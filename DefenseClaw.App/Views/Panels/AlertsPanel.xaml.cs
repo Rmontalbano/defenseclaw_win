@@ -7,7 +7,7 @@ namespace DefenseClaw.App.Views.Panels;
 /// <see cref="ViewModels.AlertsPanelViewModel"/>; the shell binds the two together in
 /// <see cref="Services.PanelCatalog"/>.
 /// </summary>
-public partial class AlertsPanel : UserControl
+public sealed partial class AlertsPanel : UserControl
 {
     public AlertsPanel()
     {

@@ -1,48 +1,223 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.ActivityPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
     <!--
-        Placeholder. A later milestone replaces the contents of this file and of
-        ViewModels\ActivityPanelViewModel.cs - and nothing else. Navigation registration
-        lives in Services\PanelCatalog.cs and does not need to change.
+        Newest-first list of every subprocess this app has run. Expected to be empty today -
+        no wizard ships yet that mutates DefenseClaw state - so the empty state carries the
+        weight of explaining the panel rather than the list itself.
     -->
-    <Grid Margin="28,24,28,24">
+    <UserControl.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+
+        <Style x:Key="Secondary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Tertiary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- Exit-code badge: background tint plus matching foreground, both theme-aware. -->
+        <Style x:Key="Badge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,3,8,3" />
+            <Setter Property="MinWidth" Value="76" />
+            <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Ok">
+                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Bad">
+                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Warn">
+                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="BadgeText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Ok">
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Bad">
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Warn">
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="24,20,24,20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,18">
-            <TextBlock FontSize="26"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding Title}" />
-            <TextBlock Margin="0,4,0,0"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding Description}" />
-        </StackPanel>
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="1"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock HorizontalAlignment="Center"
-                           FontSize="18"
+            <StackPanel Grid.Column="0">
+                <TextBlock FontSize="26"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="Coming soon" />
-                <TextBlock Margin="0,6,0,0"
-                           HorizontalAlignment="Center"
-                           MaxWidth="460"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="This panel lands in a later milestone. The shell, navigation and gateway state around it are already live." />
+                           Text="{Binding Title}" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="13"
+                           Style="{StaticResource Secondary}"
+                           Text="{Binding Description}" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="11"
+                           Style="{StaticResource Tertiary}"
+                           Text="{Binding CapacityNote}" />
             </StackPanel>
-        </Border>
+
+            <ui:Button Grid.Column="1"
+                       VerticalAlignment="Top"
+                       Appearance="Secondary"
+                       Content="Clear"
+                       Command="{Binding ClearActivityCommand}">
+                <ui:Button.Icon>
+                    <ui:SymbolIcon Symbol="Delete24" />
+                </ui:Button.Icon>
+            </ui:Button>
+        </Grid>
+
+        <!-- List -->
+        <Grid Grid.Row="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0"
+                                                   FontFamily="Cascadia Mono, Consolas"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   Text="{Binding CommandLine}" />
+
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                                            <Border Margin="0,0,8,0"
+                                                    Padding="6,1,6,1"
+                                                    CornerRadius="9"
+                                                    VerticalAlignment="Center"
+                                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                    Visibility="{Binding UsedStdinSecret, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock FontSize="10"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Text="stdin secret" />
+                                            </Border>
+
+                                            <Border Style="{StaticResource Badge}">
+                                                <TextBlock Style="{StaticResource BadgeText}" Text="{Binding ExitBadgeText}" />
+                                            </Border>
+
+                                            <ui:Button Margin="8,0,0,0"
+                                                       Padding="6,4,6,4"
+                                                       Appearance="Secondary"
+                                                       ToolTip="Copy command"
+                                                       Command="{Binding CopyCommand}">
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon Symbol="Copy24" />
+                                                </ui:Button.Icon>
+                                            </ui:Button>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <TextBlock Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding StartedText}" />
+                                        <TextBlock Margin="10,0,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding RelativeStartText}" />
+                                        <TextBlock Margin="10,0,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding DurationText, StringFormat='duration {0}'}" />
+                                    </StackPanel>
+
+                                    <TextBlock Margin="0,4,0,0"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding HasFailure, Converter={StaticResource BoolToVisibility}}"
+                                               Text="{Binding FailureText}" />
+
+                                    <Expander Margin="0,8,0,0"
+                                              Header="Output"
+                                              IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
+                                        <Border Margin="0,6,0,0"
+                                                Padding="10"
+                                                CornerRadius="6"
+                                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                                            <ItemsControl ItemsSource="{Binding Output}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock FontFamily="Cascadia Mono, Consolas"
+                                                                   FontSize="12"
+                                                                   TextWrapping="Wrap"
+                                                                   Text="{Binding Text}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Border>
+                                    </Expander>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Empty is the expected state today, not a failure: say exactly why. -->
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MaxWidth="480"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock HorizontalAlignment="Center"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding EmptyTitle}" />
+                <TextBlock Margin="0,6,0,0"
+                           TextAlignment="Center"
+                           Style="{StaticResource Tertiary}"
+                           Text="{Binding EmptyDetail}" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>

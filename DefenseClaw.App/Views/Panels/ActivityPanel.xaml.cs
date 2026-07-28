@@ -7,7 +7,7 @@ namespace DefenseClaw.App.Views.Panels;
 /// <see cref="ViewModels.ActivityPanelViewModel"/>; the shell binds the two together in
 /// <see cref="Services.PanelCatalog"/>.
 /// </summary>
-public partial class ActivityPanel : UserControl
+public sealed partial class ActivityPanel : UserControl
 {
     public ActivityPanel()
     {

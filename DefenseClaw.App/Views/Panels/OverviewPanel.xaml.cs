@@ -7,7 +7,7 @@ namespace DefenseClaw.App.Views.Panels;
 /// <see cref="ViewModels.OverviewPanelViewModel"/>; the shell binds the two together in
 /// <see cref="Services.PanelCatalog"/>.
 /// </summary>
-public partial class OverviewPanel : UserControl
+public sealed partial class OverviewPanel : UserControl
 {
     public OverviewPanel()
     {

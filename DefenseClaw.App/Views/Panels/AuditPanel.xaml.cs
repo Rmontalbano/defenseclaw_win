@@ -7,7 +7,7 @@ namespace DefenseClaw.App.Views.Panels;
 /// <see cref="ViewModels.AuditPanelViewModel"/>; the shell binds the two together in
 /// <see cref="Services.PanelCatalog"/>.
 /// </summary>
-public partial class AuditPanel : UserControl
+public sealed partial class AuditPanel : UserControl
 {
     public AuditPanel()
     {
