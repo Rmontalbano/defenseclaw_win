@@ -1,0 +1,210 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
+using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Config;
+using DefenseClaw.Core.Paths;
+
+namespace DefenseClaw.App.ViewModels.ConfigEditor;
+
+/// <summary>Which step of the pipeline a <see cref="SaveOutcome"/> stopped at.</summary>
+public enum SaveStage
+{
+    DriftDetected,
+    BackupFailed,
+    WriteFailed,
+    ValidationFailed,
+    Succeeded,
+}
+
+public sealed record SaveOutcome(bool Success, SaveStage Stage, string Message, string? BackupPath, string? BackupSha256Hex);
+
+public sealed record RestoreOutcome(bool Success, string Message);
+
+/// <summary>
+/// The config editor's only write path: hash-checked backup, atomic write, CLI
+/// validation, and one-click restore. Takes <see cref="DefenseClawPaths"/> and
+/// <see cref="CliRunner"/> directly (not <c>AppServices</c>) precisely so it can be
+/// pointed at a temp-directory fixture — real or fake CLI included — for verification,
+/// the same way <c>DefenseClaw.Tests</c> points <see cref="ConfigStore"/> at fixtures.
+/// <para>
+/// Stage order matters: drift is checked before anything touches disk, the backup is
+/// written and its SHA-256 recorded before the real file is touched, the write itself is
+/// temp-file-plus-<see cref="File.Replace(string, string, string?)"/> so a crash mid-write
+/// never leaves a half-written config.yaml, and CLI validation only runs after all of that
+/// has already succeeded — a validation failure still leaves a good backup to restore.
+/// </para>
+/// </summary>
+public sealed class ConfigSaveService
+{
+    private readonly DefenseClawPaths _paths;
+    private readonly CliRunner? _cli;
+
+    public ConfigSaveService(DefenseClawPaths paths, CliRunner? cli)
+    {
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _cli = cli;
+    }
+
+    /// <summary>Captures the on-disk identity of config.yaml — call this once, right after loading, and keep it for the eventual save.</summary>
+    public FileSignature CaptureSignature() => FileSignature.Capture(_paths.ConfigFilePath);
+
+    /// <summary>Reads the current on-disk config.yaml verbatim — used to populate the drift banner's "view on-disk version" action.</summary>
+    public async Task<string> ReadCurrentTextAsync(CancellationToken cancellationToken = default)
+    {
+        var path = _paths.ConfigFilePath;
+        return File.Exists(path)
+            ? await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false)
+            : string.Empty;
+    }
+
+    public async Task<SaveOutcome> SaveAsync(string newRawText, FileSignature signatureAtLoad, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(newRawText);
+
+        var path = _paths.ConfigFilePath;
+
+        // 1. Drift check, before anything touches disk.
+        var onDiskNow = FileSignature.Capture(path);
+        if (!onDiskNow.Equals(signatureAtLoad))
+        {
+            return new SaveOutcome(
+                false,
+                SaveStage.DriftDetected,
+                "config.yaml changed on disk since it was loaded. Reload to pick up the new content, or view the on-disk version to compare before deciding.",
+                null,
+                null);
+        }
+
+        // 2. Hash-checked backup, before the real file is touched.
+        string? backupPath = null;
+        string? backupSha = null;
+        if (File.Exists(path))
+        {
+            try
+            {
+                var originalBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+                backupSha = Convert.ToHexString(SHA256.HashData(originalBytes)).ToLowerInvariant();
+                backupPath = path + ".bak-" + DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+                await File.WriteAllBytesAsync(backupPath, originalBytes, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return new SaveOutcome(false, SaveStage.BackupFailed, $"Could not create a backup before saving: {ex.Message}", null, null);
+            }
+        }
+
+        // 3. Atomic write: temp file in the same directory, then a filesystem-level replace.
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(directory))
+            {
+                directory = _paths.DataDirectory;
+            }
+
+            Directory.CreateDirectory(directory);
+            var tempPath = Path.Combine(directory, $".config.yaml.tmp-{Guid.NewGuid():N}");
+            await File.WriteAllTextAsync(tempPath, newRawText, cancellationToken).ConfigureAwait(false);
+
+            if (File.Exists(path))
+            {
+                File.Replace(tempPath, path, null);
+            }
+            else
+            {
+                File.Move(tempPath, path);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new SaveOutcome(false, SaveStage.WriteFailed, $"Could not write config.yaml: {ex.Message}", backupPath, backupSha);
+        }
+
+        // 4. Validate the file that is now live, via the CLI — never by re-parsing our own write.
+        if (_cli is not null)
+        {
+            CliInvocation invocation;
+            try
+            {
+                invocation = await _cli.RunAsync(new[] { "config", "show" }, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (CliNotFoundException)
+            {
+                return new SaveOutcome(
+                    true,
+                    SaveStage.Succeeded,
+                    "Saved. Could not validate: the defenseclaw CLI was not found on PATH.",
+                    backupPath,
+                    backupSha);
+            }
+
+            if (invocation.FailureReason is { Length: > 0 } failure)
+            {
+                return new SaveOutcome(false, SaveStage.ValidationFailed, $"Saved, but validation could not run: {failure}", backupPath, backupSha);
+            }
+
+            if (invocation.ExitCode is not 0)
+            {
+                return new SaveOutcome(false, SaveStage.ValidationFailed, BuildValidationMessage(invocation), backupPath, backupSha);
+            }
+        }
+
+        return new SaveOutcome(true, SaveStage.Succeeded, "Saved and validated.", backupPath, backupSha);
+    }
+
+    /// <summary>Copies a backup file back over config.yaml, atomically. The one-click restore offered after a validation failure.</summary>
+    public async Task<RestoreOutcome> RestoreFromBackupAsync(string backupPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(backupPath);
+
+        if (!File.Exists(backupPath))
+        {
+            return new RestoreOutcome(false, $"Backup file not found: {backupPath}");
+        }
+
+        var path = _paths.ConfigFilePath;
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(backupPath, cancellationToken).ConfigureAwait(false);
+            var directory = Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(directory))
+            {
+                directory = _paths.DataDirectory;
+            }
+
+            Directory.CreateDirectory(directory);
+            var tempPath = Path.Combine(directory, $".config.yaml.tmp-{Guid.NewGuid():N}");
+            await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken).ConfigureAwait(false);
+
+            if (File.Exists(path))
+            {
+                File.Replace(tempPath, path, null);
+            }
+            else
+            {
+                File.Move(tempPath, path);
+            }
+
+            return new RestoreOutcome(true, "Restored config.yaml from the backup.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new RestoreOutcome(false, $"Could not restore from backup: {ex.Message}");
+        }
+    }
+
+    private static string BuildValidationMessage(CliInvocation invocation)
+    {
+        var stderr = string.Join(
+            Environment.NewLine,
+            invocation.OutputLines.Where(l => l.Stream == CliStream.StandardError).Select(l => l.Text));
+
+        var detail = stderr.Length > 0 ? stderr : $"defenseclaw config show exited with code {invocation.ExitCode}.";
+        return "The saved file failed validation — restore the backup or fix it in the RAW tab: " + detail;
+    }
+}

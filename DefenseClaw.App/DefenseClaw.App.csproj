@@ -30,6 +30,13 @@
       net9.0-windows project silently falls back to the .NET Framework build (NU1701).
     -->
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.2" />
+    <!--
+      Latest stable (6.3.1.120) ships net8.0-windows7.0 assets alongside net6.0-windows7.0
+      and net462; a net9.0-windows project resolves the net8.0-windows7.0 asset cleanly
+      (same TFM family, lower version) with no NU1701 fallback, unlike the H.NotifyIcon
+      case above where the only modern asset targeted a *newer* TFM than this project.
+    -->
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
   </ItemGroup>
 
 </Project>

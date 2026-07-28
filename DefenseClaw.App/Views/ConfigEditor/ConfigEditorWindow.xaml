@@ -1,0 +1,458 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.ConfigEditor.ConfigEditorWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
+                 xmlns:vmc="clr-namespace:DefenseClaw.App.ViewModels.ConfigEditor"
+                 xmlns:vc="clr-namespace:DefenseClaw.App.Views.ConfigEditor"
+                 Title="{Binding WindowTitle}"
+                 Width="1150"
+                 Height="800"
+                 MinWidth="820"
+                 MinHeight="560"
+                 WindowStartupLocation="CenterScreen">
+    <!--
+        No Mica backdrop here: WPF-UI's FluentWindow throws unless
+        ExtendsContentIntoTitleBar is also true, which would mean building a custom
+        title bar (as MainWindow does with ui:TitleBar) — not worth it for a secondary
+        utility window whose native title bar already needs to show plain text (the
+        "contains secret references" hint). Standard chrome is intentional here.
+    -->
+    <!--
+        Two tabs over one ConfigEditorWindowViewModel: RAW is an AvalonEdit editor wired up
+        in code-behind (TextEditor.Text is a plain CLR property, not bindable from XAML);
+        FORM is a tree of generated sections rendered entirely through DataTemplates below,
+        keyed off DefenseClaw.App.ViewModels.ConfigEditor's model types. See
+        FormFieldTemplateSelector for why FormField needs a selector rather than an
+        implicit DataType template: every field kind is the same CLR type.
+    -->
+    <ui:FluentWindow.Resources>
+        <vc:BoolToInfoBarSeverityConverter x:Key="BoolToInfoBarSeverity" />
+        <vc:BoolToRevealLabelConverter x:Key="BoolToRevealLabel" />
+        <vc:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
+        <vc:StringHasValueConverter x:Key="StringHasValue" />
+
+        <Style x:Key="Secondary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Badge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="5,1,5,1" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}" />
+        </Style>
+
+        <Style x:Key="BadgeText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        </Style>
+
+        <!-- ============================ Field templates ============================ -->
+
+        <DataTemplate x:Key="BoolFieldTemplate" DataType="{x:Type vmc:FormField}">
+            <Grid Margin="0,0,0,10" ToolTip="{Binding DisabledReason}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding DisplayName}" />
+                <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding BoolValue, Mode=TwoWay}" IsEnabled="{Binding IsEditable}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="IntFieldTemplate" DataType="{x:Type vmc:FormField}">
+            <Grid Margin="0,0,0,10" ToolTip="{Binding DisabledReason}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="150" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding DisplayName}" />
+                <ui:NumberBox Grid.Column="1" Value="{Binding NumberValue, Mode=TwoWay}" IsEnabled="{Binding IsEditable}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StringFieldTemplate" DataType="{x:Type vmc:FormField}">
+            <Grid Margin="0,0,0,10" ToolTip="{Binding DisabledReason}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="230" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding DisplayName}" />
+                <ui:TextBox Grid.Column="1"
+                            IsEnabled="{Binding IsEditable}"
+                            Text="{Binding TextValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="EnvNameFieldTemplate" DataType="{x:Type vmc:FormField}">
+            <Grid Margin="0,0,0,10" ToolTip="{Binding DisabledReason}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="230" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="{Binding DisplayName}" />
+                    <Border Margin="6,0,0,0" Style="{StaticResource Badge}">
+                        <TextBlock Style="{StaticResource BadgeText}" Text="ENV VAR NAME" />
+                    </Border>
+                </StackPanel>
+                <ui:TextBox Grid.Column="1"
+                            FontFamily="Cascadia Mono, Consolas"
+                            IsEnabled="{Binding IsEditable}"
+                            Text="{Binding TextValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="SecretFieldTemplate" DataType="{x:Type vmc:FormField}">
+            <Grid Margin="0,0,0,10" ToolTip="{Binding DisabledReason}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="230" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding DisplayName}" />
+                <ui:TextBox Grid.Column="1"
+                            FontFamily="Cascadia Mono, Consolas"
+                            IsEnabled="{Binding IsEditable}"
+                            Text="{Binding TextValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                            Visibility="{Binding IsRevealed, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           FontFamily="Cascadia Mono, Consolas"
+                           Style="{StaticResource Secondary}"
+                           Text="{Binding MaskedText}"
+                           Visibility="{Binding IsRevealed, Converter={StaticResource InverseBoolToVisibility}}" />
+                <ui:Button Grid.Column="2"
+                           Margin="6,0,0,0"
+                           Appearance="Secondary"
+                           Command="{Binding ToggleRevealCommand}"
+                           Content="{Binding IsRevealed, Converter={StaticResource BoolToRevealLabel}}" />
+            </Grid>
+        </DataTemplate>
+
+        <vc:FormFieldTemplateSelector x:Key="FieldSelector"
+                                      BoolTemplate="{StaticResource BoolFieldTemplate}"
+                                      EnvNameTemplate="{StaticResource EnvNameFieldTemplate}"
+                                      IntTemplate="{StaticResource IntFieldTemplate}"
+                                      SecretTemplate="{StaticResource SecretFieldTemplate}"
+                                      StringTemplate="{StaticResource StringFieldTemplate}" />
+
+        <!-- ============================ List field template ============================ -->
+
+        <DataTemplate x:Key="ListFieldTemplate" DataType="{x:Type vmc:FormListField}">
+            <StackPanel Margin="0,0,0,10" ToolTip="{Binding DisabledReason}">
+                <TextBlock Margin="0,0,0,4"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="{Binding DisplayName}" />
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBox Grid.Column="0"
+                                            FontFamily="Cascadia Mono, Consolas"
+                                            IsReadOnly="True"
+                                            Text="{Binding Mode=OneWay}" />
+                                <ui:Button Grid.Column="1"
+                                           Margin="6,0,0,0"
+                                           Appearance="Secondary"
+                                           Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                           CommandParameter="{Binding}"
+                                           Content="Remove" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Margin="0,4,0,0" IsEnabled="{Binding IsEditable}" Orientation="Horizontal">
+                    <ui:TextBox Width="230"
+                                PlaceholderText="Add item"
+                                Text="{Binding NewItemText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <ui:Button Margin="6,0,0,0"
+                               Appearance="Secondary"
+                               Command="{Binding AddItemCommand}"
+                               Content="Add" />
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- ============================ Raw block (read-only) ============================ -->
+
+        <DataTemplate x:Key="RawBlockTemplate" DataType="{x:Type vmc:RawBlockNode}">
+            <Border Margin="0,0,0,10"
+                    Padding="10"
+                    CornerRadius="6"
+                    Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                    ToolTip="{Binding Reason}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Text="{Binding DisplayName}" />
+                        <TextBlock Margin="8,0,0,0" Style="{StaticResource Secondary}" FontSize="11" Text="(read-only)" />
+                    </StackPanel>
+                    <TextBox Margin="0,6,0,0"
+                              MaxHeight="220"
+                              FontFamily="Cascadia Mono, Consolas"
+                              FontSize="11"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              IsReadOnly="True"
+                              TextWrapping="NoWrap"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                              Text="{Binding Yaml, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- ============================ Group / section content ============================ -->
+
+        <DataTemplate x:Key="GroupContentTemplate" DataType="{x:Type vmc:FormGroup}">
+            <StackPanel>
+                <ItemsControl ItemsSource="{Binding Fields}" ItemTemplateSelector="{StaticResource FieldSelector}" />
+                <ItemsControl ItemsSource="{Binding Lists}" ItemTemplate="{StaticResource ListFieldTemplate}" />
+                <ItemsControl ItemsSource="{Binding RawBlocks}" ItemTemplate="{StaticResource RawBlockTemplate}" />
+                <!--
+                    DynamicResource, not StaticResource: SubGroupTemplate (below) contains a
+                    ContentPresenter templated by *this* resource, so the two are mutually
+                    recursive. StaticResource requires the key to already be registered at
+                    the point deferred template content is parsed, which fails for whichever
+                    of the pair is declared second — DynamicResource defers the lookup until
+                    the template is actually used, by which point the whole dictionary (both
+                    keys) is loaded.
+                -->
+                <ItemsControl ItemsSource="{Binding SubGroups}" ItemTemplate="{DynamicResource SubGroupTemplate}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Recursive: a sub-group can itself contain sub-groups (e.g. guardrail.connectors.claudecode). -->
+        <DataTemplate x:Key="SubGroupTemplate" DataType="{x:Type vmc:FormGroup}">
+            <Border Margin="0,0,0,12"
+                    Padding="12"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                <StackPanel>
+                    <TextBlock Margin="0,0,0,8"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="{Binding DisplayName}" />
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource GroupContentTemplate}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="SectionTemplate" DataType="{x:Type vmc:FormSection}">
+            <Border Margin="0,0,0,16"
+                    Padding="16"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <StackPanel>
+                    <StackPanel Margin="0,0,0,10" Orientation="Horizontal">
+                        <TextBlock FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Text="{Binding DisplayName}" />
+                        <Border Margin="8,0,0,0"
+                                Style="{StaticResource Badge}"
+                                Visibility="{Binding ExistsInRawConfig, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource BadgeText}" Text="IN CONFIG.YAML" />
+                        </Border>
+                        <Border Margin="8,0,0,0"
+                                Style="{StaticResource Badge}"
+                                Visibility="{Binding ExistsInRawConfig, Converter={StaticResource InverseBoolToVisibility}}">
+                            <TextBlock Style="{StaticResource BadgeText}" Text="EFFECTIVE DEFAULT ONLY" />
+                        </Border>
+                    </StackPanel>
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource GroupContentTemplate}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0"
+                Padding="16,10,16,10"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center"
+                               FontFamily="Cascadia Mono, Consolas"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding ConfigFilePath}" />
+                    <Border Margin="10,0,0,0"
+                            Style="{StaticResource Badge}"
+                            Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                            Visibility="{Binding IsRawModified, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock FontSize="10" FontWeight="SemiBold" Text="MODIFIED" />
+                    </Border>
+                    <ui:ProgressRing Width="16"
+                                     Height="16"
+                                     Margin="10,0,0,0"
+                                     IsIndeterminate="True"
+                                     Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ui:Button Margin="0,0,8,0"
+                               Appearance="Secondary"
+                               Command="{Binding ReloadCommand}"
+                               Content="Reload" />
+                    <ui:Button Command="{Binding SaveCommand}" Content="Save">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Save24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Banners -->
+        <StackPanel Grid.Row="1" Margin="16,10,16,0">
+            <ui:InfoBar Margin="0,0,0,6"
+                        IsClosable="False"
+                        IsOpen="{Binding ParseError, Converter={StaticResource StringHasValue}, FallbackValue=False}"
+                        Message="{Binding ParseError}"
+                        Severity="Error"
+                        Title="config.yaml does not parse as YAML" />
+
+            <ui:InfoBar Margin="0,0,0,6"
+                        IsClosable="False"
+                        IsOpen="{Binding FormUnavailableReason, Converter={StaticResource StringHasValue}, FallbackValue=False}"
+                        Message="{Binding FormUnavailableReason}"
+                        Severity="Warning"
+                        Title="FORM view unavailable" />
+
+            <ui:InfoBar Margin="0,0,0,6"
+                        IsClosable="False"
+                        IsOpen="{Binding ShowDriftBanner}"
+                        Message="{Binding DriftMessage}"
+                        Severity="Warning"
+                        Title="config.yaml changed on disk" />
+            <StackPanel Margin="0,0,0,6"
+                        Orientation="Horizontal"
+                        Visibility="{Binding ShowDriftBanner, Converter={StaticResource BoolToVisibility}}">
+                <ui:Button Margin="0,0,8,0"
+                           Appearance="Secondary"
+                           Command="{Binding ViewOnDiskCommand}"
+                           Content="View on-disk version" />
+                <ui:Button Appearance="Secondary" Command="{Binding ReloadCommand}" Content="Reload" />
+            </StackPanel>
+
+            <Border Margin="0,0,0,6"
+                    Padding="10"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Visibility="{Binding ShowOnDiskPreview, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <Grid>
+                        <TextBlock FontWeight="SemiBold" Text="Current on-disk content" />
+                        <ui:Button HorizontalAlignment="Right"
+                                   Appearance="Secondary"
+                                   Command="{Binding DismissOnDiskPreviewCommand}"
+                                   Content="Close" />
+                    </Grid>
+                    <TextBox MaxHeight="220"
+                              Margin="0,6,0,0"
+                              FontFamily="Cascadia Mono, Consolas"
+                              FontSize="11"
+                              IsReadOnly="True"
+                              TextWrapping="NoWrap"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              Text="{Binding OnDiskPreviewText, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+
+            <ui:InfoBar Margin="0,0,0,6"
+                        IsClosable="False"
+                        IsOpen="{Binding ShowSaveSuccessBanner}"
+                        Message="{Binding SaveResultMessage}"
+                        Severity="Success"
+                        Title="Saved" />
+
+            <ui:InfoBar Margin="0,0,0,6"
+                        IsClosable="False"
+                        IsOpen="{Binding ShowSaveErrorBanner}"
+                        Message="{Binding SaveResultMessage}"
+                        Severity="Error"
+                        Title="Save problem" />
+            <StackPanel Margin="0,0,0,6"
+                        Orientation="Horizontal"
+                        Visibility="{Binding ShowRestoreAction, Converter={StaticResource BoolToVisibility}}">
+                <ui:Button Appearance="Secondary" Command="{Binding RestoreFromBackupCommand}" Content="Restore from backup" />
+                <TextBlock Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           FontFamily="Cascadia Mono, Consolas"
+                           FontSize="11"
+                           Style="{StaticResource Secondary}"
+                           Text="{Binding LastBackupPath, StringFormat='backup: {0}'}" />
+            </StackPanel>
+
+            <ui:InfoBar IsClosable="False"
+                        IsOpen="{Binding FieldErrorMessage, Converter={StaticResource StringHasValue}, FallbackValue=False}"
+                        Message="{Binding FieldErrorMessage}"
+                        Severity="Warning"
+                        Title="Could not apply that field" />
+        </StackPanel>
+
+        <!-- RAW / FORM tabs -->
+        <TabControl x:Name="RootTabs" Grid.Row="2" Margin="16,10,16,16">
+            <TabItem Header="Raw">
+                <Border Padding="1"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                    <avalonEdit:TextEditor x:Name="RawEditor"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           FontSize="13"
+                                           ShowLineNumbers="True"
+                                           WordWrap="False" />
+                </Border>
+            </TabItem>
+            <TabItem x:Name="FormTabItem" Header="Form">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="4,10,4,10">
+                        <ItemsControl ItemsSource="{Binding Sections}" ItemTemplate="{StaticResource SectionTemplate}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</ui:FluentWindow>
