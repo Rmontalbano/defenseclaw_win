@@ -1,0 +1,41 @@
+cisco_ai_defense:
+  api_key_env: CISCO_AI_DEFENSE_API_KEY
+claw:
+  mode: claudecode
+guardrail:
+  connector: claudecode
+  enabled: true
+  scanner_mode: local
+  connectors:
+    claudecode:
+      mode: observe
+      hook_fail_mode: open
+      block_message: ''
+      rule_pack_dir: ''
+  detection_strategy_completion: regex_only
+llm:
+  api_key_env: DEFENSECLAW_LLM_KEY
+config_version: 8
+observability: {}
+gateway:
+  token_env: DEFENSECLAW_GATEWAY_TOKEN
+ai_discovery:
+  enabled: true
+  mode: enhanced
+  scan_interval_min: 5
+  process_interval_s: 60
+  scan_roots:
+  - '~'
+  signature_packs: []
+  allow_workspace_signatures: false
+  disabled_signature_ids: []
+  include_shell_history: true
+  include_package_manifests: true
+  include_env_var_names: true
+  include_network_domains: true
+  max_files_per_scan: 1000
+  max_file_bytes: 524288
+  store_raw_local_paths: false
+  confidence_policy_path: ''
+  require_trusted_binary_paths: false
+  trusted_binary_prefixes: []
