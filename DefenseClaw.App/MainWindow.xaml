@@ -1,12 +1,148 @@
-﻿<Window x:Class="DefenseClaw.App.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:DefenseClaw.App"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+<ui:FluentWindow x:Class="DefenseClaw.App.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="DefenseClaw for Windows"
+                 Width="1200"
+                 Height="800"
+                 MinWidth="940"
+                 MinHeight="620"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterScreen">
 
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="DefenseClaw for Windows" />
+
+        <!-- Status strip: one line, always visible, always from the GatewayMonitor snapshot. -->
+        <Border Grid.Row="1"
+                Padding="18,8,18,8"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding StateBrush}" />
+                    <TextBlock Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="{Binding StateLabel}" />
+                    <TextBlock Margin="12,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="{Binding VersionSummary}" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1"
+                           Margin="20,0,20,0"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           ToolTip="{Binding StateDetail}"
+                           Text="{Binding StateDetail}" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding ConnectorSummary, StringFormat='Connector: {0}'}" />
+                    <TextBlock Margin="16,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding AlertSummary}" />
+                    <ui:Button Margin="16,0,0,0"
+                               Padding="10,4,10,4"
+                               Content="Refresh"
+                               Command="{Binding RefreshCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Banner region, above the content frame. -->
+        <StackPanel Grid.Row="2" Margin="18,10,18,0">
+            <ui:InfoBar Margin="0,0,0,8"
+                        IsClosable="False"
+                        Severity="Warning"
+                        Title="WSL gateway detected"
+                        IsOpen="{Binding ShowWslBanner}"
+                        Message="{Binding WslMessage}" />
+
+            <ui:InfoBar Margin="0,0,0,8"
+                        IsClosable="False"
+                        Severity="Error"
+                        Title="config.yaml could not be read"
+                        IsOpen="{Binding ShowConfigErrorBanner}"
+                        Message="{Binding ConfigErrorMessage}" />
+
+            <ui:InfoBar Margin="0,0,0,8"
+                        IsClosable="False"
+                        Severity="Warning"
+                        Title="{Binding DegradedTitle}"
+                        IsOpen="{Binding ShowDegradedBanner}"
+                        Message="{Binding DegradedMessage}" />
+
+            <!--
+                Not-initialized gets its own banner rather than an InfoBar: it has to offer
+                the init command as copyable text. The app shows the command and never runs
+                it - every mutation belongs to the CLI, recorded in Activity.
+            -->
+            <Border Margin="0,0,0,8"
+                    Padding="14,12,14,12"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                    Visibility="{Binding ShowNotInitializedBanner, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="DefenseClaw is installed but not initialized" />
+                    <TextBlock Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding NotInitializedMessage}" />
+                    <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                        <Border Padding="10,5,10,5"
+                                CornerRadius="4"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                            <TextBox FontFamily="Cascadia Mono, Consolas"
+                                     IsReadOnly="True"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                     Text="defenseclaw init" />
+                        </Border>
+                        <ui:Button Margin="8,0,0,0"
+                                   Content="Copy"
+                                   Command="{Binding CopyCommandCommand}"
+                                   CommandParameter="defenseclaw init" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!--
+            Sidebar. Items are added in code from Services\PanelCatalog.cs so that adding or
+            replacing a panel never requires editing this file.
+        -->
+        <ui:NavigationView x:Name="RootNavigation"
+                           Grid.Row="3"
+                           IsBackButtonVisible="Collapsed"
+                           IsPaneToggleVisible="True"
+                           OpenPaneLength="220"
+                           PaneDisplayMode="Left" />
     </Grid>
-</Window>
+</ui:FluentWindow>

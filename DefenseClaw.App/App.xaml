@@ -1,9 +1,26 @@
-﻿<Application x:Class="DefenseClaw.App.App"
+<Application x:Class="DefenseClaw.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:DefenseClaw.App"
-             StartupUri="MainWindow.xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <!--
+        No StartupUri: the shell composes its services first, then creates the window, so
+        App.OnStartup owns window creation.
+    -->
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!--
+                    WPF-UI's dictionaries style the Fluent controls. The theme here is the
+                    seed value only - ApplicationThemeManager.ApplySystemTheme() in
+                    App.OnStartup swaps it to match the OS, and SystemThemeWatcher keeps it
+                    in step afterwards.
+                -->
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

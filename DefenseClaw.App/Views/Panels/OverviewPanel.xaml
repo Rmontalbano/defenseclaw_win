@@ -1,0 +1,48 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.OverviewPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Placeholder. A later milestone replaces the contents of this file and of
+        ViewModels\OverviewPanelViewModel.cs - and nothing else. Navigation registration
+        lives in Services\PanelCatalog.cs and does not need to change.
+    -->
+    <Grid Margin="28,24,28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,18">
+            <TextBlock FontSize="26"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       Text="{Binding Title}" />
+            <TextBlock Margin="0,4,0,0"
+                       FontSize="13"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="{Binding Description}" />
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock HorizontalAlignment="Center"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="Coming soon" />
+                <TextBlock Margin="0,6,0,0"
+                           HorizontalAlignment="Center"
+                           MaxWidth="460"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Text="This panel lands in a later milestone. The shell, navigation and gateway state around it are already live." />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,8 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
-  <ItemGroup>
-    <ProjectReference Include="..\DefenseClaw.Core\DefenseClaw.Core.csproj" />
-  </ItemGroup>
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -10,6 +6,30 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>DefenseClaw.App</RootNamespace>
+    <AssemblyName>DefenseClaw.App</AssemblyName>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      WPF0001 is the experimental-API diagnostic guarding Application.ThemeMode, the .NET 9
+      Fluent theming switch this shell is built on. Opting in is deliberate.
+    -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DefenseClaw.Core\DefenseClaw.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <!--
+      Pinned to 2.3.2: 2.4.1 ships only net462 and net10.0-windows assets, so a
+      net9.0-windows project silently falls back to the .NET Framework build (NU1701).
+    -->
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.2" />
+  </ItemGroup>
 
 </Project>
