@@ -1,18 +1,22 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.AiDiscoveryPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!--
-        Placeholder. A later milestone replaces the contents of this file and of
-        ViewModels\AiDiscoveryPanelViewModel.cs - and nothing else. Navigation registration
-        lives in Services\PanelCatalog.cs and does not need to change.
-    -->
-    <Grid Margin="28,24,28,24">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:AiDiscoveryPanelViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Grid Margin="28,24,28,20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,18">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
             <TextBlock FontSize="26"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -24,25 +28,206 @@
                        Text="{Binding Description}" />
         </StackPanel>
 
-        <Border Grid.Row="1"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock HorizontalAlignment="Center"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="Coming soon" />
-                <TextBlock Margin="0,6,0,0"
+        <!-- Honesty banner: what confidence means and does not mean -->
+        <ui:InfoBar Grid.Row="1"
+                    Margin="0,0,0,10"
+                    Title="About these confidence numbers"
+                    IsClosable="False"
+                    IsOpen="True"
+                    Severity="Informational"
+                    Message="Confidence comes from signature/heuristic matches — process names, config files, MCP registrations, package manifests, environment variable names — not verified installs. A high score does not prove the product is present, and a genuinely running tool can be missed if nothing matched. Evidence below is a hashed fingerprint (type, quality, match kind); DefenseClaw does not retain literal file paths." />
+
+        <!-- Toolbar -->
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <ui:TextBox Grid.Column="0"
+                        PlaceholderText="Search vendor, product, category…"
+                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+            <TextBlock Grid.Column="1"
+                       Margin="14,0,0,0"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                       Text="{Binding LastRunSummary}" />
+
+            <TextBlock Grid.Column="2"
+                       Margin="0,0,14,0"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="{Binding StatusMessage}" />
+
+            <ui:Button Grid.Column="3"
+                       Margin="0,0,8,0"
+                       Padding="10,4,10,4"
+                       Content="Refresh"
+                       Command="{Binding RefreshCommand}" />
+
+            <ui:Button Grid.Column="4"
+                       Padding="10,4,10,4"
+                       Appearance="Caution"
+                       Content="Run agent discover…"
+                       Command="{Binding RunDiscoverCommand}"
+                       IsEnabled="{Binding NotRunningDiscover}" />
+        </Grid>
+
+        <!-- Cards + sources -->
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <ItemsControl ItemsSource="{Binding CardsView}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <ui:CardExpander Margin="0,0,0,10" Header="{Binding HeaderDisplay}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Detectors" />
+                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding DetectorsDisplay}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Categories" />
+                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding CategoriesDisplay}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Sources" />
+                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding SourcesDisplay}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="First seen" />
+                                            <TextBlock Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding FirstSeenDisplay}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Last seen" />
+                                            <TextBlock Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding LastSeenDisplay}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Grid.Row="2"
+                                               Margin="0,0,0,4"
+                                               TextWrapping="Wrap"
+                                               FontStyle="Italic"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Text="{Binding EvidenceSummary}" />
+                                </Grid>
+                            </ui:CardExpander>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Margin="0,10,0,10"
                            HorizontalAlignment="Center"
-                           MaxWidth="460"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="This panel lands in a later milestone. The shell, navigation and gateway state around it are already live." />
+                           Text="No AI components discovered yet — run agent discovery above once DefenseClaw has scanned this machine."
+                           Visibility="{Binding HasNoComponents, Converter={StaticResource BoolToVisibility}}" />
+
+                <!-- Sources section -->
+                <ui:CardExpander Margin="0,4,0,0" Header="Sources — where these cards came from" IsExpanded="True">
+                    <StackPanel Margin="0,8,0,0">
+                        <ItemsControl ItemsSource="{Binding Sources}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding Label}" />
+                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding Detail}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1"
+                                                   VerticalAlignment="Top"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                            <Run Text="updated " />
+                                            <Run Text="{Binding LastUpdatedDisplay, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Expander Margin="0,6,0,0" Header="Recent scans (ai.discovery audit bucket)">
+                            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ScanHistory}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding TimestampDisplay}" />
+                                            <TextBlock Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding Summary}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Expander>
+
+                        <Expander Margin="0,6,0,0" Header="Connector discovery (agent_discovery.json)">
+                            <ui:DataGrid Margin="0,8,0,0"
+                                         Height="220"
+                                         AutoGenerateColumns="False"
+                                         IsReadOnly="True"
+                                         GridLinesVisibility="Horizontal"
+                                         HeadersVisibility="Column"
+                                         ItemsSource="{Binding ConnectorDiscovery}">
+                                <ui:DataGrid.Columns>
+                                    <DataGridTextColumn Width="120" Header="Connector" Binding="{Binding Name}" />
+                                    <DataGridTextColumn Width="110" Header="Status" Binding="{Binding StatusDisplay}" />
+                                    <DataGridTextColumn Width="120" Header="Version" Binding="{Binding Version}" />
+                                    <DataGridTextColumn Width="*" Header="Config path" Binding="{Binding ConfigPath}" />
+                                    <DataGridTextColumn Width="*" Header="Binary path" Binding="{Binding BinaryPath}" />
+                                    <DataGridTextColumn Width="140" Header="Error" Binding="{Binding Error}" />
+                                </ui:DataGrid.Columns>
+                            </ui:DataGrid>
+                        </Expander>
+
+                        <Expander Margin="0,6,0,0" Header="Connector selection (agent_selection.json)">
+                            <ui:DataGrid Margin="0,8,0,0"
+                                         Height="140"
+                                         AutoGenerateColumns="False"
+                                         IsReadOnly="True"
+                                         GridLinesVisibility="Horizontal"
+                                         HeadersVisibility="Column"
+                                         ItemsSource="{Binding ConnectorSelections}">
+                                <ui:DataGrid.Columns>
+                                    <DataGridTextColumn Width="120" Header="Connector" Binding="{Binding Connector}" />
+                                    <DataGridTextColumn Width="*" Header="Executable" Binding="{Binding Executable}" />
+                                    <DataGridTextColumn Width="140" Header="Version" Binding="{Binding RawVersion}" />
+                                    <DataGridTextColumn Width="150" Header="Selected at" Binding="{Binding SelectedAtDisplay}" />
+                                    <DataGridTextColumn Width="150" Header="Expires at" Binding="{Binding ExpiresAtDisplay}" />
+                                    <DataGridTextColumn Width="110" Header="Source" Binding="{Binding Source}" />
+                                </ui:DataGrid.Columns>
+                            </ui:DataGrid>
+                        </Expander>
+                    </StackPanel>
+                </ui:CardExpander>
             </StackPanel>
-        </Border>
+        </ScrollViewer>
     </Grid>
 </UserControl>

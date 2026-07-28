@@ -1,18 +1,23 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.InventoryPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!--
-        Placeholder. A later milestone replaces the contents of this file and of
-        ViewModels\InventoryPanelViewModel.cs - and nothing else. Navigation registration
-        lives in Services\PanelCatalog.cs and does not need to change.
-    -->
-    <Grid Margin="28,24,28,24">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:InventoryPanelViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Grid Margin="28,24,28,20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,18">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
             <TextBlock FontSize="26"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -24,25 +29,247 @@
                        Text="{Binding Description}" />
         </StackPanel>
 
-        <Border Grid.Row="1"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock HorizontalAlignment="Center"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="Coming soon" />
-                <TextBlock Margin="0,6,0,0"
-                           HorizontalAlignment="Center"
-                           MaxWidth="460"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="This panel lands in a later milestone. The shell, navigation and gateway state around it are already live." />
-            </StackPanel>
-        </Border>
+        <!-- Toolbar: search, group-by, refresh, status -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <ui:TextBox Grid.Column="0"
+                        PlaceholderText="Search name, vendor, framework…"
+                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+            <TextBlock Grid.Column="1"
+                       Margin="14,0,6,0"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="Group by" />
+
+            <ComboBox Grid.Column="2"
+                      Width="110"
+                      VerticalAlignment="Center"
+                      ItemsSource="{Binding GroupByOptions}"
+                      SelectedItem="{Binding GroupBy}" />
+
+            <TextBlock Grid.Column="4"
+                       Margin="0,0,14,0"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                       Text="{Binding StatusMessage}" />
+
+            <ui:Button Grid.Column="5"
+                       Padding="10,4,10,4"
+                       Content="Refresh"
+                       Command="{Binding RefreshCommand}" />
+        </Grid>
+
+        <!-- Banners -->
+        <StackPanel Grid.Row="2" Margin="0,0,0,10">
+            <ui:InfoBar Margin="0,0,0,6"
+                        Title="inventory.db"
+                        IsClosable="False"
+                        IsOpen="{Binding HasError}"
+                        Message="{Binding ErrorMessage}"
+                        Severity="Warning" />
+
+            <ui:InfoBar Title="No ai_components_v view in this install"
+                        IsClosable="False"
+                        IsOpen="{Binding UsingFallbackView}"
+                        Message="This inventory.db does not expose the ai_components_v rollup view — nothing to group above. Use the table browser at the bottom to inspect whatever tables this install does have."
+                        Severity="Informational" />
+        </StackPanel>
+
+        <!-- Main content: grid + detail pane -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2.2*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="1*" MinWidth="260" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <Grid>
+                    <ui:DataGrid AutoGenerateColumns="False"
+                                 IsReadOnly="True"
+                                 GridLinesVisibility="Horizontal"
+                                 HeadersVisibility="Column"
+                                 SelectionMode="Single"
+                                 ItemsSource="{Binding ComponentsView}"
+                                 SelectedItem="{Binding SelectedComponent}"
+                                 Visibility="{Binding ShowComponentsGrid, Converter={StaticResource BoolToVisibility}}">
+                        <ui:DataGrid.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Margin="6,10,0,4"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   Text="{Binding Name, StringFormat='{}{0}'}" />
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ui:DataGrid.GroupStyle>
+                        <ui:DataGrid.Columns>
+                            <DataGridTextColumn Width="140" Header="Vendor" Binding="{Binding VendorDisplay}" />
+                            <DataGridTextColumn Width="200" Header="Name" Binding="{Binding Name}" />
+                            <DataGridTextColumn Width="90" Header="Ecosystem" Binding="{Binding EcosystemDisplay}" />
+                            <DataGridTextColumn Width="180" Header="Framework" Binding="{Binding Framework}" />
+                            <DataGridTextColumn Width="80" Header="Version" Binding="{Binding Version}" />
+                            <DataGridTextColumn Width="70" Header="Installs" Binding="{Binding InstallCountDisplay}" />
+                            <DataGridTextColumn Width="130" Header="Identity" Binding="{Binding IdentityDisplay}" />
+                            <DataGridTextColumn Width="130" Header="Presence" Binding="{Binding PresenceDisplay}" />
+                            <DataGridTextColumn Width="130" Header="Last seen" Binding="{Binding LastSeenDisplay}" />
+                        </ui:DataGrid.Columns>
+                    </ui:DataGrid>
+
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding UsingFallbackView, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock HorizontalAlignment="Center"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Text="No component rollup available" />
+                        <TextBlock Margin="0,6,0,0"
+                                   MaxWidth="420"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Text="Use the table browser below to inspect the raw tables this install's inventory.db does have." />
+                    </StackPanel>
+
+                    <ui:ProgressRing IsIndeterminate="True"
+                                     Width="32"
+                                     Height="32"
+                                     Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2"
+                    Padding="14"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Margin="0,0,0,8"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="Raw row detail" />
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding DetailRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Text="{Binding Key}" />
+                                        <TextBlock Grid.Row="1"
+                                                   TextWrapping="Wrap"
+                                                   FontFamily="Cascadia Mono, Consolas"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   Text="{Binding Value}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <TextBlock Grid.Row="1"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="Select a row to see every column."
+                               Visibility="{Binding NoComponentSelected, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Table browser: power-user access to every other table/view InventoryReader discovers -->
+        <ui:CardExpander Grid.Row="4"
+                         Margin="0,12,0,0"
+                         Header="Table browser (all tables in inventory.db)">
+            <Grid Margin="0,10,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="320" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Table or view" />
+                    <ComboBox Grid.Column="1"
+                              VerticalAlignment="Center"
+                              ItemsSource="{Binding Tables}"
+                              SelectedItem="{Binding SelectedTable}"
+                              DisplayMemberPath="Name" />
+                    <TextBlock Grid.Column="2"
+                               Margin="14,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                        <Run Text="{Binding SelectedTable.Kind, Mode=OneWay}" />
+                        <Run Text=" · " />
+                        <Run Text="{Binding SelectedTable.RowCountDisplay, Mode=OneWay}" />
+                        <Run Text=" rows (first 200 shown)" />
+                    </TextBlock>
+                </Grid>
+
+                <ui:InfoBar Grid.Row="1"
+                            Margin="0,0,0,8"
+                            Title="Could not browse table"
+                            IsClosable="False"
+                            IsOpen="{Binding HasTableBrowserError}"
+                            Message="{Binding TableBrowserError}"
+                            Severity="Warning" />
+
+                <Grid Grid.Row="2">
+                    <ui:DataGrid AutoGenerateColumns="True"
+                                 IsReadOnly="True"
+                                 GridLinesVisibility="Horizontal"
+                                 HeadersVisibility="Column"
+                                 ItemsSource="{Binding BrowsedRows}" />
+                    <ui:ProgressRing IsIndeterminate="True"
+                                     Width="28"
+                                     Height="28"
+                                     Visibility="{Binding IsTableLoading, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="Pick a table above to browse its rows."
+                               Visibility="{Binding NoTableSelected, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+            </Grid>
+        </ui:CardExpander>
     </Grid>
 </UserControl>

@@ -1,48 +1,199 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.RegistriesPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!--
-        Placeholder. A later milestone replaces the contents of this file and of
-        ViewModels\RegistriesPanelViewModel.cs - and nothing else. Navigation registration
-        lives in Services\PanelCatalog.cs and does not need to change.
-    -->
-    <Grid Margin="28,24,28,24">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:RegistriesPanelViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Grid Margin="28,24,28,20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,18">
-            <TextBlock FontSize="26"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding Title}" />
-            <TextBlock Margin="0,4,0,0"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding Description}" />
-        </StackPanel>
-
-        <Border Grid.Row="1"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock HorizontalAlignment="Center"
-                           FontSize="18"
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock FontSize="26"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="Coming soon" />
-                <TextBlock Margin="0,6,0,0"
-                           HorizontalAlignment="Center"
-                           MaxWidth="460"
-                           TextAlignment="Center"
+                           Text="{Binding Title}" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="13"
                            TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="This panel lands in a later milestone. The shell, navigation and gateway state around it are already live." />
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding Description}" />
             </StackPanel>
-        </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <TextBlock Margin="0,0,14,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Text="{Binding StatusMessage}" />
+                <ui:Button Padding="10,4,10,4" Content="Refresh" Command="{Binding RefreshCommand}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- What a registry source is, and the CLI error banner if the read failed -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,10">
+            <ui:InfoBar IsClosable="False"
+                        IsOpen="True"
+                        Severity="Informational"
+                        Title="What a registry source is"
+                        Message="A fetchable manifest (corporate HTTPS YAML, smithery.ai, a git repo with defenseclaw-registry.yaml, …) that DefenseClaw ingests on demand. Synced entries are scanned with the normal skill/MCP scanners and clean ones are auto-promoted into policy. Read here via 'defenseclaw registry list --json' — nothing on this panel writes anything." />
+
+            <ui:InfoBar Margin="0,6,0,0"
+                        Title="Could not read registry sources"
+                        IsClosable="False"
+                        IsOpen="{Binding HasCliError}"
+                        Message="{Binding CliErrorMessage}"
+                        Severity="Warning" />
+        </StackPanel>
+
+        <ui:ProgressRing Grid.Row="2"
+                         Width="28"
+                         Height="28"
+                         HorizontalAlignment="Left"
+                         IsIndeterminate="True"
+                         Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+
+        <!-- Sources, or the empty state -->
+        <Grid Grid.Row="3">
+            <Border CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    Visibility="{Binding HasNoSources, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock HorizontalAlignment="Center"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="No registry sources configured" />
+                    <TextBlock Margin="0,6,0,12"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="Add one from a terminal — this app never runs mutating registry commands for you:" />
+
+                    <Border Padding="12,8,12,8"
+                            CornerRadius="4"
+                            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                        <StackPanel>
+                            <TextBox FontFamily="Cascadia Mono, Consolas"
+                                     IsReadOnly="True"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                     Text="defenseclaw registry add &lt;id&gt; --url &lt;manifest-url&gt;" />
+                            <TextBox Margin="0,6,0,0"
+                                     FontFamily="Cascadia Mono, Consolas"
+                                     IsReadOnly="True"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                     Text="defenseclaw registry wizard" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Margin="0,14,0,0" Visibility="{Binding HasConfigSection, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Text="config.yaml does have a registry: section though — raw text:" />
+                        <Border Margin="0,6,0,0"
+                                MaxHeight="160"
+                                Padding="10"
+                                CornerRadius="4"
+                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <TextBlock FontFamily="Cascadia Mono, Consolas"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Text="{Binding ConfigSectionYaml}" />
+                            </ScrollViewer>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Grid Visibility="{Binding HasSources, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.4*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="1*" MinWidth="260" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        CornerRadius="8"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                    <ui:DataGrid AutoGenerateColumns="False"
+                                 IsReadOnly="True"
+                                 GridLinesVisibility="Horizontal"
+                                 HeadersVisibility="Column"
+                                 SelectionMode="Single"
+                                 ItemsSource="{Binding Sources}"
+                                 SelectedItem="{Binding SelectedSource}">
+                        <ui:DataGrid.Columns>
+                            <DataGridTextColumn Width="160" Header="Id" Binding="{Binding Id}" />
+                            <DataGridTextColumn Width="100" Header="Type" Binding="{Binding Kind}" />
+                            <DataGridTextColumn Width="*" Header="Location" Binding="{Binding Location}" />
+                            <DataGridTextColumn Width="140" Header="Entries" Binding="{Binding EntriesSummary}" />
+                        </ui:DataGrid.Columns>
+                    </ui:DataGrid>
+                </Border>
+
+                <Border Grid.Column="2"
+                        Padding="14"
+                        CornerRadius="8"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Margin="0,0,0,8"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Text="Raw fields" />
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding SelectedSource.Fields}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                       Text="{Binding Key}" />
+                                            <TextBlock Grid.Row="1"
+                                                       TextWrapping="Wrap"
+                                                       FontFamily="Cascadia Mono, Consolas"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                       Text="{Binding Value}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>
