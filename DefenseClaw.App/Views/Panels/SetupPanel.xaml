@@ -1,48 +1,332 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.SetupPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
     <!--
-        Placeholder. A later milestone replaces the contents of this file and of
-        ViewModels\SetupPanelViewModel.cs - and nothing else. Navigation registration
-        lives in Services\PanelCatalog.cs and does not need to change.
+        The Setup hub. Cards are generated from the CLI's own setup help at runtime, so this
+        file describes a card, not a catalogue - adding a setup target upstream needs no edit
+        here. Uncertified targets stay launchable and carry their warning into the wizard.
     -->
-    <Grid Margin="28,24,28,24">
+    <UserControl.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+
+        <Style x:Key="Secondary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Tertiary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Chip" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="7,2,7,2" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+        </Style>
+
+        <Style x:Key="ChipText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="24,20,24,20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,18">
-            <TextBlock FontSize="26"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding Title}" />
-            <TextBlock Margin="0,4,0,0"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding Description}" />
-        </StackPanel>
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="1"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock HorizontalAlignment="Center"
-                           FontSize="18"
+            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock FontSize="26"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="Coming soon" />
-                <TextBlock Margin="0,6,0,0"
-                           HorizontalAlignment="Center"
-                           MaxWidth="460"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="This panel lands in a later milestone. The shell, navigation and gateway state around it are already live." />
+                           Text="{Binding Title}" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="13"
+                           Style="{StaticResource Secondary}"
+                           Text="{Binding Description}" />
+            </StackPanel>
+
+            <ui:Button Grid.Column="1"
+                       VerticalAlignment="Center"
+                       Content="Re-read catalog"
+                       Command="{Binding RefreshCommand}">
+                <ui:Button.Icon>
+                    <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                </ui:Button.Icon>
+            </ui:Button>
+        </Grid>
+
+        <!-- Connector roster: what the wizards are acting on right now. -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Text="Configured connectors" />
+
+                <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding Connectors}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,10,8"
+                                    Padding="10,6,10,6"
+                                    CornerRadius="6"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                    Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                                    ToolTip="{Binding MismatchNote}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   Text="{Binding Name}" />
+                                        <Border Margin="10,0,0,0" Style="{StaticResource Chip}">
+                                            <TextBlock Style="{StaticResource ChipText}" Text="{Binding Mode}" />
+                                        </Border>
+                                        <!-- Fail-mode is a first-class chip: observe + fail-closed is the
+                                             recurring bad default this project keeps meeting. -->
+                                        <Border>
+                                            <Border.Style>
+                                                <Style TargetType="Border" BasedOn="{StaticResource Chip}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasMismatch}" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Style="{StaticResource ChipText}" Text="{Binding FailMode}" />
+                                        </Border>
+                                    </StackPanel>
+
+                                    <TextBlock Margin="0,4,0,0"
+                                               MaxWidth="320"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding HasMismatch, Converter={StaticResource BoolToVisibility}}"
+                                               Text="{Binding MismatchNote}" />
+
+                                    <TextBlock Margin="0,2,0,0"
+                                               FontSize="10"
+                                               Style="{StaticResource Tertiary}"
+                                               Text="{Binding SourceNote}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock FontSize="11" Style="{StaticResource Tertiary}" Text="{Binding ConnectorNote}" />
             </StackPanel>
         </Border>
+
+        <!-- Filters -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+                <WrapPanel>
+                    <ui:TextBox Width="320"
+                                VerticalAlignment="Center"
+                                PlaceholderText="Search wizards by name, target or description…"
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <ui:ToggleSwitch IsChecked="{Binding CertifiedOnly, Mode=TwoWay}" />
+                        <TextBlock Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource Secondary}"
+                                   Text="Certified on this platform" />
+                    </StackPanel>
+
+                    <ui:Button Margin="16,0,0,0"
+                               Padding="10,5,10,5"
+                               Appearance="Secondary"
+                               Content="Clear"
+                               Command="{Binding ClearFiltersCommand}" />
+                </WrapPanel>
+
+                <TextBlock Margin="0,10,0,0"
+                           FontSize="11"
+                           Style="{StaticResource Tertiary}"
+                           Text="{Binding StatusNote}" />
+
+                <ui:InfoBar Margin="0,10,0,0"
+                            IsClosable="False"
+                            Severity="Error"
+                            Title="The setup catalog could not be read"
+                            IsOpen="{Binding HasLoadError, Mode=OneWay}"
+                            Message="{Binding LoadError}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Card grid, grouped -->
+        <Grid Grid.Row="3">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,0,0,18">
+                                <StackPanel Orientation="Horizontal" Margin="2,0,0,8">
+                                    <TextBlock FontSize="15"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Text="{Binding Name}" />
+                                    <TextBlock Margin="8,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Style="{StaticResource Tertiary}"
+                                               Text="{Binding CountText}" />
+                                </StackPanel>
+
+                                <ItemsControl ItemsSource="{Binding Cards}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="288"
+                                                    Height="176"
+                                                    Margin="0,0,12,12"
+                                                    Style="{StaticResource Card}">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto" />
+                                                        <RowDefinition Height="*" />
+                                                        <RowDefinition Height="Auto" />
+                                                    </Grid.RowDefinitions>
+
+                                                    <StackPanel Grid.Row="0">
+                                                        <TextBlock FontSize="15"
+                                                                   FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                   Text="{Binding Title}" />
+                                                        <TextBlock Margin="0,2,0,0"
+                                                                   FontSize="11"
+                                                                   FontFamily="Cascadia Mono, Consolas"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Style="{StaticResource Tertiary}"
+                                                                   Text="{Binding CommandHint}" />
+                                                    </StackPanel>
+
+                                                    <TextBlock Grid.Row="1"
+                                                               Margin="0,8,0,8"
+                                                               FontSize="12"
+                                                               MaxHeight="56"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Style="{StaticResource Secondary}"
+                                                               Text="{Binding Summary}" />
+
+                                                    <StackPanel Grid.Row="2">
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <!-- Certification badge: amber for not_certified,
+                                                                 red for unsupported, neutral when unknown. -->
+                                                            <Border>
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border" BasedOn="{StaticResource Chip}">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding BadgeKey}" Value="Ok">
+                                                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding BadgeKey}" Value="Warn">
+                                                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding BadgeKey}" Value="Bad">
+                                                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Style="{StaticResource ChipText}" Text="{Binding Badge}" />
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <TextBlock Grid.Column="0"
+                                                                       VerticalAlignment="Center"
+                                                                       FontSize="10"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Style="{StaticResource Tertiary}"
+                                                                       Text="{Binding StepNote}" />
+
+                                                            <ui:Button Grid.Column="1"
+                                                                       Padding="12,5,12,5"
+                                                                       Appearance="Secondary"
+                                                                       Content="Configure"
+                                                                       Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                       CommandParameter="{Binding}" />
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Empty and loading are states, not failures: say which one. -->
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MaxWidth="460"
+                        Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}">
+                <ui:ProgressRing IsIndeterminate="True" HorizontalAlignment="Center" />
+                <TextBlock Margin="0,12,0,0"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           Style="{StaticResource Tertiary}"
+                           Text="Asking the CLI which setup targets it has." />
+            </StackPanel>
+
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MaxWidth="460"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock HorizontalAlignment="Center"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="No wizards match" />
+                <TextBlock Margin="0,6,0,0"
+                           TextAlignment="Center"
+                           Style="{StaticResource Tertiary}"
+                           Text="Clear the search, or turn off the certified-only filter: on this platform only Claude Code and Codex are certified." />
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>
