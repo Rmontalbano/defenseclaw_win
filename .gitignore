@@ -1,0 +1,17 @@
+# .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+publish/
+TestResults/
+*.binlog
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Local-only
+*.local.json
