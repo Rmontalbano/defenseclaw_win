@@ -15,3 +15,6 @@ TestResults/
 
 # Local-only
 *.local.json
+
+# Agent worktrees
+.claude/

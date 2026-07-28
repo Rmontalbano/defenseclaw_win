@@ -1,18 +1,32 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.PluginsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:DefenseClaw.App.Views.Panels">
     <!--
-        Placeholder. A later milestone replaces the contents of this file and of
-        ViewModels\PluginsPanelViewModel.cs - and nothing else. Navigation registration
-        lives in Services\PanelCatalog.cs and does not need to change.
+        Plugins panel: there is no gateway endpoint for plugins, so this panel reads local
+        state via the read-only CLI command "defenseclaw plugin list json" (verified with
+        "defenseclaw plugin help" / "plugin list help" against the live 0.8.7 install; flags
+        elided here only to keep this XML comment from tripping on a double hyphen) instead
+        of GatewayClient. Install/remove mutations run through the same confirm overlay as
+        the other Govern panels. See ViewModels\PluginsPanelViewModel.cs for the data and
+        command logic - this view only lays it out and binds to it.
     -->
+    <UserControl.Resources>
+        <local:PluginsTruthyToVisibilityConverter x:Key="Truthy" />
+    </UserControl.Resources>
+
     <Grid Margin="28,24,28,24">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,18">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
             <TextBlock FontSize="26"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -24,25 +38,192 @@
                        Text="{Binding Description}" />
         </StackPanel>
 
+        <!-- Toolbar -->
         <Border Grid.Row="1"
+                Margin="0,0,0,14"
+                Padding="12,10"
                 CornerRadius="8"
                 BorderThickness="1"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock HorizontalAlignment="Center"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="Coming soon" />
-                <TextBlock Margin="0,6,0,0"
-                           HorizontalAlignment="Center"
-                           MaxWidth="460"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="This panel lands in a later milestone. The shell, navigation and gateway state around it are already live." />
+            <StackPanel Orientation="Horizontal">
+                <ui:Button Content="Refresh"
+                           Command="{Binding RefreshCommand}"
+                           IsEnabled="{Binding IsIdle}" />
+                <TextBlock Margin="18,0,6,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="Connector scope:" />
+                <ComboBox MinWidth="180"
+                          VerticalAlignment="Center"
+                          ItemsSource="{Binding Connectors}"
+                          SelectedItem="{Binding SelectedConnector, Mode=TwoWay}" />
+                <ui:Button Margin="18,0,0,0"
+                           Content="Install plugin…"
+                           Command="{Binding ToggleInstallFormCommand}" />
             </StackPanel>
         </Border>
+
+        <!-- Install plugin mini form -->
+        <Border Grid.Row="2"
+                Margin="0,0,0,14"
+                Padding="14"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                Visibility="{Binding IsInstallFormOpen, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock FontWeight="SemiBold" Text="Install a plugin (defenseclaw plugin install)" />
+                <TextBlock Margin="0,10,0,4"
+                           FontSize="12"
+                           Text="Local path, npm package, clawhub:// URI, or HTTPS URL" />
+                <ui:TextBox Text="{Binding InstallNameOrPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <CheckBox Margin="0,10,0,0"
+                          Content="Force (overwrite an existing plugin)"
+                          IsChecked="{Binding InstallForce, Mode=TwoWay}" />
+                <CheckBox Margin="0,6,0,0"
+                          Content="Apply the configured plugin_actions policy based on scan severity"
+                          IsChecked="{Binding InstallApplyActionPolicy, Mode=TwoWay}" />
+                <StackPanel Margin="0,12,0,0"
+                            HorizontalAlignment="Right"
+                            Orientation="Horizontal">
+                    <ui:Button Margin="0,0,8,0"
+                               Content="Cancel"
+                               Command="{Binding ToggleInstallFormCommand}" />
+                    <ui:Button Appearance="Primary"
+                               Content="Review command"
+                               Command="{Binding SubmitInstallFormCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Mutation result -->
+        <ui:InfoBar Grid.Row="3"
+                    Margin="0,0,0,14"
+                    Title="{Binding ResultTitle}"
+                    Message="{Binding ResultMessage}"
+                    Severity="{Binding ResultSeverity}"
+                    IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
+                    IsClosable="True" />
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <ui:InfoBar Margin="0,0,0,14"
+                            Title="Plugins"
+                            Message="{Binding BannerMessage}"
+                            Severity="Informational"
+                            IsOpen="{Binding ShowBanner}"
+                            IsClosable="False" />
+
+                <ui:ProgressRing Width="32"
+                                  Height="32"
+                                  Margin="0,24,0,0"
+                                  HorizontalAlignment="Center"
+                                  IsIndeterminate="True"
+                                  Visibility="{Binding IsLoadingState, Converter={StaticResource BoolToVisibility}}" />
+
+                <ItemsControl Visibility="{Binding IsLoadedState, Converter={StaticResource BoolToVisibility}}"
+                              ItemsSource="{Binding Plugins}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel VirtualizationMode="Recycling" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <ui:CardExpander Margin="0,0,0,8">
+                                <ui:CardExpander.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                                            <TextBlock Margin="0,2,0,0"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding Severity, StringFormat='severity: {0}'}"
+                                                       Visibility="{Binding Severity, Converter={StaticResource Truthy}}" />
+                                            <TextBlock Margin="0,2,0,0"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding Connector, StringFormat='connector: {0}'}"
+                                                       Visibility="{Binding Connector, Converter={StaticResource Truthy}}" />
+                                        </StackPanel>
+
+                                        <ui:Button Grid.Column="1"
+                                                   Content="Remove"
+                                                   Command="{Binding DataContext.RemovePluginCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                   CommandParameter="{Binding}" />
+                                    </Grid>
+                                </ui:CardExpander.Header>
+
+                                <Border Padding="4"
+                                        Background="{DynamicResource LayerFillColorDefaultBrush}">
+                                    <TextBox MaxHeight="220"
+                                             VerticalScrollBarVisibility="Auto"
+                                             HorizontalScrollBarVisibility="Auto"
+                                             FontFamily="Consolas"
+                                             FontSize="12"
+                                             IsReadOnly="True"
+                                             TextWrapping="NoWrap"
+                                             Text="{Binding RawJson, Mode=OneWay}" />
+                                </Border>
+                            </ui:CardExpander>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Confirm-mutation overlay: shows the exact argv before anything runs. -->
+        <Grid Grid.Row="0"
+              Grid.RowSpan="5"
+              Background="#88000000"
+              Visibility="{Binding IsConfirmOpen, Converter={StaticResource BoolToVisibility}}">
+            <Border MaxWidth="560"
+                    Padding="20"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource ApplicationBackgroundBrush}">
+                <StackPanel>
+                    <TextBlock FontSize="16"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               Text="{Binding ConfirmHeading}" />
+                    <TextBlock Margin="0,10,0,0"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="This is the exact command that will run. Nothing happens until you confirm." />
+                    <Border Margin="0,10,0,0"
+                            Padding="10"
+                            CornerRadius="4"
+                            Background="{DynamicResource LayerFillColorDefaultBrush}">
+                        <TextBox FontFamily="Consolas"
+                                 FontSize="12"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 Text="{Binding ConfirmCommandText, Mode=OneWay}" />
+                    </Border>
+                    <StackPanel Margin="0,16,0,0"
+                                HorizontalAlignment="Right"
+                                Orientation="Horizontal">
+                        <ui:Button Margin="0,0,8,0"
+                                   Content="Cancel"
+                                   Command="{Binding ConfirmNoCommand}" />
+                        <ui:Button Appearance="Primary"
+                                   Content="Run command"
+                                   Command="{Binding ConfirmYesCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>
