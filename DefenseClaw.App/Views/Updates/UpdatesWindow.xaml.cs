@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.ViewModels.Updates;
 using Wpf.Ui.Controls;
@@ -5,15 +6,21 @@ using Wpf.Ui.Controls;
 namespace DefenseClaw.App.Views.Updates;
 
 /// <summary>
-/// Install/update awareness surface: installed-vs-latest version, an honest trust panel
-/// (Authenticode + sigstore + stub-asset sanity read straight off the GitHub release), and
-/// copyable — never executed — upgrade commands.
+/// Install/update surface: installed-vs-latest version, an honest trust panel (Authenticode +
+/// sigstore + stub-asset sanity read straight off the GitHub release), copyable upgrade
+/// commands, and the in-app upgrade flow.
 /// <para>
-/// <b>This window never mutates anything.</b> Every other write path in this app goes through
-/// <see cref="DefenseClaw.Core.Cli.CliRunner"/> so the Activity panel can record exact argv;
-/// this window has no such path at all, deliberately: an update/upgrade is consequential
-/// enough that the operator should run it themselves, with the exact command in front of
-/// them, not have this companion app run it on their behalf.
+/// <b>The upgrade flow is the one mutation here, and it is deliberately unhurried.</b> Checking,
+/// staging and running are three separate clicks; the run is gated behind a confirm overlay that
+/// prints the exact argv, what the resolver will replace, and how it rolls back. The command
+/// itself goes through <see cref="DefenseClaw.Core.Cli.CliRunner"/> — same as every other change
+/// this app makes — so the Activity panel records the argv, the streaming output and the exit
+/// code. Nothing runs on its own, and nothing runs that was not first size-checked and
+/// hash-verified against the release's signed checksums.txt.
+/// </para>
+/// <para>
+/// This class owns only window concerns: lifetime, single-instance behaviour, and keeping the
+/// resolver console pinned to its newest line.
 /// </para>
 /// </summary>
 public sealed partial class UpdatesWindow : FluentWindow
@@ -29,6 +36,7 @@ public sealed partial class UpdatesWindow : FluentWindow
         InitializeComponent();
         DataContext = viewModel;
 
+        ((INotifyCollectionChanged)_viewModel.Upgrade.Output).CollectionChanged += OnUpgradeOutputChanged;
         Closed += OnClosed;
     }
 
@@ -68,9 +76,25 @@ public sealed partial class UpdatesWindow : FluentWindow
         return window;
     }
 
+    /// <summary>
+    /// Keeps the console on its newest line while the resolver runs. Honours the pause toggle:
+    /// an operator reading back through a long upgrade should not be yanked to the bottom every
+    /// quarter second. Lines are still collected while paused — only the scrolling stops.
+    /// </summary>
+    private void OnUpgradeOutputChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action != NotifyCollectionChangedAction.Add || _viewModel.Upgrade.IsOutputPaused)
+        {
+            return;
+        }
+
+        UpgradeOutputScroll.ScrollToEnd();
+    }
+
     private void OnClosed(object? sender, EventArgs e)
     {
         Closed -= OnClosed;
+        ((INotifyCollectionChanged)_viewModel.Upgrade.Output).CollectionChanged -= OnUpgradeOutputChanged;
         _viewModel.Dispose();
 
         if (ReferenceEquals(_current, this))

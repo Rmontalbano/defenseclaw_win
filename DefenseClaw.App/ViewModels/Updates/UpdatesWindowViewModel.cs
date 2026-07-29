@@ -11,9 +11,14 @@ using DefenseClaw.App.Services.Updates;
 namespace DefenseClaw.App.ViewModels.Updates;
 
 /// <summary>
-/// Drives the Updates window: installed-vs-latest comparison, the trust panel, and static
-/// upgrade guidance. Nothing here downloads an artifact or runs an upgrade — see the class
-/// remarks on <see cref="Views.Updates.UpdatesWindow"/> for why.
+/// Drives the Updates window: installed-vs-latest comparison, the trust panel, the copyable
+/// upgrade guidance, and — through <see cref="Upgrade"/> — the in-app upgrade flow.
+/// <para>
+/// The check and trust halves are still read-only. The one path that changes this machine is
+/// <see cref="UpgradeSectionViewModel"/>, and it does so the way the rest of the app does: by
+/// shelling out through <see cref="DefenseClaw.Core.Cli.CliRunner"/> with the exact argv shown
+/// to the operator first.
+/// </para>
 /// </summary>
 public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposable
 {
@@ -21,6 +26,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     private readonly HttpClient _http;
     private readonly UpdateChecker _updateChecker;
     private readonly ProvenanceInspector _provenanceInspector;
+    private readonly UpgradeRunner _upgradeRunner;
     private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
 
@@ -123,10 +129,17 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         _http = UpdateChecker.CreateHttpClient();
         _updateChecker = new UpdateChecker(_services, _http, ownsHttpClient: true);
         _provenanceInspector = new ProvenanceInspector(_http, ownsHttpClient: false);
+        _upgradeRunner = new UpgradeRunner(_services.Cli, _http);
+
+        Upgrade = new UpgradeSectionViewModel(_services, _upgradeRunner);
+        Upgrade.UpgradeSucceeded += OnUpgradeSucceeded;
     }
 
     /// <summary>Individual stub-asset warnings for the trust panel's detail list.</summary>
     public ObservableCollection<StubAssetWarning> StubWarnings { get; } = new();
+
+    /// <summary>The in-app upgrade flow: cosign preflight, verify, confirm, run.</summary>
+    public UpgradeSectionViewModel Upgrade { get; }
 
     /// <summary>
     /// Static context about the known-broken 0.8.6→0.8.7 in-place upgrade, shown next to the
@@ -181,11 +194,20 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         }
 
         _disposed = true;
+        Upgrade.UpgradeSucceeded -= OnUpgradeSucceeded;
+        Upgrade.Dispose();
         _cts.Cancel();
         _cts.Dispose();
         _provenanceInspector.Dispose();
         _updateChecker.Dispose();
     }
+
+    /// <summary>
+    /// Re-runs the check after a successful upgrade so the installed version is re-resolved from
+    /// the new binaries. Not forced: the release data is already cached, and this is about the
+    /// local side of the comparison, not GitHub's.
+    /// </summary>
+    private void OnUpgradeSucceeded(object? sender, EventArgs e) => _ = RunCheckAsync(forceRefresh: false);
 
     private static void CopyToClipboard(string? text)
     {
@@ -287,11 +309,15 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             ? $"Start-Process \"{setupAsset.DownloadUrl}\"  # opens the Setup download in your browser"
             : "No Setup exe asset was found on this release.";
 
+        Upgrade.ApplyCheck(result);
+
         OpenReleasePageCommand.NotifyCanExecuteChanged();
     }
 
     private void ApplyProvenance(ProvenanceReport report)
     {
+        Upgrade.ApplyProvenance(report);
+
         AuthenticodeLabel = report.InstallerAuthenticode switch
         {
             AuthenticodeStatus.Signed => "Authenticode-signed",
@@ -364,6 +390,8 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
 
     private void ClearProvenance()
     {
+        Upgrade.ApplyProvenance(new ProvenanceReport());
+
         AuthenticodeLabel = "Unknown";
         AuthenticodeDetail = "No release assets to inspect.";
         AuthenticodeBadgeKey = "Neutral";
