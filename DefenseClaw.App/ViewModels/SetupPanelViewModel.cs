@@ -65,6 +65,14 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
     public override string Title => "Setup";
 
+    /// <summary>Opens the config.yaml editor (raw AvalonEdit + generated form tabs).</summary>
+    [RelayCommand]
+    private void OpenConfigEditor() => Views.ConfigEditor.ConfigEditorWindow.Show(Services);
+
+    /// <summary>Opens the runtime update / release-trust awareness window.</summary>
+    [RelayCommand]
+    private void OpenUpdates() => Views.Updates.UpdatesWindow.Show(Services);
+
     public override string Description =>
         "Every defenseclaw setup flow on this machine, discovered from the CLI at runtime. Each one ends on a review screen showing the exact command before anything runs.";
 

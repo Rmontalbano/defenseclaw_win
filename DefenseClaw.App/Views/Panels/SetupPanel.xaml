@@ -168,6 +168,22 @@
                                Appearance="Secondary"
                                Content="Clear"
                                Command="{Binding ClearFiltersCommand}" />
+
+                    <ui:Button Margin="24,0,0,0"
+                               Padding="10,5,10,5"
+                               Appearance="Secondary"
+                               Icon="{ui:SymbolIcon DocumentEdit24}"
+                               Content="Config editor"
+                               ToolTip="Edit config.yaml with backup, validation and restore"
+                               Command="{Binding OpenConfigEditorCommand}" />
+
+                    <ui:Button Margin="8,0,0,0"
+                               Padding="10,5,10,5"
+                               Appearance="Secondary"
+                               Icon="{ui:SymbolIcon ArrowSync24}"
+                               Content="Updates &amp; trust"
+                               ToolTip="Installed vs latest release, signing and provenance status"
+                               Command="{Binding OpenUpdatesCommand}" />
                 </WrapPanel>
 
                 <TextBlock Margin="0,10,0,0"

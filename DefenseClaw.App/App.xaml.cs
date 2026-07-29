@@ -49,7 +49,12 @@ public partial class App : Application
 
         _window = new MainWindow(_services, _catalog, _tray);
         MainWindow = _window;
-        _window.Show();
+
+        // Autostart launches with --minimized: the tray is the app until the user asks for more.
+        if (!e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase))
+        {
+            _window.Show();
+        }
 
         // Started last, on the UI thread, so StateChanged is raised where the bindings live.
         _services.Monitor.Start();

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views;
+using DefenseClaw.Core.Install;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 
@@ -22,6 +23,11 @@ public sealed class TrayIconService : IDisposable
     private readonly TrayFlyoutViewModel _flyoutViewModel;
     private TrayFlyoutWindow? _flyout;
     private ShieldState? _currentShield;
+    private MenuItem? _gatewayItem;
+    private MenuItem? _autostartItem;
+    private int _lastCriticalCount;
+    private AppGatewayState _lastState = AppGatewayState.Unknown;
+    private bool _gatewayActionRunning;
     private bool _disposed;
 
     public TrayIconService(AppServices services)
@@ -97,15 +103,27 @@ public sealed class TrayIconService : IDisposable
         open.Click += (_, _) => OnOpenDashboard();
         _ = menu.Items.Add(open);
 
-        // Deliberately enabled but inert: wiring this to `defenseclaw-gateway start` is a
-        // later milestone, and every mutation this app makes has to land in the Activity
-        // panel with its exact argv. A menu item that silently shells out would not.
-        var start = new MenuItem { Header = "Start Gateway" };
-        start.Click += (_, _) => Notify(
-            "Start Gateway",
-            "Gateway control is wired in a later milestone. For now, run 'defenseclaw-gateway start' yourself.",
-            NotificationIcon.Info);
-        _ = menu.Items.Add(start);
+        // Gateway control goes through CliRunner, so the invocation — exact argv, output,
+        // exit code — lands in the Activity panel like every other mutation this app makes.
+        _gatewayItem = new MenuItem { Header = "Start Gateway" };
+        _gatewayItem.Click += async (_, _) => await ToggleGatewayAsync();
+        _ = menu.Items.Add(_gatewayItem);
+
+        _autostartItem = new MenuItem
+        {
+            Header = "Start with Windows",
+            IsCheckable = true,
+            IsChecked = AutostartManager.IsEnabled,
+        };
+        _autostartItem.Click += (_, _) =>
+        {
+            var on = AutostartManager.Toggle();
+            _autostartItem.IsChecked = on;
+            Notify("Start with Windows", on
+                ? "DefenseClaw will start minimized to the tray when you sign in."
+                : "Autostart removed.", NotificationIcon.Info);
+        };
+        _ = menu.Items.Add(_autostartItem);
 
         _ = menu.Items.Add(new Separator());
 
@@ -139,6 +157,37 @@ public sealed class TrayIconService : IDisposable
 
     private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e) => Apply(e.Snapshot);
 
+    /// <summary>Runs `defenseclaw-gateway start` or `stop` depending on the current state.</summary>
+    private async Task ToggleGatewayAsync()
+    {
+        if (_gatewayActionRunning)
+        {
+            return;
+        }
+
+        var stopping = _services.Monitor.Current.IsRunning;
+        _gatewayActionRunning = true;
+        try
+        {
+            var invocation = await _services.Cli.RunGatewayAsync(new[] { stopping ? "stop" : "start" });
+            Notify(
+                stopping ? "Stop Gateway" : "Start Gateway",
+                invocation.ExitCode == 0
+                    ? $"defenseclaw-gateway {(stopping ? "stop" : "start")} succeeded."
+                    : $"Exit code {invocation.ExitCode} — see the Activity panel for output.",
+                invocation.ExitCode == 0 ? NotificationIcon.Info : NotificationIcon.Warning);
+            _ = await _services.Monitor.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Notify("Gateway control failed", ex.Message, NotificationIcon.Error);
+        }
+        finally
+        {
+            _gatewayActionRunning = false;
+        }
+    }
+
     private void Apply(GatewaySnapshot snapshot)
     {
         var shield = ShieldIconFactory.StateFor(snapshot);
@@ -154,5 +203,27 @@ public sealed class TrayIconService : IDisposable
             : $"\n{snapshot.AlertCount} recent alert{(snapshot.AlertCount == 1 ? string.Empty : "s")}";
 
         _icon.ToolTipText = $"DefenseClaw — {snapshot.StateLabel}{alerts}";
+
+        // Toast on new CRITICALs and on losing the gateway — not on every poll.
+        if (snapshot.CriticalAlertCount > _lastCriticalCount)
+        {
+            Notify(
+                "Critical finding",
+                $"{snapshot.CriticalAlertCount - _lastCriticalCount} new CRITICAL alert(s) — open Alerts for detail.",
+                NotificationIcon.Error);
+        }
+        _lastCriticalCount = snapshot.CriticalAlertCount;
+
+        if (_lastState == AppGatewayState.Running && snapshot.State is AppGatewayState.GatewayStopped or AppGatewayState.Degraded)
+        {
+            Notify("Gateway lost", snapshot.Detail, NotificationIcon.Warning);
+        }
+        _lastState = snapshot.State;
+
+        if (_gatewayItem is not null)
+        {
+            _gatewayItem.Header = snapshot.IsRunning ? "Stop Gateway" : "Start Gateway";
+            _gatewayItem.IsEnabled = snapshot.Install is not (null or InstallState.NotInstalled);
+        }
     }
 }
