@@ -39,7 +39,33 @@ public partial class MainWindow : FluentWindow
         // Application.ThemeMode alone only covers the framework's Fluent dictionaries.
         SystemThemeWatcher.Watch(this);
 
+        // Taskbar icon mirrors the tray shield, colour and all, so alt-tab tells the same
+        // story as the notification area. Rendered at 256px so alt-tab and taskbar scaling
+        // stay crisp; cached per state because StateChanged fires every poll.
+        ApplyShieldIcon(ShieldIconFactory.StateFor(services.Monitor.Current));
+        services.Monitor.StateChanged += (_, e) => ApplyShieldIcon(ShieldIconFactory.StateFor(e.Snapshot));
+
         Loaded += OnLoaded;
+    }
+
+    private static readonly Dictionary<ShieldState, System.Windows.Media.ImageSource> ShieldImageCache = new();
+    private ShieldState? _currentIconState;
+
+    private void ApplyShieldIcon(ShieldState state)
+    {
+        if (_currentIconState == state)
+        {
+            return;
+        }
+
+        _currentIconState = state;
+        if (!ShieldImageCache.TryGetValue(state, out var image))
+        {
+            image = ShieldIconFactory.CreateImage(state, 256);
+            ShieldImageCache[state] = image;
+        }
+
+        Icon = image;
     }
 
     /// <summary>Brings the window back from the tray. Used by the tray and by a second launch.</summary>
