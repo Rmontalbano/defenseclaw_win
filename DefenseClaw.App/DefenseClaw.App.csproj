@@ -16,6 +16,13 @@
       Fluent theming switch this shell is built on. Opting in is deliberate.
     -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!--
+      The one binary asset in the repo. Generated from ShieldIconFactory (Running state)
+      by a throwaway harness, so the compiled file icon — Explorer, Start menu, alt-tab
+      fallback — is the same shield the tray and taskbar draw at runtime. Regenerate by
+      rendering CreateImage at 16/24/32/48/64/128/256 and repacking; do not hand-edit.
+    -->
+    <ApplicationIcon>Assets\DefenseClaw.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
