@@ -1,0 +1,342 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.Updates.UpdatesWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="DefenseClaw Updates"
+                 Width="780"
+                 Height="760"
+                 MinWidth="620"
+                 MinHeight="520"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterScreen">
+    <!--
+        Awareness surface only: this window never downloads or installs anything. It reports
+        installed-vs-latest, reads three small sidecar files off the release to describe trust
+        honestly (Authenticode + sigstore + stub-asset sanity), and shows copyable — not
+        executable — upgrade commands. Every mutation this app makes still goes through the
+        CLI runner elsewhere; there is deliberately no such path from this window.
+    -->
+    <ui:FluentWindow.Resources>
+        <Style x:Key="Secondary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Tertiary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Mono" TargetType="TextBox">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        </Style>
+
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        </Style>
+
+        <!-- Ok / Warn / Bad / Neutral share one colour key, as elsewhere in this app. -->
+        <Style x:Key="Badge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,2,8,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
+        </Style>
+
+        <Style x:Key="BadgeText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="DefenseClaw Updates" />
+
+        <ScrollViewer Grid.Row="1" Margin="24,4,24,16" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <ui:InfoBar Margin="0,0,0,14"
+                            IsClosable="False"
+                            Severity="Informational"
+                            Title="Awareness only"
+                            IsOpen="True"
+                            Message="This window only checks and reports. It never downloads, installs, or upgrades anything — copy a command below and run it yourself, or use the release page." />
+
+                <!-- Version comparison -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource CardTitle}" Margin="0" Text="Version" />
+                                <Border Margin="10,0,0,8">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding StateBadgeKey}" Value="Ok">
+                                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding StateBadgeKey}" Value="Warn">
+                                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding StateBadgeKey}" Value="Bad">
+                                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Style="{StaticResource BadgeText}" Text="{Binding StateLabel}" />
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:Button Content="Check again"
+                                           Command="{Binding RefreshCommand}" />
+                                <ui:Button Margin="8,0,0,0"
+                                           Appearance="Secondary"
+                                           Content="Open release page"
+                                           Command="{Binding OpenReleasePageCommand}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Margin="0,2,0,10" FontSize="12" Style="{StaticResource Secondary}" Text="{Binding StateDetail}" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,10,4" FontSize="12" Style="{StaticResource Tertiary}" Text="Installed" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,4" FontSize="12" Text="{Binding InstalledVersionText}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,10,4" FontSize="12" Style="{StaticResource Tertiary}" Text="Latest" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,4" FontSize="12" Text="{Binding LatestVersionText}" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,10,4" FontSize="12" Style="{StaticResource Tertiary}" Text="Published" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,4" FontSize="12" Text="{Binding PublishedAtText}" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,10,0" FontSize="12" Style="{StaticResource Tertiary}" Text="Assets" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" FontSize="12" Text="{Binding AssetsSummary}" />
+                        </Grid>
+
+                        <ui:InfoBar Margin="0,10,0,0"
+                                    IsClosable="False"
+                                    Severity="Warning"
+                                    Title="Rate limited"
+                                    IsOpen="{Binding IsRateLimited, Mode=OneWay}"
+                                    Message="GitHub's unauthenticated API rate limit (60 requests/hour/IP) was hit. Try again later." />
+
+                        <ui:InfoBar Margin="0,10,0,0"
+                                    IsClosable="False"
+                                    Severity="Informational"
+                                    Title="Cached result"
+                                    IsOpen="{Binding FromCache, Mode=OneWay}"
+                                    Message="{Binding CacheNote}" />
+
+                        <ui:InfoBar Margin="0,10,0,0"
+                                    IsClosable="False"
+                                    Severity="Error"
+                                    Title="Check failed"
+                                    IsOpen="{Binding HasError, Mode=OneWay}"
+                                    Message="{Binding ErrorMessage}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Trust panel -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Trust" />
+
+                        <!-- Authenticode -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding AuthenticodeBadgeKey}" Value="Ok">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding AuthenticodeBadgeKey}" Value="Warn">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding AuthenticodeBadgeKey}" Value="Bad">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Style="{StaticResource BadgeText}" Text="{Binding AuthenticodeLabel}" />
+                            </Border>
+                            <TextBlock Grid.Column="1" FontSize="12" Style="{StaticResource Secondary}" Text="{Binding AuthenticodeDetail}" />
+                        </Grid>
+
+                        <!-- Sigstore / checksums -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SigstoreBadgeKey}" Value="Ok">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding SigstoreBadgeKey}" Value="Warn">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding SigstoreBadgeKey}" Value="Bad">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Style="{StaticResource BadgeText}" Text="{Binding SigstoreLabel}" />
+                            </Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock FontSize="12" Style="{StaticResource Secondary}" Text="{Binding SigstoreDetail}" />
+                                <TextBlock Margin="0,2,0,0"
+                                           FontSize="11"
+                                           Style="{StaticResource Tertiary}"
+                                           Visibility="{Binding HasChecksumsEntryCount, Converter={StaticResource BoolToVisibility}}"
+                                           Text="{Binding ChecksumsEntryCountText}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Stub-asset sanity -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding StubBadgeKey}" Value="Ok">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding StubBadgeKey}" Value="Bad">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Style="{StaticResource BadgeText}" Text="Stub check" />
+                            </Border>
+                            <TextBlock Grid.Row="0" Grid.Column="1" FontSize="12" Style="{StaticResource Secondary}" Text="{Binding StubSummary}" />
+
+                            <ItemsControl Grid.Row="1" Grid.Column="1" Margin="0,6,0,0"
+                                          Visibility="{Binding HasStubWarnings, Converter={StaticResource BoolToVisibility}}"
+                                          ItemsSource="{Binding StubWarnings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6"
+                                                Padding="10,6,10,6"
+                                                CornerRadius="4"
+                                                Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding AssetName}" />
+                                                <TextBlock FontSize="11" TextWrapping="Wrap" Style="{StaticResource Secondary}" Text="{Binding Reason}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Upgrade guidance -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Upgrade guidance" />
+
+                        <ui:InfoBar Margin="0,0,0,10"
+                                    IsClosable="False"
+                                    Severity="Warning"
+                                    Title="Known upgrade issue"
+                                    IsOpen="True"
+                                    Message="{Binding UpgradeCaveat}" />
+
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" Text="Upgrade script (release asset)" />
+                        <Border Padding="10"
+                                Margin="0,0,0,4"
+                                CornerRadius="6"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                            <TextBox Style="{StaticResource Mono}" Text="{Binding UpgradeScriptCommandText, Mode=OneWay}" />
+                        </Border>
+                        <ui:Button Margin="0,0,0,14"
+                                   Padding="10,4,10,4"
+                                   Appearance="Secondary"
+                                   Content="Copy"
+                                   IsEnabled="{Binding HasUpgradeScriptAsset}"
+                                   Command="{Binding CopyUpgradeScriptCommandCommand}" />
+
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" Text="Setup wizard (installer exe)" />
+                        <Border Padding="10"
+                                Margin="0,0,0,4"
+                                CornerRadius="6"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                            <TextBox Style="{StaticResource Mono}" Text="{Binding SetupCommandText, Mode=OneWay}" />
+                        </Border>
+                        <ui:Button Padding="10,4,10,4"
+                                   Appearance="Secondary"
+                                   Content="Copy"
+                                   IsEnabled="{Binding HasSetupAsset}"
+                                   Command="{Binding CopySetupCommandCommand}" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</ui:FluentWindow>
