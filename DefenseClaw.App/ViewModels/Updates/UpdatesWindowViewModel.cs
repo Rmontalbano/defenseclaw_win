@@ -142,13 +142,19 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     public UpgradeSectionViewModel Upgrade { get; }
 
     /// <summary>
-    /// Static context about the known-broken 0.8.6→0.8.7 in-place upgrade, shown next to the
-    /// upgrade commands rather than acted on: this app never runs an upgrade itself.
+    /// What is known to be broken about upgrading, shown next to the copyable commands. History
+    /// first, then the failure that matters on this machine's layout today.
     /// </summary>
     public string UpgradeCaveat =>
-        "The 0.8.6 -> 0.8.7 in-place upgrade path was broken upstream (a migration-cursor catch-22). " +
-        "Back up %USERPROFILE%\\.defenseclaw before upgrading. If the upgrade script fails partway, " +
-        "the documented recovery is reinstalling from the Setup exe over a fresh 'defenseclaw init'.";
+        "History: the 0.8.6 -> 0.8.7 in-place upgrade path was broken upstream (a migration-cursor catch-22). " +
+        "Current: on Setup-based installs the defenseclaw-upgrade.ps1 resolver fails outright — run here it " +
+        "stopped with \"Upgrade resolver stopped: Managed Python not found at " +
+        "%USERPROFILE%\\.defenseclaw\\.venv\\Scripts\\python.exe\", because it assumes a venv layout these " +
+        "installs do not have, and 0.8.10's copy of the script is byte-identical to 0.8.9's. The channel that " +
+        "works is the Setup exe installed over the top with /quiet /norestart INSTALLSCOPE=user: it stops the " +
+        "gateway, installs in user scope, restarts the gateway, and preserves %USERPROFILE%\\.defenseclaw " +
+        "(config, audit, inventory, token) — verified live on a 0.8.7 -> 0.8.10 upgrade. Backing that directory " +
+        "up first is still cheap insurance; the installer keeps no journal and rolls nothing back.";
 
     private bool CanOpenReleasePage => !string.IsNullOrEmpty(HtmlUrl);
 
@@ -295,19 +301,26 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
 
         StateDetail = result.Detail;
 
-        var scriptAsset = result.Assets.FirstOrDefault(a =>
-            string.Equals(a.Name, "defenseclaw-upgrade.ps1", StringComparison.OrdinalIgnoreCase));
-        HasUpgradeScriptAsset = scriptAsset is not null;
-        UpgradeScriptCommandText = scriptAsset is { DownloadUrl.Length: > 0 }
-            ? $"Invoke-WebRequest -Uri \"{scriptAsset.DownloadUrl}\" -OutFile defenseclaw-upgrade.ps1; .\\defenseclaw-upgrade.ps1"
-            : "No defenseclaw-upgrade.ps1 asset was found on this release.";
-
+        // The Setup block is the primary suggestion now, and it is a real two-line command rather
+        // than a browser hand-off: this is the sequence that was live-verified on 0.8.7 -> 0.8.10.
         var setupAsset = result.Assets.FirstOrDefault(a =>
-            string.Equals(a.Name, ProvenanceInspector.SetupAssetName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(a.Name, UpgradeRunner.InstallerAssetName, StringComparison.OrdinalIgnoreCase));
         HasSetupAsset = setupAsset is not null;
         SetupCommandText = setupAsset is { DownloadUrl.Length: > 0 }
-            ? $"Start-Process \"{setupAsset.DownloadUrl}\"  # opens the Setup download in your browser"
+            ? $"curl.exe -LO \"{setupAsset.DownloadUrl}\"\n" +
+              $".\\{UpgradeRunner.InstallerAssetName} {string.Join(' ', UpgradeRunner.BuildInstallerArgv())}"
             : "No Setup exe asset was found on this release.";
+
+        // Demoted, and labelled: the resolver is still the documented channel upstream, so it stays
+        // copyable — but it is not the one to reach for on this layout.
+        var scriptAsset = result.Assets.FirstOrDefault(a =>
+            string.Equals(a.Name, UpgradeRunner.ScriptAssetName, StringComparison.OrdinalIgnoreCase));
+        HasUpgradeScriptAsset = scriptAsset is not null;
+        UpgradeScriptCommandText = scriptAsset is { DownloadUrl.Length: > 0 }
+            ? $"Invoke-WebRequest -Uri \"{scriptAsset.DownloadUrl}\" -OutFile {UpgradeRunner.ScriptAssetName}; " +
+              $".\\{UpgradeRunner.ScriptAssetName}\n" +
+              "# (known broken on Setup-based installs — see the upgrade section)"
+            : "No defenseclaw-upgrade.ps1 asset was found on this release.";
 
         Upgrade.ApplyCheck(result);
 

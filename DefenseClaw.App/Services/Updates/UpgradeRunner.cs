@@ -42,6 +42,45 @@ public sealed record CosignStatus
     public bool IsUsable => Availability == CosignAvailability.OnPath;
 }
 
+/// <summary>
+/// The two ways this app knows to upgrade a Windows install. They are not interchangeable: which
+/// one works is decided by how DefenseClaw was installed, not by preference.
+/// </summary>
+public enum UpgradeChannel
+{
+    /// <summary>
+    /// The release's <c>DefenseClawSetup-x64.exe</c>, run over the top of the current install with
+    /// <c>/quiet /norestart INSTALLSCOPE=user</c>. Live-verified on this machine (0.8.7 → 0.8.10).
+    /// The default and the recommendation on native Setup-based installs.
+    /// </summary>
+    SetupInstaller = 0,
+
+    /// <summary>
+    /// The release's <c>defenseclaw-upgrade.ps1</c> resolver. Correct only where the POSIX-style
+    /// venv layout it assumes actually exists — see <see cref="UpgradeRunner.DetectResolverLayout"/>.
+    /// </summary>
+    ResolverScript,
+}
+
+/// <summary>
+/// What the on-disk layout says about whether the resolver script can work here, and which
+/// channel this app therefore recommends. Purely a filesystem probe — nothing is downloaded.
+/// </summary>
+public sealed record ResolverLayoutStatus
+{
+    /// <summary>The channel the UI defaults to, given what was found on disk.</summary>
+    public required UpgradeChannel RecommendedChannel { get; init; }
+
+    /// <summary>
+    /// True only when <c>%USERPROFILE%\.defenseclaw\.venv\Scripts\python.exe</c> is present — the
+    /// one path whose absence the resolver fails on.
+    /// </summary>
+    public required bool ResolverLayoutPresent { get; init; }
+
+    /// <summary>One paragraph, always set, shown under the channel picker.</summary>
+    public required string Detail { get; init; }
+}
+
 /// <summary>Why a staging attempt ended the way it did. Only <see cref="Verified"/> stages a file.</summary>
 public enum UpgradeStagingOutcome
 {
@@ -68,13 +107,19 @@ public enum UpgradeStagingOutcome
 }
 
 /// <summary>
-/// One verified upgrade script, sitting under
+/// One verified upgrade asset — a resolver script or a Setup installer — sitting under
 /// <c>%LOCALAPPDATA%\DefenseClaw.App\upgrades\&lt;version&gt;\</c>. Only ever produced after the
 /// size sanity check and the checksum comparison both passed.
 /// </summary>
-public sealed record StagedUpgradeScript
+public sealed record StagedUpgradeAsset
 {
-    /// <summary>Release tag the script came from, e.g. <c>0.8.9</c>.</summary>
+    /// <summary>Which channel staged this, and therefore how <c>RunAsync</c> will launch it.</summary>
+    public required UpgradeChannel Channel { get; init; }
+
+    /// <summary>Release-asset file name, e.g. <c>DefenseClawSetup-x64.exe</c>. Also the file name on disk.</summary>
+    public required string AssetName { get; init; }
+
+    /// <summary>Release tag the asset came from, e.g. <c>0.8.10</c>.</summary>
     public required string Version { get; init; }
 
     public required string FilePath { get; init; }
@@ -96,18 +141,31 @@ public sealed record StagedUpgradeScript
 
     public DateTimeOffset StagedAt { get; init; }
 
-    public string SizeText => SizeBytes >= 1024
-        ? string.Create(CultureInfo.CurrentCulture, $"{SizeBytes / 1024.0:0.#} KB ({SizeBytes:N0} bytes)")
-        : string.Create(CultureInfo.CurrentCulture, $"{SizeBytes:N0} bytes");
+    /// <summary>
+    /// Human size, always with the exact byte count alongside it: the byte count is what the stub
+    /// check and the release page are compared on, and a rounded "258 MB" hides a 133-byte file.
+    /// Scales to MB because the installer channel stages ~270,000,000-byte files, where a KB
+    /// figure is unreadable.
+    /// </summary>
+    public string SizeText => SizeBytes switch
+    {
+        >= 1024 * 1024 => string.Create(
+            CultureInfo.CurrentCulture, $"{SizeBytes / (1024.0 * 1024.0):0.#} MB ({SizeBytes:N0} bytes)"),
+        >= 1024 => string.Create(CultureInfo.CurrentCulture, $"{SizeBytes / 1024.0:0.#} KB ({SizeBytes:N0} bytes)"),
+        _ => string.Create(CultureInfo.CurrentCulture, $"{SizeBytes:N0} bytes"),
+    };
 }
 
-/// <summary>Outcome of one <see cref="UpgradeRunner.DownloadAndVerifyAsync"/> call.</summary>
+/// <summary>
+/// Outcome of one <see cref="UpgradeRunner.DownloadAndVerifyAsync"/> or
+/// <see cref="UpgradeRunner.DownloadAndVerifyInstallerAsync"/> call.
+/// </summary>
 public sealed record UpgradeStagingResult
 {
     public UpgradeStagingOutcome Outcome { get; init; }
 
     /// <summary>Non-null exactly when <see cref="Succeeded"/>.</summary>
-    public StagedUpgradeScript? Script { get; init; }
+    public StagedUpgradeAsset? Asset { get; init; }
 
     /// <summary>One line, always set — safe to show whether this succeeded or failed.</summary>
     public string Summary { get; init; } = string.Empty;
@@ -121,10 +179,10 @@ public sealed record UpgradeStagingResult
 
     public long? SizeBytes { get; init; }
 
-    public bool Succeeded => Outcome == UpgradeStagingOutcome.Verified && Script is not null;
+    public bool Succeeded => Outcome == UpgradeStagingOutcome.Verified && Asset is not null;
 }
 
-/// <summary>How a resolver run ended.</summary>
+/// <summary>How an upgrade run ended, on either channel.</summary>
 public sealed record UpgradeRunResult
 {
     /// <summary>The recorded invocation — argv, output and exit code, same object Activity holds.</summary>
@@ -139,23 +197,46 @@ public sealed record UpgradeRunResult
 }
 
 /// <summary>
-/// Downloads, verifies and runs the canonical Windows upgrade channel: the <b>target</b>
-/// release's own <c>defenseclaw-upgrade.ps1</c> asset.
+/// Downloads, verifies and runs a Windows upgrade from the <b>target</b> release's own assets,
+/// on one of two channels — see <see cref="UpgradeChannel"/>.
 /// <para>
-/// <b>Why that script and not <c>defenseclaw upgrade</c>.</b> The installed CLI's own upgrade
-/// verb fails on 0.8.7 with "no canonical release-managed gateway"; the release asset is the
-/// supported path. It is a ~2900-line manifest-aware resolver that cosign-verifies the signed
-/// release contract <i>before</i> touching anything, journals the upgrade in two phases with
-/// automatic rollback, and resumes after a crash. This class never invokes the installed CLI's
-/// upgrade verb.
+/// <b>Two channels, and which one is canonical depends on the install layout.</b>
 /// </para>
 /// <para>
-/// <b>What is verified here, and what is not.</b> This class checks two things the resolver
-/// cannot check about itself: that the download is not one of the 133-byte placeholder stubs
-/// some releases shipped (see <see cref="MinimumPlausibleScriptBytes"/>), and that its SHA-256
-/// matches the entry in the same release's sigstore-signed <c>checksums.txt</c>. Everything
-/// beyond that — the manifest, the artifacts, the signatures over them — is the resolver's own
-/// cosign-backed job, which is why <see cref="DetectCosign"/> gates the run.
+/// <b>1. <see cref="UpgradeChannel.SetupInstaller"/> — <c>DefenseClawSetup-x64.exe</c>.</b> Run
+/// with <c>/quiet /norestart INSTALLSCOPE=user</c> from a non-elevated session, it stops the
+/// gateway, installs over the top in user scope, restarts the gateway, and leaves
+/// <c>%USERPROFILE%\.defenseclaw</c> (config.yaml, .env, audit.db, inventory.db) intact. All of
+/// that was verified live on this machine's 0.8.7 → 0.8.10 upgrade. This is the canonical channel
+/// on native Setup-based installs, which put managed Python under
+/// <c>%LOCALAPPDATA%\Programs\DefenseClaw\runtime</c>.
+/// </para>
+/// <para>
+/// <b>2. <see cref="UpgradeChannel.ResolverScript"/> — <c>defenseclaw-upgrade.ps1</c>.</b> A
+/// ~2900-line manifest-aware resolver that cosign-verifies the signed release contract before
+/// touching anything, journals the upgrade in two phases with automatic rollback, and resumes
+/// after a crash. It is the canonical channel <i>only</i> where the POSIX-style venv layout it
+/// assumes actually exists. On a Setup-based install it does not: run live here (0.8.7 → 0.8.9)
+/// it stopped with exactly <c>Upgrade resolver stopped: Managed Python not found at
+/// C:\Users\&lt;user&gt;\.defenseclaw\.venv\Scripts\python.exe.</c> 0.8.10's copy of the script is
+/// byte-identical to 0.8.9's (SHA-256
+/// <c>e830172b08c86a62991d8f3fa916dffd3e9ad90fca809f5e685e38d8b4555c2c</c>), so the bug is still
+/// upstream. <see cref="DetectResolverLayout"/> probes for that venv and picks the default.
+/// </para>
+/// <para>
+/// Neither channel uses the installed CLI's own <c>defenseclaw upgrade</c> verb: on 0.8.7 it
+/// fails with "no canonical release-managed gateway". This class never invokes it.
+/// </para>
+/// <para>
+/// <b>What is verified here, and what is not.</b> On both channels this class checks two things
+/// the downloaded thing cannot check about itself: that it is not one of the 133-byte placeholder
+/// stubs some releases shipped (see <see cref="MinimumPlausibleScriptBytes"/> and
+/// <see cref="MinimumPlausibleInstallerBytes"/>), and that its SHA-256 matches the entry in the
+/// same release's sigstore-signed <c>checksums.txt</c>. Beyond that the two diverge: the
+/// resolver's manifest, artifacts and signatures are its own cosign-backed job, which is why
+/// <see cref="DetectCosign"/> gates <i>that</i> channel and only that one. The installer channel
+/// never shells out to cosign and is not gated on it. The Setup exe is also not Authenticode-signed
+/// through 0.8.10 — the window's trust panel reports that; nothing here claims otherwise.
 /// </para>
 /// <para>
 /// <b>Never automatic.</b> Staging and running are two separate calls, each behind a distinct
@@ -167,6 +248,13 @@ public sealed record UpgradeRunResult
 public sealed class UpgradeRunner
 {
     public const string ScriptAssetName = "defenseclaw-upgrade.ps1";
+
+    /// <summary>
+    /// The Setup installer asset. Same constant as
+    /// <see cref="ProvenanceInspector.SetupAssetName"/>, aliased here so the staging code does not
+    /// reach across into the trust inspector for a name it launches as a process.
+    /// </summary>
+    public const string InstallerAssetName = ProvenanceInspector.SetupAssetName;
 
     public const string ChecksumsAssetName = "checksums.txt";
 
@@ -180,8 +268,21 @@ public sealed class UpgradeRunner
     /// <summary>Upper sanity bound; the script is a PowerShell file, not an artifact.</summary>
     public const long MaximumPlausibleScriptBytes = 8 * 1024 * 1024;
 
+    /// <summary>
+    /// Stub floor for the installer. The real 0.8.10 Setup exe is 270,013,440 bytes; the
+    /// placeholder stubs are 133. The floor exists precisely because the stubs' hashes <i>do</i>
+    /// appear in the correctly signed checksums.txt, so hash equality alone waves them through.
+    /// </summary>
+    public const long MinimumPlausibleInstallerBytes = 50L * 1024 * 1024;
+
+    /// <summary>Upper sanity bound; refused from Content-Length before the body is read at all.</summary>
+    public const long MaximumPlausibleInstallerBytes = 2L * 1024 * 1024 * 1024;
+
     /// <summary>The flag that makes the resolver non-interactive. Every other default is left alone.</summary>
     public const string NonInteractiveFlag = "-Yes";
+
+    /// <summary>Read buffer for the ~270 MB installer stream. Never buffered whole in memory.</summary>
+    private const int InstallerCopyBufferBytes = 128 * 1024;
 
     private static readonly string[] CosignFileNames = ["cosign.exe", "cosign"];
 
@@ -235,6 +336,94 @@ public sealed class UpgradeRunner
     }
 
     /// <summary>
+    /// The exact flags the Setup exe is launched with. These three, in a non-elevated session, are
+    /// what was live-verified on this machine's 0.8.7 → 0.8.10 upgrade: <c>/quiet</c> for no UI,
+    /// <c>/norestart</c> so the installer never reboots the box on its own, and
+    /// <c>INSTALLSCOPE=user</c> so it installs where the current install already lives rather than
+    /// asking for elevation. The confirm overlay renders this same list, so the screen cannot
+    /// drift from what executes.
+    /// </summary>
+    public static IReadOnlyList<string> BuildInstallerArgv() => ["/quiet", "/norestart", "INSTALLSCOPE=user"];
+
+    /// <summary>
+    /// <c>%USERPROFILE%\.defenseclaw\.venv\Scripts\python.exe</c> — the one path the resolver
+    /// script fails on when it is missing.
+    /// </summary>
+    public static string ResolverVenvPythonPath() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".defenseclaw",
+        ".venv",
+        "Scripts",
+        "python.exe");
+
+    /// <summary>
+    /// <c>%LOCALAPPDATA%\Programs\DefenseClaw\runtime</c> — where a native Setup install puts
+    /// managed Python instead.
+    /// </summary>
+    public static string SetupRuntimeDirectory() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Programs",
+        "DefenseClaw",
+        "runtime");
+
+    /// <summary>
+    /// Decides which channel this install should default to, by probing for the single path whose
+    /// absence the resolver script dies on.
+    /// <para>
+    /// This is not a guess. Run live on this machine (0.8.7 → 0.8.9), the resolver stopped with
+    /// exactly: <c>Upgrade resolver stopped: Managed Python not found at
+    /// C:\Users\&lt;user&gt;\.defenseclaw\.venv\Scripts\python.exe.</c> The script assumes a
+    /// POSIX-style venv under <c>%USERPROFILE%\.defenseclaw\.venv</c>; native Setup installs put
+    /// managed Python under <c>%LOCALAPPDATA%\Programs\DefenseClaw\runtime</c> instead. 0.8.10's
+    /// copy of the script is byte-identical to 0.8.9's, so the failure is not something a newer
+    /// release has fixed.
+    /// </para>
+    /// </summary>
+    /// <param name="fileExists">Filesystem probe; overridable for tests.</param>
+    /// <param name="directoryExists">Directory probe; overridable for tests.</param>
+    public static ResolverLayoutStatus DetectResolverLayout(
+        Func<string, bool>? fileExists = null,
+        Func<string, bool>? directoryExists = null)
+    {
+        var probeFile = fileExists ?? File.Exists;
+        var probeDirectory = directoryExists ?? Directory.Exists;
+
+        var venvPython = ResolverVenvPythonPath();
+        if (probeFile(venvPython))
+        {
+            return new ResolverLayoutStatus
+            {
+                RecommendedChannel = UpgradeChannel.ResolverScript,
+                ResolverLayoutPresent = true,
+                Detail =
+                    $"The venv layout the resolver script expects is present ({venvPython}), so " +
+                    "defenseclaw-upgrade.ps1 can run here — with its cosign-verified release contract, its " +
+                    "two-phase journal and its automatic rollback. The Setup installer remains available as " +
+                    "the blunter alternative.",
+            };
+        }
+
+        var runtimeDirectory = SetupRuntimeDirectory();
+        var runtimePresent = probeDirectory(runtimeDirectory);
+
+        return new ResolverLayoutStatus
+        {
+            RecommendedChannel = UpgradeChannel.SetupInstaller,
+            ResolverLayoutPresent = false,
+            Detail =
+                $"{venvPython} does not exist on this machine. Run live here (0.8.7 → 0.8.9), the resolver " +
+                "script stopped with exactly: \"Upgrade resolver stopped: Managed Python not found at " +
+                $"{venvPython}.\" It assumes a POSIX-style venv layout this install does not have" +
+                (runtimePresent
+                    ? $" — the managed runtime is under {runtimeDirectory}, which is where a native Setup " +
+                      "install puts it."
+                    : $"; native Setup installs put the managed runtime under {runtimeDirectory} instead.") +
+                " 0.8.10's defenseclaw-upgrade.ps1 is byte-identical to 0.8.9's, so a newer release does not " +
+                "fix it. On this layout the Setup exe, run over the top, is the channel that works.",
+        };
+    }
+
+    /// <summary>
     /// Windows PowerShell 5.1, by absolute path. Resolved rather than trusted to PATH so the
     /// overlay can show the operator exactly which binary will run.
     /// </summary>
@@ -245,9 +434,26 @@ public sealed class UpgradeRunner
         return File.Exists(candidate) ? candidate : "powershell.exe";
     }
 
-    /// <summary>Display form of the full command line. For humans; the runner never re-parses it.</summary>
+    /// <summary>Display form of the resolver command line. For humans; the runner never re-parses it.</summary>
     public static string DescribeCommand(string scriptPath) =>
-        string.Join(' ', new[] { ResolvePowerShellPath() }.Concat(BuildArgv(scriptPath)).Select(Quote));
+        DescribeCommand(UpgradeChannel.ResolverScript, scriptPath);
+
+    /// <summary>
+    /// Display form of the full command line for either channel. For humans; the runner never
+    /// re-parses it. Built from the same <c>BuildArgv</c>/<c>BuildInstallerArgv</c> the run uses,
+    /// so the confirm overlay cannot drift from what executes.
+    /// </summary>
+    public static string DescribeCommand(UpgradeChannel channel, string stagedPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stagedPath);
+
+        // The installer is its own executable — there is no interpreter in front of it. The path
+        // is quoted unconditionally because it sits under a user profile, which routinely has a
+        // space in it.
+        return channel == UpgradeChannel.SetupInstaller
+            ? $"\"{stagedPath}\" {string.Join(' ', BuildInstallerArgv())}"
+            : string.Join(' ', new[] { ResolvePowerShellPath() }.Concat(BuildArgv(stagedPath)).Select(Quote));
+    }
 
     /// <summary>
     /// Probes for cosign the way the resolver will: a bare <c>cosign</c> on the PATH a child
@@ -433,8 +639,10 @@ public sealed class UpgradeRunner
             };
         }
 
-        var script = new StagedUpgradeScript
+        var script = new StagedUpgradeAsset
         {
+            Channel = UpgradeChannel.ResolverScript,
+            AssetName = ScriptAssetName,
             Version = version,
             FilePath = filePath,
             SourceUrl = scriptUrl.ToString(),
@@ -449,7 +657,7 @@ public sealed class UpgradeRunner
         return new UpgradeStagingResult
         {
             Outcome = UpgradeStagingOutcome.Verified,
-            Script = script,
+            Asset = script,
             ComputedSha256 = computed,
             ExpectedSha256 = expected,
             SizeBytes = bytes.Length,
@@ -458,61 +666,386 @@ public sealed class UpgradeRunner
     }
 
     /// <summary>
-    /// Runs a staged, verified resolver through <see cref="CliRunner"/>.
+    /// Fetches the target release's Setup installer, verifies its SHA-256 against the same
+    /// release's checksums.txt, and only then promotes it into <see cref="StagingRoot"/>.
     /// <para>
-    /// Re-hashes the file first: staging and running are separate user actions, possibly minutes
-    /// apart, and a verification that is not re-checked at launch is a verification of whatever
-    /// used to be at that path.
+    /// <b>Order matters.</b> checksums.txt is fetched <i>first</i>. It is a few kilobytes, and if
+    /// GitHub is rate-limiting or the release simply has no entry for the installer, that is
+    /// discovered in one cheap request rather than after a ~270 MB download that can then only be
+    /// thrown away.
+    /// </para>
+    /// <para>
+    /// <b>Nothing is buffered whole.</b> The body streams to
+    /// <c>&lt;asset&gt;.partial</c> through a <see cref="IncrementalHash"/>, so the hash is
+    /// computed in the same pass and the ~270 MB never lands in memory. (The byte[] path used by
+    /// <see cref="DownloadAndVerifyAsync"/> is fine there — that asset is ~216 KB.) The partial
+    /// file is deleted on every failure path and on exceptions; only a full size-and-hash match
+    /// promotes it to its final name.
+    /// </para>
+    /// </summary>
+    /// <param name="version">Release tag, e.g. <c>0.8.10</c>.</param>
+    /// <param name="checksumsSigstoreSigned">
+    /// Whether the release also carries checksums.txt.sig/.pem, recorded on the staged record so
+    /// the UI can say what the hash comparison is anchored to.
+    /// </param>
+    /// <param name="progress">
+    /// Bytes read so far and the Content-Length when the server sent one. Raised on the download
+    /// worker thread — marshal before touching UI state.
+    /// </param>
+    public async Task<UpgradeStagingResult> DownloadAndVerifyInstallerAsync(
+        string version,
+        bool checksumsSigstoreSigned = false,
+        IProgress<(long BytesRead, long? TotalBytes)>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+
+        var installerUrl = AssetUrl(version, InstallerAssetName);
+        var checksumsUrl = AssetUrl(version, ChecksumsAssetName);
+
+        var (checksums, checksumsError) = await DownloadAsync(checksumsUrl, cancellationToken).ConfigureAwait(false);
+        if (checksums is null)
+        {
+            return new UpgradeStagingResult
+            {
+                Outcome = checksumsError!.Outcome == UpgradeStagingOutcome.RateLimited
+                    ? UpgradeStagingOutcome.RateLimited
+                    : UpgradeStagingOutcome.ChecksumUnavailable,
+                Summary = $"Aborted before downloading: {ChecksumsAssetName} could not be read.",
+                ErrorMessage =
+                    $"{ChecksumsAssetName} for release {version} could not be read: {checksumsError.ErrorMessage} " +
+                    "The installer was not downloaded — without the checksum entry there would be nothing to " +
+                    "verify the download against.",
+            };
+        }
+
+        var expected = FindChecksumEntry(Encoding.UTF8.GetString(checksums), InstallerAssetName);
+        if (expected is null)
+        {
+            return new UpgradeStagingResult
+            {
+                Outcome = UpgradeStagingOutcome.ChecksumUnavailable,
+                Summary = $"Aborted before downloading: {ChecksumsAssetName} carries no entry for {InstallerAssetName}.",
+                ErrorMessage =
+                    $"Release {version} publishes {ChecksumsAssetName}, but it has no line for " +
+                    $"{InstallerAssetName}, so a download could not be anchored to anything signed. Nothing was " +
+                    "downloaded.",
+            };
+        }
+
+        string partialPath;
+        string filePath;
+        try
+        {
+            var directory = Path.Combine(StagingRoot, SanitizeVersionForPath(version));
+            Directory.CreateDirectory(directory);
+            filePath = Path.Combine(directory, InstallerAssetName);
+            partialPath = filePath + ".partial";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new UpgradeStagingResult
+            {
+                Outcome = UpgradeStagingOutcome.WriteFailed,
+                ExpectedSha256 = expected,
+                Summary = "The staging directory could not be created, so nothing was downloaded.",
+                ErrorMessage = $"Creating a staging directory under {StagingRoot} failed: {ex.Message}",
+            };
+        }
+
+        var promoted = false;
+        try
+        {
+            var (response, downloadError) = await SendAsync(
+                installerUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            if (response is null)
+            {
+                return downloadError!;
+            }
+
+            long totalRead;
+            string computed;
+
+            using (response)
+            {
+                // Refuse an absurd Content-Length before a single byte of body is read. The size
+                // is enforced again during the copy, because a server is free to send more than
+                // it advertised — or to advertise nothing at all.
+                var declaredLength = response.Content.Headers.ContentLength;
+                if (declaredLength > MaximumPlausibleInstallerBytes)
+                {
+                    return new UpgradeStagingResult
+                    {
+                        Outcome = UpgradeStagingOutcome.DownloadFailed,
+                        ExpectedSha256 = expected,
+                        SizeBytes = declaredLength,
+                        Summary = $"Aborted: {InstallerAssetName} advertises {declaredLength:N0} bytes.",
+                        ErrorMessage =
+                            $"{InstallerAssetName} on release {version} advertises {declaredLength:N0} bytes, past " +
+                            $"the {MaximumPlausibleInstallerBytes:N0}-byte sanity ceiling. The body was never read " +
+                            "and nothing was written to disk.",
+                    };
+                }
+
+                try
+                {
+                    (totalRead, computed) = await StreamToPartialAsync(
+                        response, partialPath, declaredLength, progress, cancellationToken).ConfigureAwait(false);
+                }
+                catch (InstallerTooLargeException ex)
+                {
+                    return new UpgradeStagingResult
+                    {
+                        Outcome = UpgradeStagingOutcome.DownloadFailed,
+                        ExpectedSha256 = expected,
+                        SizeBytes = ex.BytesRead,
+                        Summary = $"Aborted: {InstallerAssetName} exceeded the size ceiling mid-download.",
+                        ErrorMessage =
+                            $"{InstallerAssetName} on release {version} passed {MaximumPlausibleInstallerBytes:N0} " +
+                            "bytes while streaming, so the download was cut off. The partial file was deleted.",
+                    };
+                }
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
+                {
+                    return new UpgradeStagingResult
+                    {
+                        Outcome = UpgradeStagingOutcome.DownloadFailed,
+                        ExpectedSha256 = expected,
+                        Summary = "The download was interrupted.",
+                        ErrorMessage = $"Reading {installerUrl} failed partway: {ex.Message} The partial file was deleted.",
+                    };
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    return new UpgradeStagingResult
+                    {
+                        Outcome = UpgradeStagingOutcome.WriteFailed,
+                        ExpectedSha256 = expected,
+                        Summary = "The download could not be written to the staging directory.",
+                        ErrorMessage = $"Writing to {partialPath} failed: {ex.Message}",
+                    };
+                }
+            }
+
+            if (totalRead < MinimumPlausibleInstallerBytes)
+            {
+                return new UpgradeStagingResult
+                {
+                    Outcome = UpgradeStagingOutcome.StubDetected,
+                    ComputedSha256 = computed,
+                    ExpectedSha256 = expected,
+                    SizeBytes = totalRead,
+                    Summary = $"Aborted: {InstallerAssetName} came back as only {totalRead:N0} bytes.",
+                    ErrorMessage =
+                        $"{InstallerAssetName} on release {version} is {totalRead:N0} bytes; the real 0.8.10 " +
+                        "installer is 270,013,440 bytes. This is the placeholder-stub pattern seen on some " +
+                        "releases — the known-bad stubs are 133 bytes, and their hashes are still faithfully " +
+                        $"listed in the correctly signed {ChecksumsAssetName}, so a hash check alone would wave " +
+                        "them through. The partial download was deleted. Check the release page before upgrading.",
+                };
+            }
+
+            if (!string.Equals(expected, computed, StringComparison.OrdinalIgnoreCase))
+            {
+                return new UpgradeStagingResult
+                {
+                    Outcome = UpgradeStagingOutcome.ChecksumMismatch,
+                    ComputedSha256 = computed,
+                    ExpectedSha256 = expected,
+                    SizeBytes = totalRead,
+                    Summary = "Aborted: the download's SHA-256 does not match the release's checksums.txt.",
+                    ErrorMessage =
+                        $"{InstallerAssetName} downloaded from release {version} hashes to {computed}, but " +
+                        $"{ChecksumsAssetName} lists {expected}. The partial download was deleted. Do not run this " +
+                        "installer; re-check later, and treat a persistent mismatch as a supply-chain problem " +
+                        "worth reporting.",
+                };
+            }
+
+            try
+            {
+                File.Move(partialPath, filePath, overwrite: true);
+                promoted = true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return new UpgradeStagingResult
+                {
+                    Outcome = UpgradeStagingOutcome.WriteFailed,
+                    ComputedSha256 = computed,
+                    ExpectedSha256 = expected,
+                    SizeBytes = totalRead,
+                    Summary = "The installer verified, but could not be moved into place.",
+                    ErrorMessage = $"Verification passed, but renaming {partialPath} to {filePath} failed: {ex.Message}",
+                };
+            }
+
+            var asset = new StagedUpgradeAsset
+            {
+                Channel = UpgradeChannel.SetupInstaller,
+                AssetName = InstallerAssetName,
+                Version = version,
+                FilePath = filePath,
+                SourceUrl = installerUrl.ToString(),
+                ChecksumsUrl = checksumsUrl.ToString(),
+                SizeBytes = totalRead,
+                Sha256 = computed,
+                ExpectedSha256 = expected,
+                ChecksumsSigstoreSigned = checksumsSigstoreSigned,
+                StagedAt = DateTimeOffset.UtcNow,
+            };
+
+            return new UpgradeStagingResult
+            {
+                Outcome = UpgradeStagingOutcome.Verified,
+                Asset = asset,
+                ComputedSha256 = computed,
+                ExpectedSha256 = expected,
+                SizeBytes = totalRead,
+                Summary = $"Verified: SHA-256 matches release {version}'s {ChecksumsAssetName} entry.",
+            };
+        }
+        finally
+        {
+            // Every path that is not a promotion — refusal, mismatch, write error, cancellation,
+            // an exception nobody here catches — leaves the partial behind otherwise.
+            if (!promoted)
+            {
+                TryDelete(partialPath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Streams a response body to <paramref name="partialPath"/> while hashing it in the same
+    /// pass. Returns the byte count and the lowercase hex SHA-256.
+    /// </summary>
+    private static async Task<(long TotalRead, string Sha256)> StreamToPartialAsync(
+        HttpResponseMessage response,
+        string partialPath,
+        long? declaredLength,
+        IProgress<(long BytesRead, long? TotalBytes)>? progress,
+        CancellationToken cancellationToken)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[InstallerCopyBufferBytes];
+        long totalRead = 0;
+
+        await using var source = await response.Content
+            .ReadAsStreamAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await using (var destination = new FileStream(
+            partialPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            InstallerCopyBufferBytes,
+            useAsync: true))
+        {
+            int read;
+            while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                totalRead += read;
+                if (totalRead > MaximumPlausibleInstallerBytes)
+                {
+                    throw new InstallerTooLargeException(totalRead);
+                }
+
+                hash.AppendData(buffer, 0, read);
+                await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                progress?.Report((totalRead, declaredLength));
+            }
+
+            await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return (totalRead, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The partial is inert — it is never launched, and the next attempt overwrites it.
+        }
+    }
+
+    /// <summary>
+    /// Runs a staged, verified asset through <see cref="CliRunner"/> — the resolver via
+    /// <c>powershell.exe</c>, or the Setup exe as its own executable.
+    /// <para>
+    /// Re-hashes the file first, on <b>both</b> channels: staging and running are separate user
+    /// actions, possibly minutes apart, and a verification that is not re-checked at launch is a
+    /// verification of whatever used to be at that path. Re-hashing 270 MB costs roughly a second
+    /// — nothing next to the 270 MB download that produced it.
     /// </para>
     /// </summary>
     public async Task<UpgradeRunResult> RunAsync(
-        StagedUpgradeScript script,
+        StagedUpgradeAsset asset,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(script);
+        ArgumentNullException.ThrowIfNull(asset);
 
         if (IsRunning)
         {
             return new UpgradeRunResult { FailureReason = "An upgrade run is already in flight." };
         }
 
-        if (!File.Exists(script.FilePath))
+        var noun = asset.Channel == UpgradeChannel.SetupInstaller ? "installer" : "script";
+
+        if (!File.Exists(asset.FilePath))
         {
             return new UpgradeRunResult
             {
-                FailureReason = $"The staged script is no longer at {script.FilePath}. Download and verify it again.",
+                FailureReason =
+                    $"The staged {noun} is no longer at {asset.FilePath}. Download and verify it again.",
             };
         }
 
         string actualHash;
         try
         {
-            actualHash = await ComputeFileSha256Async(script.FilePath, cancellationToken).ConfigureAwait(false);
+            actualHash = await ComputeFileSha256Async(asset.FilePath, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new UpgradeRunResult { FailureReason = $"The staged script could not be re-read: {ex.Message}" };
+            return new UpgradeRunResult { FailureReason = $"The staged {noun} could not be re-read: {ex.Message}" };
         }
 
-        if (!string.Equals(actualHash, script.Sha256, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(actualHash, asset.Sha256, StringComparison.OrdinalIgnoreCase))
         {
             return new UpgradeRunResult
             {
                 FailureReason =
-                    $"The staged script changed on disk since it was verified (now {actualHash}, was {script.Sha256}). " +
+                    $"The staged {noun} changed on disk since it was verified (now {actualHash}, was {asset.Sha256}). " +
                     "Nothing was run. Download and verify it again.",
             };
         }
 
-        var argv = BuildArgv(script.FilePath);
-        var powershell = ResolvePowerShellPath();
+        // The installer is launched directly; the resolver needs an interpreter in front of it.
+        var (executable, argv) = asset.Channel == UpgradeChannel.SetupInstaller
+            ? (asset.FilePath, BuildInstallerArgv())
+            : (ResolvePowerShellPath(), BuildArgv(asset.FilePath));
+
         CliInvocation? captured = null;
 
         void OnStarted(object? sender, CliInvocation invocation)
         {
             // Another panel can shell out while this is starting, and this fires on the runner's
-            // thread — match on the argv this call is about to pass, exactly as the wizard does.
-            if (captured is not null || !invocation.Argv.SequenceEqual(argv, StringComparer.Ordinal))
+            // thread. The resolver's argv carries the staged path and is distinctive on its own,
+            // but the installer's is three generic flags — so match on executable *and* argv,
+            // which together are unique to this call on either channel.
+            if (captured is not null ||
+                !string.Equals(invocation.Executable, executable, StringComparison.OrdinalIgnoreCase) ||
+                !invocation.Argv.SequenceEqual(argv, StringComparer.Ordinal))
             {
                 return;
             }
@@ -527,7 +1060,7 @@ public sealed class UpgradeRunner
         try
         {
             var invocation = await _cli
-                .RunExecutableAsync(powershell, argv, stdinSecret: null, cancellationToken)
+                .RunExecutableAsync(executable, argv, stdinSecret: null, cancellationToken)
                 .ConfigureAwait(false);
 
             return new UpgradeRunResult
@@ -601,8 +1134,15 @@ public sealed class UpgradeRunner
     private static string ComputeSha256(byte[] bytes) =>
         Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
-    private async Task<(byte[]? Bytes, UpgradeStagingResult? Error)> DownloadAsync(
+    /// <summary>
+    /// Issues the GET and turns every non-success shape into the same
+    /// <see cref="UpgradeStagingResult"/> vocabulary both channels report in. On success the
+    /// caller owns the response and must dispose it — the installer channel needs the body as a
+    /// stream, so this cannot close it.
+    /// </summary>
+    private async Task<(HttpResponseMessage? Response, UpgradeStagingResult? Error)> SendAsync(
         Uri url,
+        HttpCompletionOption completionOption,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -610,7 +1150,7 @@ public sealed class UpgradeRunner
         HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response = await _http.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
@@ -625,37 +1165,56 @@ public sealed class UpgradeRunner
                 $"The request for {url} timed out: {ex.Message}"));
         }
 
+        if (response.StatusCode is HttpStatusCode.Forbidden or (HttpStatusCode)429)
+        {
+            response.Dispose();
+            return (null, Failure(UpgradeStagingOutcome.RateLimited,
+                "GitHub rate-limited the download.",
+                $"GitHub returned HTTP {(int)response.StatusCode} for {url}. This is the same " +
+                "unauthenticated rate limit the version check hits (60 requests/hour/IP); try again later."));
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            response.Dispose();
+            return (null, Failure(UpgradeStagingOutcome.DownloadFailed,
+                "That release does not publish this asset.",
+                $"GitHub returned HTTP 404 for {url}. The release exists but does not carry that asset, " +
+                "or the tag is not what this app thinks it is."));
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var statusCode = (int)response.StatusCode;
+            response.Dispose();
+            return (null, Failure(UpgradeStagingOutcome.DownloadFailed,
+                $"GitHub returned HTTP {statusCode}.",
+                $"GitHub returned HTTP {statusCode} for {url}."));
+        }
+
+        return (response, null);
+    }
+
+    /// <summary>Buffers a small asset whole. Never used for the installer — see <see cref="StreamToPartialAsync"/>.</summary>
+    private async Task<(byte[]? Bytes, UpgradeStagingResult? Error)> DownloadAsync(
+        Uri url,
+        CancellationToken cancellationToken)
+    {
+        var (response, error) = await SendAsync(
+            url, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
+        if (response is null)
+        {
+            return (null, error);
+        }
+
         using (response)
         {
-            if (response.StatusCode is HttpStatusCode.Forbidden or (HttpStatusCode)429)
-            {
-                return (null, Failure(UpgradeStagingOutcome.RateLimited,
-                    "GitHub rate-limited the download.",
-                    $"GitHub returned HTTP {(int)response.StatusCode} for {url}. This is the same " +
-                    "unauthenticated rate limit the version check hits (60 requests/hour/IP); try again later."));
-            }
-
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                return (null, Failure(UpgradeStagingOutcome.DownloadFailed,
-                    "That release does not publish this asset.",
-                    $"GitHub returned HTTP 404 for {url}. The release exists but does not carry that asset, " +
-                    "or the tag is not what this app thinks it is."));
-            }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return (null, Failure(UpgradeStagingOutcome.DownloadFailed,
-                    $"GitHub returned HTTP {(int)response.StatusCode}.",
-                    $"GitHub returned HTTP {(int)response.StatusCode} for {url}."));
-            }
-
             try
             {
                 var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
                 return (bytes, null);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException or IOException)
             {
                 return (null, Failure(UpgradeStagingOutcome.DownloadFailed,
                     "The download was interrupted.",
@@ -760,4 +1319,20 @@ public sealed class UpgradeRunner
 
     private static string Quote(string value) =>
         value.Length == 0 || value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
+
+    /// <summary>
+    /// Cuts a runaway installer download short from inside the copy loop. Private and never
+    /// surfaced: <see cref="DownloadAndVerifyInstallerAsync"/> turns it into an ordinary
+    /// <see cref="UpgradeStagingOutcome.DownloadFailed"/> result.
+    /// </summary>
+    private sealed class InstallerTooLargeException : Exception
+    {
+        public InstallerTooLargeException(long bytesRead)
+            : base($"The download passed the {MaximumPlausibleInstallerBytes:N0}-byte ceiling at {bytesRead:N0} bytes.")
+        {
+            BytesRead = bytesRead;
+        }
+
+        public long BytesRead { get; }
+    }
 }

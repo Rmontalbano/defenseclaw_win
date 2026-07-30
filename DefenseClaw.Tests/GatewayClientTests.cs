@@ -49,6 +49,27 @@ public class GatewayClientTests
         Assert.Equal(8, health.Services().Count());
     }
 
+    /// <summary>
+    /// 0.8.10 drift-check: same schema as 0.8.7, captured live after the machine upgrade on
+    /// 2026-07-30. Confirms the client still parses the payload correctly against a real
+    /// post-upgrade capture rather than only ever exercising the 0.8.7 fixture.
+    /// </summary>
+    [Fact]
+    public async Task Health_parses_the_captured_0810_payload()
+    {
+        var (client, _) = Build(h => h.MapFixture("/health", "health-0.8.10.json"));
+
+        var result = await client.GetHealthAsync();
+
+        Assert.Equal(GatewayStatus.Ok, result.Status);
+        var health = result.Value!;
+        Assert.Equal("0.8.10", health.Provenance!.BinaryVersion);
+        Assert.Single(health.Connectors);
+        Assert.Equal("claudecode", health.Connectors[0].Name);
+        Assert.True(health.AiDiscovery!.IsRunning);
+        Assert.True(health.ApplicationProtection!.IsDisabled);
+    }
+
     [Fact]
     public async Task Health_is_sent_without_an_authorization_header()
     {

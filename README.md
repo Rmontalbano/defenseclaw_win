@@ -2,7 +2,7 @@
 
 A native Windows desktop companion for [cisco-ai-defense/defenseclaw](https://github.com/cisco-ai-defense/defenseclaw), replicating the `defenseclaw tui` terminal dashboard with WPF (.NET 9, Fluent theme) — the Windows counterpart to [defenseclaw_mac](https://github.com/keitheobrien/defenseclaw_mac).
 
-> **Status:** in active development, targeting full TUI parity against DefenseClaw 0.8.7.
+> **Status:** in active development, targeting full TUI parity against DefenseClaw 0.8.10 (originally built and live-verified against 0.8.7; the gateway /health schema is unchanged between the two).
 
 ## What it is
 
@@ -29,6 +29,8 @@ A **read-mostly companion** for a local DefenseClaw installation: a system-tray 
 - **Connector certification badges** — surfaces `not_certified` platform status before setup, not after failure
 - **Fail-mode visibility** — warns when observe mode is paired with fail-closed hooks
 - **Update awareness** — checks GitHub releases, verifies SHA-256 against the signed `checksums.txt`, and reports Authenticode/sigstore provenance status honestly
+
+The in-app upgrade flow supports two channels: the release's Setup installer (recommended on Setup-based installs) and the `defenseclaw-upgrade.ps1` resolver script. The script is known broken on Setup-based installs upstream — it assumes a `.defenseclaw\.venv` POSIX-style layout and fails with "Managed Python not found"; it is byte-identical between 0.8.9 and 0.8.10, so this is not fixed by upgrading.
 
 ## Building
 

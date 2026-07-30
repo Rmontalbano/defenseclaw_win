@@ -98,8 +98,10 @@ public sealed record UpdateCheckResult
 /// <para>
 /// The installed version comes from whichever of two read-only sources answers first: the
 /// gateway's own <c>/health</c> provenance (already polled by <see cref="GatewayMonitor"/>,
-/// so this is free), or <c>defenseclaw --version</c> via <see cref="CliRunner"/> when the
-/// gateway is not answering. Neither path writes anything.
+/// so this is free), or the CLI via <see cref="CliRunner"/> when the gateway is not answering —
+/// preferring the structured <c>defenseclaw --version-json</c> (0.8.10+) and falling back to
+/// the older <c>defenseclaw --version</c> text only when that flag is not understood. Neither
+/// path writes anything.
 /// </para>
 /// </summary>
 public sealed class UpdateChecker : IDisposable
@@ -302,7 +304,10 @@ public sealed class UpdateChecker : IDisposable
 
     /// <summary>
     /// Best-effort, read-only. Prefers the gateway's own answer (already polled, no extra
-    /// process); falls back to a CLI call only when the gateway has never reported a version.
+    /// process). Falls back to a CLI call only when the gateway has never reported a version —
+    /// and within that fallback, prefers <c>defenseclaw --version-json</c> (0.8.10+) since it is
+    /// structured and unambiguous; only when that misses (older CLIs predate the flag) does it
+    /// fall back further to the human-readable <c>--version</c> text and regex extraction.
     /// </summary>
     private async Task<string?> ResolveInstalledVersionAsync(CancellationToken cancellationToken)
     {
@@ -312,6 +317,101 @@ public sealed class UpdateChecker : IDisposable
             return fromHealth.Trim();
         }
 
+        var fromVersionJson = await TryResolveVersionViaVersionJsonAsync(cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(fromVersionJson))
+        {
+            return fromVersionJson;
+        }
+
+        return await TryResolveVersionViaVersionFlagAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs <c>defenseclaw --version-json</c> (supported starting with the 0.8.10 CLI) and
+    /// parses its output via <see cref="TryParseVersionJson"/>. A non-zero exit code, unparsable
+    /// output, or a blank <c>version</c> field are all treated as a miss — not an error — so the
+    /// caller can fall back to <see cref="TryResolveVersionViaVersionFlagAsync"/> for older CLIs
+    /// that predate the flag.
+    /// </summary>
+    private async Task<string?> TryResolveVersionViaVersionJsonAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var invocation = await _services.Cli
+                .RunAsync(["--version-json"], cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            if (invocation.ExitCode != 0)
+            {
+                return null;
+            }
+
+            var text = string.Join(
+                Environment.NewLine,
+                invocation.OutputLines.Select(l => l.Text));
+
+            return TryParseVersionJson(text);
+        }
+        catch (CliNotFoundException)
+        {
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // Best-effort version probe; any failure just means "unknown".
+        catch (Exception)
+        {
+            return null;
+        }
+#pragma warning restore CA1031
+    }
+
+    /// <summary>
+    /// Parses the output of <c>defenseclaw --version-json</c>, e.g.
+    /// <c>{"name":"defenseclaw-cli","schema_version":1,"version":"0.8.10"}</c>. Tolerates extra
+    /// fields (schema may grow); returns null for anything that is not a JSON object with a
+    /// non-blank string <c>version</c> property, so the caller can fall back cleanly rather than
+    /// propagate a parse exception.
+    /// </summary>
+    internal static string? TryParseVersionJson(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (!document.RootElement.TryGetProperty("version", out var versionElement) ||
+                versionElement.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var version = versionElement.GetString();
+            return string.IsNullOrWhiteSpace(version) ? null : version.Trim();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Runs the older, human-readable <c>defenseclaw --version</c> and regex-extracts the
+    /// version substring. Kept as the fallback for CLIs older than 0.8.10, which do not
+    /// understand <c>--version-json</c> and would otherwise just error or print usage.
+    /// </summary>
+    private async Task<string?> TryResolveVersionViaVersionFlagAsync(CancellationToken cancellationToken)
+    {
         try
         {
             var invocation = await _services.Cli

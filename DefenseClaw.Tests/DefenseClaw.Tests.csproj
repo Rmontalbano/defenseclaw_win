@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Canned payloads captured from a live 0.8.7 install; tests read them from the
+    <!-- Canned payloads captured from live 0.8.7 and 0.8.10 installs; tests read them from the
          output directory so they never touch the real ~/.defenseclaw. -->
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

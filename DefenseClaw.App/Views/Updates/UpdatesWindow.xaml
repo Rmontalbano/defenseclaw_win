@@ -88,7 +88,7 @@
                             Severity="Informational"
                             Title="Check, verify, then upgrade — one click at a time"
                             IsOpen="True"
-                            Message="Checking and the trust panel are read-only. The upgrade card can also download the target release's own upgrade script, verify its SHA-256 against that release's signed checksums.txt, and run it — as three separate clicks, with the exact command shown in a confirm step first. The run is recorded in the Activity panel like every other command this app issues. Prefer to do it yourself? The copyable commands further down still work." />
+                            Message="Checking and the trust panel are read-only. The upgrade card can also download the target release's Setup installer (or its upgrade script, on installs where that works), verify the SHA-256 against that release's signed checksums.txt, and run it — as three separate clicks, with the exact command shown in a confirm step first. The run is recorded in the Activity panel like every other command this app issues. Prefer to do it yourself? The copyable commands further down still work." />
 
                 <!-- Version comparison -->
                 <Border Style="{StaticResource Card}">
@@ -297,8 +297,10 @@
                 </Border>
 
                 <!--
-                    In-app upgrade. Three gated steps, top to bottom: cosign preflight, then
-                    download+verify, then a confirm overlay before the resolver runs.
+                    In-app upgrade. Channel picker first — the two channels are not
+                    interchangeable, and which one works is decided by the install layout, not by
+                    preference. Then the gated steps: cosign preflight (resolver channel only),
+                    download+verify, and a confirm overlay before anything runs.
                 -->
                 <Border Style="{StaticResource Card}" DataContext="{Binding Upgrade}">
                     <StackPanel>
@@ -317,10 +319,41 @@
                                        Text="{Binding TargetVersion, StringFormat='target {0}'}" />
                         </Grid>
 
+                        <!-- Channel picker. Switching drops any staging, by design. -->
+                        <Border Margin="0,0,0,12"
+                                Padding="12"
+                                CornerRadius="6"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                            <StackPanel>
+                                <TextBlock Margin="0,0,0,6" FontSize="12" FontWeight="SemiBold" Text="Channel" />
+
+                                <RadioButton GroupName="UpgradeChannel"
+                                             FontSize="12"
+                                             Content="Setup installer (recommended on this install)"
+                                             IsChecked="{Binding IsSetupInstallerSelected, Mode=TwoWay}" />
+                                <RadioButton GroupName="UpgradeChannel"
+                                             Margin="0,2,0,0"
+                                             FontSize="12"
+                                             Content="Resolver script"
+                                             IsChecked="{Binding IsResolverScriptSelected, Mode=TwoWay}" />
+
+                                <TextBlock Margin="0,8,0,0"
+                                           FontSize="11"
+                                           Style="{StaticResource Tertiary}"
+                                           Text="{Binding ChannelReasonText}" />
+                            </StackPanel>
+                        </Border>
+
                         <TextBlock Margin="0,0,0,12" FontSize="12" Style="{StaticResource Secondary}" Text="{Binding ChannelNote}" />
 
-                        <!-- Preflight: cosign, which the resolver refuses to run without -->
-                        <Grid Margin="0,0,0,8">
+                        <!--
+                            Preflight: cosign, which the resolver refuses to run without. Collapsed
+                            on the installer channel — the Setup exe never invokes cosign, so
+                            showing it there would be a gate on nothing.
+                        -->
+                        <Grid Margin="0,0,0,8" Visibility="{Binding IsCosignRelevant, Converter={StaticResource BoolToVisibility}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -361,7 +394,7 @@
                                     IsClosable="False"
                                     Severity="Warning"
                                     Title="cosign is required"
-                                    IsOpen="{Binding HasCosignGuidance, Mode=OneWay}"
+                                    IsOpen="{Binding ShowCosignGuidance, Mode=OneWay}"
                                     Message="{Binding CosignGuidance}" />
 
                         <!-- Step 1 -->
@@ -369,19 +402,25 @@
                         <TextBlock Margin="0,2,0,8"
                                    FontSize="11"
                                    Style="{StaticResource Tertiary}"
-                                   Text="Fetches defenseclaw-upgrade.ps1 from the target release, refuses it if it is one of the placeholder stubs (under 10 KB — the real resolver is around 216 KB), and compares its SHA-256 with that release's checksums.txt. Nothing is written to disk unless both checks pass, and nothing on this machine changes." />
+                                   Text="{Binding StagingStepNote}" />
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <ui:Button Appearance="Primary"
                                        Content="Download &amp; verify"
                                        IsEnabled="{Binding CanDownload}"
                                        Command="{Binding DownloadAndVerifyCommand}" />
-                            <TextBlock Margin="12,0,0,0"
-                                       MaxWidth="470"
-                                       VerticalAlignment="Center"
-                                       FontSize="12"
-                                       Style="{StaticResource Secondary}"
-                                       Text="{Binding StagingSummary}" />
+                            <StackPanel Margin="12,0,0,0" MaxWidth="470" VerticalAlignment="Center">
+                                <TextBlock FontSize="12"
+                                           Style="{StaticResource Secondary}"
+                                           Text="{Binding StagingSummary}" />
+                                <!-- Installer channel only: a ~270 MB download deserves a number. -->
+                                <TextBlock Margin="0,2,0,0"
+                                           FontSize="11"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           Style="{StaticResource Tertiary}"
+                                           Visibility="{Binding HasDownloadProgress, Converter={StaticResource BoolToVisibility}}"
+                                           Text="{Binding DownloadProgressText}" />
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- Verification detail, only once something verified -->
@@ -442,11 +481,11 @@
                                     Message="{Binding StagingError}" />
 
                         <!-- Step 2 -->
-                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="Step 2 — run the resolver" />
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="Step 2 — run the upgrade" />
                         <TextBlock Margin="0,2,0,8"
                                    FontSize="11"
                                    Style="{StaticResource Tertiary}"
-                                   Text="Opens a confirmation showing the exact argv, what the resolver will do, and how it rolls back. The button stays disabled until a verified script is staged, cosign is usable, and no other command this app issued is still running." />
+                                   Text="{Binding RunStepNote}" />
 
                         <ui:Button Margin="0,0,0,10"
                                    Appearance="Primary"
@@ -470,7 +509,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Text="Resolver output" />
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Text="{Binding ConsoleTitle}" />
 
                                 <Border Grid.Column="1" Margin="10,0,0,0" HorizontalAlignment="Left">
                                     <Border.Style>
@@ -535,7 +574,7 @@
                                                TextAlignment="Center"
                                                Style="{StaticResource Tertiary}"
                                                Visibility="{Binding HasOutput, Converter={StaticResource InverseBoolToVisibility}}"
-                                               Text="Waiting for the resolver's first line. Output streams here as it arrives, and the same invocation is in the Activity panel." />
+                                               Text="No output yet. Anything printed streams here as it arrives, and the same invocation is in the Activity panel — a quiet installer run may print almost nothing." />
                                 </Grid>
                             </Border>
 
@@ -555,7 +594,7 @@
                             <ui:InfoBar Margin="0,8,0,0"
                                         IsClosable="False"
                                         Severity="Error"
-                                        Title="The resolver did not finish cleanly"
+                                        Title="The upgrade did not finish cleanly"
                                         IsOpen="{Binding ShowRollbackGuidance, Mode=OneWay}"
                                         Message="{Binding RollbackStory}" />
                         </StackPanel>
@@ -574,6 +613,25 @@
                                     IsOpen="True"
                                     Message="{Binding UpgradeCaveat}" />
 
+                        <!-- Setup exe first: it is the channel that works on this install layout. -->
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" Text="Setup installer (recommended)" />
+                        <Border Padding="10"
+                                Margin="0,0,0,4"
+                                CornerRadius="6"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                            <TextBox Style="{StaticResource Mono}"
+                                     AcceptsReturn="True"
+                                     Text="{Binding SetupCommandText, Mode=OneWay}" />
+                        </Border>
+                        <ui:Button Margin="0,0,0,14"
+                                   Padding="10,4,10,4"
+                                   Appearance="Secondary"
+                                   Content="Copy"
+                                   IsEnabled="{Binding HasSetupAsset}"
+                                   Command="{Binding CopySetupCommandCommand}" />
+
                         <TextBlock FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" Text="Upgrade script (release asset)" />
                         <Border Padding="10"
                                 Margin="0,0,0,4"
@@ -581,29 +639,15 @@
                                 BorderThickness="1"
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                 Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
-                            <TextBox Style="{StaticResource Mono}" Text="{Binding UpgradeScriptCommandText, Mode=OneWay}" />
-                        </Border>
-                        <ui:Button Margin="0,0,0,14"
-                                   Padding="10,4,10,4"
-                                   Appearance="Secondary"
-                                   Content="Copy"
-                                   IsEnabled="{Binding HasUpgradeScriptAsset}"
-                                   Command="{Binding CopyUpgradeScriptCommandCommand}" />
-
-                        <TextBlock FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" Text="Setup wizard (installer exe)" />
-                        <Border Padding="10"
-                                Margin="0,0,0,4"
-                                CornerRadius="6"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
-                            <TextBox Style="{StaticResource Mono}" Text="{Binding SetupCommandText, Mode=OneWay}" />
+                            <TextBox Style="{StaticResource Mono}"
+                                     AcceptsReturn="True"
+                                     Text="{Binding UpgradeScriptCommandText, Mode=OneWay}" />
                         </Border>
                         <ui:Button Padding="10,4,10,4"
                                    Appearance="Secondary"
                                    Content="Copy"
-                                   IsEnabled="{Binding HasSetupAsset}"
-                                   Command="{Binding CopySetupCommandCommand}" />
+                                   IsEnabled="{Binding HasUpgradeScriptAsset}"
+                                   Command="{Binding CopyUpgradeScriptCommandCommand}" />
                     </StackPanel>
                 </Border>
 
@@ -634,7 +678,7 @@
                         <TextBlock FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                   Text="{Binding TargetVersion, StringFormat='Run the {0} upgrade resolver?'}" />
+                                   Text="{Binding ConfirmTitle}" />
 
                         <TextBlock Margin="0,4,0,12"
                                    FontSize="12"
@@ -648,9 +692,11 @@
                                 Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
                             <StackPanel>
                                 <TextBox Style="{StaticResource Mono}" Text="{Binding CommandPreview, Mode=OneWay}" />
+                                <!-- Only the resolver channel has an interpreter to disambiguate. -->
                                 <TextBlock Margin="0,8,0,0"
                                            FontSize="11"
                                            Style="{StaticResource Tertiary}"
+                                           Visibility="{Binding IsInstallerChannel, Converter={StaticResource InverseBoolToVisibility}}"
                                            Text="{Binding PowerShellPath, StringFormat='powershell.exe resolves to {0}'}" />
                             </StackPanel>
                         </Border>
@@ -661,7 +707,7 @@
                                    Content="Copy command"
                                    Command="{Binding CopyCommandCommand}" />
 
-                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="What the resolver does" />
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="What this does" />
                         <TextBlock Margin="0,4,0,12" FontSize="12" Style="{StaticResource Secondary}" Text="{Binding ResolverPlan}" />
 
                         <TextBlock FontSize="12" FontWeight="SemiBold" Text="If it fails" />
