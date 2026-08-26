@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DefenseClaw for Windows — Quick-wins change log</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1d21;
+    --muted: #5b6470;
+    --border: #d7dce1;
+    --card-bg: #fafbfc;
+    --table-head: #eef1f4;
+    --before-bg: #fbeeee;
+    --before-fg: #7a2a2a;
+    --after-bg: #eaf5ee;
+    --after-fg: #1f6b3a;
+    --badge-bg: #eef1f4;
+    --badge-fg: #2a3138;
+    --accent: #3a5a8c;
+    --risk-note-bg: #fff6e6;
+    --risk-note-border: #e0b64a;
+    --risk-note-fg: #6b4f0e;
+    --code-bg: #f1f3f5;
+    --link: #2a5db0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --fg: #e6e8eb;
+      --muted: #9aa4af;
+      --border: #33383e;
+      --card-bg: #1b1e23;
+      --table-head: #23272d;
+      --before-bg: #3a2222;
+      --before-fg: #e6a7a7;
+      --after-bg: #1f3327;
+      --after-fg: #9fd8b3;
+      --badge-bg: #23272d;
+      --badge-fg: #d6dbe1;
+      --accent: #7fa3d6;
+      --risk-note-bg: #332a12;
+      --risk-note-border: #8a6a1e;
+      --risk-note-fg: #e2c67f;
+      --code-bg: #21252b;
+      --link: #7fa3d6;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    line-height: 1.5;
+    font-size: 15px;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.75rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.01em;
+  }
+
+  .context-line {
+    color: var(--muted);
+    margin: 0 0 0.9rem;
+    font-size: 0.95rem;
+  }
+
+  .badge-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .badge {
+    background: var(--badge-bg);
+    color: var(--badge-fg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.82rem;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  }
+
+  h2 {
+    font-size: 1.15rem;
+    margin: 2rem 0 0.75rem;
+  }
+
+  h2.section-title {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.4rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin-bottom: 0.5rem;
+  }
+
+  caption {
+    text-align: left;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+  }
+
+  thead th {
+    background: var(--table-head);
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    font-weight: 600;
+  }
+
+  tbody td {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tbody tr:nth-child(even) {
+    background: var(--card-bg);
+  }
+
+  .risk-low { color: var(--after-fg); font-weight: 600; }
+  .risk-note-flag { color: var(--risk-note-fg); font-weight: 600; }
+
+  .overflow-wrap { overflow-x: auto; }
+
+  section.fix-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    padding: 1.1rem 1.25rem 1.3rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .fix-card h3 {
+    margin: 0 0 0.7rem;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .fix-card h3 .finding-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--badge-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  }
+
+  .fix-card .decision-label,
+  .fix-card .files-label,
+  .fix-card .risk-label {
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    margin: 0.9rem 0 0.3rem;
+  }
+
+  .fix-card p.decision {
+    margin: 0;
+    font-size: 0.93rem;
+  }
+
+  .before-after {
+    margin-top: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .ba-row {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+    font-size: 0.88rem;
+  }
+
+  .ba-row + .ba-row {
+    border-top: 1px solid var(--border);
+  }
+
+  .ba-row .ba-label {
+    padding: 0.55rem 0.6rem;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .ba-row .ba-text {
+    padding: 0.55rem 0.7rem 0.55rem 0;
+  }
+
+  .ba-row.before { background: var(--before-bg); color: var(--before-fg); }
+  .ba-row.after { background: var(--after-bg); color: var(--after-fg); }
+
+  .file-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.82rem;
+  }
+
+  .file-list li {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.25rem 0.5rem;
+    margin-bottom: 0.3rem;
+    word-break: break-all;
+  }
+
+  .residual-risk {
+    margin-top: 0.9rem;
+    background: var(--risk-note-bg);
+    border: 1px solid var(--risk-note-border);
+    color: var(--risk-note-fg);
+    border-radius: 4px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .residual-risk strong { font-weight: 700; }
+
+  ul.verify-list {
+    margin: 0 0 1rem;
+    padding-left: 1.2rem;
+    font-size: 0.9rem;
+  }
+
+  ul.verify-list li { margin-bottom: 0.35rem; }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    background: var(--code-bg);
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.88em;
+  }
+
+  footer {
+    margin-top: 2.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  @media print {
+    body { padding: 0.5rem 0.75rem; }
+    section.fix-card { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DefenseClaw for Windows — Quick-wins change log</h1>
+  <p class="context-line">
+    Six high-impact/small-effort findings from <code>docs/PERFORMANCE-DURABILITY-EVAL.md</code>, app baseline 0.8.10.
+  </p>
+  <div class="badge-strip">
+    <span class="badge">build: 0 warnings</span>
+    <span class="badge">tests: 208/208 (was 186)</span>
+    <span class="badge">fan-out: 4 agents + 1 follow-up</span>
+  </div>
+</header>
+
+<h2 class="section-title">Summary</h2>
+<div class="overflow-wrap">
+<table>
+  <caption>Six fixes, findings addressed, files touched, and risk at a glance.</caption>
+  <thead>
+    <tr>
+      <th>Fix #</th>
+      <th>Finding #(s)</th>
+      <th>What changed</th>
+      <th>Files touched</th>
+      <th>Risk</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>#6, #26</td>
+      <td>Replaced full-transcript copy per UI tick with a cursor-based incremental read API.</td>
+      <td>4</td>
+      <td><span class="risk-low">low</span></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>#14</td>
+      <td>Capped per-invocation retained output (lines and bytes) with an honest truncation notice.</td>
+      <td>2</td>
+      <td><span class="risk-low">low</span> <span class="risk-note-flag">(residual risk noted)</span></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>#7</td>
+      <td>Updates console: coalesced scrolling and list virtualization, matching the Logs panel pattern.</td>
+      <td>2</td>
+      <td><span class="risk-low">low</span></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>#8</td>
+      <td>Logs filter binding delayed 400 ms so keystrokes stop re-projecting 5,000 lines each time.</td>
+      <td>2</td>
+      <td><span class="risk-low">low</span></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>#18</td>
+      <td>Added global exception handlers with a startup-complete gate and rate-limited crash dialog/log.</td>
+      <td>1</td>
+      <td><span class="risk-low">low</span> <span class="risk-note-flag">(residual risk noted)</span></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>#20</td>
+      <td>Config-change notifications marshalled to the UI dispatcher at the App boundary.</td>
+      <td>4</td>
+      <td><span class="risk-low">low</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 class="section-title">Fixes</h2>
+
+<section class="fix-card">
+  <h3><span class="finding-tag">Findings #6 + #26</span> CliInvocation.Snapshot() full-copy per tick</h3>
+
+  <p class="decision-label">Decision</p>
+  <p class="decision">
+    New cursor-based incremental API: <code>int OutputCursor</code> (a monotonic append count) plus
+    <code>CopyNewLines(int fromCursor, ICollection&lt;CliOutputLine&gt;)</code> returning the next cursor.
+    Cursors are positions in the append sequence, not list indices, so trimming can never renumber a reader;
+    a lagging reader instead gets an explicit notice of how many lines it missed.
+    <code>Snapshot()</code> is kept — now one copy under one lock instead of three — but has zero production
+    callers once all three consumers (upgrade console, Activity panel, wizard console) are migrated to
+    <code>CopyNewLines</code> with reusable buffers.
+  </p>
+
+  <div class="before-after">
+    <div class="ba-row before">
+      <div class="ba-label">Before</div>
+      <div class="ba-text">Every 250–500 ms UI tick copied the full accumulated transcript (twice, plus once per loop iteration in two of the consumers).</div>
+    </div>
+    <div class="ba-row after">
+      <div class="ba-label">After</div>
+      <div class="ba-text">One lock plus only the lines that actually arrived; zero steady-state allocation.</div>
+    </div>
+  </div>
+
+  <p class="files-label">Files</p>
+  <ul class="file-list">
+    <li>DefenseClaw.Core/Cli/CliInvocation.cs</li>
+    <li>DefenseClaw.App/ViewModels/Updates/UpgradeSectionViewModel.cs</li>
+    <li>DefenseClaw.App/ViewModels/ActivityPanelViewModel.cs</li>
+    <li>DefenseClaw.App/ViewModels/Wizards/WizardViewModel.cs</li>
+  </ul>
+</section>
+
+<section class="fix-card">
+  <h3><span class="finding-tag">Finding #14</span> Unbounded per-invocation output</h3>
+
+  <p class="decision-label">Decision</p>
+  <p class="decision">
+    Two caps: <code>MaxRetainedOutputLines = 2,000</code> and <code>MaxRetainedOutputBytes = 256 KiB</code> per
+    invocation — 256 KiB × the 200-entry Activity ring gives a 50 MiB hard ceiling on all retained CLI text.
+    Trim drops oldest lines down to a 75% low-water mark in one <code>RemoveRange</code> call (once per
+    quarter-budget, not per line); the newest line is never dropped. Truncation is surfaced honestly: a
+    synthesized <code>[output truncated] N earlier line(s) dropped…</code> marker goes into a new third stream,
+    <code>CliStream.Notice</code> — deliberately not stdout/stderr, since call sites parse those
+    (<code>LastOrDefault(stderr)</code> for error messages; PluginsPanel parses concatenated stdout).
+    Exit code, failure reason, argv, and duration are never trimmed.
+    Required follow-up: ActivityPanelViewModel and WizardViewModel still did index-based delta reads that would
+    silently skip ~500 lines per trim event — both were migrated to the cursor API; a grep confirms zero
+    index-based readers remain.
+  </p>
+
+  <div class="before-after">
+    <div class="ba-row before">
+      <div class="ba-label">Before</div>
+      <div class="ba-text">A single long-running invocation could accumulate output without limit.</div>
+    </div>
+    <div class="ba-row after">
+      <div class="ba-label">After</div>
+      <div class="ba-text">Output is capped per invocation at 2,000 lines / 256 KiB, with an explicit truncation marker on a dedicated stream and no impact on stdout/stderr parsing.</div>
+    </div>
+  </div>
+
+  <p class="files-label">Files</p>
+  <ul class="file-list">
+    <li>DefenseClaw.Core/Cli/CliInvocation.cs (cap lives in Append)</li>
+    <li>DefenseClaw.Core/Cli/CliRunner.cs (docs)</li>
+  </ul>
+
+  <div class="residual-risk">
+    <strong>Residual risk:</strong> a single output line larger than 256 KiB is retained over-budget by exactly one line.
+  </div>
+</section>
+
+<section class="fix-card">
+  <h3><span class="finding-tag">Finding #7</span> Updates console scrolled once per line, non-virtualized</h3>
+
+  <p class="decision-label">Decision</p>
+  <p class="decision">
+    Mirrored the Logs panel's proven pattern rather than inventing one. (a) Coalesced scroll: a
+    <code>_scrollScheduled</code> guard with <code>Dispatcher.BeginInvoke(Background)</code> gives one scroll
+    per batch of appended lines instead of one per line. (b) Virtualization: the ItemsControl-in-ScrollViewer
+    became a ListBox with <code>IsVirtualizing</code> + Recycling mode; the ItemContainerStyle strips
+    ListBoxItem down to a bare ContentPresenter so the console still looks identical (non-interactive, no
+    selection chrome). <code>IsOutputPaused</code> is re-checked both at schedule time and inside the deferred
+    callback.
+  </p>
+
+  <div class="before-after">
+    <div class="ba-row before">
+      <div class="ba-label">Before</div>
+      <div class="ba-text">Verbose resolver runs caused visible judder — a full layout pass per line against a fully-realized list.</div>
+    </div>
+    <div class="ba-row after">
+      <div class="ba-label">After</div>
+      <div class="ba-text">One coalesced scroll per tick against a list that only realizes on-screen rows.</div>
+    </div>
+  </div>
+
+  <p class="files-label">Files</p>
+  <ul class="file-list">
+    <li>DefenseClaw.App/Views/Updates/UpdatesWindow.xaml</li>
+    <li>DefenseClaw.App/Views/Updates/UpdatesWindow.xaml.cs</li>
+  </ul>
+</section>
+
+<section class="fix-card">
+  <h3><span class="finding-tag">Finding #8</span> Logs filter re-projected 5,000 lines per keystroke</h3>
+
+  <p class="decision-label">Decision</p>
+  <p class="decision">
+    <code>Delay=400</code> on the FilterText binding — the exact value and mechanism the Audit panel's identical
+    filters already use (AuditPanel.xaml lines 162/169). WPF's binding delay defers the source update itself,
+    so no new timer plumbing is needed. Consistency with the sibling panel was chosen over the verifier's
+    alternate 300 ms.
+  </p>
+
+  <div class="before-after">
+    <div class="ba-row before">
+      <div class="ba-label">Before</div>
+      <div class="ba-text">Every keystroke synchronously cleared and re-filled the displayed collection from the 5,000-line buffer.</div>
+    </div>
+    <div class="ba-row after">
+      <div class="ba-label">After</div>
+      <div class="ba-text">Re-projection fires once typing pauses for 400 ms. Match semantics unchanged.</div>
+    </div>
+  </div>
+
+  <p class="files-label">Files</p>
+  <ul class="file-list">
+    <li>DefenseClaw.App/Views/Panels/LogsPanel.xaml (one attribute)</li>
+    <li>DefenseClaw.App/ViewModels/LogsPanelViewModel.cs (doc comment only)</li>
+  </ul>
+</section>
+
+<section class="fix-card">
+  <h3><span class="finding-tag">Finding #18</span> No global exception handlers</h3>
+
+  <p class="decision-label">Decision</p>
+  <p class="decision">
+    All three handlers — DispatcherUnhandledException, TaskScheduler.UnobservedTaskException, and
+    AppDomain.UnhandledException — are wired as the first statements of OnStartup, before any service
+    construction. Continue-vs-crash criterion: a <code>_shellReady</code> flag set as the last statement of
+    startup. Dispatcher faults are swallowed (Handled=true) only after tray, window, and monitor are fully up,
+    because before that point the tray isn't a usable control surface and swallowing would leave an invisible
+    zombie process. On a handled fault: the window is hidden (never a live tray with a broken window), one
+    honest dialog is shown, rate-limited to 1 per 30 s, and the full exception is logged.
+    UnobservedTaskException calls SetObserved and logs, never fatal. AppDomain does a last-resort log, nothing
+    swallowed. Crash log path: <code>%LOCALAPPDATA%\DefenseClaw.App\logs\crash-&lt;timestamp&gt;-&lt;pid&gt;.log</code>,
+    keeping the newest 10 files, with a 1 MB per-session cap and explicit marker; every path is
+    exception-proofed so the handler itself can never throw.
+  </p>
+
+  <div class="before-after">
+    <div class="ba-row before">
+      <div class="ba-label">Before</div>
+      <div class="ba-text">Any dispatcher fault silently killed the process — the tray shield just vanished, no log, no dialog.</div>
+    </div>
+    <div class="ba-row after">
+      <div class="ba-label">After</div>
+      <div class="ba-text">Faults after startup completes are caught, logged, and surfaced via a rate-limited dialog instead of killing the process silently.</div>
+    </div>
+  </div>
+
+  <p class="files-label">Files</p>
+  <ul class="file-list">
+    <li>DefenseClaw.App/App.xaml.cs</li>
+  </ul>
+
+  <div class="residual-risk">
+    <strong>Residual risk:</strong> handled dispatcher faults may leave view-model state inconsistent
+    (mitigation: window hidden, reopen rebuilds); the MessageBox shown in the dispatcher handler pumps messages
+    re-entrantly, bounded by the 30 s throttle.
+  </div>
+</section>
+
+<section class="fix-card">
+  <h3><span class="finding-tag">Finding #20</span> Config-change event mutated UI collections off-thread</h3>
+
+  <p class="decision-label">Decision</p>
+  <p class="decision">
+    Marshal once at the App boundary: <code>AppServices.RaiseConfigReloaded</code> resolves
+    <code>Application.Current.Dispatcher</code> at raise time (CheckAccess/BeginInvoke — the shell's dominant
+    pattern). Rejected: a captured SynchronizationContext, since AppServices is constructed mid-composition
+    where the context may be null or a pool context, so a capture could silently degrade to raising on the
+    watcher thread. Marshalling at the source makes every current and future ConfigReloaded subscriber safe by
+    construction. Headless tests keep the unchanged inline path (Application.Current is null). Guarded against
+    shutdown races with HasShutdownStarted plus a narrow catch.
+  </p>
+
+  <div class="before-after">
+    <div class="ba-row before">
+      <div class="ba-label">Before</div>
+      <div class="ba-text">An external config.yaml/.env edit with the Overview panel open threw NotSupportedException from WPF's CollectionView on the watcher thread and killed the process.</div>
+    </div>
+    <div class="ba-row after">
+      <div class="ba-label">After</div>
+      <div class="ba-text">Reload work stays off the UI thread; only the notification hops to the Dispatcher.</div>
+    </div>
+  </div>
+
+  <p class="files-label">Files</p>
+  <ul class="file-list">
+    <li>DefenseClaw.Core/Config/ConfigChangeToken.cs (docs only — Core stays thread-agnostic)</li>
+    <li>DefenseClaw.App/Services/AppServices.cs (the fix)</li>
+    <li>DefenseClaw.App/ViewModels/OverviewPanelViewModel.cs (doc comments)</li>
+    <li>DefenseClaw.App/ViewModels/MainWindowViewModel.cs (doc comments)</li>
+  </ul>
+</section>
+
+<h2 class="section-title">Verification</h2>
+<p class="decision">
+  <code>dotnet build</code>: 0 warnings, 0 errors. <code>dotnet test</code>: 208/208 passing (186 before).
+</p>
+<p class="decision-label">New test coverage</p>
+<ul class="verify-list">
+  <li>Cap overflow drops oldest lines and emits the Notice marker.</li>
+  <li>Marker is invisible to stdout/stderr filters.</li>
+  <li>Byte cap vs. line cap binding.</li>
+  <li>Cursor reads lose or duplicate nothing, including under concurrent append.</li>
+  <li>Lagging-reader gap reporting.</li>
+</ul>
+<p class="decision-label">New public API surface</p>
+<ul class="verify-list">
+  <li><code>CliStream.Notice</code></li>
+  <li><code>CliInvocation.OutputCursor</code> / <code>CliInvocation.CopyNewLines</code></li>
+  <li>The two cap constants (<code>MaxRetainedOutputLines</code>, <code>MaxRetainedOutputBytes</code>)</li>
+</ul>
+<p class="decision">
+  No exhaustive switch over <code>CliStream</code> existed anywhere, so adding Notice breaks nothing.
+</p>
+
+<footer>
+  A follow-up migration (part of Fix 2) moved ActivityPanelViewModel and WizardViewModel off index-based delta
+  reads and onto the cursor API, preventing the silent skipping of lines that a trim event would otherwise
+  have caused in those two consumers.
+</footer>
+
+</body>
+</html>

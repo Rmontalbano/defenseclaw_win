@@ -278,4 +278,291 @@ public class CliRunnerTests
         Assert.Equal(invocation.Argv, snapshot.Argv);
         Assert.Equal(invocation.OutputLines.Count, snapshot.OutputLines.Count);
     }
+
+    // ----------------------------------------------------------------------------------
+    // Retained-output cap. The activity ring is bounded by entry count only, so without a
+    // second cap here one chatty command pins its whole transcript for the life of the app.
+    // ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Writes <paramref name="lineCount"/> distinguishable lines and has cmd type them back,
+    /// which is the cheapest way to drive a real capture path with a large transcript.
+    /// </summary>
+    private static string TranscriptFile(TempDirectory temp, int lineCount, int width = 0)
+    {
+        var padding = width > 0 ? new string('x', width) : string.Empty;
+        var text = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, lineCount).Select(i => $"line-{i:00000}{padding}"));
+
+        return temp.Write("transcript.txt", text);
+    }
+
+    [Fact]
+    public async Task Chatty_output_is_capped_and_the_oldest_lines_are_dropped()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 3_000);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+
+        var lines = invocation.OutputLines;
+
+        // Retained is bounded, and the tail — where the diagnosis lives — is what survives.
+        Assert.True(invocation.IsOutputTruncated);
+        Assert.True(invocation.DroppedOutputLineCount > 0);
+        Assert.True(
+            lines.Count <= CliInvocation.MaxRetainedOutputLines + 1,
+            $"retained {lines.Count} lines, cap is {CliInvocation.MaxRetainedOutputLines} (+1 marker)");
+        Assert.Contains(lines, l => l.Text.Contains("line-03000", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Text.Contains("line-00001", StringComparison.Ordinal));
+
+        // Every line ever captured is still accounted for, dropped or retained. (>= rather
+        // than ==: whether `type` emits a final newline for a file that lacks one is a cmd
+        // detail, not something this cap should be pinned to.)
+        Assert.True(invocation.OutputCursor >= 3_000);
+        Assert.Equal(
+            invocation.OutputCursor,
+            invocation.DroppedOutputLineCount + lines.Count - 1);
+    }
+
+    [Fact]
+    public async Task Dropping_output_emits_an_explicit_truncation_marker()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 3_000);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+
+        // Honest reporting: output is never dropped silently, and the marker says how much.
+        var marker = invocation.OutputLines[0];
+        Assert.Equal(CliStream.Notice, marker.Stream);
+        Assert.Contains("output truncated", marker.Text, StringComparison.Ordinal);
+        Assert.Contains($"{invocation.DroppedOutputLineCount} earlier", marker.Text, StringComparison.Ordinal);
+
+        // The marker is a notice, not a fabricated stdout/stderr line: the call sites that
+        // reduce an invocation to a user-facing error by filtering on a stream must not pick
+        // it up, and the ones that concatenate stdout and parse it must not see it either.
+        Assert.DoesNotContain(
+            invocation.OutputLines.Where(l => l.Stream is CliStream.StandardOutput or CliStream.StandardError),
+            l => l.Text.Contains("output truncated", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_byte_cap_binds_before_the_line_cap_on_wide_output()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        // 200 lines is far below the line cap, but 2 KB per line blows the byte budget —
+        // which is the case a line-count-only cap would miss entirely.
+        var file = TranscriptFile(temp, lineCount: 200, width: 2_000);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+
+        Assert.True(invocation.IsOutputTruncated);
+        Assert.True(
+            invocation.OutputLines.Count < 200,
+            "the byte cap should have trimmed well before 200 lines were retained");
+        Assert.Contains(
+            invocation.OutputLines,
+            l => l.Text.Contains("line-00200", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Truncation_never_touches_argv_the_exit_code_or_the_failure_reason()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 3_000);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+
+        Assert.True(invocation.IsOutputTruncated);
+        Assert.Equal(0, invocation.ExitCode);
+        Assert.True(invocation.Succeeded);
+        Assert.Null(invocation.FailureReason);
+        Assert.Equal(new[] { "/c", "type", file }, invocation.Argv);
+        Assert.NotNull(invocation.Duration);
+    }
+
+    [Fact]
+    public async Task Snapshot_carries_truncation_state_with_it()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 3_000);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+        var snapshot = invocation.Snapshot();
+
+        Assert.True(snapshot.IsOutputTruncated);
+        Assert.Equal(invocation.DroppedOutputLineCount, snapshot.DroppedOutputLineCount);
+        Assert.Equal(invocation.OutputCursor, snapshot.OutputCursor);
+        Assert.Equal(invocation.OutputLines.Count, snapshot.OutputLines.Count);
+        Assert.Equal(CliStream.Notice, snapshot.OutputLines[0].Stream);
+    }
+
+    // ----------------------------------------------------------------------------------
+    // Incremental reads. Live consoles poll several times a second; they must be able to
+    // pull only what arrived since their last read rather than re-copying the transcript.
+    // ----------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task CopyNewLines_from_zero_returns_the_whole_transcript()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 50);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+
+        var drained = new List<CliOutputLine>();
+        var cursor = invocation.CopyNewLines(0, drained);
+
+        Assert.False(invocation.IsOutputTruncated);
+        Assert.Equal(invocation.OutputCursor, cursor);
+        Assert.Equal(invocation.OutputLines.Select(l => l.Text), drained.Select(l => l.Text));
+    }
+
+    [Fact]
+    public async Task CopyNewLines_returns_nothing_when_the_cursor_is_already_current()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "echo", "once" });
+
+        var drained = new List<CliOutputLine>();
+        var cursor = invocation.CopyNewLines(0, drained);
+        var firstPass = drained.Count;
+        Assert.True(firstPass > 0);
+
+        // A second tick with no new output must add nothing — the bug this API replaces was
+        // a console that re-read (and could re-append) lines it had already shown.
+        drained.Clear();
+        var second = invocation.CopyNewLines(cursor, drained);
+
+        Assert.Empty(drained);
+        Assert.Equal(cursor, second);
+
+        // Defensive: a cursor from some other invocation must not replay history either.
+        drained.Clear();
+        invocation.CopyNewLines(cursor + 5_000, drained);
+        Assert.Empty(drained);
+    }
+
+    [Fact]
+    public async Task CopyNewLines_tells_a_lagging_reader_exactly_what_it_missed()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 3_000);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+        Assert.True(invocation.IsOutputTruncated);
+
+        // A reader still holding cursor 0 fell behind a trim. It is told, rather than
+        // silently handed a transcript that starts in the middle of the run.
+        var drained = new List<CliOutputLine>();
+        invocation.CopyNewLines(0, drained);
+
+        Assert.Equal(CliStream.Notice, drained[0].Stream);
+        Assert.Contains("output truncated", drained[0].Text, StringComparison.Ordinal);
+        Assert.Contains($"{invocation.DroppedOutputLineCount} earlier", drained[0].Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(drained, l => l.Text.Contains("line-00001", StringComparison.Ordinal));
+        Assert.Contains(drained, l => l.Text.Contains("line-03000", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Incremental_reads_during_a_live_run_lose_and_duplicate_nothing()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 400);
+
+        // The runner only hands the invocation back when the process exits, so grab the live
+        // instance the way the panels do — the whole point is reading it while it mutates.
+        CliInvocation? live = null;
+        runner.InvocationStarted += (_, i) => live = i;
+
+        var run = runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+
+        // Poll on this thread while the capture callbacks append on theirs.
+        var drained = new List<CliOutputLine>();
+        var buffer = new List<CliOutputLine>();
+        var cursor = 0;
+        while (!run.IsCompleted)
+        {
+            if (live is { } invocation)
+            {
+                buffer.Clear();
+                cursor = invocation.CopyNewLines(cursor, buffer);
+                drained.AddRange(buffer);
+            }
+
+            await Task.Yield();
+        }
+
+        var finished = await run;
+        buffer.Clear();
+        finished.CopyNewLines(cursor, buffer);
+        drained.AddRange(buffer);
+
+        Assert.False(finished.IsOutputTruncated);
+        Assert.Equal(finished.OutputCursor, drained.Count);
+        Assert.Equal(finished.OutputLines.Select(l => l.Text), drained.Select(l => l.Text));
+
+        // No line arrived twice, however the ticks happened to interleave with the appends.
+        var payload = drained.Where(l => l.Text.StartsWith("line-", StringComparison.Ordinal)).ToList();
+        Assert.Equal(payload.Count, payload.Select(l => l.Text).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task Incremental_reads_are_safe_from_a_second_thread()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 400);
+
+        CliInvocation? live = null;
+        runner.InvocationStarted += (_, i) => live = i;
+
+        using var stop = new CancellationTokenSource();
+        var drained = new List<CliOutputLine>();
+        var cursor = 0;
+
+        // Drains on a pool thread with no coordination beyond the invocation's own lock,
+        // concurrently with the stdout callback thread appending into it.
+        var reader = Task.Run(
+            async () =>
+            {
+                var buffer = new List<CliOutputLine>();
+                while (!stop.IsCancellationRequested)
+                {
+                    if (live is { } invocation)
+                    {
+                        buffer.Clear();
+                        cursor = invocation.CopyNewLines(cursor, buffer);
+                        drained.AddRange(buffer);
+                    }
+
+                    await Task.Yield();
+                }
+            },
+            CancellationToken.None);
+
+        var finished = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+        stop.Cancel();
+        await reader;
+
+        var tail = new List<CliOutputLine>();
+        finished.CopyNewLines(cursor, tail);
+        drained.AddRange(tail);
+
+        Assert.Equal(finished.OutputCursor, drained.Count);
+        Assert.Equal(finished.OutputLines.Select(l => l.Text), drained.Select(l => l.Text));
+    }
 }

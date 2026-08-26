@@ -1,5 +1,7 @@
 using System.IO;
+using System.Windows;
 using DefenseClaw.Core.Audit;
+using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
@@ -53,6 +55,7 @@ public sealed class AppServices : IDisposable
 
         Audit = new AuditReader(Paths.AuditDatabasePath);
         Inventory = new InventoryReader(Paths.InventoryDatabasePath);
+        ClaudeSettings = new ClaudeSettingsReader();
         GatewayLog = new LogTailer(Paths.GatewayLogPath, new LogTailerOptions { StartAtEnd = true });
         WatchdogLog = new LogTailer(Paths.WatchdogLogPath, new LogTailerOptions { StartAtEnd = true });
 
@@ -85,6 +88,9 @@ public sealed class AppServices : IDisposable
     public AuditReader Audit { get; }
 
     public InventoryReader Inventory { get; }
+
+    /// <summary>Read-only view of Claude Code's settings.json; the app never writes it.</summary>
+    public ClaudeSettingsReader ClaudeSettings { get; }
 
     /// <summary>Tail of <c>gateway.log</c>. Not started — the Logs panel owns the lifecycle.</summary>
     public LogTailer GatewayLog { get; }
@@ -133,7 +139,15 @@ public sealed class AppServices : IDisposable
         }
     }
 
-    /// <summary>Raised after config.yaml or .env changed and the token was re-resolved.</summary>
+    /// <summary>
+    /// Raised after config.yaml or .env changed and the token was re-resolved.
+    /// <para>
+    /// <b>Always raised on the UI thread</b> when there is one — see
+    /// <see cref="RaiseConfigReloaded"/>. Subscribers may mutate bound collections and
+    /// view-model properties directly, exactly as they can from
+    /// <c>GatewayMonitor.StateChanged</c>.
+    /// </para>
+    /// </summary>
     public event EventHandler? ConfigReloaded;
 
     public static AppServices Initialize()
@@ -145,7 +159,15 @@ public sealed class AppServices : IDisposable
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
     public SecretValue? CurrentToken() => Token.Token;
 
-    /// <summary>Re-reads config.yaml and the .env file, then re-resolves the token ladder.</summary>
+    /// <summary>
+    /// Re-reads config.yaml and the .env file, then re-resolves the token ladder.
+    /// <para>
+    /// The reading, parsing and hashing all happen on the calling thread — which for the
+    /// watcher-driven path is a thread-pool or <c>FileSystemWatcher</c> thread, and must
+    /// stay that way: this is file I/O plus a YAML parse, and the UI thread has no business
+    /// doing it. Only the <see cref="ConfigReloaded"/> notification is marshalled.
+    /// </para>
+    /// </summary>
     public void ReloadConfig()
     {
         var document = LoadConfigSafely(ConfigStore, out var error);
@@ -159,7 +181,7 @@ public sealed class AppServices : IDisposable
         }
 
         RegisterTokenWithCli();
-        ConfigReloaded?.Invoke(this, EventArgs.Empty);
+        RaiseConfigReloaded();
     }
 
     public void Dispose()
@@ -179,7 +201,74 @@ public sealed class AppServices : IDisposable
         Instance = null;
     }
 
+    /// <summary>
+    /// The App side of <see cref="ConfigChangeToken.Changed"/>. Runs on the watcher's or
+    /// the poll timer's thread; <see cref="ReloadConfig"/> is idempotent, which is what
+    /// that event's contract requires of its handlers.
+    /// </summary>
     private void OnConfigChanged(object? sender, ConfigChangedEventArgs e) => ReloadConfig();
+
+    /// <summary>
+    /// Marshals <see cref="ConfigReloaded"/> onto the UI thread.
+    /// <para>
+    /// <b>Why this is the boundary.</b> <see cref="ConfigChangeToken"/> lives in Core and
+    /// stays thread-agnostic — it raises on whichever thread spotted the file edit. Its
+    /// only App-side subscriber is this class, and every downstream consumer is a
+    /// view-model: <c>OverviewPanelViewModel.OnConfigReloaded</c> rebuilds the bound
+    /// <c>ObservableCollection&lt;AttentionRow&gt;</c>, <c>MainWindowViewModel</c> sets
+    /// banner properties. Marshalling once here makes every current and future subscriber
+    /// safe by construction, rather than leaving each one to remember.
+    /// </para>
+    /// <para>
+    /// <b>Why the Dispatcher rather than a captured <see cref="SynchronizationContext"/>.</b>
+    /// <c>GatewayMonitor.Publish</c> captures a context because it has an explicit
+    /// <c>Start()</c> that OnStartup calls last, on the UI thread, precisely so the capture
+    /// is correct. This class has no such moment — it is constructed midway through
+    /// composition and <c>Initialize()</c> is reachable from tests and tooling, where
+    /// <c>SynchronizationContext.Current</c> is null or a pool context and a captured value
+    /// would silently degrade back to raising on the watcher thread. Resolving
+    /// <c>Application.Current.Dispatcher</c> at raise time cannot go stale, and the
+    /// CheckAccess/BeginInvoke shape matches how the rest of the shell marshals
+    /// (<c>UpgradeSectionViewModel.PostState</c>, the Activity, Logs and Setup panels,
+    /// <c>App.OnActivationRequested</c>).
+    /// </para>
+    /// <para>
+    /// A null dispatcher means no WPF application is running — headless tests — so the
+    /// handler is invoked inline, preserving the synchronous behaviour those tests observe.
+    /// </para>
+    /// </summary>
+    private void RaiseConfigReloaded()
+    {
+        var handler = ConfigReloaded;
+        if (handler is null)
+        {
+            return;
+        }
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            handler(this, EventArgs.Empty);
+            return;
+        }
+
+        if (dispatcher.HasShutdownStarted)
+        {
+            // Exiting: there is no UI left to update, and BeginInvoke would throw.
+            return;
+        }
+
+        try
+        {
+            _ = dispatcher.BeginInvoke(() => handler(this, EventArgs.Empty));
+        }
+        catch (InvalidOperationException)
+        {
+            // Shutdown began between the check above and the post. A dropped banner update
+            // on the way out is fine; an exception on the watcher thread is not — nothing
+            // above it can catch, so it would take the process down.
+        }
+    }
 
     /// <summary>
     /// Hands the resolved bearer token to the CLI runner so it can never reach argv or

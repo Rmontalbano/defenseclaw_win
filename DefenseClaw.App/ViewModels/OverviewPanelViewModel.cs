@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Audit;
+using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Gateway.Models;
@@ -130,6 +131,12 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         await RefreshDataAsync(CancellationToken.None);
     }
 
+    /// <summary>
+    /// The reload originates on the config watcher's thread, but AppServices marshals
+    /// <c>ConfigReloaded</c> onto the Dispatcher before raising it, so — as with
+    /// <see cref="OnStateChanged"/> — this is the UI thread and <see cref="Attention"/>
+    /// can be rebuilt directly.
+    /// </summary>
     private void OnConfigReloaded(object? sender, EventArgs e) => Apply(Services.Monitor.Current);
 
     private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e)
@@ -266,6 +273,26 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             }
         }
 
+        // The third opinion, and the one that wins: Claude Code's own settings.json can
+        // hold an env override the hook obeys over both config.yaml and /status.
+        if (snapshot.FailModeDrift is { } drift)
+        {
+            rows.Add(new AttentionRow
+            {
+                Title = "claudecode: settings.json overrides the hook fail mode",
+                Detail = $"{drift.SettingsPath} sets {ClaudeSettingsReader.FailModeVariableName}={drift.EnvFailMode}, " +
+                         $"but {drift.GatewaySource} says hook_fail_mode: {drift.GatewayFailMode}. The hook obeys the " +
+                         "env var, so this is the effective behavior — the Setup installer is known to re-plant " +
+                         "fail-closed on upgrade." +
+                         (drift.IsDangerousPairing
+                             ? " With the connector in observe mode, a gateway outage blocks the agent it is only " +
+                               "meant to watch."
+                             : string.Empty),
+                SeverityKey = drift.IsDangerousPairing ? "Critical" : "High",
+                Command = drift.RemediationCommand,
+            });
+        }
+
         if (snapshot.CriticalAlertCount > 0)
         {
             rows.Add(new AttentionRow
@@ -303,7 +330,8 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             rows.Add(new AttentionRow
             {
                 Title = "Nothing needs attention",
-                Detail = "The gateway is healthy, no CRITICAL alerts in the last poll, and no fail-mode mismatch.",
+                Detail = "The gateway is healthy, no CRITICAL alerts in the last poll, no fail-mode mismatch, " +
+                         "and settings.json agrees with the gateway on the hook fail mode.",
                 SeverityKey = "Ok",
             });
         }

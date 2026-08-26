@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Windows.Threading;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.ViewModels.Updates;
 using Wpf.Ui.Controls;
@@ -20,7 +21,8 @@ namespace DefenseClaw.App.Views.Updates;
 /// </para>
 /// <para>
 /// This class owns only window concerns: lifetime, single-instance behaviour, and keeping the
-/// resolver console pinned to its newest line.
+/// resolver console (a virtualized <see cref="System.Windows.Controls.ListBox"/>, see
+/// <c>UpgradeOutputList</c> in the XAML) pinned to its newest line as output streams in.
 /// </para>
 /// </summary>
 public sealed partial class UpdatesWindow : FluentWindow
@@ -28,6 +30,7 @@ public sealed partial class UpdatesWindow : FluentWindow
     private static UpdatesWindow? _current;
 
     private readonly UpdatesWindowViewModel _viewModel;
+    private bool _scrollScheduled;
 
     private UpdatesWindow(UpdatesWindowViewModel viewModel)
     {
@@ -80,15 +83,38 @@ public sealed partial class UpdatesWindow : FluentWindow
     /// Keeps the console on its newest line while the resolver runs. Honours the pause toggle:
     /// an operator reading back through a long upgrade should not be yanked to the bottom every
     /// quarter second. Lines are still collected while paused — only the scrolling stops.
+    /// <para>
+    /// <b>Why the scroll is coalesced.</b> <c>UpgradeSectionViewModel.PullOutput</c> ticks every
+    /// 250ms and can add many lines to <c>Output</c> in one pass, each as its own
+    /// <see cref="NotifyCollectionChangedAction.Add"/>. Scrolling on every individual add would
+    /// mean a full layout pass per line for a bursty resolver run. Instead this defers to the
+    /// dispatcher's background priority so a whole burst settles into a single
+    /// <see cref="System.Windows.Controls.ListBox.ScrollIntoView(object)"/> call — the same
+    /// <c>_scrollScheduled</c> + <see cref="DispatcherPriority.Background"/> coalescing pattern
+    /// <see cref="DefenseClaw.App.Views.Panels.LogsPanel"/> uses for its own append-heavy console.
+    /// </para>
     /// </summary>
     private void OnUpgradeOutputChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action != NotifyCollectionChangedAction.Add || _viewModel.Upgrade.IsOutputPaused)
+        if (e.Action != NotifyCollectionChangedAction.Add || _viewModel.Upgrade.IsOutputPaused || _scrollScheduled)
         {
             return;
         }
 
-        UpgradeOutputScroll.ScrollToEnd();
+        _scrollScheduled = true;
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(() =>
+            {
+                _scrollScheduled = false;
+
+                // Re-check pause here too: the operator may have paused during the deferred
+                // window between scheduling this callback and it actually running.
+                if (!_viewModel.Upgrade.IsOutputPaused && UpgradeOutputList.Items.Count > 0)
+                {
+                    UpgradeOutputList.ScrollIntoView(UpgradeOutputList.Items[^1]);
+                }
+            }));
     }
 
     private void OnClosed(object? sender, EventArgs e)

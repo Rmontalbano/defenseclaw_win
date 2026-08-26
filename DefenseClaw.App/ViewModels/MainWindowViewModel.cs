@@ -126,6 +126,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e) => Apply(e.Snapshot);
 
+    /// <summary>
+    /// AppServices marshals <c>ConfigReloaded</c> onto the Dispatcher, so the banner
+    /// properties below are set on the UI thread even though the edit was spotted by the
+    /// config watcher on a background one.
+    /// </summary>
     private void OnConfigReloaded(object? sender, EventArgs e) => ApplyConfigError();
 
     private void Apply(GatewaySnapshot snapshot)

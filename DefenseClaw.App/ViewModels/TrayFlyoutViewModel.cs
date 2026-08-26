@@ -41,6 +41,17 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _lastPolled = "never";
 
+    /// <summary>
+    /// The one line about fail-mode drift the operator sees before opening the dashboard.
+    /// Deliberately a single sentence: the full explanation and the copyable remediation
+    /// live in the Overview panel's attention list.
+    /// </summary>
+    [ObservableProperty]
+    private string _failModeNote = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasFailModeNote;
+
     public TrayFlyoutViewModel(AppServices services, Action openDashboard, Action exit)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
@@ -84,6 +95,19 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
             ? reason
             : $"{snapshot.AlertCount} in the last {GatewayMonitor.AlertLimit}" +
               (snapshot.CriticalAlertCount > 0 ? $" · {snapshot.CriticalAlertCount} CRITICAL" : string.Empty);
+
+        if (snapshot.FailModeDrift is { } drift)
+        {
+            FailModeNote =
+                $"⚠ settings.json forces fail-{drift.EnvFailMode}; {drift.GatewaySource} says " +
+                $"{drift.GatewayFailMode} — open the dashboard";
+            HasFailModeNote = true;
+        }
+        else
+        {
+            FailModeNote = string.Empty;
+            HasFailModeNote = false;
+        }
 
         LastPolled = snapshot.PolledAt == DateTimeOffset.MinValue
             ? "never"

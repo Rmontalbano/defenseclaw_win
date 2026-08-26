@@ -21,10 +21,13 @@ namespace DefenseClaw.App.ViewModels;
 /// <para>
 /// <b>Why a timer drives live output.</b> <see cref="CliRunner.OutputReceived"/> carries a
 /// bare <see cref="CliOutputLine"/> with no invocation id, so there is no cheap way to route
-/// one event to one row. Instead, a half-second <see cref="DispatcherTimer"/> re-reads
-/// <see cref="CliInvocation.Snapshot"/> for every row still running, which is also what keeps
-/// the elapsed-time readout current. <see cref="CliRunner"/> raises its events from
-/// background threads (process callbacks, or continuations captured with
+/// one event to one row. Instead, a half-second <see cref="DispatcherTimer"/> re-reads every
+/// row still running, which is also what keeps the elapsed-time readout current. Each tick
+/// pulls only the output that arrived since the last one via
+/// <see cref="CliInvocation.CopyNewLines"/> - a full <see cref="CliInvocation.Snapshot"/> per
+/// row twice a second would copy the whole accumulated transcript each time, and it is the
+/// long noisy runs where that cost lands hardest. <see cref="CliRunner"/> raises its events
+/// from background threads (process callbacks, or continuations captured with
 /// <c>ConfigureAwait(false)</c>), so every handler marshals through
 /// <see cref="Application.Current"/>'s dispatcher.
 /// </para>
@@ -56,9 +59,19 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     public override string Description =>
         "Every DefenseClaw mutation this app makes: exact argv, live output and exit code.";
 
-    /// <summary>Stated once, from the runner's fixed capacity - never changes at runtime.</summary>
+    /// <summary>
+    /// Stated once, from fixed capacities - neither changes at runtime.
+    /// <para>
+    /// Names both caps, because there are two and an operator who only knows about the entry
+    /// cap would read a trimmed transcript as a bug. A truncated invocation also says so
+    /// inline, at the top of its own output.
+    /// </para>
+    /// </summary>
     public string CapacityNote =>
-        $"Showing the last {Services.Cli.ActivityCapacity.ToString(CultureInfo.CurrentCulture)} invocations, in memory only. Nothing here survives an app restart.";
+        $"Showing the last {Services.Cli.ActivityCapacity.ToString(CultureInfo.CurrentCulture)} invocations, in memory only. " +
+        $"Each one keeps up to {CliInvocation.MaxRetainedOutputLines.ToString(CultureInfo.CurrentCulture)} lines " +
+        $"({(CliInvocation.MaxRetainedOutputBytes / 1024).ToString(CultureInfo.CurrentCulture)} KiB) of output - past that the oldest lines are dropped and the invocation says how many. " +
+        "Nothing here survives an app restart.";
 
     public string EmptyTitle => "No CLI activity yet";
 
@@ -141,7 +154,11 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     }
 }
 
-/// <summary>One invocation row, refreshed from <see cref="CliInvocation.Snapshot"/>.</summary>
+/// <summary>
+/// One invocation row, refreshed in place from the live <see cref="CliInvocation"/> - status
+/// fields re-read each tick, output pulled as a delta through
+/// <see cref="CliInvocation.CopyNewLines"/>.
+/// </summary>
 public sealed partial class ActivityRow : ObservableObject
 {
     [ObservableProperty]
@@ -175,7 +192,18 @@ public sealed partial class ActivityRow : ObservableObject
     [ObservableProperty]
     private bool _isExpanded;
 
-    private int _syncedOutputCount;
+    /// <summary>
+    /// Reused across ticks so a running row allocates nothing in steady state - it is cleared
+    /// and refilled with only the lines that arrived since the last tick.
+    /// </summary>
+    private readonly List<CliOutputLine> _outputBuffer = new();
+
+    /// <summary>
+    /// Position in <see cref="Invocation"/>'s monotonic append sequence - deliberately not an
+    /// index into its retained lines, which shift when a chatty invocation trims itself. See
+    /// <see cref="CliInvocation.CopyNewLines"/>.
+    /// </summary>
+    private int _outputCursor;
 
     public ActivityRow(CliInvocation invocation)
     {
@@ -183,7 +211,11 @@ public sealed partial class ActivityRow : ObservableObject
         Tick();
     }
 
-    /// <summary>The live, shared instance from <see cref="CliRunner.Activity"/> - used only for identity and to pull fresh snapshots, never read directly.</summary>
+    /// <summary>
+    /// The live, shared instance from <see cref="CliRunner.Activity"/>, still being appended
+    /// to while its process runs. Output is only ever read through
+    /// <see cref="CliInvocation.CopyNewLines"/>, which takes the invocation's own lock.
+    /// </summary>
     public CliInvocation Invocation { get; }
 
     public string CommandLine => Invocation.CommandLine;
@@ -191,23 +223,35 @@ public sealed partial class ActivityRow : ObservableObject
     public ObservableCollection<CliOutputRow> Output { get; } = new();
 
     /// <summary>
-    /// Re-reads a <see cref="CliInvocation.Snapshot"/> and applies it. Safe to call from the
-    /// UI thread even while the process is still running on a background thread, because the
-    /// snapshot is an immutable copy rather than the live, concurrently-mutated instance.
+    /// Re-reads the invocation and applies it. Safe to call from the UI thread while the
+    /// process is still running on a background thread.
+    /// <para>
+    /// The completion fields are read into locals once, at the top, and everything below uses
+    /// those: the invocation can finish mid-tick, and re-reading <c>FinishedAt</c> per use is
+    /// what would let a row render a "running" badge next to a settled duration. That is the
+    /// whole of what <see cref="CliInvocation.Snapshot"/> bought here - it reads those same
+    /// fields without locking too - and it charged a full copy of the accumulated transcript
+    /// for it, twice a second, for the entire length of the run.
+    /// </para>
     /// </summary>
     public void Tick()
     {
-        var snapshot = Invocation.Snapshot();
-        IsRunning = snapshot.IsRunning;
-        StartedText = snapshot.StartedAt.ToLocalTime().ToString("MMM d HH:mm:ss", CultureInfo.CurrentCulture);
-        RelativeStartText = Relative(snapshot.StartedAt);
-        UsedStdinSecret = snapshot.UsedStdinSecret;
-        DurationText = snapshot.IsRunning
-            ? FormatDuration(DateTimeOffset.UtcNow - snapshot.StartedAt)
-            : snapshot.Duration is { } duration ? FormatDuration(duration) : "—";
+        var startedAt = Invocation.StartedAt;
+        var finishedAt = Invocation.FinishedAt;
+        var exitCode = Invocation.ExitCode;
+        var failureReason = Invocation.FailureReason;
+        var isRunning = finishedAt is null;
 
-        ApplyBadge(snapshot);
-        SyncOutput(snapshot.OutputLines);
+        IsRunning = isRunning;
+        StartedText = startedAt.ToLocalTime().ToString("MMM d HH:mm:ss", CultureInfo.CurrentCulture);
+        RelativeStartText = Relative(startedAt);
+        UsedStdinSecret = Invocation.UsedStdinSecret;
+        DurationText = finishedAt is { } finished
+            ? FormatDuration(finished - startedAt)
+            : FormatDuration(DateTimeOffset.UtcNow - startedAt);
+
+        ApplyBadge(isRunning, exitCode, failureReason);
+        SyncOutput();
     }
 
     [RelayCommand]
@@ -223,9 +267,14 @@ public sealed partial class ActivityRow : ObservableObject
         }
     }
 
-    private void ApplyBadge(CliInvocation snapshot)
+    /// <summary>
+    /// Takes the three values rather than the invocation, so it is reading exactly what
+    /// <see cref="Tick"/> read - a second read of a live field could disagree with the one
+    /// the duration and running flag were computed from.
+    /// </summary>
+    private void ApplyBadge(bool isRunning, int? exitCode, string? failureReason)
     {
-        if (snapshot.IsRunning)
+        if (isRunning)
         {
             ExitBadgeText = "running";
             ExitBadgeKey = "Neutral";
@@ -234,7 +283,7 @@ public sealed partial class ActivityRow : ObservableObject
             return;
         }
 
-        if (snapshot.FailureReason is { Length: > 0 } failure)
+        if (failureReason is { Length: > 0 } failure)
         {
             ExitBadgeText = "failed";
             ExitBadgeKey = "Warn";
@@ -246,7 +295,7 @@ public sealed partial class ActivityRow : ObservableObject
         HasFailure = false;
         FailureText = string.Empty;
 
-        if (snapshot.ExitCode is { } code)
+        if (exitCode is { } code)
         {
             ExitBadgeText = code == 0 ? "exit 0" : $"exit {code.ToString(CultureInfo.CurrentCulture)}";
             ExitBadgeKey = code == 0 ? "Ok" : "Bad";
@@ -259,18 +308,24 @@ public sealed partial class ActivityRow : ObservableObject
     }
 
     /// <summary>
-    /// Output only ever grows, so each tick appends the delta since the last sync instead of
-    /// rebuilding the whole collection.
+    /// Appends whatever arrived since the last tick, so the bound collection is never rebuilt.
+    /// <para>
+    /// The cursor is a position in the invocation's append sequence, not an index into its
+    /// retained lines. That distinction is load-bearing once an invocation is chatty enough
+    /// to trim itself: a remembered <c>OutputLines.Count</c> would point past the first
+    /// unread line after a trim and skip everything the trim shifted underneath it, silently.
+    /// A row that fell behind a trim gets a notice line saying how much it missed instead.
+    /// </para>
     /// </summary>
-    private void SyncOutput(IReadOnlyList<CliOutputLine> lines)
+    private void SyncOutput()
     {
-        for (var i = _syncedOutputCount; i < lines.Count; i++)
+        _outputBuffer.Clear();
+        _outputCursor = Invocation.CopyNewLines(_outputCursor, _outputBuffer);
+
+        foreach (var line in _outputBuffer)
         {
-            var line = lines[i];
             Output.Add(new CliOutputRow(line.Text, line.Stream == CliStream.StandardError));
         }
-
-        _syncedOutputCount = lines.Count;
     }
 
     private static string Relative(DateTimeOffset value)

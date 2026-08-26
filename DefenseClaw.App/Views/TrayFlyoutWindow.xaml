@@ -12,6 +12,9 @@
         ShowInTaskbar="False"
         Topmost="True"
         WindowStartupLocation="Manual">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
     <Border Margin="10"
             Padding="16"
             CornerRadius="8"
@@ -41,6 +44,13 @@
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="{Binding StateDetail}" />
+
+            <TextBlock Margin="0,6,0,0"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                       Visibility="{Binding HasFailModeNote, Converter={StaticResource BoolToVis}}"
+                       Text="{Binding FailModeNote}" />
 
             <Separator Margin="0,12,0,10" Opacity="0.4" />
 

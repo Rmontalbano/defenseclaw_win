@@ -24,9 +24,10 @@ namespace DefenseClaw.App.ViewModels.Wizards;
 /// <para>
 /// <b>Live output.</b> <see cref="CliRunner.OutputReceived"/> carries no invocation id, so —
 /// exactly as the Activity panel does — this captures the invocation from
-/// <see cref="CliRunner.InvocationStarted"/> and ticks <see cref="CliInvocation.Snapshot"/> on
-/// a dispatcher timer, appending the delta. The invocation lands in the Activity panel too;
-/// the runner records it there without this view-model doing anything.
+/// <see cref="CliRunner.InvocationStarted"/> and polls it on a dispatcher timer, pulling the
+/// delta through <see cref="CliInvocation.CopyNewLines"/> rather than re-copying the whole
+/// transcript each tick. The invocation lands in the Activity panel too; the runner records it
+/// there without this view-model doing anything.
 /// </para>
 /// </summary>
 public sealed partial class WizardViewModel : ObservableObject
@@ -39,7 +40,19 @@ public sealed partial class WizardViewModel : ObservableObject
     private readonly DispatcherTimer _timer;
     private CliInvocation? _invocation;
     private IReadOnlyList<string> _pendingArgv = Array.Empty<string>();
-    private int _syncedOutputCount;
+
+    /// <summary>
+    /// Reused between ticks so the 250ms console poll allocates nothing in steady state —
+    /// it is cleared and refilled with only the delta, never the whole transcript.
+    /// </summary>
+    private readonly List<CliOutputLine> _outputBuffer = new();
+
+    /// <summary>
+    /// Position in <see cref="_invocation"/>'s monotonic append sequence, not an index into
+    /// its retained lines — see <see cref="CliInvocation.CopyNewLines"/>. Reset to 0 with the
+    /// console when a new run starts.
+    /// </summary>
+    private int _outputCursor;
 
     [ObservableProperty]
     private int _pageIndex;
@@ -226,7 +239,8 @@ public sealed partial class WizardViewModel : ObservableObject
         }
 
         Output.Clear();
-        _syncedOutputCount = 0;
+        _outputBuffer.Clear();
+        _outputCursor = 0;
         _invocation = null;
         _pendingArgv = argv;
         ResultMessage = string.Empty;
@@ -275,6 +289,20 @@ public sealed partial class WizardViewModel : ObservableObject
         _invocation = invocation;
     }
 
+    /// <summary>
+    /// Drains whatever the command printed since the last tick into the console.
+    /// <para>
+    /// Pulls the delta rather than a snapshot: <see cref="CliInvocation.CopyNewLines"/> costs
+    /// one lock plus the lines that actually arrived, where snapshotting re-copied the whole
+    /// accumulated transcript on every one of the four ticks a second.
+    /// </para>
+    /// <para>
+    /// <see cref="_outputCursor"/> is a position in the invocation's monotonic append
+    /// sequence, not an index into its retained list, so it stays correct if a chatty command
+    /// trims its own output mid-run; the drop arrives as a notice line rather than as lines
+    /// silently skipped.
+    /// </para>
+    /// </summary>
     private void PullOutput()
     {
         if (_invocation is null)
@@ -282,14 +310,13 @@ public sealed partial class WizardViewModel : ObservableObject
             return;
         }
 
-        var snapshot = _invocation.Snapshot();
-        for (var i = _syncedOutputCount; i < snapshot.OutputLines.Count; i++)
+        _outputBuffer.Clear();
+        _outputCursor = _invocation.CopyNewLines(_outputCursor, _outputBuffer);
+
+        foreach (var line in _outputBuffer)
         {
-            var line = snapshot.OutputLines[i];
             Output.Add(new CliOutputRow(line.Text, line.Stream == CliStream.StandardError));
         }
-
-        _syncedOutputCount = snapshot.OutputLines.Count;
     }
 
     private void ApplyResult(CliInvocation invocation)

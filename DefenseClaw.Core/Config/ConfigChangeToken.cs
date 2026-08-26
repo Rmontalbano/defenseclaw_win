@@ -78,6 +78,14 @@ public readonly record struct FileSignature(bool Exists, long Length, DateTime L
 /// actually changes. Uses <see cref="FileSystemWatcher"/> for latency and a periodic
 /// signature poll as the backstop — editors that save via rename, and network or
 /// virtualized paths, routinely defeat the watcher on its own.
+/// <para>
+/// <b>Threading.</b> This type is deliberately thread-agnostic and has no idea a UI exists
+/// — it lives in Core, which never takes a WPF dependency. Notifications are raised on
+/// whichever thread noticed the edit: a thread-pool thread for the poll timer, the
+/// watcher's own callback thread for <see cref="FileSystemWatcher"/> events. Subscribers
+/// that touch thread-affine state (bound collections, WPF properties) own the marshalling.
+/// See <see cref="Changed"/>.
+/// </para>
 /// </summary>
 public sealed class ConfigChangeToken : IDisposable
 {
@@ -135,9 +143,29 @@ public sealed class ConfigChangeToken : IDisposable
     /// <summary>True once any watched file has changed since construction or the last reset.</summary>
     public bool HasChanged { get; private set; }
 
+    /// <summary>
+    /// Raised once per watched file that actually changed.
+    /// <para>
+    /// <b>Never raised on a UI thread.</b> The handler runs on the poll timer's thread-pool
+    /// thread or on the <see cref="FileSystemWatcher"/> callback thread, whichever spotted
+    /// the edit first. Anything downstream that mutates thread-affine state must marshal;
+    /// in this app that happens once, at <c>AppServices.RaiseConfigReloaded</c>, so panel
+    /// view-models never see the watcher thread.
+    /// </para>
+    /// <para>
+    /// <b>Not deduplicated across sources.</b> A single save can be spotted by the watcher
+    /// and the poll timer close enough together that both raise for it, and
+    /// <see cref="Raise"/> runs outside the signature lock, so two notifications can be in
+    /// flight concurrently. Handlers must be idempotent and safe to re-enter — reloading
+    /// twice must cost nothing worse than a redundant read.
+    /// </para>
+    /// </summary>
     public event EventHandler<ConfigChangedEventArgs>? Changed;
 
-    /// <summary>Subscribes a callback; dispose the return value to unsubscribe.</summary>
+    /// <summary>
+    /// Subscribes a callback; dispose the return value to unsubscribe. Callbacks carry the
+    /// same threading contract as <see cref="Changed"/>: any thread, possibly concurrent.
+    /// </summary>
     public IDisposable RegisterChangeCallback(Action<ConfigChangedEventArgs> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);

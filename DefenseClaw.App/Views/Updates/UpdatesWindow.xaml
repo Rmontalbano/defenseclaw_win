@@ -544,29 +544,60 @@
                                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                     Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
                                 <Grid>
-                                    <ScrollViewer x:Name="UpgradeOutputScroll" VerticalScrollBarVisibility="Auto">
-                                        <ItemsControl ItemsSource="{Binding Output}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock FontFamily="Cascadia Mono, Consolas"
-                                                               FontSize="12"
-                                                               TextWrapping="Wrap"
-                                                               Text="{Binding Text}">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsError}" Value="True">
-                                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
+                                    <!--
+                                        ListBox (not a plain ItemsControl in a ScrollViewer) so the panel gets the
+                                        same VirtualizingPanel realization the Logs panel's console already relies
+                                        on (see LogsPanel.xaml) instead of inflating every line of a long resolver
+                                        run up front. The ItemContainerStyle strips selection/focus/hover chrome
+                                        back down to a bare ContentPresenter so a realized row still renders as
+                                        exactly the TextBlock below - no ListBoxItem highlight, no keyboard focus
+                                        rectangle - matching the old ItemsControl's appearance pixel for pixel.
+                                    -->
+                                    <ListBox x:Name="UpgradeOutputList"
+                                             ItemsSource="{Binding Output}"
+                                             BorderThickness="0"
+                                             Padding="0"
+                                             Background="Transparent"
+                                             HorizontalContentAlignment="Stretch"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                             VirtualizingPanel.IsVirtualizing="True"
+                                             VirtualizingPanel.VirtualizationMode="Recycling"
+                                             Focusable="False">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="0" />
+                                                <Setter Property="Focusable" Value="False" />
+                                                <Setter Property="IsTabStop" Value="False" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <ContentPresenter />
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock FontFamily="Cascadia Mono, Consolas"
+                                                           FontSize="12"
+                                                           TextWrapping="Wrap"
+                                                           Text="{Binding Text}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
 
                                     <TextBlock HorizontalAlignment="Center"
                                                VerticalAlignment="Center"

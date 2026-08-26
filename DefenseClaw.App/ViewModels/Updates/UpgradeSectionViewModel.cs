@@ -40,9 +40,11 @@ namespace DefenseClaw.App.ViewModels.Updates;
 /// <para>
 /// <b>Live output.</b> <see cref="CliRunner.OutputReceived"/> carries no invocation id, so — as
 /// the Activity panel and the wizards do — this binds to the <see cref="CliInvocation"/> the
-/// runner hands back on <see cref="UpgradeRunner.InvocationStarted"/> and ticks
-/// <see cref="CliInvocation.Snapshot"/> on a dispatcher timer, appending the delta. A quiet
-/// installer run legitimately produces almost none of it.
+/// runner hands back on <see cref="UpgradeRunner.InvocationStarted"/> and polls it on a
+/// dispatcher timer. It pulls the delta through <see cref="CliInvocation.CopyNewLines"/>
+/// rather than re-snapshotting: an upgrade is the longest, noisiest run this app makes, and a
+/// full transcript copy four times a second is the one place that cost is actually felt. A
+/// quiet installer run legitimately produces almost no output at all.
 /// </para>
 /// </summary>
 public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposable
@@ -55,9 +57,22 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     private readonly DispatcherTimer _timer;
     private readonly CancellationTokenSource _cts = new();
 
+    /// <summary>
+    /// Reused between ticks so the 250ms console poll allocates nothing in steady state —
+    /// it is cleared and refilled with only the delta, never the whole transcript.
+    /// </summary>
+    private readonly List<CliOutputLine> _outputBuffer = new();
+
     private StagedUpgradeAsset? _staged;
     private CliInvocation? _invocation;
-    private int _syncedOutputCount;
+
+    /// <summary>
+    /// Position in <see cref="_invocation"/>'s monotonic append sequence, not an index into
+    /// its retained lines — see <see cref="CliInvocation.CopyNewLines"/>. Reset to 0 with the
+    /// console when a new run starts.
+    /// </summary>
+    private int _outputCursor;
+
     private int _foreignInvocationsInFlight;
     private bool _checksumsSigstoreSigned;
     private string? _versionBeforeUpgrade;
@@ -629,7 +644,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
         IsConfirmVisible = false;
         Output.Clear();
-        _syncedOutputCount = 0;
+        _outputBuffer.Clear();
+        _outputCursor = 0;
         _invocation = null;
         _ranChannel = _staged.Channel;
         _versionBeforeUpgrade = _services.Monitor.Current.BinaryVersion;
@@ -831,6 +847,22 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         _dispatcher.BeginInvoke(RaiseState);
     }
 
+    /// <summary>
+    /// Drains whatever the installer printed since the last tick into the console.
+    /// <para>
+    /// Runs on the UI thread four times a second for the whole length of an upgrade, so it
+    /// pulls the delta rather than a snapshot: <see cref="CliInvocation.CopyNewLines"/> costs
+    /// one lock plus the lines that actually arrived, where the previous
+    /// <c>Snapshot()</c>-and-diff pass re-copied the entire accumulated transcript on every
+    /// tick — worst exactly when the run is long and noisy and the operator is watching.
+    /// </para>
+    /// <para>
+    /// <see cref="_outputCursor"/> is a position in the invocation's monotonic append
+    /// sequence, not an index into its retained list, so it stays correct if the invocation
+    /// trims its own output mid-run; the drop is reported inline as a notice line rather
+    /// than silently skipping or replaying lines.
+    /// </para>
+    /// </summary>
     private void PullOutput()
     {
         if (_invocation is null)
@@ -838,18 +870,19 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             return;
         }
 
-        var snapshot = _invocation.Snapshot();
-        for (var i = _syncedOutputCount; i < snapshot.OutputLines.Count; i++)
+        _outputBuffer.Clear();
+        _outputCursor = _invocation.CopyNewLines(_outputCursor, _outputBuffer);
+        if (_outputBuffer.Count == 0)
         {
-            var line = snapshot.OutputLines[i];
+            return;
+        }
+
+        foreach (var line in _outputBuffer)
+        {
             Output.Add(new CliOutputRow(line.Text, line.Stream == CliStream.StandardError));
         }
 
-        if (snapshot.OutputLines.Count != _syncedOutputCount)
-        {
-            _syncedOutputCount = snapshot.OutputLines.Count;
-            HasOutput = Output.Count > 0;
-        }
+        HasOutput = Output.Count > 0;
     }
 
     // The gates below are computed from several flags at once, so every flag that feeds them

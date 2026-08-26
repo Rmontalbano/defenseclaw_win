@@ -44,6 +44,14 @@ public sealed class CliNotFoundException : FileNotFoundException
 /// Secrets are accepted only through <c>stdinSecret</c>. Anything that would put one in
 /// argv throws <see cref="SecretInArgumentException"/>.
 /// </para>
+/// <para>
+/// <b>Two independent caps.</b> This class bounds the ring by entry count
+/// (<see cref="ActivityCapacity"/>); <see cref="CliInvocation"/> separately bounds each
+/// entry's retained transcript in lines and bytes. Both are needed — an entry cap alone
+/// leaves total memory a function of how chatty the commands were, which is exactly the
+/// unbounded case for a tray app that stays resident for weeks. Argv, exit code and
+/// failure reason are never trimmed by either cap.
+/// </para>
 /// </summary>
 public sealed class CliRunner
 {
@@ -64,17 +72,34 @@ public sealed class CliRunner
         ActivityCapacity = activityCapacity > 0 ? activityCapacity : 200;
     }
 
-    /// <summary>Bounded ring size for <see cref="Activity"/>.</summary>
+    /// <summary>
+    /// Bounded ring size for <see cref="Activity"/>. Bounds entries, not bytes — each
+    /// entry's transcript is capped separately by
+    /// <see cref="CliInvocation.MaxRetainedOutputLines"/> and
+    /// <see cref="CliInvocation.MaxRetainedOutputBytes"/>, which together put a ceiling on
+    /// retained CLI text of roughly <c>ActivityCapacity x 256 KiB</c>.
+    /// </summary>
     public int ActivityCapacity { get; }
 
-    /// <summary>Fires per output line, as it arrives, for live wizard consoles.</summary>
+    /// <summary>
+    /// Fires per output line, as it arrives, for live wizard consoles. Every captured line
+    /// is raised exactly once regardless of retention: the per-invocation cap governs what
+    /// is kept for later re-reads, not what is streamed out at capture time. Raised on the
+    /// process's stdout/stderr callback threads, and it carries no invocation id — that is
+    /// why the live consoles bind to a <see cref="CliInvocation"/> instead.
+    /// </summary>
     public event EventHandler<CliOutputLine>? OutputReceived;
 
     public event EventHandler<CliInvocation>? InvocationStarted;
 
     public event EventHandler<CliInvocation>? InvocationCompleted;
 
-    /// <summary>Most recent invocations, newest first, capped at <see cref="ActivityCapacity"/>.</summary>
+    /// <summary>
+    /// Most recent invocations, newest first, capped at <see cref="ActivityCapacity"/>.
+    /// These are the live instances, still being appended to while their processes run —
+    /// call <see cref="CliInvocation.Snapshot"/> or <see cref="CliInvocation.CopyNewLines"/>
+    /// before reading one from another thread.
+    /// </summary>
     public IReadOnlyList<CliInvocation> Activity
     {
         get

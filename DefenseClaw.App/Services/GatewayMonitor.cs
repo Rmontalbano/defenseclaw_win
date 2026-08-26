@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Gateway.Models;
 using DefenseClaw.Core.Install;
@@ -101,6 +102,14 @@ public sealed record GatewaySnapshot
     /// <summary>Consecutive unreachable polls; drives the poll backoff.</summary>
     public int ConsecutiveFailures { get; init; }
 
+    /// <summary>
+    /// Set when the <c>env</c> block of Claude Code's settings.json overrides the hook fail
+    /// mode the gateway believes it is running. Null when the two agree, or when there was
+    /// nothing to compare. The hook obeys the env var, so a non-null value here is the
+    /// effective behavior regardless of what config.yaml or <c>/status</c> claim.
+    /// </summary>
+    public FailModeDrift? FailModeDrift { get; init; }
+
     /// <summary>True while the gateway cannot serve reads and panels must fall back.</summary>
     public bool IsDegraded =>
         State is AppGatewayState.GatewayStopped or AppGatewayState.Degraded or AppGatewayState.NotInstalled;
@@ -158,11 +167,20 @@ public sealed class GatewayMonitor : IDisposable
     public static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan AlertInterval = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// Cadence for <c>/status</c>. It is authenticated and carries the hook contract rather
+    /// than liveness, so it rides the same slow lane as alerts instead of the 5s health tick.
+    /// </summary>
+    public static readonly TimeSpan StatusInterval = TimeSpan.FromSeconds(30);
+
     /// <summary>Unreachable polls tolerated before backing off to <see cref="SlowInterval"/>.</summary>
     public const int FailuresBeforeBackoff = 3;
 
     /// <summary>Matches the TUI's alert page size.</summary>
     public const int AlertLimit = 25;
+
+    /// <summary>The connector whose hook Claude Code's settings.json can override.</summary>
+    public const string ClaudeCodeConnector = "claudecode";
 
     private readonly AppServices _services;
     private readonly CancellationTokenSource _stop = new();
@@ -171,6 +189,10 @@ public sealed class GatewayMonitor : IDisposable
     private Task? _loop;
     private int _consecutiveFailures;
     private DateTimeOffset _lastAlertPoll = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastStatusPoll = DateTimeOffset.MinValue;
+
+    /// <summary>Last known claudecode hook contract from <c>/status</c>; sticky across blips.</summary>
+    private ConnectorMode? _lastClaudeCodeMode;
     private IReadOnlyList<GatewayAlert> _lastAlerts = Array.Empty<GatewayAlert>();
     private string? _lastAlertsUnavailable = "Alerts have not been polled yet.";
     private GatewaySnapshot _current = GatewaySnapshot.Initial;
@@ -280,18 +302,35 @@ public sealed class GatewayMonitor : IDisposable
 
         var state = Classify(status, health.Status);
 
-        if (state is AppGatewayState.Running or AppGatewayState.Degraded or AppGatewayState.WslGatewayDetected &&
-            DateTimeOffset.UtcNow - _lastAlertPoll >= AlertInterval)
+        if (state is AppGatewayState.Running or AppGatewayState.Degraded or AppGatewayState.WslGatewayDetected)
         {
-            await RefreshAlertsAsync(cancellationToken).ConfigureAwait(false);
+            if (DateTimeOffset.UtcNow - _lastAlertPoll >= AlertInterval)
+            {
+                await RefreshAlertsAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (DateTimeOffset.UtcNow - _lastStatusPoll >= StatusInterval)
+            {
+                await RefreshClaudeCodeModeAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
         else if (state is AppGatewayState.GatewayStopped or AppGatewayState.NotInstalled or AppGatewayState.NotInitialized)
         {
             _lastAlerts = Array.Empty<GatewayAlert>();
             _lastAlertsUnavailable = "The gateway is not answering; alerts are unavailable.";
+
+            // Nothing is serving /status, so the runtime hook contract is unknowable and a
+            // stale cached one would be a lie. config.yaml takes over as the comparison side.
+            _lastClaudeCodeMode = null;
         }
 
         var alerts = _lastAlerts;
+
+        // Re-read every poll rather than caching: the installer re-plants the env override
+        // silently and mid-session, and catching that is the entire point of the check.
+        var claudeSettings = _services.ClaudeSettings.Read();
+        config.Guardrail.Connectors.TryGetValue(ClaudeCodeConnector, out var configuredClaudeCode);
+        var drift = FailModeDrift.Evaluate(claudeSettings, _lastClaudeCodeMode, configuredClaudeCode);
 
         return new GatewaySnapshot
         {
@@ -310,6 +349,7 @@ public sealed class GatewayMonitor : IDisposable
             CriticalAlertCount = alerts.Count(IsCritical),
             AlertsUnavailable = _lastAlertsUnavailable,
             ActiveConnectors = ResolveConnectors(health.Value),
+            FailModeDrift = drift,
             PolledAt = DateTimeOffset.UtcNow,
             ConsecutiveFailures = Volatile.Read(ref _consecutiveFailures),
         };
@@ -347,6 +387,49 @@ public sealed class GatewayMonitor : IDisposable
                 _lastAlerts = Array.Empty<GatewayAlert>();
                 _lastAlertsUnavailable = result.ErrorMessage ?? "Alerts could not be read.";
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Reads the claudecode hook contract from <c>/status</c>, the only surface that states
+    /// what the running hook will actually do on a gateway failure.
+    /// <para>
+    /// Deliberately forgiving about which entry counts. <c>connector_modes</c> is preferred
+    /// and matched by name; failing that the primary <c>connector_mode</c> is accepted when
+    /// it names claudecode, and also when it is the only mode present — on a
+    /// single-connector install 0.8.x omits the connector name, and refusing to read it
+    /// there would silently disable the check on exactly the boxes it was written for.
+    /// </para>
+    /// <para>
+    /// Any non-Ok result keeps the previous cached value: <c>/status</c> is authenticated,
+    /// and a transient 401 or timeout must not flap the drift banner on and off.
+    /// </para>
+    /// </summary>
+    private async Task RefreshClaudeCodeModeAsync(CancellationToken cancellationToken)
+    {
+        var result = await _services.Gateway.GetStatusAsync(cancellationToken).ConfigureAwait(false);
+
+        _lastStatusPoll = DateTimeOffset.UtcNow;
+
+        if (!result.IsOk || result.Value is not { } status)
+        {
+            return;
+        }
+
+        foreach (var mode in status.ConnectorModes)
+        {
+            if (string.Equals(mode.Connector, ClaudeCodeConnector, StringComparison.OrdinalIgnoreCase))
+            {
+                _lastClaudeCodeMode = mode;
+                return;
+            }
+        }
+
+        if (status.ConnectorMode is { } primary &&
+            (string.Equals(primary.Connector, ClaudeCodeConnector, StringComparison.OrdinalIgnoreCase) ||
+             status.ConnectorModes.Count <= 1))
+        {
+            _lastClaudeCodeMode = primary;
         }
     }
 

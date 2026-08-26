@@ -115,6 +115,12 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
         ApplyFilters();
     }
 
+    /// <summary>
+    /// The source update itself is debounced - <c>LogsPanel.xaml</c> binds
+    /// <see cref="FilterText"/> with <c>Delay=400</c>, the same coalescing AuditPanel uses on
+    /// its filter boxes - so this fires once per pause in typing, not once per keystroke,
+    /// before it re-projects the whole <see cref="MaxBufferedLines"/> buffer.
+    /// </summary>
     partial void OnFilterTextChanged(string value) => ApplyFilters();
 
     partial void OnAutoScrollChanged(bool value) => LiveStateText = value ? "live" : "paused";
