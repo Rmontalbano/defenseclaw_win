@@ -112,8 +112,12 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
     /// <summary>Components observed in the active source's buffer, plus "(no component)".</summary>
     public ObservableCollection<ComponentFilterOption> ComponentFilters { get; } = new();
 
-    /// <summary>The filtered view bound to the list - what survives the component and text filters.</summary>
-    public ObservableCollection<LogEntry> DisplayedLines { get; } = new();
+    /// <summary>
+    /// The filtered view bound to the list - what survives the component and text filters. Bounded
+    /// to <see cref="MaxBufferedLines"/>; a batch that overflows it is trimmed in one operation
+    /// (see <see cref="BatchObservableCollection{T}.AppendCapped"/>), not one row at a time.
+    /// </summary>
+    public BatchObservableCollection<LogEntry> DisplayedLines { get; } = new();
 
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -274,70 +278,81 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
             return;
         }
 
-        dispatcher.BeginInvoke(() =>
+        dispatcher.BeginInvoke(() => ApplyLines(state, lines));
+    }
+
+    /// <summary>
+    /// The UI-thread half of <see cref="OnLinesReceived"/>: files a batch into its source's buffer
+    /// and, when that source is on screen, into <see cref="DisplayedLines"/>. Separate from the
+    /// dispatcher hop so a test can drive it without an <see cref="Application"/>.
+    /// </summary>
+    private void ApplyLines(SourceState state, IReadOnlyList<LogLine> lines)
+    {
+        // Nobody is looking: keep the line (the buffer is the record, and OnActivated
+        // re-projects from it) but do none of the UI work. IsActive is read here, when the
+        // queued call runs, not when the batch was received.
+        if (!IsActive)
         {
-            // Nobody is looking: keep the line (the buffer is the record, and OnActivated
-            // re-projects from it) but do none of the UI work. IsActive is read here, when the
-            // queued call runs, not when the batch was received.
-            if (!IsActive)
-            {
-                foreach (var line in lines)
-                {
-                    Append(state, line);
-                }
-
-                // Only the source on screen has a projection to fall behind; the other one is
-                // rebuilt in full when the operator switches to it.
-                if (ReferenceEquals(state, ActiveState))
-                {
-                    _projectionStale = true;
-                }
-
-                return;
-            }
-
-            var isActiveSource = ReferenceEquals(state, ActiveState);
-            var componentsChanged = false;
-
             foreach (var line in lines)
             {
-                var before = state.Components.Count;
-                var hadComponentless = state.HasComponentless;
                 Append(state, line);
-                componentsChanged |= state.Components.Count != before || state.HasComponentless != hadComponentless;
-
-                // Append rather than rebuild: a full rebuild would reset the scroll offset
-                // and the selection on every poll, which is exactly what a paused tail must
-                // not do while the operator is reading back through it.
-                if (isActiveSource && Passes(line))
-                {
-                    DisplayedLines.Add(new LogEntry(line));
-                }
             }
 
-            if (!isActiveSource)
+            // Only the source on screen has a projection to fall behind; the other one is
+            // rebuilt in full when the operator switches to it.
+            if (ReferenceEquals(state, ActiveState))
             {
-                return;
+                _projectionStale = true;
             }
 
-            if (componentsChanged)
-            {
-                RebuildComponentFilters();
-            }
-
-            TrimDisplayed();
-            UpdateStatusText(state);
-        });
-    }
-
-    /// <summary>Keeps the rendered list bounded the same way the buffer is.</summary>
-    private void TrimDisplayed()
-    {
-        while (DisplayedLines.Count > MaxBufferedLines)
-        {
-            DisplayedLines.RemoveAt(0);
+            return;
         }
+
+        var isActiveSource = ReferenceEquals(state, ActiveState);
+        var componentsChanged = false;
+        var shown = isActiveSource ? new List<LogEntry>(lines.Count) : null;
+
+        foreach (var line in lines)
+        {
+            var before = state.Components.Count;
+            var hadComponentless = state.HasComponentless;
+            Append(state, line);
+            componentsChanged |= state.Components.Count != before || state.HasComponentless != hadComponentless;
+
+            if (shown is not null && Passes(line))
+            {
+                shown.Add(new LogEntry(line));
+            }
+        }
+
+        if (shown is null)
+        {
+            return;
+        }
+
+        if (componentsChanged)
+        {
+            RebuildComponentFilters();
+        }
+
+        // Append rather than rebuild: a full rebuild would reset the scroll offset and the
+        // selection on every poll, which is exactly what a paused tail must not do while the
+        // operator is reading back through it. When the batch overflows the cap the collection
+        // drops the excess in one operation - a burst of 2,000 lines on a full list used to be
+        // 2,000 RemoveAt(0) shifts and notifications inside this one callback.
+        DisplayedLines.AppendCapped(shown, MaxBufferedLines);
+        UpdateStatusText(state);
     }
+
+    /// <summary>
+    /// Test seam: files <paramref name="lines"/> as if <paramref name="source"/>'s tailer had just
+    /// delivered them, on the calling thread. "Gateway" or "Watchdog".
+    /// </summary>
+    internal void AcceptLines(string source, IReadOnlyList<LogLine> lines) =>
+        ApplyLines(string.Equals(source, "Watchdog", StringComparison.Ordinal) ? _watchdog : _gateway, lines);
+
+    /// <summary>The active source's buffered line count, for tests.</summary>
+    internal int BufferedCount => ActiveState.Buffer.Count;
 
     /// <summary><see cref="LogTailer.Truncated"/> fires on a background poll thread.</summary>
     private void OnTruncated(SourceState state)
@@ -374,6 +389,11 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
         });
     }
 
+    /// <summary>
+    /// Files one line. The buffer is a <see cref="LogRingBuffer"/>, so once it holds
+    /// <see cref="MaxBufferedLines"/> the add itself evicts the oldest line in O(1): there is no
+    /// trim step, and no array shift per line (eval #24).
+    /// </summary>
     private static void Append(SourceState state, LogLine line)
     {
         state.Buffer.Add(line);
@@ -384,12 +404,6 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
         else
         {
             state.HasComponentless = true;
-        }
-
-        var excess = state.Buffer.Count - MaxBufferedLines;
-        if (excess > 0)
-        {
-            state.Buffer.RemoveRange(0, excess);
         }
     }
 
@@ -527,7 +541,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
 
         public string FilePath { get; }
 
-        public List<LogLine> Buffer { get; } = new();
+        public LogRingBuffer Buffer { get; } = new(MaxBufferedLines);
 
         public HashSet<string> Components { get; } = new(StringComparer.Ordinal);
 

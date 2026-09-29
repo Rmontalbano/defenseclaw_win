@@ -32,6 +32,17 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     /// <summary>Rows per keyset page.</summary>
     public const int PageSize = 100;
 
+    /// <summary>
+    /// The most rows <see cref="Rows"/> ever holds: twenty pages. The list is newest-first and
+    /// "Load more" only appends older rows, so past this the panel stops paging and says so
+    /// (<see cref="IsRowCapReached"/>) rather than dropping the newest rows off the top or growing
+    /// for as long as the operator keeps clicking. Each row carries its flattened columns and a
+    /// detail field list, so an unbounded list is unbounded memory - the Logs panel caps its list
+    /// at 5,000 single-line rows and Activity at its 200-entry ring; this is the same idea sized
+    /// for a heavier row.
+    /// </summary>
+    public const int MaxRows = 20 * PageSize;
+
     private const string AnyBucket = "All buckets";
     private const string AnyAction = "Any action";
 
@@ -77,6 +88,14 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 
     [ObservableProperty]
     private bool _hasMore;
+
+    /// <summary>
+    /// True when more rows match than <see cref="MaxRows"/> lets the list hold, so the operator
+    /// is looking at the newest <see cref="MaxRows"/> and "Load more" is gone. Cleared by any
+    /// fresh load. See <see cref="RowCapNotice"/> for what the view says about it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRowCapReached;
 
     [ObservableProperty]
     private string _resultSummary = "Loading…";
@@ -130,6 +149,11 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 
     /// <summary>Drives the detail pane's placeholder without an inverse-boolean converter.</summary>
     public bool HasSelection => SelectedRow is not null;
+
+    /// <summary>What the list footer says while <see cref="IsRowCapReached"/>.</summary>
+    public string RowCapNotice =>
+        $"Showing the newest {MaxRows.ToString("N0", CultureInfo.CurrentCulture)} matching events. " +
+        "Narrow the time range or add a filter to reach older ones.";
 
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -233,9 +257,10 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             return;
         }
 
-        if (append && _cursor is null)
+        if (append && (_cursor is null || Rows.Count >= MaxRows))
         {
-            // Nothing anchored to page from; a fresh load would duplicate the first page.
+            // Nothing anchored to page from (a fresh load would duplicate the first page), or the
+            // list is already full: either way there is no next page to add.
             HasMore = false;
             return;
         }
@@ -262,6 +287,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
                 Rows.Clear();
             }
 
+            var truncated = false;
             foreach (var row in page.Events)
             {
                 if (SelectedConnector.PlatformOnly && row.Connector is not null)
@@ -269,11 +295,22 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
                     continue;
                 }
 
+                if (Rows.Count >= MaxRows)
+                {
+                    truncated = true;
+                    break;
+                }
+
                 Rows.Add(new AuditRow(row));
             }
 
+            // At the cap with anything left over - unread rows in this page, or another page
+            // behind it - the list is a window onto the newest MaxRows, not the whole result.
+            var capReached = Rows.Count >= MaxRows && (truncated || page.HasMore);
+            IsRowCapReached = capReached;
+
             _cursor = page.NextCursor;
-            HasMore = page.HasMore;
+            HasMore = page.HasMore && !capReached;
 
             await UpdateSummaryAsync(query, cancellationToken);
 
@@ -437,12 +474,16 @@ public sealed record AuditDetailField(string Name, string Value)
 }
 
 /// <summary>
-/// One <c>audit_events</c> row, flattened for display. <c>structured_json</c> is parsed
-/// lazily by Core, so building a row stays cheap even at a page of 100.
+/// One <c>audit_events</c> row, flattened for display. <c>structured_json</c> - often several
+/// kilobytes - is only pretty-printed when <see cref="StructuredJson"/> is first read, which is
+/// the detail pane showing this row, so building a page of 100 rows never parses a payload nobody
+/// opens.
 /// </summary>
 public sealed class AuditRow
 {
     private static readonly JsonSerializerOptions PrettyOptions = new() { WriteIndented = true };
+
+    private readonly Lazy<string> _structuredJson;
 
     public AuditRow(AuditEvent source)
     {
@@ -479,7 +520,8 @@ public sealed class AuditRow
         TraceId = source.TraceId ?? string.Empty;
         BinaryVersion = source.BinaryVersion ?? string.Empty;
         RawTimestamp = source.RawTimestamp;
-        StructuredJson = PrettyJson(source.StructuredJsonRaw);
+        var rawStructured = source.StructuredJsonRaw;
+        _structuredJson = new Lazy<string>(() => PrettyJson(rawStructured), LazyThreadSafetyMode.ExecutionAndPublication);
         Fields = BuildFields(source);
     }
 
@@ -532,8 +574,15 @@ public sealed class AuditRow
 
     public string RawTimestamp { get; }
 
-    /// <summary>Pretty-printed <c>structured_json</c>; the raw text when it will not parse.</summary>
-    public string StructuredJson { get; }
+    /// <summary>
+    /// Pretty-printed <c>structured_json</c>; the raw text when it will not parse. Computed on first
+    /// read and kept - the detail pane's binding is the only reader - so a row nobody selects
+    /// never pays for the parse and the indented re-serialize.
+    /// </summary>
+    public string StructuredJson => _structuredJson.Value;
+
+    /// <summary>True once <see cref="StructuredJson"/> has been read (and so pretty-printed).</summary>
+    internal bool IsStructuredJsonMaterialized => _structuredJson.IsValueCreated;
 
     public IReadOnlyList<AuditDetailField> Fields { get; }
 

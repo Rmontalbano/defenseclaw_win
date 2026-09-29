@@ -251,22 +251,34 @@
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                     </StackPanel>
 
-                    <StackPanel Grid.Row="2"
-                                Margin="0,8,0,2"
-                                Orientation="Horizontal"
-                                HorizontalAlignment="Center">
+                    <!-- A WrapPanel, not a StackPanel: it hands its children the column's width, so the limit
+                         notice wraps inside a narrow list instead of running past the card's edge. -->
+                    <WrapPanel Grid.Row="2"
+                               Margin="8,8,8,2"
+                               HorizontalAlignment="Center">
                         <ui:Button Content="Load more"
                                    Appearance="Secondary"
                                    Command="{Binding LoadMoreCommand}"
                                    AutomationProperties.HelpText="Load the next 100 events after the last one shown."
                                    Visibility="{Binding HasMore, Converter={StaticResource BoolToVisibility}}" />
+                        <!-- Where "Load more" would be, once the list is full: say why there is no next page. -->
+                        <TextBlock Style="{StaticResource DcToneText}"
+                                   Tag="Warn"
+                                   FontSize="12"
+                                   MaxWidth="440"
+                                   Margin="0,2"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding RowCapNotice, Mode=OneWay}"
+                                   Visibility="{Binding IsRowCapReached, Converter={StaticResource BoolToVisibility}}" />
                         <ui:ProgressRing Width="20"
                                          Height="20"
                                          Margin="10,0,0,0"
                                          IsIndeterminate="True"
                                          AutomationProperties.Name="Loading"
                                          Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
-                    </StackPanel>
+                    </WrapPanel>
                 </Grid>
             </Border>
 

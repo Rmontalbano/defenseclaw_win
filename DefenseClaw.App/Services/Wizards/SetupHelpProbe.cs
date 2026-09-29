@@ -16,7 +16,8 @@ public sealed record HelpProbeResult(string Text, string? Error)
 
 /// <summary>
 /// Runs <c>defenseclaw setup … --help</c> and caches successful help text until
-/// <see cref="Clear"/> (the hub's Refresh) or the process ends.
+/// <see cref="Clear"/> (the hub's Refresh) or the process ends - and, across processes, in
+/// <see cref="SetupHelpDiskCache"/> for as long as the installed CLI is the same build.
 /// <para>
 /// <b>Why this does not go through <see cref="Core.Cli.CliRunner"/>.</b> The runner is the
 /// app's write path: everything it executes lands in the Activity panel, whose contract is
@@ -30,6 +31,15 @@ public sealed record HelpProbeResult(string Text, string? Error)
 /// <para>
 /// Probes are ~800 ms each on 0.8.7 (Python start-up dominates), so the catalog fans them
 /// out with <see cref="MaxParallelProbes"/> in flight and keeps the results (see below).
+/// </para>
+/// <para>
+/// <b>Across launches.</b> A relaunch used to repeat the whole fan-out from zero. Successful screens
+/// are now also written to <see cref="SetupHelpDiskCache"/> (under the app's own
+/// <c>%LOCALAPPDATA%</c> folder, never <c>~/.defenseclaw</c>), keyed by the CLI's identity - its
+/// resolved path, size and timestamp, and the version it reports via <c>--version-json</c> - so an
+/// upgrade retires the file, and an unreadable or foreign file is simply ignored. The first launch
+/// against a CLI behaves exactly as before (every screen is probed; the identity call runs alongside);
+/// later launches against the same build answer from disk after that one identity call.
 /// </para>
 /// <para>
 /// <b>What is and is not cached.</b> Only a probe that <i>succeeded</i> stays cached. A
@@ -56,6 +66,8 @@ public sealed class SetupHelpProbe
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(30);
 
     private readonly DefenseClawPaths _paths;
+    private readonly SetupHelpDiskCache? _diskCache;
+    private readonly Func<string, IReadOnlyList<string>, CancellationToken, Task<HelpProbeResult>> _runHelp;
 
     // Lazy, not a bare Task: ConcurrentDictionary.GetOrAdd may run its value factory on several
     // threads for one key, and here the factory spawns a process. ExecutionAndPublication makes
@@ -63,9 +75,25 @@ public sealed class SetupHelpProbe
     private readonly ConcurrentDictionary<string, Lazy<Task<HelpProbeResult>>> _cache = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _throttle = new(MaxParallelProbes, MaxParallelProbes);
 
+    /// <summary>The production probe: real CLI, disk cache under the app's local data directory.</summary>
     public SetupHelpProbe(DefenseClawPaths paths)
+        : this(paths, new SetupHelpDiskCache(SetupHelpDiskCache.DefaultFilePath(), ReadCliVersionAsync), ExecuteHelpAsync)
+    {
+    }
+
+    /// <summary>
+    /// Test seam: a probe over a fake runner and (optionally) a scratch-directory cache, so a test
+    /// never starts a process or touches the real <c>%LOCALAPPDATA%</c> file. A null
+    /// <paramref name="diskCache"/> is the in-memory-only behaviour this class had before.
+    /// </summary>
+    internal SetupHelpProbe(
+        DefenseClawPaths paths,
+        SetupHelpDiskCache? diskCache,
+        Func<string, IReadOnlyList<string>, CancellationToken, Task<HelpProbeResult>> runHelp)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _diskCache = diskCache;
+        _runHelp = runHelp ?? throw new ArgumentNullException(nameof(runHelp));
     }
 
     /// <summary>
@@ -79,9 +107,14 @@ public sealed class SetupHelpProbe
     /// Forgets every cached help screen so the next <see cref="HelpAsync"/> re-reads the CLI —
     /// what the hub's "Re-read catalog" means. Probes already running finish and answer the
     /// callers that started them, but are not re-cached (they were removed with the rest), so
-    /// a stale answer cannot outlive the refresh that asked to forget it.
+    /// a stale answer cannot outlive the refresh that asked to forget it. The on-disk copy goes too
+    /// (and is not read again this run): a refresh asks the CLI, not a file written earlier.
     /// </summary>
-    public void Clear() => _cache.Clear();
+    public void Clear()
+    {
+        _cache.Clear();
+        _diskCache?.Invalidate();
+    }
 
     /// <summary>
     /// <c>defenseclaw setup <paramref name="path"/> --help</c>, cached by argument path while it
@@ -130,20 +163,84 @@ public sealed class SetupHelpProbe
             return new HelpProbeResult(string.Empty, "defenseclaw is not on PATH or in the installer's bin directory.");
         }
 
+        // Recorded before anything else, so an answer that lands after a Clear() is dropped, not stored.
+        var key = string.Join(' ', path);
+        var generation = _diskCache?.Generation ?? 0;
+
+        if (_diskCache is not null)
+        {
+            // Answered from disk only when the installed CLI is the build that wrote the file; no
+            // process is started for it. Either way this also starts the CLI's identity resolving,
+            // so on a miss it runs alongside the probe below rather than ahead of it.
+            var persisted = await _diskCache.TryGetAsync(executable, key).ConfigureAwait(false);
+            if (persisted is not null)
+            {
+                return new HelpProbeResult(persisted, null);
+            }
+        }
+
+        HelpProbeResult result;
         await _throttle.WaitAsync().ConfigureAwait(false);
         try
         {
-            return await ExecuteAsync(executable, path, CancellationToken.None).ConfigureAwait(false);
+            result = await _runHelp(executable, path, CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
             _throttle.Release();
         }
+
+        if (result.Succeeded)
+        {
+            // Filed in the background: persisting is bookkeeping, and a cold cache is still waiting on
+            // the CLI's identity here (a second start-up alongside this probe). The caller gets its
+            // answer now, exactly as it did before there was a disk cache.
+            _diskCache?.Store(executable, key, result.Text, generation);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// The CLI's own version, from <c>defenseclaw --version-json</c> (0.8.10+), or null when it
+    /// cannot say - an older CLI that predates the flag, a failed start, unparseable output. Null
+    /// means the disk cache is not used for that CLI, so nothing is ever keyed to a guess.
+    /// </summary>
+    internal static async Task<string?> ReadCliVersionAsync(string executable, CancellationToken cancellationToken)
+    {
+        var result = await ExecuteAsync(executable, new[] { "--version-json" }, cancellationToken).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            return null;
+        }
+
+        // Stdout and stderr arrive combined; the JSON object is the line that starts with a brace.
+        foreach (var line in result.Text.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith('{') && Updates.UpdateChecker.TryParseVersionJson(trimmed) is { } version)
+            {
+                return version;
+            }
+        }
+
+        return null;
+    }
+
+    internal static Task<HelpProbeResult> ExecuteHelpAsync(
+        string executable,
+        IReadOnlyList<string> path,
+        CancellationToken cancellationToken)
+    {
+        var arguments = new List<string>(path.Count + 2) { "setup" };
+        arguments.AddRange(path);
+        arguments.Add("--help");
+        return ExecuteAsync(executable, arguments, cancellationToken);
     }
 
     private static async Task<HelpProbeResult> ExecuteAsync(
         string executable,
-        IReadOnlyList<string> path,
+        IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo
@@ -157,13 +254,10 @@ public sealed class SetupHelpProbe
             StandardErrorEncoding = Encoding.UTF8,
         };
 
-        startInfo.ArgumentList.Add("setup");
-        foreach (var segment in path)
+        foreach (var argument in arguments)
         {
-            startInfo.ArgumentList.Add(segment);
+            startInfo.ArgumentList.Add(argument);
         }
-
-        startInfo.ArgumentList.Add("--help");
 
         // Click wraps to the terminal width; with no console attached it falls back to 80,
         // which is exactly the layout SetupHelpParser was written against. Pinning COLUMNS
