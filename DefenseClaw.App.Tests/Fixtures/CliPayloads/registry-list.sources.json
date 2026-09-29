@@ -1,0 +1,59 @@
+[
+  {
+    "auth_env": "EXAMPLE_REGISTRY_TOKEN",
+    "auto_sync": false,
+    "content": "both",
+    "enabled": true,
+    "entries": {
+      "blocked": 1,
+      "clean": 2,
+      "error": 0,
+      "total": 5,
+      "warning": 1
+    },
+    "id": "corp-skills",
+    "kind": "http_yaml",
+    "last_status": "ok",
+    "last_sync": "2026-09-20T15:04:05.123456+00:00",
+    "sync_interval_hours": 24,
+    "url": "https://registry.example.test/defenseclaw-registry.yaml"
+  },
+  {
+    "auth_env": "",
+    "auto_sync": false,
+    "content": "skill",
+    "enabled": false,
+    "entries": {
+      "blocked": 0,
+      "clean": 0,
+      "error": 0,
+      "total": 0,
+      "warning": 0
+    },
+    "id": "team.catalog",
+    "kind": "git",
+    "last_status": "",
+    "last_sync": "",
+    "sync_interval_hours": 24,
+    "url": "https://git.example.test/team/catalog.git"
+  },
+  {
+    "auth_env": "",
+    "auto_sync": true,
+    "content": "skill",
+    "enabled": true,
+    "entries": {
+      "blocked": 0,
+      "clean": 0,
+      "error": 3,
+      "total": 3,
+      "warning": 0
+    },
+    "id": "clawhub-main",
+    "kind": "clawhub",
+    "last_status": "error: fetch failed: HTTP 503",
+    "last_sync": "2026-09-21T09:00:00+00:00",
+    "sync_interval_hours": 6,
+    "url": ""
+  }
+]

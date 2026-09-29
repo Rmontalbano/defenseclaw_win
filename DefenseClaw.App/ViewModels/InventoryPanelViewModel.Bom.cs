@@ -23,9 +23,9 @@ public sealed record InventoryBomRow(string Connector, string Summary)
 /// active connectors' own skills, plugins, MCP servers, agents, tools, models and memory with policy
 /// verdicts. The inventory is only read, but every run records a scan event in audit.db and posts to the
 /// gateway (and fails closed if the gateway is down), so it is a state-changing command: it goes through the
-/// review dialog and never runs on its own. Its JSON shape was not run here (a live run writes the audit
-/// record), so the summary reads it generically — the connector's <c>summary</c> object if it has one,
-/// otherwise the length of each top-level array — and falls back to "see Activity".
+/// review dialog and never runs on its own. Its JSON shape was never captured from a live run (that writes the audit
+/// record); it is taken from the code that prints it, see <see cref="ParseBom"/>. The summary reads each connector's
+/// <c>summary</c> counts, or the length of each category array, and falls back to "see Activity".
 /// </para>
 /// </summary>
 public sealed partial class InventoryPanelViewModel
@@ -212,6 +212,14 @@ public sealed partial class InventoryPanelViewModel
                 BomRows.Add(row);
             }
 
+            if (BomRows.Count == 0)
+            {
+                // '[]' is what a scan of no connector prints (cmd_aibom.py:111-118): nothing was inventoried.
+                BomStatus = $"AI BOM ran ({stamp}) but listed no connector, so there is nothing to summarize. " +
+                            "Is a connector configured? The Activity panel has its output.";
+                return Task.CompletedTask;
+            }
+
             _lastBomJson = stdout;
             _lastBomTruncated = invocation.IsOutputTruncated;
             CanSaveBom = !_lastBomTruncated && !string.IsNullOrWhiteSpace(stdout);
@@ -228,10 +236,20 @@ public sealed partial class InventoryPanelViewModel
         return Task.CompletedTask;
     }
 
+    /// <summary>The seven inventory categories, in the order the CLI lists them (claw_inventory.py:724-747, _build_summary).</summary>
+    private static readonly string[] BomCategories =
+        { "skills", "plugins", "mcp", "agents", "tools", "model_providers", "memory" };
+
     /// <summary>
     /// A connector's category counts from <c>aibom scan --json</c>: the bare object for one connector, a list
-    /// for several. Reads a <c>summary</c> object of numbers if there is one, otherwise the length of each
-    /// top-level array.
+    /// for several (<c>[]</c> when no connector is active; cmd_aibom.py:111-118). Each connector object is the inventory
+    /// dict of claw_inventory.py:104-174 / 2091-2177: seven category arrays (skills, plugins, mcp, agents, tools,
+    /// model_providers, memory), <c>errors</c> and <c>limitations</c> arrays, and a <c>summary</c> that holds
+    /// <c>total_items</c>, one <c>{"count": n, …}</c> object per category, <c>errors</c> and <c>limitations</c> as
+    /// numbers, plus the <c>policy_*</c> / <c>scan_*</c> objects policy enrichment adds (claw_inventory.py:724-747).
+    /// The counts are read from the summary, and from the category array when the summary lacks one; the many
+    /// other top-level arrays (<c>connector_skill_dirs</c>, <c>connector_config_files</c>, …) are paths, not components,
+    /// and are never counted.
     /// </summary>
     internal static List<InventoryBomRow> ParseBom(string json, string? requestedConnector)
     {
@@ -253,24 +271,32 @@ public sealed partial class InventoryPanelViewModel
             var connector = FirstString(item, "connector", "connector_name", "name") ?? requestedConnector ?? "active connector";
             var counts = new List<(string Name, long Count)>();
 
-            if (item.TryGetProperty("summary", out var summary) && summary.ValueKind == JsonValueKind.Object)
+            var summary = item.TryGetProperty("summary", out var summaryElement) && summaryElement.ValueKind == JsonValueKind.Object
+                ? summaryElement
+                : (JsonElement?)null;
+
+            foreach (var category in BomCategories)
             {
-                foreach (var property in summary.EnumerateObject())
+                if ((summary is { } s ? SummaryCount(s, category) : null) is { } fromSummary)
                 {
-                    if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt64(out var number))
-                    {
-                        counts.Add((property.Name, number));
-                    }
+                    counts.Add((category, fromSummary));
+                }
+                else if (item.TryGetProperty(category, out var array) && array.ValueKind == JsonValueKind.Array)
+                {
+                    counts.Add((category, array.GetArrayLength()));
                 }
             }
 
-            if (counts.Count == 0)
+            // Only worth a word when there is something: a failed category command, or a category this connector cannot inventory.
+            if (counts.Count > 0)
             {
-                foreach (var property in item.EnumerateObject())
+                foreach (var name in new[] { "errors", "limitations" })
                 {
-                    if (property.Value.ValueKind == JsonValueKind.Array)
+                    var count = (summary is { } s2 ? SummaryCount(s2, name) : null)
+                        ?? (item.TryGetProperty(name, out var list) && list.ValueKind == JsonValueKind.Array ? list.GetArrayLength() : (long?)null);
+                    if (count is > 0)
                     {
-                        counts.Add((property.Name, property.Value.GetArrayLength()));
+                        counts.Add((name, count.Value));
                     }
                 }
             }
@@ -285,6 +311,22 @@ public sealed partial class InventoryPanelViewModel
         }
 
         return rows;
+    }
+
+    /// <summary>A summary entry as a count: a bare number, or the <c>count</c> of a category object.</summary>
+    private static long? SummaryCount(JsonElement summary, string name)
+    {
+        if (!summary.TryGetProperty(name, out var value))
+        {
+            return null;
+        }
+
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            value = value.TryGetProperty("count", out var count) ? count : default;
+        }
+
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number) ? number : null;
     }
 
     private static string? FirstString(JsonElement element, params string[] names)

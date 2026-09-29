@@ -1,0 +1,145 @@
+[
+  {
+    "name": "pdf-tools",
+    "description": "Read and edit PDF files",
+    "source": "C:\\Users\\example\\.claude\\skills",
+    "status": "active",
+    "eligible": true,
+    "disabled": false,
+    "bundled": false,
+    "homepage": "https://example.test/pdf-tools",
+    "scan": {
+      "target": "C:\\Users\\example\\.claude\\skills\\pdf-tools",
+      "clean": false,
+      "max_severity": "HIGH",
+      "total_findings": 3,
+      "severity_counts": {
+        "critical": 0,
+        "high": 2,
+        "medium": 1,
+        "low": 0,
+        "info": 0
+      }
+    },
+    "actions": {
+      "install": "allow"
+    },
+    "verdict": "allowed"
+  },
+  {
+    "name": "notes-helper",
+    "description": "Summarise meeting notes",
+    "source": "C:\\Users\\example\\.claude\\skills",
+    "status": "active",
+    "eligible": true,
+    "disabled": false,
+    "bundled": false,
+    "scan": {
+      "target": "C:\\Users\\example\\.claude\\skills\\notes-helper",
+      "clean": true,
+      "max_severity": "CLEAN",
+      "total_findings": 0,
+      "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 0
+      }
+    },
+    "verdict": "clean"
+  },
+  {
+    "name": "risky-skill",
+    "description": "Runs shell commands from a web page",
+    "source": "C:\\Users\\example\\.claude\\skills",
+    "status": "active",
+    "eligible": true,
+    "disabled": false,
+    "bundled": false,
+    "scan": {
+      "target": "C:\\Users\\example\\.claude\\skills\\risky-skill",
+      "clean": false,
+      "max_severity": "CRITICAL",
+      "total_findings": 1,
+      "severity_counts": {
+        "critical": 1,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 0
+      }
+    },
+    "verdict": "rejected"
+  },
+  {
+    "name": "draft-skill",
+    "description": "",
+    "source": "C:\\Users\\example\\.claude\\skills",
+    "status": "inactive",
+    "eligible": false,
+    "disabled": false,
+    "bundled": false,
+    "verdict": "-"
+  },
+  {
+    "name": "paused-skill",
+    "description": "Temporarily switched off",
+    "source": "C:\\Users\\example\\.claude\\skills",
+    "status": "disabled",
+    "eligible": true,
+    "disabled": true,
+    "bundled": false,
+    "actions": {
+      "runtime": "disable"
+    },
+    "verdict": "disabled"
+  },
+  {
+    "name": "removed-skill",
+    "description": "",
+    "source": "enforcement",
+    "status": "inactive",
+    "eligible": false,
+    "disabled": false,
+    "bundled": false,
+    "actions": {
+      "file": "quarantine",
+      "install": "block"
+    },
+    "verdict": "quarantined"
+  },
+  {
+    "name": "old-scan-only",
+    "description": "",
+    "source": "scan-history",
+    "status": "inactive",
+    "eligible": false,
+    "disabled": false,
+    "bundled": false,
+    "scan": {
+      "target": "C:\\Users\\example\\Downloads\\old-scan-only",
+      "clean": false,
+      "max_severity": "MEDIUM",
+      "total_findings": 1,
+      "severity_counts": {
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 0,
+        "info": 0
+      }
+    },
+    "verdict": "warning"
+  },
+  {
+    "name": "r\u00e9sum\u00e9-\u52a9\u624b",
+    "description": "G\u00e9n\u00e8re un r\u00e9sum\u00e9 \u2014 \u65e5\u672c\u8a9e \u2713",
+    "source": "C:\\Users\\example\\.claude\\skills",
+    "status": "active",
+    "eligible": true,
+    "disabled": false,
+    "bundled": false,
+    "verdict": "-"
+  }
+]

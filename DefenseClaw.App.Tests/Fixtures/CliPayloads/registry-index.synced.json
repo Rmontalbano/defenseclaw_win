@@ -1,0 +1,73 @@
+{
+  "blocked_count": 1,
+  "clean_count": 1,
+  "entry_count": 5,
+  "error_count": 1,
+  "fetched_at": "2026-09-20T15:04:05.123456+00:00",
+  "publisher": "Example Corp",
+  "schema_version": 1,
+  "source_id": "corp-skills",
+  "verdicts": [
+    {
+      "approved": true,
+      "last_scanned_at": "2026-09-20T15:04:09+00:00",
+      "name": "pdf-tools",
+      "rejected": false,
+      "scan_id": "scan-0001",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "source_url": "https://registry.example.test/skills/pdf-tools.tar.gz",
+      "status": "clean",
+      "target": "C:\\Users\\example\\.defenseclaw\\registries\\corp-skills\\pdf-tools",
+      "type": "skill"
+    },
+    {
+      "approved": false,
+      "args": [
+        "-y",
+        "@example/docs-mcp"
+      ],
+      "command": "npx",
+      "connector": "claudecode",
+      "findings": 2,
+      "last_scanned_at": "2026-09-20T15:04:12+00:00",
+      "name": "docs-mcp",
+      "rejected": false,
+      "scan_id": "scan-0002",
+      "severity": "MEDIUM",
+      "status": "warning",
+      "transport": "stdio",
+      "type": "mcp"
+    },
+    {
+      "approved": false,
+      "findings": 4,
+      "last_scanned_at": "2026-09-20T15:04:15+00:00",
+      "name": "remote-mcp",
+      "rejected": true,
+      "scan_id": "scan-0003",
+      "severity": "HIGH",
+      "status": "blocked",
+      "transport": "sse",
+      "type": "mcp",
+      "url": "https://mcp.example.test/sse"
+    },
+    {
+      "approved": false,
+      "error": "fetch failed: HTTP 404",
+      "name": "broken-skill",
+      "rejected": false,
+      "source_url": "https://registry.example.test/skills/broken-skill.tar.gz",
+      "status": "error",
+      "type": "skill"
+    },
+    {
+      "approved": false,
+      "name": "new-entry",
+      "rejected": false,
+      "source_url": "clawhub://example/new-entry",
+      "status": "pending",
+      "type": "skill"
+    }
+  ],
+  "warning_count": 1
+}

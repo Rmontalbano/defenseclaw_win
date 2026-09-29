@@ -1,0 +1,31 @@
+[
+  {
+    "name": "nulls-everywhere",
+    "transport": null,
+    "connector": null,
+    "command": null,
+    "args": null,
+    "url": null,
+    "severity": null,
+    "actions": null,
+    "verdict": null
+  },
+  {
+    "name": "args-that-are-not-all-strings",
+    "transport": "stdio",
+    "command": "example-server",
+    "args": ["--port", 8080, true, null, ["nested"]],
+    "verdict": "-",
+    "env_keys": ["EXAMPLE_TOKEN"],
+    "disabled_tools": ["danger"]
+  },
+  {
+    "name": "empty-args",
+    "transport": "stdio",
+    "command": "example-server",
+    "args": [],
+    "verdict": "-"
+  },
+  "an entry that is not an object",
+  { "transport": "stdio", "command": "no-name-so-skipped" }
+]

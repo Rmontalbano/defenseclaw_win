@@ -1,0 +1,59 @@
+[
+  {
+    "connector": "claudecode",
+    "skills": [
+      {
+        "name": "pdf-tools",
+        "description": "Read and edit PDF files",
+        "source": "C:\\Users\\example\\.claude\\skills",
+        "status": "active",
+        "eligible": true,
+        "disabled": false,
+        "bundled": false,
+        "connector": "claudecode",
+        "verdict": "-"
+      },
+      {
+        "name": "shared-skill",
+        "description": "Installed for two connectors",
+        "source": "C:\\Users\\example\\.claude\\skills",
+        "status": "active",
+        "eligible": true,
+        "disabled": false,
+        "bundled": false,
+        "connector": "claudecode",
+        "actions": {
+          "install": "block"
+        },
+        "verdict": "blocked"
+      }
+    ]
+  },
+  {
+    "connector": "codex",
+    "skills": [
+      {
+        "name": "shared-skill",
+        "description": "Installed for two connectors",
+        "source": "C:\\Users\\example\\.codex\\skills",
+        "status": "active",
+        "eligible": true,
+        "disabled": false,
+        "bundled": false,
+        "connector": "codex",
+        "verdict": "-"
+      },
+      {
+        "name": "skill-installer",
+        "description": "Ships with the connector",
+        "source": "C:\\Users\\example\\.codex\\skills\\.system",
+        "status": "active",
+        "eligible": true,
+        "disabled": false,
+        "bundled": true,
+        "connector": "codex",
+        "verdict": "-"
+      }
+    ]
+  }
+]

@@ -29,10 +29,13 @@ public readonly record struct GovernItemState(
         : !string.IsNullOrWhiteSpace(Status) ? Capitalize(Status!)
         : "Unknown";
 
+    // "active" is a skill's healthy status (cmd_skill.py _skill_status); "enabled" is a plugin's (cmd_plugin.py _plugin_status).
     public string Tone =>
         Quarantined || Blocked ? "Bad"
         : Disabled ? "Warn"
-        : Allowed || string.Equals(Status, "active", StringComparison.OrdinalIgnoreCase) ? "Ok"
+        : Allowed
+          || string.Equals(Status, "active", StringComparison.OrdinalIgnoreCase)
+          || string.Equals(Status, "enabled", StringComparison.OrdinalIgnoreCase) ? "Ok"
         : "Neutral";
 
     public string ScanLabel
@@ -147,11 +150,19 @@ public static class GovernJson
         return Str(element, name);
     }
 
+    // Shown to a person in the details expander, never embedded in HTML: the default encoder would print a skill named
+    // "résumé", or a description in Japanese, as backslash-u escape sequences.
+    private static readonly JsonSerializerOptions PrettyOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     public static string Pretty(JsonElement element)
     {
         try
         {
-            return JsonSerializer.Serialize(element, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(element, PrettyOptions);
         }
         catch (JsonException)
         {
@@ -267,6 +278,14 @@ public static class GovernJson
 
         return result;
     }
+
+    /// <summary>
+    /// True when <paramref name="stdout"/> is the plain sentence 0.8.10's list commands print, with exit code 0 and even
+    /// under <c>--json</c>, when no connector is configured at all (<c>resolve_list_connectors</c>, commands/__init__.py:83-119,
+    /// used by skill, mcp, plugin and tool list). It is not JSON, so without this it would be reported as unparseable output.
+    /// </summary>
+    public static bool IsNoConnectorMessage(string stdout) =>
+        stdout.TrimStart().StartsWith("no connector configured", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryGroup(JsonElement candidate, string itemsKey, out List<JsonElement> items, out string? connector)
     {

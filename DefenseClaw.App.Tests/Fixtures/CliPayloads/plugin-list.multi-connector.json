@@ -1,0 +1,40 @@
+[
+  {
+    "connector": "claudecode",
+    "plugins": [
+      {
+        "id": "code-review",
+        "name": "Code Review",
+        "description": "Reviews pull requests",
+        "version": "1.4.2",
+        "origin": "C:\\Users\\example\\.claude\\plugins",
+        "source": "host:claudecode",
+        "status": "enabled",
+        "enabled": true,
+        "connector": "claudecode",
+        "verdict": "-"
+      }
+    ]
+  },
+  {
+    "connector": "codex",
+    "plugins": [
+      {
+        "id": "code-review",
+        "name": "code-review",
+        "description": "",
+        "version": "1.0.0",
+        "origin": "C:\\Users\\example\\.codex\\plugins",
+        "source": "host:codex",
+        "status": "enabled",
+        "enabled": true,
+        "connector": "codex",
+        "verdict": "-"
+      }
+    ]
+  },
+  {
+    "connector": "zeptoclaw",
+    "plugins": []
+  }
+]

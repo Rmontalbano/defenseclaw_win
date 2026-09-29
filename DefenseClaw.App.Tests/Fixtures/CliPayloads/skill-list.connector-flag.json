@@ -1,0 +1,28 @@
+{
+  "connector": "codex",
+  "skills": [
+    {
+      "name": "skill-installer",
+      "description": "Ships with the connector",
+      "source": "C:\\Users\\example\\.codex\\skills\\.system",
+      "status": "active",
+      "eligible": true,
+      "disabled": false,
+      "bundled": true,
+      "connector": "codex",
+      "verdict": "-"
+    },
+    {
+      "name": "team-helper",
+      "description": "Installed by the operator",
+      "source": "C:\\Users\\example\\.codex\\skills",
+      "status": "active",
+      "eligible": true,
+      "disabled": false,
+      "bundled": false,
+      "connector": "codex",
+      "homepage": "https://example.test/team-helper",
+      "verdict": "-"
+    }
+  ]
+}

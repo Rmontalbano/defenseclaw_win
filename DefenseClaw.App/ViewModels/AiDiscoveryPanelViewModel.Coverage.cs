@@ -555,7 +555,15 @@ public sealed partial class AiDiscoveryPanelViewModel
         }
     }
 
-    private void ApplyRuntime(GatewayResult<JsonDocument> result)
+    /// <summary>
+    /// Turns the gateway's answer into the runtime section's state. Two worlds meet here: 0.8.10, whose gateway has no
+    /// such route at all (no <c>/api/v1/ai-usage/runtime</c> in its binary; the route is in upstream main since
+    /// c97e652fc7, 2026-09-11, and in no release so far), so the answer is a 404 and the section says "not supported";
+    /// and a newer gateway whose reply is <c>aiRuntimeResponse</c> (internal/gateway/ai_runtime_api.go:31-97 upstream):
+    /// <c>enabled</c>, <c>scanned_at</c>, <c>findings[]</c>, <c>planes[]</c>, the process/connection counts, and
+    /// <c>degraded</c> with <c>degraded_reasons[]</c>.
+    /// </summary>
+    internal void ApplyRuntime(GatewayResult<JsonDocument> result)
     {
         RuntimePlanes.Clear();
         RuntimeFindings.Clear();
@@ -673,8 +681,10 @@ public sealed partial class AiDiscoveryPanelViewModel
                 var severity = JsonText(finding, "severity") ?? "unknown";
                 var providers = finding.TryGetProperty("providers", out var p) && p.ValueKind == JsonValueKind.Array
                     ? string.Join(", ", p.EnumerateArray()
+                        // aiRuntimeProvider: {hostname, address?, port?, category?, confidence?, attribution_source?}. The
+                        // hostname can be empty when a peer was attributed by address alone, so the address is the fallback.
                         .Select(item => item.ValueKind == JsonValueKind.Object
-                            ? JsonText(item, "host") ?? JsonText(item, "name")
+                            ? JsonText(item, "hostname") ?? JsonText(item, "host") ?? JsonText(item, "name") ?? JsonText(item, "address")
                             : item.ValueKind == JsonValueKind.String ? item.GetString() : null)
                         .Where(v => !string.IsNullOrWhiteSpace(v)))
                     : null;
@@ -708,6 +718,15 @@ public sealed partial class AiDiscoveryPanelViewModel
 
         var polled = ParseTime(JsonText(root, "scanned_at"));
         var degraded = JsonFlag(root, "degraded") == true;
+
+        // One entry per plane the platform supports but that is not running; without it "Degraded" says nothing about why.
+        var reasons = root.TryGetProperty("degraded_reasons", out var reasonList) && reasonList.ValueKind == JsonValueKind.Array
+            ? reasonList.EnumerateArray()
+                .Where(v => v.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString()))
+                .Select(v => v.GetString()!.Trim())
+                .ToArray()
+            : Array.Empty<string>();
+
         var detail =
             $"{findingCount.ToString("N0", CultureInfo.InvariantCulture)} finding{(findingCount == 1 ? string.Empty : "s")}; " +
             $"{N(JsonNumber(root, "processes_observed"))} processes observed" +
@@ -715,7 +734,9 @@ public sealed partial class AiDiscoveryPanelViewModel
             $"; {N(JsonNumber(root, "connections_observed"))} connections" +
             (JsonNumber(root, "connections_unattributed") is > 0 ? $" ({N(JsonNumber(root, "connections_unattributed"))} not attributed to a process)" : string.Empty) +
             (polled is { } at ? $"; polled {at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)}" : string.Empty) +
-            ". No findings is not the same as a clean host: a plane that is idle or blind saw nothing at all.";
+            "." +
+            (degraded && reasons.Length > 0 ? $" Degraded: {string.Join("; ", reasons)}." : string.Empty) +
+            " No findings is not the same as a clean host: a plane that is idle or blind saw nothing at all.";
 
         SetRuntime(
             degraded ? "Degraded" : "Watching",

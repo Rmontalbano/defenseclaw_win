@@ -1,0 +1,106 @@
+{
+  "enabled": true,
+  "scanned_at": "2026-09-29T14:03:05Z",
+  "findings": [
+    {
+      "finding_id": "f-7c1e0a",
+      "pid": 4321,
+      "process": "python.exe",
+      "cmdline": "python.exe serve.py --model example",
+      "user": "EXAMPLE\\user",
+      "agent_name": "example-agent",
+      "score": 82,
+      "severity": "critical",
+      "signals": [
+        { "id": "sustained-compute", "title": "Sustained compute", "detail": "CPU above 200% for 90 s", "weight": 40 },
+        { "id": "large-resident-memory", "title": "Large resident memory", "detail": "9.1 GiB", "weight": 25 }
+      ],
+      "providers": [
+        {
+          "hostname": "api.example.test",
+          "address": "203.0.113.10",
+          "port": 443,
+          "category": "llm-api",
+          "confidence": 0.95,
+          "attribution_source": "dns-answer"
+        },
+        {
+          "hostname": "",
+          "address": "198.51.100.7",
+          "port": 443,
+          "confidence": 0.6,
+          "attribution_source": "reverse-dns"
+        }
+      ],
+      "correlation": {
+        "verdict": "unaccounted",
+        "reason": "a complete inventory observed nothing matching this process",
+        "matched_signal_ids": [],
+        "categories": ["llm-api"]
+      },
+      "first_seen": "2026-09-29T13:40:00Z",
+      "last_seen": "2026-09-29T14:03:05Z"
+    },
+    {
+      "finding_id": "f-19b2cc",
+      "pid": 777,
+      "process": "node.exe",
+      "score": 41,
+      "severity": "medium",
+      "signals": [
+        { "id": "provider-egress", "weight": 41 }
+      ],
+      "providers": [
+        { "hostname": "models.example.test", "port": 443, "confidence": 0.75, "attribution_source": "catalog-address" }
+      ],
+      "correlation": {
+        "verdict": "accounted",
+        "reason": "the inventory independently observed the same agent",
+        "matched_signal_ids": ["provider-egress"]
+      }
+    },
+    {
+      "finding_id": "f-55aa10",
+      "pid": 9001,
+      "process": "helper.exe",
+      "score": 63,
+      "severity": "high",
+      "signals": [],
+      "correlation": {
+        "verdict": "unobserved",
+        "reason": "no usable inventory to consult"
+      },
+      "first_seen": "2026-09-29T14:00:00Z"
+    }
+  ],
+  "planes": [
+    {
+      "plane": "a",
+      "name": "inference heartbeat",
+      "available": true,
+      "running": true,
+      "mechanism": "process table sampling"
+    },
+    {
+      "plane": "b",
+      "name": "shadow egress",
+      "available": true,
+      "running": true,
+      "mechanism": "socket table with DNS answer capture"
+    },
+    {
+      "plane": "c",
+      "name": "agent actions",
+      "available": false,
+      "running": false,
+      "reason": "no kernel event source on this platform"
+    }
+  ],
+  "processes_observed": 312,
+  "processes_skipped": 4,
+  "connections_observed": 88,
+  "connections_unattributed": 9,
+  "host_plane_observations": 0,
+  "host_plane_gated": 0,
+  "degraded": false
+}

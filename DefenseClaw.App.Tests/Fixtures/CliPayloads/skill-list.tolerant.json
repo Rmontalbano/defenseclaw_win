@@ -1,0 +1,42 @@
+[
+  {
+    "name": "all-optionals-null",
+    "description": null,
+    "source": null,
+    "status": null,
+    "eligible": null,
+    "disabled": null,
+    "bundled": null,
+    "homepage": null,
+    "scan": null,
+    "actions": null,
+    "verdict": null
+  },
+  {
+    "name": "fields-a-later-release-adds",
+    "description": "unknown members are ignored, and kept in the raw JSON",
+    "status": "active",
+    "eligible": true,
+    "disabled": false,
+    "bundled": false,
+    "verdict": "-",
+    "tags": ["alpha", "beta"],
+    "metrics": { "loads": 3 },
+    "scan": {
+      "target": "C:\\Users\\example\\.claude\\skills\\fields-a-later-release-adds",
+      "clean": true,
+      "max_severity": "CLEAN",
+      "total_findings": 0,
+      "severity_counts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "unknown": 2 },
+      "scanner_version": "9.9.9"
+    }
+  },
+  "an entry that is not an object",
+  null,
+  { "name": "" },
+  { "description": "no name at all" },
+  {
+    "name": "scan-with-only-a-severity",
+    "scan": { "max_severity": "HIGH" }
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "enabled": true,
+  "scanned_at": "2026-09-29T14:10:00Z",
+  "findings": [],
+  "planes": [
+    {
+      "plane": "a",
+      "name": "inference heartbeat",
+      "available": true,
+      "running": true,
+      "mechanism": "process table sampling"
+    },
+    {
+      "plane": "b",
+      "name": "shadow egress",
+      "available": true,
+      "running": false,
+      "reason": "DNS capture stopped: access denied"
+    },
+    {
+      "plane": "c",
+      "name": "agent actions",
+      "available": false,
+      "running": false,
+      "reason": "no kernel event source on this platform"
+    }
+  ],
+  "processes_observed": 300,
+  "processes_skipped": 0,
+  "connections_observed": 0,
+  "connections_unattributed": 0,
+  "host_plane_observations": 0,
+  "host_plane_gated": 0,
+  "degraded": true,
+  "degraded_reasons": [
+    "shadow egress: DNS capture stopped: access denied"
+  ]
+}

@@ -1,0 +1,65 @@
+[
+  {
+    "name": "docs-search",
+    "transport": "stdio",
+    "connector": "claudecode",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@example/docs-mcp",
+      "--root",
+      "C:\\Users\\example\\docs"
+    ],
+    "severity": "CLEAN",
+    "verdict": "clean"
+  },
+  {
+    "name": "remote-tools",
+    "transport": "http",
+    "connector": "claudecode",
+    "url": "https://mcp.example.test/v1",
+    "severity": "HIGH",
+    "actions": {
+      "install": "block"
+    },
+    "verdict": "blocked"
+  },
+  {
+    "name": "streaming-tools",
+    "transport": "streamable-http",
+    "connector": "claudecode",
+    "url": "https://mcp.example.test/stream",
+    "severity": "MEDIUM",
+    "verdict": "warning"
+  },
+  {
+    "name": "sse-server",
+    "transport": "sse",
+    "connector": "claudecode",
+    "url": "https://mcp.example.test/sse",
+    "actions": {
+      "install": "allow"
+    },
+    "verdict": "allowed"
+  },
+  {
+    "name": "bare-server",
+    "transport": "stdio",
+    "connector": "claudecode",
+    "command": "example-server",
+    "verdict": "-"
+  },
+  {
+    "name": "donn\u00e9es-\u00fc",
+    "transport": "stdio",
+    "connector": "claudecode",
+    "command": "python",
+    "args": [
+      "-m",
+      "srv",
+      "--label",
+      "caf\u00e9 \u2615"
+    ],
+    "verdict": "-"
+  }
+]

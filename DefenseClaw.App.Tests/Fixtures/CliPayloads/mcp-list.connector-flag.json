@@ -1,0 +1,16 @@
+{
+  "connector": "claudecode",
+  "mcp_servers": [
+    {
+      "name": "docs-search",
+      "transport": "stdio",
+      "connector": "claudecode",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@example/docs-mcp"
+      ],
+      "verdict": "-"
+    }
+  ]
+}

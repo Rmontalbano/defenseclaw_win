@@ -1,0 +1,21 @@
+{
+  "connector": "claudecode",
+  "tools": [
+    {
+      "name": "delete_file",
+      "connector": "claudecode",
+      "scope": "connector",
+      "status": "block",
+      "reason": "destructive",
+      "updated_at": "2026-09-01T10:00:00.123456+00:00"
+    },
+    {
+      "name": "shell_exec",
+      "connector": "claudecode",
+      "scope": "global",
+      "status": "allow",
+      "reason": "",
+      "updated_at": "2026-09-02T10:00:00+00:00"
+    }
+  ]
+}

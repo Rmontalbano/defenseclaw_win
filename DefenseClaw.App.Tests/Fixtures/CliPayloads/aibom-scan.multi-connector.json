@@ -1,0 +1,85 @@
+[
+  {
+    "version": 3,
+    "generated_at": "2026-09-29T14:03:05.123456+00:00",
+    "connector": "claudecode",
+    "claw_home": "C:\\Users\\example\\.claude",
+    "claw_mode": "claudecode",
+    "live": true,
+    "skills": [
+      { "id": "pdf-tools", "source": "C:\\Users\\example\\.claude\\skills", "eligible": true, "enabled": true, "bundled": false, "path": "C:\\Users\\example\\.claude\\skills\\pdf-tools" }
+    ],
+    "plugins": [],
+    "mcp": [
+      { "id": "docs-search", "source": "claudecode mcp registry", "command": "npx", "args": ["-y", "@example/docs-mcp"], "transport": "stdio" }
+    ],
+    "agents": [],
+    "tools": [],
+    "model_providers": [],
+    "memory": [],
+    "errors": [],
+    "limitations": [
+      { "connector": "claudecode", "category": "agents", "status": "unsupported", "reason": "agents are not a first-class concept on this connector" },
+      { "connector": "claudecode", "category": "tools", "status": "unsupported", "reason": "tool registry is owned by each plugin's manifest" },
+      { "connector": "claudecode", "category": "models", "status": "unsupported", "reason": "model providers are configured inside the framework" },
+      { "connector": "claudecode", "category": "memory", "status": "unsupported", "reason": "memory backend is private to the framework" }
+    ],
+    "connector_home": "C:\\Users\\example\\.claude",
+    "connector_config_files": ["C:\\Users\\example\\.claude\\settings.json"],
+    "connector_skill_dirs": ["C:\\Users\\example\\.claude\\skills"],
+    "connector_plugin_dirs": ["C:\\Users\\example\\.claude\\plugins"],
+    "connector_mcp_files": ["C:\\Users\\example\\.claude\\settings.json"],
+    "connector_config": "C:\\Users\\example\\.claude\\settings.json",
+    "summary": {
+      "total_items": 2,
+      "skills": { "count": 1, "eligible": 1 },
+      "plugins": { "count": 0, "loaded": 0, "disabled": 0 },
+      "mcp": { "count": 1 },
+      "agents": { "count": 0 },
+      "tools": { "count": 0 },
+      "model_providers": { "count": 0 },
+      "memory": { "count": 0 },
+      "errors": 0,
+      "limitations": 4
+    },
+    "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+  },
+  {
+    "version": 3,
+    "generated_at": "2026-09-29T14:03:06.000000+00:00",
+    "connector": "codex",
+    "claw_home": "C:\\Users\\example\\.codex",
+    "claw_mode": "codex",
+    "live": true,
+    "skills": [],
+    "plugins": [],
+    "mcp": [],
+    "agents": [],
+    "tools": [],
+    "model_providers": [],
+    "memory": [],
+    "errors": [
+      { "command": "codex:mcp", "error": "could not read C:\\Users\\example\\.codex\\config.toml: permission denied" }
+    ],
+    "limitations": [],
+    "connector_home": "C:\\Users\\example\\.codex",
+    "connector_config_files": ["C:\\Users\\example\\.codex\\config.toml"],
+    "connector_skill_dirs": ["C:\\Users\\example\\.codex\\skills"],
+    "connector_plugin_dirs": ["C:\\Users\\example\\.codex\\plugins"],
+    "connector_mcp_files": ["C:\\Users\\example\\.codex\\config.toml"],
+    "connector_config": "C:\\Users\\example\\.codex\\config.toml",
+    "summary": {
+      "total_items": 0,
+      "skills": { "count": 0, "eligible": 0 },
+      "plugins": { "count": 0, "loaded": 0, "disabled": 0 },
+      "mcp": { "count": 0 },
+      "agents": { "count": 0 },
+      "tools": { "count": 0 },
+      "model_providers": { "count": 0 },
+      "memory": { "count": 0 },
+      "errors": 1,
+      "limitations": 0
+    },
+    "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+  }
+]

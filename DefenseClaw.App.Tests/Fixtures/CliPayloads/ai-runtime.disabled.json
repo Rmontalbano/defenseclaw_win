@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "findings": [],
+  "planes": [],
+  "processes_observed": 0,
+  "processes_skipped": 0,
+  "connections_observed": 0,
+  "connections_unattributed": 0,
+  "host_plane_observations": 0,
+  "host_plane_gated": 0,
+  "degraded": false
+}

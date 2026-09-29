@@ -155,6 +155,12 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     // keeps a value that could escape the registries folder (or start with '-') out of a path or argv.
     private static readonly Regex SourceIdPattern = new("^[a-z0-9][a-z0-9_-]{1,63}$", RegexOptions.Compiled);
 
+    // What the CLI accepts for a source id is wider than that: ^[a-z0-9][a-z0-9._-]{1,63}$ (cmd_registry.py:82), so
+    // 'corp.skills' is a valid id whose cache this panel must be able to read. A '.' is safe in a folder name as long as
+    // it never appears twice in a row (the CLI's own source_dir refuses '..' and '/', registries/cache.py:133-139). Upper case
+    // is allowed here too: a hand-edited config.yaml can carry it, and the check only has to keep the path in its folder.
+    private static readonly Regex CachedSourceIdPattern = new("^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$", RegexOptions.Compiled);
+
     private bool _loadRunning;
     private DateTimeOffset? _loadedAt;
     private int _entriesSequence;
@@ -493,14 +499,14 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
     /// <summary>
     /// Reads <c>registries\&lt;id&gt;\index.json</c> for <paramref name="source"/> (capped at 4 MiB /
-    /// 5,000 entries). The id is checked against <see cref="SourceIdPattern"/> first, so a value from
+    /// 5,000 entries). The id is checked against <see cref="CachedSourceIdPattern"/> first, so a value from
     /// the CLI's JSON can never point outside the registries folder.
     /// </summary>
-    private async Task LoadEntriesAsync(RegistrySourceRow? source)
+    internal async Task LoadEntriesAsync(RegistrySourceRow? source)
     {
         var sequence = ++_entriesSequence;
 
-        if (source is null || !SourceIdPattern.IsMatch(source.Id))
+        if (source is null || !IsPlainSourceId(source.Id))
         {
             Entries.Clear();
             EntriesMessage = source is null ? null : "This source id is not a plain name, so its cache is not read here.";
@@ -549,7 +555,17 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         IsEntriesLoading = false;
     }
 
-    /// <summary>Fills <paramref name="rows"/> from an index.json body; returns a message when there is nothing to show.</summary>
+    /// <summary>A name that is one folder under registries\: the CLI's id alphabet, and never '..' or a trailing '.'.</summary>
+    internal static bool IsPlainSourceId(string id) =>
+        CachedSourceIdPattern.IsMatch(id) && !id.Contains("..", StringComparison.Ordinal) && !id.EndsWith('.');
+
+    /// <summary>
+    /// Fills <paramref name="rows"/> from an index.json body; returns a message when there is nothing to show.
+    /// The file is <c>SourceIndex.to_dict()</c> (registries/cache.py:120-123, written sorted by <c>save_index</c>):
+    /// source_id, schema_version, fetched_at, publisher, the five counts, and <c>verdicts</c>, each an
+    /// <c>EntryVerdict.to_dict()</c> (cache.py:70-89) that always has name/type/status/approved/rejected and omits every
+    /// other field when it is empty.
+    /// </summary>
     internal static string? ParseIndex(string json, List<RegistryEntryRow> rows)
     {
         using var document = JsonDocument.Parse(json);
@@ -621,10 +637,15 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     private static bool JsonBool(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
 
-    private void ParseSources(string json, List<RegistrySourceRow> rows)
+    /// <summary>
+    /// Reads <c>registry list --json</c>: always a JSON array, <c>[]</c> when nothing is configured
+    /// (cmd_registry.py:504-535). Anything else is reported, not read as "no sources".
+    /// </summary>
+    internal void ParseSources(string json, List<RegistrySourceRow> rows)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
+            CliErrorMessage = "'defenseclaw registry list --json' printed nothing (expected a JSON array, [] when there are no sources).";
             return;
         }
 
@@ -633,6 +654,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             using var document = JsonDocument.Parse(DiscoverCli.TrimToJson(json));
             if (document.RootElement.ValueKind != JsonValueKind.Array)
             {
+                CliErrorMessage = "'defenseclaw registry list --json' did not return a JSON array of sources.";
                 return;
             }
 
@@ -720,6 +742,13 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         else
         {
             fields.Add(new RegistryFieldRow("value", FormatValue(element)));
+        }
+
+        // The CLI's own table shows "-" for a source with no cached entries and no last_sync (cmd_registry.py:557-560);
+        // its JSON carries a zeroed entries object for that, which must not read as "synced, found 0".
+        if (entries == "0" && string.IsNullOrWhiteSpace(lastSync))
+        {
+            entries = null;
         }
 
         return new RegistrySourceRow

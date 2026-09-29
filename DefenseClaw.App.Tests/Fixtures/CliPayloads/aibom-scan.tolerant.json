@@ -1,0 +1,26 @@
+[
+  {
+    "connector": "no-summary",
+    "skills": [{ "id": "a" }, { "id": "b" }],
+    "plugins": [],
+    "mcp": [{ "id": "c" }],
+    "connector_skill_dirs": ["C:\\one", "C:\\two", "C:\\three"],
+    "connector_config_files": ["C:\\one.json"],
+    "errors": [],
+    "limitations": [],
+    "future_array": [1, 2, 3, 4]
+  },
+  {
+    "connector": "flat-numeric-summary",
+    "summary": { "skills": 4, "mcp": 2, "agents": 0, "errors": 2, "limitations": 0, "total_items": 6 }
+  },
+  {
+    "connector": "nothing-countable",
+    "generated_at": "2026-09-29T14:03:05+00:00",
+    "summary": { "total_items": "many", "skills": null, "mcp": { "count": "two" } }
+  },
+  "an entry that is not an object",
+  {
+    "summary": { "skills": { "count": 1 } }
+  }
+]

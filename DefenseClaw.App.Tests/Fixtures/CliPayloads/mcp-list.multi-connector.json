@@ -1,0 +1,46 @@
+[
+  {
+    "connector": "claudecode",
+    "mcp_servers": [
+      {
+        "name": "docs-search",
+        "transport": "stdio",
+        "connector": "claudecode",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@example/docs-mcp"
+        ],
+        "severity": "CLEAN",
+        "verdict": "clean"
+      }
+    ]
+  },
+  {
+    "connector": "codex",
+    "mcp_servers": [
+      {
+        "name": "docs-search",
+        "transport": "stdio",
+        "connector": "codex",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@example/docs-mcp"
+        ],
+        "verdict": "-"
+      },
+      {
+        "name": "remote-tools",
+        "transport": "http",
+        "connector": "codex",
+        "url": "https://mcp.example.test/v1",
+        "verdict": "-"
+      }
+    ]
+  },
+  {
+    "connector": "cursor",
+    "mcp_servers": []
+  }
+]

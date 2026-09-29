@@ -1,0 +1,58 @@
+[
+  {
+    "connector": "claudecode",
+    "tools": [
+      {
+        "name": "delete_file",
+        "connector": "claudecode",
+        "scope": "connector",
+        "status": "block",
+        "reason": "destructive",
+        "updated_at": "2026-09-01T10:00:00.123456+00:00"
+      },
+      {
+        "name": "shell_exec",
+        "connector": "claudecode",
+        "scope": "global",
+        "status": "allow",
+        "reason": "",
+        "updated_at": "2026-09-02T10:00:00+00:00"
+      },
+      {
+        "name": "runtime-only",
+        "connector": "claudecode",
+        "scope": "connector",
+        "status": "none",
+        "reason": "",
+        "updated_at": null
+      }
+    ]
+  },
+  {
+    "connector": "codex",
+    "tools": [
+      {
+        "name": "shell_exec",
+        "connector": "codex",
+        "scope": "global",
+        "status": "allow",
+        "reason": "",
+        "updated_at": "2026-09-02T10:00:00+00:00"
+      }
+    ]
+  },
+  {
+    "connector": null,
+    "scope": "source",
+    "tools": [
+      {
+        "name": "docs-server/read_file",
+        "connector": null,
+        "scope": "source",
+        "status": "block",
+        "reason": "audit only",
+        "updated_at": "2026-09-03T08:30:00+00:00"
+      }
+    ]
+  }
+]

@@ -443,6 +443,13 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             throw new FormatException("The command printed nothing.");
         }
 
+        // With no connector configured the CLI prints a sentence (exit 0), not JSON; say what it means.
+        if (GovernJson.IsNoConnectorMessage(stdout))
+        {
+            throw new FormatException(
+                $"No connector is configured, so there is nothing to list. The CLI said: {stdout.Trim()}");
+        }
+
         var rows = new List<GovernRow>();
         using var document = JsonDocument.Parse(stdout);
         var seen = new HashSet<string>(StringComparer.Ordinal);

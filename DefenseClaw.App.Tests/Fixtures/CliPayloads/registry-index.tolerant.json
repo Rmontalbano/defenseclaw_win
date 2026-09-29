@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "future_top_level": { "anything": [1, 2, 3] },
+  "verdicts": [
+    {
+      "name": "nulls-and-unknowns",
+      "type": null,
+      "status": null,
+      "approved": null,
+      "rejected": null,
+      "severity": null,
+      "source_url": null,
+      "url": "https://mcp.example.test/fallback",
+      "future_member": { "a": 1 }
+    },
+    {
+      "name": "naïve-скилл-助手",
+      "type": "skill",
+      "status": "clean",
+      "approved": true,
+      "rejected": false
+    },
+    {
+      "name": "type-a-registry-may-add",
+      "type": "agent",
+      "status": "clean",
+      "approved": false,
+      "rejected": false,
+      "target": "C:\\Users\\example\\.defenseclaw\\registries\\corp-skills\\agent"
+    },
+    "an entry that is not an object",
+    null,
+    { "type": "skill", "status": "clean" },
+    { "name": "", "type": "skill" }
+  ]
+}
