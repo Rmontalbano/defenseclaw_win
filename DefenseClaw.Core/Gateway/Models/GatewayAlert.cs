@@ -29,8 +29,19 @@ public sealed class GatewayAlert
         public const string Severity = "defenseclaw.security.severity";
     }
 
+    private string _id = string.Empty;
+
+    /// <summary>
+    /// Alert id. Never null: an explicit <c>"id":null</c> overwrites the empty-string default
+    /// (see <see cref="NullSafe"/> for why an initializer alone does not hold), and callers key
+    /// sets and lookups on this value.
+    /// </summary>
     [JsonPropertyName("id")]
-    public string Id { get; init; } = string.Empty;
+    public string Id
+    {
+        get => _id;
+        init => _id = value ?? string.Empty;
+    }
 
     [JsonPropertyName("timestamp")]
     public DateTimeOffset Timestamp { get; init; }

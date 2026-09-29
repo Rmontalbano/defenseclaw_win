@@ -16,8 +16,14 @@ public class InstallStateDetectorTests
         public GatewayResult<GatewayHealth> Health { get; set; } =
             GatewayResult<GatewayHealth>.Unreachable();
 
-        public Task<GatewayResult<GatewayHealth>> GetHealthAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Health);
+        /// <summary>How many times <c>/health</c> was requested through this client.</summary>
+        public int HealthCalls { get; private set; }
+
+        public Task<GatewayResult<GatewayHealth>> GetHealthAsync(CancellationToken cancellationToken = default)
+        {
+            HealthCalls++;
+            return Task.FromResult(Health);
+        }
 
         public Task<GatewayResult<GatewayStatusResponse>> GetStatusAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(GatewayResult<GatewayStatusResponse>.Unreachable());
@@ -156,6 +162,70 @@ public class InstallStateDetectorTests
 
         Assert.False(status.WslGatewayDetected);
         Assert.Equal(InstallState.Running, status.State);
+    }
+
+    [Fact]
+    public async Task Detection_hands_back_the_health_result_so_a_poller_needs_only_one_probe()
+    {
+        using var temp = new TempDirectory();
+        temp.Write("config.yaml", "config_version: 8\n");
+
+        var result = GatewayResult<GatewayHealth>.Ok(new GatewayHealth());
+        var gateway = new StubGatewayClient { Health = result };
+        var detector = new InstallStateDetector(
+            PathsFor(temp.Path, installed: true), gateway, new StubPortInspector());
+
+        var status = await detector.DetectAsync(18970);
+
+        Assert.Same(result, status.Health);
+        Assert.Equal(GatewayStatus.Ok, status.HealthProbe);
+        Assert.Equal(1, gateway.HealthCalls);
+    }
+
+    [Fact]
+    public async Task Health_is_absent_when_detection_stops_before_probing()
+    {
+        using var notInstalledDir = new TempDirectory();
+        var missing = new StubGatewayClient();
+        var notInstalled = await new InstallStateDetector(
+                PathsFor(notInstalledDir.Path, installed: false), missing, new StubPortInspector())
+            .DetectAsync(18970);
+
+        using var uninitializedDir = new TempDirectory();
+        var uninitialized = new StubGatewayClient();
+        var notInitialized = await new InstallStateDetector(
+                PathsFor(uninitializedDir.Path, installed: true), uninitialized, new StubPortInspector())
+            .DetectAsync(18970);
+
+        Assert.Equal(InstallState.NotInstalled, notInstalled.State);
+        Assert.Null(notInstalled.Health);
+        Assert.Null(notInstalled.HealthProbe);
+        Assert.Equal(0, missing.HealthCalls);
+
+        Assert.Equal(InstallState.InstalledNotInitialized, notInitialized.State);
+        Assert.Null(notInitialized.Health);
+        Assert.Equal(0, uninitialized.HealthCalls);
+    }
+
+    [Fact]
+    public async Task An_explicit_client_is_probed_instead_of_the_constructors()
+    {
+        // The app rebuilds its gateway client when gateway.api_port changes; the detector must
+        // probe the client bound to the port it was asked about, not the one it was built with.
+        using var temp = new TempDirectory();
+        temp.Write("config.yaml", "config_version: 8\n");
+
+        var original = new StubGatewayClient { Health = GatewayResult<GatewayHealth>.Unreachable() };
+        var retargeted = new StubGatewayClient { Health = GatewayResult<GatewayHealth>.Ok(new GatewayHealth()) };
+        var detector = new InstallStateDetector(
+            PathsFor(temp.Path, installed: true), original, new StubPortInspector());
+
+        var status = await detector.DetectAsync(19999, retargeted);
+
+        Assert.Equal(InstallState.Running, status.State);
+        Assert.Equal(19999, status.Port);
+        Assert.Equal(0, original.HealthCalls);
+        Assert.Equal(1, retargeted.HealthCalls);
     }
 
     [Theory]

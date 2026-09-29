@@ -167,7 +167,7 @@
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding Blocked.Count, StringFormat='Blocked ({0})'}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding BlockedHeader}" />
                             <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Blocked}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -190,6 +190,11 @@
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                Text="{Binding Scope, StringFormat='scope: {0}'}"
                                                                Visibility="{Binding Scope, Converter={StaticResource Truthy}}" />
+                                                    <!-- What Unblock removes: this connector's entry, or the global
+                                                         fallback plus every connector-specific override. -->
+                                                    <TextBlock FontSize="12"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding ConnectorLabel}" />
                                                 </StackPanel>
                                                 <ui:Button Grid.Column="1"
                                                            VerticalAlignment="Top"
@@ -206,6 +211,13 @@
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Text="No blocked tools."
                                        Visibility="{Binding DataContext.NoBlockedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
+                            <!-- The list could not be read: say so, rather than "No blocked tools." -->
+                            <TextBlock Margin="0,4,0,0"
+                                       FontStyle="Italic"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Text="{Binding BlockedUnavailable}"
+                                       Visibility="{Binding HasBlockedUnavailable, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
 
@@ -216,7 +228,7 @@
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding Allowed.Count, StringFormat='Allowed ({0})'}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding AllowedHeader}" />
                             <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Allowed}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -239,6 +251,11 @@
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                Text="{Binding Scope, StringFormat='scope: {0}'}"
                                                                Visibility="{Binding Scope, Converter={StaticResource Truthy}}" />
+                                                    <!-- What Unblock removes: this connector's entry, or the global
+                                                         fallback plus every connector-specific override. -->
+                                                    <TextBlock FontSize="12"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding ConnectorLabel}" />
                                                 </StackPanel>
                                                 <ui:Button Grid.Column="1"
                                                            VerticalAlignment="Top"
@@ -255,6 +272,12 @@
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Text="No allow-listed tools."
                                        Visibility="{Binding DataContext.NoAllowedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       FontStyle="Italic"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Text="{Binding AllowedUnavailable}"
+                                       Visibility="{Binding HasAllowedUnavailable, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
                 </Grid>

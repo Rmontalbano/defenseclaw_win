@@ -19,44 +19,95 @@ namespace DefenseClaw.App.Views.Panels;
 /// (a clear followed by many adds), so the scroll is coalesced onto the dispatcher's
 /// background queue rather than fired once per added item.
 /// </para>
+/// <para>
+/// <b>Listening follows Loaded / Unloaded, not the DataContext.</b> The view instance is
+/// cached and reused for the life of the process, but <see cref="FrameworkElement.Unloaded"/>
+/// fires every time the navigation frame swaps it out (and when the window is closed), and
+/// <see cref="FrameworkElement.Loaded"/> fires again when it comes back. A subscription made
+/// only when the DataContext is set and dropped on Unloaded therefore survived exactly one
+/// visit: after navigating away and back the list kept filling but never scrolled again. The
+/// subscription is now (re)attached on every Loaded and dropped on every Unloaded, and both
+/// are idempotent, so the sequence of events the framework raises does not matter.
+/// </para>
 /// </summary>
 public sealed partial class LogsPanel : UserControl
 {
     private LogsPanelViewModel? _viewModel;
+
+    /// <summary>
+    /// The view-model whose <c>DisplayedLines</c> this view is currently subscribed to; null
+    /// while unsubscribed. Kept separately from <see cref="_viewModel"/> (the DataContext) so
+    /// attach and detach can each be repeated safely and always remove exactly what was added.
+    /// </summary>
+    private LogsPanelViewModel? _attachedTo;
     private bool _scrollScheduled;
 
     public LogsPanel()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (_viewModel is not null)
+        _viewModel = e.NewValue as LogsPanelViewModel;
+
+        // The shell sets the DataContext before the view is ever shown, so usually this only
+        // records it and Loaded does the attaching. A DataContext swapped while on screen
+        // moves the subscription over immediately.
+        if (IsLoaded)
         {
-            _viewModel.DisplayedLines.CollectionChanged -= OnDisplayedLinesChanged;
+            Attach();
+        }
+        else
+        {
+            Detach();
+        }
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Attach();
+
+        // Lines may have been projected into the collection before this handler was attached
+        // (the view-model's catch-up on activation can run ahead of Loaded), and the list must
+        // open at the newest line either way.
+        ScheduleScrollToEnd();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e) => Detach();
+
+    private void Attach()
+    {
+        if (ReferenceEquals(_attachedTo, _viewModel))
+        {
+            return;
         }
 
-        _viewModel = e.NewValue as LogsPanelViewModel;
+        Detach();
+
         if (_viewModel is not null)
         {
             _viewModel.DisplayedLines.CollectionChanged += OnDisplayedLinesChanged;
+            _attachedTo = _viewModel;
         }
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e)
+    private void Detach()
     {
-        // Panel instances are cached and reused across navigation, so this normally only
-        // fires at app shutdown; detaching defensively costs nothing.
-        if (_viewModel is not null)
+        if (_attachedTo is not null)
         {
-            _viewModel.DisplayedLines.CollectionChanged -= OnDisplayedLinesChanged;
+            _attachedTo.DisplayedLines.CollectionChanged -= OnDisplayedLinesChanged;
+            _attachedTo = null;
         }
     }
 
-    private void OnDisplayedLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnDisplayedLinesChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+        ScheduleScrollToEnd();
+
+    private void ScheduleScrollToEnd()
     {
         if (_viewModel is not { AutoScroll: true } || _scrollScheduled)
         {

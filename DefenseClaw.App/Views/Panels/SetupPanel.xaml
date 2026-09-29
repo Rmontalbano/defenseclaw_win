@@ -155,12 +155,15 @@
                                 PlaceholderText="Search wizards by name, target or description…"
                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal"
+                                Margin="16,0,0,0"
+                                VerticalAlignment="Center"
+                                ToolTip="Hides connectors the CLI reports as not_certified or unsupported on Windows. Flows that are not connectors (rotate-token, webhook, llm, scanners…) have nothing to certify and stay visible.">
                         <ui:ToggleSwitch IsChecked="{Binding CertifiedOnly, Mode=TwoWay}" />
                         <TextBlock Margin="8,0,0,0"
                                    VerticalAlignment="Center"
                                    Style="{StaticResource Secondary}"
-                                   Text="Certified on this platform" />
+                                   Text="Hide uncertified connectors" />
                     </StackPanel>
 
                     <ui:Button Margin="16,0,0,0"
@@ -262,8 +265,10 @@
 
                                                     <StackPanel Grid.Row="2">
                                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                            <!-- Certification badge: amber for not_certified,
-                                                                 red for unsupported, neutral when unknown. -->
+                                                            <!-- Certification badge: green only for a certified
+                                                                 connector, amber for not_certified, red for
+                                                                 unsupported, neutral when unknown or when the
+                                                                 target is not a connector (nothing to certify). -->
                                                             <Border>
                                                                 <Border.Style>
                                                                     <Style TargetType="Border" BasedOn="{StaticResource Chip}">
@@ -341,7 +346,7 @@
                 <TextBlock Margin="0,6,0,0"
                            TextAlignment="Center"
                            Style="{StaticResource Tertiary}"
-                           Text="Clear the search, or turn off the certified-only filter: on this platform only Claude Code and Codex are certified." />
+                           Text="Clear the search, or turn off the certification filter: on this platform only Claude Code and Codex are certified connectors." />
             </StackPanel>
         </Grid>
     </Grid>

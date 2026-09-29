@@ -29,8 +29,21 @@ namespace DefenseClaw.App.ViewModels.Wizards;
 /// transcript each tick. The invocation lands in the Activity panel too; the runner records it
 /// there without this view-model doing anything.
 /// </para>
+/// <para>
+/// <b>A run can be re-run and can be stopped.</b> <see cref="HasRun"/> means "a run's outcome is on
+/// display", not "this wizard has been used": it is reset — along with the badge, the message and
+/// the console — the moment the operator goes <see cref="Back"/> or changes an answer, because all
+/// of that describes answers that no longer exist. A failed or cancelled attempt can also simply be
+/// retried from the review page as it stands. Only a <i>successful</i> run locks
+/// <see cref="ExecuteCommand"/> (a setup verb applied twice is not something to allow by a stray
+/// double-click); the deliberate way past that is <see cref="RunAgainCommand"/>, which returns to
+/// a fresh review page. A run in flight is held on a token of its own, so <see cref="CancelCommand"/>
+/// and closing the window can stop it — after a confirmation, because <c>setup</c> verbs write
+/// configuration and a killed one can leave it half-applied. <see cref="CliRunner"/> kills the whole
+/// process tree on cancellation and reports it as <c>cancelled — process tree killed</c>.
+/// </para>
 /// </summary>
-public sealed partial class WizardViewModel : ObservableObject
+public sealed partial class WizardViewModel : ObservableObject, IDisposable
 {
     private static readonly TimeSpan OutputTick = TimeSpan.FromMilliseconds(250);
 
@@ -40,6 +53,24 @@ public sealed partial class WizardViewModel : ObservableObject
     private readonly DispatcherTimer _timer;
     private CliInvocation? _invocation;
     private IReadOnlyList<string> _pendingArgv = Array.Empty<string>();
+
+    /// <summary>
+    /// The current run's own cancellation source. Non-null exactly while <see cref="IsRunning"/>,
+    /// and only ever touched on the UI thread. Nothing else shares it: a run's stop button must not
+    /// be able to cancel anything but that run.
+    /// </summary>
+    private CancellationTokenSource? _runCts;
+
+    /// <summary>True once the operator has confirmed stopping the current run.</summary>
+    private bool _stopRequested;
+
+    /// <summary>
+    /// True when the stop was asked for by closing the window, so the window should close once the
+    /// killed run has finished reporting rather than sit there showing a result nobody asked to see.
+    /// </summary>
+    private bool _closeAfterStop;
+
+    private bool _disposed;
 
     /// <summary>
     /// Reused between ticks so the 250ms console poll allocates nothing in steady state —
@@ -96,8 +127,28 @@ public sealed partial class WizardViewModel : ObservableObject
     [ObservableProperty]
     private bool _isRunning;
 
+    /// <summary>
+    /// True while a run's outcome (badge, message, output) is on display. Reset by
+    /// <see cref="ResetRunState"/> when the operator goes back or edits an answer — it is not a
+    /// permanent "already used" mark.
+    /// </summary>
     [ObservableProperty]
     private bool _hasRun;
+
+    /// <summary>
+    /// True when the run on display exited 0 with no failure reason. Only this — not
+    /// <see cref="HasRun"/> — locks <see cref="CanExecute"/>: a failed or cancelled attempt is
+    /// exactly the case where the operator needs to be able to try again.
+    /// </summary>
+    [ObservableProperty]
+    private bool _lastRunSucceeded;
+
+    /// <summary>The "stop the running command?" overlay. See <see cref="RequestStop"/>.</summary>
+    [ObservableProperty]
+    private bool _isStopConfirmVisible;
+
+    [ObservableProperty]
+    private string _stopConfirmMessage = string.Empty;
 
     [ObservableProperty]
     private string _exitBadgeText = string.Empty;
@@ -172,7 +223,14 @@ public sealed partial class WizardViewModel : ObservableObject
 
     public bool CanGoNext => !IsReview && !IsRunning;
 
-    public bool CanExecute => IsReview && !IsRunning && !HasRun;
+    /// <summary>
+    /// Review page, nothing in flight, and the last run (if any) did not succeed. A successful run
+    /// disables Execute until <see cref="RunAgainCommand"/> or a change of answers resets it.
+    /// </summary>
+    public bool CanExecute => IsReview && !IsRunning && !(HasRun && LastRunSucceeded);
+
+    /// <summary>True after a successful run: the explicit way to run the same command again.</summary>
+    public bool CanRunAgain => IsReview && !IsRunning && HasRun && LastRunSucceeded;
 
     /// <summary>Visible pages only: a gated page the current answers exclude is not a page.</summary>
     private IReadOnlyList<WizardStepViewModel> VisibleSteps =>
@@ -183,6 +241,9 @@ public sealed partial class WizardViewModel : ObservableObject
     {
         if (PageIndex > 0)
         {
+            // The badge, message and console describe a run of answers the operator is about to
+            // change. Left in place they would also keep Execute disabled after a success.
+            ResetRunState();
             GoTo(PageIndex - 1);
         }
     }
@@ -198,10 +259,121 @@ public sealed partial class WizardViewModel : ObservableObject
         GoTo(PageIndex + 1);
     }
 
+    /// <summary>
+    /// Before a run: abandons the wizard. During one: asks whether to stop it (the window stays open
+    /// and shows the outcome). After one: dismisses — the footer shows this as "Close".
+    /// </summary>
     [RelayCommand]
     private void Cancel()
     {
+        if (IsRunning)
+        {
+            RequestStop(closeAfterStop: false);
+            return;
+        }
+
         CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// The window's close was requested while a run is in flight. Asks the same question as
+    /// <see cref="Cancel"/>, and — only if the operator says yes — closes the window once the killed
+    /// run has finished reporting.
+    /// </summary>
+    public void RequestStopAndClose() => RequestStop(closeAfterStop: true);
+
+    /// <summary>
+    /// Shows the overlay. A confirmation is required because <c>defenseclaw setup</c> verbs write
+    /// configuration, and a run killed partway can leave it half-applied. Not a modal dialog: this can
+    /// be raised from <c>Window.Closing</c>, where blocking would risk holding up an app exit.
+    /// </summary>
+    private void RequestStop(bool closeAfterStop)
+    {
+        if (!IsRunning)
+        {
+            return;
+        }
+
+        _closeAfterStop = closeAfterStop;
+        StopConfirmMessage = closeAfterStop
+            ? "Closing this window stops the command and everything it started. It may leave setup " +
+              "half-applied — read the output and the Activity panel afterwards before running it again."
+            : "This ends the command and everything it started. It may leave setup half-applied — read " +
+              "the output and the Activity panel afterwards before running it again.";
+        IsStopConfirmVisible = true;
+    }
+
+    /// <summary>The operator said yes: cancel the run's token, which makes the runner kill its process tree.</summary>
+    [RelayCommand]
+    private void ConfirmStop()
+    {
+        IsStopConfirmVisible = false;
+
+        if (!IsRunning)
+        {
+            // The run finished while the question was on screen; there is nothing left to stop.
+            _closeAfterStop = false;
+            return;
+        }
+
+        _stopRequested = true;
+        ResultMessage = "Stopping the command — ending its process tree…";
+
+        try
+        {
+            _runCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The run finished and released its source between the check and here.
+        }
+    }
+
+    /// <summary>The operator said no: dismiss the question and let the run carry on.</summary>
+    [RelayCommand]
+    private void KeepRunning()
+    {
+        IsStopConfirmVisible = false;
+        _closeAfterStop = false;
+    }
+
+    /// <summary>
+    /// After a successful run: returns the review page to a fresh, executable state. Deliberately a
+    /// separate step from <see cref="ExecuteCommand"/> so that running the same setup twice is two
+    /// decisions, not one stray double-click.
+    /// </summary>
+    [RelayCommand]
+    private void RunAgain()
+    {
+        ResetRunState();
+        ResultMessage = "Ready to run again. Check the command above, then press Execute.";
+    }
+
+    /// <summary>
+    /// Ends this wizard's hold on the world. Called by the window when it closes, however it closes:
+    /// stops the console poll and — because a wizard's child must not outlive its wizard, unlike the
+    /// upgrade installer — cancels a run still in flight. The normal paths never get here running
+    /// (the window asks first); this is the backstop for the closes it cannot refuse.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _timer.Stop();
+        _services.Cli.InvocationStarted -= OnInvocationStarted;
+
+        try
+        {
+            _runCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already released by a run that just finished.
+        }
     }
 
     [RelayCommand]
@@ -221,11 +393,17 @@ public sealed partial class WizardViewModel : ObservableObject
     /// The one mutation this wizard performs. Runs through <see cref="CliRunner"/> so the
     /// argv, the live output and the exit code are recorded in Activity like every other
     /// change the app makes.
+    /// <para>
+    /// The run holds a token of its own (<see cref="_runCts"/>) so that <see cref="ConfirmStopCommand"/>
+    /// can end it. Cancelling makes the runner kill the whole process tree and report
+    /// <c>cancelled — process tree killed</c> as data on the returned invocation — it does not throw,
+    /// so the outcome arrives through <see cref="ApplyResult"/> like any other.
+    /// </para>
     /// </summary>
     [RelayCommand]
     private async Task ExecuteAsync()
     {
-        if (!CanExecute)
+        if (!CanExecute || _disposed)
         {
             return;
         }
@@ -238,12 +416,15 @@ public sealed partial class WizardViewModel : ObservableObject
             return;
         }
 
-        Output.Clear();
-        _outputBuffer.Clear();
-        _outputCursor = 0;
-        _invocation = null;
+        // A retry after a failed or cancelled attempt starts from a clean console and badge, not
+        // the previous attempt's.
+        ResetRunState();
         _pendingArgv = argv;
-        ResultMessage = string.Empty;
+        _stopRequested = false;
+        _closeAfterStop = false;
+        _runCts = new CancellationTokenSource();
+        var token = _runCts.Token;
+        ResultMessage = "Running. Cancel stops the command and everything it started.";
         IsRunning = true;
         RaiseNavigationState();
 
@@ -252,7 +433,7 @@ public sealed partial class WizardViewModel : ObservableObject
 
         try
         {
-            var invocation = await _services.Cli.RunAsync(argv, secret).ConfigureAwait(true);
+            var invocation = await _services.Cli.RunAsync(argv, secret, token).ConfigureAwait(true);
             _invocation = invocation;
             PullOutput();
             ApplyResult(invocation);
@@ -271,9 +452,24 @@ public sealed partial class WizardViewModel : ObservableObject
         {
             _services.Cli.InvocationStarted -= OnInvocationStarted;
             _timer.Stop();
+
+            _runCts?.Dispose();
+            _runCts = null;
+
+            // Only a stop the operator confirmed closes the window on its own. A run that simply
+            // finished while the "close?" question was up leaves its result on screen to be read.
+            var closeNow = _closeAfterStop && _stopRequested;
+            _closeAfterStop = false;
+            IsStopConfirmVisible = false;
+
             IsRunning = false;
             HasRun = true;
             RaiseNavigationState();
+
+            if (closeNow)
+            {
+                CloseRequested?.Invoke(this, EventArgs.Empty);
+            }
         }
     }
 
@@ -321,8 +517,21 @@ public sealed partial class WizardViewModel : ObservableObject
 
     private void ApplyResult(CliInvocation invocation)
     {
+        LastRunSucceeded = false;
+
         if (invocation.FailureReason is { Length: > 0 } failure)
         {
+            // The runner words a stop it performed itself — "cancelled — process tree killed" —
+            // so an operator's confirmed Cancel reads as what it was rather than as a failure.
+            if (failure.StartsWith("cancelled", StringComparison.Ordinal))
+            {
+                ExitBadgeText = "cancelled";
+                ExitBadgeKey = "Warn";
+                ResultMessage = failure + ". The command may have left setup half-applied — read the output " +
+                                "above and the Activity panel before running it again.";
+                return;
+            }
+
             ExitBadgeText = "failed";
             ExitBadgeKey = "Warn";
             ResultMessage = failure;
@@ -333,6 +542,7 @@ public sealed partial class WizardViewModel : ObservableObject
         {
             ExitBadgeText = "exit " + code.ToString(CultureInfo.CurrentCulture);
             ExitBadgeKey = code == 0 ? "Ok" : "Bad";
+            LastRunSucceeded = code == 0;
             ResultMessage = code == 0
                 ? "The command completed. Its argv, output and exit code are in the Activity panel."
                 : "The command failed. The output above is kept exactly as it was produced.";
@@ -342,6 +552,37 @@ public sealed partial class WizardViewModel : ObservableObject
         ExitBadgeText = "exit unknown";
         ExitBadgeKey = "Neutral";
         ResultMessage = "The process ended without reporting an exit code.";
+    }
+
+    /// <summary>
+    /// Forgets the last run: the badge, the message, the console and the "already ran" state, so the
+    /// review page is executable again and no longer describes a run it did not just perform. Called
+    /// when the operator goes back or changes an answer, when a run is about to start, and by
+    /// <see cref="RunAgainCommand"/>. A no-op while a run is in flight — its state is live, not stale.
+    /// </summary>
+    private void ResetRunState()
+    {
+        if (IsRunning)
+        {
+            return;
+        }
+
+        // Runs on every keystroke in a field, so a wizard that has not run pays nothing for it.
+        if (!HasRun && !LastRunSucceeded && Output.Count == 0 && ResultMessage.Length == 0 && ExitBadgeText.Length == 0)
+        {
+            return;
+        }
+
+        HasRun = false;
+        LastRunSucceeded = false;
+        ExitBadgeText = string.Empty;
+        ExitBadgeKey = "Neutral";
+        ResultMessage = string.Empty;
+        Output.Clear();
+        _outputBuffer.Clear();
+        _outputCursor = 0;
+        _invocation = null;
+        RaiseNavigationState();
     }
 
     private void Fail(string message)
@@ -384,6 +625,10 @@ public sealed partial class WizardViewModel : ObservableObject
         {
             return;
         }
+
+        // An answer changed, so the last run's badge, message and console describe a command that
+        // is no longer the one on the review page.
+        ResetRunState();
 
         ApplyGates();
         RefreshCommand();
@@ -501,6 +746,7 @@ public sealed partial class WizardViewModel : ObservableObject
         OnPropertyChanged(nameof(CanGoBack));
         OnPropertyChanged(nameof(CanGoNext));
         OnPropertyChanged(nameof(CanExecute));
+        OnPropertyChanged(nameof(CanRunAgain));
         BackCommand.NotifyCanExecuteChanged();
         NextCommand.NotifyCanExecuteChanged();
         ExecuteCommand.NotifyCanExecuteChanged();

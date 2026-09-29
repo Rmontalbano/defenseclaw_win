@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.ViewModels.Updates;
@@ -23,6 +24,26 @@ namespace DefenseClaw.App.Views.Updates;
 /// This class owns only window concerns: lifetime, single-instance behaviour, and keeping the
 /// resolver console (a virtualized <see cref="System.Windows.Controls.ListBox"/>, see
 /// <c>UpgradeOutputList</c> in the XAML) pinned to its newest line as output streams in.
+/// </para>
+/// <para>
+/// <b>Closing during an upgrade.</b> The installer has no journal, so nothing that closes this
+/// window may end a run — and none does: the run is started with no cancellation token at all (see
+/// <c>UpgradeSectionViewModel.RunUpgradeAsync</c>) and disposing the view-model leaves it alone. On
+/// top of that, <see cref="OnClosing"/> refuses a close while <c>Upgrade.IsRunning</c>, because
+/// closing would only throw away the live view of an install that carries on regardless. Refusing is
+/// non-modal (a banner, no dialog) and can never block an app exit. Checked with a throwaway WPF
+/// harness (Windows PowerShell 5.1, i.e. .NET Framework's WPF, whose <c>Window</c> close logic .NET
+/// inherited) against WPF's own close paths:
+/// <list type="bullet">
+/// <item><description>The title-bar X, Alt+F4 and the system menu reach <see cref="OnClosing"/> and are refused.</description></item>
+/// <item><description>The owner <c>MainWindow</c> closing (tray Exit) closes its owned windows
+/// <i>without</i> raising <c>Closing</c> on them, so this window is simply closed — <see cref="OnClosed"/>
+/// disposes the view-model, which does not cancel the run — and <c>App.ExitApplication</c> goes on to
+/// <c>Shutdown()</c>.</description></item>
+/// <item><description><c>Application.Shutdown()</c> raises <c>Closing</c> on a window it has to close
+/// itself but ignores <c>Cancel</c>, so a refusal cannot hold the process open. The installer is
+/// exempt from <c>CliRunner.Shutdown</c>, so it survives the exit.</description></item>
+/// </list>
 /// </para>
 /// </summary>
 public sealed partial class UpdatesWindow : FluentWindow
@@ -115,6 +136,27 @@ public sealed partial class UpdatesWindow : FluentWindow
                     UpgradeOutputList.ScrollIntoView(UpgradeOutputList.Items[^1]);
                 }
             }));
+    }
+
+    /// <summary>
+    /// Refuses a close while an upgrade run is in flight. Cancels rather than blocks: it returns at
+    /// once, shows nothing modal, and leaves the explanation to the banner the XAML pins under the
+    /// title bar (<c>NoteCloseRefused</c> makes that banner acknowledge the click). A close that
+    /// WPF forces regardless — <c>Application.Shutdown</c> ignores <c>Cancel</c> — goes through
+    /// untouched, and once the dispatcher has begun shutting down this does not even try to refuse.
+    /// </summary>
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_viewModel.Upgrade.IsRunning && !Dispatcher.HasShutdownStarted)
+        {
+            e.Cancel = true;
+            _viewModel.Upgrade.NoteCloseRefused();
+
+            // The banner is the message, so make sure the window is in front for it to be read.
+            _ = Activate();
+        }
+
+        base.OnClosing(e);
     }
 
     private void OnClosed(object? sender, EventArgs e)

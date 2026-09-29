@@ -46,6 +46,20 @@ namespace DefenseClaw.App.ViewModels.Updates;
 /// full transcript copy four times a second is the one place that cost is actually felt. A
 /// quiet installer run legitimately produces almost no output at all.
 /// </para>
+/// <para>
+/// <b>A run is never tied to this view-model's lifetime.</b> The Setup installer has no journal
+/// and no rollback, and the resolver's rollback only covers a failure it observes itself, so
+/// killing either mid-install can leave the machine with a half-replaced DefenseClaw — strictly
+/// worse than an install that finishes with nobody watching. <see cref="RunUpgradeAsync"/> therefore
+/// passes <see cref="CancellationToken.None"/> to <see cref="UpgradeRunner.RunAsync"/> and
+/// <see cref="Dispose"/> does not touch it; <see cref="_cts"/> covers only the download/staging
+/// and the post-run re-poll, which are safe to abandon. Nothing that closes the window can end a
+/// run: <c>UpdatesWindow.OnClosing</c> refuses a close while <see cref="IsRunning"/>, and the closes
+/// it cannot refuse (the owner <c>MainWindow</c> closing on tray Exit, <c>Application.Shutdown</c>)
+/// only reach <see cref="Dispose"/>, which leaves the run alone. The runner's
+/// <see cref="CliRunOptions.Installer"/> options in turn exempt the run from
+/// <c>CliRunner.Shutdown</c> at app exit.
+/// </para>
 /// </summary>
 public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposable
 {
@@ -55,6 +69,14 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     private readonly UpgradeRunner _runner;
     private readonly Dispatcher _dispatcher;
     private readonly DispatcherTimer _timer;
+
+    /// <summary>
+    /// Lifetime token for the work that is safe to abandon when the window goes — the download
+    /// and verify, and the post-run gateway re-poll. Deliberately <b>never</b> handed to the
+    /// upgrade run itself; see the type documentation. Read it through <see cref="LifetimeToken"/>
+    /// after any await, because <see cref="CancellationTokenSource.Token"/> throws once this is
+    /// disposed, and a run outlives <see cref="Dispose"/> by design.
+    /// </summary>
     private readonly CancellationTokenSource _cts = new();
 
     /// <summary>
@@ -73,7 +95,22 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// </summary>
     private int _outputCursor;
 
-    private int _foreignInvocationsInFlight;
+    /// <summary>
+    /// Ids of the runner invocations — anything this app shelled out, this section's own run
+    /// included — that have started and not yet finished. Tracked by id rather than as a bare
+    /// counter: a counter seeded at zero goes to -1 when a command that was already running when
+    /// the window opened completes, and <see cref="IsBusy"/> then under-reports for as long as the
+    /// window lives. A completion is only counted against a start that was actually seen (or
+    /// seeded from <see cref="CliRunner.Activity"/> in the constructor). Guarded by
+    /// <see cref="_cliGate"/>, because the runner raises its events on subprocess threads.
+    /// </summary>
+    private readonly HashSet<string> _cliInFlight = new(StringComparer.Ordinal);
+
+    private readonly object _cliGate = new();
+
+    /// <summary>True once a run's close has been refused, so the banner can say the click was noticed.</summary>
+    private bool _closeRefused;
+
     private bool _checksumsSigstoreSigned;
     private string? _versionBeforeUpgrade;
 
@@ -215,6 +252,10 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         _runner.InvocationStarted += OnUpgradeInvocationStarted;
         _services.Cli.InvocationStarted += OnAnyInvocationStarted;
         _services.Cli.InvocationCompleted += OnAnyInvocationCompleted;
+
+        // Seeded after subscribing, never before: a command that starts or finishes in between is
+        // then seen by the handlers rather than lost between the snapshot and the subscription.
+        SeedCliInFlight();
 
         // Probe the layout before anything else: it decides which channel the section opens on,
         // and the cosign badge below is only a gate on one of them.
@@ -364,7 +405,56 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         "restart it. Restart DefenseClaw for Windows after the upgrade finishes.";
 
     /// <summary>True while this section, or anything else in the app, has a subprocess in flight.</summary>
-    public bool IsBusy => IsStaging || IsRunning || _foreignInvocationsInFlight > 0;
+    public bool IsBusy => IsStaging || IsRunning || CliInFlightCount > 0;
+
+    /// <summary>
+    /// True from the moment a run is requested until its outcome is on screen. The window binds its
+    /// "this window can't be closed yet" banner to <see cref="IsRunning"/> and refuses to close for
+    /// exactly as long — see <c>UpdatesWindow.OnClosing</c>.
+    /// </summary>
+    public bool IsCloseBlocked => IsRunning;
+
+    /// <summary>
+    /// The banner text shown while <see cref="IsCloseBlocked"/>. Says what closing does and does not
+    /// do, because "why won't this window close" is the first thing anyone asks and the honest
+    /// answer has a second half: quitting the app from the tray is still possible, and does not
+    /// stop the install either.
+    /// </summary>
+    public string CloseBlockedNotice =>
+        (_closeRefused ? "That close was ignored. " : string.Empty) +
+        $"The {RanNoun} is running, and stopping it partway through an install can leave DefenseClaw " +
+        "half-replaced, so this window stays open until it finishes. The install carries on whether or " +
+        "not this window is open — even if you quit DefenseClaw for Windows from the tray, which is the " +
+        "way out if you must leave, at the cost of this live view of it.";
+
+    /// <summary>
+    /// Called by the window when it has just refused a close, so the banner can acknowledge the click
+    /// instead of leaving the operator to wonder whether the button did anything.
+    /// </summary>
+    public void NoteCloseRefused()
+    {
+        _closeRefused = true;
+        OnPropertyChanged(nameof(CloseBlockedNotice));
+    }
+
+    private int CliInFlightCount
+    {
+        get
+        {
+            lock (_cliGate)
+            {
+                return _cliInFlight.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The token for work that may be abandoned when the window goes. After <see cref="Dispose"/> it
+    /// is an already-cancelled token rather than <c>_cts.Token</c>, which would throw
+    /// <see cref="ObjectDisposedException"/> from a continuation that outlived the window — the
+    /// post-run re-poll of a run that finished after the window was closed under it.
+    /// </summary>
+    private CancellationToken LifetimeToken => _disposed ? new CancellationToken(canceled: true) : _cts.Token;
 
     public bool CanDownload => IsUpdateAvailable && !IsBusy;
 
@@ -438,6 +528,19 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
               "present, so the checksum is an integrity check only — not a signed one.";
     }
 
+    /// <summary>
+    /// Detaches from the runner and abandons the download/staging and the post-run re-poll.
+    /// <para>
+    /// <b>Never ends an upgrade run.</b> The run was started with <see cref="CancellationToken.None"/>,
+    /// not <see cref="_cts"/>, so cancelling that source here cannot reach the installer or the
+    /// resolver. That matters because this is reachable while a run is in flight: the window refuses
+    /// a user-initiated close during one, but the owner <c>MainWindow</c> closing on tray Exit closes
+    /// its owned windows without raising <c>Closing</c> at all (observed in a throwaway WPF harness —
+    /// see <c>UpdatesWindow</c>), so <c>OnClosed</c> and this method run regardless. The continuation
+    /// of <see cref="RunUpgradeAsync"/> that eventually resumes finds <c>_disposed</c> set and does
+    /// no further UI work.
+    /// </para>
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -633,6 +736,15 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// <summary>
     /// Step two, and the only mutation this window performs: runs the staged, re-verified asset
     /// through the CLI runner.
+    /// <para>
+    /// <b>Not cancellable from here, on purpose.</b> The run gets <see cref="CancellationToken.None"/>,
+    /// not <see cref="_cts"/>: an installer that is killed midway has no journal to roll back from
+    /// (see the type documentation for the full chain of paths that this closes). The runner's
+    /// <c>CliRunOptions.Installer</c> already removes the timeout and the app-exit kill; this removes
+    /// the last one — the window's own token. The pre-launch re-hash inside
+    /// <see cref="UpgradeRunner.RunAsync"/> is no longer cancellable either, which costs nothing:
+    /// it is roughly a second of reading a file we staged ourselves.
+    /// </para>
     /// </summary>
     [RelayCommand]
     private async Task RunUpgradeAsync()
@@ -642,6 +754,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             return;
         }
 
+        _closeRefused = false;
         IsConfirmVisible = false;
         Output.Clear();
         _outputBuffer.Clear();
@@ -674,20 +787,36 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
         try
         {
-            var result = await _runner.RunAsync(_staged, _cts.Token).ConfigureAwait(true);
+            var result = await _runner.RunAsync(_staged, CancellationToken.None).ConfigureAwait(true);
+
+            if (_disposed)
+            {
+                // The window went away while the run was in flight — only the owner closing on tray
+                // Exit or app shutdown can do that, since a user-initiated close is refused. The
+                // installer was left alone; there is no longer anything to show its outcome to, and
+                // the Activity panel already holds the record.
+                return;
+            }
+
             PullOutput();
             await ApplyRunResultAsync(result).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
-            ExitBadgeText = "cancelled";
+            // Nothing here passes a token that can be cancelled, so this is not expected. It is kept
+            // so that a stray cancellation from the runner cannot escape as an unhandled fault — and
+            // worded so as not to claim the install stopped, which nothing here can know.
+            ExitBadgeText = "interrupted";
             ExitBadgeKey = "Warn";
-            ResultMessage = $"The run was cancelled because the window closed. Check the Activity panel for how " +
-                            $"far the {RanNoun} got, and re-run it from a terminal if it was mid-install.";
+            ResultMessage = $"The {RanNoun} run was interrupted before it reported an outcome, and it may " +
+                            "still be running. Check the Activity panel, then 'defenseclaw --version' in a " +
+                            "terminal, before starting it again.";
+            ShowRollbackGuidance = true;
         }
         finally
         {
             _timer.Stop();
+            _closeRefused = false;
             IsRunning = false;
             HasRun = true;
             RaiseState();
@@ -740,10 +869,17 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
             try
             {
-                await _services.Monitor.RefreshAsync(_cts.Token).ConfigureAwait(true);
+                await _services.Monitor.RefreshAsync(LifetimeToken).ConfigureAwait(true);
             }
             catch (OperationCanceledException)
             {
+                return;
+            }
+
+            if (_disposed)
+            {
+                // Closed during the re-poll: the run has already finished, so this only abandons the
+                // version read-back. Nothing left to show it to.
                 return;
             }
 
@@ -820,14 +956,50 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
     private void OnAnyInvocationStarted(object? sender, CliInvocation invocation)
     {
-        Interlocked.Increment(ref _foreignInvocationsInFlight);
+        lock (_cliGate)
+        {
+            _ = _cliInFlight.Add(invocation.Id);
+        }
+
         PostState();
     }
 
     private void OnAnyInvocationCompleted(object? sender, CliInvocation invocation)
     {
-        Interlocked.Decrement(ref _foreignInvocationsInFlight);
+        // A completion for an id that was never seen starting is simply not counted — which is what
+        // keeps a command that was already running when the window opened, and was missed by the
+        // seed, from driving the in-flight count negative.
+        lock (_cliGate)
+        {
+            _ = _cliInFlight.Remove(invocation.Id);
+        }
+
         PostState();
+    }
+
+    /// <summary>
+    /// Picks up the commands that were already running when this section was created, so a window
+    /// opened mid-command is busy for exactly as long as that command is. Safe against the runner's
+    /// own events because they share <see cref="_cliGate"/>, and because
+    /// <see cref="CliInvocation.FinishedAt"/> is set <i>before</i> <c>InvocationCompleted</c> is
+    /// raised: read under the gate, an invocation whose completion has already been handled reads as
+    /// finished and is skipped, and one whose completion has not been handled yet is added and then
+    /// removed by that handler. Either way the id ends up in the set exactly while it is running.
+    /// </summary>
+    private void SeedCliInFlight()
+    {
+        var recent = _services.Cli.Activity;
+
+        lock (_cliGate)
+        {
+            foreach (var invocation in recent)
+            {
+                if (invocation.IsRunning)
+                {
+                    _ = _cliInFlight.Add(invocation.Id);
+                }
+            }
+        }
     }
 
     /// <summary>Runner events arrive on a subprocess thread; command state lives on the UI one.</summary>
@@ -891,7 +1063,12 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     // something else is still in flight.
     partial void OnIsStagingChanged(bool value) => RaiseState();
 
-    partial void OnIsRunningChanged(bool value) => RaiseState();
+    partial void OnIsRunningChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsCloseBlocked));
+        OnPropertyChanged(nameof(CloseBlockedNotice));
+        RaiseState();
+    }
 
     partial void OnIsStagedChanged(bool value) => RaiseState();
 

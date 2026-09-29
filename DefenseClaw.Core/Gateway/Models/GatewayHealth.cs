@@ -113,6 +113,8 @@ public sealed class Provenance
 /// <summary>Payload of <c>GET /health</c> — the only unauthenticated endpoint on 0.8.7.</summary>
 public sealed class GatewayHealth
 {
+    private IReadOnlyList<ConnectorStatus> _connectors = Array.Empty<ConnectorStatus>();
+
     [JsonPropertyName("started_at")]
     public DateTimeOffset? StartedAt { get; init; }
 
@@ -147,8 +149,17 @@ public sealed class GatewayHealth
     [JsonPropertyName("connector")]
     public ConnectorStatus? Connector { get; init; }
 
+    /// <summary>
+    /// Every registered connector. Never null and holds no null element: the gateway serializes
+    /// an empty Go slice as <c>"connectors":null</c>, and the setter turns that into an empty
+    /// list — see <see cref="NullSafe"/>.
+    /// </summary>
     [JsonPropertyName("connectors")]
-    public IReadOnlyList<ConnectorStatus> Connectors { get; init; } = Array.Empty<ConnectorStatus>();
+    public IReadOnlyList<ConnectorStatus> Connectors
+    {
+        get => _connectors;
+        init => _connectors = NullSafe.ListOrEmpty(value);
+    }
 
     [JsonPropertyName("provenance")]
     public Provenance? Provenance { get; init; }

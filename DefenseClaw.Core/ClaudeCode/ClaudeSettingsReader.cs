@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway.Models;
 
@@ -175,12 +177,134 @@ public sealed record FailModeDrift
         string.Equals(EnvFailMode, "closed", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The documented one-liner that flips settings.json to match the gateway. Displayed
-    /// and copyable; the app never runs it, mirroring <c>GatewaySnapshot.InitCommand</c>.
-    /// The operator stays the only writer of a file the installer already contests.
+    /// Placeholder in <see cref="RemediationTemplate"/> for the single-quoted settings.json
+    /// path. Substituted by <see cref="RemediationCommand"/>; never appears in its output.
+    /// </summary>
+    private const string PathPlaceholder = "@@PATH@@";
+
+    /// <summary>Placeholder in <see cref="RemediationTemplate"/> for the fail-mode word.</summary>
+    private const string ModePlaceholder = "@@MODE@@";
+
+    /// <summary>
+    /// The copyable one-liner, as a template. A raw literal (not interpolated) so PowerShell's
+    /// braces and dollar signs need no escaping and the text reads exactly as it will be pasted.
+    /// <para>
+    /// <b>Why it is written this way — the first version could destroy the file.</b> It was
+    /// <c>Get-Content -Raw | ConvertFrom-Json; …; $j | ConvertTo-Json | Set-Content -Encoding utf8</c>.
+    /// The reader above tolerates comments and trailing commas (Claude Code does, and operators
+    /// hand-edit this file), but <c>ConvertFrom-Json</c> is strict. On such a file the parse
+    /// failed, <c>$j</c> stayed <c>$null</c>, and the <c>;</c>-chained line carried on regardless
+    /// into <c>$null | ConvertTo-Json | Set-Content</c>. Measured on Windows PowerShell 5.1, that
+    /// last pipeline emits nothing for a null input, so the file was left alone (and the operator
+    /// was told nothing useful); PowerShell 7 emits the text <c>null</c> for it, which would
+    /// replace the operator's settings.json with those four bytes. The path that <i>did</i> run
+    /// to the end was no better: <c>ConvertTo-Json</c> reformats the whole file and drops every
+    /// comment, and 5.1's <c>Set-Content -Encoding utf8</c> prepends a byte-order mark. So each
+    /// property of the current form answers one of those:
+    /// </para>
+    /// <list type="number">
+    /// <item><description>
+    /// <b>No JSON round-trip.</b> The file is treated as text and only the one
+    /// <c>"DEFENSECLAW_FAIL_MODE": "…"</c> pair is replaced by a regular expression, so comments,
+    /// key order, indentation, line endings and every other byte survive. Nothing is parsed, so a
+    /// file the strict parser would have rejected is no longer a way to lose it. The replacement
+    /// keeps the original spacing around the colon (capture group 1).
+    /// </description></item>
+    /// <item><description>
+    /// <b>Exactly one match, or nothing happens.</b> Zero matches (the key is spelled with
+    /// unicode escapes, or is gone) and several (a comment or a second block also mentions it)
+    /// are both ambiguous, so the command throws before touching anything and says to edit by
+    /// hand. The value pattern accepts escaped quotes, so an odd but valid value still matches.
+    /// </description></item>
+    /// <item><description>
+    /// <b><c>$ErrorActionPreference = 'Stop'</c>, inside <c>&amp; { … }</c>.</b> With the default
+    /// <c>Continue</c>, a failed read or copy would let the statements after it run against
+    /// empty state. Stop aborts the whole line on the first error. The script block gives the
+    /// preference and the <c>$s $v $p $t $b</c> variables a child scope, so pasting this into an
+    /// interactive prompt neither leaves the session in Stop mode nor leaks variables.
+    /// </description></item>
+    /// <item><description>
+    /// <b>A timestamped backup before the write</b>, made only after the match check passed, so
+    /// a refused run leaves no litter. Milliseconds are in the name so two runs in one second
+    /// cannot overwrite the pre-edit copy with an already-edited one.
+    /// </description></item>
+    /// <item><description>
+    /// <b>UTF-8 without a byte-order mark</b>, via <c>[IO.File]::WriteAllText</c> with
+    /// <c>UTF8Encoding($false)</c>. <c>ReadAllText</c> detects and drops any existing BOM.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// The path is the one this drift was read from, embedded as a single-quoted literal (so
+    /// <c>$</c> and <c>%</c> in a profile name are inert and <c>[IO.File]</c> takes it as a plain
+    /// path, never a wildcard), and the mode is restricted to a plain word — see
+    /// <see cref="RemediationCommand"/>. ASCII only: this is pasted through terminals that
+    /// mangle typographic characters. No newline, so it stays one copyable line.
+    /// </para>
+    /// </summary>
+    private const string RemediationTemplate = """
+        & { $ErrorActionPreference = 'Stop'; $s = '@@PATH@@'; $v = '@@MODE@@'; $p = '("DEFENSECLAW_FAIL_MODE"\s*:\s*)"(?:[^"\\]|\\.)*"'; $t = [IO.File]::ReadAllText($s); if ([regex]::Matches($t, $p).Count -ne 1) { throw "Expected exactly one DEFENSECLAW_FAIL_MODE entry in $s. Nothing was changed - edit the file by hand." }; $b = $s + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'); Copy-Item -LiteralPath $s -Destination $b; [IO.File]::WriteAllText($s, [regex]::Replace($t, $p, '${1}"' + $v + '"'), (New-Object Text.UTF8Encoding $false)); Write-Host "Updated $s (backup: $b)" }
+        """;
+
+    /// <summary>
+    /// What <see cref="RemediationCommand"/> may embed as the fail mode: a plain word such as
+    /// <c>open</c> or <c>closed</c>. The value comes from the gateway's <c>/status</c> or from
+    /// config.yaml and lands inside a script the operator pastes into a shell, so anything else —
+    /// a quote of any kind, a <c>$</c>, a backtick, a newline — is refused rather than escaped.
+    /// Anchored with <c>\z</c>, not <c>$</c>, because <c>$</c> also matches before a trailing
+    /// newline and <c>"open\n"</c> must not slip through.
+    /// </summary>
+    private static readonly Regex PlainWord = new(@"^[A-Za-z0-9_.-]{1,32}\z", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The one-liner that flips settings.json to match the gateway. Displayed and copyable; the
+    /// app never runs it, mirroring <c>GatewaySnapshot.InitCommand</c>. The operator stays the
+    /// only writer of a file the installer already contests.
+    /// <para>
+    /// It edits <see cref="SettingsPath"/> as text — a single targeted replacement after a
+    /// backup, aborting unless the key occurs exactly once — rather than parsing and
+    /// re-serializing the JSON. <see cref="RemediationTemplate"/> explains why: the earlier
+    /// parse-and-rewrite form could replace a hand-edited settings.json with the literal
+    /// <c>null</c>.
+    /// </para>
+    /// <para>
+    /// When <see cref="GatewayFailMode"/> is not a plain word (see <see cref="PlainWord"/>) the
+    /// result is a PowerShell comment saying so instead of a command: pasting it changes nothing.
+    /// The value itself is deliberately not echoed into that comment, since a newline in it would
+    /// end the comment and begin executable text.
+    /// </para>
     /// </summary>
     public string RemediationCommand =>
-        $"""$s = "$env:USERPROFILE\.claude\settings.json"; $j = Get-Content $s -Raw | ConvertFrom-Json; $j.env.{ClaudeSettingsReader.FailModeVariableName} = '{GatewayFailMode}'; $j | ConvertTo-Json -Depth 32 | Set-Content $s -Encoding utf8""";
+        PlainWord.IsMatch(GatewayFailMode)
+            // Mode first, path last: the mode is a validated plain word and cannot contain a
+            // placeholder, whereas a path is free text and must not be rescanned for one.
+            ? RemediationTemplate
+                .Replace(ModePlaceholder, GatewayFailMode, StringComparison.Ordinal)
+                .Replace(PathPlaceholder, PowerShellSingleQuoted(SettingsPath), StringComparison.Ordinal)
+            : "# No command generated: the gateway reported a hook fail mode that is not a plain word, " +
+              $"so it is not safe to paste into a script. Set env.{ClaudeSettingsReader.FailModeVariableName} " +
+              "in Claude Code's settings.json by hand.";
+
+    /// <summary>
+    /// Makes <paramref name="value"/> safe to place between single quotes in PowerShell. Inside
+    /// a single-quoted string the only special character is the quote itself, doubled to escape
+    /// it — but PowerShell treats the typographic single quotes (U+2018, U+2019, U+201A, U+201B)
+    /// as quote characters too, so each of those is doubled as well. Otherwise a profile folder
+    /// named with an apostrophe would end the string early.
+    /// </summary>
+    private static string PowerShellSingleQuoted(string value)
+    {
+        var builder = new StringBuilder(value.Length + 4);
+        foreach (var c in value)
+        {
+            builder.Append(c);
+            if (c is '\'' or '‘' or '’' or '‚' or '‛')
+            {
+                builder.Append(c);
+            }
+        }
+
+        return builder.ToString();
+    }
 
     /// <summary>
     /// Compares the env override against whatever the gateway will admit to.

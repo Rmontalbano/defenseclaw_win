@@ -171,6 +171,12 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
     }
 
     /// <summary>Maps an HTTP status plus body onto a <see cref="GatewayResult{T}"/>.</summary>
+    /// <summary>An empty array for an <c>IReadOnlyList&lt;X&gt;</c> payload type; null otherwise.</summary>
+    private static object? EmptyListFor(Type type) =>
+        type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IReadOnlyList<>)
+            ? Array.CreateInstance(type.GetGenericArguments()[0], 0)
+            : null;
+
     internal static GatewayResult<T> Interpret<T>(HttpStatusCode statusCode, string body)
     {
         var code = (int)statusCode;
@@ -203,9 +209,17 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         try
         {
             var value = JsonSerializer.Deserialize<T>(body, JsonOptions);
-            return value is null
-                ? GatewayResult<T>.Error("gateway returned an empty body", code)
-                : GatewayResult<T>.Ok(value, code);
+            if (value is not null)
+            {
+                return GatewayResult<T>.Ok(value, code);
+            }
+
+            // The gateway is Go: encoding/json writes a nil slice as `null`, so for the list
+            // endpoints a bare `null` is an empty list, not a failure. For an object payload
+            // (health, status) `null` still means the answer carried nothing usable.
+            return EmptyListFor(typeof(T)) is T empty
+                ? GatewayResult<T>.Ok(empty, code)
+                : GatewayResult<T>.Error("gateway returned an empty body", code);
         }
         catch (JsonException ex)
         {

@@ -20,6 +20,12 @@ public partial class MainWindow : FluentWindow
     private readonly PanelCatalog _catalog;
     private readonly TrayIconService _tray;
     private readonly MainWindowViewModel _viewModel;
+
+    /// <summary>
+    /// One line per panel whose initialization failed, newest fault per panel wins; what
+    /// <c>PanelFaultBar</c> shows. Cleared when the operator dismisses the bar. UI thread only.
+    /// </summary>
+    private readonly List<(string PanelId, string Line)> _panelFaults = new();
     private bool _allowClose;
     private bool _minimizeHintShown;
 
@@ -41,12 +47,82 @@ public partial class MainWindow : FluentWindow
 
         // Taskbar icon mirrors the tray shield, colour and all, so alt-tab tells the same
         // story as the notification area. Rendered at 256px so alt-tab and taskbar scaling
-        // stay crisp; cached per state because StateChanged fires every poll.
+        // stay crisp; cached per state because StateChanged also fires for changes that leave
+        // the shield colour alone (a new detail line, a connector appearing).
         ApplyShieldIcon(ShieldIconFactory.StateFor(services.Monitor.Current));
         services.Monitor.StateChanged += (_, e) => ApplyShieldIcon(ShieldIconFactory.StateFor(e.Snapshot));
 
+        // Panels only run while someone can see them. Hiding to the tray is caught by
+        // IsVisibleChanged; a minimized window still reports itself visible, so the window
+        // state is watched as well. Both feed the one flag the catalog understands.
+        IsVisibleChanged += (_, _) => PublishInteractivity();
+        StateChanged += (_, _) => PublishInteractivity();
+
+        // A panel whose InitializeAsync throws would otherwise sit on "Loading…" forever with
+        // nothing saying why. Subscribed before the sidebar exists (OnLoaded builds it), so no
+        // fault can be missed. Dismissing the bar forgets the faults it listed: the next one
+        // shows on its own instead of resurrecting ones the operator already saw.
+        _catalog.PanelFaulted += OnPanelFaulted;
+        DependencyPropertyDescriptor
+            .FromProperty(InfoBar.IsOpenProperty, typeof(InfoBar))
+            ?.AddValueChanged(PanelFaultBar, OnPanelFaultBarOpenChanged);
+
         Loaded += OnLoaded;
     }
+
+    /// <summary>
+    /// Adds the faulted panel to the banner. Normally already on the UI thread (see
+    /// <see cref="PanelCatalog.PanelFaulted"/>); marshals anyway so a future caller that is
+    /// not cannot turn a panel fault into a cross-thread exception.
+    /// </summary>
+    private void OnPanelFaulted(object? sender, PanelFaultEventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(() => OnPanelFaulted(sender, e));
+            return;
+        }
+
+        var reason = e.Exception.Message.ReplaceLineEndings(" ").Trim();
+        if (reason.Length > 300)
+        {
+            reason = string.Concat(reason.AsSpan(0, 300), "…");
+        }
+
+        var line = $"{e.Panel.Title} — {e.Exception.GetType().Name}: {reason}";
+        var existing = _panelFaults.FindIndex(fault => string.Equals(fault.PanelId, e.Panel.Id, StringComparison.Ordinal));
+        if (existing >= 0)
+        {
+            _panelFaults[existing] = (e.Panel.Id, line);
+        }
+        else
+        {
+            _panelFaults.Add((e.Panel.Id, line));
+        }
+
+        PanelFaultBar.Message =
+            string.Join(Environment.NewLine, _panelFaults.Select(fault => fault.Line)) +
+            Environment.NewLine +
+            "The affected panel may stay empty or on “Loading…”; the rest of the dashboard is unaffected.";
+        PanelFaultBar.IsOpen = true;
+    }
+
+    private void OnPanelFaultBarOpenChanged(object? sender, EventArgs e)
+    {
+        if (!PanelFaultBar.IsOpen)
+        {
+            _panelFaults.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Whether the operator can actually see this window: shown, and not minimized to the
+    /// taskbar. The panels' pause/resume hangs off this — see the activation contract on
+    /// <see cref="PanelViewModelBase"/>. The tray, its toasts and the shell status strip do
+    /// not, and keep running.
+    /// </summary>
+    private void PublishInteractivity() =>
+        _catalog.SetWindowInteractive(IsVisible && WindowState != WindowState.Minimized);
 
     private static readonly Dictionary<ShieldState, System.Windows.Media.ImageSource> ShieldImageCache = new();
     private ShieldState? _currentIconState;
@@ -108,6 +184,7 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        _catalog.PanelFaulted -= OnPanelFaulted;
         _viewModel.Dispose();
         base.OnClosing(e);
     }

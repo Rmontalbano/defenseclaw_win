@@ -38,6 +38,16 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private AuditCursor? _cursor;
 
+    /// <summary>
+    /// True once the bucket / connector / action lists have been read from audit.db. They are
+    /// loaded by the first <see cref="LoadAsync"/> that finds the database, not by
+    /// <see cref="InitializeAsync"/>: that runs once, on the first visit, and if audit.db did
+    /// not exist yet (it appears with the first event) the lists used to stay at their
+    /// "All ..." placeholders for good even after the database showed up and Refresh worked.
+    /// A failed read leaves this false, so the next load retries.
+    /// </summary>
+    private bool _filterOptionsLoaded;
+
     [ObservableProperty]
     private string _selectedBucket = AnyBucket;
 
@@ -132,7 +142,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             return;
         }
 
-        await LoadFilterOptionsAsync(cancellationToken);
+        // The filter lists load inside LoadAsync, the first time it finds the database.
         await LoadAsync(append: false, cancellationToken);
     }
 
@@ -200,6 +210,9 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             {
                 Actions.Add(action);
             }
+
+            // All three reads succeeded before anything was added, so a retry never duplicates.
+            _filterOptionsLoaded = true;
         }
 #pragma warning disable CA1031 // Losing the dropdowns must not lose the panel.
         catch (Exception ex) when (ex is SqliteException or IOException or InvalidOperationException)
@@ -229,6 +242,14 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
         try
         {
             IsLoading = true;
+
+            // Inside the gate, so a burst of filter changes cannot load the lists twice. The
+            // note a failed read sets is cleared by a successful query below, as before.
+            if (!_filterOptionsLoaded)
+            {
+                await LoadFilterOptionsAsync(cancellationToken);
+            }
+
             var query = BuildQuery(append ? _cursor : null);
             var page = await Services.Audit.QueryAsync(query, cancellationToken);
 

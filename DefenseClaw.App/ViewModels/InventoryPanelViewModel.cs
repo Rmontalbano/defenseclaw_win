@@ -7,11 +7,16 @@ using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
+using DefenseClaw.Core.Inventory;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.ViewModels;
 
-/// <summary>One row of the <c>ai_components_v</c> rollup, plus its raw column values.</summary>
+/// <summary>
+/// One row of the components rollup for the latest full scan (the <c>ai_components_v</c> columns,
+/// scoped to one scan — see <see cref="InventoryReader.GetLatestComponentsAsync"/>), plus its raw
+/// column values.
+/// </summary>
 public sealed class InventoryComponentRow
 {
     public required string Ecosystem { get; init; }
@@ -77,10 +82,23 @@ public sealed partial class InventoryTableSummary : ObservableObject
 
     public string Kind => IsView ? "view" : "table";
 
+    /// <summary>
+    /// <c>null</c> until the count has finished (the row shows "…"). A view, and a database
+    /// error, both end as <see cref="InventoryRowCount.NotCounted"/> ("n/a") so a count that will
+    /// never arrive is not indistinguishable from one that has not arrived yet.
+    /// </summary>
     [ObservableProperty]
-    private int? _rowCount;
+    [NotifyPropertyChangedFor(nameof(RowCountDisplay))]
+    [NotifyPropertyChangedFor(nameof(Summary))]
+    private InventoryRowCount? _rowCount;
 
-    public string RowCountDisplay => RowCount is { } count ? count.ToString(CultureInfo.InvariantCulture) : "…";
+    /// <summary><c>1,234</c>, <c>~4,907,787</c> (an estimate from the rowid span), <c>250,000+</c>, <c>n/a</c>, or "…" while pending.</summary>
+    public string RowCountDisplay => RowCount is { } count ? count.ToDisplayString() : "…";
+
+    /// <summary>The line under the table picker.</summary>
+    public string Summary => IsView
+        ? "view · row count not computed (a view is evaluated on every read) · first 200 rows once loaded"
+        : $"table · {RowCountDisplay} rows (first 200 shown)";
 }
 
 /// <summary>
@@ -89,9 +107,23 @@ public sealed partial class InventoryTableSummary : ObservableObject
 /// generic table browser for every other table the reader discovers.
 /// <para>
 /// <c>inventory.db</c> has no published schema contract (see
-/// <see cref="DefenseClaw.Core.Inventory.InventoryReader"/>), so this treats
-/// <c>ai_components_v</c> as the happy path and falls back to the generic browser — which
-/// works against any table — when that view is absent.
+/// <see cref="DefenseClaw.Core.Inventory.InventoryReader"/>), so the rollup is the happy path and
+/// the panel falls back to the generic browser — which works against any table — when the
+/// database lacks the layout the rollup is built from.
+/// </para>
+/// <para>
+/// <b>The rollup is not <c>ai_components_v</c>.</b> That view aggregates every signal of every scan
+/// ever recorded: on the live 4.5 GB database it takes 14-20 s and reports a component the latest
+/// scan saw twice as <c>install_count</c> 102,128. The grid is fed by
+/// <see cref="InventoryReader.GetLatestComponentsAsync"/> instead — the same SELECT for one scan
+/// (~0.2 ms) — and <see cref="ScanNote"/> says which scan that was. The view stays reachable in the
+/// table browser, but only after an explicit "load anyway" behind a warning.
+/// </para>
+/// <para>
+/// <b>Threading.</b> Every <see cref="InventoryReader"/> query runs on the thread pool (see its
+/// type documentation), so the awaits here return the dispatcher to WPF immediately: the table
+/// counts (a capped scan of a multi-million-row table, seconds when the file is cold) and the
+/// deliberate 15-20 s view load cost the UI nothing.
 /// </para>
 /// </summary>
 public sealed partial class InventoryPanelViewModel : PanelViewModelBase
@@ -100,6 +132,17 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     public const string GroupByType = "Type";
 
     private readonly List<InventoryComponentRow> _allComponents = new();
+
+    /// <summary>The load the table browser is currently waiting on; cancelled when the selection changes.</summary>
+    private CancellationTokenSource? _browseCts;
+
+    /// <summary>
+    /// Bumped for every browse request. A load only publishes its rows or clears
+    /// <see cref="IsTableLoading"/> while it is still the newest — the query cannot be interrupted
+    /// mid-statement, so an earlier, slower table can finish after a later one and must not win.
+    /// UI thread only.
+    /// </summary>
+    private int _browseSequence;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -139,8 +182,29 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _isTableLoading;
 
+    /// <summary>Which scan the grid's numbers come from (time, source, result), or why there is none. Empty when there is nothing to say.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasScanNote))]
+    private string? _scanNote;
+
+    /// <summary>
+    /// A warning about the selected table or view: today, that <c>ai_components_v</c> aggregates all
+    /// history. Shown above the browser and kept while the view loads.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTableBrowserNote))]
+    private string? _tableBrowserNote;
+
+    /// <summary>A view is selected but not loaded: browsing one costs its whole definition, so it waits for a click.</summary>
+    [ObservableProperty]
+    private bool _isViewLoadPending;
+
     /// <summary>True once loading has failed with a message worth showing in a banner.</summary>
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+
+    public bool HasScanNote => !string.IsNullOrEmpty(ScanNote);
+
+    public bool HasTableBrowserNote => !string.IsNullOrEmpty(TableBrowserNote);
 
     /// <summary>Inverse of <see cref="UsingFallbackView"/> — whether the rollup grid should show.</summary>
     public bool ShowComponentsGrid => !UsingFallbackView;
@@ -162,7 +226,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     public override string Title => "Inventory";
 
     public override string Description =>
-        "AI components and SDK rollup discovered in inventory.db, with search and grouping.";
+        "AI components and SDKs from the latest full scan in inventory.db, with search and grouping.";
 
     /// <summary>Filtered, grouped view over the loaded rollup; the grid binds to this.</summary>
     public ICollectionView ComponentsView { get; }
@@ -203,15 +267,73 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         }
     }
 
+    /// <summary>
+    /// A new table (or none) was picked: whatever the browser was loading for the previous pick is
+    /// stale. Cancels it and bumps <see cref="_browseSequence"/> so that, even though the query
+    /// itself cannot be stopped once SQLite is inside a statement, its result is dropped instead of
+    /// overwriting <see cref="BrowsedRows"/> or clearing <see cref="IsTableLoading"/> under the
+    /// newer pick. A view is not loaded here — see <see cref="LoadSelectedViewAsync"/>.
+    /// </summary>
     partial void OnSelectedTableChanged(InventoryTableSummary? value)
     {
+        var sequence = ++_browseSequence;
+        CancelBrowse();
+
+        BrowsedRows = null;
+        TableBrowserError = null;
+        TableBrowserNote = null;
+        IsViewLoadPending = false;
+        IsTableLoading = false;
+
         if (value is null)
         {
-            BrowsedRows = null;
             return;
         }
 
-        _ = LoadBrowsedTableAsync(value.Name, CancellationToken.None);
+        if (value.IsView)
+        {
+            TableBrowserNote = DescribeViewCost(value.Name);
+            IsViewLoadPending = true;
+            return;
+        }
+
+        _ = LoadBrowsedTableAsync(value.Name, sequence);
+    }
+
+    /// <summary>
+    /// The explicit "load anyway" for a selected view. Browsing <c>ai_components_v</c> aggregates
+    /// every scan ever recorded (14-20 s on the live 4.5 GB database), so it never happens just
+    /// because the picker moved over it.
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadSelectedViewAsync()
+    {
+        var view = SelectedTable;
+        if (view is null || !view.IsView)
+        {
+            return;
+        }
+
+        IsViewLoadPending = false;
+        var sequence = ++_browseSequence;
+        CancelBrowse();
+        await LoadBrowsedTableAsync(view.Name, sequence).ConfigureAwait(true);
+    }
+
+    private static string DescribeViewCost(string name) =>
+        string.Equals(name, "ai_components_v", StringComparison.OrdinalIgnoreCase)
+            ? "Aggregates all history. ai_components_v adds up every signal of every scan ever recorded, so " +
+              "it takes 15-20 s on a large inventory.db (measured on a 4.5 GB file) and its install counts are " +
+              "inflated history totals. The components grid above already shows the latest scan instead — load " +
+              "this view only if you specifically want the all-history rollup."
+            : "A view is computed from its definition on every read, and this inventory.db can be many " +
+              "gigabytes, so this may take a while. Load it only if you need it.";
+
+    private void CancelBrowse()
+    {
+        var pending = _browseCts;
+        _browseCts = null;
+        pending?.Cancel();
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken)
@@ -227,6 +349,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
                     "It is created the first time AI discovery runs — nothing to show yet.";
                 _allComponents.Clear();
                 Tables.Clear();
+                ScanNote = null;
                 ComponentsView.Refresh();
                 return;
             }
@@ -239,36 +362,43 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
                 Tables.Add(new InventoryTableSummary(table.Name, table.IsView));
             }
 
-            var componentsTable = tables.FirstOrDefault(t =>
-                string.Equals(t.Name, "ai_components_v", StringComparison.OrdinalIgnoreCase));
+            // The rollup for the latest full scan — not a browse of ai_components_v, which is 14-20 s
+            // and history-inflated. null = this database lacks the layout it is built from.
+            var rollup = await Services.Inventory.GetLatestComponentsAsync(cancellationToken).ConfigureAwait(true);
 
             _allComponents.Clear();
-            if (componentsTable is not null)
+            if (rollup is null)
             {
-                UsingFallbackView = false;
-                var rows = await Services.Inventory.BrowseAsync(
-                    componentsTable.Name, limit: 5000, cancellationToken: cancellationToken).ConfigureAwait(true);
-
-                foreach (var row in rows.Rows)
-                {
-                    _allComponents.Add(MapComponentRow(row));
-                }
+                UsingFallbackView = true;
+                ScanNote = null;
             }
             else
             {
-                UsingFallbackView = true;
+                UsingFallbackView = false;
+                foreach (var row in rollup.Rows.Rows)
+                {
+                    _allComponents.Add(MapComponentRow(row));
+                }
+
+                ScanNote = DescribeScan(rollup.Scan);
             }
 
             ComponentsView.Refresh();
-            StatusMessage = BuildStatusMessage();
+            StatusMessage = rollup is null
+                ? "Component rollup unavailable for this inventory.db."
+                : BuildStatusMessage(rollup.Scan);
 
             // Fire off row counts for the table browser without blocking the main load —
-            // COUNT(*) on a multi-million-row table (ai_signals on this box) is not free.
+            // a capped COUNT on a multi-million-row table (ai_signals on this box) is not free.
             _ = LoadTableCountsAsync(tables.Select(t => t.Name).ToArray(), cancellationToken);
         }
         catch (Exception ex) when (ex is IOException or SqliteException or UnauthorizedAccessException)
         {
             ErrorMessage = $"Could not read inventory.db: {ex.Message}";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The shell went away mid-load; there is nobody to tell.
         }
         finally
         {
@@ -276,6 +406,11 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         }
     }
 
+    /// <summary>
+    /// Fills each table's row count as it arrives. A table above the exact-count cap shows an
+    /// estimate labelled as one (<c>~4,907,787</c>), a view shows <c>n/a</c> without being queried,
+    /// and a count that fails shows <c>n/a</c> too — the table itself still browses.
+    /// </summary>
     private async Task LoadTableCountsAsync(IReadOnlyList<string> tableNames, CancellationToken cancellationToken)
     {
         foreach (var name in tableNames)
@@ -285,31 +420,51 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
                 return;
             }
 
+            InventoryRowCount count;
             try
             {
-                var count = await Services.Inventory.CountAsync(name, cancellationToken).ConfigureAwait(true);
-                var summary = Tables.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
-                if (summary is not null)
-                {
-                    summary.RowCount = count;
-                }
+                count = await Services.Inventory.CountRowsAsync(name, cancellationToken).ConfigureAwait(true);
             }
-            catch (SqliteException)
+            catch (OperationCanceledException)
             {
-                // Leave the row count as "…" — the table itself still browses fine.
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or SqliteException or ArgumentException)
+            {
+                count = InventoryRowCount.NotCounted;
+            }
+
+            var summary = Tables.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (summary is not null)
+            {
+                summary.RowCount = count;
             }
         }
     }
 
-    private async Task LoadBrowsedTableAsync(string tableName, CancellationToken cancellationToken)
+    /// <summary>
+    /// Loads the first 200 rows of <paramref name="tableName"/> into the browser grid for the browse
+    /// request numbered <paramref name="sequence"/>. If a newer request has been issued by the time the
+    /// query returns, the rows and every state change are dropped.
+    /// </summary>
+    private async Task LoadBrowsedTableAsync(string tableName, int sequence)
     {
+        var cts = new CancellationTokenSource();
+        _browseCts = cts;
+        var token = cts.Token;
+
         IsTableLoading = true;
         TableBrowserError = null;
 
         try
         {
-            var rows = await Services.Inventory.BrowseAsync(tableName, limit: 200, cancellationToken: cancellationToken)
+            var rows = await Services.Inventory.BrowseAsync(tableName, limit: 200, cancellationToken: token)
                 .ConfigureAwait(true);
+
+            if (sequence != _browseSequence)
+            {
+                return;
+            }
 
             var table = new DataTable(tableName);
             foreach (var column in rows.Columns)
@@ -330,15 +485,55 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
 
             BrowsedRows = table.DefaultView;
         }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer selection; that request owns the state now.
+        }
         catch (Exception ex) when (ex is IOException or SqliteException or ArgumentException)
         {
-            TableBrowserError = $"Could not browse '{tableName}': {ex.Message}";
-            BrowsedRows = null;
+            if (sequence == _browseSequence)
+            {
+                TableBrowserError = $"Could not browse '{tableName}': {ex.Message}";
+                BrowsedRows = null;
+            }
         }
         finally
         {
-            IsTableLoading = false;
+            if (sequence == _browseSequence)
+            {
+                IsTableLoading = false;
+            }
+
+            if (ReferenceEquals(_browseCts, cts))
+            {
+                _browseCts = null;
+            }
+
+            cts.Dispose();
         }
+    }
+
+    /// <summary>
+    /// One line on where the grid's numbers come from. The scan is named (time, source, result) because
+    /// the alternative — the all-history view — gives very different, inflated, install counts.
+    /// </summary>
+    private static string DescribeScan(InventoryScan? scan)
+    {
+        if (scan is null)
+        {
+            return "inventory.db has not recorded a scan yet, so there is nothing to roll up.";
+        }
+
+        var stamp = scan.ScannedAt is { } at
+            ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+            : scan.ScannedAtRaw;
+        var what = $"{stamp} ({scan.Source}, {scan.Result})";
+
+        return scan.IsFullScan
+            ? $"Showing the latest full scan: {what}. Install counts are what that scan found — the ai_components_v " +
+              "view in the table browser adds up every scan ever recorded, which inflates them."
+            : $"No completed scheduled or startup scan is recorded, so this is the newest scan of any kind: {what}. " +
+              "Install counts are what that scan found, not history totals.";
     }
 
     private bool FilterComponent(object obj)
@@ -372,13 +567,16 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         ComponentsView.SortDescriptions.Add(new SortDescription(nameof(InventoryComponentRow.Name), ListSortDirection.Ascending));
     }
 
-    private string BuildStatusMessage()
+    private string BuildStatusMessage(InventoryScan? scan)
     {
+        if (_allComponents.Count == 0)
+        {
+            return scan is null ? "No scans recorded yet." : "The latest scan found no components.";
+        }
+
         var vendors = _allComponents.Select(c => c.VendorDisplay).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-        return _allComponents.Count == 0
-            ? "No components recorded yet."
-            : $"{_allComponents.Count} component{(_allComponents.Count == 1 ? string.Empty : "s")} across " +
-              $"{vendors} vendor{(vendors == 1 ? string.Empty : "s")}.";
+        return $"{_allComponents.Count} component{(_allComponents.Count == 1 ? string.Empty : "s")} across " +
+               $"{vendors} vendor{(vendors == 1 ? string.Empty : "s")}.";
     }
 
     private static InventoryComponentRow MapComponentRow(IReadOnlyDictionary<string, object?> raw)

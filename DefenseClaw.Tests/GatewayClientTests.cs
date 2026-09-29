@@ -188,6 +188,142 @@ public class GatewayClientTests
         Assert.Empty((await client.GetEnforceAllowedAsync()).Value!);
     }
 
+    // ----------------------------------------------------------------------------------
+    // Go nil slices. The sidecar is written in Go, and `encoding/json` writes a nil slice as
+    // `null`, not `[]` (Fixtures/health.json carries "discovered":null). System.Text.Json calls
+    // the setter with null after the property initializer ran, so a `= Array.Empty<T>()` default
+    // was overwritten and the poll loop's foreach over Connectors threw a NullReferenceException.
+    // ----------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_bare_null_list_body_is_an_empty_list_not_an_error()
+    {
+        // Go's encoding/json writes a nil slice as `null`; for a list endpoint that is "none".
+        var (client, _) = Build(h =>
+        {
+            h.Map("/alerts", "null");
+            h.Map("/enforce/blocked", "null");
+        });
+
+        var alerts = await client.GetAlertsAsync();
+        var blocked = await client.GetEnforceBlockedAsync();
+
+        Assert.True(alerts.IsOk);
+        Assert.Empty(alerts.Value!);
+        Assert.True(blocked.IsOk);
+        Assert.Empty(blocked.Value!);
+    }
+
+    [Fact]
+    public async Task A_bare_null_object_body_is_still_an_error()
+    {
+        var (client, _) = Build(h => h.Map("/health", "null"));
+
+        var health = await client.GetHealthAsync();
+
+        Assert.False(health.IsOk);
+    }
+
+    [Fact]
+    public async Task Null_connectors_in_health_deserialize_to_an_empty_list()
+    {
+        var (client, _) = Build(h => h.Map("/health", """{"uptime_ms":5,"connectors":null}"""));
+
+        var health = (await client.GetHealthAsync()).Value!;
+
+        // Assert.Empty enumerates it, which is the operation that used to throw: the monitor and
+        // the Overview panel foreach over this list on every poll.
+        Assert.NotNull(health.Connectors);
+        Assert.Empty(health.Connectors);
+    }
+
+    [Fact]
+    public async Task Null_connector_modes_and_telemetry_in_status_deserialize_to_empty_lists()
+    {
+        var (client, _) = Build(h => h.Map(
+            "/status",
+            """
+            {
+              "connector_mode": { "connector": "claudecode", "telemetry": null },
+              "connector_modes": null
+            }
+            """));
+
+        var status = (await client.GetStatusAsync()).Value!;
+
+        Assert.NotNull(status.ConnectorModes);
+        Assert.Empty(status.ConnectorModes);
+        Assert.NotNull(status.ConnectorMode);
+        Assert.NotNull(status.ConnectorMode.Telemetry);
+        Assert.Empty(status.ConnectorMode.Telemetry);
+    }
+
+    [Fact]
+    public async Task Null_telemetry_inside_a_connector_mode_entry_is_an_empty_list()
+    {
+        var (client, _) = Build(h => h.Map(
+            "/status",
+            """{ "connector_modes": [ { "connector": "claudecode", "telemetry": null } ] }"""));
+
+        var status = (await client.GetStatusAsync()).Value!;
+
+        var mode = Assert.Single(status.ConnectorModes);
+        Assert.Equal("claudecode", mode.Connector);
+        Assert.Empty(mode.Telemetry);
+    }
+
+    [Fact]
+    public async Task Absent_list_properties_are_empty_lists_too()
+    {
+        var (client, _) = Build(h => h
+            .Map("/health", "{}")
+            .Map("/status", "{}"));
+
+        var health = (await client.GetHealthAsync()).Value!;
+        var status = (await client.GetStatusAsync()).Value!;
+
+        Assert.Empty(health.Connectors);
+        Assert.Empty(status.ConnectorModes);
+    }
+
+    [Fact]
+    public async Task Null_elements_inside_a_list_are_dropped()
+    {
+        // A Go slice of pointers can carry nil entries; a consumer reading connector.Name off one
+        // would throw exactly like the null list did.
+        var (client, _) = Build(h => h
+            .Map("/health", """{ "connectors": [ null, { "name": "claudecode" }, null ] }""")
+            .Map("/status", """{ "connector_modes": [ null, { "connector": "claudecode" } ] }"""));
+
+        var health = (await client.GetHealthAsync()).Value!;
+        var status = (await client.GetStatusAsync()).Value!;
+
+        Assert.Equal("claudecode", Assert.Single(health.Connectors).Name);
+        Assert.Equal("claudecode", Assert.Single(status.ConnectorModes).Connector);
+    }
+
+    [Fact]
+    public async Task Populated_lists_are_passed_through_untouched()
+    {
+        var (client, _) = Build(h => h.MapFixture("/status", FixtureFiles.Status));
+
+        var status = (await client.GetStatusAsync()).Value!;
+
+        Assert.Equal(new[] { "hooks", "otel" }, status.ConnectorMode!.Telemetry);
+        Assert.Single(status.ConnectorModes);
+    }
+
+    [Fact]
+    public async Task A_null_alert_id_is_an_empty_string()
+    {
+        var (client, _) = Build(h => h.Map("/alerts", """[ { "id": null, "severity": "HIGH" } ]"""));
+
+        var alert = Assert.Single((await client.GetAlertsAsync()).Value!);
+
+        Assert.Equal(string.Empty, alert.Id);
+        Assert.Equal("HIGH", alert.Severity);
+    }
+
     [Fact]
     public async Task Not_connected_error_payload_maps_to_NotConnected()
     {

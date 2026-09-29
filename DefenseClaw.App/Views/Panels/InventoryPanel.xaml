@@ -77,10 +77,17 @@
                         Message="{Binding ErrorMessage}"
                         Severity="Warning" />
 
-            <ui:InfoBar Title="No ai_components_v view in this install"
+            <ui:InfoBar Margin="0,0,0,6"
+                        Title="Where these numbers come from"
+                        IsClosable="False"
+                        IsOpen="{Binding HasScanNote}"
+                        Message="{Binding ScanNote}"
+                        Severity="Informational" />
+
+            <ui:InfoBar Title="No component rollup for this inventory.db"
                         IsClosable="False"
                         IsOpen="{Binding UsingFallbackView}"
-                        Message="This inventory.db does not expose the ai_components_v rollup view — nothing to group above. Use the table browser at the bottom to inspect whatever tables this install does have."
+                        Message="This inventory.db does not have the scan tables the rollup is built from (ai_scans, ai_signals and ai_confidence_snapshots, with their scan_id columns) — nothing to group above. Use the table browser at the bottom to inspect whatever tables this install does have."
                         Severity="Informational" />
         </StackPanel>
 
@@ -215,6 +222,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="320" />
                 </Grid.RowDefinitions>
 
@@ -237,15 +245,28 @@
                     <TextBlock Grid.Column="2"
                                Margin="14,0,0,0"
                                VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}">
-                        <Run Text="{Binding SelectedTable.Kind, Mode=OneWay}" />
-                        <Run Text=" · " />
-                        <Run Text="{Binding SelectedTable.RowCountDisplay, Mode=OneWay}" />
-                        <Run Text=" rows (first 200 shown)" />
-                    </TextBlock>
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="{Binding SelectedTable.Summary, Mode=OneWay}" />
                 </Grid>
 
-                <ui:InfoBar Grid.Row="1"
+                <!-- Cost warning for a selected view, with the explicit "load anyway" (ai_components_v aggregates every scan: 15-20 s). -->
+                <StackPanel Grid.Row="1">
+                    <ui:InfoBar Margin="0,0,0,8"
+                                Title="Slow to open"
+                                IsClosable="False"
+                                IsOpen="{Binding HasTableBrowserNote}"
+                                Message="{Binding TableBrowserNote}"
+                                Severity="Warning" />
+                    <ui:Button Margin="0,0,0,8"
+                               Padding="10,4,10,4"
+                               HorizontalAlignment="Left"
+                               Content="Load this view anyway"
+                               Command="{Binding LoadSelectedViewCommand}"
+                               Visibility="{Binding IsViewLoadPending, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+
+                <ui:InfoBar Grid.Row="2"
                             Margin="0,0,0,8"
                             Title="Could not browse table"
                             IsClosable="False"
@@ -253,7 +274,7 @@
                             Message="{Binding TableBrowserError}"
                             Severity="Warning" />
 
-                <Grid Grid.Row="2">
+                <Grid Grid.Row="3">
                     <ui:DataGrid AutoGenerateColumns="True"
                                  IsReadOnly="True"
                                  GridLinesVisibility="Horizontal"

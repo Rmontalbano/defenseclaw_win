@@ -27,6 +27,18 @@ namespace DefenseClaw.App.ViewModels;
 /// fire on a background thread, so every handler marshals through
 /// <see cref="Application.Current"/>'s dispatcher.
 /// </para>
+/// <para>
+/// <b>Buffering never stops; projecting does.</b> The tailers run for the life of the process
+/// so no line is ever lost, and every arriving line goes into its source's buffer whether or
+/// not the panel is on screen. What is deferred while the panel is inactive (see the
+/// activation contract on <see cref="PanelViewModelBase"/>) is the <i>projection</i> - adding
+/// to <see cref="DisplayedLines"/>, re-deriving the component checkboxes and the status text -
+/// which is pure UI cost when nobody is looking, and on a chatty gateway is a batch of list
+/// inserts several times a second. The panel is marked stale instead, and
+/// <see cref="OnActivated"/> re-projects the buffer once, so what is seen on return is
+/// exactly what a panel that had been live all along would show. The buffer's own trim
+/// (<see cref="MaxBufferedLines"/>) is unchanged and bounds that catch-up.
+/// </para>
 /// </summary>
 public sealed partial class LogsPanelViewModel : PanelViewModelBase
 {
@@ -37,6 +49,21 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
     private readonly SourceState _gateway;
     private readonly SourceState _watchdog;
     private List<LogEntry> _selectedEntries = new();
+
+    /// <summary>
+    /// True once <see cref="InitializeAsync"/> has seeded both buffers and attached the
+    /// handlers, on the UI thread. Until then the buffers are still being filled on a
+    /// background thread, so <see cref="OnActivated"/> (which may run first on the very first
+    /// visit) must not read them.
+    /// </summary>
+    private bool _seeded;
+
+    /// <summary>
+    /// True when lines arrived, or a rotation cleared the buffer, while the panel was inactive
+    /// and <see cref="DisplayedLines"/> therefore no longer mirrors the buffer. Cleared by the
+    /// next projection.
+    /// </summary>
+    private bool _projectionStale;
 
     [ObservableProperty]
     private string _activeSource = "Gateway";
@@ -100,6 +127,28 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
         // toggle never has to wait on a fresh watcher to spin up.
         _gateway.Tailer.StartWatching();
         _watchdog.Tailer.StartWatching();
+
+        RebuildComponentFilters();
+        ApplyFilters();
+
+        // Last, and on the UI thread with nothing awaited since the handlers were attached:
+        // from here on the buffers are only touched from the UI thread, so OnActivated may
+        // read them.
+        _seeded = true;
+    }
+
+    /// <summary>
+    /// The catch-up half of the deferral described on the type: if anything arrived (or the
+    /// file rotated) while the panel was away, re-project the buffer once now. A no-op before
+    /// <see cref="InitializeAsync"/> has finished - on the first visit activation can run
+    /// first, and the initial projection is InitializeAsync's own.
+    /// </summary>
+    protected override void OnActivated()
+    {
+        if (!_seeded || !_projectionStale)
+        {
+            return;
+        }
 
         RebuildComponentFilters();
         ApplyFilters();
@@ -208,7 +257,27 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
 
         dispatcher.BeginInvoke(() =>
         {
-            var isActive = ReferenceEquals(state, ActiveState);
+            // Nobody is looking: keep the line (the buffer is the record, and OnActivated
+            // re-projects from it) but do none of the UI work. IsActive is read here, when the
+            // queued call runs, not when the batch was received.
+            if (!IsActive)
+            {
+                foreach (var line in lines)
+                {
+                    Append(state, line);
+                }
+
+                // Only the source on screen has a projection to fall behind; the other one is
+                // rebuilt in full when the operator switches to it.
+                if (ReferenceEquals(state, ActiveState))
+                {
+                    _projectionStale = true;
+                }
+
+                return;
+            }
+
+            var isActiveSource = ReferenceEquals(state, ActiveState);
             var componentsChanged = false;
 
             foreach (var line in lines)
@@ -221,13 +290,13 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
                 // Append rather than rebuild: a full rebuild would reset the scroll offset
                 // and the selection on every poll, which is exactly what a paused tail must
                 // not do while the operator is reading back through it.
-                if (isActive && Passes(line))
+                if (isActiveSource && Passes(line))
                 {
                     DisplayedLines.Add(new LogEntry(line));
                 }
             }
 
-            if (!isActive)
+            if (!isActiveSource)
             {
                 return;
             }
@@ -268,8 +337,18 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
 
             if (ReferenceEquals(state, ActiveState))
             {
-                RebuildComponentFilters();
-                ApplyFilters();
+                if (IsActive)
+                {
+                    RebuildComponentFilters();
+                    ApplyFilters();
+                }
+                else
+                {
+                    // The displayed list still holds the old file's lines; OnActivated
+                    // re-projects the (now empty, then refilling) buffer.
+                    _projectionStale = true;
+                }
+
                 ShowRotationNotice = true;
                 RotationNoticeText = $"{Path.GetFileName(state.FilePath)} rotated or was truncated - the buffer was cleared and is replaying from the top of the new file.";
             }
@@ -358,10 +437,15 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
         return needle.Length == 0 || line.Raw.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Rebuilds <see cref="DisplayedLines"/> from the active source's buffer.</summary>
+    /// <summary>
+    /// Rebuilds <see cref="DisplayedLines"/> from the active source's buffer. Every full
+    /// projection - a filter change, a source switch, the activation catch-up - leaves the
+    /// list mirroring the buffer, so it also clears the stale mark.
+    /// </summary>
     private void ApplyFilters()
     {
         var state = ActiveState;
+        _projectionStale = false;
 
         DisplayedLines.Clear();
         foreach (var line in state.Buffer)

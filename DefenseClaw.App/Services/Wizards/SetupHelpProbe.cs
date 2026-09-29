@@ -15,7 +15,8 @@ public sealed record HelpProbeResult(string Text, string? Error)
 }
 
 /// <summary>
-/// Runs <c>defenseclaw setup … --help</c> and caches the text for the life of the process.
+/// Runs <c>defenseclaw setup … --help</c> and caches successful help text until
+/// <see cref="Clear"/> (the hub's Refresh) or the process ends.
 /// <para>
 /// <b>Why this does not go through <see cref="Core.Cli.CliRunner"/>.</b> The runner is the
 /// app's write path: everything it executes lands in the Activity panel, whose contract is
@@ -28,7 +29,22 @@ public sealed record HelpProbeResult(string Text, string? Error)
 /// </para>
 /// <para>
 /// Probes are ~800 ms each on 0.8.7 (Python start-up dominates), so the catalog fans them
-/// out with <see cref="MaxParallelProbes"/> in flight and caches per app run.
+/// out with <see cref="MaxParallelProbes"/> in flight and keeps the results (see below).
+/// </para>
+/// <para>
+/// <b>What is and is not cached.</b> Only a probe that <i>succeeded</i> stays cached. A
+/// failure — "not on PATH", a timeout, a non-zero exit — is an answer about a moment, not
+/// about the CLI: the operator installs or repairs it and presses Refresh, and a cached
+/// failure would make that a no-op for the rest of the process. Failed probes are evicted the
+/// moment they finish, so the next request re-runs them, and <see cref="Clear"/> drops the
+/// successes too.
+/// </para>
+/// <para>
+/// <b>The caller's token never reaches the child.</b> One probe is shared by everyone who
+/// asks for the same screen, so it must not be owned by whichever caller asked first: if that
+/// caller cancelled (a panel closing mid-warm-up), every later reader of the cached task would
+/// inherit a cancellation that was never theirs. The probe runs on its own bounded lifetime
+/// (<see cref="ProbeTimeout"/>); a caller's token only stops <i>that caller</i> waiting.
 /// </para>
 /// </summary>
 public sealed class SetupHelpProbe
@@ -40,7 +56,11 @@ public sealed class SetupHelpProbe
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(30);
 
     private readonly DefenseClawPaths _paths;
-    private readonly ConcurrentDictionary<string, Task<HelpProbeResult>> _cache = new(StringComparer.Ordinal);
+
+    // Lazy, not a bare Task: ConcurrentDictionary.GetOrAdd may run its value factory on several
+    // threads for one key, and here the factory spawns a process. ExecutionAndPublication makes
+    // sure exactly one probe runs per entry no matter how many callers race.
+    private readonly ConcurrentDictionary<string, Lazy<Task<HelpProbeResult>>> _cache = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _throttle = new(MaxParallelProbes, MaxParallelProbes);
 
     public SetupHelpProbe(DefenseClawPaths paths)
@@ -48,22 +68,61 @@ public sealed class SetupHelpProbe
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
     }
 
-    /// <summary>Number of distinct help screens read so far. Surfaced in the hub's footer note.</summary>
+    /// <summary>
+    /// Number of help screens held right now: successful reads plus any still in flight.
+    /// Failed probes are evicted, so this is "read so far", never "attempted". Surfaced in the
+    /// hub's footer note.
+    /// </summary>
     public int CachedProbeCount => _cache.Count;
 
     /// <summary>
-    /// <c>defenseclaw setup <paramref name="path"/> --help</c>, cached by argument path.
-    /// Pass an empty array for the top-level <c>setup --help</c>.
+    /// Forgets every cached help screen so the next <see cref="HelpAsync"/> re-reads the CLI —
+    /// what the hub's "Re-read catalog" means. Probes already running finish and answer the
+    /// callers that started them, but are not re-cached (they were removed with the rest), so
+    /// a stale answer cannot outlive the refresh that asked to forget it.
+    /// </summary>
+    public void Clear() => _cache.Clear();
+
+    /// <summary>
+    /// <c>defenseclaw setup <paramref name="path"/> --help</c>, cached by argument path while it
+    /// keeps succeeding. Pass an empty array for the top-level <c>setup --help</c>.
+    /// <paramref name="cancellationToken"/> only abandons this caller's wait (the returned task
+    /// ends cancelled); the probe itself is shared and runs on.
     /// </summary>
     public Task<HelpProbeResult> HelpAsync(IReadOnlyList<string> path, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(path);
 
         var key = string.Join(' ', path);
-        return _cache.GetOrAdd(key, _ => RunAsync(path, cancellationToken));
+        var candidate = new Lazy<Task<HelpProbeResult>>(
+            () => RunAsync(path),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+
+        var entry = _cache.GetOrAdd(key, candidate);
+        var probe = entry.Value;
+
+        if (ReferenceEquals(entry, candidate))
+        {
+            // Only the caller whose entry was stored watches it, so eviction is attached exactly
+            // once. The pair form of TryRemove removes this very entry and nothing newer: a
+            // Clear() followed by a fresh probe under the same key is left alone.
+            _ = probe.ContinueWith(
+                finished =>
+                {
+                    if (finished.Status != TaskStatus.RanToCompletion || !finished.Result.Succeeded)
+                    {
+                        _ = _cache.TryRemove(new KeyValuePair<string, Lazy<Task<HelpProbeResult>>>(key, entry));
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        return cancellationToken.CanBeCanceled ? probe.WaitAsync(cancellationToken) : probe;
     }
 
-    private async Task<HelpProbeResult> RunAsync(IReadOnlyList<string> path, CancellationToken cancellationToken)
+    private async Task<HelpProbeResult> RunAsync(IReadOnlyList<string> path)
     {
         var executable = _paths.FindExecutable("defenseclaw");
         if (executable is null)
@@ -71,10 +130,10 @@ public sealed class SetupHelpProbe
             return new HelpProbeResult(string.Empty, "defenseclaw is not on PATH or in the installer's bin directory.");
         }
 
-        await _throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _throttle.WaitAsync().ConfigureAwait(false);
         try
         {
-            return await ExecuteAsync(executable, path, cancellationToken).ConfigureAwait(false);
+            return await ExecuteAsync(executable, path, CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {

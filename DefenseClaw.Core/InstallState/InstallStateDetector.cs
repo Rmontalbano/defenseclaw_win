@@ -1,5 +1,6 @@
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
+using DefenseClaw.Core.Gateway.Models;
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
 
@@ -51,6 +52,14 @@ public sealed record InstallStatus
     /// <summary>Raw outcome of the <c>/health</c> probe; null when it was not attempted.</summary>
     public GatewayStatus? HealthProbe { get; init; }
 
+    /// <summary>
+    /// The full <c>/health</c> result the probe got, so the caller does not have to GET it a
+    /// second time. Null exactly when <see cref="HealthProbe"/> is: detection stops before the
+    /// probe when the binaries are missing or the install is uninitialized, and a caller that
+    /// still wants a health answer in those states fetches one itself.
+    /// </summary>
+    public GatewayResult<GatewayHealth>? Health { get; init; }
+
     public int Port { get; init; }
 
     /// <summary>Human-readable explanation for the status banner.</summary>
@@ -62,6 +71,21 @@ public sealed record InstallStatus
 /// <summary>
 /// Composes paths, the gateway probe and the port owner lookup into a single answer for
 /// the app's startup banner and tray icon.
+/// <para>
+/// <b>Which client, which port.</b> The instance-level client passed to the constructor is
+/// only the default. A long-lived host whose <c>gateway.api_port</c> can change (the app
+/// re-reads config.yaml while running) passes the client that is bound to the <i>same</i>
+/// port per call — see <see cref="DetectAsync(int, IGatewayClient, CancellationToken)"/> — so
+/// the port that is inspected for an owner and the port that is probed can never disagree.
+/// </para>
+/// <para>
+/// <b>The port owner is looked up whether or not the port answers</b>, deliberately: the WSL
+/// case this exists to catch is a relay that <i>answers</i> (<c>wslrelay.exe</c> forwards
+/// <c>/health</c> to a gateway inside WSL), so skipping the lookup for a healthy-looking
+/// port would hide exactly that. The lookup is a size query plus a fetch of the
+/// <c>GetExtendedTcpTable</c> listener table per address family (IPv6 only if IPv4 had no
+/// match), and is cheap next to the HTTP probe.
+/// </para>
 /// </summary>
 public sealed class InstallStateDetector
 {
@@ -83,13 +107,28 @@ public sealed class InstallStateDetector
     public Task<InstallStatus> DetectAsync(DefenseClawConfig config, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(config);
-        return DetectAsync(config.Gateway.ApiPort, cancellationToken);
+        return DetectAsync(config.Gateway.ApiPort, _gateway, cancellationToken);
     }
 
-    public async Task<InstallStatus> DetectAsync(
+    /// <summary>Detects on <paramref name="port"/> using the constructor's gateway client.</summary>
+    public Task<InstallStatus> DetectAsync(
         int port = GatewaySection.DefaultApiPort,
+        CancellationToken cancellationToken = default) =>
+        DetectAsync(port, _gateway, cancellationToken);
+
+    /// <summary>
+    /// Detects on <paramref name="port"/>, probing <c>/health</c> through
+    /// <paramref name="gateway"/>, which the caller guarantees is bound to that same port.
+    /// The probe's full result comes back in <see cref="InstallStatus.Health"/>, so a poller
+    /// needs one <c>GET /health</c> per cycle instead of two.
+    /// </summary>
+    public async Task<InstallStatus> DetectAsync(
+        int port,
+        IGatewayClient gateway,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(gateway);
+
         var cliPath = _paths.CliPath;
         var gatewayCliPath = _paths.GatewayCliPath;
         var owner = _portInspector.FindListener(port);
@@ -124,7 +163,7 @@ public sealed class InstallStateDetector
             };
         }
 
-        var health = await _gateway.GetHealthAsync(cancellationToken).ConfigureAwait(false);
+        var health = await gateway.GetHealthAsync(cancellationToken).ConfigureAwait(false);
 
         // /health is unauthenticated on 0.8.7, so anything other than "unreachable"
         // means something is listening and answering.
@@ -139,6 +178,7 @@ public sealed class InstallStateDetector
             PortOwner = owner,
             WslGatewayDetected = wslDetected,
             HealthProbe = health.Status,
+            Health = health,
             BinaryVersion = health.Value?.Provenance?.BinaryVersion,
             Detail = BuildDetail(running, port, owner, wslDetected, health),
         };
@@ -149,7 +189,7 @@ public sealed class InstallStateDetector
         int port,
         PortOwner? owner,
         bool wslDetected,
-        GatewayResult<Gateway.Models.GatewayHealth> health)
+        GatewayResult<GatewayHealth> health)
     {
         if (wslDetected)
         {

@@ -173,6 +173,19 @@ public static class ConfigFormBuilder
     {
         var (kind, value) = ClassifyScalar(key, scalar);
         var (isEditable, reason) = ProbeScalar(document, path);
+
+        // A plain (unquoted) effective scalar that is not a bool or an int but still reads as
+        // a non-string — a float, "null"/"yes", a date — would be written back through the
+        // string path, which quotes it ('0.85'), silently changing its YAML type. Refuse the
+        // edit instead; RAW keeps the type intact.
+        if (isEditable &&
+            kind == FormFieldKind.String &&
+            scalar.Style == ScalarStyle.Plain &&
+            YamlSectionEditor.LooksLikeNonStringPlainScalar(scalar.Value ?? string.Empty))
+        {
+            (isEditable, reason) = (false, "This value is a number, date or null/yes/no word rather than a string — edit it in the RAW tab so its type is preserved.");
+        }
+
         var dotted = string.Join('.', path);
 
         group.Fields.Add(new FormField(key, Humanize(key), dotted, kind, value, isEditable, reason, onFieldCommitted));
@@ -247,6 +260,11 @@ public static class ConfigFormBuilder
             return (false, "This key appears more than once in config.yaml — edit it in the RAW tab.");
         }
 
+        if (lookup.Unsupported)
+        {
+            return (false, "This value has a trailing comment, is a block scalar/anchor/alias, or continues on the next line — edit it in the RAW tab.");
+        }
+
         return (true, null);
     }
 
@@ -267,6 +285,11 @@ public static class ConfigFormBuilder
         if (lookup.Ambiguous)
         {
             return (false, "This key appears more than once in config.yaml — edit it in the RAW tab.");
+        }
+
+        if (lookup.Unsupported)
+        {
+            return (false, "This list has comments, nested or non-scalar items, or other content a rewrite could corrupt — edit it in the RAW tab.");
         }
 
         return (true, null);

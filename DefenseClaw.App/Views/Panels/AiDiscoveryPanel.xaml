@@ -45,6 +45,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <ui:TextBox Grid.Column="0"
@@ -71,10 +72,19 @@
                        Command="{Binding RefreshCommand}" />
 
             <ui:Button Grid.Column="4"
+                       Margin="0,0,8,0"
+                       Padding="10,4,10,4"
+                       Content="Re-detect agents…"
+                       ToolTip="defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards."
+                       Command="{Binding RefreshConnectorsCommand}"
+                       IsEnabled="{Binding NotRunningDiscover}" />
+
+            <ui:Button Grid.Column="5"
                        Padding="10,4,10,4"
                        Appearance="Caution"
-                       Content="Run agent discover…"
-                       Command="{Binding RunDiscoverCommand}"
+                       Content="Run AI discovery scan…"
+                       ToolTip="defenseclaw agent discovery scan: asks the running sidecar for one immediate AI discovery scan, which is what the component cards read."
+                       Command="{Binding RunScanCommand}"
                        IsEnabled="{Binding NotRunningDiscover}" />
         </Grid>
 
@@ -142,7 +152,7 @@
                 <TextBlock Margin="0,10,0,10"
                            HorizontalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="No AI components discovered yet — run agent discovery above once DefenseClaw has scanned this machine."
+                           Text="No AI components discovered yet — run an AI discovery scan above, or wait for the gateway's next scheduled one."
                            Visibility="{Binding HasNoComponents, Converter={StaticResource BoolToVisibility}}" />
 
                 <!-- Sources section -->

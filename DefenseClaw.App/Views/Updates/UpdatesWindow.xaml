@@ -75,12 +75,26 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <ui:TitleBar Grid.Row="0" Title="DefenseClaw Updates" />
 
-        <ScrollViewer Grid.Row="1" Margin="24,4,24,16" VerticalScrollBarVisibility="Auto">
+        <!--
+            Pinned above the scrolling content (not inside it) so it is on screen whenever the window
+            is: while an upgrade run is in flight UpdatesWindow.OnClosing refuses to close, and this is
+            where the operator learns why. Collapsed (zero height) the rest of the time.
+        -->
+        <ui:InfoBar Grid.Row="1"
+                    Margin="24,4,24,0"
+                    IsClosable="False"
+                    Severity="Warning"
+                    Title="Upgrade in progress — this window stays open until it finishes"
+                    IsOpen="{Binding Upgrade.IsCloseBlocked, Mode=OneWay}"
+                    Message="{Binding Upgrade.CloseBlockedNotice, Mode=OneWay}" />
+
+        <ScrollViewer Grid.Row="2" Margin="24,4,24,16" VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
                 <ui:InfoBar Margin="0,0,0,14"
@@ -692,6 +706,7 @@
             what executes.
         -->
         <Grid Grid.Row="1"
+              Grid.RowSpan="2"
               Background="#B0000000"
               DataContext="{Binding Upgrade}"
               Visibility="{Binding IsConfirmVisible, Converter={StaticResource BoolToVisibility}}">

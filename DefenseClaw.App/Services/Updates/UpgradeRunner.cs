@@ -1059,8 +1059,20 @@ public sealed class UpgradeRunner
 
         try
         {
+            // Opted out of both of CliRunner's process-lifecycle guards, on both channels:
+            //  - No timeout. The 270 MB Setup installer and the ~2900-line resolver
+            //    legitimately run for minutes with almost no output, and a timeout here would
+            //    be a kill signal aimed at an installer that is midway through replacing this
+            //    app's own binaries.
+            //  - Survives shutdown. Exiting the tray must not kill msiexec/Setup mid-flight;
+            //    a half-applied install is strictly worse than one that finishes after the app
+            //    has gone. The run simply carries on unsupervised.
+            // The caller's token is still honoured — that is an explicit act, not an accident of
+            // the app exiting — but UpgradeSectionViewModel passes CancellationToken.None here, so
+            // neither closing the Updates window nor disposing its view-model can end the run. Both
+            // used to cancel that token, and it was the only remaining way to kill an install midway.
             var invocation = await _cli
-                .RunExecutableAsync(executable, argv, stdinSecret: null, cancellationToken)
+                .RunExecutableAsync(executable, argv, stdinSecret: null, cancellationToken, CliRunOptions.Installer)
                 .ConfigureAwait(false);
 
             return new UpgradeRunResult

@@ -101,6 +101,132 @@ public class DefenseClawPathsTests
             candidates.IndexOf(Path.Combine(FakeBin, "defenseclaw.exe")));
     }
 
+    /// <summary>A clock the test moves by hand; timestamps are plain ticks.</summary>
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
+
+    [Fact]
+    public void A_cached_hit_is_revalidated_with_one_probe_instead_of_walking_path()
+    {
+        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var probes = new List<string>();
+        var paths = new DefenseClawPaths(
+            binDirectory: FakeBin,
+            searchPath: new[] { FakePathEntry },
+            fileExists: p =>
+            {
+                probes.Add(p);
+                return p == inBin;
+            },
+            timeProvider: new ManualTimeProvider());
+
+        Assert.Equal(inBin, paths.CliPath);
+        var scanCost = probes.Count;
+        Assert.True(scanCost > 1, "the first lookup should have walked the PATH entry before the bin directory");
+
+        probes.Clear();
+        Assert.Equal(inBin, paths.CliPath);
+        Assert.Equal(new[] { inBin }, probes);
+    }
+
+    [Fact]
+    public void A_cached_path_that_has_disappeared_is_never_returned()
+    {
+        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var exists = true;
+        var paths = new DefenseClawPaths(
+            binDirectory: FakeBin,
+            searchPath: Array.Empty<string>(),
+            fileExists: p => exists && p == inBin,
+            timeProvider: new ManualTimeProvider());
+
+        Assert.Equal(inBin, paths.CliPath);
+
+        exists = false;
+        Assert.Null(paths.CliPath);
+    }
+
+    [Fact]
+    public void A_found_lookup_is_rescanned_once_its_lifetime_ends()
+    {
+        var clock = new ManualTimeProvider();
+        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var onPath = Path.Combine(FakePathEntry, "defenseclaw.exe");
+        var pathCopyInstalled = false;
+        var paths = new DefenseClawPaths(
+            binDirectory: FakeBin,
+            searchPath: new[] { FakePathEntry },
+            fileExists: p => p == inBin || (pathCopyInstalled && p == onPath),
+            timeProvider: clock);
+
+        Assert.Equal(inBin, paths.CliPath);
+
+        // A copy earlier on PATH appears. The trusted result stands until the lifetime is up...
+        pathCopyInstalled = true;
+        clock.Advance(DefenseClawPaths.FoundLookupLifetime - TimeSpan.FromSeconds(1));
+        Assert.Equal(inBin, paths.CliPath);
+
+        // ...and PATH precedence is honoured again after it.
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(onPath, paths.CliPath);
+    }
+
+    [Fact]
+    public void A_missing_lookup_is_trusted_briefly_then_retried()
+    {
+        var clock = new ManualTimeProvider();
+        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var installed = false;
+        var probes = 0;
+        var paths = new DefenseClawPaths(
+            binDirectory: FakeBin,
+            searchPath: new[] { FakePathEntry },
+            fileExists: p =>
+            {
+                probes++;
+                return installed && p == inBin;
+            },
+            timeProvider: clock);
+
+        Assert.Null(paths.CliPath);
+        var scanCost = probes;
+
+        installed = true;
+        Assert.Null(paths.CliPath);
+        Assert.Equal(scanCost, probes);
+
+        clock.Advance(DefenseClawPaths.MissingLookupLifetime + TimeSpan.FromSeconds(1));
+        Assert.Equal(inBin, paths.CliPath);
+    }
+
+    [Fact]
+    public void Invalidating_the_cache_makes_a_fresh_install_visible_immediately()
+    {
+        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var installed = false;
+        var paths = new DefenseClawPaths(
+            binDirectory: FakeBin,
+            searchPath: Array.Empty<string>(),
+            fileExists: p => installed && p == inBin,
+            timeProvider: new ManualTimeProvider());
+
+        Assert.Null(paths.CliPath);
+
+        installed = true;
+        Assert.Null(paths.CliPath);
+
+        paths.InvalidateExecutableCache();
+        Assert.Equal(inBin, paths.CliPath);
+    }
+
     [Fact]
     public void IsInitialized_tracks_the_presence_of_config_yaml()
     {

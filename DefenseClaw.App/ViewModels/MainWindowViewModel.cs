@@ -14,6 +14,16 @@ namespace DefenseClaw.App.ViewModels;
 /// <see cref="GatewayMonitor.StateChanged"/>. There is no second source of gateway truth
 /// in the UI.
 /// </para>
+/// <para>
+/// Not a panel, so it is exempt from the activation contract on
+/// <see cref="PanelViewModelBase"/> and stays subscribed while the window is in the tray:
+/// it is a few property assignments, and StateChanged now only fires on a material change,
+/// so there is nothing worth pausing. Everything it shows is in
+/// <see cref="GatewaySnapshot.RendersSameAs"/>'s compared set; nothing here prints uptime or
+/// a poll time. (<c>Apply</c> does test <see cref="GatewaySnapshot.PolledAt"/> against its
+/// unset value, but only to recognise the <see cref="GatewaySnapshot.Initial"/> snapshot, and
+/// the first real poll is always published, so that test can never go stale.)
+/// </para>
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
@@ -138,25 +148,38 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Snapshot = snapshot;
         StateLabel = snapshot.StateLabel;
         StateDetail = snapshot.Detail;
-        StateBrush = new SolidColorBrush(ShieldIconFactory.ColorFor(ShieldIconFactory.StateFor(snapshot)));
+        StateBrush = StateBrushes.For(ShieldIconFactory.StateFor(snapshot));
         ConnectorSummary = snapshot.ConnectorSummary;
         VersionSummary = string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
             ? string.Empty
             : $"DefenseClaw {snapshot.BinaryVersion}";
 
+        // The Initial snapshot carries no alert answer and no "unavailable" reason, so without
+        // the PolledAt test it would render as a confident "0 alerts in the last poll" before
+        // any poll has happened.
         AlertSummary = snapshot.AlertsUnavailable is { Length: > 0 } reason
             ? reason
-            : $"{snapshot.AlertCount} alert{(snapshot.AlertCount == 1 ? string.Empty : "s")} in the last poll" +
-              (snapshot.CriticalAlertCount > 0 ? $" · {snapshot.CriticalAlertCount} CRITICAL" : string.Empty);
+            : snapshot.PolledAt == DateTimeOffset.MinValue
+                ? "Alerts: —"
+                : $"{snapshot.AlertCount} alert{(snapshot.AlertCount == 1 ? string.Empty : "s")} in the last poll" +
+                  (snapshot.CriticalAlertCount > 0 ? $" · {snapshot.CriticalAlertCount} CRITICAL" : string.Empty);
 
-        // Unreachable sidecar: SQLite reads and the log tail still work, so say what still
-        // works rather than just what broke.
+        // The banner covers three different situations, and each gets its own words: the
+        // sidecar is not answering, it answered but not cleanly (IsDegraded includes both), or
+        // there is no install at all. SQLite reads and the log tail still work when there is
+        // one, so say what still works rather than just what broke - but not when nothing is
+        // installed, where there is nothing to say still works.
         ShowDegradedBanner = snapshot.IsDegraded;
-        DegradedTitle = snapshot.State == AppGatewayState.NotInstalled
-            ? "DefenseClaw was not found"
-            : "Degraded mode — the gateway is not answering";
-        DegradedMessage = snapshot.Detail +
-            " The audit database and the log tail still work, so Audit, Logs and Activity stay usable.";
+        DegradedTitle = snapshot.State switch
+        {
+            AppGatewayState.NotInstalled => "DefenseClaw was not found",
+            AppGatewayState.Degraded => "Degraded mode — the gateway answered, but not cleanly",
+            _ => "Degraded mode — the gateway is not answering",
+        };
+        DegradedMessage = snapshot.State == AppGatewayState.NotInstalled
+            ? snapshot.Detail
+            : snapshot.Detail +
+              " The audit database and the log tail still work, so Audit, Logs and Activity stay usable.";
 
         ShowWslBanner = snapshot.WslGatewayDetected;
         WslMessage = snapshot.PortOwner is { } owner
@@ -173,5 +196,37 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         ConfigErrorMessage = _services.ConfigLoadError ?? string.Empty;
         ShowConfigErrorBanner = ConfigErrorMessage.Length > 0;
+    }
+}
+
+/// <summary>
+/// The status-dot brush per <see cref="ShieldState"/>, allocated once and frozen. The dot's
+/// colour only ever takes one of four values, but the view-models used to build a new
+/// <see cref="SolidColorBrush"/> for it on every snapshot: a fresh unfrozen
+/// <see cref="Freezable"/> per poll per view-model, and — because each was a new reference — a
+/// guaranteed <c>PropertyChanged</c> and Ellipse re-render even when the colour had not
+/// moved. A shared, frozen, reference-stable brush makes the generated property setter's
+/// equality check suppress all of that, and frozen brushes are safe to share across the
+/// shell's view-models (and to read off the UI thread).
+/// </summary>
+internal static class StateBrushes
+{
+    private static readonly Dictionary<ShieldState, Brush> Cache = Build();
+
+    /// <summary>The shared frozen brush for <paramref name="state"/>; never null.</summary>
+    public static Brush For(ShieldState state) =>
+        Cache.TryGetValue(state, out var brush) ? brush : Cache[ShieldState.Stopped];
+
+    private static Dictionary<ShieldState, Brush> Build()
+    {
+        var cache = new Dictionary<ShieldState, Brush>();
+        foreach (var state in Enum.GetValues<ShieldState>())
+        {
+            var brush = new SolidColorBrush(ShieldIconFactory.ColorFor(state));
+            brush.Freeze();
+            cache[state] = brush;
+        }
+
+        return cache;
     }
 }

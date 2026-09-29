@@ -345,6 +345,18 @@
 
         <!-- Banners -->
         <StackPanel Grid.Row="1" Margin="16,10,16,0">
+            <!--
+                A failed *read* of config.yaml (locked, permissions) — distinct from a parse
+                error. Save and FORM stay disabled until Reload succeeds, so the empty editor
+                below can never be mistaken for, or saved over, the real file.
+            -->
+            <ui:InfoBar Margin="0,0,0,6"
+                        IsClosable="False"
+                        IsOpen="{Binding LoadError, Converter={StaticResource StringHasValue}, FallbackValue=False}"
+                        Message="{Binding LoadError}"
+                        Severity="Error"
+                        Title="config.yaml could not be loaded — Save is disabled until Reload succeeds" />
+
             <ui:InfoBar Margin="0,0,0,6"
                         IsClosable="False"
                         IsOpen="{Binding ParseError, Converter={StaticResource StringHasValue}, FallbackValue=False}"
@@ -442,6 +454,7 @@
                     <avalonEdit:TextEditor x:Name="RawEditor"
                                            FontFamily="Cascadia Mono, Consolas"
                                            FontSize="13"
+                                           IsReadOnly="{Binding LoadFailed, Mode=OneWay}"
                                            ShowLineNumbers="True"
                                            WordWrap="False" />
                 </Border>
@@ -449,7 +462,20 @@
             <TabItem x:Name="FormTabItem" Header="Form">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="4,10,4,10">
-                        <ItemsControl ItemsSource="{Binding Sections}" ItemTemplate="{StaticResource SectionTemplate}" />
+                        <!--
+                            Shown when the RAW tab holds YAML that does not parse: the tree below
+                            is the last version that did, so it is disabled (IsFormEditable) and
+                            FORM edits are refused until RAW parses again.
+                        -->
+                        <ui:InfoBar Margin="0,0,0,10"
+                                    IsClosable="False"
+                                    IsOpen="{Binding ShowFormStaleNotice}"
+                                    Message="The RAW tab has changes that do not parse as YAML, so this view is out of date and read-only. Fix the YAML in RAW, then switch back."
+                                    Severity="Warning"
+                                    Title="FORM is out of date" />
+                        <ItemsControl IsEnabled="{Binding IsFormEditable}"
+                                      ItemsSource="{Binding Sections}"
+                                      ItemTemplate="{StaticResource SectionTemplate}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

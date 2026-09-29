@@ -18,10 +18,25 @@ namespace DefenseClaw.App.ViewModels;
 /// The dashboard: the TUI's boxes — What Needs Attention, Services, Scanners,
 /// Enforcement, Connectors — plus severity tiles counted straight out of the audit DB.
 /// <para>
-/// <b>Two clocks.</b> Everything gateway-derived is pushed by
-/// <see cref="GatewayMonitor.StateChanged"/> and re-rendered on every poll; the audit
-/// counts and the enforcement lists are far more expensive, so they refresh on a
-/// <see cref="DataRefreshInterval"/> floor and on demand.
+/// <b>Two clocks.</b> Everything gateway-derived is re-derived on every poll; the audit
+/// counts, the enforcement lists and the scanner-path probes are far more expensive, so they
+/// refresh on a <see cref="DataRefreshInterval"/> floor and on demand.
+/// </para>
+/// <para>
+/// <b>Only while it is being looked at.</b> The panel listens to
+/// <see cref="GatewayMonitor.PollCompleted"/> — not StateChanged, because what it prints
+/// (uptime, connector counters, last-activity ages) is exactly what StateChanged ignores —
+/// and only between <see cref="OnActivated"/> and <see cref="OnDeactivated"/>. Hidden in the
+/// tray it does no work at all; on the way back it re-derives everything from
+/// <c>Monitor.Current</c> once, and refreshes the expensive data if it is past its floor.
+/// </para>
+/// <para>
+/// <b>Rows are merged, not rebuilt.</b> Each poll produces the desired rows and
+/// <see cref="PanelViewModelBase.SyncCollection{T}"/> reconciles the bound collections with
+/// them by key. A row whose content did not change keeps its visuals — the scroll position,
+/// and a selection inside the copyable remediation text, used to be destroyed every five
+/// seconds by a clear-and-refill — and the two connector fields that tick under a stable
+/// row (counters, last-activity age) are updated in place.
 /// </para>
 /// <para>
 /// <b>Disabled is not broken.</b> On a healthy standalone box <c>/health</c> reports
@@ -43,12 +58,30 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     private DateTimeOffset _lastDataRefresh = DateTimeOffset.MinValue;
 
     /// <summary>
+    /// Where the scanners were last found. <c>DefenseClawPaths.FindExecutable</c> keeps only a
+    /// short-lived cache (60 s for hits, 10 s for misses), and the Scanners box used to do two
+    /// lookups on every poll. They are re-probed on the <see cref="DataRefreshInterval"/> floor
+    /// and on a manual refresh instead; an installed-or-not answer does not change between polls.
+    /// </summary>
+    private string? _skillScannerPath;
+    private string? _mcpScannerPath;
+    private DateTimeOffset _scannerPathsProbedAt = DateTimeOffset.MinValue;
+
+    /// <summary>
     /// Runtime enforcement posture per connector, from <c>/status</c>. Kept here rather
     /// than in <see cref="GatewaySnapshot"/> because the monitor only polls <c>/health</c>
     /// and <c>/alerts</c>; this rides the slow refresh, never its own timer.
     /// </summary>
     private IReadOnlyDictionary<string, ConnectorMode> _connectorModes =
         new Dictionary<string, ConnectorMode>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True once a <c>/status</c> read has failed and no later one has succeeded. The runtime
+    /// hook contract is then unknowable, so <see cref="_connectorModes"/> is emptied rather than
+    /// left holding the last answer, and a connector row that can only show config.yaml's
+    /// stated intent says so instead of presenting it as what the hook is doing.
+    /// </summary>
+    private bool _statusUnavailable;
 
     [ObservableProperty]
     private string _gatewayHeadline = "Checking…";
@@ -89,9 +122,8 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     public OverviewPanelViewModel(AppServices services)
         : base(services)
     {
-        // Reading the cached snapshot is not I/O; the poll that produced it already ran.
-        Services.Monitor.StateChanged += OnStateChanged;
-        Services.ConfigReloaded += OnConfigReloaded;
+        // Reading the cached snapshot is not I/O; the poll that produced it already ran. No
+        // subscriptions here: OnActivated attaches them, and OnDeactivated lets go.
         DataDirectoryText = Services.Paths.DataDirectory;
         Apply(Services.Monitor.Current);
     }
@@ -122,10 +154,36 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         await RefreshDataAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Attaches to the poll and config-reload notifications, then catches up once: the panel
+    /// may have been off screen for hours, so everything gateway-derived is re-derived from
+    /// the monitor's current snapshot (a no-op merge if nothing moved) and the expensive data
+    /// is refreshed if it is past its floor. A refresh already in flight — the first visit
+    /// overlaps <see cref="InitializeAsync"/> — makes that call a no-op via the
+    /// <c>_refreshing</c> guard.
+    /// </summary>
+    protected override void OnActivated()
+    {
+        Services.Monitor.PollCompleted += OnPollCompleted;
+        Services.ConfigReloaded += OnConfigReloaded;
+
+        Apply(Services.Monitor.Current);
+        RefreshDataIfDue();
+    }
+
+    protected override void OnDeactivated()
+    {
+        Services.Monitor.PollCompleted -= OnPollCompleted;
+        Services.ConfigReloaded -= OnConfigReloaded;
+    }
+
     [RelayCommand]
     private async Task RefreshAsync()
     {
         var snapshot = await Services.Monitor.RefreshAsync();
+
+        // "Refresh" means look again, including whether the scanners are installed.
+        _scannerPathsProbedAt = DateTimeOffset.MinValue;
         Apply(snapshot);
         _lastDataRefresh = DateTimeOffset.MinValue;
         await RefreshDataAsync(CancellationToken.None);
@@ -134,17 +192,22 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// <summary>
     /// The reload originates on the config watcher's thread, but AppServices marshals
     /// <c>ConfigReloaded</c> onto the Dispatcher before raising it, so — as with
-    /// <see cref="OnStateChanged"/> — this is the UI thread and <see cref="Attention"/>
-    /// can be rebuilt directly.
+    /// <see cref="OnPollCompleted"/> — this is the UI thread and <see cref="Attention"/>
+    /// can be merged directly. Only attached while active; a reload that lands while the
+    /// panel is away is picked up by the catch-up in <see cref="OnActivated"/>.
     /// </summary>
     private void OnConfigReloaded(object? sender, EventArgs e) => Apply(Services.Monitor.Current);
 
-    private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e)
+    private void OnPollCompleted(object? sender, GatewaySnapshotEventArgs e)
     {
         // GatewayMonitor posts on the UI SynchronizationContext, so this is already the
         // UI thread and the collections below can be mutated directly.
         Apply(e.Snapshot);
+        RefreshDataIfDue();
+    }
 
+    private void RefreshDataIfDue()
+    {
         if (DateTimeOffset.UtcNow - _lastDataRefresh >= DataRefreshInterval)
         {
             _ = RefreshDataAsync(CancellationToken.None);
@@ -327,16 +390,33 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         if (rows.Count == 0)
         {
-            rows.Add(new AttentionRow
+            if (snapshot.State == AppGatewayState.Unknown)
             {
-                Title = "Nothing needs attention",
-                Detail = "The gateway is healthy, no CRITICAL alerts in the last poll, no fail-mode mismatch, " +
-                         "and settings.json agrees with the gateway on the hook fail mode.",
-                SeverityKey = "Ok",
-            });
+                // Before the first poll nothing has been checked, so "the gateway is healthy" would
+                // be an assertion with no evidence behind it. Only a Running snapshot reaches the
+                // reassurance below: every other state adds its own row above.
+                rows.Add(new AttentionRow
+                {
+                    Title = "Checking the gateway…",
+                    Detail = snapshot.Detail.Length > 0
+                        ? snapshot.Detail
+                        : "The gateway state has not been determined yet.",
+                    SeverityKey = "Info",
+                });
+            }
+            else
+            {
+                rows.Add(new AttentionRow
+                {
+                    Title = "Nothing needs attention",
+                    Detail = "The gateway is healthy, no CRITICAL alerts in the last poll, no fail-mode mismatch, " +
+                             "and settings.json agrees with the gateway on the hook fail mode.",
+                    SeverityKey = "Ok",
+                });
+            }
         }
 
-        Replace(Attention, rows);
+        SyncByEquality(Attention, rows, static row => row.Title);
     }
 
     /// <summary>
@@ -347,7 +427,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     {
         if (health is null)
         {
-            Replace(ServiceRows, Array.Empty<ServiceRow>());
+            SyncByEquality(ServiceRows, Array.Empty<ServiceRow>(), static row => row.Name);
             return;
         }
 
@@ -365,15 +445,33 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             });
         }
 
-        Replace(ServiceRows, rows);
+        SyncByEquality(ServiceRows, rows, static row => row.Name);
+    }
+
+    /// <summary>
+    /// Probes for the two scanner executables at most once per <see cref="DataRefreshInterval"/>;
+    /// see <see cref="_skillScannerPath"/> for why it is not once per poll.
+    /// </summary>
+    private void EnsureScannerPathsProbed()
+    {
+        if (DateTimeOffset.UtcNow - _scannerPathsProbedAt < DataRefreshInterval)
+        {
+            return;
+        }
+
+        _skillScannerPath = Services.Paths.SkillScannerPath;
+        _mcpScannerPath = Services.Paths.McpScannerPath;
+        _scannerPathsProbedAt = DateTimeOffset.UtcNow;
     }
 
     private void BuildScanners(GatewaySnapshot snapshot, GatewayHealth? health)
     {
+        EnsureScannerPathsProbed();
+
         var rows = new List<ScannerRow>
         {
-            ExecutableRow("skill-scanner", Services.Paths.SkillScannerPath),
-            ExecutableRow("mcp-scanner", Services.Paths.McpScannerPath),
+            ExecutableRow("skill-scanner", _skillScannerPath),
+            ExecutableRow("mcp-scanner", _mcpScannerPath),
             new()
             {
                 Name = "codeguard",
@@ -425,7 +523,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             });
         }
 
-        Replace(ScannerRows, rows);
+        SyncByEquality(ScannerRows, rows, static row => row.Name);
     }
 
     /// <summary>
@@ -470,9 +568,10 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             _connectorModes.TryGetValue(name, out var runtime);
 
             // config.yaml is stated intent; /status is what the running hook contract does.
-            // They can disagree — say so rather than picking a winner.
-            var mode = runtime?.GuardrailMode ?? settings?.Mode ?? "—";
-            var failMode = runtime?.HookFailMode ?? settings?.HookFailMode ?? "—";
+            // They can disagree — say so rather than picking a winner. With /status down there
+            // is no runtime side at all, and config.yaml's value is labelled as what it is.
+            var mode = runtime?.GuardrailMode ?? ConfigOnly(settings?.Mode);
+            var failMode = runtime?.HookFailMode ?? ConfigOnly(settings?.HookFailMode);
             var mismatch = (settings?.HasFailModeMismatch ?? false) || (runtime?.HasFailModeMismatch ?? false);
 
             var drift = runtime is not null && settings is not null &&
@@ -511,7 +610,16 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             });
         }
 
-        Replace(ConnectorRows, rows);
+        // Structure is compared, the two fields that tick are not: counters move on nearly
+        // every poll of a busy box and "last activity 5s ago" is a different string every
+        // time, and replacing the row for either would rebuild the whole card. They are
+        // copied onto the row that stays.
+        SyncCollection(
+            ConnectorRows,
+            rows,
+            static row => row.Name,
+            static (existing, wanted) => existing.SameStructureAs(wanted),
+            static (existing, wanted) => existing.RefreshLiveFieldsFrom(wanted));
     }
 
     /// <summary>
@@ -546,7 +654,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         {
             AuditSummary = "No audit database yet";
             AuditNote = $"{Services.Paths.AuditDatabasePath} has not been created. It appears after the first event.";
-            Replace(SeverityTiles, Array.Empty<CountTile>());
+            SyncTiles(SeverityTiles, Array.Empty<CountTile>());
             return;
         }
 
@@ -575,7 +683,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 });
             }
 
-            Replace(SeverityTiles, tiles);
+            SyncTiles(SeverityTiles, tiles);
             AuditSummary = $"{total.ToString("N0", CultureInfo.CurrentCulture)} audit events in the last 24 hours";
             AuditNote = Services.Paths.AuditDatabasePath;
         }
@@ -584,7 +692,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         {
             AuditSummary = "Audit counts unavailable";
             AuditNote = ex.Message;
-            Replace(SeverityTiles, Array.Empty<CountTile>());
+            SyncTiles(SeverityTiles, Array.Empty<CountTile>());
         }
 #pragma warning restore CA1031
     }
@@ -599,7 +707,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             var blockedItems = blocked.ValueOr(Array.Empty<EnforcementEntry>());
             var allowedItems = allowed.ValueOr(Array.Empty<EnforcementEntry>());
 
-            Replace(EnforcementTiles, new[]
+            SyncTiles(EnforcementTiles, new[]
             {
                 new CountTile
                 {
@@ -624,7 +732,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             return;
         }
 
-        Replace(EnforcementTiles, Array.Empty<CountTile>());
+        SyncTiles(EnforcementTiles, Array.Empty<CountTile>());
         EnforcementSummary = "Enforcement lists unavailable";
         EnforcementNote = DescribeUnavailable(blocked.Status, blocked.ErrorMessage);
     }
@@ -638,9 +746,22 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         var result = await Services.Gateway.GetStatusAsync(cancellationToken);
         if (!result.IsOk || result.Value is not { } status)
         {
+            // Not "keep the last answer": a stopped gateway or a 401 leaves the previous
+            // mode / fail-mode on screen as if it were still what the hook does, which is the
+            // one thing this box exists to get right. Rebuild only when that changes what is
+            // shown, so a gateway that stays down costs nothing per refresh.
+            var changed = !_statusUnavailable || _connectorModes.Count > 0;
+            _statusUnavailable = true;
+            _connectorModes = new Dictionary<string, ConnectorMode>(StringComparer.OrdinalIgnoreCase);
+            if (changed)
+            {
+                BuildConnectors(Services.Monitor.Current, Services.Monitor.Current.Health);
+            }
+
             return;
         }
 
+        _statusUnavailable = false;
         var modes = new Dictionary<string, ConnectorMode>(StringComparer.OrdinalIgnoreCase);
         if (status.ConnectorMode is { Connector: { Length: > 0 } primary } primaryMode)
         {
@@ -658,6 +779,19 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         _connectorModes = modes;
         BuildConnectors(Services.Monitor.Current, status.Health ?? Services.Monitor.Current.Health);
     }
+
+    /// <summary>
+    /// The text for a mode field that has no runtime value. Normally that is just config.yaml's
+    /// value (or a dash); after a failed <c>/status</c> read it says the value is only what
+    /// config.yaml states, or that nothing is known.
+    /// </summary>
+    private string ConfigOnly(string? configured) => (configured, _statusUnavailable) switch
+    {
+        (null, true) => "unknown",
+        (null, false) => "—",
+        ({ } value, true) => $"{value} (config.yaml)",
+        ({ } value, false) => value,
+    };
 
     private static bool Equal(string? left, string? right) =>
         string.Equals(left ?? string.Empty, right ?? string.Empty, StringComparison.OrdinalIgnoreCase);
@@ -819,21 +953,28 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     }
 
     /// <summary>
-    /// Rebuilds a bound collection in place. The lists are a handful of rows and the panel
-    /// re-renders on every poll, so a diffing merge would cost more than it saves.
+    /// Merges a list of immutable rows into its bound collection by key: a row whose content
+    /// is unchanged (record equality) keeps its visuals, a changed one is swapped in place,
+    /// and only rows that appeared or vanished are inserted or removed. See
+    /// <see cref="PanelViewModelBase.SyncCollection{T}"/>. The row types are records precisely
+    /// so that "unchanged" is a comparison the compiler writes and cannot forget a field of.
     /// </summary>
-    private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items)
-    {
-        target.Clear();
-        foreach (var item in items)
-        {
-            target.Add(item);
-        }
-    }
+    private static void SyncByEquality<T>(
+        ObservableCollection<T> target,
+        IReadOnlyList<T> desired,
+        Func<T, string> keyOf)
+        where T : class, IEquatable<T> =>
+        SyncCollection(target, desired, keyOf, static (existing, wanted) => existing.Equals(wanted));
+
+    private static void SyncTiles(ObservableCollection<CountTile> target, IReadOnlyList<CountTile> tiles) =>
+        SyncByEquality(target, tiles, static tile => tile.Label);
 }
 
-/// <summary>One line in "What Needs Attention".</summary>
-public sealed class AttentionRow
+/// <summary>
+/// One line in "What Needs Attention". A record so the panel can tell an unchanged row from a
+/// changed one by value (see <c>SyncByEquality</c>); rows are immutable once built.
+/// </summary>
+public sealed record AttentionRow
 {
     public required string Title { get; init; }
 
@@ -848,8 +989,8 @@ public sealed class AttentionRow
     public bool HasCommand => !string.IsNullOrWhiteSpace(Command);
 }
 
-/// <summary>One subsystem row in the Services box.</summary>
-public sealed class ServiceRow
+/// <summary>One subsystem row in the Services box. A record for the same reason as <see cref="AttentionRow"/>.</summary>
+public sealed record ServiceRow
 {
     public required string Name { get; init; }
 
@@ -870,7 +1011,8 @@ public sealed class ServiceRow
     public bool HasDetail => Detail.Length > 0;
 }
 
-public sealed class ScannerRow
+/// <summary>One row in the Scanners box. A record for the same reason as <see cref="AttentionRow"/>.</summary>
+public sealed record ScannerRow
 {
     public required string Name { get; init; }
 
@@ -881,7 +1023,15 @@ public sealed class ScannerRow
     public string Detail { get; init; } = string.Empty;
 }
 
-public sealed class ConnectorRow
+/// <summary>
+/// One connector card. Immutable except for the two fields that legitimately change under a
+/// stable row and would otherwise force the whole card to be rebuilt on every poll:
+/// <see cref="Counters"/> (request/error counts move whenever the agent works) and
+/// <see cref="LastActivity"/> (an age, so a different string every few seconds). Those two
+/// notify; <see cref="SameStructureAs"/> compares everything else, and
+/// <see cref="RefreshLiveFieldsFrom"/> carries the two across onto the row that stays.
+/// </summary>
+public sealed partial class ConnectorRow : ObservableObject
 {
     public required string Name { get; init; }
 
@@ -895,8 +1045,6 @@ public sealed class ConnectorRow
 
     public string Source { get; init; } = string.Empty;
 
-    public string Counters { get; init; } = string.Empty;
-
     public string Surface { get; init; } = string.Empty;
 
     /// <summary>Set when config.yaml and the running hook contract disagree.</summary>
@@ -904,17 +1052,45 @@ public sealed class ConnectorRow
 
     public bool HasDrift => Drift.Length > 0;
 
-    public string LastActivity { get; init; } = string.Empty;
-
     public bool HasWarning { get; init; }
 
     public string WarningText { get; init; } = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCounters))]
+    private string _counters = string.Empty;
+
+    [ObservableProperty]
+    private string _lastActivity = string.Empty;
+
     public bool HasCounters => Counters.Length > 0;
+
+    /// <summary>
+    /// True when every field except the two live ones matches, i.e. when keeping this row
+    /// and refreshing those two shows exactly what <paramref name="other"/> would.
+    /// </summary>
+    internal bool SameStructureAs(ConnectorRow other) =>
+        string.Equals(Name, other.Name, StringComparison.Ordinal) &&
+        string.Equals(StateText, other.StateText, StringComparison.Ordinal) &&
+        string.Equals(StateKey, other.StateKey, StringComparison.Ordinal) &&
+        string.Equals(Mode, other.Mode, StringComparison.Ordinal) &&
+        string.Equals(FailMode, other.FailMode, StringComparison.Ordinal) &&
+        string.Equals(Source, other.Source, StringComparison.Ordinal) &&
+        string.Equals(Surface, other.Surface, StringComparison.Ordinal) &&
+        string.Equals(Drift, other.Drift, StringComparison.Ordinal) &&
+        string.Equals(WarningText, other.WarningText, StringComparison.Ordinal) &&
+        HasWarning == other.HasWarning;
+
+    /// <summary>Copies the two ticking fields; each setter notifies only if the value moved.</summary>
+    internal void RefreshLiveFieldsFrom(ConnectorRow fresh)
+    {
+        Counters = fresh.Counters;
+        LastActivity = fresh.LastActivity;
+    }
 }
 
-/// <summary>A number tile: severity counts and the enforcement rollup.</summary>
-public sealed class CountTile
+/// <summary>A number tile: severity counts and the enforcement rollup. A record for the same reason as <see cref="AttentionRow"/>.</summary>
+public sealed record CountTile
 {
     public required string Label { get; init; }
 

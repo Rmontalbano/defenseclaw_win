@@ -9,6 +9,8 @@ namespace DefenseClaw.Core.Gateway.Models;
 /// </summary>
 public sealed class ConnectorMode
 {
+    private IReadOnlyList<string> _telemetry = Array.Empty<string>();
+
     [JsonPropertyName("connector")]
     public string? Connector { get; init; }
 
@@ -40,8 +42,17 @@ public sealed class ConnectorMode
     [JsonPropertyName("proxy_intercept")]
     public bool ProxyIntercept { get; init; }
 
+    /// <summary>
+    /// Telemetry sinks in use, e.g. <c>hooks</c>, <c>otel</c>. Never null: an empty Go slice
+    /// arrives as <c>"telemetry":null</c>, which the setter turns into an empty list — see
+    /// <see cref="NullSafe"/>.
+    /// </summary>
     [JsonPropertyName("telemetry")]
-    public IReadOnlyList<string> Telemetry { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Telemetry
+    {
+        get => _telemetry;
+        init => _telemetry = NullSafe.ListOrEmpty(value);
+    }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; init; }
@@ -68,11 +79,22 @@ public sealed class RuntimeInfo
 /// <summary>Payload of <c>GET /status</c>. Requires a bearer token on 0.8.7.</summary>
 public sealed class GatewayStatusResponse
 {
+    private IReadOnlyList<ConnectorMode> _connectorModes = Array.Empty<ConnectorMode>();
+
     [JsonPropertyName("connector_mode")]
     public ConnectorMode? ConnectorMode { get; init; }
 
+    /// <summary>
+    /// Enforcement posture per connector. Never null and holds no null element: an empty Go
+    /// slice arrives as <c>"connector_modes":null</c>, which the setter turns into an empty
+    /// list — see <see cref="NullSafe"/>.
+    /// </summary>
     [JsonPropertyName("connector_modes")]
-    public IReadOnlyList<ConnectorMode> ConnectorModes { get; init; } = Array.Empty<ConnectorMode>();
+    public IReadOnlyList<ConnectorMode> ConnectorModes
+    {
+        get => _connectorModes;
+        init => _connectorModes = NullSafe.ListOrEmpty(value);
+    }
 
     [JsonPropertyName("health")]
     public GatewayHealth? Health { get; init; }

@@ -52,7 +52,11 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private string? _statusMessage;
 
+    // HasConfigSection is derived from this and drives the "config.yaml does have a registry:
+    // section" block. Without the notification the binding read the empty initial value once and
+    // never again, so the fallback the panel documents could not appear.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasConfigSection))]
     private string? _configSectionYaml;
 
     [ObservableProperty]
@@ -92,45 +96,54 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         CliErrorMessage = null;
         Sources.Clear();
 
+        // try/finally, not a trailing assignment: a cancelled or faulted read must not leave the
+        // progress ring spinning over a panel that has already stopped trying.
         try
         {
-            var invocation = await Services.Cli.RunAsync(
-                new[] { "registry", "list", "--json" }, cancellationToken: cancellationToken).ConfigureAwait(true);
+            try
+            {
+                var invocation = await Services.Cli.RunAsync(
+                    new[] { "registry", "list", "--json" }, cancellationToken: cancellationToken).ConfigureAwait(true);
 
-            if (invocation.FailureReason is { Length: > 0 } reason)
-            {
-                CliErrorMessage = $"Could not run 'defenseclaw registry list': {reason}";
+                if (invocation.FailureReason is { Length: > 0 } reason)
+                {
+                    // FailureReason is not only "could not start": it also says "timed out after
+                    // 120 s" and "cancelled", so the sentence must not claim a start failure.
+                    CliErrorMessage = $"'defenseclaw registry list' did not complete: {reason}";
+                }
+                else if (invocation.ExitCode != 0)
+                {
+                    var stderr = string.Join(
+                        Environment.NewLine,
+                        invocation.OutputLines.Where(l => l.Stream == CliStream.StandardError).Select(l => l.Text));
+                    CliErrorMessage = string.IsNullOrWhiteSpace(stderr)
+                        ? $"'defenseclaw registry list' exited {invocation.ExitCode}."
+                        : $"'defenseclaw registry list' exited {invocation.ExitCode}: {stderr}";
+                }
+                else
+                {
+                    var stdout = string.Join(
+                        Environment.NewLine,
+                        invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput).Select(l => l.Text));
+                    ParseSources(stdout);
+                }
             }
-            else if (invocation.ExitCode != 0)
+            catch (CliNotFoundException ex)
             {
-                var stderr = string.Join(
-                    Environment.NewLine,
-                    invocation.OutputLines.Where(l => l.Stream == CliStream.StandardError).Select(l => l.Text));
-                CliErrorMessage = string.IsNullOrWhiteSpace(stderr)
-                    ? $"'defenseclaw registry list' exited {invocation.ExitCode}."
-                    : $"'defenseclaw registry list' exited {invocation.ExitCode}: {stderr}";
+                CliErrorMessage = $"'defenseclaw' was not found on PATH: {ex.Message}";
             }
-            else
-            {
-                var stdout = string.Join(
-                    Environment.NewLine,
-                    invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput).Select(l => l.Text));
-                ParseSources(stdout);
-            }
+
+            HasSources = Sources.Count > 0;
+            StatusMessage = Sources.Count == 0
+                ? "No registry sources configured."
+                : $"{Sources.Count} registry source{(Sources.Count == 1 ? string.Empty : "s")}.";
+
+            LoadConfigFallback();
         }
-        catch (CliNotFoundException ex)
+        finally
         {
-            CliErrorMessage = $"'defenseclaw' was not found on PATH: {ex.Message}";
+            IsLoading = false;
         }
-
-        HasSources = Sources.Count > 0;
-        StatusMessage = Sources.Count == 0
-            ? "No registry sources configured."
-            : $"{Sources.Count} registry source{(Sources.Count == 1 ? string.Empty : "s")}.";
-
-        LoadConfigFallback();
-
-        IsLoading = false;
     }
 
     /// <summary>

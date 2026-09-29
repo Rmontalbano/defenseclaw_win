@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Paths;
@@ -216,7 +217,8 @@ public class CliRunnerTests
         var runner = Runner(temp.Path);
         var secret = new SecretValue("piped-through-stdin");
 
-        // 'sort' reads stdin and echoes it back, proving the child received the value
+        // 'sort' reads stdin and echoes it back. The echo is scrubbed on the way into the
+        // transcript, so a redacted line is the proof that the child received the value —
         // without it ever appearing in argv.
         var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "sort" }, stdinSecret: secret);
 
@@ -224,7 +226,78 @@ public class CliRunnerTests
         Assert.DoesNotContain("piped-through-stdin", string.Join(' ', invocation.Argv), StringComparison.Ordinal);
         Assert.Contains(
             invocation.OutputLines,
-            l => l.Text.Contains("piped-through-stdin", StringComparison.Ordinal));
+            l => l.Text.Contains(SecretValue.Redacted, StringComparison.Ordinal));
+    }
+
+    // ----------------------------------------------------------------------------------
+    // The per-call stdin secret is scrubbed from that run's output. Scrub used to consult only
+    // RegisterSecret'd values, so a child that echoed its stdin (a CLI reporting "invalid key:
+    // <key>") put the secret in the Activity panel, in the wizard console and in OutputReceived
+    // — the exact places the wizard UI promises it never appears.
+    // ----------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("sort")]
+    [InlineData("sort 1>&2")]
+    public async Task The_stdin_secret_is_scrubbed_from_output_the_child_echoes(string shellCommand)
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        const string Echoed = "echoed-back-secret-987654";
+        var streamed = new List<CliOutputLine>();
+        runner.OutputReceived += (_, line) =>
+        {
+            lock (streamed)
+            {
+                streamed.Add(line);
+            }
+        };
+
+        // `sort` (to stdout) and `sort 1>&2` (to stderr) both write back exactly what they read.
+        var invocation = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", shellCommand },
+            stdinSecret: new SecretValue(Echoed));
+
+        Assert.True(invocation.Succeeded);
+
+        var retained = string.Join('\n', invocation.OutputLines.Select(l => l.Text));
+        Assert.DoesNotContain(Echoed, retained, StringComparison.Ordinal);
+        Assert.Contains(SecretValue.Redacted, retained, StringComparison.Ordinal);
+
+        // Nor through the other two ways to read it: the live stream and a snapshot copy.
+        lock (streamed)
+        {
+            Assert.DoesNotContain(streamed, l => l.Text.Contains(Echoed, StringComparison.Ordinal));
+            Assert.Contains(streamed, l => l.Text.Contains(SecretValue.Redacted, StringComparison.Ordinal));
+        }
+
+        Assert.DoesNotContain(
+            invocation.Snapshot().OutputLines,
+            l => l.Text.Contains(Echoed, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Registered_and_per_call_secrets_are_both_scrubbed_from_one_run()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        runner.RegisterSecret(new SecretValue("registered-secret-13579"));
+
+        // `type` prints a registered secret wrapped in a message (a CLI rarely echoes a bare
+        // value); `sort` then echoes the per-call secret it was piped. Both must be redacted,
+        // and the surrounding text must survive.
+        var file = temp.Write("wrapped.txt", "invalid key: registered-secret-13579 (rejected)\r\n");
+        var invocation = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", $"type {file} & sort" },
+            stdinSecret: new SecretValue("call-secret-24680"));
+
+        var lines = invocation.OutputLines.Select(l => l.Text).ToList();
+        Assert.Contains($"invalid key: {SecretValue.Redacted} (rejected)", lines);
+        Assert.Contains(SecretValue.Redacted, lines);
+        Assert.DoesNotContain(lines, l => l.Contains("registered-secret-13579", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Contains("call-secret-24680", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -564,5 +637,473 @@ public class CliRunnerTests
 
         Assert.Equal(finished.OutputCursor, drained.Count);
         Assert.Equal(finished.OutputLines.Select(l => l.Text), drained.Select(l => l.Text));
+    }
+
+    // ----------------------------------------------------------------------------------
+    // Process lifecycle: timeout, cancellation and app-exit shutdown. A hung child used to
+    // wedge whatever awaited it, and nothing ever killed a child when the app quit.
+    //
+    // The stand-in for "a child that will not exit" is `cmd /c ping -n 30 127.0.0.1`: about
+    // 29 s if left alone, and — importantly — a real tree. cmd is the runner's child and
+    // ping is cmd's, so a kill that stops at the direct child leaves ping running, which the
+    // tree tests detect by watching for the ping process itself.
+    // ----------------------------------------------------------------------------------
+
+    private static readonly string[] LongPing = { "/c", "ping", "-n", "30", "127.0.0.1" };
+
+    private static readonly string DefenseClawCli = Path.Combine("C:\\", "bin", "defenseclaw.exe");
+
+    private static readonly string GatewayCli = Path.Combine("C:\\", "bin", "defenseclaw-gateway.exe");
+
+    /// <summary>Ids of every ping.exe running right now. Disposes the Process objects it opens.</summary>
+    private static HashSet<int> PingPids()
+    {
+        var ids = new HashSet<int>();
+        foreach (var process in Process.GetProcessesByName("ping"))
+        {
+            using (process)
+            {
+                _ = ids.Add(process.Id);
+            }
+        }
+
+        return ids;
+    }
+
+    private static bool IsAlive(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            // No process with that id: it is gone.
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Last-resort cleanup so a failing assertion never leaves a 30-second ping behind.</summary>
+    private static void KillIfAlive(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            process.Kill();
+        }
+        catch (Exception)
+        {
+            // Already gone, or not ours to kill; either way there is nothing left to clean up.
+        }
+    }
+
+    /// <summary>
+    /// Waits for the ping grandchild of a run in flight to appear and returns its id — which is
+    /// also the signal that the whole tree is up, so a test can act on a live child rather than
+    /// racing process start-up.
+    /// </summary>
+    private static async Task<int> WaitForNewPingAsync(HashSet<int> known, Task run)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (DateTime.UtcNow < deadline && !run.IsCompleted)
+        {
+            foreach (var pid in PingPids())
+            {
+                if (!known.Contains(pid))
+                {
+                    return pid;
+                }
+            }
+
+            await Task.Delay(25);
+        }
+
+        Assert.Fail("No ping grandchild appeared before the run ended.");
+        return 0;
+    }
+
+    private static async Task<bool> WaitUntilGoneAsync(int pid, TimeSpan within)
+    {
+        var deadline = DateTime.UtcNow + within;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (!IsAlive(pid))
+            {
+                return true;
+            }
+
+            await Task.Delay(25);
+        }
+
+        return !IsAlive(pid);
+    }
+
+    [Fact]
+    public async Task A_hung_child_is_killed_at_the_timeout_and_the_reason_is_recorded()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var completedEvents = 0;
+        runner.InvocationCompleted += (_, _) => Interlocked.Increment(ref completedEvents);
+
+        var stopwatch = Stopwatch.StartNew();
+        var invocation = await runner.RunExecutableAsync(
+            CmdPath,
+            LongPing,
+            options: CliRunOptions.WithTimeout(TimeSpan.FromSeconds(2)));
+        stopwatch.Stop();
+
+        // Timeout plus generous slack — and nowhere near the ~29 s the ping would have taken.
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(10),
+            $"the run took {stopwatch.Elapsed.TotalSeconds:0.0} s; a 2 s timeout should have ended it");
+        Assert.True(
+            stopwatch.Elapsed >= TimeSpan.FromSeconds(1.5),
+            $"the run ended after {stopwatch.Elapsed.TotalSeconds:0.0} s, before its 2 s timeout");
+
+        Assert.Contains("timed out after 2 s", invocation.FailureReason, StringComparison.Ordinal);
+        Assert.Contains("process tree killed", invocation.FailureReason, StringComparison.Ordinal);
+        Assert.Null(invocation.ExitCode);
+        Assert.False(invocation.Succeeded);
+
+        // Never left "running" in the Activity panel, and completed exactly once.
+        Assert.False(invocation.IsRunning);
+        Assert.NotNull(invocation.FinishedAt);
+        Assert.False(runner.Activity[0].IsRunning);
+        Assert.Equal(1, Volatile.Read(ref completedEvents));
+    }
+
+    [Fact]
+    public async Task Timeout_kills_the_grandchild_too()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var known = PingPids();
+
+        var run = runner.RunExecutableAsync(
+            CmdPath,
+            LongPing,
+            options: CliRunOptions.WithTimeout(TimeSpan.FromSeconds(3)));
+        var grandchild = await WaitForNewPingAsync(known, run);
+
+        try
+        {
+            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.Contains("timed out", invocation.FailureReason, StringComparison.Ordinal);
+            Assert.True(
+                await WaitUntilGoneAsync(grandchild, TimeSpan.FromSeconds(5)),
+                "ping, the grandchild, survived the kill: only the direct child was terminated");
+        }
+        finally
+        {
+            KillIfAlive(grandchild);
+        }
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_kills_the_whole_tree_and_records_cancelled()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var known = PingPids();
+        using var cts = new CancellationTokenSource();
+
+        var run = runner.RunExecutableAsync(CmdPath, LongPing, cancellationToken: cts.Token);
+        var grandchild = await WaitForNewPingAsync(known, run);
+
+        try
+        {
+            var stopwatch = Stopwatch.StartNew();
+            cts.Cancel();
+            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            stopwatch.Stop();
+
+            Assert.True(
+                stopwatch.Elapsed < TimeSpan.FromSeconds(10),
+                $"cancelling took {stopwatch.Elapsed.TotalSeconds:0.0} s to end the run");
+            Assert.StartsWith("cancelled", invocation.FailureReason, StringComparison.Ordinal);
+            Assert.Contains("process tree killed", invocation.FailureReason, StringComparison.Ordinal);
+            Assert.Null(invocation.ExitCode);
+            Assert.False(invocation.Succeeded);
+            Assert.False(invocation.IsRunning);
+            Assert.NotNull(invocation.FinishedAt);
+
+            Assert.True(
+                await WaitUntilGoneAsync(grandchild, TimeSpan.FromSeconds(5)),
+                "ping, the grandchild, survived cancellation");
+        }
+        finally
+        {
+            KillIfAlive(grandchild);
+        }
+    }
+
+    [Fact]
+    public async Task Cancelling_while_the_stdin_secret_is_still_being_written_still_ends_the_run_cleanly()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var known = PingPids();
+        var completedEvents = 0;
+        runner.InvocationCompleted += (_, _) => Interlocked.Increment(ref completedEvents);
+        using var cts = new CancellationTokenSource();
+
+        // `ping` never reads stdin, so a secret far larger than the pipe buffer leaves the runner
+        // parked inside StreamWriter.WriteAsync — the window in which a cancellation surfaces as an
+        // OperationCanceledException from the stdin write rather than from WaitForExit. That
+        // exception used to be able to escape the run: child left alive, invocation never
+        // finished, InvocationCompleted never raised (so a caller counting in-flight runs, like the
+        // Updates window, counted one forever).
+        var secret = new SecretValue(new string('s', 4 * 1024 * 1024));
+        var run = runner.RunExecutableAsync(CmdPath, LongPing, secret, cts.Token);
+        var grandchild = await WaitForNewPingAsync(known, run);
+
+        try
+        {
+            await Task.Delay(300); // long enough for the write to have filled the pipe and blocked
+            Assert.False(run.IsCompleted, "the run ended before it was cancelled");
+
+            cts.Cancel();
+            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.StartsWith("cancelled", invocation.FailureReason, StringComparison.Ordinal);
+            Assert.Contains("process tree killed", invocation.FailureReason, StringComparison.Ordinal);
+            Assert.Null(invocation.ExitCode);
+            Assert.False(invocation.IsRunning);
+            Assert.NotNull(invocation.FinishedAt);
+            Assert.Equal(1, Volatile.Read(ref completedEvents));
+            Assert.True(
+                await WaitUntilGoneAsync(grandchild, TimeSpan.FromSeconds(5)),
+                "ping, the grandchild, survived a cancellation that arrived during the stdin write");
+        }
+        finally
+        {
+            KillIfAlive(grandchild);
+        }
+    }
+
+    [Fact]
+    public async Task A_token_cancelled_before_the_call_never_launches_the_child()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, LongPing, cancellationToken: cts.Token);
+
+        Assert.StartsWith("cancelled", invocation.FailureReason, StringComparison.Ordinal);
+        Assert.Contains("nothing was started", invocation.FailureReason, StringComparison.Ordinal);
+        Assert.Null(invocation.ExitCode);
+        Assert.Empty(invocation.OutputLines);
+        Assert.False(invocation.IsRunning);
+        Assert.NotNull(invocation.FinishedAt);
+    }
+
+    [Fact]
+    public async Task The_default_timeout_is_generous_and_does_not_touch_a_fast_command()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        // The ceiling is real and it is well above anything a status/list call takes.
+        Assert.Equal(TimeSpan.FromSeconds(120), CliRunner.DefaultTimeout);
+
+        var implicitDefault = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "echo", "quick" });
+        var explicitCeiling = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", "echo", "quick" },
+            options: CliRunOptions.WithTimeout(TimeSpan.FromSeconds(30)));
+
+        foreach (var invocation in new[] { implicitDefault, explicitCeiling })
+        {
+            Assert.True(invocation.Succeeded);
+            Assert.Equal(0, invocation.ExitCode);
+            Assert.Null(invocation.FailureReason);
+            Assert.Contains(
+                invocation.OutputLines,
+                l => l.Text.Contains("quick", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Timeouts_are_inferred_in_tiers_for_the_defenseclaw_cli_only()
+    {
+        // Wizards run `defenseclaw setup <target> …`; they are the reason the long tier exists.
+        Assert.Equal(CliRunner.LongRunningTimeout, CliRunner.ResolveTimeout(DefenseClawCli, new[] { "setup", "claude-code" }));
+
+        // Work-doing verbs get the extended tier.
+        Assert.Equal(CliRunner.ExtendedTimeout, CliRunner.ResolveTimeout(DefenseClawCli, new[] { "doctor" }));
+        Assert.Equal(CliRunner.ExtendedTimeout, CliRunner.ResolveTimeout(DefenseClawCli, new[] { "agent", "discover" }));
+        Assert.Equal(CliRunner.ExtendedTimeout, CliRunner.ResolveTimeout(DefenseClawCli, new[] { "plugin", "install", "some-plugin" }));
+
+        // Everything else — status, list, allow/block — is the default.
+        Assert.Equal(CliRunner.DefaultTimeout, CliRunner.ResolveTimeout(DefenseClawCli, new[] { "status" }));
+        Assert.Equal(CliRunner.DefaultTimeout, CliRunner.ResolveTimeout(DefenseClawCli, new[] { "plugin", "list", "--json" }));
+        Assert.Equal(CliRunner.DefaultTimeout, CliRunner.ResolveTimeout(DefenseClawCli, Array.Empty<string>()));
+
+        // The gateway binary never gets a longer leash: a hung `start`/`stop` is the wedged
+        // tray toggle this whole ceiling exists to bound.
+        Assert.Equal(CliRunner.DefaultTimeout, CliRunner.ResolveTimeout(GatewayCli, new[] { "start" }));
+        Assert.Equal(CliRunner.DefaultTimeout, CliRunner.ResolveTimeout(GatewayCli, new[] { "setup" }));
+
+        Assert.True(CliRunner.DefaultTimeout < CliRunner.ExtendedTimeout);
+        Assert.True(CliRunner.ExtendedTimeout < CliRunner.LongRunningTimeout);
+    }
+
+    [Fact]
+    public async Task Explicit_options_override_the_inferred_timeout()
+    {
+        Assert.Equal(
+            TimeSpan.FromSeconds(5),
+            CliRunner.ResolveTimeout(DefenseClawCli, new[] { "setup" }, CliRunOptions.WithTimeout(TimeSpan.FromSeconds(5))));
+        Assert.Equal(
+            CliRunner.LongRunningTimeout,
+            CliRunner.ResolveTimeout(DefenseClawCli, new[] { "status" }, CliRunOptions.LongRunning));
+
+        // "No timeout" is spelled out, never a side effect: null here means unbounded.
+        Assert.Null(CliRunner.ResolveTimeout(DefenseClawCli, new[] { "setup" }, CliRunOptions.NoTimeout));
+        Assert.Null(CliRunner.ResolveTimeout(DefenseClawCli, new[] { "status" }, CliRunOptions.Installer));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CliRunner.ResolveTimeout(DefenseClawCli, new[] { "status" }, CliRunOptions.WithTimeout(TimeSpan.Zero)));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CliRunner.ResolveTimeout(DefenseClawCli, new[] { "status" }, CliRunOptions.WithTimeout(TimeSpan.FromSeconds(-1))));
+
+        // A bad option is a plain argument error and leaves nothing half-recorded behind.
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            runner.RunExecutableAsync(
+                CmdPath,
+                new[] { "/c", "exit", "0" },
+                options: CliRunOptions.WithTimeout(TimeSpan.Zero)));
+        Assert.Empty(runner.Activity);
+    }
+
+    [Fact]
+    public async Task Shutdown_kills_in_flight_runs_but_leaves_exempt_ones_alone()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var known = PingPids();
+
+        var doomed = runner.RunExecutableAsync(CmdPath, LongPing);
+        var doomedPing = await WaitForNewPingAsync(known, doomed);
+        _ = known.Add(doomedPing);
+
+        using var release = new CancellationTokenSource();
+        var exempt = runner.RunExecutableAsync(
+            CmdPath,
+            LongPing,
+            cancellationToken: release.Token,
+            options: CliRunOptions.Installer);
+        var exemptPing = await WaitForNewPingAsync(known, exempt);
+
+        try
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var settled = runner.Shutdown(TimeSpan.FromSeconds(10));
+            stopwatch.Stop();
+
+            Assert.True(settled, "Shutdown did not see the killed run finish inside its bound");
+            Assert.True(
+                stopwatch.Elapsed < TimeSpan.FromSeconds(8),
+                $"Shutdown took {stopwatch.Elapsed.TotalSeconds:0.0} s; app exit must not hang on a child");
+            Assert.True(runner.IsShutDown);
+
+            // The ordinary run is stopped, says why, and takes its whole tree with it.
+            var doomedResult = await doomed.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Contains("exiting", doomedResult.FailureReason, StringComparison.Ordinal);
+            Assert.Contains("process tree killed", doomedResult.FailureReason, StringComparison.Ordinal);
+            Assert.Null(doomedResult.ExitCode);
+            Assert.False(doomedResult.IsRunning);
+            Assert.True(
+                await WaitUntilGoneAsync(doomedPing, TimeSpan.FromSeconds(5)),
+                "the non-exempt run's grandchild survived Shutdown");
+
+            // The exempt run — the upgrade installer's stand-in — is untouched: still running,
+            // its process tree still alive.
+            Assert.False(exempt.IsCompleted, "Shutdown ended a run that is marked as surviving it");
+            Assert.True(IsAlive(exemptPing), "Shutdown killed the exempt run's process tree");
+
+            // Exemption covers app exit only. Its caller's own token still ends it, exactly as
+            // for any other run — which is also how this test cleans up after itself.
+            release.Cancel();
+            var exemptResult = await exempt.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.StartsWith("cancelled", exemptResult.FailureReason, StringComparison.Ordinal);
+            Assert.DoesNotContain("exiting", exemptResult.FailureReason, StringComparison.Ordinal);
+        }
+        finally
+        {
+            KillIfAlive(doomedPing);
+            KillIfAlive(exemptPing);
+        }
+    }
+
+    [Fact]
+    public async Task After_shutdown_new_runs_are_refused_unless_they_are_exempt()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        // Nothing in flight: shutdown is immediate and reports that everything settled.
+        Assert.True(runner.Shutdown());
+        Assert.True(runner.IsShutDown);
+
+        var refused = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "echo", "late" });
+
+        Assert.StartsWith("not started", refused.FailureReason, StringComparison.Ordinal);
+        Assert.Null(refused.ExitCode);
+        Assert.Empty(refused.OutputLines);
+        Assert.False(refused.IsRunning);
+        Assert.NotNull(refused.FinishedAt);
+
+        // The upgrade path is allowed through: an installer the operator started must not be
+        // turned away because the tray began exiting a moment earlier.
+        var allowed = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", "echo", "late" },
+            options: CliRunOptions.Installer);
+
+        Assert.True(allowed.Succeeded);
+        Assert.Null(allowed.FailureReason);
+
+        // Idempotent: a second shutdown, as AppServices.Dispose issues after OnExit, is a no-op.
+        Assert.True(runner.Shutdown());
+    }
+
+    [Fact]
+    public async Task Dispose_is_a_shutdown()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var known = PingPids();
+
+        var run = runner.RunExecutableAsync(CmdPath, LongPing);
+        var ping = await WaitForNewPingAsync(known, run);
+
+        try
+        {
+            runner.Dispose();
+
+            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Contains("exiting", invocation.FailureReason, StringComparison.Ordinal);
+            Assert.False(invocation.IsRunning);
+            Assert.True(
+                await WaitUntilGoneAsync(ping, TimeSpan.FromSeconds(5)),
+                "Dispose left the child's process tree running");
+            Assert.True(runner.IsShutDown);
+        }
+        finally
+        {
+            KillIfAlive(ping);
+        }
     }
 }

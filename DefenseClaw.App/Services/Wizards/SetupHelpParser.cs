@@ -122,7 +122,10 @@ public static class SetupHelpParser
 
         var usage = ExtractUsage(lines);
         var description = ExtractDescription(lines);
-        var (status, note) = ExtractPlatformStatus(description.Length > 0 ? description : helpText);
+        var options = ParseOptions(lines);
+        var (status, note) = ExtractPlatformStatus(
+            description.Length > 0 ? description : helpText,
+            connectorShaped: IsConnectorShaped(options));
 
         return new ParsedHelp
         {
@@ -131,7 +134,7 @@ public static class SetupHelpParser
             Summary = FirstSentence(description),
             PlatformStatus = status,
             PlatformNote = note,
-            Options = ParseOptions(lines),
+            Options = options,
             Commands = ParseCommands(lines),
             Positionals = ParsePositionals(usage, commandDepth),
             SubcommandOptional = usage.Contains("[COMMAND]", StringComparison.Ordinal),
@@ -139,18 +142,28 @@ public static class SetupHelpParser
     }
 
     /// <summary>
-    /// Maps a status word onto <see cref="PlatformStatus"/>. Absence of the line means the
-    /// integration is certified here — that is Click's convention, and it is why
-    /// claude-code and codex carry no such line on 0.8.7.
+    /// Maps a status word onto <see cref="PlatformStatus"/>. For a <b>connector</b>, absence
+    /// of the line means the integration is certified here — that is Click's convention, and
+    /// it is why claude-code and codex carry no such line on 0.8.x. For anything else the
+    /// absence means nothing: rotate-token, webhook, llm, remove and the scanners have no
+    /// certification to declare, and reporting them <see cref="PlatformStatus.Certified"/>
+    /// would put a green "Certified on Windows" badge on a flow nobody certified and inflate
+    /// the hub's certified count. Those get <see cref="PlatformStatus.NotApplicable"/>.
+    /// A status line, when present, is always honoured whatever the target looks like.
     /// </summary>
-    public static (PlatformStatus Status, string Note) ExtractPlatformStatus(string text)
+    /// <param name="text">The help prose to search.</param>
+    /// <param name="connectorShaped">
+    /// Whether the target is a connector wizard (see <see cref="IsConnectorShaped"/>). Defaults
+    /// to <see langword="true"/>, the pre-existing behaviour, for callers that only have text.
+    /// </param>
+    public static (PlatformStatus Status, string Note) ExtractPlatformStatus(string text, bool connectorShaped = true)
     {
         ArgumentNullException.ThrowIfNull(text);
 
         var match = PlatformStatusPattern.Match(text);
         if (!match.Success)
         {
-            return (PlatformStatus.Certified, string.Empty);
+            return (connectorShaped ? PlatformStatus.Certified : PlatformStatus.NotApplicable, string.Empty);
         }
 
         var word = match.Groups["status"].Value.Trim();
@@ -187,6 +200,30 @@ public static class SetupHelpParser
         return summary.Contains("unsupported", StringComparison.OrdinalIgnoreCase)
             ? PlatformStatus.Unsupported
             : PlatformStatus.Unknown;
+    }
+
+    /// <summary>
+    /// True when the options look like a <b>hook-connector wizard</b> — the only kind of setup
+    /// target certification is a meaningful question for. The CLI does not label connectors,
+    /// so this reads the one structural trait they share: a <c>--mode</c> policy switch
+    /// together with a way to place the connector among its peers (<c>--replace</c>, or a
+    /// <c>--fail-mode</c> hook policy). Verified against the installed 0.8.x CLI: claude-code,
+    /// codex and every not_certified / unsupported connector carry both; guardrail has
+    /// <c>--mode</c> but is not a connector and has neither companion; rotate-token, webhook,
+    /// llm, remove, gateway and the scanners have no <c>--mode</c> at all. Deliberately
+    /// conservative: a future connector that matches none of this shows as not-applicable
+    /// (neutral) rather than being handed a green badge the CLI never gave it, and any
+    /// <c>Platform status</c> line it does print is honoured regardless.
+    /// </summary>
+    public static bool IsConnectorShaped(IReadOnlyList<ParsedOption> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var hasMode = options.Any(o => o.Names.Contains("--mode", StringComparer.Ordinal));
+        return hasMode &&
+               options.Any(o =>
+                   o.Names.Contains("--replace", StringComparer.Ordinal) ||
+                   o.Names.Contains("--fail-mode", StringComparer.Ordinal));
     }
 
     /// <summary>

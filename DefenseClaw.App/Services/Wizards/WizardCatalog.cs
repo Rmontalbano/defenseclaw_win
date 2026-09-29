@@ -34,7 +34,14 @@ public sealed class WizardDefinitionChangedEventArgs : EventArgs
 /// pages are built from. Groups additionally probe their subcommands, lazily, the first time
 /// that wizard is opened.
 /// </para>
-/// <para>Results are cached for the life of the process; <see cref="ReloadAsync"/> starts over.</para>
+/// <para>
+/// Successful results are cached until <see cref="ReloadAsync"/>, which forgets everything —
+/// including the probe's cached help screens, without which a Refresh would just re-serve the
+/// text it already had. Failures are not kept: a target whose help could not be read is retried
+/// the next time its wizard is opened, and a failed roster read is retried by Refresh. Loads
+/// are never owned by the caller that started them (a cancelled first caller must not poison
+/// the shared result); a caller's token only ends that caller's wait.
+/// </para>
 /// </summary>
 public sealed class WizardCatalog
 {
@@ -53,6 +60,10 @@ public sealed class WizardCatalog
     private readonly ConcurrentDictionary<string, Task> _detailLoads = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private Task<IReadOnlyList<WizardDefinition>>? _load;
+
+    // Bumped by ReloadAsync. A load that began before a reload describes a CLI the operator just
+    // asked us to forget; it must not write its answer into the fresh catalog when it lands.
+    private int _generation;
 
     public WizardCatalog(DefenseClawPaths paths)
     {
@@ -82,22 +93,39 @@ public sealed class WizardCatalog
         }
     }
 
-    /// <summary>Phase one: the roster, badged from the summary hints. Cached per app run.</summary>
+    /// <summary>
+    /// Phase one: the roster, badged from the summary hints. Cached until
+    /// <see cref="ReloadAsync"/>. <paramref name="cancellationToken"/> ends this caller's wait
+    /// only; the shared load runs on for whoever else asks.
+    /// </summary>
     public Task<IReadOnlyList<WizardDefinition>> LoadAsync(CancellationToken cancellationToken = default)
     {
+        Task<IReadOnlyList<WizardDefinition>> load;
         lock (InstanceGate)
         {
-            return _load ??= LoadCoreAsync(cancellationToken);
+            // Task.Run so the synchronous head of the load (locating and starting the CLI) runs
+            // on the pool, not on the UI thread that asked and not inside this lock.
+            var generation = _generation;
+            load = _load ??= Task.Run(() => LoadCoreAsync(generation));
         }
+
+        return cancellationToken.CanBeCanceled ? load.WaitAsync(cancellationToken) : load;
     }
 
-    /// <summary>Drops every cached definition and re-probes from scratch.</summary>
+    /// <summary>
+    /// Drops every cached definition <b>and every cached help screen</b>, then re-probes from
+    /// scratch. Clearing only the definitions would make this a no-op: the probe would answer
+    /// the roster and every target from its own cache, and a CLI upgraded since the hub opened
+    /// would still show yesterday's cards.
+    /// </summary>
     public Task<IReadOnlyList<WizardDefinition>> ReloadAsync(CancellationToken cancellationToken = default)
     {
         lock (InstanceGate)
         {
+            _generation++;
             _definitions.Clear();
             _detailLoads.Clear();
+            _probe.Clear();
             _load = null;
         }
 
@@ -111,24 +139,52 @@ public sealed class WizardCatalog
     /// Phase two for one target, on demand: parses its <c>--help</c> (and, for a group, every
     /// subcommand's) and rebuilds its pages. Idempotent and safe to call from the hub's
     /// background warm-up and from the wizard launcher at the same time.
+    /// <para>
+    /// A target whose help could not be read is <b>not remembered as failed</b>: the definition
+    /// it leaves behind carries <see cref="WizardDefinition.DetailError"/> so the hub can say
+    /// why, but the next call for that target probes again — opening the wizard is the natural
+    /// moment to retry a timeout, and a "not on PATH" answer must not outlive the install that
+    /// fixed it.
+    /// </para>
     /// </summary>
     public async Task<WizardDefinition> EnsureDetailAsync(string target, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(target);
 
-        await _detailLoads
-            .GetOrAdd(target, key => LoadDetailAsync(key, cancellationToken))
-            .ConfigureAwait(false);
+        Task load;
+        lock (InstanceGate)
+        {
+            // Under the gate so two callers cannot both start the load for one target, and so
+            // the generation read here is the one ReloadAsync would clear this entry under.
+            var generation = _generation;
+            load = _detailLoads.GetOrAdd(target, key => Task.Run(() => LoadDetailAsync(key, generation)));
+        }
 
-        return Find(target) ?? Placeholder(target);
+        await (cancellationToken.CanBeCanceled ? load.WaitAsync(cancellationToken) : load).ConfigureAwait(false);
+
+        var definition = Find(target) ?? Placeholder(target);
+        if (definition.DetailError is not null)
+        {
+            _ = _detailLoads.TryRemove(new KeyValuePair<string, Task>(target, load));
+        }
+
+        return definition;
     }
 
-    private async Task<IReadOnlyList<WizardDefinition>> LoadCoreAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<WizardDefinition>> LoadCoreAsync(int generation)
     {
-        await _loadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _loadGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var result = await _probe.HelpAsync(Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+            var result = await _probe.HelpAsync(Array.Empty<string>()).ConfigureAwait(false);
+
+            // A reload began while the probe ran: this answer belongs to a catalog that no longer
+            // exists, and the load that replaced it will write the real one.
+            if (generation != Volatile.Read(ref _generation))
+            {
+                return Array.Empty<WizardDefinition>();
+            }
+
             if (!result.Succeeded)
             {
                 LoadError = result.Error;
@@ -138,14 +194,24 @@ public sealed class WizardCatalog
             LoadError = null;
             var help = SetupHelpParser.Parse(result.Text);
 
-            foreach (var command in help.Commands)
+            lock (InstanceGate)
             {
-                if (HiddenTargets.Contains(command.Name))
+                // Re-checked under the lock ReloadAsync clears under, so a reload cannot slip
+                // between the check above and these writes and inherit stale stubs.
+                if (generation != _generation)
                 {
-                    continue;
+                    return Array.Empty<WizardDefinition>();
                 }
 
-                _definitions[command.Name] = Stub(command);
+                foreach (var command in help.Commands)
+                {
+                    if (HiddenTargets.Contains(command.Name))
+                    {
+                        continue;
+                    }
+
+                    _definitions[command.Name] = Stub(command);
+                }
             }
 
             return Ordered();
@@ -182,10 +248,10 @@ public sealed class WizardCatalog
         IsDetailLoaded = true,
     };
 
-    private async Task LoadDetailAsync(string target, CancellationToken cancellationToken)
+    private async Task LoadDetailAsync(string target, int generation)
     {
         var existing = Find(target);
-        var result = await _probe.HelpAsync(new[] { target }, cancellationToken).ConfigureAwait(false);
+        var result = await _probe.HelpAsync(new[] { target }).ConfigureAwait(false);
 
         if (!result.Succeeded)
         {
@@ -202,7 +268,7 @@ public sealed class WizardCatalog
                 DetailError = result.Error,
             };
 
-            Replace(failed);
+            Replace(failed, generation);
             return;
         }
 
@@ -212,7 +278,7 @@ public sealed class WizardCatalog
 
         if (help.HasSubcommands)
         {
-            var subcommands = await LoadSubcommandsAsync(target, help, cancellationToken).ConfigureAwait(false);
+            var subcommands = await LoadSubcommandsAsync(target, help).ConfigureAwait(false);
             steps = WizardStepFactory.BuildGroup(help, subcommands);
         }
         else
@@ -221,7 +287,9 @@ public sealed class WizardCatalog
         }
 
         // The per-target help is authoritative for certification; the summary hint from the
-        // top-level screen was only ever a stand-in until this landed.
+        // top-level screen was only ever a stand-in until this landed. For a target that is not
+        // a connector the parser reports NotApplicable rather than Certified (see
+        // SetupHelpParser.ExtractPlatformStatus).
         Replace(new WizardDefinition
         {
             Target = target,
@@ -234,20 +302,19 @@ public sealed class WizardCatalog
             HelpText = result.Text,
             IsCurated = curated,
             IsDetailLoaded = true,
-        });
+        }, generation);
     }
 
     private async Task<IReadOnlyDictionary<string, ParsedHelp>> LoadSubcommandsAsync(
         string target,
-        ParsedHelp help,
-        CancellationToken cancellationToken)
+        ParsedHelp help)
     {
         var results = new ConcurrentDictionary<string, ParsedHelp>(StringComparer.Ordinal);
 
         var probes = help.Commands.Select(async command =>
         {
             var probe = await _probe
-                .HelpAsync(new[] { target, command.Name }, cancellationToken)
+                .HelpAsync(new[] { target, command.Name })
                 .ConfigureAwait(false);
 
             // A subcommand whose help will not parse simply contributes no fields; the
@@ -261,9 +328,21 @@ public sealed class WizardCatalog
         return results;
     }
 
-    private void Replace(WizardDefinition definition)
+    private void Replace(WizardDefinition definition, int generation)
     {
-        _definitions[definition.Target] = definition;
+        lock (InstanceGate)
+        {
+            // Dropped, silently, when a reload happened since this load began: its help text came
+            // from before the operator asked the catalog to forget, and writing it now would put a
+            // stale card into the catalog the reload just rebuilt.
+            if (generation != _generation)
+            {
+                return;
+            }
+
+            _definitions[definition.Target] = definition;
+        }
+
         DefinitionChanged?.Invoke(this, new WizardDefinitionChangedEventArgs(definition));
     }
 

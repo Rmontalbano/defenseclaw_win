@@ -66,7 +66,18 @@ public sealed class ConfigStore
         return Parse(text, path);
     }
 
-    /// <summary>Parses YAML text without touching the filesystem.</summary>
+    /// <summary>
+    /// Parses YAML text without touching the filesystem.
+    /// <para>
+    /// The returned <see cref="ConfigDocument.Config"/> never has a null section, list or
+    /// dictionary, however sparse the file: an empty document, <c>gateway:</c> with nothing under
+    /// it, <c>connectors:</c>, or <c>claudecode:</c> with no settings all parse to defaults. YAML
+    /// reads those as null and YamlDotNet assigns null over the property initializers, so the
+    /// model's setters coalesce it and <see cref="DefenseClawConfig.Normalize"/> handles null
+    /// entries inside collections. Callers such as <see cref="TokenResolver"/> rely on that and
+    /// do not null-check.
+    /// </para>
+    /// </summary>
     public static ConfigDocument Parse(string yaml, string path = "<memory>")
     {
         ArgumentNullException.ThrowIfNull(yaml);
@@ -80,6 +91,8 @@ public sealed class ConfigStore
         {
             throw new ConfigParseException(path, $"config.yaml is not valid YAML: {ex.Message}", ex);
         }
+
+        config.Normalize();
 
         return new ConfigDocument(path, yaml, config, SplitTopLevelSections(yaml), DateTimeOffset.UtcNow);
     }

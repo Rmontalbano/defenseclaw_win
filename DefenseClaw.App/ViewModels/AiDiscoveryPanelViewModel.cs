@@ -221,18 +221,65 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
     private async Task RefreshAsync() => await LoadAsync(CancellationToken.None).ConfigureAwait(true);
 
     /// <summary>
-    /// Offers to run <c>defenseclaw agent discover</c> — the one mutation this panel can
-    /// trigger, and only after an explicit confirm. Every other action here is a read.
+    /// Offers to run <c>defenseclaw agent discovery scan</c> — the command that updates what the
+    /// component cards show, and only after an explicit confirm.
+    /// <para>
+    /// This used to run <c>agent discover</c>, which is a different thing: it is the
+    /// connector-level detection (is Claude Code / Codex installed, in <c>agent_discovery.json</c>),
+    /// it returns that file's 24-hour cache without scanning when the cache is fresh, and it emits
+    /// its own OTel report through the sidecar by default. It never touched
+    /// <c>ai_discovery_state.json</c> or <c>inventory.db</c>, which is where the cards come from.
+    /// <c>agent discovery scan</c> asks the running sidecar for one immediate AI discovery scan
+    /// (<c>POST /api/v1/ai-usage/scan</c>) — the scan it already runs on a schedule, whose result
+    /// the sidecar records in both files (the CLI's own help: "Trigger one immediate AI discovery
+    /// scan via the sidecar"; it answers HTTP 503 when <c>ai_discovery</c> is disabled).
+    /// </para>
     /// </summary>
     [RelayCommand]
-    private async Task RunDiscoverAsync()
+    private Task RunScanAsync() =>
+        RunCliAsync(
+            "Run an AI discovery scan?",
+            new[] { "agent", "discovery", "scan" },
+            "It asks the running DefenseClaw gateway (sidecar) to scan this machine for AI tools right now — the " +
+            "same scan it already runs on its own schedule. The result is written to ai_discovery_state.json and " +
+            "inventory.db, which is what the cards on this page read, and the sidecar records it in the audit " +
+            "trail as an ai.discovery event like any scheduled scan (plus whatever telemetry export you have " +
+            "configured for those events).\n\n" +
+            "It needs the gateway running with AI discovery enabled; otherwise the command fails (HTTP 503 or " +
+            "\"sidecar unavailable\") and nothing changes. It does not refresh the connector table below.\n\n" +
+            "The exact command, its live output and its exit code are recorded in the Activity panel, and this " +
+            "page re-reads its files afterwards.");
+
+    /// <summary>
+    /// Offers to run <c>defenseclaw agent discover --refresh --no-emit-otel</c>, which re-detects
+    /// which agent CLIs are installed and rewrites <c>agent_discovery.json</c> — the connector
+    /// table under "Sources". Without <c>--refresh</c> the CLI serves a cache up to 24 hours old,
+    /// and it sends an OTel report through the sidecar unless told not to; a refresh from here is
+    /// meant to be a local re-read, so it does neither. Flags checked against
+    /// <c>defenseclaw agent discover --help</c>.
+    /// </summary>
+    [RelayCommand]
+    private Task RefreshConnectorsAsync() =>
+        RunCliAsync(
+            "Re-detect installed agents?",
+            new[] { "agent", "discover", "--refresh", "--no-emit-otel" },
+            "It re-checks which agent CLIs (Claude Code, Codex, …) are installed on this machine and rewrites " +
+            "agent_discovery.json — the \"Connector discovery\" table under Sources. Without --refresh the CLI " +
+            "would hand back a cached result up to 24 hours old. --no-emit-otel keeps it from sending a discovery " +
+            "report through the sidecar.\n\n" +
+            "It does not change the AI component cards; use \"Run AI discovery scan\" for those.\n\n" +
+            "The exact command, its live output and its exit code are recorded in the Activity panel, and this " +
+            "page re-reads its files afterwards.");
+
+    /// <summary>Confirm, run <c>defenseclaw &lt;argv&gt;</c>, summarize, and re-read the panel's files.</summary>
+    private async Task RunCliAsync(string dialogTitle, string[] argv, string explanation)
     {
+        var command = "defenseclaw " + string.Join(' ', argv);
+
         var dialog = new Wpf.Ui.Controls.MessageBox
         {
-            Title = "Run agent discovery?",
-            Content = "This will run:\n\n    defenseclaw agent discover\n\n" +
-                      "The exact command, its live output and its exit code are recorded in the Activity panel. " +
-                      "Local caches are re-read afterwards to refresh this view.",
+            Title = dialogTitle,
+            Content = $"This will run:\n\n    {command}\n\n{explanation}",
             PrimaryButtonText = "Run",
             CloseButtonText = "Cancel",
             IsPrimaryButtonEnabled = true,
@@ -249,10 +296,13 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
 
         try
         {
-            var invocation = await Services.Cli.RunAsync(new[] { "agent", "discover" }).ConfigureAwait(true);
+            var invocation = await Services.Cli.RunAsync(argv).ConfigureAwait(true);
+
+            // FailureReason covers every way a run ends without a normal exit (timeout, cancel,
+            // could not start), so word it as "did not complete", not as "could not start".
             LastRunSummary = invocation.FailureReason is { Length: > 0 } reason
-                ? $"Could not run: {reason}"
-                : $"defenseclaw agent discover finished at {invocation.FinishedAt?.ToLocalTime():HH:mm:ss} " +
+                ? $"{command} did not complete: {reason}"
+                : $"{command} finished at {invocation.FinishedAt?.ToLocalTime():HH:mm:ss} " +
                   $"(exit {invocation.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}). See Activity for full output.";
         }
         catch (CliNotFoundException ex)
@@ -323,8 +373,10 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
     /// <summary>
     /// Primary source: the persisted signal cache (<c>ai_discovery_state.json</c>), which
     /// carries first/last-seen and hashed evidence per signal. Falls back to the
-    /// <c>ai_signals</c> table in <c>inventory.db</c> — the same data, DB-shaped, with
-    /// slightly thinner evidence — when the cache file is missing or unreadable.
+    /// <c>ai_signals</c> rows of the latest full scan in <c>inventory.db</c> — the same data,
+    /// DB-shaped, with slightly thinner evidence — when the cache file is missing or unreadable.
+    /// The table holds every scan ever recorded (millions of rows), so "the signals" always means
+    /// one scan's worth, chosen by <see cref="DefenseClaw.Core.Inventory.InventoryReader"/>.
     /// </summary>
     private async Task<(IReadOnlyList<DiscoverySignalRecord> Signals, DiscoverySourceInfo Source)> LoadSignalsAsync(
         CancellationToken cancellationToken)
@@ -379,14 +431,34 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
                     new DiscoverySourceInfo("Signal cache", $"{note} inventory.db not found either — nothing to show.", null, Available: false));
             }
 
-            var rows = await Services.Inventory.BrowseAsync("ai_signals", limit: 5000, cancellationToken: cancellationToken)
+            // The signals of the latest full scan. This used to browse ai_signals with no ORDER BY,
+            // which returns the OLDEST 5,000 rows (rowid order — the first days of the install) out of
+            // millions.
+            var latest = await Services.Inventory.GetLatestSignalsAsync(cancellationToken: cancellationToken)
                 .ConfigureAwait(true);
 
-            var signals = rows.Rows.Select(MapSignalFromDbRow).ToList();
+            if (latest is null)
+            {
+                return (Array.Empty<DiscoverySignalRecord>(),
+                    new DiscoverySourceInfo(
+                        "Signal cache",
+                        $"{note} inventory.db does not have the scan tables this fallback reads (ai_scans, and a scan_id on ai_signals) — nothing to show.",
+                        null,
+                        Available: false));
+            }
+
+            var signals = latest.Rows.Rows.Select(MapSignalFromDbRow).ToList();
+            var scan = latest.Scan;
+            var detail = scan is null
+                ? $"{note} inventory.db has not recorded a scan yet."
+                : $"{note} {signals.Count} signal{(signals.Count == 1 ? string.Empty : "s")} from the " +
+                  (scan.IsFullScan ? "latest full scan" : "newest scan (no completed scheduled or startup scan is recorded)") +
+                  $": {scan.Source}, {scan.Result}.";
+
             return (signals, new DiscoverySourceInfo(
-                "Signal cache — inventory.db (ai_signals table, fallback)",
-                $"{note} {signals.Count} signals.",
-                null,
+                "Signal cache — inventory.db (ai_signals, latest scan, fallback)",
+                detail,
+                scan?.ScannedAt,
                 Available: signals.Count > 0));
         }
         catch (Exception ex) when (ex is IOException or SqliteException or ArgumentException)

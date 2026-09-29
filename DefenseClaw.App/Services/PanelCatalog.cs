@@ -32,6 +32,18 @@ public sealed record PanelDescriptor(
 /// <c>{Name}Panel.xaml</c> / <c>{Name}PanelViewModel.cs</c> pair leaves this untouched.
 /// Only adding or removing a panel outright is a reason to come back here.
 /// </para>
+/// <para>
+/// <b>Activation.</b> Views and view-models are cached forever (navigating away and back
+/// keeps panel state), so "is this panel doing work" cannot be inferred from "does it exist".
+/// The catalog is the one place that knows both halves of "is anyone looking at it": whether
+/// the panel's view is actually on screen (<see cref="UIElement.IsVisible"/>, which is false
+/// once the navigation frame swaps the view out <i>and</i> once the window is hidden to the
+/// tray) and whether the dashboard window is interactive at all
+/// (<see cref="SetWindowInteractive"/>, which the window feeds because a minimized window
+/// still reports itself visible). It combines the two and calls
+/// <see cref="PanelViewModelBase.SetActive"/>; see the activation contract on that type.
+/// Nothing here subscribes to the navigation control itself, so a WPF-UI upgrade cannot break it.
+/// </para>
 /// </summary>
 public sealed class PanelCatalog : INavigationViewPageProvider
 {
@@ -46,6 +58,15 @@ public sealed class PanelCatalog : INavigationViewPageProvider
 
     private readonly AppServices _services;
     private readonly Dictionary<Type, FrameworkElement> _views = new();
+    private readonly Dictionary<Type, PanelViewModelBase> _viewModels = new();
+
+    /// <summary>
+    /// Whether the dashboard window is one the operator can see and use. Starts true so a
+    /// host that never reports it (a test harness) still gets panels that work; the real
+    /// window reports it immediately, and a view that is not in a visible tree is inactive
+    /// regardless of this flag.
+    /// </summary>
+    private bool _windowInteractive = true;
 
     public PanelCatalog(AppServices services)
     {
@@ -95,7 +116,16 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// <summary>The panel the shell opens on first launch.</summary>
     public PanelDescriptor Default => Panels[0];
 
-    /// <summary>Raised when a panel's <c>InitializeAsync</c> throws, so the shell can say so.</summary>
+    /// <summary>
+    /// Raised when a panel's <c>InitializeAsync</c> throws, so the shell can say so. Without a
+    /// listener such a panel would sit on its "Loading…" state forever with nothing to explain
+    /// it; <c>MainWindow</c> subscribes and shows a banner naming the panel and the error.
+    /// <para>
+    /// Raised on the UI thread: <see cref="GetPage"/> runs there and the initialization
+    /// continuation resumes on that context (<c>ConfigureAwait(true)</c>), and that is what lets
+    /// a subscriber touch controls directly.
+    /// </para>
+    /// </summary>
     public event EventHandler<PanelFaultEventArgs>? PanelFaulted;
 
     public IEnumerable<PanelDescriptor> InGroup(string group) =>
@@ -108,9 +138,39 @@ public sealed class PanelCatalog : INavigationViewPageProvider
         Panels.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// Tells the catalog whether the dashboard window is currently one the operator can see
+    /// and use: shown, and not minimized. Called by the window on every visibility or
+    /// window-state change. Every cached panel is re-evaluated, so a panel that was on
+    /// screen when the window went to the tray deactivates now, and reactivates — with its
+    /// catch-up pass — when the window comes back. UI thread only.
+    /// </summary>
+    public void SetWindowInteractive(bool interactive)
+    {
+        if (_windowInteractive == interactive)
+        {
+            return;
+        }
+
+        _windowInteractive = interactive;
+
+        foreach (var (pageType, view) in _views)
+        {
+            UpdateActivation(view, _viewModels[pageType]);
+        }
+    }
+
+    /// <summary>
+    /// A panel is active exactly when its view is on screen in an interactive window. The
+    /// view-model, not the view, gets told: the view has nothing to pause.
+    /// </summary>
+    private void UpdateActivation(FrameworkElement view, PanelViewModelBase viewModel) =>
+        viewModel.SetActive(_windowInteractive && view.IsVisible);
+
+    /// <summary>
     /// Called by WPF-UI's navigation frame. Builds the view, binds a freshly created
     /// view-model, and kicks off the panel's one-shot initialization. Instances are
-    /// cached, so navigating away and back keeps panel state.
+    /// cached, so navigating away and back keeps panel state. The view starts out
+    /// inactive; it activates when the frame puts it on screen.
     /// </summary>
     public object? GetPage(Type pageType)
     {
@@ -135,6 +195,17 @@ public sealed class PanelCatalog : INavigationViewPageProvider
         var viewModel = descriptor.ViewModelFactory(_services);
         view.DataContext = viewModel;
         _views[pageType] = view;
+        _viewModels[pageType] = viewModel;
+
+        // IsVisible flips when the frame attaches or detaches the view AND when the window
+        // that hosts it is shown or hidden, so this one handler covers navigation and the
+        // hide-to-tray case; SetWindowInteractive covers the minimized case it cannot see.
+        // Loaded/Unloaded say the same thing about the visual tree and cost nothing extra
+        // (SetActive ignores a repeated state), so they back the primary signal up rather
+        // than leaving activation resting on one framework event.
+        view.IsVisibleChanged += (_, _) => UpdateActivation(view, viewModel);
+        view.Loaded += (_, _) => UpdateActivation(view, viewModel);
+        view.Unloaded += (_, _) => UpdateActivation(view, viewModel);
 
         _ = InitializeAsync(descriptor, viewModel);
         return view;

@@ -131,9 +131,20 @@ public sealed partial class PluginsPanelViewModel : PanelViewModelBase
 
         AppendConnectorScope(argv);
 
-        BeginConfirm($"Install plugin “{target}”?", argv, () => RunMutationAsync(argv, $"Installed “{target}”.", closeInstallForm: true));
+        // Bare install materializes the plugin into every configured connector that exposes a
+        // plugin directory (plugin install --help), so the heading says where it will land.
+        var scope = ScopeText(ToolbarConnector());
+        BeginConfirm($"Install plugin “{target}” into {scope}?", argv, () => RunMutationAsync(argv, $"Installed “{target}”.", closeInstallForm: true));
     }
 
+    /// <summary>
+    /// Removes one plugin — and only the copy the row is about. A row from
+    /// <c>plugin list --json</c> carries the connector it was listed under, so that connector is
+    /// what <c>--connector</c> names; the toolbar scope is only a fallback for a row that
+    /// carries none (an unexpected payload shape). With neither, <c>plugin remove</c> is bare,
+    /// and per <c>plugin remove --help</c> a bare remove deletes matching copies across EVERY
+    /// configured connector — so the heading says exactly that rather than "Remove plugin X".
+    /// </summary>
     [RelayCommand]
     private void RemovePlugin(PluginRow? row)
     {
@@ -143,9 +154,18 @@ public sealed partial class PluginsPanelViewModel : PanelViewModelBase
         }
 
         var name = NameOf(row);
+        var connector = EffectiveConnector(row.Connector);
         var argv = new List<string> { "plugin", "remove", name };
-        AppendConnectorScope(argv);
-        BeginConfirm($"Remove plugin “{name}”?", argv, () => RunMutationAsync(argv, $"Removed “{name}”.", closeInstallForm: false));
+        if (connector is not null)
+        {
+            argv.Add("--connector");
+            argv.Add(connector);
+        }
+
+        BeginConfirm(
+            $"Remove plugin “{name}” from {ScopeText(connector)}?",
+            argv,
+            () => RunMutationAsync(argv, $"Removed “{name}”.", closeInstallForm: false));
     }
 
     [RelayCommand]
@@ -170,12 +190,25 @@ public sealed partial class PluginsPanelViewModel : PanelViewModelBase
 
     private static string NameOf(PluginRow row) => string.IsNullOrWhiteSpace(row.Name) ? row.DisplayName : row.Name;
 
+    /// <summary>The toolbar's connector, or null for "All configured connectors" / nothing chosen.</summary>
+    private string? ToolbarConnector() =>
+        !string.IsNullOrWhiteSpace(SelectedConnector) && !string.Equals(SelectedConnector, AllConnectorsLabel, StringComparison.Ordinal)
+            ? SelectedConnector
+            : null;
+
+    /// <summary>The row's own connector when it has one; otherwise the toolbar's; otherwise null (all).</summary>
+    private string? EffectiveConnector(string? rowConnector) =>
+        string.IsNullOrWhiteSpace(rowConnector) ? ToolbarConnector() : rowConnector.Trim();
+
+    private static string ScopeText(string? connector) =>
+        connector is null ? "ALL configured connectors" : $"connector “{connector}”";
+
     private void AppendConnectorScope(List<string> argv)
     {
-        if (!string.IsNullOrWhiteSpace(SelectedConnector) && !string.Equals(SelectedConnector, AllConnectorsLabel, StringComparison.Ordinal))
+        if (ToolbarConnector() is { } connector)
         {
             argv.Add("--connector");
-            argv.Add(SelectedConnector);
+            argv.Add(connector);
         }
     }
 
@@ -210,6 +243,17 @@ public sealed partial class PluginsPanelViewModel : PanelViewModelBase
                 var detail = invocation.FailureReason ?? errorLine?.Text ?? $"Exit code {invocation.ExitCode?.ToString() ?? "unknown"}.";
                 ShowResult("Command failed", detail, InfoBarSeverity.Error);
             }
+        }
+        // CliRunner throws these two synchronously, before any process exists. Uncaught, they
+        // reach the dispatcher's fault handler and replace the dashboard with an error dialog;
+        // here they are just a failed command with a reason.
+        catch (CliNotFoundException ex)
+        {
+            ShowResult("Command failed", $"The defenseclaw CLI could not be found. {ex.Message}", InfoBarSeverity.Error);
+        }
+        catch (SecretInArgumentException ex)
+        {
+            ShowResult("Command refused", ex.Message, InfoBarSeverity.Error);
         }
         finally
         {
@@ -280,8 +324,10 @@ public sealed partial class PluginsPanelViewModel : PanelViewModelBase
 
             if (invocation.FailureReason is not null)
             {
+                // Not "could not start": FailureReason also carries "timed out after 120 s —
+                // process tree killed" and "cancelled — …", where the process did start.
                 State = GovernListState.Error;
-                BannerMessage = $"`defenseclaw plugin list --json` could not start: {invocation.FailureReason}";
+                BannerMessage = $"`defenseclaw plugin list --json` did not complete: {invocation.FailureReason}";
                 return;
             }
 

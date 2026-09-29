@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Paths;
 
@@ -34,6 +35,73 @@ public sealed class CliNotFoundException : FileNotFoundException
 }
 
 /// <summary>
+/// Per-call lifecycle options for <see cref="CliRunner"/>. Every property has a default that
+/// is right for an ordinary status/list/mutation call, so most call sites pass none of this —
+/// the options exist for the few that are legitimately different.
+/// <para>
+/// <b>Two independent decisions.</b> How long a run may take (<see cref="Timeout"/>) and whether
+/// it may be ended by the app exiting (<see cref="SurvivesShutdown"/>) are separate: a wizard
+/// that may run for many minutes still <i>should</i> be stopped if the operator quits the app,
+/// while an installer that replaces this app's own binaries must not be. The presets below
+/// pair them the way the call sites in this repo need.
+/// </para>
+/// </summary>
+public sealed record CliRunOptions
+{
+    /// <summary>Nothing overridden: the runner's inferred timeout, and the run is ended at app exit.</summary>
+    public static CliRunOptions Default { get; } = new();
+
+    /// <summary>
+    /// For interactive setup flows that can legitimately run for minutes (image pulls,
+    /// scanner downloads): <see cref="CliRunner.LongRunningTimeout"/>, still stopped at app exit.
+    /// </summary>
+    public static CliRunOptions LongRunning { get; } = new() { Timeout = CliRunner.LongRunningTimeout };
+
+    /// <summary>
+    /// No timeout at all. Use only where the operator watches the run and can cancel it —
+    /// an unbounded run with no cancel affordance is exactly the wedge this type exists to prevent.
+    /// </summary>
+    public static CliRunOptions NoTimeout { get; } = new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+
+    /// <summary>
+    /// For the in-app upgrade — the Setup installer and the <c>defenseclaw-upgrade.ps1</c>
+    /// resolver: no timeout <b>and</b> <see cref="SurvivesShutdown"/>. Killing an installer
+    /// mid-install can leave the machine with a half-replaced DefenseClaw, which is strictly
+    /// worse than letting it finish after the tray has gone.
+    /// </summary>
+    public static CliRunOptions Installer { get; } = new()
+    {
+        Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        SurvivesShutdown = true,
+    };
+
+    /// <summary>An explicit ceiling for this call, overriding the runner's inferred one.</summary>
+    public static CliRunOptions WithTimeout(TimeSpan timeout) => new() { Timeout = timeout };
+
+    /// <summary>
+    /// How long the child may run before its whole process tree is killed.
+    /// <para>
+    /// <c>null</c> (the default) means "let the runner decide" — <see cref="CliRunner.ResolveTimeout"/>
+    /// picks <see cref="CliRunner.DefaultTimeout"/> or a longer tier from the argv.
+    /// <see cref="System.Threading.Timeout.InfiniteTimeSpan"/> means no timeout. Anything else must
+    /// be positive.
+    /// </para>
+    /// </summary>
+    public TimeSpan? Timeout { get; init; }
+
+    /// <summary>
+    /// True when <see cref="CliRunner.Shutdown"/> / <see cref="CliRunner.Dispose"/> must leave
+    /// this child alone, and must not refuse to start it once shutdown has begun.
+    /// <para>
+    /// This governs <i>app exit only</i>. A caller's own <see cref="CancellationToken"/> is still
+    /// honoured — cancelling is an explicit act by whoever holds the token, and it kills the
+    /// tree exactly as for any other run.
+    /// </para>
+    /// </summary>
+    public bool SurvivesShutdown { get; init; }
+}
+
+/// <summary>
 /// Runs the DefenseClaw CLIs and records every invocation.
 /// <para>
 /// This is the app's only write path: the GUI never edits DefenseClaw state directly, so
@@ -42,7 +110,11 @@ public sealed class CliNotFoundException : FileNotFoundException
 /// </para>
 /// <para>
 /// Secrets are accepted only through <c>stdinSecret</c>. Anything that would put one in
-/// argv throws <see cref="SecretInArgumentException"/>.
+/// argv throws <see cref="SecretInArgumentException"/>. On the way out, the run's own
+/// <c>stdinSecret</c> and every secret passed to <see cref="RegisterSecret"/> are scrubbed from
+/// captured output before it is stored or streamed — the wizards promise the value "will not
+/// appear in the Activity panel or in captured output", and a child that echoes what it read on
+/// stdin would otherwise break that promise.
 /// </para>
 /// <para>
 /// <b>Two independent caps.</b> This class bounds the ring by entry count
@@ -52,9 +124,80 @@ public sealed class CliNotFoundException : FileNotFoundException
 /// unbounded case for a tray app that stays resident for weeks. Argv, exit code and
 /// failure reason are never trimmed by either cap.
 /// </para>
+/// <para>
+/// <b>Every child has a bounded life.</b> A child that never exits used to wedge whatever
+/// awaited it — a panel's busy flag, the tray's Start/Stop Gateway latch — for as long as the
+/// app ran, because most call sites pass no <see cref="CancellationToken"/>. So the runner
+/// applies its own ceiling to every run (<see cref="ResolveTimeout"/>), and there are three
+/// ways a run can be ended early: the timeout, the caller's token, and app exit
+/// (<see cref="Shutdown"/>). All three do the same thing: <see cref="Process.Kill(bool)"/> with
+/// <c>entireProcessTree: true</c> — the CLIs are Python launchers and PowerShell wrappers, so
+/// killing only the direct child would leave the interpreter or installer it spawned running —
+/// then finish the invocation with a <see cref="CliInvocation.FailureReason"/> that says which
+/// of the three it was. An invocation is never left <see cref="CliInvocation.IsRunning"/> by any
+/// of them; <see cref="InvocationCompleted"/> is raised exactly once per recorded invocation.
+/// </para>
+/// <para>
+/// <b>The exemption.</b> Some children must outlive all of that: the upgrade installer can
+/// legitimately run for minutes, and killing it mid-install can corrupt the installation. Those
+/// pass <see cref="CliRunOptions.Installer"/> (no timeout, survives shutdown). See
+/// <see cref="CliRunOptions"/> for the presets and <see cref="Shutdown"/> for what survival means.
+/// </para>
 /// </summary>
-public sealed class CliRunner
+public sealed class CliRunner : IDisposable
 {
+    /// <summary>
+    /// Ceiling applied to a run that names none: 120 s.
+    /// <para>
+    /// Sized against what the verbs actually do. Nearly every call is a status, list or
+    /// allow/block mutation that finishes in seconds — Python start-up (~0.8 s) dominates — and
+    /// even <c>defenseclaw-gateway start</c>/<c>stop</c>, the slowest of the routine ones, settle
+    /// in well under half a minute. Two minutes therefore has a wide margin over any healthy
+    /// run while still bounding a wedged one to something an operator will sit through; the
+    /// worst case it caps is the tray's gateway toggle staying disabled, which is the reason
+    /// this value is not larger. Verbs that legitimately need longer are inferred into the
+    /// tiers below by <see cref="ResolveTimeout"/>, or pass a <see cref="CliRunOptions"/>.
+    /// </para>
+    /// </summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// Ceiling for verbs that do real work rather than reporting state — <c>doctor</c>,
+    /// <c>agent discover</c> and anything of the form <c>&lt;noun&gt; install</c> (downloads and
+    /// scans): 10 minutes.
+    /// </summary>
+    public static readonly TimeSpan ExtendedTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Ceiling for <c>defenseclaw setup …</c>, the wizard flows: 30 minutes. These can pull
+    /// container images or download scanners. The wizard's Cancel stops a run the operator is
+    /// watching, but an unattended hung one still needs a ceiling — and it has to be far beyond
+    /// any real download.
+    /// </summary>
+    public static readonly TimeSpan LongRunningTimeout = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// How long <see cref="Shutdown"/> waits, by default, for killed children to finish
+    /// reporting: 3 s. App exit must never hang on a child, so this is a bound, not a promise.
+    /// </summary>
+    public static readonly TimeSpan DefaultShutdownWait = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Largest explicit timeout accepted. <see cref="CancellationTokenSource.CancelAfter(TimeSpan)"/>
+    /// tops out near 49 days; rejecting up front turns a typo into a synchronous argument error
+    /// instead of a failure deep inside a recorded run.
+    /// </summary>
+    private static readonly TimeSpan MaxTimeout = TimeSpan.FromDays(30);
+
+    /// <summary>How long to wait for the stdout/stderr callbacks to see EOF after the child exits.</summary>
+    private static readonly TimeSpan StreamDrainTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// After a kill, how long to wait for the process to be reaped and its last output lines to
+    /// land. Bounded because a descendant that escaped the tree kill can hold the pipes open.
+    /// </summary>
+    private static readonly TimeSpan KillSettleTimeout = TimeSpan.FromSeconds(2);
+
     /// <summary>
     /// Substring checks only kick in for secrets at least this long — shorter values
     /// produce false positives against ordinary arguments.
@@ -65,6 +208,20 @@ public sealed class CliRunner
     private readonly object _gate = new();
     private readonly LinkedList<CliInvocation> _activity = new();
     private readonly List<SecretValue> _knownSecrets = new();
+
+    /// <summary>Runs between registration and completion. Guarded by <see cref="_gate"/>.</summary>
+    private readonly List<InFlightRun> _inFlight = new();
+
+    /// <summary>
+    /// The ambient shutdown signal, linked into every run that is not exempt. Deliberately never
+    /// disposed: a run that starts in the same instant as <see cref="Dispose"/> would otherwise
+    /// race a disposed source and throw from <c>CreateLinkedTokenSource</c>. It owns no timer and
+    /// no wait handle, so there is nothing to leak.
+    /// </summary>
+    private readonly CancellationTokenSource _shutdown = new();
+
+    /// <summary>Set once by <see cref="Shutdown"/>. Guarded by <see cref="_gate"/>.</summary>
+    private bool _shuttingDown;
 
     public CliRunner(DefenseClawPaths paths, int activityCapacity = 200)
     {
@@ -82,6 +239,34 @@ public sealed class CliRunner
     public int ActivityCapacity { get; }
 
     /// <summary>
+    /// True while a run marked <see cref="CliRunOptions.SurvivesShutdown"/> is in flight — in
+    /// practice the in-app upgrade. <see cref="Shutdown"/> deliberately leaves such a run alone,
+    /// so the shell asks before quitting over one rather than silently orphaning it.
+    /// </summary>
+    public bool HasShutdownSurvivingRun
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _inFlight.Any(r => r.SurvivesShutdown);
+            }
+        }
+    }
+
+    /// <summary>True once <see cref="Shutdown"/> or <see cref="Dispose"/> has been called.</summary>
+    public bool IsShutDown
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _shuttingDown;
+            }
+        }
+    }
+
+    /// <summary>
     /// Fires per output line, as it arrives, for live wizard consoles. Every captured line
     /// is raised exactly once regardless of retention: the per-invocation cap governs what
     /// is kept for later re-reads, not what is streamed out at capture time. Raised on the
@@ -92,6 +277,13 @@ public sealed class CliRunner
 
     public event EventHandler<CliInvocation>? InvocationStarted;
 
+    /// <summary>
+    /// Raised exactly once per recorded invocation, after <see cref="CliInvocation.FinishedAt"/>
+    /// is set — including when the run timed out, was cancelled, was refused because the app is
+    /// exiting, or failed to start. Raised on a thread-pool thread, and during
+    /// <see cref="Shutdown"/> possibly while the UI thread is blocked waiting for it, so a
+    /// handler must marshal with <c>BeginInvoke</c> and never <c>Invoke</c>.
+    /// </summary>
     public event EventHandler<CliInvocation>? InvocationCompleted;
 
     /// <summary>
@@ -137,47 +329,145 @@ public sealed class CliRunner
         }
     }
 
+    /// <summary>
+    /// The ceiling a run gets, or <c>null</c> for none.
+    /// <para>
+    /// An explicit <see cref="CliRunOptions.Timeout"/> always wins. Otherwise the tier is inferred
+    /// from the argv, and <b>only</b> for the <c>defenseclaw</c> CLI — the gateway binary is left
+    /// at <see cref="DefaultTimeout"/>, because a hung <c>defenseclaw-gateway start</c> is the
+    /// tray-toggle wedge this exists to bound and it should not get a longer leash:
+    /// <list type="bullet">
+    /// <item><description><c>setup …</c> — <see cref="LongRunningTimeout"/> (the wizards).</description></item>
+    /// <item><description><c>doctor</c>, <c>agent discover</c>, <c>&lt;noun&gt; install</c> — <see cref="ExtendedTimeout"/>.</description></item>
+    /// <item><description>everything else — <see cref="DefaultTimeout"/>.</description></item>
+    /// </list>
+    /// This is a fallback for call sites that pass no options, not a policy engine: it is a
+    /// handful of verbs, kept here so a wizard or panel that has not opted in is still covered.
+    /// A call site that knows better should pass a <see cref="CliRunOptions"/>.
+    /// </para>
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// An explicit timeout that is neither <see cref="System.Threading.Timeout.InfiniteTimeSpan"/>
+    /// nor a positive value of at most 30 days.
+    /// </exception>
+    public static TimeSpan? ResolveTimeout(
+        string executablePath,
+        IReadOnlyList<string> args,
+        CliRunOptions? options = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(executablePath);
+        ArgumentNullException.ThrowIfNull(args);
+
+        if (options?.Timeout is { } requested)
+        {
+            if (requested == Timeout.InfiniteTimeSpan)
+            {
+                return null;
+            }
+
+            if (requested <= TimeSpan.Zero || requested > MaxTimeout)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(options),
+                    requested,
+                    "Timeout must be positive and at most 30 days, or Timeout.InfiniteTimeSpan for none.");
+            }
+
+            return requested;
+        }
+
+        return InferTimeout(executablePath, args);
+    }
+
+    private static TimeSpan InferTimeout(string executablePath, IReadOnlyList<string> args)
+    {
+        if (args.Count == 0 ||
+            !string.Equals(Path.GetFileNameWithoutExtension(executablePath), "defenseclaw", StringComparison.OrdinalIgnoreCase))
+        {
+            return DefaultTimeout;
+        }
+
+        if (IsToken(args[0], "setup"))
+        {
+            return LongRunningTimeout;
+        }
+
+        if (IsToken(args[0], "doctor") ||
+            (args.Count > 1 && IsToken(args[0], "agent") && IsToken(args[1], "discover")) ||
+            (args.Count > 1 && IsToken(args[1], "install")))
+        {
+            return ExtendedTimeout;
+        }
+
+        return DefaultTimeout;
+    }
+
+    private static bool IsToken(string arg, string expected) =>
+        string.Equals(arg, expected, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Runs <c>defenseclaw</c>.</summary>
     public Task<CliInvocation> RunAsync(
         IReadOnlyList<string> args,
         SecretValue? stdinSecret = null,
-        CancellationToken cancellationToken = default) =>
-        RunNamedAsync("defenseclaw", args, stdinSecret, cancellationToken);
+        CancellationToken cancellationToken = default,
+        CliRunOptions? options = null) =>
+        RunNamedAsync("defenseclaw", args, stdinSecret, cancellationToken, options);
 
     /// <summary>Runs <c>defenseclaw-gateway</c>.</summary>
     public Task<CliInvocation> RunGatewayAsync(
         IReadOnlyList<string> args,
         SecretValue? stdinSecret = null,
-        CancellationToken cancellationToken = default) =>
-        RunNamedAsync("defenseclaw-gateway", args, stdinSecret, cancellationToken);
+        CancellationToken cancellationToken = default,
+        CliRunOptions? options = null) =>
+        RunNamedAsync("defenseclaw-gateway", args, stdinSecret, cancellationToken, options);
 
     /// <summary>Resolves <paramref name="executableName"/> through PATH then the install bin dir.</summary>
     public Task<CliInvocation> RunNamedAsync(
         string executableName,
         IReadOnlyList<string> args,
         SecretValue? stdinSecret = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        CliRunOptions? options = null)
     {
         var path = _paths.FindExecutable(executableName)
             ?? throw new CliNotFoundException(executableName, _paths.CandidatesFor(executableName));
 
-        return RunExecutableAsync(path, args, stdinSecret, cancellationToken);
+        return RunExecutableAsync(path, args, stdinSecret, cancellationToken, options);
     }
 
     /// <summary>
     /// Runs an explicit executable path. Uses <see cref="ProcessStartInfo.ArgumentList"/>,
     /// so no shell is involved and no quoting is required or performed.
+    /// <para>
+    /// <b>How a run can end.</b> Normally the child exits and <see cref="CliInvocation.ExitCode"/>
+    /// is set. Otherwise the run is stopped, its whole process tree is killed, and
+    /// <see cref="CliInvocation.FailureReason"/> says why while <see cref="CliInvocation.ExitCode"/>
+    /// stays <c>null</c>: <c>timed out after N s</c> (see <see cref="ResolveTimeout"/>),
+    /// <c>cancelled</c> (the caller's token), <c>cancelled: … exiting</c> (<see cref="Shutdown"/>),
+    /// or <c>not started</c> when the app was already exiting. None of them throws
+    /// <see cref="OperationCanceledException"/> — the outcome is data on the returned invocation.
+    /// </para>
     /// </summary>
+    /// <param name="options">
+    /// Timeout and app-exit behaviour for this call; <c>null</c> is <see cref="CliRunOptions.Default"/>.
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">An invalid explicit timeout in <paramref name="options"/>.</exception>
     public async Task<CliInvocation> RunExecutableAsync(
         string executablePath,
         IReadOnlyList<string> args,
         SecretValue? stdinSecret = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        CliRunOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(executablePath);
         ArgumentNullException.ThrowIfNull(args);
 
         GuardArguments(args, stdinSecret);
+
+        // Resolved before anything is recorded so a bad option is a plain argument error and
+        // leaves no half-recorded invocation behind.
+        var timeout = ResolveTimeout(executablePath, args, options);
+        var survivesShutdown = options?.SurvivesShutdown ?? false;
 
         var invocation = new CliInvocation(executablePath, args.ToArray(), DateTimeOffset.UtcNow)
         {
@@ -185,8 +475,154 @@ public sealed class CliRunner
         };
 
         Record(invocation);
-        InvocationStarted?.Invoke(this, invocation);
 
+        // Registered before the started event so that Shutdown, which reads this list, cannot
+        // slip between "recorded" and "tracked" and miss a run.
+        var run = TryRegister(survivesShutdown);
+
+        try
+        {
+            InvocationStarted?.Invoke(this, invocation);
+
+            if (run is null)
+            {
+                invocation.FailureReason =
+                    "not started — DefenseClaw for Windows is exiting, so no new commands are launched";
+            }
+            else
+            {
+                await SuperviseAsync(invocation, run, executablePath, args, stdinSecret, cancellationToken, timeout)
+                    .ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            // Whatever happened above — a normal exit, a kill, a start failure, a throwing
+            // event handler — the entry is finished and the completion event is raised once.
+            // An entry stuck "running" forever is the failure this whole block exists to prevent.
+            try
+            {
+                invocation.FinishedAt = DateTimeOffset.UtcNow;
+                InvocationCompleted?.Invoke(this, invocation);
+            }
+            finally
+            {
+                if (run is not null)
+                {
+                    lock (_gate)
+                    {
+                        _ = _inFlight.Remove(run);
+                    }
+
+                    // Signalled only after the completion event, so Shutdown's bounded wait
+                    // covers the whole tail of the run and not just the process kill.
+                    _ = run.Completed.TrySetResult();
+                }
+            }
+        }
+
+        return invocation;
+    }
+
+    /// <summary>
+    /// Ends the runner's life for app exit: refuses new runs, and cancels and kills the process
+    /// tree of every in-flight run that is not <see cref="CliRunOptions.SurvivesShutdown"/>.
+    /// <para>
+    /// <b>Bounded.</b> Blocks the calling thread for at most <paramref name="wait"/> (default
+    /// <see cref="DefaultShutdownWait"/>) while the killed runs finish reporting — enough for
+    /// their invocations to be marked finished and <see cref="InvocationCompleted"/> raised, not
+    /// enough for a stuck child to hold the app open. The kill itself does not depend on that
+    /// wait: this method terminates each tracked process directly before waiting, so the children
+    /// are gone even if a pool thread is slow to run the continuation.
+    /// </para>
+    /// <para>
+    /// <b>Survivors.</b> A run started with <see cref="CliRunOptions.SurvivesShutdown"/> — the
+    /// upgrade installer and resolver — is not touched: it keeps running, it is not cancelled by
+    /// this call, and it may still be started after it. Only its caller's own token can end it.
+    /// After the app process exits it simply carries on unsupervised; a child is not part of a
+    /// Windows job that dies with its parent.
+    /// </para>
+    /// <para>
+    /// Idempotent. Safe to call from <c>OnExit</c> and again from a <c>Dispose</c> that follows;
+    /// the second call finds nothing left to kill and returns at once.
+    /// </para>
+    /// </summary>
+    /// <param name="wait">Upper bound on the wait; <c>null</c> uses <see cref="DefaultShutdownWait"/>.</param>
+    /// <returns>
+    /// <c>true</c> when every non-exempt run had finished by the time this returned;
+    /// <c>false</c> when the wait expired first (the kills were still issued).
+    /// </returns>
+    public bool Shutdown(TimeSpan? wait = null)
+    {
+        var budget = wait ?? DefaultShutdownWait;
+        if (budget < TimeSpan.Zero)
+        {
+            budget = TimeSpan.Zero;
+        }
+
+        InFlightRun[] victims;
+        lock (_gate)
+        {
+            _shuttingDown = true;
+            victims = _inFlight.Where(r => !r.SurvivesShutdown).ToArray();
+        }
+
+        // Cancelling first means every victim, when it observes its own cancellation, can see
+        // that shutdown is the reason and report it as such.
+        _shutdown.Cancel();
+
+        foreach (var victim in victims)
+        {
+            if (victim.CurrentProcess is { } process)
+            {
+                TryKill(process);
+            }
+        }
+
+        return victims.Length == 0 ||
+               Task.WhenAll(victims.Select(v => v.Completed.Task)).Wait(budget);
+    }
+
+    /// <summary>
+    /// Same as <see cref="Shutdown"/> with the default bound. Lets <c>AppServices.Dispose</c>
+    /// own the runner like every other service it tears down.
+    /// </summary>
+    public void Dispose() => _ = Shutdown();
+
+    /// <summary>
+    /// Adds a run to the in-flight set, or returns <c>null</c> when shutdown has begun and this
+    /// run is not exempt — in which case nothing may be started. Exempt runs are always tracked
+    /// (so that a later diagnostic can see them) but are never selected as shutdown victims.
+    /// </summary>
+    private InFlightRun? TryRegister(bool survivesShutdown)
+    {
+        lock (_gate)
+        {
+            if (_shuttingDown && !survivesShutdown)
+            {
+                return null;
+            }
+
+            var run = new InFlightRun(survivesShutdown);
+            _inFlight.Add(run);
+            return run;
+        }
+    }
+
+    /// <summary>
+    /// Starts the child and holds it to <paramref name="timeout"/>, <paramref name="callerToken"/>
+    /// and — unless exempt — the ambient shutdown signal. Fills in the invocation's outcome; the
+    /// caller finishes it.
+    /// </summary>
+    private async Task SuperviseAsync(
+        CliInvocation invocation,
+        InFlightRun run,
+        string executablePath,
+        IReadOnlyList<string> args,
+        SecretValue? stdinSecret,
+        CancellationToken callerToken,
+        TimeSpan? timeout)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = executablePath,
@@ -209,24 +645,97 @@ public sealed class CliRunner
         var stdoutDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stderrDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        process.OutputDataReceived += (_, e) => Capture(invocation, CliStream.StandardOutput, e.Data, stdoutDone);
-        process.ErrorDataReceived += (_, e) => Capture(invocation, CliStream.StandardError, e.Data, stderrDone);
+        // The per-call stdin secret is scrubbed from this run's output alongside the registered
+        // ones. It is not in _knownSecrets (it belongs to this one call), so without passing it
+        // down a child that echoes its stdin — a CLI reporting "invalid key: <key>" — would put the
+        // very value the wizard promised to keep out of the Activity panel straight into it.
+        process.OutputDataReceived += (_, e) => Capture(invocation, CliStream.StandardOutput, e.Data, stdoutDone, stdinSecret);
+        process.ErrorDataReceived += (_, e) => Capture(invocation, CliStream.StandardError, e.Data, stderrDone, stdinSecret);
+
+        // One token for everything that may end this run early. The timeout is armed here, before
+        // the launch, so the clock covers the whole life of the child. Shutdown is linked in only
+        // for runs that are allowed to be ended by it — an exempt run's stop token is its
+        // caller's and its timeout, nothing else.
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(
+            callerToken,
+            run.SurvivesShutdown ? CancellationToken.None : _shutdown.Token);
+
+        if (timeout is { } limit)
+        {
+            stop.CancelAfter(limit);
+        }
 
         try
         {
+            // Never launch a child for a run that is already over — a token cancelled before the
+            // call, or a shutdown that began between registration and here.
+            stop.Token.ThrowIfCancellationRequested();
             process.Start();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             invocation.FailureReason = ex.Message;
-            invocation.FinishedAt = DateTimeOffset.UtcNow;
-            InvocationCompleted?.Invoke(this, invocation);
-            return invocation;
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            invocation.FailureReason = DescribeStop(ClassifyStop(callerToken, run), timeout, processStarted: false);
+            return;
         }
 
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        run.Attach(process);
+        var settled = false;
 
+        try
+        {
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            // Inside the supervised section on purpose: a child that never reads stdin leaves this
+            // write blocked once the pipe is full, and a cancellation or timeout that lands then
+            // surfaces as an OperationCanceledException from here. It takes the same catch below
+            // as one from WaitForExitAsync — kill the tree, record why — rather than escaping.
+            await WriteStdinAsync(process, stdinSecret, stop.Token).ConfigureAwait(false);
+
+            await process.WaitForExitAsync(stop.Token).ConfigureAwait(false);
+            await Task.WhenAll(stdoutDone.Task, stderrDone.Task).WaitAsync(StreamDrainTimeout).ConfigureAwait(false);
+            invocation.ExitCode = process.ExitCode;
+            settled = true;
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            invocation.FailureReason = DescribeStop(ClassifyStop(callerToken, run), timeout, processStarted: true);
+            await KillAndSettleAsync(process, stdoutDone.Task, stderrDone.Task).ConfigureAwait(false);
+            settled = true;
+        }
+        catch (TimeoutException)
+        {
+            // Streams did not close cleanly; the exit code is still meaningful.
+            invocation.ExitCode = process.HasExited ? process.ExitCode : null;
+            settled = true;
+        }
+        finally
+        {
+            // Detached before the Process is disposed at the end of this method, so Shutdown
+            // never reaches for a handle that is about to be closed.
+            run.Detach();
+
+            if (!settled)
+            {
+                // An exception nobody here anticipates is on its way out. Whatever it is, it
+                // must not leave the child running with no one left holding a reference to it.
+                TryKill(process);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes the secret (if any) and closes stdin. A child that exited before reading it is not
+    /// an error. Cancellation is not swallowed — it propagates to <see cref="SuperviseAsync"/>,
+    /// which owns turning it into a kill and a recorded reason.
+    /// </summary>
+    private static async Task WriteStdinAsync(Process process, SecretValue? stdinSecret, CancellationToken cancellationToken)
+    {
         try
         {
             if (stdinSecret is { IsEmpty: false })
@@ -251,27 +760,73 @@ public sealed class CliRunner
             {
             }
         }
+    }
 
+    /// <summary>
+    /// Kills the tree, then gives the process a moment to be reaped and its last lines of output
+    /// to arrive, so the transcript shows what the child said before it was stopped. Bounded by
+    /// <see cref="KillSettleTimeout"/> in total: a descendant that survived the kill and still
+    /// holds the pipes must not turn a stop into another hang.
+    /// </summary>
+    private static async Task KillAndSettleAsync(Process process, Task stdoutDone, Task stderrDone)
+    {
+        TryKill(process);
+
+        using var settle = new CancellationTokenSource(KillSettleTimeout);
         try
         {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            await Task.WhenAll(stdoutDone.Task, stderrDone.Task).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-            invocation.ExitCode = process.ExitCode;
+            await process.WaitForExitAsync(settle.Token).ConfigureAwait(false);
+            await Task.WhenAll(stdoutDone, stderrDone).WaitAsync(settle.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            invocation.FailureReason = "cancelled";
-            TryKill(process);
+            // Did not settle in time; the reason is already recorded, and that is what matters.
         }
-        catch (TimeoutException)
+        catch (InvalidOperationException)
         {
-            // Streams did not close cleanly; the exit code is still meaningful.
-            invocation.ExitCode = process.HasExited ? process.ExitCode : null;
+            // The process object is no longer usable, i.e. it is gone.
+        }
+    }
+
+    /// <summary>Why a run was stopped, decided from which of its three sources actually fired.</summary>
+    private enum StopKind
+    {
+        Cancelled,
+        Shutdown,
+        TimedOut,
+    }
+
+    /// <summary>
+    /// The caller's token outranks shutdown, which outranks the timeout: someone who explicitly
+    /// cancelled should be told they did, and an app that is exiting is a better explanation than
+    /// a clock that happened to expire in the same moment.
+    /// </summary>
+    private StopKind ClassifyStop(CancellationToken callerToken, InFlightRun run)
+    {
+        if (callerToken.IsCancellationRequested)
+        {
+            return StopKind.Cancelled;
         }
 
-        invocation.FinishedAt = DateTimeOffset.UtcNow;
-        InvocationCompleted?.Invoke(this, invocation);
-        return invocation;
+        return !run.SurvivesShutdown && _shutdown.IsCancellationRequested
+            ? StopKind.Shutdown
+            : StopKind.TimedOut;
+    }
+
+    private static string DescribeStop(StopKind kind, TimeSpan? timeout, bool processStarted)
+    {
+        // "process tree killed" is only said when there was a process to kill.
+        var tail = processStarted ? " — process tree killed" : " — nothing was started";
+
+        // "120", "2", "0.5": whole seconds print bare, so the reason reads "timed out after 120 s".
+        var seconds = (timeout ?? TimeSpan.Zero).TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture);
+
+        return kind switch
+        {
+            StopKind.TimedOut => $"timed out after {seconds} s{tail}",
+            StopKind.Shutdown => $"cancelled: DefenseClaw for Windows is exiting{tail}",
+            _ => $"cancelled{tail}",
+        };
     }
 
     /// <summary>
@@ -322,7 +877,12 @@ public sealed class CliRunner
         }
     }
 
-    private void Capture(CliInvocation invocation, CliStream stream, string? data, TaskCompletionSource completion)
+    private void Capture(
+        CliInvocation invocation,
+        CliStream stream,
+        string? data,
+        TaskCompletionSource completion,
+        SecretValue? callSecret)
     {
         if (data is null)
         {
@@ -330,31 +890,43 @@ public sealed class CliRunner
             return;
         }
 
-        var line = new CliOutputLine(DateTimeOffset.UtcNow, stream, Scrub(data));
+        var line = new CliOutputLine(DateTimeOffset.UtcNow, stream, Scrub(data, callSecret));
         invocation.Append(line);
         OutputReceived?.Invoke(this, line);
     }
 
-    /// <summary>Removes any registered secret that leaked into subprocess output.</summary>
-    private string Scrub(string text)
+    /// <summary>
+    /// Removes every secret that leaked into subprocess output: each one passed to
+    /// <see cref="RegisterSecret"/>, plus <paramref name="callSecret"/> — the per-call
+    /// <c>stdinSecret</c> of the run this line belongs to.
+    /// <para>
+    /// Occurrences are replaced wherever they appear in a line, with no minimum length (unlike the
+    /// argv guard, which skips substring checks below <see cref="MinimumSubstringGuardLength"/>):
+    /// a false positive here only garbles a diagnostic, while a miss discloses a secret. Matching
+    /// is per line, so a secret that itself contains a newline is not recognised once the child
+    /// splits it across lines; the secrets this app pipes in (tokens, API keys) are single-line.
+    /// </para>
+    /// </summary>
+    private string Scrub(string text, SecretValue? callSecret)
     {
-        List<SecretValue> secrets;
+        List<SecretValue>? secrets = null;
         lock (_gate)
         {
-            if (_knownSecrets.Count == 0)
+            if (_knownSecrets.Count > 0)
             {
-                return text;
+                secrets = new List<SecretValue>(_knownSecrets);
             }
-
-            secrets = new List<SecretValue>(_knownSecrets);
         }
 
-        foreach (var secret in secrets)
+        if (secrets is not null)
         {
-            text = secret.Scrub(text);
+            foreach (var secret in secrets)
+            {
+                text = secret.Scrub(text);
+            }
         }
 
-        return text;
+        return callSecret is { IsEmpty: false } ? callSecret.Scrub(text) : text;
     }
 
     private void Record(CliInvocation invocation)
@@ -369,23 +941,54 @@ public sealed class CliRunner
         }
     }
 
+    /// <summary>
+    /// Best-effort kill of the process and every descendant. Never throws, and deliberately does
+    /// not pre-check <see cref="Process.HasExited"/>: a parent that already exited can still have
+    /// descendants worth killing, and the framework skips whatever is not there.
+    /// <para>
+    /// Every failure is swallowed because there is nobody to tell — this runs from a timeout, a
+    /// cancellation and app exit, and all three are already reporting a stop. The realistic ones
+    /// are the process having just exited (<see cref="InvalidOperationException"/>), a descendant
+    /// that ended between the snapshot and the kill (<see cref="System.ComponentModel.Win32Exception"/>,
+    /// <see cref="AggregateException"/>), and a <see cref="Process"/> disposed by its own run a
+    /// moment before <see cref="Shutdown"/> got to it.
+    /// </para>
+    /// </summary>
     private static void TryKill(Process process)
     {
         try
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
+            process.Kill(entireProcessTree: true);
         }
-        catch (InvalidOperationException)
+        catch (Exception)
         {
+            // See the method comment: best effort, and nobody to report to.
         }
-        catch (System.ComponentModel.Win32Exception)
+    }
+
+    /// <summary>
+    /// One run's handle for <see cref="Shutdown"/>: whether it is exempt, which process to kill
+    /// once there is one, and a signal for when the run has fully finished reporting.
+    /// </summary>
+    private sealed class InFlightRun
+    {
+        private Process? _process;
+
+        public InFlightRun(bool survivesShutdown)
         {
+            SurvivesShutdown = survivesShutdown;
         }
-        catch (NotSupportedException)
-        {
-        }
+
+        public bool SurvivesShutdown { get; }
+
+        /// <summary>Completed by the run's own <c>finally</c>, after the completion event.</summary>
+        public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Null before the child is launched and again once the run lets go of it.</summary>
+        public Process? CurrentProcess => Volatile.Read(ref _process);
+
+        public void Attach(Process process) => Volatile.Write(ref _process, process);
+
+        public void Detach() => Volatile.Write(ref _process, null);
     }
 }

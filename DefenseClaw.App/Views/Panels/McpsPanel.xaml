@@ -101,11 +101,25 @@
                         <TextBlock FontSize="12" Text="Transport (stdio, sse)" />
                         <ui:TextBox Text="{Binding SetTransport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <TextBlock FontSize="12" Text="Env (KEY=VAL)" />
-                        <ui:TextBox Text="{Binding SetEnv, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
                 </UniformGrid>
+
+                <!-- Env is repeatable KEY=VAL on the CLI, so it gets a multi-line box of its own
+                     (a UniformGrid cell would stretch every other cell to match). One entry per
+                     line, or separated by semicolons; each becomes its own env flag. -->
+                <StackPanel Margin="0,0,0,8">
+                    <TextBlock FontSize="12" Text="Env (one KEY=VAL per line, or separated by ;)" />
+                    <ui:TextBox AcceptsReturn="True"
+                                MinLines="2"
+                                MaxLines="6"
+                                TextWrapping="Wrap"
+                                VerticalScrollBarVisibility="Auto"
+                                Text="{Binding SetEnv, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Margin="0,4,0,0"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Text="Env values are placed on the command line: they show in the confirm box and the Activity panel and are visible to other processes on this machine. Do not put secrets here." />
+                </StackPanel>
                 <CheckBox Margin="0,4,0,0"
                           Content="Skip security scan before adding"
                           IsChecked="{Binding SetSkipScan, Mode=TwoWay}" />
@@ -226,7 +240,7 @@
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding Blocked.Count, StringFormat='Blocked ({0})'}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding BlockedHeader}" />
                             <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Blocked}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -254,6 +268,13 @@
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Text="No blocked MCP servers."
                                        Visibility="{Binding DataContext.NoBlockedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
+                            <!-- The list could not be read: say so, rather than "No blocked MCP servers." -->
+                            <TextBlock Margin="0,4,0,0"
+                                       FontStyle="Italic"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Text="{Binding BlockedUnavailable}"
+                                       Visibility="{Binding HasBlockedUnavailable, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
 
@@ -264,7 +285,7 @@
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding Allowed.Count, StringFormat='Allowed ({0})'}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding AllowedHeader}" />
                             <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Allowed}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -292,6 +313,12 @@
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Text="No allow-listed MCP servers."
                                        Visibility="{Binding DataContext.NoAllowedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       FontStyle="Italic"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Text="{Binding AllowedUnavailable}"
+                                       Visibility="{Binding HasAllowedUnavailable, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -320,6 +347,12 @@
                                FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="This is the exact command that will run. Nothing happens until you confirm." />
+                    <TextBlock Margin="0,8,0,0"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Text="{Binding ConfirmNote}"
+                               Visibility="{Binding ConfirmNote, Converter={StaticResource Truthy}}" />
                     <Border Margin="0,10,0,0"
                             Padding="10"
                             CornerRadius="4"

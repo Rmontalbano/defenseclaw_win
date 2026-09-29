@@ -12,6 +12,15 @@ namespace DefenseClaw.App.ViewModels;
 /// Reads the same <see cref="GatewaySnapshot"/> the main window does, so the flyout can
 /// never disagree with the dashboard.
 /// </para>
+/// <para>
+/// Two subscriptions, both for the life of the process (the flyout is a tray surface, not a
+/// panel, and nothing tells this view-model when the flyout window is showing):
+/// <see cref="GatewayMonitor.StateChanged"/> for everything that can change materially, and
+/// <see cref="GatewayMonitor.PollCompleted"/> for the one volatile field it prints,
+/// <see cref="LastPolled"/>. The second costs one dispatcher hop and one short string per
+/// poll; it exists so the "polled at" line stays truthful without turning every poll back
+/// into a full StateChanged fan-out.
+/// </para>
 /// </summary>
 public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
 {
@@ -59,6 +68,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         _exit = exit ?? throw new ArgumentNullException(nameof(exit));
 
         _services.Monitor.StateChanged += OnStateChanged;
+        _services.Monitor.PollCompleted += OnPollCompleted;
         Apply(_services.Monitor.Current);
     }
 
@@ -71,6 +81,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
 
         _disposed = true;
         _services.Monitor.StateChanged -= OnStateChanged;
+        _services.Monitor.PollCompleted -= OnPollCompleted;
     }
 
     [RelayCommand]
@@ -81,17 +92,32 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
 
     private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e) => Apply(e.Snapshot);
 
+    /// <summary>
+    /// The cheap path for the one field StateChanged does not carry: the time of the last
+    /// poll, which moves every few seconds while everything else usually does not.
+    /// </summary>
+    private void OnPollCompleted(object? sender, GatewaySnapshotEventArgs e) =>
+        LastPolled = FormatPolledAt(e.Snapshot.PolledAt);
+
+    private static string FormatPolledAt(DateTimeOffset polledAt) =>
+        polledAt == DateTimeOffset.MinValue
+            ? "never"
+            : polledAt.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture);
+
     private void Apply(GatewaySnapshot snapshot)
     {
         StateLabel = snapshot.StateLabel;
         StateDetail = snapshot.Detail;
-        StateBrush = new SolidColorBrush(ShieldIconFactory.ColorFor(ShieldIconFactory.StateFor(snapshot)));
+        StateBrush = StateBrushes.For(ShieldIconFactory.StateFor(snapshot));
         ConnectorSummary = snapshot.ConnectorSummary;
         VersionSummary = string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
             ? $"127.0.0.1:{snapshot.ApiPort}"
             : $"DefenseClaw {snapshot.BinaryVersion} · 127.0.0.1:{snapshot.ApiPort}";
 
-        AlertSummary = snapshot.AlertsUnavailable is { Length: > 0 } reason
+        // Before the first poll there is no alert data at all; "0 in the last 25" would be a claim.
+        AlertSummary = snapshot.PolledAt == DateTimeOffset.MinValue
+            ? "—"
+            : snapshot.AlertsUnavailable is { Length: > 0 } reason
             ? reason
             : $"{snapshot.AlertCount} in the last {GatewayMonitor.AlertLimit}" +
               (snapshot.CriticalAlertCount > 0 ? $" · {snapshot.CriticalAlertCount} CRITICAL" : string.Empty);
@@ -109,8 +135,6 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
             HasFailModeNote = false;
         }
 
-        LastPolled = snapshot.PolledAt == DateTimeOffset.MinValue
-            ? "never"
-            : snapshot.PolledAt.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture);
+        LastPolled = FormatPolledAt(snapshot.PolledAt);
     }
 }

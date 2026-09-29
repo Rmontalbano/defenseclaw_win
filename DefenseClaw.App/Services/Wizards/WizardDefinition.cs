@@ -28,6 +28,15 @@ public enum PlatformStatus
 
     /// <summary>Declared <c>unsupported</c>: the feature cannot work on this platform at all.</summary>
     Unsupported,
+
+    /// <summary>
+    /// The target is not a connector, so certification does not apply to it: rotate-token,
+    /// webhook, llm, remove, the scanners and the like carry no <c>Platform status on
+    /// windows:</c> line because there is nothing to certify — not because they passed.
+    /// Appended after <see cref="Unsupported"/> so no existing numeric value moves.
+    /// Neutral badge, no in-wizard warning, and never counted as certified.
+    /// </summary>
+    NotApplicable,
 }
 
 /// <summary>The control a field renders as, and how it turns into argv.</summary>
@@ -392,6 +401,7 @@ public static class PlatformStatusText
         PlatformStatus.Certified => "Certified on Windows",
         PlatformStatus.NotCertified => "Not certified on Windows",
         PlatformStatus.Unsupported => "Unsupported on Windows",
+        PlatformStatus.NotApplicable => "No platform rating",
         _ => "Certification unknown",
     };
 
@@ -401,7 +411,7 @@ public static class PlatformStatusText
         PlatformStatus.Certified => "Ok",
         PlatformStatus.NotCertified => "Warn",
         PlatformStatus.Unsupported => "Bad",
-        _ => "Neutral",
+        _ => "Neutral", // Unknown and NotApplicable: never a green light, never an alarm.
     };
 
     public static string Warning(PlatformStatus status, string note)

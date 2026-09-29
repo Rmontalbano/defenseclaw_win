@@ -142,7 +142,17 @@ public sealed class CliInvocation
 
     public int? ExitCode { get; internal set; }
 
-    /// <summary>Set when the process could not be started or was cancelled.</summary>
+    /// <summary>
+    /// Set when the run did not end with the child exiting on its own: the process could not be
+    /// started, or <see cref="CliRunner"/> stopped it and killed its process tree. The text says
+    /// which — <c>timed out after N s</c>, <c>cancelled</c> (the caller's token),
+    /// <c>cancelled: DefenseClaw for Windows is exiting</c> (app shutdown), or <c>not started</c>.
+    /// <para>
+    /// A stopped run has no <see cref="ExitCode"/>: the value a killed process reports is an
+    /// artefact of the kill, not something the CLI said, so it is left <c>null</c> rather than
+    /// recorded. Any non-null reason therefore means <see cref="Succeeded"/> is false.
+    /// </para>
+    /// </summary>
     public string? FailureReason { get; internal set; }
 
     /// <summary>True when a secret was piped in on stdin. The secret itself is never stored.</summary>

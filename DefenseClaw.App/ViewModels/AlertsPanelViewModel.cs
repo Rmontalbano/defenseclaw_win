@@ -25,6 +25,35 @@ namespace DefenseClaw.App.ViewModels;
 /// evidence, and a collapse-repeats switch that folds identical signature+action pairs
 /// into one row with a count.
 /// </para>
+/// <para>
+/// <b>What re-projects, and when.</b> The health poll runs every five seconds but
+/// <c>/alerts</c> is only re-read every thirty, and <see cref="GatewayMonitor"/> hands back
+/// the same <see cref="GatewaySnapshot.RecentAlerts"/> instance whenever a fresh answer shows
+/// the same findings. So a poll that brings that same list re-projects nothing — it only
+/// refreshes the "refreshed …" note — and a poll that brings a different list projects only
+/// the alerts it has not seen (an alert id names an immutable audit row, so an already
+/// projected row is reused, which also skips its JSON flattening). The bound list is then
+/// merged by alert key rather than cleared and refilled, so scroll position and the selected
+/// row survive. None of this runs while the panel is not on screen: it listens to
+/// <see cref="GatewayMonitor.PollCompleted"/> and runs its relative-time clock only between
+/// <see cref="OnActivated"/> and <see cref="OnDeactivated"/>.
+/// </para>
+/// <para>
+/// <b>What "refreshed" means.</b> The health poll's <see cref="GatewaySnapshot.PolledAt"/>
+/// says nothing about the alert list, which is re-read on its own slower cadence. The note
+/// above the list therefore prints <see cref="GatewaySnapshot.AlertsFetchedAt"/> — when
+/// <c>/alerts</c> last answered — and the Refresh button forces that read
+/// (<see cref="GatewayMonitor.RefreshAlertsNowAsync"/>) instead of re-running a health poll
+/// that would skip it. While the list came from the audit fallback, the note keeps saying
+/// so on every poll, not only on the poll that loaded it.
+/// </para>
+/// <para>
+/// <b>Filters act on the normalized severity.</b> A finding's stored severity can be a
+/// spelling the toggles do not have (<c>WARN</c>, <c>FATAL</c>, <c>MODERATE</c>);
+/// <see cref="AlertItem.SeverityKey"/> folds those into the bucket the row is coloured as,
+/// and the toggles filter on that same key, so a row is always hidden by exactly the toggle
+/// its chip looks like.
+/// </para>
 /// </summary>
 public sealed partial class AlertsPanelViewModel : PanelViewModelBase
 {
@@ -35,6 +64,36 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     private readonly DispatcherTimer _clock;
     private int _loadingFallback;
     private DateTimeOffset _lastFallbackLoad = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// Why <c>/alerts</c> is not being served, as of the last snapshot applied; null while it
+    /// is. The fallback load reads it when it finishes, so a load that outlives the outage
+    /// does not decorate a note that no longer describes one.
+    /// </summary>
+    private string? _alertsUnavailableReason;
+
+    /// <summary>
+    /// The empty-state text the current <i>source</i> calls for. What the overlay actually
+    /// shows also depends on whether the filters are hiding loaded alerts; see
+    /// <see cref="ShowEmptyText"/>.
+    /// </summary>
+    private string _sourceEmptyTitle = "No alerts yet";
+
+    private string _sourceEmptyDetail = "The first alert poll has not completed.";
+
+    /// <summary>
+    /// The monitor's alert list that <see cref="_all"/> was last projected from; null when
+    /// <see cref="_all"/> came from audit.db or has not been filled. A poll whose
+    /// <see cref="GatewaySnapshot.RecentAlerts"/> is this very instance has nothing to project.
+    /// </summary>
+    private IReadOnlyList<GatewayAlert>? _appliedAlerts;
+
+    /// <summary>
+    /// True while <see cref="_all"/> holds audit.db rows. The two sources project the same
+    /// alert to slightly different rows (the audit path has no tags or confidence), so rows
+    /// are never reused, and the bound list never merged, across a switch of source.
+    /// </summary>
+    private bool _allFromAudit;
 
     [ObservableProperty]
     private string _filterText = string.Empty;
@@ -71,13 +130,11 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
             SeverityFilters.Add(filter);
         }
 
-        Services.Monitor.StateChanged += OnStateChanged;
-
         // Relative timestamps go stale silently, which is the worst way for a monitoring
-        // panel to lie. One timer re-stamps the visible rows.
+        // panel to lie. One timer re-stamps the rows - but only while someone can read them;
+        // OnActivated starts it and re-stamps once so a returning operator never sees old text.
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
         _clock.Tick += (_, _) => RestampTimes();
-        _clock.Start();
     }
 
     public override string Title => "Alerts";
@@ -99,14 +156,40 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Catch-up first, then listen: <c>Apply</c> compares against what is already projected,
+    /// so returning to an unchanged alert list re-projects nothing, and a list that moved on
+    /// while the panel was away is rebuilt before it is seen.
+    /// </summary>
+    protected override void OnActivated()
+    {
+        Apply(Services.Monitor.Current);
+        RestampTimes();
+
+        Services.Monitor.PollCompleted += OnPollCompleted;
+        _clock.Start();
+    }
+
+    protected override void OnDeactivated()
+    {
+        Services.Monitor.PollCompleted -= OnPollCompleted;
+        _clock.Stop();
+    }
+
     partial void OnFilterTextChanged(string value) => ApplyFilters();
 
     partial void OnCollapseRepeatsChanged(bool value) => ApplyFilters();
 
+    /// <summary>
+    /// Forces a real <c>/alerts</c> read. <see cref="GatewayMonitor.RefreshAsync"/> would only
+    /// re-run the health poll, which skips <c>/alerts</c> until its 30 s throttle expires — the
+    /// button would then relabel a list that was never re-fetched. The fallback's own 30 s
+    /// throttle is reset too, so a gateway that is still down re-reads audit.db now.
+    /// </summary>
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        var snapshot = await Services.Monitor.RefreshAsync();
+        var snapshot = await Services.Monitor.RefreshAlertsNowAsync();
         _lastFallbackLoad = DateTimeOffset.MinValue;
         Apply(snapshot);
     }
@@ -122,10 +205,15 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         }
     }
 
-    private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e) => Apply(e.Snapshot);
+    /// <summary>
+    /// Every poll, not just StateChanged: the fallback's 30 s reload cadence and the
+    /// "refreshed …" note both ride the poll, and StateChanged is silent on an idle box.
+    /// <c>Apply</c> decides what, if anything, actually needs rebuilding.
+    /// </summary>
+    private void OnPollCompleted(object? sender, GatewaySnapshotEventArgs e) => Apply(e.Snapshot);
 
     /// <summary>
-    /// Rebuilds the master list from one snapshot. <c>NotConnected</c> and
+    /// Brings the master list in line with one snapshot. <c>NotConnected</c> and
     /// <c>Unauthorized</c> are informational: the panel says why the stream is quiet and
     /// falls back to the audit database rather than showing an error.
     /// </summary>
@@ -133,7 +221,15 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     {
         if (snapshot.AlertsUnavailable is { Length: > 0 } reason)
         {
-            SourceNote = reason;
+            _alertsUnavailableReason = reason;
+
+            // Rebuilt on every poll, so the audit suffix has to be part of the rebuild: the
+            // fallback only reloads every 30 s, and a note that dropped its suffix for the
+            // five polls in between claimed the list below had no source.
+            SourceNote = WithFallbackNote(reason);
+
+            // The master list no longer mirrors /alerts, so the next answer must re-project.
+            _appliedAlerts = null;
 
             if (Services.Audit.Exists && DateTimeOffset.UtcNow - _lastFallbackLoad > TimeSpan.FromSeconds(30))
             {
@@ -148,17 +244,81 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
             return;
         }
 
-        _all.Clear();
-        foreach (var alert in snapshot.RecentAlerts)
+        _alertsUnavailableReason = null;
+
+        // The Initial snapshot: no poll has completed, so there is no answer to describe (its
+        // AlertsUnavailable is null, which would otherwise read as "the gateway reported none").
+        if (snapshot.PolledAt == DateTimeOffset.MinValue)
         {
-            _all.Add(AlertItem.FromGateway(alert));
+            SourceNote = "Waiting for the first alert poll…";
+            SetEmpty("No alerts yet", "The first alert poll has not completed.");
+            return;
         }
 
-        SourceNote = $"GET /alerts · newest {GatewayMonitor.AlertLimit} · refreshed {Relative(snapshot.PolledAt)}";
+        // AlertsFetchedAt, not PolledAt: the health poll runs every few seconds but /alerts is
+        // re-read on its own slower cadence, so PolledAt would say "just now" about a list
+        // that is up to 30 s old. Null means /alerts has never answered.
+        var fetched = snapshot.AlertsFetchedAt is { } at ? Relative(at) : "never";
+        SourceNote = $"GET /alerts · newest {GatewayMonitor.AlertLimit} · fetched {fetched}";
         SetEmpty(
             "No alerts in the last poll",
             "The gateway is answering and reported no findings in the most recent window.");
+
+        // The same list instance means the same findings (see GatewayMonitor), and the
+        // filters re-run themselves when they change - nothing else can alter the result.
+        if (ReferenceEquals(_appliedAlerts, snapshot.RecentAlerts))
+        {
+            return;
+        }
+
+        ProjectGatewayAlerts(snapshot.RecentAlerts);
         ApplyFilters();
+    }
+
+    /// <summary>
+    /// Rebuilds the master list from a /alerts answer, reusing the row for any alert already
+    /// projected: an alert id is an immutable audit row, and the row is where the cost is
+    /// (the attribute bag is sorted, flattened and pretty-printed twice). Only alerts new
+    /// since the last projection pay for it. An alert without an id gets a fresh identity per
+    /// projection and is never reused.
+    /// </summary>
+    private void ProjectGatewayAlerts(IReadOnlyList<GatewayAlert> alerts)
+    {
+        Dictionary<string, AlertItem>? reusable = null;
+        if (_allFromAudit)
+        {
+            // Different source, different row shape; the bound list starts over too.
+            if (Alerts.Count > 0)
+            {
+                Alerts.Clear();
+            }
+        }
+        else if (_all.Count > 0)
+        {
+            reusable = new Dictionary<string, AlertItem>(_all.Count, StringComparer.Ordinal);
+            foreach (var item in _all)
+            {
+                _ = reusable.TryAdd(item.Key, item);
+            }
+        }
+
+        var projected = new List<AlertItem>(alerts.Count);
+        foreach (var alert in alerts)
+        {
+            if (alert.Id.Length > 0 && reusable is not null && reusable.Remove(alert.Id, out var existing))
+            {
+                projected.Add(existing);
+            }
+            else
+            {
+                projected.Add(AlertItem.FromGateway(alert));
+            }
+        }
+
+        _all.Clear();
+        _all.AddRange(projected);
+        _allFromAudit = false;
+        _appliedAlerts = alerts;
     }
 
     /// <summary>
@@ -183,13 +343,29 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
             var page = await Services.Audit.QueryAsync(query, CancellationToken.None);
             _lastFallbackLoad = DateTimeOffset.UtcNow;
 
+            if (!_allFromAudit && Alerts.Count > 0)
+            {
+                // Different source, different row shape; see _allFromAudit.
+                Alerts.Clear();
+            }
+
             _all.Clear();
             foreach (var row in page.Events)
             {
                 _all.Add(AlertItem.FromAudit(row));
             }
 
-            SourceNote += $" · showing {_all.Count} finding(s) from audit.db instead";
+            _allFromAudit = true;
+            _appliedAlerts = null;
+
+            // Rebuilt from the reason rather than appended to whatever the note is now: a poll
+            // may have replaced it while the query ran, and the gateway may even have come
+            // back (then the next poll re-projects /alerts and the note is not this one's).
+            if (_alertsUnavailableReason is { } reason)
+            {
+                SourceNote = WithFallbackNote(reason);
+            }
+
             SetEmpty(
                 "No findings recorded",
                 "The gateway is not serving alerts and audit.db holds no security.finding rows yet.");
@@ -208,31 +384,71 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         }
     }
 
+    /// <summary>
+    /// The source note plus, while <see cref="_all"/> holds audit.db rows, the statement that
+    /// the list below came from there. The one place the suffix is built, so every poll and
+    /// the fallback load agree on it.
+    /// </summary>
+    private string WithFallbackNote(string reason) =>
+        _allFromAudit ? $"{reason} · showing {_all.Count} finding(s) from audit.db instead" : reason;
+
+    /// <summary>Records what the source says about an empty list, then shows the right text.</summary>
     private void SetEmpty(string title, string detail)
     {
-        EmptyTitle = title;
-        EmptyDetail = detail;
+        _sourceEmptyTitle = title;
+        _sourceEmptyDetail = detail;
+        ShowEmptyText();
+    }
+
+    /// <summary>
+    /// "No alerts" and "alerts exist but the filters hide them" are different states with
+    /// different remedies; the source's own message ("the gateway reported no findings")
+    /// would be false in the second. Runs after every filter pass and every
+    /// <see cref="SetEmpty"/>, so neither ordering leaves the wrong text up.
+    /// </summary>
+    private void ShowEmptyText()
+    {
+        if (_all.Count > 0 && Alerts.Count == 0)
+        {
+            EmptyTitle = "No alerts match the current filters";
+            EmptyDetail =
+                $"{_all.Count} alert(s) are loaded but hidden by the severity toggles or the text filter. " +
+                "Use Clear to show them again.";
+            return;
+        }
+
+        EmptyTitle = _sourceEmptyTitle;
+        EmptyDetail = _sourceEmptyDetail;
     }
 
     /// <summary>
     /// Severity toggles, then substring match, then optional collapse. Collapsing keys on
     /// signature+action, which is exactly the axis the agent-generated noise repeats on.
+    /// <para>
+    /// The toggles compare <see cref="AlertItem.SeverityKey"/>, not the stored spelling: the
+    /// toggles only spell five severities, and <c>WARN</c> / <c>WARNING</c> / <c>MODERATE</c> /
+    /// <c>FATAL</c> rows (which the chip colours as Medium / Critical) would otherwise match
+    /// none of them and vanish the moment any toggle was switched off, with no toggle able to
+    /// bring them back. Anything the key does not recognise is Info, so the five keys
+    /// partition every alert.
+    /// </para>
     /// </summary>
     private void ApplyFilters()
     {
+        var anyToggleOff = SeverityFilters.Any(f => !f.IsEnabled);
         var allowed = SeverityFilters
             .Where(f => f.IsEnabled)
-            .Select(f => f.Severity)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .Select(f => f.SeverityKey)
+            .ToHashSet(StringComparer.Ordinal);
 
         var needle = FilterText.Trim();
         var selectedKey = SelectedAlert?.Key;
 
         IEnumerable<AlertItem> query = _all;
 
-        if (allowed.Count != SeverityFilters.Count)
+        if (anyToggleOff)
         {
-            query = query.Where(item => allowed.Contains(item.Severity));
+            query = query.Where(item => allowed.Contains(item.SeverityKey));
         }
 
         if (needle.Length > 0)
@@ -243,13 +459,20 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         var filtered = query.ToList();
         var rows = CollapseRepeats ? Collapse(filtered) : filtered;
 
-        Alerts.Clear();
-        foreach (var row in rows)
-        {
-            Alerts.Add(row);
-        }
+        // Merged by alert key, not cleared and refilled: the ListView keeps the containers,
+        // the scroll offset and the selected row for every alert that is still listed. Within
+        // one source a key names one immutable finding, so a matched row is always current
+        // - the only field that varies under a key is a collapsed group's repeat count, and
+        // that is copied across in place.
+        SyncCollection(
+            Alerts,
+            rows,
+            static alert => alert.Key,
+            static (_, _) => true,
+            static (existing, wanted) => existing.RepeatCount = wanted.RepeatCount);
 
         IsEmpty = Alerts.Count == 0;
+        ShowEmptyText();
         CountSummary = _all.Count == 0
             ? string.Empty
             : CollapseRepeats
@@ -283,8 +506,18 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         return groups;
     }
 
+    /// <summary>
+    /// Re-stamps every row, not just the listed ones: rows are now reused across polls, so a
+    /// row a filter is hiding would otherwise carry its old text back into view. (Collapsed
+    /// group rows are not in <see cref="_all"/>, hence both passes.)
+    /// </summary>
     private void RestampTimes()
     {
+        foreach (var item in _all)
+        {
+            item.Restamp();
+        }
+
         foreach (var item in Alerts)
         {
             item.Restamp();

@@ -123,7 +123,17 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Tray first so the shield leaves the notification area immediately; the CLI shutdown
+        // below is bounded but not instant, and a ghost icon for a few seconds looks like a hang.
         _tray?.Dispose();
+
+        // Then the CLI children: cancel and kill the process tree of anything still running
+        // (a wizard mutation, `agent discover`, a gateway start/stop) so nothing is orphaned
+        // writing to ~/.defenseclaw after the app is gone. The upgrade installer/resolver is
+        // exempt inside the runner — killing Setup mid-install can corrupt the install — and
+        // the wait is bounded, so a stuck child cannot hold the exit open.
+        _services?.Cli.Shutdown();
+
         _services?.Dispose();
 
         if (_instanceGuard is not null)
@@ -156,6 +166,28 @@ public partial class App : Application
 
     private void ExitApplication()
     {
+        // An in-app upgrade survives CliRunner.Shutdown by design, so quitting would not kill it —
+        // but it would leave it running with nobody watching, and the resolver-script channel
+        // writes to stdout pipes that close with this process. Ask; default to staying.
+        if (_services?.Cli.HasShutdownSurvivingRun == true)
+        {
+            var answer = MessageBox.Show(
+                "A DefenseClaw upgrade is still running.\n\n" +
+                "Exiting now leaves the installer running in the background with no progress shown, " +
+                "and an upgrade run through the resolver script may be interrupted when its output " +
+                "pipe closes. Waiting for the Updates window to report the result is safer.\n\n" +
+                "Exit anyway?",
+                "DefenseClaw — upgrade in progress",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (answer != MessageBoxResult.Yes)
+            {
+                return;
+            }
+        }
+
         _window?.AllowClose();
         _window?.Close();
         Shutdown();

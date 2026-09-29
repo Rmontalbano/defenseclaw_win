@@ -170,8 +170,71 @@ public class TokenResolverTests
     [InlineData("")]
     [InlineData("no-equals-sign")]
     [InlineData("=novalue")]
+    [InlineData("export")]
+    [InlineData("export FOO")]
     public void DotEnv_ignores_junk_lines(string line)
     {
         Assert.Empty(DotEnvFile.Parse(line));
+    }
+
+    // ----------------------------------------------------------------------------------
+    // Inline comments and `export<TAB>`. python-dotenv and Go's godotenv both end an unquoted
+    // value at a `#` that follows whitespace. This reader used to keep the comment in the
+    // value, so `TOKEN=abc   # rotated` became the bearer token "abc   # rotated" and every
+    // authenticated call answered 401 from a file that looked fine to its owner.
+    // ----------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("TOKEN=abc   # rotated", "abc")]
+    [InlineData("TOKEN=abc # rotated", "abc")]
+    [InlineData("TOKEN=abc\t# rotated", "abc")]
+    [InlineData("TOKEN=abc # one # two", "abc")]
+    [InlineData("TOKEN=abc   # rotated\r", "abc")]
+    [InlineData("TOKEN=   # only a comment", "")]
+    public void DotEnv_strips_an_inline_comment_from_an_unquoted_value(string line, string expected)
+    {
+        Assert.Equal(expected, DotEnvFile.Parse(line)["TOKEN"]);
+    }
+
+    [Theory]
+    [InlineData("TOKEN=abc#not-a-comment", "abc#not-a-comment")]
+    [InlineData("TOKEN=#starts-with-hash", "#starts-with-hash")]
+    [InlineData("TOKEN=\"abc # kept\"", "abc # kept")]
+    [InlineData("TOKEN='abc # kept'", "abc # kept")]
+    [InlineData("TOKEN=\"abc # kept\"   # trailing", "abc # kept")]
+    [InlineData("TOKEN='abc # kept'   # trailing", "abc # kept")]
+    [InlineData("TOKEN=\"abc\"   # rotated", "abc")]
+    [InlineData("TOKEN=\"a\\\"b # c\"", "a\\\"b # c")]
+    [InlineData("TOKEN=\"\"", "")]
+    public void DotEnv_keeps_a_hash_that_is_part_of_the_value(string line, string expected)
+    {
+        // A '#' is only a comment after whitespace; inside quotes it is never one.
+        Assert.Equal(expected, DotEnvFile.Parse(line)["TOKEN"]);
+    }
+
+    [Theory]
+    [InlineData("export\tKEY=tabbed", "KEY", "tabbed")]
+    [InlineData("export \t  KEY=mixed", "KEY", "mixed")]
+    [InlineData("export   KEY=spaces", "KEY", "spaces")]
+    [InlineData("export=1", "export", "1")]
+    [InlineData("exports=1", "exports", "1")]
+    [InlineData("exportKEY=1", "exportKEY", "1")]
+    [InlineData("export = 1", "export", "1")]
+    public void DotEnv_export_prefix_takes_any_whitespace_and_only_when_it_is_a_prefix(string line, string key, string expected)
+    {
+        Assert.Equal(expected, DotEnvFile.Parse(line)[key]);
+    }
+
+    [Fact]
+    public void A_commented_dot_env_token_is_the_token_not_the_comment()
+    {
+        var resolver = new TokenResolver(
+            () => DotEnvFile.Parse($"{VariableName}=abc123XYZ   # rotated 2026-09-01\n"),
+            new DictionaryEnvironmentReader(new Dictionary<string, string>()));
+
+        var resolution = resolver.Resolve(ConfigWith());
+
+        Assert.Equal(TokenSource.DotEnvFile, resolution.Source);
+        Assert.Equal("abc123XYZ", resolution.Token!.Reveal());
     }
 }

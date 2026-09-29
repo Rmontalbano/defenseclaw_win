@@ -14,8 +14,10 @@ namespace DefenseClaw.App.ViewModels;
 /// plus <see cref="CliRunner.InvocationStarted"/> / <see cref="CliRunner.InvocationCompleted"/>
 /// to keep the list live.
 /// <para>
-/// <b>Nothing shells out yet.</b> The app has not shipped any wizard that mutates
-/// DefenseClaw state, so on a fresh install this list is empty by design - that is not a
+/// <b>Empty is normal.</b> Every mutation the app makes - the Govern panels' block / allow /
+/// remove actions, the Setup wizards and the upgrade flow (and the config check behind the
+/// editor's Save) - shells out through <see cref="CliRunner"/> and lands here, but the list lives in memory and starts empty on
+/// every launch. So it is empty until something has been run in this session, which is not a
 /// fault, and the empty state says so explicitly rather than reading as a broken panel.
 /// </para>
 /// <para>
@@ -30,6 +32,16 @@ namespace DefenseClaw.App.ViewModels;
 /// from background threads (process callbacks, or continuations captured with
 /// <c>ConfigureAwait(false)</c>), so every handler marshals through
 /// <see cref="Application.Current"/>'s dispatcher.
+/// </para>
+/// <para>
+/// <b>When the timer runs.</b> Only while the panel is active <i>and</i> some row is still
+/// running — never from the constructor, and never while the dashboard is in the tray. A tick
+/// that finds nothing running does no work but still wakes the dispatcher twice a second, and
+/// this timer used to do exactly that for the whole life of the process once the panel had
+/// been visited. The runner's two events stay attached (they only fire when a command
+/// starts or ends, and keep <see cref="Rows"/> current while the panel is away); the
+/// live-output and elapsed-time work waits for <see cref="OnActivated"/>, which ticks every
+/// row once so nothing is stale when the panel is seen.
 /// </para>
 /// </summary>
 public sealed partial class ActivityPanelViewModel : PanelViewModelBase
@@ -47,9 +59,9 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
         Services.Cli.InvocationStarted += OnInvocationStarted;
         Services.Cli.InvocationCompleted += OnInvocationCompleted;
 
+        // Created stopped: EnsureTimerState starts it when there is something to tick.
         _timer = new DispatcherTimer { Interval = TickInterval };
         _timer.Tick += (_, _) => TickRunningRows();
-        _timer.Start();
 
         LoadActivity();
     }
@@ -76,9 +88,11 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     public string EmptyTitle => "No CLI activity yet";
 
     public string EmptyDetail =>
-        "The GUI never edits DefenseClaw state directly - every mutation it makes runs as a subprocess, and its exact " +
-        "command line, live output and exit code will show up here. The app does not ship any wizard that mutates " +
-        "state yet, so this list is expected to stay empty for now.";
+        "The GUI never edits DefenseClaw state directly - every mutation it makes (a Govern action, a Setup wizard, " +
+        "an upgrade) runs as a subprocess, and so does the config check behind the editor's Save; each one's exact " +
+        "command line, live output and exit code " +
+        "show up here. Nothing has been run in this session yet; the list is kept in memory only, so it also " +
+        "starts empty each time the app launches.";
 
     public ObservableCollection<ActivityRow> Rows { get; } = new();
 
@@ -87,6 +101,15 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
         LoadActivity();
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Catch-up: every row still marked running is ticked once (a row that finished, or grew
+    /// output, while the panel was away is stale until then), and the timer is armed if any
+    /// are still running.
+    /// </summary>
+    protected override void OnActivated() => TickRunningRows();
+
+    protected override void OnDeactivated() => _timer.Stop();
 
     [RelayCommand]
     private void ClearActivity()
@@ -105,6 +128,27 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
         }
 
         IsEmpty = Rows.Count == 0;
+        EnsureTimerState();
+    }
+
+    /// <summary>
+    /// Runs the timer exactly when it can do something: the panel is active and at least one
+    /// row is still running. Idempotent, and cheap enough (a scan of at most
+    /// <see cref="CliRunner.ActivityCapacity"/> rows) to call after every change to either.
+    /// </summary>
+    private void EnsureTimerState()
+    {
+        if (IsActive && Rows.Any(row => row.IsRunning))
+        {
+            if (!_timer.IsEnabled)
+            {
+                _timer.Start();
+            }
+        }
+        else
+        {
+            _timer.Stop();
+        }
     }
 
     private void OnInvocationStarted(object? sender, CliInvocation invocation)
@@ -124,6 +168,7 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
             }
 
             IsEmpty = Rows.Count == 0;
+            EnsureTimerState();
         });
     }
 
@@ -139,6 +184,7 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
         {
             var row = Rows.FirstOrDefault(r => ReferenceEquals(r.Invocation, invocation));
             row?.Tick();
+            EnsureTimerState();
         });
     }
 
@@ -151,6 +197,9 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
                 row.Tick();
             }
         }
+
+        // The last running row just finished: nothing left for the timer to do.
+        EnsureTimerState();
     }
 }
 

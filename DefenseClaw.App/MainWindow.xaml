@@ -95,6 +95,19 @@
                         Message="{Binding DegradedMessage}" />
 
             <!--
+                A panel whose InitializeAsync threw (PanelCatalog.PanelFaulted). Driven from
+                MainWindow.xaml.cs rather than the view-model: it is shell plumbing, not
+                gateway state, and it is the only banner the operator can dismiss - the
+                others describe a condition that is still true.
+            -->
+            <ui:InfoBar x:Name="PanelFaultBar"
+                        Margin="0,0,0,8"
+                        IsClosable="True"
+                        IsOpen="False"
+                        Severity="Error"
+                        Title="A panel failed to load" />
+
+            <!--
                 Not-initialized gets its own banner rather than an InfoBar: it has to offer
                 the init command as copyable text. The app shows the command and never runs
                 it - every mutation belongs to the CLI, recorded in Activity.

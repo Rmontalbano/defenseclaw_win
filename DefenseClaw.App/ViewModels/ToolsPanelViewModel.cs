@@ -66,6 +66,20 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
     [NotifyPropertyChangedFor(nameof(NoAllowedItems))]
     private bool _hasAllowedItems;
 
+    // Null while /enforce/blocked (resp. /allowed) answers; otherwise "unavailable (<reason>)".
+    // Kept apart from "empty": a list that could not be read is not a list with nothing in it.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBlockedUnavailable))]
+    [NotifyPropertyChangedFor(nameof(NoBlockedItems))]
+    [NotifyPropertyChangedFor(nameof(BlockedHeader))]
+    private string? _blockedUnavailable;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAllowedUnavailable))]
+    [NotifyPropertyChangedFor(nameof(NoAllowedItems))]
+    [NotifyPropertyChangedFor(nameof(AllowedHeader))]
+    private string? _allowedUnavailable;
+
     [ObservableProperty] private bool _isConfirmOpen;
     [ObservableProperty] private string _confirmHeading = string.Empty;
     [ObservableProperty] private string _confirmCommandText = string.Empty;
@@ -108,9 +122,19 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
 
     public bool IsIdle => !IsBusy;
 
-    public bool NoBlockedItems => !HasBlockedItems;
+    /// <summary>True only when the list was read and is empty — never when it could not be read.</summary>
+    public bool NoBlockedItems => !HasBlockedItems && !HasBlockedUnavailable;
 
-    public bool NoAllowedItems => !HasAllowedItems;
+    public bool NoAllowedItems => !HasAllowedItems && !HasAllowedUnavailable;
+
+    public bool HasBlockedUnavailable => !string.IsNullOrEmpty(BlockedUnavailable);
+
+    public bool HasAllowedUnavailable => !string.IsNullOrEmpty(AllowedUnavailable);
+
+    /// <summary>"Blocked (3)", or "Blocked (unavailable)" — a count of 0 would claim a read that never happened.</summary>
+    public string BlockedHeader => HasBlockedUnavailable ? "Blocked (unavailable)" : $"Blocked ({Blocked.Count})";
+
+    public string AllowedHeader => HasAllowedUnavailable ? "Allowed (unavailable)" : $"Allowed ({Allowed.Count})";
 
     public bool ShowCatalogBanner => CatalogState is GovernListState.NotConnected or GovernListState.Empty or GovernListState.Error;
 
@@ -134,8 +158,9 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
         }
 
         var name = NameOf(row);
-        var argv = BuildArgv("block", name);
-        BeginConfirm($"Block tool “{name}”?", argv, () => RunMutationAsync(argv, $"Blocked “{name}”."));
+        var connector = EffectiveConnector(row.Connector);
+        var argv = BuildArgv("block", name, connector);
+        BeginConfirm($"Block tool “{name}” for {ScopeText(connector)}?", argv, () => RunMutationAsync(argv, $"Blocked “{name}”."));
     }
 
     [RelayCommand]
@@ -147,10 +172,21 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
         }
 
         var name = NameOf(row);
-        var argv = BuildArgv("allow", name);
-        BeginConfirm($"Allow tool “{name}”?", argv, () => RunMutationAsync(argv, $"Allowed “{name}”."));
+        var connector = EffectiveConnector(row.Connector);
+        var argv = BuildArgv("allow", name, connector);
+        BeginConfirm($"Allow tool “{name}” for {ScopeText(connector)}?", argv, () => RunMutationAsync(argv, $"Allowed “{name}”."));
     }
 
+    /// <summary>
+    /// Removes exactly the entry the row is. The row — not the toolbar — decides the scope, because
+    /// the row IS a stored entry: a connector-scoped one (<c>@hermes/delete_file</c>) is removed
+    /// with <c>--connector hermes</c>, and a global one with no flag. The toolbar's scope is
+    /// deliberately not applied: <c>tool unblock delete_file --connector hermes</c> against a
+    /// global row would target a different (probably absent) entry and leave the row in place.
+    /// A bare <c>tool unblock</c> removes the fallback entry AND every connector-specific override
+    /// for the tool (<c>tool unblock --help</c>), so a row with no connector says it affects ALL of
+    /// them.
+    /// </summary>
     [RelayCommand]
     private void UnblockEntry(EnforcementRow? row)
     {
@@ -160,9 +196,19 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
         }
 
         var name = row.DisplayName;
+        var connector = row.Connector;
         var argv = new List<string> { "tool", "unblock", name };
-        AppendConnectorScope(argv);
-        BeginConfirm($"Remove enforcement entry for “{name}”?", argv, () => RunMutationAsync(argv, $"Removed the enforcement entry for “{name}”."));
+        if (connector is not null)
+        {
+            argv.Add("--connector");
+            argv.Add(connector);
+        }
+
+        var heading = connector is null
+            ? $"Remove “{name}” from the block/allow lists for ALL configured connectors? This clears the fallback entry and every connector-specific override for this tool."
+            : $"Remove the entry for “{name}” scoped to connector “{connector}”?";
+
+        BeginConfirm(heading, argv, () => RunMutationAsync(argv, $"Removed the enforcement entry for “{name}”."));
     }
 
     [RelayCommand]
@@ -187,7 +233,7 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
 
     private static string NameOf(ToolRow row) => string.IsNullOrWhiteSpace(row.Name) ? row.DisplayName : row.Name;
 
-    private List<string> BuildArgv(string verb, string name)
+    private List<string> BuildArgv(string verb, string name, string? connector)
     {
         var argv = new List<string> { "tool", verb, name };
 
@@ -197,18 +243,34 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
             argv.Add(Reason.Trim());
         }
 
-        AppendConnectorScope(argv);
+        if (connector is not null)
+        {
+            argv.Add("--connector");
+            argv.Add(connector);
+        }
+
         return argv;
     }
 
-    private void AppendConnectorScope(List<string> argv)
+    /// <summary>
+    /// The connector a catalog-row command should name: the row's own when it has one, then the
+    /// toolbar's, then none — which the CLI treats as the fallback tier covering every configured
+    /// connector, and which the confirm heading says via <see cref="ScopeText"/>.
+    /// </summary>
+    private string? EffectiveConnector(string? rowConnector)
     {
-        if (!string.IsNullOrWhiteSpace(SelectedConnector) && !string.Equals(SelectedConnector, AllConnectorsLabel, StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(rowConnector))
         {
-            argv.Add("--connector");
-            argv.Add(SelectedConnector);
+            return rowConnector.Trim();
         }
+
+        return !string.IsNullOrWhiteSpace(SelectedConnector) && !string.Equals(SelectedConnector, AllConnectorsLabel, StringComparison.Ordinal)
+            ? SelectedConnector
+            : null;
     }
+
+    private static string ScopeText(string? connector) =>
+        connector is null ? "ALL configured connectors" : $"connector “{connector}”";
 
     private void BeginConfirm(string heading, IReadOnlyList<string> argv, Func<Task> action)
     {
@@ -237,6 +299,17 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
                 var detail = invocation.FailureReason ?? errorLine?.Text ?? $"Exit code {invocation.ExitCode?.ToString() ?? "unknown"}.";
                 ShowResult("Command failed", detail, InfoBarSeverity.Error);
             }
+        }
+        // CliRunner throws these two synchronously, before any process exists. Uncaught, they
+        // reach the dispatcher's fault handler and replace the dashboard with an error dialog;
+        // here they are just a failed command with a reason.
+        catch (CliNotFoundException ex)
+        {
+            ShowResult("Command failed", $"The defenseclaw CLI could not be found. {ex.Message}", InfoBarSeverity.Error);
+        }
+        catch (SecretInArgumentException ex)
+        {
+            ShowResult("Command refused", ex.Message, InfoBarSeverity.Error);
         }
         finally
         {
@@ -295,12 +368,14 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
             ApplyCatalog(catalog);
 
             var blocked = await Services.Gateway.GetEnforceBlockedAsync(cancellationToken).ConfigureAwait(true);
-            ApplyEnforcement(Blocked, blocked);
+            BlockedUnavailable = ApplyEnforcement(Blocked, blocked);
             HasBlockedItems = Blocked.Count > 0;
+            OnPropertyChanged(nameof(BlockedHeader));
 
             var allowed = await Services.Gateway.GetEnforceAllowedAsync(cancellationToken).ConfigureAwait(true);
-            ApplyEnforcement(Allowed, allowed);
+            AllowedUnavailable = ApplyEnforcement(Allowed, allowed);
             HasAllowedItems = Allowed.Count > 0;
+            OnPropertyChanged(nameof(AllowedHeader));
         }
         finally
         {
@@ -356,13 +431,20 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
         }
     }
 
-    private void ApplyEnforcement(ObservableCollection<EnforcementRow> target, GatewayResult<IReadOnlyList<EnforcementEntry>> result)
+    /// <summary>
+    /// Fills <paramref name="target"/> from one enforcement list. Returns null when the list was
+    /// read (empty or not), or "unavailable (&lt;reason&gt;)" when it was not — 401, gateway down,
+    /// not connected — in which case the rows are cleared too, because rows from an earlier read
+    /// would offer actions on entries nobody can currently see. The caller shows the reason where
+    /// "No blocked tools." would otherwise have said the opposite.
+    /// </summary>
+    private string? ApplyEnforcement(ObservableCollection<EnforcementRow> target, GatewayResult<IReadOnlyList<EnforcementEntry>> result)
     {
         target.Clear();
 
         if (!result.IsOk || result.Value is null)
         {
-            return;
+            return $"unavailable ({DescribeEnforcementFailure(result.Status, result.ErrorMessage)})";
         }
 
         foreach (var entry in result.Value)
@@ -372,16 +454,74 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
                 continue;
             }
 
+            var (tool, connector) = SplitScopedName(entry.DisplayName, entry.Connector);
             target.Add(new EnforcementRow
             {
-                DisplayName = entry.DisplayName,
+                DisplayName = tool,
                 Kind = entry.Kind,
                 Reason = entry.Reason,
                 Scope = entry.Scope,
-                Connector = entry.Connector,
+                Connector = connector,
             });
         }
+
+        return null;
     }
+
+    /// <summary>
+    /// Separates a tool entry into the tool name and the connector it is scoped to (null =
+    /// global, the fallback tier). The CLI stores a connector-scoped tool row as
+    /// <c>@&lt;connector&gt;/&lt;tool&gt;</c> (<c>cmd_tool._parse_target</c>), so a payload that
+    /// hands that key over as the name is decoded here; a payload that carries the connector in
+    /// its own field is trusted, and its <c>@connector/</c> prefix stripped if the name repeats it.
+    /// Passing the undecoded key to <c>tool unblock</c> would build <c>@hermes/@hermes/tool</c>.
+    /// </summary>
+    private static (string Tool, string? Connector) SplitScopedName(string name, string? connectorField)
+    {
+        var connector = NormalizeConnector(connectorField);
+
+        if (connector is not null)
+        {
+            var prefix = "@" + connector + "/";
+            return (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? name[prefix.Length..] : name, connector);
+        }
+
+        if (name.Length > 3 && name[0] == '@')
+        {
+            var slash = name.IndexOf('/', StringComparison.Ordinal);
+            if (slash > 1 && slash < name.Length - 1)
+            {
+                return (name[(slash + 1)..], name[1..slash]);
+            }
+        }
+
+        return (name, null);
+    }
+
+    /// <summary>Blank, "*", "all" and "global" all mean "no specific connector": the CLI's own word for the fallback tier is "connector=all".</summary>
+    private static string? NormalizeConnector(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed is "*" ||
+               trimmed.Equals("all", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("global", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : trimmed;
+    }
+
+    /// <summary>Same wording the Overview panel uses for the same failures.</summary>
+    private string DescribeEnforcementFailure(GatewayStatus status, string? message) => status switch
+    {
+        GatewayStatus.NotConnected => "the enforcement subsystem is not connected on this install",
+        GatewayStatus.Unauthorized => $"the gateway needs a bearer token; none was found via {Services.Token.VariableName}",
+        GatewayStatus.Unreachable => "the gateway is not answering",
+        _ => message ?? "the gateway did not return the list",
+    };
 
     private static IEnumerable<ToolRow> ParseRows(JsonElement root)
     {
@@ -407,6 +547,7 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
                 DisplayName = typed?.DisplayName ?? BestEffortName(element),
                 Name = typed?.Name,
                 Server = typed?.Server,
+                Connector = typed?.Connector,
                 CapabilityClass = typed?.CapabilityClass,
                 Description = typed?.Description,
                 RawJson = FormatJson(element),
@@ -463,6 +604,9 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
 
         public string? Server { get; init; }
 
+        /// <summary>The connector the catalog lists this tool under, when the payload says.</summary>
+        public string? Connector { get; init; }
+
         public string? CapabilityClass { get; init; }
 
         public string? Description { get; init; }
@@ -470,8 +614,10 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
         public string RawJson { get; init; } = string.Empty;
     }
 
+    /// <summary>One stored block/allow entry, decoded so the row states what Unblock will remove.</summary>
     public sealed class EnforcementRow
     {
+        /// <summary>The tool name, without any <c>@connector/</c> scoping prefix.</summary>
         public required string DisplayName { get; init; }
 
         public string? Kind { get; init; }
@@ -480,6 +626,10 @@ public sealed partial class ToolsPanelViewModel : PanelViewModelBase
 
         public string? Scope { get; init; }
 
+        /// <summary>The connector this entry is scoped to; null for a global (fallback-tier) entry.</summary>
         public string? Connector { get; init; }
+
+        /// <summary>What the row applies to, shown on the row so Unblock is never a surprise.</summary>
+        public string ConnectorLabel => Connector is null ? "applies to all connectors (fallback)" : $"connector: {Connector}";
     }
 }

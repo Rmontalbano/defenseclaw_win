@@ -3,8 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
     <!--
-        Newest-first list of every subprocess this app has run. Expected to be empty today -
-        no wizard ships yet that mutates DefenseClaw state - so the empty state carries the
+        Newest-first list of every subprocess this app has run. The list is in memory only, so
+        it is empty until something has been run in this session - the empty state carries the
         weight of explaining the panel rather than the list itself.
     -->
     <UserControl.Resources>

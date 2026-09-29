@@ -18,12 +18,22 @@ namespace DefenseClaw.App.ViewModels;
 /// stops appearing. The certification badge is the CLI's own
 /// <c>Platform status on windows:</c> answer, not a table in this app: on 0.8.7 that means
 /// Claude Code and Codex are certified and every other connector is not, but the badge will
-/// follow the binary if that changes.
+/// follow the binary if that changes. Certification is a question about <i>connectors</i>;
+/// the other flows (rotate-token, webhook, llm, the scanners…) carry
+/// <see cref="PlatformStatus.NotApplicable"/> and a neutral badge, and are not counted as
+/// certified.
 /// </para>
 /// <para>
 /// Uncertified cards stay launchable on purpose. The mac app's lesson — and the codex ghost
 /// this project chased — is that hiding the option teaches nothing; the warning travels with
 /// the operator into the wizard and onto its review screen instead.
+/// </para>
+/// <para>
+/// <b>Lifecycle.</b> The connector roster is re-derived on every gateway state change, but only
+/// while this panel is <see cref="PanelViewModelBase.IsActive"/>: the subscription, and the
+/// card updates that ride the catalog's <c>DefinitionChanged</c>, are attached in
+/// <see cref="OnActivated"/> and detached in <see cref="OnDeactivated"/>, with one catch-up pass
+/// on the way back in. A hidden tray app must not rebuild a card grid for nobody.
 /// </para>
 /// </summary>
 public sealed partial class SetupPanelViewModel : PanelViewModelBase
@@ -58,9 +68,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     public SetupPanelViewModel(AppServices services)
         : base(services)
     {
+        // No subscriptions here: OnActivated attaches them and OnDeactivated lets go.
         _catalog = WizardCatalog.Shared(services);
-        _catalog.DefinitionChanged += OnDefinitionChanged;
-        Services.Monitor.StateChanged += OnGatewayStateChanged;
     }
 
     public override string Title => "Setup";
@@ -88,15 +97,18 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         BuildConnectors();
 
-        var definitions = await _catalog.LoadAsync(cancellationToken).ConfigureAwait(true);
-
-        _all.Clear();
-        foreach (var definition in definitions)
+        try
         {
-            _all.Add(new WizardCardViewModel(definition));
+            var definitions = await _catalog.LoadAsync(cancellationToken).ConfigureAwait(true);
+            FillCards(definitions);
+        }
+        finally
+        {
+            // Whatever ended the read — a result, a failure, a cancelled wait — the spinner
+            // stops. Left true, "Asking the CLI which setup targets it has" would show forever.
+            IsLoading = false;
         }
 
-        IsLoading = false;
         HasLoadError = _catalog.LoadError is { Length: > 0 };
         LoadError = _catalog.LoadError ?? string.Empty;
         ApplyFilters();
@@ -105,6 +117,63 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         // from the top-level screen; this fills in real descriptions, the authoritative
         // platform-status line, and the option lists the wizards are built from.
         _ = WarmAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Attaches to the gateway monitor and the catalog, then catches up once: the panel may have
+    /// been off screen while the roster changed and while per-target help landed, and none of it
+    /// was being watched. The catch-up is a no-op merge when nothing moved. Runs possibly before
+    /// <see cref="InitializeAsync"/> has finished on the first visit — with no cards yet, the
+    /// card half of the catch-up simply has nothing to do.
+    /// </summary>
+    protected override void OnActivated()
+    {
+        _catalog.DefinitionChanged += OnDefinitionChanged;
+        Services.Monitor.StateChanged += OnGatewayStateChanged;
+
+        BuildConnectors();
+
+        if (SyncCardsWithCatalog())
+        {
+            ApplyFilters();
+        }
+    }
+
+    protected override void OnDeactivated()
+    {
+        _catalog.DefinitionChanged -= OnDefinitionChanged;
+        Services.Monitor.StateChanged -= OnGatewayStateChanged;
+    }
+
+    /// <summary>Replaces the card list with one card per definition.</summary>
+    private void FillCards(IReadOnlyList<WizardDefinition> definitions)
+    {
+        _all.Clear();
+        foreach (var definition in definitions)
+        {
+            _all.Add(new WizardCardViewModel(definition));
+        }
+    }
+
+    /// <summary>
+    /// Brings every card up to the catalog's current definition for its target. Definitions are
+    /// replaced wholesale and never mutated, so reference equality is exactly "is this card
+    /// behind". Returns true if any card moved, which is when group membership and the
+    /// certified filter may have changed too.
+    /// </summary>
+    private bool SyncCardsWithCatalog()
+    {
+        var changed = false;
+        foreach (var card in _all)
+        {
+            if (_catalog.Find(card.Target) is { } definition && !ReferenceEquals(card.Definition, definition))
+            {
+                card.Apply(definition);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilters();
@@ -139,18 +208,28 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        // A second press while a read is in flight would interleave two reloads into one list.
+        if (IsLoading)
+        {
+            return;
+        }
+
         IsLoading = true;
         StatusNote = "Re-reading the setup catalog from the CLI…";
         Groups.Clear();
         _all.Clear();
 
-        var definitions = await _catalog.ReloadAsync().ConfigureAwait(true);
-        foreach (var definition in definitions)
+        try
         {
-            _all.Add(new WizardCardViewModel(definition));
+            // Reload forgets the cached help screens too, so this genuinely re-asks the CLI.
+            var definitions = await _catalog.ReloadAsync().ConfigureAwait(true);
+            FillCards(definitions);
+        }
+        finally
+        {
+            IsLoading = false;
         }
 
-        IsLoading = false;
         HasLoadError = _catalog.LoadError is { Length: > 0 };
         LoadError = _catalog.LoadError ?? string.Empty;
         ApplyFilters();
@@ -185,7 +264,9 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
     private void OnDefinitionChanged(object? sender, WizardDefinitionChangedEventArgs e)
     {
-        // Raised from the probe's continuation, which may be any thread pool thread.
+        // Raised from the probe's continuation, which may be any thread pool thread. Attached
+        // only while active; an event already queued when the panel goes away still lands here
+        // and is applied in full, so the catch-up in OnActivated never finds a half-applied card.
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null)
         {
@@ -214,8 +295,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         var config = Services.Config.Config;
         var snapshot = Services.Monitor.Current;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        Connectors.Clear();
+        var desired = new List<ConnectorChipViewModel>();
 
         foreach (var (name, settings) in config.Guardrail.Connectors.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
         {
@@ -224,7 +304,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
                 continue;
             }
 
-            Connectors.Add(new ConnectorChipViewModel(
+            desired.Add(new ConnectorChipViewModel(
                 name,
                 settings.Mode,
                 settings.HookFailMode,
@@ -236,9 +316,14 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         {
             if (seen.Add(name))
             {
-                Connectors.Add(new ConnectorChipViewModel(name, null, null, false, fromConfig: false));
+                desired.Add(new ConnectorChipViewModel(name, null, null, false, fromConfig: false));
             }
         }
+
+        // Merged, not rebuilt: the roster is re-derived on every state change and on every
+        // activation, and almost always comes out identical. Clear() + Add() would tear down and
+        // re-create every chip's visuals each time for nothing.
+        SyncCollection(Connectors, desired, chip => chip.Name, static (existing, wanted) => existing.IsSameAs(wanted));
 
         ConnectorNote = Connectors.Count == 0
             ? "No connectors are configured yet. Start with a certified one — Claude Code or Codex on this platform."
@@ -254,8 +339,12 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         var needle = SearchText.Trim();
 
+        // "Hide uncertified connectors": what it removes is a connector the CLI says is
+        // not_certified / unsupported here, or one whose help is not read yet. A flow that
+        // is not a connector (NotApplicable) has nothing to certify, so the filter leaves it
+        // alone — exactly what it did before those cards stopped being mislabelled Certified.
         var matching = _all.Where(card =>
-            (!CertifiedOnly || card.PlatformStatus == PlatformStatus.Certified) &&
+            (!CertifiedOnly || card.PlatformStatus is PlatformStatus.Certified or PlatformStatus.NotApplicable) &&
             (needle.Length == 0 || card.Matches(needle)))
             .ToList();
 
@@ -284,7 +373,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
         StatusNote = string.Format(
             CultureInfo.CurrentCulture,
-            "{0} of {1} setup target(s) shown · {2} certified on Windows · {3} help screen(s) read{4}",
+            "{0} of {1} setup target(s) shown · {2} certified connector(s) on Windows · {3} help screen(s) read{4}",
             shown,
             _all.Count,
             certified,
@@ -347,6 +436,12 @@ public sealed partial class WizardCardViewModel : ObservableObject
 
     public PlatformStatus PlatformStatus { get; private set; }
 
+    /// <summary>
+    /// The definition this card currently shows. Definitions are immutable and replaced
+    /// wholesale, so comparing this by reference with the catalog's says whether the card is behind.
+    /// </summary>
+    public WizardDefinition Definition { get; private set; } = null!;
+
     /// <summary>The command this card runs, shown small on the card so nothing is a surprise.</summary>
     public string CommandHint => "defenseclaw setup " + Target;
 
@@ -354,6 +449,7 @@ public sealed partial class WizardCardViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(definition);
 
+        Definition = definition;
         Group = definition.Group;
         PlatformStatus = definition.PlatformStatus;
         Title = definition.Title;
@@ -407,4 +503,16 @@ public sealed class ConnectorChipViewModel
         "observe + fail-closed: this connector never blocks on policy, but does block whenever the gateway errors.";
 
     public string SourceNote => FromConfig ? "config.yaml" : "/health only";
+
+    /// <summary>True when <paramref name="other"/> would render exactly like this chip.</summary>
+    public bool IsSameAs(ConnectorChipViewModel other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return string.Equals(Name, other.Name, StringComparison.Ordinal) &&
+               string.Equals(Mode, other.Mode, StringComparison.Ordinal) &&
+               string.Equals(FailMode, other.FailMode, StringComparison.Ordinal) &&
+               HasMismatch == other.HasMismatch &&
+               FromConfig == other.FromConfig;
+    }
 }

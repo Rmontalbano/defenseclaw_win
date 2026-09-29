@@ -381,7 +381,19 @@
                                IsEnabled="{Binding CanExecute}"
                                Visibility="{Binding IsReview, Converter={StaticResource BoolToVisibility}}"
                                Command="{Binding ExecuteCommand}" />
-                    <!-- Same command, different word: before a run it abandons, after one it dismisses. -->
+                    <!--
+                        After a successful run Execute is locked so a setup verb is not applied twice by
+                        a stray click; this is the deliberate way back to a fresh review page. Going
+                        Back, or changing an answer, also unlocks it.
+                    -->
+                    <ui:Button Margin="0,0,8,0"
+                               Content="Run again"
+                               Visibility="{Binding CanRunAgain, Converter={StaticResource BoolToVisibility}}"
+                               Command="{Binding RunAgainCommand}" />
+                    <!--
+                        Same command, three meanings: before a run it abandons, during one it asks
+                        whether to stop the command (the overlay below), after one it dismisses.
+                    -->
                     <ui:Button Content="Cancel"
                                Visibility="{Binding HasRun, Converter={StaticResource InverseBoolToVisibility}}"
                                Command="{Binding CancelCommand}" />
@@ -391,5 +403,49 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!--
+            Stop confirmation. Raised by Cancel, and by closing the window (X / Alt+F4), while a
+            command is running: a setup verb writes configuration, so ending one partway can leave
+            it half-applied and that should be a decision, not a click. Covers everything below the
+            title bar and leaves the title bar alone so the window stays closable — a close attempt
+            just raises this again. An overlay rather than a modal dialog on purpose: it is raised
+            from Window.Closing, where a blocking dialog could hold up an app exit.
+        -->
+        <Grid Grid.Row="1"
+              Grid.RowSpan="3"
+              Background="#B0000000"
+              Visibility="{Binding IsStopConfirmVisible, Converter={StaticResource BoolToVisibility}}">
+            <Border MaxWidth="560"
+                    Margin="24"
+                    Padding="22"
+                    CornerRadius="10"
+                    BorderThickness="1"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource ApplicationBackgroundBrush}">
+                <StackPanel>
+                    <TextBlock FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="Stop the running setup command?" />
+
+                    <TextBlock Margin="0,8,0,16"
+                               FontSize="12"
+                               Style="{StaticResource Secondary}"
+                               Text="{Binding StopConfirmMessage}" />
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <ui:Button Margin="0,0,8,0"
+                                   Content="Keep running"
+                                   Command="{Binding KeepRunningCommand}" />
+                        <ui:Button Appearance="Primary"
+                                   Content="Stop the command"
+                                   Command="{Binding ConfirmStopCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </ui:FluentWindow>

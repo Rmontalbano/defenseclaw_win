@@ -165,7 +165,7 @@
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding Blocked.Count, StringFormat='Blocked ({0})'}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding BlockedHeader}" />
                             <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Blocked}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -193,6 +193,13 @@
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Text="No blocked skills."
                                        Visibility="{Binding DataContext.NoBlockedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
+                            <!-- The list could not be read: say so, rather than "No blocked skills." -->
+                            <TextBlock Margin="0,4,0,0"
+                                       FontStyle="Italic"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Text="{Binding BlockedUnavailable}"
+                                       Visibility="{Binding HasBlockedUnavailable, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
 
@@ -203,7 +210,7 @@
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding Allowed.Count, StringFormat='Allowed ({0})'}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding AllowedHeader}" />
                             <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Allowed}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -231,6 +238,12 @@
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Text="No allow-listed skills."
                                        Visibility="{Binding DataContext.NoAllowedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       FontStyle="Italic"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Text="{Binding AllowedUnavailable}"
+                                       Visibility="{Binding HasAllowedUnavailable, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Border>
                 </Grid>

@@ -3,6 +3,7 @@
 > **Baseline:** app at commit `bfd2bf3` (0.8.10 runtime baseline), evaluated 2026-08-25.
 > **Method:** four dimension surveys (UI responsiveness, process & I/O durability, data access & memory, startup & packaging) read the code independently; every candidate finding was then re-verified against source by a separate adversarial pass instructed to reject anything wrong, already handled, or speculative. 34 candidates → **33 confirmed, 1 rejected** (appendix). Nothing in this document has been applied — it is an evaluation, not a changelog.
 > **Status update (2026-08-25):** the six quick wins (#6, #7, #8, #14, #18, #20) and #26 (folded into the same cursor-API fix) are implemented — see [QUICK-WINS-LOG.html](QUICK-WINS-LOG.html). Their code citations below describe the pre-fix state.
+> **Status update (2026-09-28):** a second pass fixed #1, #2, #3, #9-adjacent Logs projection, #10, #11, #12, #13, #16, #21 (null-probe keyset + indexed ranges), and #33-adjacent catalog refresh; #15 was re-tested and its premise disproved (read-only WAL opens survived every synthesized crash state), so only the busy timeout was tightened. Measured live: idle CPU in the tray 13.8% → 0.6% of a core. Citations below describe the pre-fix state.
 
 ## Executive summary
 

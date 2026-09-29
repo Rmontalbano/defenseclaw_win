@@ -38,9 +38,23 @@ public sealed record RestoreOutcome(bool Success, string Message);
 /// never leaves a half-written config.yaml, and CLI validation only runs after all of that
 /// has already succeeded — a validation failure still leaves a good backup to restore.
 /// </para>
+/// <para>
+/// <b>Backups are never overwritten.</b> The name carries a millisecond timestamp and the
+/// file is created with <see cref="FileMode.CreateNew"/>, retrying with a numeric suffix if
+/// the name is taken — two saves inside one second (or one clock tick) must not replace the
+/// pre-edit backup of the first with the already-edited content of the second.
+/// </para>
+/// <para>
+/// <b>No litter.</b> The temp file (<c>.config.yaml.tmp-&lt;guid&gt;</c>) is deleted in a
+/// <c>finally</c>, so a failed or cancelled <see cref="File.Replace(string, string, string?)"/>
+/// does not leave it behind next to the user's real config.
+/// </para>
 /// </summary>
 public sealed class ConfigSaveService
 {
+    /// <summary>How many numeric suffixes to try when a same-millisecond backup name is already taken.</summary>
+    private const int MaxBackupNameAttempts = 100;
+
     private readonly DefenseClawPaths _paths;
     private readonly CliRunner? _cli;
 
@@ -89,8 +103,7 @@ public sealed class ConfigSaveService
             {
                 var originalBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
                 backupSha = Convert.ToHexString(SHA256.HashData(originalBytes)).ToLowerInvariant();
-                backupPath = path + ".bak-" + DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
-                await File.WriteAllBytesAsync(backupPath, originalBytes, cancellationToken).ConfigureAwait(false);
+                backupPath = await WriteBackupAsync(path, originalBytes, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -101,24 +114,7 @@ public sealed class ConfigSaveService
         // 3. Atomic write: temp file in the same directory, then a filesystem-level replace.
         try
         {
-            var directory = Path.GetDirectoryName(path);
-            if (string.IsNullOrEmpty(directory))
-            {
-                directory = _paths.DataDirectory;
-            }
-
-            Directory.CreateDirectory(directory);
-            var tempPath = Path.Combine(directory, $".config.yaml.tmp-{Guid.NewGuid():N}");
-            await File.WriteAllTextAsync(tempPath, newRawText, cancellationToken).ConfigureAwait(false);
-
-            if (File.Exists(path))
-            {
-                File.Replace(tempPath, path, null);
-            }
-            else
-            {
-                File.Move(tempPath, path);
-            }
+            await WriteAtomicallyAsync(Utf8NoBom.GetBytes(newRawText), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -126,12 +122,17 @@ public sealed class ConfigSaveService
         }
 
         // 4. Validate the file that is now live, via the CLI — never by re-parsing our own write.
+        //    `config validate` ("parses and references valid enums", exit 0/1) rather than
+        //    `config show`: show only proves the file parses, so a bad enum would still have
+        //    been reported as "Saved and validated". On 0.8.10 validate prints "config is valid"
+        //    against a known-good file; its failure output goes to stdout, so the message below
+        //    reads both streams.
         if (_cli is not null)
         {
             CliInvocation invocation;
             try
             {
-                invocation = await _cli.RunAsync(new[] { "config", "show" }, cancellationToken: cancellationToken).ConfigureAwait(false);
+                invocation = await _cli.RunAsync(new[] { "config", "validate" }, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             catch (CliNotFoundException)
             {
@@ -167,18 +168,92 @@ public sealed class ConfigSaveService
             return new RestoreOutcome(false, $"Backup file not found: {backupPath}");
         }
 
-        var path = _paths.ConfigFilePath;
         try
         {
             var bytes = await File.ReadAllBytesAsync(backupPath, cancellationToken).ConfigureAwait(false);
-            var directory = Path.GetDirectoryName(path);
-            if (string.IsNullOrEmpty(directory))
+            await WriteAtomicallyAsync(bytes, cancellationToken).ConfigureAwait(false);
+            return new RestoreOutcome(true, "Restored config.yaml from the backup.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new RestoreOutcome(false, $"Could not restore from backup: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// UTF-8 without a BOM — what <see cref="File.WriteAllTextAsync(string, string?, CancellationToken)"/>
+    /// has always written here, kept explicit now that the write goes through
+    /// <see cref="WriteAtomicallyAsync"/> as bytes.
+    /// </summary>
+    private static readonly System.Text.UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>
+    /// Writes <paramref name="originalBytes"/> next to <paramref name="configPath"/> as
+    /// <c>config.yaml.bak-&lt;yyyyMMddHHmmssfff&gt;</c> (plus <c>-N</c> if that exact name exists),
+    /// created with <see cref="FileMode.CreateNew"/> so an existing backup can never be replaced.
+    /// A backup that fails part-way is deleted rather than left truncated.
+    /// </summary>
+    private static async Task<string> WriteBackupAsync(string configPath, byte[] originalBytes, CancellationToken cancellationToken)
+    {
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture);
+        var baseName = configPath + ".bak-" + stamp;
+
+        for (var attempt = 0; attempt < MaxBackupNameAttempts; attempt++)
+        {
+            var candidate = attempt == 0 ? baseName : baseName + "-" + attempt.ToString(CultureInfo.InvariantCulture);
+
+            FileStream stream;
+            try
             {
-                directory = _paths.DataDirectory;
+                stream = new FileStream(candidate, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+            }
+            catch (IOException) when (File.Exists(candidate))
+            {
+                // Name already taken (a second save in the same millisecond) — try the next suffix.
+                continue;
             }
 
-            Directory.CreateDirectory(directory);
-            var tempPath = Path.Combine(directory, $".config.yaml.tmp-{Guid.NewGuid():N}");
+            try
+            {
+                await using (stream.ConfigureAwait(false))
+                {
+                    await stream.WriteAsync(originalBytes, cancellationToken).ConfigureAwait(false);
+                    await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                return candidate;
+            }
+            catch
+            {
+                // The stream is already disposed by the time control reaches here.
+                TryDeleteQuietly(candidate);
+                throw;
+            }
+        }
+
+        throw new IOException($"Could not find an unused backup file name for '{configPath}' after {MaxBackupNameAttempts} attempts.");
+    }
+
+    /// <summary>
+    /// The shared atomic-write step: bytes go to a uniquely named temp file in the same
+    /// directory, then <see cref="File.Replace(string, string, string?)"/> (or a move, if
+    /// config.yaml does not exist yet) swaps it in. The temp file is removed in a
+    /// <c>finally</c> whichever way that goes.
+    /// </summary>
+    private async Task WriteAtomicallyAsync(byte[] bytes, CancellationToken cancellationToken)
+    {
+        var path = _paths.ConfigFilePath;
+        var directory = Path.GetDirectoryName(path);
+        if (string.IsNullOrEmpty(directory))
+        {
+            directory = _paths.DataDirectory;
+        }
+
+        Directory.CreateDirectory(directory);
+        var tempPath = Path.Combine(directory, $".config.yaml.tmp-{Guid.NewGuid():N}");
+
+        try
+        {
             await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken).ConfigureAwait(false);
 
             if (File.Exists(path))
@@ -189,22 +264,43 @@ public sealed class ConfigSaveService
             {
                 File.Move(tempPath, path);
             }
+        }
+        finally
+        {
+            // After a successful Replace/Move the temp name no longer exists and this is a no-op.
+            TryDeleteQuietly(tempPath);
+        }
+    }
 
-            return new RestoreOutcome(true, "Restored config.yaml from the backup.");
+    private static void TryDeleteQuietly(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new RestoreOutcome(false, $"Could not restore from backup: {ex.Message}");
+            // Best effort: a leftover temp/partial-backup file is untidy, not harmful.
         }
     }
 
     private static string BuildValidationMessage(CliInvocation invocation)
     {
-        var stderr = string.Join(
+        // Stderr first; `config validate` reports its findings on stdout, so fall back to that
+        // (minus blank lines) before settling for a bare exit code.
+        static string Join(IEnumerable<CliOutputLine> lines) => string.Join(
             Environment.NewLine,
-            invocation.OutputLines.Where(l => l.Stream == CliStream.StandardError).Select(l => l.Text));
+            lines.Select(l => l.Text.Trim()).Where(text => text.Length > 0));
 
-        var detail = stderr.Length > 0 ? stderr : $"defenseclaw config show exited with code {invocation.ExitCode}.";
+        var stderr = Join(invocation.OutputLines.Where(l => l.Stream == CliStream.StandardError));
+        var stdout = Join(invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput));
+
+        var detail = stderr.Length > 0 ? stderr
+            : stdout.Length > 0 ? stdout
+            : $"defenseclaw config validate exited with code {invocation.ExitCode}.";
         return "The saved file failed validation — restore the backup or fix it in the RAW tab: " + detail;
     }
 }
