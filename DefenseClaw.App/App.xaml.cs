@@ -247,7 +247,7 @@ public partial class App : Application
         return window;
     }
 
-    private void ExitApplication()
+    private async void ExitApplication()
     {
         // An in-app upgrade survives CliRunner.Shutdown by design, so quitting would not kill it —
         // but it would leave it running with nobody watching, and the resolver-script channel
@@ -269,6 +269,13 @@ public partial class App : Application
             {
                 return;
             }
+        }
+
+        // Unsaved config-editor edits: false means the operator cancelled or the save failed, so stay running.
+        // Last check, because it closes the editor itself once the answer allows the exit.
+        if (!await Views.ConfigEditor.ConfigEditorWindow.CloseForExitAsync())
+        {
+            return;
         }
 
         _dashboard?.CloseForExit();

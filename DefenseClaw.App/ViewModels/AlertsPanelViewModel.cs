@@ -462,8 +462,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         var tier = CommandTiers.Classify(applyArgv);
         IsDestructive = tier == CommandTier.Destructive;
         IsNotDestructive = !IsDestructive;
-        TierText = IsDestructive ? "Destructive" : "State-changing";
-        TierKey = IsDestructive ? "Bad" : "Medium";
+        // Same words and tone as the shared command review, so a tier reads identically everywhere.
+        TierText = CommandReview.LabelFor(tier);
+        TierKey = CommandReview.ToneFor(tier);
         ConfirmButtonText = string.Equals(verb, DismissVerb, StringComparison.Ordinal)
             ? (choice.IsAll ? "Dismiss all alerts" : $"Dismiss all {choice.Value}")
             : (choice.IsAll ? "Acknowledge all alerts" : $"Acknowledge all {choice.Value}");
