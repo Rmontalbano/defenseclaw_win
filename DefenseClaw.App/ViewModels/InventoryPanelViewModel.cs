@@ -709,10 +709,13 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     /// cannot parse directly because of the trailing zone-name token. Strips that token and
     /// retries before giving up.
     /// </summary>
-    private static bool TryParseFlexibleTimestamp(string? raw, out DateTimeOffset result)
+    internal static bool TryParseFlexibleTimestamp(string? raw, out DateTimeOffset result)
     {
         result = default;
-        if (string.IsNullOrWhiteSpace(raw))
+
+        // Only a string that starts like a date (yyyy-MM-dd) is a candidate: DateTimeOffset.TryParse
+        // alone turns version-like cells such as "1-0" or "2.1" into dates in the table browser.
+        if (string.IsNullOrWhiteSpace(raw) || !StartsWithIsoDate(raw.AsSpan().TrimStart()))
         {
             return false;
         }
@@ -732,6 +735,12 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
 
         return false;
     }
+
+    private static bool StartsWithIsoDate(ReadOnlySpan<char> s) =>
+        s.Length >= 10
+        && char.IsAsciiDigit(s[0]) && char.IsAsciiDigit(s[1]) && char.IsAsciiDigit(s[2]) && char.IsAsciiDigit(s[3])
+        && s[4] == '-' && char.IsAsciiDigit(s[5]) && char.IsAsciiDigit(s[6])
+        && s[7] == '-' && char.IsAsciiDigit(s[8]) && char.IsAsciiDigit(s[9]);
 
     private static string FormatRawValue(object? value) => value switch
     {

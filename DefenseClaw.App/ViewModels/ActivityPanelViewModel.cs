@@ -349,15 +349,15 @@ public sealed partial class ActivityRow : ObservableObject
 
         // Fixed for the life of the row: the tier is a function of the argv alone.
         var tier = CommandTiers.Classify(invocation.Argv);
-        var (tierText, tierKey, tierHelp) = tier switch
+        // Words and tone come from the shared command review, so a tier reads the same here as in every dialog.
+        TierText = CommandReview.LabelFor(tier);
+        TierKey = CommandReview.ToneFor(tier);
+        TierHelp = tier switch
         {
-            CommandTier.ReadOnly => ("Read-only", "Neutral", "Only reads state; runs without a confirmation step."),
-            CommandTier.Destructive => ("Destructive", "Bad", "Removes or resets something; needs a confirmation with the exact command."),
-            _ => ("State-changing", "Medium", "Changes DefenseClaw state; needs a confirmation with the exact command."),
+            CommandTier.ReadOnly => "Only reads state; runs without a confirmation step.",
+            CommandTier.Destructive => "Removes or resets something; needs a confirmation with the exact command.",
+            _ => "Changes DefenseClaw state; needs a confirmation with the exact command.",
         };
-        TierText = tierText;
-        TierKey = tierKey;
-        TierHelp = tierHelp;
 
         Tick();
     }
@@ -377,11 +377,20 @@ public sealed partial class ActivityRow : ObservableObject
             .Concat(Invocation.Argv)
             .Select(QuoteForDisplay));
 
-    /// <summary>Read-only / State-changing / Destructive, from <see cref="CommandTiers"/>.</summary>
+    /// <summary>Read-only / Changes state / Destructive, from <see cref="CommandTiers"/> via <see cref="CommandReview.LabelFor"/>.</summary>
     public string TierText { get; }
 
-    /// <summary>Neutral / Medium / Bad - the tone key for the tier badge (destructive is red).</summary>
+    /// <summary>Neutral / Warn / Bad - the tone key for the tier badge (destructive is red).</summary>
     public string TierKey { get; }
+
+    /// <summary>
+    /// True when the run carried secrets in its environment (names only are recorded; see
+    /// <see cref="CliInvocation.EnvironmentNames"/>).
+    /// </summary>
+    public bool UsedEnvironmentSecret => Invocation.EnvironmentNames.Count > 0;
+
+    /// <summary><c>env: NAME=•••</c> for the chip's tooltip; never a value.</summary>
+    public string EnvironmentText => Invocation.EnvironmentDisplay;
 
     public string TierHelp { get; }
 
@@ -656,6 +665,12 @@ public sealed partial class ActivityRow : ObservableObject
         if (invocation.UsedStdinSecret)
         {
             _ = builder.AppendLine("Stdin:    a secret was piped in on stdin; its value is never recorded");
+        }
+
+        if (invocation.EnvironmentNames.Count > 0)
+        {
+            _ = builder.Append("Env:      ").Append(string.Join(", ", invocation.EnvironmentNames))
+                .AppendLine(" set for this run only; values are never recorded");
         }
 
         if (invocation.IsOutputTruncated)

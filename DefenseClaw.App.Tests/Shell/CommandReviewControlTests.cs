@@ -17,10 +17,16 @@ using DefenseClaw.Core.Cli;
 namespace DefenseClaw.App.Tests.Shell;
 
 /// <summary>
-/// The shared review control on an STA thread with no Application: what it draws for each tier, which
-/// buttons a phase offers, where focus starts, that Esc cancels, and what a screen reader is told. (Colour and
-/// layout are looked at in rendered screenshots, not asserted here.)
+/// The shared review control: what it draws for each tier, which buttons a phase offers, where focus starts,
+/// that Esc cancels, and what a screen reader is told. (Colour and layout are looked at in rendered screenshots,
+/// not asserted here.)
+/// <para>
+/// Runs on the shared <see cref="UiThread"/>, in <see cref="UiCollection"/>: once the layout tests have created
+/// the process's one <see cref="Application"/>, its resources and WPF-UI's cached brushes belong to that thread,
+/// and a WPF-UI control built on any other thread fails with "cannot access Freezable across threads".
+/// </para>
 /// </summary>
+[Collection(UiCollection.Name)]
 public class CommandReviewControlTests
 {
     private static readonly string[] ReadOnlyArgv = { "skill", "list" };
@@ -73,7 +79,7 @@ public class CommandReviewControlTests
     [InlineData("destroy", "Destructive", "Bad")]
     public void The_badge_says_the_tier_in_words_and_carries_its_tone(string which, string label, string tone)
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var argv = which switch { "readonly" => ReadOnlyArgv, "change" => ChangeArgv, _ => DestroyArgv };
             var control = Build(ReviewOf(argv, "Title here?"));
@@ -88,7 +94,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Nothing_is_drawn_without_a_review()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(null);
 
@@ -101,7 +107,7 @@ public class CommandReviewControlTests
     [Fact]
     public void The_exact_argv_is_shown_in_a_selectable_read_only_box_named_for_a_screen_reader()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(ChangeArgv));
 
@@ -115,7 +121,7 @@ public class CommandReviewControlTests
     [Fact]
     public void A_long_argv_is_kept_whole_and_scrolls_rather_than_growing_the_dialog_without_limit()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var longArgv = new[] { "mcp", "set", "--args", "[" + string.Join(",", Enumerable.Range(0, 120).Select(i => $"\"--flag-number-{i}=value\"")) + "]", "--", "docs" };
             var control = Build(ReviewOf(longArgv), c => c.CommandMaxHeight = 120);
@@ -131,7 +137,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Several_steps_each_get_a_heading_tier_and_command_and_a_status_once_they_run()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var review = new CommandReview
             {
@@ -163,7 +169,7 @@ public class CommandReviewControlTests
     [Fact]
     public void One_step_shows_no_step_heading()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(ChangeArgv));
 
@@ -174,7 +180,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Warnings_and_the_restart_badge_show_while_the_operator_decides_and_go_quiet_afterwards()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var review = ReviewOf(ChangeArgv) with
             {
@@ -201,7 +207,7 @@ public class CommandReviewControlTests
     [Fact]
     public void The_summary_shows_only_when_there_is_one_and_never_in_the_compact_form()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var plain = Build(ReviewOf(ChangeArgv));
             Assert.False(Shown(plain.SummaryText));
@@ -222,7 +228,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Host_content_lands_under_the_command_and_beside_the_copy_button()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var extra = new CheckBox { Content = "Restart the gateway" };
             var footer = new TextBlock { Text = "footer" };
@@ -243,7 +249,7 @@ public class CommandReviewControlTests
     [Fact]
     public void A_review_offers_cancel_and_the_confirm_and_names_the_confirm_for_the_action()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var review = ReviewOf(ChangeArgv) with { ConfirmLabel = "Block skill" };
             var control = Build(review);
@@ -260,7 +266,7 @@ public class CommandReviewControlTests
     [Fact]
     public void A_destructive_command_gets_the_danger_confirm_and_anything_else_the_primary_one()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var danger = Build(ReviewOf(DestroyArgv));
             var normal = Build(ReviewOf(ChangeArgv));
@@ -275,7 +281,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Appearance_follows_the_review_when_the_same_control_is_reused()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(DestroyArgv));
             Assert.Equal(Wpf.Ui.Controls.ControlAppearance.Danger, control.ConfirmButton.Appearance);
@@ -288,7 +294,7 @@ public class CommandReviewControlTests
     [Fact]
     public void While_the_commands_run_nothing_can_be_confirmed_or_cancelled_and_afterwards_only_close_is_offered()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(ChangeArgv));
 
@@ -313,7 +319,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Shown_inline_the_control_has_no_decision_buttons_only_copy()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(DestroyArgv), c =>
             {
@@ -331,7 +337,7 @@ public class CommandReviewControlTests
     [Fact]
     public void The_buttons_run_the_hosts_commands()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var confirmed = 0;
             var cancelled = 0;
@@ -355,7 +361,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Focus_starts_on_cancel_for_a_destructive_command_so_enter_cannot_run_it()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(DestroyArgv));
 
@@ -368,7 +374,7 @@ public class CommandReviewControlTests
     [InlineData("change")]
     public void Focus_starts_on_the_confirm_for_anything_else(string which)
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(which == "readonly" ? ReadOnlyArgv : ChangeArgv));
 
@@ -379,7 +385,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Focus_stays_inside_the_dialog_as_it_moves_through_its_phases()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(ChangeArgv));
 
@@ -394,7 +400,7 @@ public class CommandReviewControlTests
     [Fact]
     public void An_inline_review_takes_no_focus()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(ChangeArgv), c => c.ShowActions = false);
 
@@ -413,7 +419,7 @@ public class CommandReviewControlTests
     [Fact]
     public void In_a_real_window_focus_lands_on_the_safe_button_and_goes_back_where_it_was_on_close()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var trigger = new System.Windows.Controls.Button { Content = "Row action" };
             var scrim = new Grid { Visibility = Visibility.Collapsed };
@@ -495,7 +501,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Escape_cancels_and_is_consumed()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var cancelled = 0;
             var control = Build(ReviewOf(DestroyArgv), c => c.CancelCommand = new RelayCommand(() => cancelled++));
@@ -508,7 +514,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Escape_from_inside_the_dialog_reaches_the_control_too()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var cancelled = 0;
             var control = Build(ReviewOf(ChangeArgv), c => c.CancelCommand = new RelayCommand(() => cancelled++));
@@ -521,7 +527,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Escape_closes_a_finished_dialog()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var cancelled = 0;
             var control = Build(ReviewOf(ChangeArgv), c =>
@@ -538,7 +544,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Escape_does_nothing_while_the_commands_run_but_the_page_behind_does_not_see_it_either()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var cancelled = 0;
             var control = Build(ReviewOf(ChangeArgv), c =>
@@ -555,7 +561,7 @@ public class CommandReviewControlTests
     [Fact]
     public void An_inline_review_leaves_escape_to_the_page_it_sits_in()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var cancelled = 0;
             var control = Build(ReviewOf(ChangeArgv), c =>
@@ -574,7 +580,7 @@ public class CommandReviewControlTests
     [Fact]
     public void Copy_puts_every_command_on_the_clipboard_and_says_so()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             string? copied = null;
             var review = new CommandReview
@@ -599,7 +605,7 @@ public class CommandReviewControlTests
     [Fact]
     public void A_clipboard_that_cannot_be_written_is_reported_not_swallowed()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(ChangeArgv), c => c.ClipboardWriter = _ => false);
 
@@ -615,7 +621,7 @@ public class CommandReviewControlTests
     [Fact]
     public void A_screen_reader_is_told_the_dialog_the_tier_and_that_nothing_runs_until_confirmed()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(DestroyArgv, "Remove skill “pdf-tools”?"));
 
@@ -631,7 +637,7 @@ public class CommandReviewControlTests
     [Fact]
     public void The_confirm_button_says_when_it_runs_something_destructive()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var danger = Build(ReviewOf(DestroyArgv));
             var normal = Build(ReviewOf(ChangeArgv));
@@ -645,7 +651,7 @@ public class CommandReviewControlTests
     [Fact]
     public void The_dialog_name_follows_the_review()
     {
-        StaThread.Run(() =>
+        UiThread.Run(() =>
         {
             var control = Build(ReviewOf(ChangeArgv, "First?"));
             var peer = UIElementAutomationPeer.CreatePeerForElement(control);

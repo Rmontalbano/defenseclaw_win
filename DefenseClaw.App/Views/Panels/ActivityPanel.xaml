@@ -132,6 +132,14 @@
                                                 <TextBlock Style="{StaticResource DcBadgeText}" Text="stdin secret" />
                                             </Border>
 
+                                            <Border Style="{StaticResource DcChip}"
+                                                    Margin="0,0,8,0"
+                                                    ToolTip="{Binding EnvironmentText, StringFormat='{}{0} (set in this run’s environment only; values are never recorded)'}"
+                                                    AutomationProperties.Name="{Binding EnvironmentText, StringFormat='Secret supplied by environment: {0}'}"
+                                                    Visibility="{Binding UsedEnvironmentSecret, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="env secret" />
+                                            </Border>
+
                                             <Border Style="{StaticResource DcBadge}"
                                                     Tag="{Binding ExitBadgeKey}"
                                                     MinWidth="76"
