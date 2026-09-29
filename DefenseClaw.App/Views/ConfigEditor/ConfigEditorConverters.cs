@@ -36,16 +36,6 @@ public sealed class BoolToInfoBarSeverityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-/// <summary>True (revealed) shows "Hide"; false shows "Reveal" — the secret-field toggle button's label.</summary>
-public sealed class BoolToRevealLabelConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is true ? "Hide" : "Reveal";
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
-
 /// <summary>Inverts a bool — used where a control's <c>IsEnabled</c> should follow the opposite of a "read-only" flag.</summary>
 public sealed class InverseBooleanConverter : IValueConverter
 {

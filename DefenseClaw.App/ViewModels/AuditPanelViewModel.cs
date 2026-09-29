@@ -170,6 +170,10 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private Task LoadMoreAsync() => LoadAsync(append: true, CancellationToken.None);
 
+    /// <summary>Closes the detail pane (Esc, or its own close button).</summary>
+    [RelayCommand]
+    private void ClearSelection() => SelectedRow = null;
+
     [RelayCommand]
     private void ResetFilters()
     {
@@ -426,7 +430,11 @@ public sealed class TimeRangeOption
 }
 
 /// <summary>One key/value row in the audit detail pane.</summary>
-public sealed record AuditDetailField(string Name, string Value);
+public sealed record AuditDetailField(string Name, string Value)
+{
+    /// <summary>"name: value" - what a screen reader says instead of the record's member dump.</summary>
+    public override string ToString() => $"{Name}: {Value}";
+}
 
 /// <summary>
 /// One <c>audit_events</c> row, flattened for display. <c>structured_json</c> is parsed
@@ -530,6 +538,17 @@ public sealed class AuditRow
     public IReadOnlyList<AuditDetailField> Fields { get; }
 
     public string Summary => Details.Length > 0 ? Details : EventName;
+
+    /// <summary>
+    /// What a screen reader announces for the row (UI Automation falls back to
+    /// <c>ToString()</c> for a list item with no explicit name), instead of the type name: severity,
+    /// action, what it was about, which connector, and when.
+    /// </summary>
+    public override string ToString()
+    {
+        var parts = new List<string> { $"{Severity} {Action}", Summary, $"connector {Connector}", TimestampText };
+        return string.Join(". ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+    }
 
     private static IReadOnlyList<AuditDetailField> BuildFields(AuditEvent source)
     {

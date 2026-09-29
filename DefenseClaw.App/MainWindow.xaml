@@ -2,6 +2,7 @@
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
                  Title="DefenseClaw for Windows"
                  Width="1200"
                  Height="800"
@@ -20,13 +21,20 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="DefenseClaw for Windows" />
+        <!--
+            32 px, not WPF-UI's default 48: the caption buttons are 30 px tall and top-aligned, so at 48 the title
+            text sat 9 px below their centre line and the bar wasted 16 px of a window that already scrolls its sidebar.
+        -->
+        <ui:TitleBar Grid.Row="0" Height="32" Title="DefenseClaw for Windows" />
 
-        <!-- Status strip: one line, always visible, always from the GatewayMonitor snapshot. -->
-        <Border Grid.Row="1"
-                Padding="18,8,18,8"
-                BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+        <!--
+            Status strip: one line, always visible, always from the GatewayMonitor snapshot.
+            Left to right it reads as a hierarchy: the state pill (the one thing that must be
+            noticed), the detail sentence (trims first when the window is narrow), then the
+            supporting facts as chips (version, connector, alerts) and the actions. Every colour is
+            a Dc tone chosen by Tag, so the dot and pill follow a live light/dark switch.
+        -->
+        <Border Grid.Row="1" Style="{StaticResource DcStatusStrip}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -34,60 +42,129 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding StateBrush}" />
-                    <TextBlock Margin="8,0,0,0"
-                               VerticalAlignment="Center"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                               Text="{Binding StateLabel}" />
-                    <TextBlock Margin="12,0,0,0"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               Text="{Binding VersionSummary}" />
-                </StackPanel>
+                <Border Grid.Column="0"
+                        Style="{StaticResource DcBadge}"
+                        Tag="{Binding StateTone}"
+                        Padding="10,4,12,4"
+                        VerticalAlignment="Center"
+                        ToolTip="{Binding StateDetail}">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Style="{StaticResource DcToneDot}"
+                                 Tag="{Binding StateTone}"
+                                 Margin="0,0,8,0" />
+                        <TextBlock x:Name="StateText"
+                                   Style="{StaticResource DcBadgeText}"
+                                   FontSize="13"
+                                   VerticalAlignment="Center"
+                                   AutomationProperties.Name="{Binding StateAutomationName}"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Text="{Binding StateLabel}" />
+                    </StackPanel>
+                </Border>
 
                 <TextBlock Grid.Column="1"
-                           Margin="20,0,20,0"
+                           Style="{StaticResource DcCaption}"
+                           Margin="12,0,12,0"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="NoWrap"
                            ToolTip="{Binding StateDetail}"
                            Text="{Binding StateDetail}" />
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="{Binding ConnectorSummary, StringFormat='Connector: {0}'}" />
-                    <TextBlock Margin="16,0,0,0"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="{Binding AlertSummary}" />
-                    <ui:Button Margin="16,0,0,0"
-                               Padding="10,4,10,4"
-                               Content="Refresh"
-                               Command="{Binding RefreshCommand}" />
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <!--
+                        Density slots. The window's width (in DIPs) decides which supporting chips show
+                        (see MainWindow.UpdateStripDensity): below ~1040 the version chip, then below ~900
+                        the connector chip, step aside so the state, the alerts and the actions never clip.
+                        The slots carry Visibility; the chips inside keep their own bindings.
+                    -->
+                    <StackPanel x:Name="VersionSlot" Orientation="Horizontal">
+                        <Border Style="{StaticResource DcChip}"
+                                Margin="0,0,8,0"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding HasVersion, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding VersionSummary}" />
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="ConnectorSlot" Orientation="Horizontal">
+                        <Border Style="{StaticResource DcChip}" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource DcBadgeText}"
+                                       MaxWidth="200"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding ConnectorChipText}"
+                                       Text="{Binding ConnectorChipText}" />
+                        </Border>
+                    </StackPanel>
+
+                    <Border Style="{StaticResource DcBadge}"
+                            Tag="{Binding AlertTone}"
+                            Margin="0,0,12,0"
+                            VerticalAlignment="Center"
+                            ToolTip="{Binding AlertDetail}">
+                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                   MaxWidth="240"
+                                   TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.HelpText="{Binding AlertDetail}"
+                                   Text="{Binding AlertSummary}" />
+                    </Border>
+
+                    <ui:Button Content="Refresh"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Check the gateway now. F5 refreshes the panel you are viewing."
+                               AutomationProperties.Name="Refresh gateway status"
+                               AutomationProperties.HelpText="Polls the gateway immediately instead of waiting for the next automatic check.">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="ArrowSync24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+
+                    <ui:Button Margin="8,0,0,0"
+                               Click="OnPaletteButtonClick"
+                               ToolTip="Command palette (Ctrl+K)"
+                               AutomationProperties.Name="Open command palette"
+                               AutomationProperties.AcceleratorKey="Ctrl+K">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Search24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+
+                    <ui:Button Margin="8,0,0,0"
+                               Click="OnShortcutsButtonClick"
+                               ToolTip="Keyboard shortcuts (F1)"
+                               AutomationProperties.Name="Show keyboard shortcuts"
+                               AutomationProperties.AcceleratorKey="F1">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Keyboard24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Banner region, above the content frame. -->
-        <StackPanel Grid.Row="2" Margin="18,10,18,0">
-            <ui:InfoBar Margin="0,0,0,8"
+        <!--
+            Banner region, above the content frame. The 12 px gap sits on each banner's top edge, not on the
+            stack: a closed banner is collapsed (margin and all), so with nothing to say the region takes no
+            height at all instead of 12 px above the sidebar.
+        -->
+        <StackPanel Grid.Row="2" Margin="24,0,24,0">
+            <ui:InfoBar Margin="0,12,0,0"
                         IsClosable="False"
                         Severity="Warning"
                         Title="WSL gateway detected"
                         IsOpen="{Binding ShowWslBanner}"
                         Message="{Binding WslMessage}" />
 
-            <ui:InfoBar Margin="0,0,0,8"
+            <ui:InfoBar Margin="0,12,0,0"
                         IsClosable="False"
                         Severity="Error"
                         Title="config.yaml could not be read"
                         IsOpen="{Binding ShowConfigErrorBanner}"
                         Message="{Binding ConfigErrorMessage}" />
 
-            <ui:InfoBar Margin="0,0,0,8"
+            <ui:InfoBar Margin="0,12,0,0"
                         IsClosable="False"
                         Severity="Warning"
                         Title="{Binding DegradedTitle}"
@@ -101,7 +178,7 @@
                 others describe a condition that is still true.
             -->
             <ui:InfoBar x:Name="PanelFaultBar"
-                        Margin="0,0,0,8"
+                        Margin="0,12,0,0"
                         IsClosable="True"
                         IsOpen="False"
                         Severity="Error"
@@ -112,34 +189,24 @@
                 the init command as copyable text. The app shows the command and never runs
                 it - every mutation belongs to the CLI, recorded in Activity.
             -->
-            <Border Margin="0,0,0,8"
-                    Padding="14,12,14,12"
-                    CornerRadius="6"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+            <Border Style="{StaticResource DcCardCompact}"
+                    Margin="0,12,0,0"
                     Visibility="{Binding ShowNotInitializedBanner, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
-                    <TextBlock FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                    <TextBlock Style="{StaticResource DcCardTitle}"
                                Text="DefenseClaw is installed but not initialized" />
-                    <TextBlock Margin="0,4,0,0"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                    <TextBlock Style="{StaticResource DcTextSecondary}"
                                Text="{Binding NotInitializedMessage}" />
-                    <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
-                        <Border Padding="10,5,10,5"
-                                CornerRadius="4"
-                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                            <TextBox FontFamily="Cascadia Mono, Consolas"
-                                     IsReadOnly="True"
-                                     BorderThickness="0"
-                                     Background="Transparent"
-                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                    <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                        <Border Style="{StaticResource DcCodeBlock}" VerticalAlignment="Center">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     AutomationProperties.Name="Initialize command"
                                      Text="defenseclaw init" />
                         </Border>
                         <ui:Button Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
                                    Content="Copy"
+                                   AutomationProperties.Name="Copy the defenseclaw init command"
                                    Command="{Binding CopyCommandCommand}"
                                    CommandParameter="defenseclaw init" />
                     </StackPanel>
@@ -157,5 +224,24 @@
                            IsPaneToggleVisible="True"
                            OpenPaneLength="220"
                            PaneDisplayMode="Left" />
+
+        <!--
+            Overlays. They start under the title bar so the window buttons stay usable, and sit last
+            in the grid so they draw over the sidebar and the page. Each host binds to the shell
+            view-model's flag; the controls themselves get their own DataContext in code.
+        -->
+        <Grid x:Name="PaletteHost"
+              Grid.Row="1"
+              Grid.RowSpan="3"
+              Visibility="{Binding IsPaletteOpen, Converter={StaticResource BoolToVisibility}}">
+            <shell:CommandPaletteControl x:Name="Palette" />
+        </Grid>
+
+        <Grid x:Name="ShortcutsHost"
+              Grid.Row="1"
+              Grid.RowSpan="3"
+              Visibility="{Binding IsShortcutsOpen, Converter={StaticResource BoolToVisibility}}">
+            <shell:ShortcutsOverlay x:Name="Shortcuts" />
+        </Grid>
     </Grid>
 </ui:FluentWindow>

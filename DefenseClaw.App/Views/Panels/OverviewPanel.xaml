@@ -3,259 +3,126 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
     <!--
-        Dashboard layout mirroring the TUI's boxes. Every colour comes from a DynamicResource
-        so both themes track the system, and every severity/state colour is chosen by a
-        DataTrigger on a plain string key from the view-model - no converters, because a
-        panel is only allowed to be two files.
+        Dashboard layout mirroring the TUI's boxes, on the shared Dc* design system
+        (Themes\DefenseClaw.xaml). Every severity / state colour is a Tag on a Dc* tone style
+        bound to the plain string key the view-model already exposes, so both themes track the
+        system and no converter is needed. The panel keeps no local styles.
+
+        Accessibility: every list item announces through its record's ToString() (the view-model
+        rows override it), every list carries a name, and status text that changes on its own
+        (doctor progress) is a polite live region.
     -->
-    <UserControl.Resources>
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="Padding" Value="16" />
-        </Style>
-
-        <Style x:Key="CardTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,0,10" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        </Style>
-
-        <Style x:Key="Primary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Secondary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Tertiary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <!-- Liveness dot. "disabled" is deliberate configuration, so it stays neutral. -->
-        <Style x:Key="StateDot" TargetType="Ellipse">
-            <Setter Property="Width" Value="9" />
-            <Setter Property="Height" Value="9" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Fill" Value="{DynamicResource SystemFillColorNeutralBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding StateKey}" Value="Ok">
-                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding StateKey}" Value="Warn">
-                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding StateKey}" Value="Bad">
-                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="GatewayDot" TargetType="Ellipse">
-            <Setter Property="Width" Value="12" />
-            <Setter Property="Height" Value="12" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Fill" Value="{DynamicResource SystemFillColorNeutralBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding GatewayStateKey}" Value="Ok">
-                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding GatewayStateKey}" Value="Warn">
-                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding GatewayStateKey}" Value="Bad">
-                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Left accent bar, by severity key. -->
-        <Style x:Key="SeverityBar" TargetType="Border">
-            <Setter Property="Width" Value="4" />
-            <Setter Property="CornerRadius" Value="2" />
-            <Setter Property="Margin" Value="0,0,12,0" />
-            <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Critical">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="High">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Medium">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Ok">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="TileBorder" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="14,10,14,10" />
-            <Setter Property="Margin" Value="0,0,10,10" />
-            <Setter Property="MinWidth" Value="104" />
-            <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Critical">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="High">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Medium">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBackgroundBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Ok">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="TileValue" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="22" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Critical">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="High">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-    </UserControl.Resources>
-
-    <Grid Margin="24,20,24,0">
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,16">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <StackPanel Grid.Column="0">
-                <TextBlock FontSize="26"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding Title}" />
-                <TextBlock Margin="0,4,0,0"
-                           FontSize="13"
-                           Style="{StaticResource Secondary}"
-                           Text="{Binding Description}" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Margin="0,0,12,0"
-                           VerticalAlignment="Center"
-                           Style="{StaticResource Tertiary}"
-                           Text="{Binding LastUpdatedText}" />
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding LastUpdatedText}" />
                 <!-- AsyncRelayCommand disables itself while it runs, so no IsEnabled plumbing. -->
-                <ui:Button Content="Refresh" Command="{Binding RefreshCommand}">
+                <ui:Button Content="Refresh"
+                           Command="{Binding RefreshCommand}"
+                           AutomationProperties.HelpText="Poll the gateway again and re-read the audit counts, enforcement lists and doctor results. Shortcut F5.">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
-        </Grid>
+        </HeaderedContentControl>
 
-        <ScrollViewer Grid.Row="1"
-                      Padding="0,0,8,0"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="0,0,0,24">
+        <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
+            <StackPanel>
 
-                <!-- Gateway headline + severity tiles -->
-                <Grid Margin="0,0,0,14">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <!-- Gateway headline, then the severity tiles. Two full-width cards, not two columns: side by side
+                     the tiles had ~350 px to share, wrapped 2+2+1 and stretched the gateway card (three short lines)
+                     to the same height, leaving it half empty. Stacked, the five tiles get one row at every
+                     window width the app allows. -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <!-- WrapPanel, not StackPanel: the version and uptime must fall to a
+                             second line on a narrow window instead of being clipped. -->
+                        <WrapPanel>
+                            <Ellipse Style="{StaticResource DcToneDotLarge}"
+                                     Tag="{Binding GatewayStateKey}"
+                                     Margin="0,0,10,0" />
+                            <TextBlock Style="{StaticResource DcSectionHeader}"
+                                       Margin="0"
+                                       FontSize="20"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding GatewayHeadline}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="14,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding VersionText}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="14,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding UptimeText, StringFormat='uptime {0}'}" />
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                   Margin="0,8,0,0"
+                                   Text="{Binding GatewayDetail}" />
+                        <TextBox Style="{StaticResource DcMonoTextBox}"
+                                 Margin="0,8,0,0"
+                                 AutomationProperties.Name="DefenseClaw data directory"
+                                 Text="{Binding DataDirectoryText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
 
-                    <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,14,0">
-                        <StackPanel>
-                            <!-- WrapPanel, not StackPanel: the version and uptime must fall to a
-                                 second line on a narrow window instead of being clipped. -->
-                            <WrapPanel>
-                                <Ellipse Style="{StaticResource GatewayDot}" Margin="0,0,10,0" />
-                                <TextBlock FontSize="20"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           Text="{Binding GatewayHeadline}" />
-                                <TextBlock Margin="14,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Style="{StaticResource Tertiary}"
-                                           Text="{Binding VersionText}" />
-                                <TextBlock Margin="14,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Style="{StaticResource Tertiary}"
-                                           Text="{Binding UptimeText, StringFormat='uptime {0}'}" />
-                            </WrapPanel>
-                            <TextBlock Margin="0,8,0,0"
-                                       Style="{StaticResource Secondary}"
-                                       Text="{Binding GatewayDetail}" />
-                            <TextBlock Margin="0,6,0,0"
-                                       FontFamily="Cascadia Mono, Consolas"
-                                       FontSize="11"
-                                       Style="{StaticResource Tertiary}"
-                                       Text="{Binding DataDirectoryText}" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="1" Style="{StaticResource Card}" MinWidth="330">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource CardTitle}" Text="Audit severity — last 24 hours" />
-                            <ItemsControl ItemsSource="{Binding SeverityTiles}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Style="{StaticResource TileBorder}">
-                                            <StackPanel>
-                                                <TextBlock Style="{StaticResource TileValue}" Text="{Binding Value}" />
-                                                <TextBlock Margin="0,2,0,0"
-                                                           FontSize="11"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Label}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Style="{StaticResource Secondary}" Text="{Binding AuditSummary}" />
-                            <TextBlock Margin="0,4,0,0"
-                                       FontSize="11"
-                                       Style="{StaticResource Tertiary}"
-                                       Text="{Binding AuditNote}" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Audit severity — last 24 hours" />
+                        <!-- Equal-width tiles (112 px; the widest count seen - "139,825" at 24 px - fits) in a wrap
+                             panel: five tiles take one row at the 940 px minimum window, and a sixth wraps as a whole
+                             tile instead of squeezing the digits. The negative right margin cancels the last tile's gap
+                             so a full row ends flush with the card padding. -->
+                        <ItemsControl Margin="0,0,-8,4"
+                                      ItemsSource="{Binding SeverityTiles}"
+                                      AutomationProperties.Name="Audit events by severity, last 24 hours">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource DcToneTile}"
+                                            Tag="{Binding SeverityKey}"
+                                            Width="112"
+                                            Padding="12,10,12,10"
+                                            Margin="0,0,8,8">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource DcValue}"
+                                                       Tag="{Binding SeverityKey}"
+                                                       Text="{Binding Value}" />
+                                            <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource DcBody}" Text="{Binding AuditSummary}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="{Binding AuditNote}" />
+                    </StackPanel>
+                </Border>
 
                 <!-- What Needs Attention -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="What needs attention" />
-                        <ItemsControl ItemsSource="{Binding Attention}">
+                        <TextBlock Style="{StaticResource DcCardTitle}" Text="What needs attention" />
+                        <ItemsControl ItemsSource="{Binding Attention}"
+                                      AutomationProperties.Name="What needs attention">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="0,0,0,10">
@@ -263,27 +130,23 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" Style="{StaticResource SeverityBar}" />
+                                        <Border Grid.Column="0"
+                                                Style="{StaticResource DcToneBar}"
+                                                Tag="{Binding SeverityKey}" />
                                         <StackPanel Grid.Column="1">
-                                            <TextBlock FontWeight="SemiBold"
-                                                       Style="{StaticResource Primary}"
+                                            <TextBlock Style="{StaticResource DcBody}"
+                                                       FontWeight="SemiBold"
                                                        Text="{Binding Title}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       Style="{StaticResource Secondary}"
+                                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                       Margin="0,2,0,0"
                                                        Text="{Binding Detail}" />
-                                            <Border Margin="0,6,0,0"
-                                                    Padding="8,4,8,4"
+                                            <Border Style="{StaticResource DcCodeBlock}"
+                                                    Margin="0,6,0,0"
                                                     HorizontalAlignment="Left"
-                                                    CornerRadius="4"
-                                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
                                                     Visibility="{Binding HasCommand, Converter={StaticResource BoolToVisibility}}">
-                                                <TextBox FontFamily="Cascadia Mono, Consolas"
-                                                         FontSize="12"
-                                                         IsReadOnly="True"
-                                                         BorderThickness="0"
-                                                         Padding="0"
-                                                         Background="Transparent"
-                                                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="Suggested command"
+                                                         AutomationProperties.HelpText="Read-only text you can select and copy. The app never runs it for you."
                                                          Text="{Binding Command, Mode=OneWay}" />
                                             </Border>
                                         </StackPanel>
@@ -294,21 +157,172 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Doctor (health check). Results come from doctor_cache.json, never from a probe the
+                     panel starts by itself; the button runs 'defenseclaw doctor' on purpose. -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <WrapPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource DcCardTitle}"
+                                           Margin="0,0,10,0"
+                                           VerticalAlignment="Center"
+                                           Text="Health check (doctor)" />
+                                <Border Style="{StaticResource DcBadge}"
+                                        Tag="Warn"
+                                        VerticalAlignment="Center"
+                                        ToolTip="These results are older than 15 minutes."
+                                        Visibility="{Binding DoctorIsStale, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="STALE" />
+                                </Border>
+                            </WrapPanel>
+
+                            <StackPanel Grid.Column="1" Style="{StaticResource DcActionBar}">
+                                <ui:ProgressRing Width="20"
+                                                 Height="20"
+                                                 IsIndeterminate="True"
+                                                 Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}" />
+                                <ui:Button Content="Cancel"
+                                           Appearance="Secondary"
+                                           Command="{Binding CancelDoctorCommand}"
+                                           Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}"
+                                           AutomationProperties.HelpText="Stop the doctor run and kill its process tree." />
+                                <ui:Button Content="Run doctor"
+                                           Command="{Binding RunDoctorCommand}"
+                                           ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds. Writes only its own results cache."
+                                           AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Live region: progress and outcome are announced without moving focus. -->
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,8,0,0"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Text="{Binding DoctorRunMessage}"
+                                   Visibility="{Binding DoctorHasRunMessage, Converter={StaticResource BoolToVisibility}}" />
+
+                        <!-- Never run: a normal state on a fresh install, not a fault. -->
+                        <StackPanel Style="{StaticResource DcEmptyState}"
+                                    Visibility="{Binding DoctorIsEmpty, Converter={StaticResource BoolToVisibility}}">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Doctor has not run yet" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                       Text="doctor_cache.json does not exist. Run doctor to check credentials, endpoints and connector wiring; the result is kept here so it does not need re-probing every time you open this page." />
+                        </StackPanel>
+
+                        <!-- Cache exists but could not be read: a different state from never run. -->
+                        <ui:InfoBar Margin="0,10,0,0"
+                                    IsClosable="False"
+                                    Severity="Warning"
+                                    Title="Doctor results could not be read"
+                                    IsOpen="{Binding DoctorHasReadError}"
+                                    Message="{Binding DoctorReadError}" />
+
+                        <StackPanel Visibility="{Binding DoctorHasData, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Ellipse Style="{StaticResource DcToneDot}"
+                                         Tag="{Binding DoctorStateKey}"
+                                         Margin="0,0,10,0" />
+                                <TextBlock Style="{StaticResource DcBody}"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding DoctorVerdict}" />
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding DoctorAsOfText}" />
+                            </StackPanel>
+
+                            <ItemsControl Margin="0,10,0,0"
+                                          ItemsSource="{Binding DoctorTiles}"
+                                          AutomationProperties.Name="Doctor check counts">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource DcToneTile}"
+                                                Tag="{Binding SeverityKey}"
+                                                Margin="0,0,10,0">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource DcValue}"
+                                                           Tag="{Binding SeverityKey}"
+                                                           Text="{Binding Value}" />
+                                                <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,8,0,0"
+                                       Text="Results are as of the last time doctor ran (from this page, a terminal or the TUI); opening this page never re-runs it. They go STALE after 15 minutes."
+                                       Visibility="{Binding DoctorIsStale, Converter={StaticResource BoolToVisibility}}" />
+
+                            <StackPanel Margin="0,12,0,0"
+                                        Visibility="{Binding DoctorHasProblems, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource DcCardTitle}" Text="Failing and warning checks" />
+                                <ItemsControl ItemsSource="{Binding DoctorChecks}"
+                                              AutomationProperties.Name="Failing and warning doctor checks">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource DcSubtleRow}" Margin="0,0,0,6">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Grid.Column="0"
+                                                            Style="{StaticResource DcBadge}"
+                                                            Tag="{Binding StatusKey}"
+                                                            MinWidth="52"
+                                                            VerticalAlignment="Top"
+                                                            Margin="0,0,10,0">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusText}" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Style="{StaticResource DcBody}"
+                                                                   FontWeight="SemiBold"
+                                                                   Text="{Binding Label}" />
+                                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                                   Margin="0,2,0,0"
+                                                                   Text="{Binding Detail}"
+                                                                   Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Text="{Binding DoctorProblemsNote}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- Services + Scanners -->
-                <Grid Margin="0,0,0,14">
+                <Grid Margin="{StaticResource DcCardGap}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="{StaticResource DcColumnGap}" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,14,0">
+                    <Border Grid.Column="0" Style="{StaticResource DcCard}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource CardTitle}" Text="Services" />
-                            <TextBlock Margin="0,-6,0,10"
-                                       FontSize="11"
-                                       Style="{StaticResource Tertiary}"
+                            <TextBlock Style="{StaticResource DcCardTitle}" Text="Services" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,0,0,10"
                                        Text="Liveness and enforcement posture are separate: a subsystem can run while enforcement stays off, and &quot;disabled&quot; is a configuration, not a fault." />
-                            <ItemsControl ItemsSource="{Binding ServiceRows}">
+                            <ItemsControl ItemsSource="{Binding ServiceRows}"
+                                          AutomationProperties.Name="Services">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,0,0,9">
@@ -317,31 +331,29 @@
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <Ellipse Grid.Column="0"
-                                                     Margin="0,5,10,0"
-                                                     VerticalAlignment="Top"
-                                                     Style="{StaticResource StateDot}" />
+                                                     Style="{StaticResource DcToneDot}"
+                                                     Tag="{Binding StateKey}"
+                                                     Margin="0,6,10,0"
+                                                     VerticalAlignment="Top" />
                                             <StackPanel Grid.Column="1">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock FontWeight="SemiBold"
-                                                               Style="{StaticResource Primary}"
+                                                <WrapPanel>
+                                                    <TextBlock Style="{StaticResource DcBody}"
+                                                               FontWeight="SemiBold"
                                                                Text="{Binding Name}" />
-                                                    <TextBlock Margin="8,0,0,0"
-                                                               Style="{StaticResource Secondary}"
+                                                    <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                               Margin="8,0,0,0"
                                                                Text="{Binding StateText}" />
-                                                    <TextBlock Margin="8,0,0,0"
-                                                               FontSize="11"
+                                                    <TextBlock Style="{StaticResource DcCaption}"
+                                                               Margin="8,0,0,0"
                                                                VerticalAlignment="Center"
-                                                               Style="{StaticResource Tertiary}"
                                                                Text="{Binding SinceText}" />
-                                                </StackPanel>
-                                                <TextBlock Margin="0,2,0,0"
-                                                           FontSize="12"
-                                                           Style="{StaticResource Secondary}"
+                                                </WrapPanel>
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           Margin="0,2,0,0"
                                                            Visibility="{Binding HasPosture, Converter={StaticResource BoolToVisibility}}"
                                                            Text="{Binding Posture}" />
-                                                <TextBlock Margin="0,2,0,0"
-                                                           FontSize="11"
-                                                           Style="{StaticResource Tertiary}"
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           Margin="0,2,0,0"
                                                            Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}"
                                                            Text="{Binding Detail}" />
                                             </StackPanel>
@@ -352,10 +364,11 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="1" Style="{StaticResource Card}">
+                    <Border Grid.Column="2" Style="{StaticResource DcCard}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource CardTitle}" Text="Scanners" />
-                            <ItemsControl ItemsSource="{Binding ScannerRows}">
+                            <TextBlock Style="{StaticResource DcCardTitle}" Text="Scanners" />
+                            <ItemsControl ItemsSource="{Binding ScannerRows}"
+                                          AutomationProperties.Name="Scanners">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,0,0,9">
@@ -364,21 +377,21 @@
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <Ellipse Grid.Column="0"
-                                                     Margin="0,5,10,0"
-                                                     VerticalAlignment="Top"
-                                                     Style="{StaticResource StateDot}" />
+                                                     Style="{StaticResource DcToneDot}"
+                                                     Tag="{Binding StateKey}"
+                                                     Margin="0,6,10,0"
+                                                     VerticalAlignment="Top" />
                                             <StackPanel Grid.Column="1">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock FontWeight="SemiBold"
-                                                               Style="{StaticResource Primary}"
+                                                <WrapPanel>
+                                                    <TextBlock Style="{StaticResource DcBody}"
+                                                               FontWeight="SemiBold"
                                                                Text="{Binding Name}" />
-                                                    <TextBlock Margin="8,0,0,0"
-                                                               Style="{StaticResource Secondary}"
+                                                    <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                               Margin="8,0,0,0"
                                                                Text="{Binding StateText}" />
-                                                </StackPanel>
-                                                <TextBlock Margin="0,2,0,0"
-                                                           FontSize="11"
-                                                           Style="{StaticResource Tertiary}"
+                                                </WrapPanel>
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           Margin="0,2,0,0"
                                                            Text="{Binding Detail}" />
                                             </StackPanel>
                                         </Grid>
@@ -390,59 +403,61 @@
                 </Grid>
 
                 <!-- Connectors -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="Connectors" />
-                        <ItemsControl ItemsSource="{Binding ConnectorRows}">
+                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Connectors" />
+                        <ItemsControl ItemsSource="{Binding ConnectorRows}"
+                                      AutomationProperties.Name="Connectors">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Margin="0,0,0,10"
-                                            Padding="12"
-                                            CornerRadius="6"
-                                            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                                    <Border Style="{StaticResource DcSubtleRow}"
+                                            Margin="0,0,0,10"
+                                            Padding="12">
                                         <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <Ellipse Style="{StaticResource StateDot}" />
-                                                <TextBlock Margin="10,0,0,0"
+                                            <WrapPanel>
+                                                <Ellipse Style="{StaticResource DcToneDot}"
+                                                         Tag="{Binding StateKey}"
+                                                         Margin="0,0,10,0" />
+                                                <TextBlock Style="{StaticResource DcBody}"
                                                            FontWeight="SemiBold"
-                                                           FontSize="14"
-                                                           Style="{StaticResource Primary}"
                                                            Text="{Binding Name}" />
-                                                <TextBlock Margin="10,0,0,0"
+                                                <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                           Margin="10,0,0,0"
                                                            VerticalAlignment="Center"
-                                                           Style="{StaticResource Secondary}"
                                                            Text="{Binding StateText}" />
-                                                <TextBlock Margin="10,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           Style="{StaticResource Secondary}"
-                                                           Text="{Binding Mode, StringFormat='mode {0}'}" />
-                                                <TextBlock Margin="10,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           Style="{StaticResource Secondary}"
-                                                           Text="{Binding FailMode, StringFormat='fail-mode {0}'}" />
-                                                <TextBlock Margin="10,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           FontSize="11"
-                                                           Style="{StaticResource Tertiary}"
-                                                           Text="{Binding Source, StringFormat='source {0}'}" />
-                                            </StackPanel>
+                                            </WrapPanel>
 
-                                            <TextBlock Margin="19,6,0,0"
-                                                       FontSize="12"
-                                                       Style="{StaticResource Secondary}"
+                                            <!-- Mode, fail-mode and source are metadata, not status: neutral chips. -->
+                                            <WrapPanel Margin="19,6,0,0">
+                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}"
+                                                               Text="{Binding Mode, StringFormat='mode {0}'}" />
+                                                </Border>
+                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}"
+                                                               Text="{Binding FailMode, StringFormat='fail-mode {0}'}" />
+                                                </Border>
+                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}"
+                                                               Text="{Binding Source, StringFormat='source {0}'}" />
+                                                </Border>
+                                            </WrapPanel>
+
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Margin="19,4,0,0"
                                                        Visibility="{Binding HasCounters, Converter={StaticResource BoolToVisibility}}"
                                                        Text="{Binding Counters}" />
-                                            <TextBlock Margin="19,2,0,0"
-                                                       FontSize="11"
-                                                       Style="{StaticResource Tertiary}"
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Margin="19,2,0,0"
                                                        Text="{Binding Surface}" />
-                                            <TextBlock Margin="19,2,0,0"
-                                                       FontSize="11"
-                                                       Style="{StaticResource Tertiary}"
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Margin="19,2,0,0"
                                                        Text="{Binding LastActivity}" />
-                                            <TextBlock Margin="19,2,0,0"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                            <TextBlock Style="{StaticResource DcToneText}"
+                                                       Tag="Warn"
+                                                       FontSize="12"
+                                                       TextWrapping="Wrap"
+                                                       Margin="19,2,0,0"
                                                        Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"
                                                        Text="{Binding Drift}" />
 
@@ -461,10 +476,11 @@
                 </Border>
 
                 <!-- Enforcement -->
-                <Border Style="{StaticResource Card}">
+                <Border Style="{StaticResource DcCard}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="Enforcement" />
-                        <ItemsControl ItemsSource="{Binding EnforcementTiles}">
+                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Enforcement" />
+                        <ItemsControl ItemsSource="{Binding EnforcementTiles}"
+                                      AutomationProperties.Name="Enforcement lists">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel />
@@ -472,16 +488,17 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Style="{StaticResource TileBorder}" MinWidth="150">
+                                    <Border Style="{StaticResource DcToneTile}"
+                                            Tag="{Binding SeverityKey}"
+                                            Margin="0,0,10,10"
+                                            MinWidth="150">
                                         <StackPanel>
-                                            <TextBlock Style="{StaticResource TileValue}" Text="{Binding Value}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding Label}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                            <TextBlock Style="{StaticResource DcValue}"
+                                                       Tag="{Binding SeverityKey}"
+                                                       Text="{Binding Value}" />
+                                            <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Margin="0,2,0,0"
                                                        Visibility="{Binding HasCaption, Converter={StaticResource BoolToVisibility}}"
                                                        Text="{Binding Caption}" />
                                         </StackPanel>
@@ -489,10 +506,9 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <TextBlock Style="{StaticResource Secondary}" Text="{Binding EnforcementSummary}" />
-                        <TextBlock Margin="0,4,0,0"
-                                   FontSize="11"
-                                   Style="{StaticResource Tertiary}"
+                        <TextBlock Style="{StaticResource DcBody}" Text="{Binding EnforcementSummary}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
                                    Text="{Binding EnforcementNote}" />
                     </StackPanel>
                 </Border>

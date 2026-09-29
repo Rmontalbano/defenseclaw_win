@@ -6,104 +6,154 @@
         Filters above, virtualized list left, detail pane right. The list is a ListView so
         WPF's own VirtualizingStackPanel does the recycling - the alert stream on a busy box
         is mostly the same handful of signatures repeating, and scrolling has to stay cheap.
+
+        On the shared Dc* design system. The one local visual is the severity chip (a toggle that
+        carries its severity's tone). Keyboard: Ctrl+F focuses the filter box, Esc closes the review
+        dialog and then the detail pane (both handled in the code-behind).
     -->
     <UserControl.Resources>
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="Padding" Value="14" />
-        </Style>
-
-        <Style x:Key="Secondary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Tertiary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <!-- Severity chip: background tint plus matching foreground, both theme-aware. -->
-        <Style x:Key="SeverityChip" TargetType="Border">
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="7,2,7,2" />
-            <Setter Property="MinWidth" Value="66" />
-            <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Critical">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="High">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Medium">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBackgroundBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="SeverityChipText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Critical">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="High">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Medium">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorAttentionBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
+        <!--
+            Severity chip. ON: the severity's own tone (tinted fill + tone text via DcBadge) and a
+            check mark. OFF: outline only, dim text, no tone. State is never colour alone - the
+            check mark and the outline carry it, so it reads in every theme and for colour-blind users.
+            Tag = the severity key ("Critical" ... "Info"). Two chips are swapped by IsChecked because
+            a template trigger cannot override the tone triggers inside DcBadge.
+        -->
+        <Style x:Key="SeverityToggle" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource DcFocusVisualStyle}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Grid>
+                            <Border x:Name="OffChip"
+                                    Padding="10,4,10,4"
+                                    CornerRadius="4"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    Background="Transparent">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Margin="0,0,6,0"
+                                               VerticalAlignment="Center"
+                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="11"
+                                               Opacity="0"
+                                               Text="&#xE73E;" />
+                                    <TextBlock VerticalAlignment="Center"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Text="{Binding Severity}" />
+                                    <TextBlock Margin="6,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Text="{Binding Count}" />
+                                </StackPanel>
+                            </Border>
+                            <Border x:Name="OnChip"
+                                    Style="{StaticResource DcBadge}"
+                                    Tag="{TemplateBinding Tag}"
+                                    Padding="10,4,10,4"
+                                    BorderThickness="1"
+                                    BorderBrush="Transparent"
+                                    Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Margin="0,0,6,0"
+                                               VerticalAlignment="Center"
+                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="11"
+                                               Text="&#xE73E;" />
+                                    <TextBlock VerticalAlignment="Center"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding Severity}" />
+                                    <TextBlock Margin="6,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Text="{Binding Count}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="OnChip" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="OffChip" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="OffChip" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="24,20,24,20">
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <StackPanel Grid.Column="0">
-                <TextBlock FontSize="26"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding Title}" />
-                <TextBlock Margin="0,4,0,0"
-                           FontSize="13"
-                           Style="{StaticResource Secondary}"
-                           Text="{Binding Description}" />
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <ui:Button Content="Acknowledge…"
+                           Appearance="Secondary"
+                           Command="{Binding OpenAcknowledgeCommand}"
+                           AutomationProperties.HelpText="Acknowledge every active alert of one severity. Shows a preview of what would match before anything is changed.">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ShieldCheckmark24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+                <ui:Button Content="Dismiss…"
+                           Appearance="Secondary"
+                           Command="{Binding OpenDismissCommand}"
+                           AutomationProperties.HelpText="Dismiss every active alert of one severity from the active list. Shows a preview of what would match before anything is changed." />
+                <ui:Button Content="Refresh"
+                           Command="{Binding RefreshCommand}"
+                           AutomationProperties.HelpText="Re-read the alert list from the gateway now. Shortcut F5.">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                    </ui:Button.Icon>
+                </ui:Button>
             </StackPanel>
+        </HeaderedContentControl>
 
-            <ui:Button Grid.Column="1"
-                       VerticalAlignment="Center"
-                       Content="Refresh"
-                       Command="{Binding RefreshCommand}">
-                <ui:Button.Icon>
-                    <ui:SymbolIcon Symbol="ArrowClockwise24" />
-                </ui:Button.Icon>
-            </ui:Button>
-        </Grid>
+        <!-- Result of the last acknowledge / dismiss -->
+        <StackPanel Grid.Row="1">
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Severity="Success"
+                        IsClosable="True"
+                        IsOpen="{Binding ShowActionSuccess, Mode=TwoWay}"
+                        Message="{Binding ActionBannerText}"
+                        AutomationProperties.LiveSetting="Polite" />
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Severity="Error"
+                        IsClosable="True"
+                        IsOpen="{Binding ShowActionError, Mode=TwoWay}"
+                        Message="{Binding ActionBannerText}"
+                        AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
 
         <!-- Filters -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+        <Border Grid.Row="2" Style="{StaticResource DcToolbar}">
             <StackPanel>
-                <WrapPanel>
-                    <ItemsControl ItemsSource="{Binding SeverityFilters}" VerticalAlignment="Center">
+                <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                    <ItemsControl Margin="0,0,4,8"
+                                  VerticalAlignment="Center"
+                                  ItemsSource="{Binding SeverityFilters}"
+                                  AutomationProperties.Name="Severity filters">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
@@ -111,54 +161,49 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <ToggleButton Margin="0,0,6,0"
-                                              Padding="12,5,12,5"
-                                              MinWidth="0"
-                                              Content="{Binding Severity}"
-                                              IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                                <ToggleButton Style="{StaticResource SeverityToggle}"
+                                              Tag="{Binding SeverityKey}"
+                                              IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                              ToolTip="{Binding AutomationName}"
+                                              AutomationProperties.Name="{Binding AutomationName}"
+                                              AutomationProperties.HelpText="Shows or hides alerts of this severity in the list." />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <ui:TextBox Width="280"
-                                Margin="10,0,0,0"
-                                VerticalAlignment="Center"
+                    <ui:TextBox x:Name="FilterBox"
+                                Width="280"
                                 PlaceholderText="Filter by signature, title, action, evidence…"
+                                AutomationProperties.Name="Filter alerts"
+                                AutomationProperties.HelpText="Shows only alerts whose rule, title, action, target, evidence, scanner or tags contain this text. Shortcut Ctrl+F."
                                 Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
-                        <ui:ToggleSwitch IsChecked="{Binding CollapseRepeats, Mode=TwoWay}" />
-                        <TextBlock Margin="8,0,0,0"
-                                   VerticalAlignment="Center"
-                                   Style="{StaticResource Secondary}"
-                                   Text="Collapse repeats" />
-                    </StackPanel>
+                    <ui:ToggleSwitch Content="Collapse repeats"
+                                     IsChecked="{Binding CollapseRepeats, Mode=TwoWay}"
+                                     AutomationProperties.HelpText="Folds alerts with the same rule and action into one row with a count." />
 
-                    <ui:Button Margin="16,0,0,0"
-                               Padding="10,5,10,5"
+                    <ui:Button Content="Clear"
                                Appearance="Secondary"
-                               Content="Clear"
-                               Command="{Binding ClearFiltersCommand}" />
+                               Command="{Binding ClearFiltersCommand}"
+                               AutomationProperties.HelpText="Turn every severity back on and clear the text filter." />
                 </WrapPanel>
 
-                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <TextBlock Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding SourceNote}" />
-                    <TextBlock Margin="12,0,0,0"
-                               FontSize="11"
-                               Style="{StaticResource Tertiary}"
-                               Text="{Binding CountSummary}" />
-                </StackPanel>
+                <WrapPanel Margin="0,0,12,8">
+                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,12,0" Text="{Binding SourceNote}" />
+                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding CountSummary}" />
+                </WrapPanel>
             </StackPanel>
         </Border>
 
         <!-- List + detail -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*" MinWidth="380" />
-                <ColumnDefinition Width="2*" MinWidth="280" />
+                <ColumnDefinition Width="3*" MinWidth="360" />
+                <ColumnDefinition Width="{StaticResource DcColumnGap}" />
+                <ColumnDefinition Width="2*" MinWidth="240" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,12,0" Padding="4">
+            <Border Grid.Column="0" Style="{StaticResource DcCardFlush}">
                 <Grid>
                     <ListView ItemsSource="{Binding Alerts}"
                               SelectedItem="{Binding SelectedAlert, Mode=TwoWay}"
@@ -167,9 +212,17 @@
                               HorizontalContentAlignment="Stretch"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               VirtualizingPanel.IsVirtualizing="True"
-                              VirtualizingPanel.VirtualizationMode="Recycling">
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              AutomationProperties.Name="Alerts, newest first">
                         <ListView.ItemTemplate>
                             <DataTemplate>
+                                <!--
+                                    Rule id on its own line, the title wrapping under it (two lines,
+                                    then an ellipsis with the whole text in the tooltip). The title used to
+                                    sit beside the rule id in a horizontal StackPanel, which measures its
+                                    children with unbounded width - so trimming never happened and the
+                                    column just clipped it ("Environ...").
+                                -->
                                 <Grid Margin="4,6,4,6">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -178,34 +231,38 @@
                                     </Grid.ColumnDefinitions>
 
                                     <Border Grid.Column="0"
+                                            Style="{StaticResource DcBadge}"
+                                            Tag="{Binding SeverityKey}"
+                                            MinWidth="66"
                                             VerticalAlignment="Top"
-                                            Margin="0,2,10,0"
-                                            Style="{StaticResource SeverityChip}">
-                                        <TextBlock Style="{StaticResource SeverityChipText}" Text="{Binding Severity}" />
+                                            Margin="0,2,10,0">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Severity}" />
                                     </Border>
 
                                     <StackPanel Grid.Column="1">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                       Text="{Binding RuleId}" />
-                                            <TextBlock Margin="8,0,0,0"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       Text="{Binding Headline}" />
-                                        </StackPanel>
-
-                                        <TextBlock Margin="0,2,0,0"
-                                                   FontSize="12"
-                                                   Style="{StaticResource Secondary}"
+                                        <TextBlock Style="{StaticResource DcBody}"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="NoWrap"
                                                    TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding RuleId}"
+                                                   Text="{Binding RuleId}" />
+                                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                   Margin="0,2,0,0"
+                                                   MaxHeight="40"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Headline}"
+                                                   Text="{Binding Headline}" />
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   Margin="0,2,0,0"
+                                                   MaxHeight="32"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding TargetRef}"
                                                    Text="{Binding TargetRef}" />
-
-                                        <TextBlock Margin="0,2,0,0"
-                                                   FontSize="11"
-                                                   FontFamily="Cascadia Mono, Consolas"
-                                                   Style="{StaticResource Tertiary}"
+                                        <TextBlock Style="{StaticResource DcMono}"
+                                                   Margin="0,2,0,0"
+                                                   TextWrapping="NoWrap"
                                                    TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Evidence}"
                                                    Visibility="{Binding HasEvidence, Converter={StaticResource BoolToVisibility}}"
                                                    Text="{Binding Evidence}" />
                                     </StackPanel>
@@ -214,24 +271,17 @@
                                         <!-- Repeat count lives here, not beside the title: a long
                                              title would push it off the row exactly when collapsing
                                              is on and the count matters most. -->
-                                        <Border Margin="0,0,0,2"
-                                                Padding="7,1,7,1"
-                                                CornerRadius="9"
+                                        <Border Style="{StaticResource DcChip}"
+                                                Margin="0,0,0,2"
                                                 HorizontalAlignment="Right"
-                                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
                                                 Visibility="{Binding IsRepeated, Converter={StaticResource BoolToVisibility}}">
-                                            <TextBlock FontSize="10"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding RepeatText}" />
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding RepeatText}" />
                                         </Border>
-                                        <TextBlock HorizontalAlignment="Right"
-                                                   FontSize="11"
-                                                   Style="{StaticResource Secondary}"
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   HorizontalAlignment="Right"
                                                    Text="{Binding RelativeTime}" />
-                                        <TextBlock HorizontalAlignment="Right"
-                                                   FontSize="10"
-                                                   Style="{StaticResource Tertiary}"
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   HorizontalAlignment="Right"
                                                    Text="{Binding TimestampText}" />
                                     </StackPanel>
                                 </Grid>
@@ -240,123 +290,113 @@
                     </ListView>
 
                     <!-- Empty is a state, not a failure: say which one. -->
-                    <StackPanel HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
+                    <StackPanel Style="{StaticResource DcEmptyState}"
                                 MaxWidth="420"
                                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock HorizontalAlignment="Center"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="{Binding EmptyTitle}" />
-                        <TextBlock Margin="0,6,0,0"
-                                   TextAlignment="Center"
-                                   Style="{StaticResource Tertiary}"
-                                   Text="{Binding EmptyDetail}" />
+                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldCheckmark24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Detail pane -->
-            <Border Grid.Column="1" Style="{StaticResource Card}">
+            <Border Grid.Column="2" Style="{StaticResource DcCardCompact}">
                 <Grid>
                     <!--
-                        ContentControl rather than a Visibility binding: with no selection the
-                        content is null and the template simply does not render, so there is no
-                        need for an inverse-boolean converter the panel contract cannot ship.
-                    -->
-                    <!--
-                        The ContentTemplate is applied even when Content is null, so the static
-                        labels inside it would sit on top of the placeholder. HasSelection is a
+                        A ContentControl still applies its ContentTemplate when Content is null, so the
+                        template's static labels would sit on top of the placeholder. HasSelection is a
                         plain bool, so the app-level converter hides the whole pane instead.
                     -->
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer Style="{StaticResource DcPageScroll}"
                                   Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
-                      <ContentControl Content="{Binding SelectedAlert}">
-                        <ContentControl.ContentTemplate>
-                          <DataTemplate>
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <Border Style="{StaticResource SeverityChip}">
-                                    <TextBlock Style="{StaticResource SeverityChipText}" Text="{Binding Severity}" />
-                                </Border>
-                                <TextBlock Margin="10,0,0,0"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Style="{StaticResource DcCardTitle}"
                                            VerticalAlignment="Center"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           Text="{Binding RuleId}" />
-                            </StackPanel>
+                                           Text="Alert details" />
+                                <ui:Button Grid.Column="1"
+                                           Appearance="Transparent"
+                                           Command="{Binding ClearSelectionCommand}"
+                                           ToolTip="Close details (Esc)"
+                                           AutomationProperties.Name="Close alert details"
+                                           AutomationProperties.HelpText="Closes this pane. Shortcut Esc.">
+                                    <ui:Button.Icon>
+                                        <ui:SymbolIcon Symbol="Dismiss24" />
+                                    </ui:Button.Icon>
+                                </ui:Button>
+                            </Grid>
 
-                            <TextBlock Margin="0,10,0,0"
-                                       FontSize="14"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       TextWrapping="Wrap"
-                                       Text="{Binding Headline}" />
-
-                            <TextBlock Margin="0,10,0,0" Style="{StaticResource Secondary}" Text="{Binding TargetRef}" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding TimestampText}" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding Scanner, StringFormat='scanner: {0}'}" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding ConfidenceText, StringFormat='confidence: {0}'}" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding Tags, StringFormat='tags: {0}'}" />
-
-                            <TextBlock Margin="0,14,0,4"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="Evidence" />
-                            <Border Padding="10"
-                                    CornerRadius="6"
-                                    Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
-                                <TextBox FontFamily="Cascadia Mono, Consolas"
-                                         FontSize="12"
-                                         IsReadOnly="True"
-                                         BorderThickness="0"
-                                         Background="Transparent"
-                                         TextWrapping="Wrap"
-                                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                         Text="{Binding Evidence, Mode=OneWay}" />
-                            </Border>
-
-                            <TextBlock Margin="0,14,0,4"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="Attributes" />
-                            <ItemsControl ItemsSource="{Binding Fields}">
-                                <ItemsControl.ItemTemplate>
+                            <ContentControl Content="{Binding SelectedAlert}" IsTabStop="False">
+                                <ContentControl.ContentTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="0,0,0,4">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" MinWidth="130" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0"
-                                                       Margin="0,0,10,0"
-                                                       FontSize="11"
-                                                       FontFamily="Cascadia Mono, Consolas"
-                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                       Text="{Binding Name}" />
-                                            <TextBlock Grid.Column="1"
-                                                       FontSize="11"
-                                                       TextWrapping="Wrap"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding Value}" />
-                                        </Grid>
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Style="{StaticResource DcBadge}" Tag="{Binding SeverityKey}">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Severity}" />
+                                                </Border>
+                                                <TextBlock Style="{StaticResource DcSectionHeader}"
+                                                           Margin="10,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding RuleId}" />
+                                            </StackPanel>
+
+                                            <TextBlock Style="{StaticResource DcBody}"
+                                                       Margin="0,10,0,0"
+                                                       Text="{Binding Headline}" />
+                                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                       Margin="0,10,0,0"
+                                                       Text="{Binding TargetRef}" />
+                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding TimestampText}" />
+                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Scanner, StringFormat='scanner: {0}'}" />
+                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding ConfidenceText, StringFormat='confidence: {0}'}" />
+                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Tags, StringFormat='tags: {0}'}" />
+
+                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="Evidence" />
+                                            <Border Style="{StaticResource DcCodeBlock}">
+                                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="Evidence"
+                                                         Text="{Binding Evidence, Mode=OneWay}" />
+                                            </Border>
+
+                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="Attributes" />
+                                            <ItemsControl ItemsSource="{Binding Fields}"
+                                                          AutomationProperties.Name="Alert attributes">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,0,0,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0"
+                                                                       Style="{StaticResource DcMono}"
+                                                                       Margin="0,0,10,0"
+                                                                       Text="{Binding Name}" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Style="{StaticResource DcCaption}"
+                                                                       Text="{Binding Value}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </ContentControl.ContentTemplate>
+                            </ContentControl>
                         </StackPanel>
-                          </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                      </ContentControl>
                     </ScrollViewer>
 
-                    <TextBlock HorizontalAlignment="Center"
+                    <TextBlock MaxWidth="240"
                                VerticalAlignment="Center"
-                               MaxWidth="240"
-                               TextAlignment="Center"
                                Text="Select an alert to see its evidence and full attribute bag.">
                         <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource Tertiary}">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcEmptyDetail}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasSelection}" Value="True">
                                         <Setter Property="Visibility" Value="Collapsed" />
@@ -366,6 +406,113 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </Grid>
+            </Border>
+        </Grid>
+
+        <!--
+            Review dialog for acknowledge / dismiss. It applies to a WHOLE severity class in DefenseClaw
+            (not only the loaded rows), so it always shows the CLI's own dry-run first and the exact
+            command that will run. The confirm button stays disabled until the preview exited 0 and
+            matched something. Focus lands on Cancel, Tab stays inside the dialog, Esc closes it.
+        -->
+        <Grid x:Name="ReviewScrim"
+              Grid.RowSpan="4"
+              Style="{StaticResource DcScrim}"
+              Visibility="{Binding IsReviewOpen, Converter={StaticResource BoolToVisibility}}">
+            <Border Style="{StaticResource DcDialogCard}"
+                    KeyboardNavigation.TabNavigation="Cycle"
+                    KeyboardNavigation.ControlTabNavigation="Cycle"
+                    AutomationProperties.Name="{Binding ReviewHeading}">
+                <StackPanel>
+                    <WrapPanel>
+                        <TextBlock Style="{StaticResource DcSectionHeader}"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding ReviewHeading}" />
+                        <Border Style="{StaticResource DcBadge}"
+                                Tag="{Binding TierKey}"
+                                Margin="0,0,0,8"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="{Binding TierText, StringFormat='Review tier: {0}'}">
+                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding TierText}" />
+                        </Border>
+                    </WrapPanel>
+
+                    <TextBlock Style="{StaticResource DcTextSecondary}"
+                               Text="This applies to every active alert of the chosen severity in DefenseClaw - the whole class - not only the alerts listed here. The preview below is the CLI's own dry run and changes nothing." />
+
+                    <StackPanel Style="{StaticResource DcField}" Margin="0,12,0,8">
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Severity" />
+                        <ComboBox x:Name="ReviewSeverityBox"
+                                  HorizontalAlignment="Left"
+                                  MinWidth="260"
+                                  ItemsSource="{Binding ReviewSeverities}"
+                                  SelectedItem="{Binding ReviewSeverity, Mode=TwoWay}"
+                                  AutomationProperties.Name="Severity to act on" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <ui:ProgressRing Width="18"
+                                         Height="18"
+                                         Margin="0,0,8,0"
+                                         IsIndeterminate="True"
+                                         Visibility="{Binding IsPreviewing, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   FontWeight="SemiBold"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Text="{Binding PreviewSummary}" />
+                    </StackPanel>
+
+                    <Border Style="{StaticResource DcCodeBlock}"
+                            Margin="0,8,0,0"
+                            MaxHeight="150"
+                            Visibility="{Binding HasPreviewOutput, Converter={StaticResource BoolToVisibility}}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     AutomationProperties.Name="Preview output"
+                                     Text="{Binding PreviewOutput, Mode=OneWay}" />
+                        </ScrollViewer>
+                    </Border>
+
+                    <ui:InfoBar Margin="0,8,0,0"
+                                IsClosable="False"
+                                Severity="Error"
+                                Title="That did not succeed"
+                                IsOpen="{Binding HasReviewError}"
+                                Message="{Binding ReviewError}"
+                                AutomationProperties.LiveSetting="Assertive" />
+
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Margin="0,12,0,0"
+                               Text="This is the exact command that will run. Nothing happens until you confirm. --yes is the CLI's own confirmation for a broad selector." />
+                    <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0">
+                        <TextBox Style="{StaticResource DcMonoTextBox}"
+                                 AutomationProperties.Name="Command that will run"
+                                 Text="{Binding ConfirmCommandText, Mode=OneWay}" />
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <ui:Button x:Name="ReviewCancelButton"
+                                   Content="Cancel"
+                                   Appearance="Secondary"
+                                   Command="{Binding CancelReviewCommand}"
+                                   ToolTip="Close without changing anything (Esc)" />
+                        <ui:Button Margin="8,0,0,0"
+                                   Content="{Binding ConfirmButtonText}"
+                                   Appearance="Primary"
+                                   Command="{Binding ConfirmReviewCommand}"
+                                   IsEnabled="{Binding CanConfirmReview}"
+                                   Visibility="{Binding IsNotDestructive, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.HelpText="Runs the command shown above. Enabled only after the preview succeeded and matched at least one alert." />
+                        <ui:Button Margin="8,0,0,0"
+                                   Content="{Binding ConfirmButtonText}"
+                                   Appearance="Danger"
+                                   Command="{Binding ConfirmReviewCommand}"
+                                   IsEnabled="{Binding CanConfirmReview}"
+                                   Visibility="{Binding IsDestructive, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.HelpText="Runs the destructive command shown above. Enabled only after the preview succeeded and matched at least one alert." />
+                    </StackPanel>
+                </StackPanel>
             </Border>
         </Grid>
     </Grid>

@@ -1,4 +1,3 @@
-using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
@@ -35,8 +34,13 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _stateDetail = string.Empty;
 
+    /// <summary>
+    /// Design-system tone key for the state dot (<c>Ok / Warn / Bad / Neutral</c>). A key rather
+    /// than a brush so the dot is a <c>DcToneDot</c> and follows a live light/dark switch — the
+    /// frozen shield-colour brush it replaces never did.
+    /// </summary>
     [ObservableProperty]
-    private Brush _stateBrush = Brushes.Gray;
+    private string _stateTone = "Neutral";
 
     [ObservableProperty]
     private string _connectorSummary = "—";
@@ -44,8 +48,17 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _alertSummary = "—";
 
+    /// <summary><c>Critical</c> when the last alert list held a CRITICAL, else <c>Neutral</c>.</summary>
+    [ObservableProperty]
+    private string _alertTone = "Neutral";
+
+    /// <summary>"DefenseClaw 0.8.10", or "unknown" until the gateway has reported a version.</summary>
     [ObservableProperty]
     private string _versionSummary = string.Empty;
+
+    /// <summary>Where the gateway's REST API listens, e.g. <c>127.0.0.1:18970</c>.</summary>
+    [ObservableProperty]
+    private string _endpointSummary = string.Empty;
 
     [ObservableProperty]
     private string _lastPolled = "never";
@@ -108,19 +121,15 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     {
         StateLabel = snapshot.StateLabel;
         StateDetail = snapshot.Detail;
-        StateBrush = StateBrushes.For(ShieldIconFactory.StateFor(snapshot));
+        StateTone = GatewayPresentation.StateTone(snapshot);
         ConnectorSummary = snapshot.ConnectorSummary;
-        VersionSummary = string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
-            ? $"127.0.0.1:{snapshot.ApiPort}"
-            : $"DefenseClaw {snapshot.BinaryVersion} · 127.0.0.1:{snapshot.ApiPort}";
+        VersionSummary = GatewayPresentation.VersionText(snapshot) is { Length: > 0 } version ? version : "unknown";
+        EndpointSummary = $"127.0.0.1:{snapshot.ApiPort}";
 
-        // Before the first poll there is no alert data at all; "0 in the last 25" would be a claim.
-        AlertSummary = snapshot.PolledAt == DateTimeOffset.MinValue
-            ? "—"
-            : snapshot.AlertsUnavailable is { Length: > 0 } reason
-            ? reason
-            : $"{snapshot.AlertCount} in the last {GatewayMonitor.AlertLimit}" +
-              (snapshot.CriticalAlertCount > 0 ? $" · {snapshot.CriticalAlertCount} CRITICAL" : string.Empty);
+        // The same wording and tone as the dashboard's status strip. Before the first poll there is
+        // no alert data at all; GatewayPresentation says "—" rather than claim "0".
+        AlertSummary = GatewayPresentation.AlertText(snapshot).Replace("Alerts: ", string.Empty, StringComparison.Ordinal);
+        AlertTone = GatewayPresentation.AlertTone(snapshot);
 
         if (snapshot.FailModeDrift is { } drift)
         {

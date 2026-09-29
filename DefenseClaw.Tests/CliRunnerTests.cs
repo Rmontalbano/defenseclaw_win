@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Paths;
@@ -27,6 +28,22 @@ public class CliRunnerTests
                 binDirectory: Path.Combine(dataDirectory, "no-such-bin"),
                 searchPath: Array.Empty<string>()),
             capacity);
+
+    [Fact]
+    public async Task Decodes_child_output_as_utf8()
+    {
+        // The DefenseClaw CLI writes UTF-8 when piped (its bullet is e2 80 a2). `type` copies file bytes
+        // to stdout verbatim, so this proves the decode, not the child's own console encoding.
+        using var temp = new TempDirectory();
+        var file = Path.Combine(temp.Path, "glyphs.txt");
+        await File.WriteAllBytesAsync(file, new System.Text.UTF8Encoding(false).GetBytes("status • ok — ✓" + Environment.NewLine));
+        var runner = Runner(temp.Path);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+
+        Assert.Equal(0, invocation.ExitCode);
+        Assert.Contains(invocation.OutputLines, l => l.Text == "status • ok — ✓");
+    }
 
     [Fact]
     public async Task Records_argv_exactly_as_passed()
@@ -1105,5 +1122,480 @@ public class CliRunnerTests
         {
             KillIfAlive(ping);
         }
+    }
+
+    // ----------------------------------------------------------------------------------
+    // Operator cancel (CliRunner.Cancel): the Activity panel's Cancel button holds the
+    // invocation, not the token the run was started with. It must kill a running child's whole
+    // tree and say "cancelled"; refuse the upgrade installer (SurvivesShutdown); and be a
+    // harmless no-op on a run that already finished. Nothing here sleeps to "let something
+    // happen": each test waits for the ping grandchild to exist (the same signal the lifecycle
+    // tests use) and then acts, and every wait has a generous ceiling rather than a fixed delay.
+    // ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Captures every invocation the runner starts, in order. The started event fires
+    /// synchronously inside <c>RunExecutableAsync</c> before the child exists, so a test can get
+    /// hold of the live instance without polling <see cref="CliRunner.Activity"/>.
+    /// </summary>
+    private static List<CliInvocation> CaptureStarted(CliRunner runner)
+    {
+        var started = new List<CliInvocation>();
+        runner.InvocationStarted += (_, invocation) =>
+        {
+            lock (started)
+            {
+                started.Add(invocation);
+            }
+        };
+
+        return started;
+    }
+
+    [Fact]
+    public async Task Cancel_kills_a_running_childs_whole_tree_and_records_cancelled()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var started = CaptureStarted(runner);
+        var completedEvents = 0;
+        runner.InvocationCompleted += (_, _) => Interlocked.Increment(ref completedEvents);
+        var known = PingPids();
+
+        var run = runner.RunExecutableAsync(CmdPath, LongPing);
+        var ping = await WaitForNewPingAsync(known, run);
+
+        try
+        {
+            CliInvocation invocation;
+            lock (started)
+            {
+                invocation = Assert.Single(started);
+            }
+
+            Assert.True(invocation.IsRunning);
+            Assert.False(invocation.SurvivesShutdown);
+            Assert.False(invocation.CancelRequested);
+
+            var stopwatch = Stopwatch.StartNew();
+            var accepted = runner.Cancel(invocation, out var reason);
+            Assert.True(accepted, reason);
+            Assert.False(string.IsNullOrWhiteSpace(reason));
+            Assert.True(invocation.CancelRequested);
+
+            var result = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            stopwatch.Stop();
+
+            // The same live instance, ended long before the ~29 s the ping would have taken.
+            Assert.Same(invocation, result);
+            Assert.True(
+                stopwatch.Elapsed < TimeSpan.FromSeconds(15),
+                $"the cancel took {stopwatch.Elapsed.TotalSeconds:0.0} s to end the run");
+
+            // Recorded exactly like a caller-token cancellation: a reason, no exit code, and never
+            // the artefact exit value a killed process reports.
+            Assert.StartsWith("cancelled", result.FailureReason, StringComparison.Ordinal);
+            Assert.Contains("process tree killed", result.FailureReason, StringComparison.Ordinal);
+            Assert.DoesNotContain("exiting", result.FailureReason, StringComparison.Ordinal);
+            Assert.DoesNotContain("timed out", result.FailureReason, StringComparison.Ordinal);
+            Assert.Null(result.ExitCode);
+            Assert.False(result.Succeeded);
+            Assert.False(result.IsRunning);
+            Assert.NotNull(result.FinishedAt);
+            Assert.False(runner.Activity[0].IsRunning);
+            Assert.Equal(1, Volatile.Read(ref completedEvents));
+
+            // Not just cmd.exe: ping, cmd's child, went with it.
+            Assert.True(
+                await WaitUntilGoneAsync(ping, TimeSpan.FromSeconds(5)),
+                "ping, the grandchild, survived Cancel: only the direct child was terminated");
+        }
+        finally
+        {
+            KillIfAlive(ping);
+        }
+    }
+
+    [Fact]
+    public async Task Cancel_matches_runs_by_instance_and_leaves_a_sibling_running()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var started = CaptureStarted(runner);
+        var known = PingPids();
+
+        var first = runner.RunExecutableAsync(CmdPath, LongPing);
+        var firstPing = await WaitForNewPingAsync(known, first);
+        _ = known.Add(firstPing);
+
+        var second = runner.RunExecutableAsync(CmdPath, LongPing);
+        var secondPing = await WaitForNewPingAsync(known, second);
+
+        try
+        {
+            CliInvocation firstInvocation;
+            CliInvocation secondInvocation;
+            lock (started)
+            {
+                Assert.Equal(2, started.Count);
+                firstInvocation = started[0];
+                secondInvocation = started[1];
+            }
+
+            Assert.True(runner.Cancel(firstInvocation, out var reason), reason);
+
+            var firstResult = await first.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.StartsWith("cancelled", firstResult.FailureReason, StringComparison.Ordinal);
+            Assert.True(
+                await WaitUntilGoneAsync(firstPing, TimeSpan.FromSeconds(5)),
+                "the cancelled run's grandchild survived");
+
+            // The sibling is untouched: still running, its tree alive, nothing recorded against it.
+            Assert.False(second.IsCompleted, "cancelling one run ended a different one");
+            Assert.True(secondInvocation.IsRunning);
+            Assert.False(secondInvocation.CancelRequested);
+            Assert.Null(secondInvocation.FailureReason);
+            Assert.True(IsAlive(secondPing), "cancelling one run killed another run's process tree");
+
+            // By id this time — which is also how the test cleans up after itself.
+            Assert.True(runner.Cancel(secondInvocation.Id, out var secondReason), secondReason);
+            var secondResult = await second.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.StartsWith("cancelled", secondResult.FailureReason, StringComparison.Ordinal);
+        }
+        finally
+        {
+            KillIfAlive(firstPing);
+            KillIfAlive(secondPing);
+        }
+    }
+
+    [Fact]
+    public async Task Cancel_refuses_a_run_that_survives_shutdown_and_leaves_it_running()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var started = CaptureStarted(runner);
+        var known = PingPids();
+
+        // The upgrade installer's stand-in. Its caller's token is how the test ends it, because
+        // that is the only thing that is allowed to.
+        using var release = new CancellationTokenSource();
+        var run = runner.RunExecutableAsync(
+            CmdPath,
+            LongPing,
+            cancellationToken: release.Token,
+            options: CliRunOptions.Installer);
+        var ping = await WaitForNewPingAsync(known, run);
+
+        try
+        {
+            CliInvocation invocation;
+            lock (started)
+            {
+                invocation = Assert.Single(started);
+            }
+
+            Assert.True(invocation.SurvivesShutdown);
+
+            var accepted = runner.Cancel(invocation, out var reason);
+
+            Assert.False(accepted);
+            Assert.Contains("survives", reason, StringComparison.OrdinalIgnoreCase);
+
+            // Refused by id as well, and with the same answer.
+            Assert.False(runner.Cancel(invocation.Id, out var byIdReason));
+            Assert.Contains("survives", byIdReason, StringComparison.OrdinalIgnoreCase);
+
+            // Nothing was signalled: still running, not flagged, process tree alive.
+            Assert.False(run.IsCompleted, "a refused Cancel ended the exempt run anyway");
+            Assert.True(invocation.IsRunning);
+            Assert.False(invocation.CancelRequested);
+            Assert.Null(invocation.FailureReason);
+            Assert.True(IsAlive(ping), "a refused Cancel killed the exempt run's process tree");
+
+            // The caller's own token is unaffected by any of this and still ends it.
+            release.Cancel();
+            var result = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.StartsWith("cancelled", result.FailureReason, StringComparison.Ordinal);
+        }
+        finally
+        {
+            KillIfAlive(ping);
+        }
+    }
+
+    [Fact]
+    public async Task Cancel_on_a_finished_run_is_a_no_op_that_leaves_its_record_alone()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        var invocation = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "exit", "7" });
+        Assert.False(invocation.IsRunning);
+        Assert.Equal(7, invocation.ExitCode);
+
+        var accepted = runner.Cancel(invocation, out var reason);
+
+        Assert.False(accepted);
+        Assert.Contains("already finished", reason, StringComparison.OrdinalIgnoreCase);
+
+        // Not re-labelled: the recorded outcome is what the child said, not "cancelled".
+        Assert.Equal(7, invocation.ExitCode);
+        Assert.Null(invocation.FailureReason);
+        Assert.False(invocation.CancelRequested);
+
+        // A second attempt, and the by-id form, say the same thing.
+        Assert.False(runner.Cancel(invocation, out _));
+        Assert.False(runner.Cancel(invocation.Id, out var byIdReason));
+        Assert.Contains("already finished", byIdReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Cancel_after_a_run_was_cancelled_is_also_a_no_op()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var started = CaptureStarted(runner);
+        var known = PingPids();
+
+        var run = runner.RunExecutableAsync(CmdPath, LongPing);
+        var ping = await WaitForNewPingAsync(known, run);
+
+        try
+        {
+            CliInvocation invocation;
+            lock (started)
+            {
+                invocation = Assert.Single(started);
+            }
+
+            Assert.True(runner.Cancel(invocation, out var firstReason), firstReason);
+            var result = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            var recorded = result.FailureReason;
+            Assert.StartsWith("cancelled", recorded, StringComparison.Ordinal);
+
+            Assert.False(runner.Cancel(invocation, out var secondReason));
+            Assert.Contains("already finished", secondReason, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(recorded, invocation.FailureReason);
+        }
+        finally
+        {
+            KillIfAlive(ping);
+        }
+    }
+
+    [Fact]
+    public async Task Cancel_of_an_unknown_id_is_refused_without_throwing_and_bad_arguments_throw()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var other = Runner(temp.Path);
+
+        // An id that is not in the activity list — never existed, or aged out of the ring.
+        Assert.False(runner.Cancel("no-such-invocation-id", out var unknownReason));
+        Assert.False(string.IsNullOrWhiteSpace(unknownReason));
+
+        // An invocation that belongs to a different runner is not this runner's to cancel; it is
+        // finished here, so the answer is the same harmless "nothing to cancel".
+        var foreign = await other.RunExecutableAsync(CmdPath, new[] { "/c", "exit", "0" });
+        Assert.False(runner.Cancel(foreign, out var foreignReason));
+        Assert.False(string.IsNullOrWhiteSpace(foreignReason));
+        Assert.False(runner.Cancel(foreign.Id, out var foreignIdReason));
+        Assert.False(string.IsNullOrWhiteSpace(foreignIdReason));
+
+        // A missing argument is a programming error, not an ordinary "no".
+        Assert.Throws<ArgumentNullException>(() => runner.Cancel((CliInvocation)null!, out _));
+        Assert.Throws<ArgumentException>(() => runner.Cancel(string.Empty, out _));
+    }
+
+    [Fact]
+    public async Task Snapshot_carries_the_survives_shutdown_and_cancel_flags()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        var ordinary = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "exit", "0" });
+        var installer = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", "exit", "0" },
+            options: CliRunOptions.Installer);
+
+        Assert.False(ordinary.SurvivesShutdown);
+        Assert.False(ordinary.Snapshot().SurvivesShutdown);
+        Assert.True(installer.SurvivesShutdown);
+        Assert.True(installer.Snapshot().SurvivesShutdown);
+    }
+
+    // ----------------------------------------------------------------------------------
+    // RetainFullOutput / JsonRead. The ordinary retention cap drops the OLDEST lines, which for
+    // a JSON document means the opening bracket: a long `<noun> list --json` then fails to parse
+    // even though the CLI was healthy. Calls that parse stdout opt into far higher ceilings.
+    // The ceilings are still ceilings — a runaway process must not pin an unbounded transcript.
+    // ----------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task JsonRead_is_the_default_timeout_plus_full_output_retention()
+    {
+        Assert.True(CliRunOptions.JsonRead.RetainFullOutput);
+        Assert.Null(CliRunOptions.JsonRead.Timeout);
+        Assert.False(CliRunOptions.JsonRead.SurvivesShutdown);
+
+        // Nothing else opts in by accident.
+        Assert.False(CliRunOptions.Default.RetainFullOutput);
+        Assert.False(CliRunOptions.LongRunning.RetainFullOutput);
+        Assert.False(CliRunOptions.NoTimeout.RetainFullOutput);
+        Assert.False(CliRunOptions.Installer.RetainFullOutput);
+
+        // The inferred timeout tiers still apply to it: a list is a default-tier call.
+        Assert.Equal(
+            CliRunner.DefaultTimeout,
+            CliRunner.ResolveTimeout(DefenseClawCli, new[] { "skill", "list", "--json" }, CliRunOptions.JsonRead));
+
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var ordinary = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "exit", "0" });
+        var full = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "exit", "0" }, options: CliRunOptions.JsonRead);
+
+        Assert.False(ordinary.RetainsFullOutput);
+        Assert.Equal(CliInvocation.MaxRetainedOutputLines, ordinary.RetainedLineLimit);
+        Assert.Equal(CliInvocation.MaxRetainedOutputBytes, ordinary.RetainedByteLimit);
+        Assert.True(full.RetainsFullOutput);
+        Assert.Equal(CliInvocation.MaxFullOutputLines, full.RetainedLineLimit);
+        Assert.Equal(CliInvocation.MaxFullOutputBytes, full.RetainedByteLimit);
+        Assert.True(full.Snapshot().RetainsFullOutput);
+    }
+
+    [Fact]
+    public async Task A_JsonRead_run_retains_output_past_the_ordinary_caps()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+        var file = TranscriptFile(temp, lineCount: 5_000);
+
+        var ordinary = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+        var full = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", "type", file },
+            options: CliRunOptions.JsonRead);
+
+        // Same command, same output: the ordinary run loses its head, the JsonRead run loses nothing.
+        Assert.True(ordinary.IsOutputTruncated);
+        Assert.DoesNotContain(ordinary.OutputLines, l => l.Text.Contains("line-00001", StringComparison.Ordinal));
+
+        Assert.False(full.IsOutputTruncated);
+        Assert.Equal(0, full.DroppedOutputLineCount);
+        Assert.True(full.OutputLines.Count >= 5_000, $"retained {full.OutputLines.Count} of 5000 lines");
+        Assert.DoesNotContain(full.OutputLines, l => l.Stream == CliStream.Notice);
+        Assert.Contains(full.OutputLines, l => l.Text.Contains("line-00001", StringComparison.Ordinal));
+        Assert.Contains(full.OutputLines, l => l.Text.Contains("line-05000", StringComparison.Ordinal));
+        Assert.Equal(full.OutputCursor, full.OutputLines.Count);
+        Assert.True(full.Succeeded);
+    }
+
+    [Fact]
+    public async Task A_JSON_document_longer_than_the_ordinary_cap_parses_from_a_JsonRead_run_only()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        // Shaped like a big `skill list --json`: an indented array of objects, well past 2,000 lines.
+        var items = Enumerable.Range(1, 400).Select(i => new
+        {
+            name = $"skill-{i:0000}",
+            description = "A stand-in skill",
+            enabled = i % 2 == 0,
+            origin = "test",
+            scan = new { clean = true, max_severity = "NONE", total_findings = 0 },
+        });
+        var json = JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true });
+        Assert.True(json.Split('\n').Length > CliInvocation.MaxRetainedOutputLines, "the fixture must exceed the ordinary cap");
+        var file = temp.Write("list.json", json);
+
+        static string StdoutOf(CliInvocation invocation) =>
+            string.Join('\n', invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput).Select(l => l.Text));
+
+        var ordinary = await runner.RunExecutableAsync(CmdPath, new[] { "/c", "type", file });
+        var full = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", "type", file },
+            options: CliRunOptions.JsonRead);
+
+        // The failure this option exists to prevent: a truncated head is not JSON.
+        Assert.True(ordinary.IsOutputTruncated);
+        Assert.ThrowsAny<JsonException>(() => JsonDocument.Parse(StdoutOf(ordinary)));
+
+        Assert.False(full.IsOutputTruncated);
+        using var document = JsonDocument.Parse(StdoutOf(full));
+        Assert.Equal(400, document.RootElement.GetArrayLength());
+        Assert.Equal("skill-0400", document.RootElement[399].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task The_full_output_byte_ceiling_still_applies()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        // Each retained line is charged its UTF-16 text plus a fixed overhead, so ~8 KB per line here.
+        // Enough lines to pass the 16 MiB ceiling by a clear margin, far below the 200,000-line one:
+        // it is the byte ceiling that has to bind.
+        const int Width = 4_000;
+        var lineCount = (int)(CliInvocation.MaxFullOutputBytes / ((Width * 2) + 64)) + 300;
+        Assert.True(lineCount < CliInvocation.MaxFullOutputLines);
+        var file = TranscriptFile(temp, lineCount, Width);
+
+        var invocation = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", "type", file },
+            options: CliRunOptions.JsonRead);
+
+        var lines = invocation.OutputLines;
+
+        // Bounded, honestly reported, and the tail — where the diagnosis lives — is what survives.
+        Assert.True(invocation.IsOutputTruncated);
+        Assert.True(invocation.DroppedOutputLineCount > 0);
+        Assert.Equal(CliStream.Notice, lines[0].Stream);
+        Assert.Contains("output truncated", lines[0].Text, StringComparison.Ordinal);
+        Assert.Contains($"{invocation.DroppedOutputLineCount} earlier", lines[0].Text, StringComparison.Ordinal);
+        Assert.Contains(lines, l => l.Text.Contains($"line-{lineCount:00000}", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Text.Contains("line-00001x", StringComparison.Ordinal));
+
+        // Not silently the ordinary cap: 256 KiB would keep ~32 of these lines; the full ceiling keeps
+        // well over a thousand.
+        Assert.True(lines.Count > 1_000, $"retained only {lines.Count} wide lines");
+        Assert.True(lines.Count < lineCount);
+        Assert.Equal(0, invocation.ExitCode);
+    }
+
+    [Fact]
+    public async Task The_full_output_line_ceiling_still_applies()
+    {
+        using var temp = new TempDirectory();
+        var runner = Runner(temp.Path);
+
+        // One-character lines cost ~66 bytes each, so the 200,000-line ceiling is reached
+        // long before the 16 MiB one: this is the line ceiling binding.
+        var lineCount = CliInvocation.MaxFullOutputLines + 300;
+        var file = temp.Write("short-lines.txt", string.Join(Environment.NewLine, Enumerable.Repeat("x", lineCount)));
+
+        var invocation = await runner.RunExecutableAsync(
+            CmdPath,
+            new[] { "/c", "type", file },
+            options: CliRunOptions.JsonRead);
+
+        var lines = invocation.OutputLines;
+
+        Assert.True(invocation.IsOutputTruncated);
+        Assert.True(invocation.DroppedOutputLineCount > 0);
+        Assert.True(
+            lines.Count <= CliInvocation.MaxFullOutputLines + 1,
+            $"retained {lines.Count} lines, ceiling is {CliInvocation.MaxFullOutputLines} (+1 marker)");
+        Assert.Equal(CliStream.Notice, lines[0].Stream);
+
+        // Everything captured is still accounted for, dropped or retained. (>= : whether `type` ends
+        // a file with a newline is a cmd detail this ceiling should not be pinned to.)
+        Assert.True(invocation.OutputCursor >= lineCount);
+        Assert.Equal(invocation.OutputCursor, invocation.DroppedOutputLineCount + lines.Count - 1);
+        Assert.Equal(0, invocation.ExitCode);
     }
 }

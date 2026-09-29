@@ -1,0 +1,82 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.Shell.GatewayActionDialog"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="Review command"
+                 Width="540"
+                 SizeToContent="Height"
+                 ResizeMode="NoResize"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 ShowInTaskbar="True"
+                 Topmost="True"
+                 AutomationProperties.Name="Review command">
+    <!--
+        The review step for a state-changing gateway action started from the tray menu or the
+        command palette. Same contract as every confirm overlay in the app: the exact argv, in a
+        copyable mono block, and nothing runs until the primary button is pressed. Enter confirms,
+        Esc cancels. Built as its own small window because the tray menu has to be able to ask while
+        the dashboard is hidden.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     Title="Review command"
+                     ShowMinimize="False"
+                     ShowMaximize="False" />
+
+        <StackPanel Grid.Row="1" Margin="24,8,24,24">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Style="{StaticResource DcSectionHeader}"
+                           Margin="0,0,12,0"
+                           VerticalAlignment="Center"
+                           Text="{Binding Heading}" />
+                <Border Style="{StaticResource DcBadge}"
+                        Tag="Bad"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding IsDestructive, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcBadgeText}" Text="Destructive" />
+                </Border>
+                <Border Style="{StaticResource DcChip}"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding IsPlainStateChange, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcBadgeText}" Text="Changes state" />
+                </Border>
+            </StackPanel>
+
+            <TextBlock Style="{StaticResource DcCaption}"
+                       Text="This is the exact command that will run. Nothing happens until you confirm." />
+
+            <Border Style="{StaticResource DcCodeBlock}" Margin="0,12,0,0">
+                <TextBox Style="{StaticResource DcMonoTextBox}"
+                         AutomationProperties.Name="Command that will run"
+                         Text="{Binding CommandText, Mode=OneWay}" />
+            </Border>
+
+            <TextBlock Style="{StaticResource DcBody}"
+                       Margin="0,12,0,0"
+                       Text="{Binding Note}" />
+
+            <StackPanel Margin="0,20,0,0"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <ui:Button x:Name="CancelButton"
+                           Content="Cancel"
+                           IsCancel="True"
+                           AutomationProperties.HelpText="Close without running anything. Esc does the same." />
+                <ui:Button x:Name="ConfirmButton"
+                           Margin="8,0,0,0"
+                           Appearance="Primary"
+                           IsDefault="True"
+                           Content="{Binding ConfirmLabel}"
+                           AutomationProperties.HelpText="Run the command shown above. Enter does the same."
+                           Click="OnConfirmClicked" />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

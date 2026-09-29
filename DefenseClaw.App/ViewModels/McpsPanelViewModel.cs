@@ -1,110 +1,50 @@
-using System.Collections.ObjectModel;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
-using DefenseClaw.Core.Cli;
-using DefenseClaw.Core.Gateway;
-using DefenseClaw.Core.Gateway.Models;
-using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.ViewModels;
 
 /// <summary>
-/// View-model for the MCPs panel: configured MCP servers (<c>GET /mcps</c>) plus the
-/// mcp-shaped slice of the enforcement lists, with block/allow/set/unset mutations that
-/// shell out to <c>defenseclaw mcp ...</c> through a confirm-first dialog.
+/// View-model for the MCPs panel: MCP servers configured for each connector, read with
+/// <c>defenseclaw mcp list --json</c>, plus block / allow / unblock / unset per row and an "Add MCP server"
+/// form (<c>mcp set</c>).
 /// <para>
-/// <b>Live-verified behaviour.</b> Unlike <c>/skills</c>, <c>/mcps</c> answers a real
-/// <c>[]</c> on this install (empty configuration, not a disconnected subsystem) - so
-/// <see cref="GovernListState.Empty"/> and <see cref="GovernListState.NotConnected"/> are
-/// kept distinct and read different banners.
+/// Real 0.8.10 items are <c>{name, transport, [connector], [command], [args], [url], [severity], [actions],
+/// verdict}</c>; <c>env</c> is never printed. On Claude Code the CLI reads only <c>mcpServers</c> in
+/// <c>settings.json</c>, not the servers <c>claude mcp add</c> writes to <c>~\.claude.json</c>, so an empty list
+/// is a coverage limit and the empty state says so.
 /// </para>
 /// <para>
-/// <see cref="McpEntry"/> is an UNVERIFIED guess at the payload shape. Every row keeps the
-/// exact JSON element it was parsed from (via <see cref="GatewayClient.GetRawJsonAsync"/>)
-/// so an unexpected shape still renders something behind the row's expander.
+/// <b>The set form</b> follows <c>mcp set --help</c>: exactly one of <c>--command</c> / <c>--url</c> (the CLI
+/// rejects both, and neither), <c>--transport</c> from the two values the help names, <c>--args</c> as a JSON
+/// array (the form takes one argument per line and sends the array, so commas inside an argument are safe),
+/// and <c>--env</c> once per KEY=VAL line.
 /// </para>
 /// </summary>
-public sealed partial class McpsPanelViewModel : PanelViewModelBase
+public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
 {
-    private const string McpsPath = "mcps";
-    private const string EnforcementKind = "mcp";
-    private const string AllConnectorsLabel = "All configured connectors";
+    /// <summary>The combo's "send no --transport" choice.</summary>
+    public const string TransportInfer = "(let DefenseClaw infer)";
 
-    private static readonly JsonSerializerOptions RowJsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNameCaseInsensitive = true,
-    };
+    private static readonly Regex EnvKeyPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
 
-    /// <summary>Separators between entries in the Env box. Not the comma: a comma can be part of a value.</summary>
-    private static readonly char[] EnvSeparators = { '\r', '\n', ';' };
+    private static readonly JsonSerializerOptions ArgsJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLoadingState))]
-    [NotifyPropertyChangedFor(nameof(IsNotConnectedState))]
-    [NotifyPropertyChangedFor(nameof(IsEmptyState))]
-    [NotifyPropertyChangedFor(nameof(IsErrorState))]
-    [NotifyPropertyChangedFor(nameof(IsLoadedState))]
-    [NotifyPropertyChangedFor(nameof(IsNotLoading))]
-    [NotifyPropertyChangedFor(nameof(ShowBanner))]
-    [NotifyPropertyChangedFor(nameof(BannerSeverity))]
-    private GovernListState _state = GovernListState.Loading;
-
-    [ObservableProperty] private string? _bannerMessage;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsIdle))]
-    private bool _isBusy;
-
-    [ObservableProperty] private string? _selectedConnector;
-    [ObservableProperty] private string _reason = string.Empty;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(NoBlockedItems))]
-    private bool _hasBlockedItems;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(NoAllowedItems))]
-    private bool _hasAllowedItems;
-
-    // Null while /enforce/blocked (resp. /allowed) answers; otherwise "unavailable (<reason>)".
-    // Kept apart from "empty": a list that could not be read is not a list with nothing in it.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasBlockedUnavailable))]
-    [NotifyPropertyChangedFor(nameof(NoBlockedItems))]
-    [NotifyPropertyChangedFor(nameof(BlockedHeader))]
-    private string? _blockedUnavailable;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasAllowedUnavailable))]
-    [NotifyPropertyChangedFor(nameof(NoAllowedItems))]
-    [NotifyPropertyChangedFor(nameof(AllowedHeader))]
-    private string? _allowedUnavailable;
-
-    [ObservableProperty] private bool _isConfirmOpen;
-    [ObservableProperty] private string _confirmHeading = string.Empty;
-    [ObservableProperty] private string _confirmCommandText = string.Empty;
-
-    /// <summary>Optional caution shown under the confirm heading; empty hides it.</summary>
-    [ObservableProperty] private string _confirmNote = string.Empty;
-
-    [ObservableProperty] private bool _isResultOpen;
-    [ObservableProperty] private string _resultTitle = string.Empty;
-    [ObservableProperty] private string _resultMessage = string.Empty;
-    [ObservableProperty] private InfoBarSeverity _resultSeverity = InfoBarSeverity.Informational;
-
-    // "Set MCP server" mini form.
     [ObservableProperty] private bool _isSetFormOpen;
     [ObservableProperty] private string _setName = string.Empty;
     [ObservableProperty] private string _setCommand = string.Empty;
     [ObservableProperty] private string _setArgs = string.Empty;
     [ObservableProperty] private string _setUrl = string.Empty;
-    [ObservableProperty] private string _setTransport = string.Empty;
+    [ObservableProperty] private string _setTransport = TransportInfer;
     [ObservableProperty] private string _setEnv = string.Empty;
     [ObservableProperty] private bool _setSkipScan;
 
-    private Func<Task>? _pendingAction;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSetFormError))]
+    private string _setFormError = string.Empty;
 
     public McpsPanelViewModel(AppServices services)
         : base(services)
@@ -113,563 +53,299 @@ public sealed partial class McpsPanelViewModel : PanelViewModelBase
 
     public override string Title => "MCPs";
 
-    public override string Description => "Configured MCP servers, their transports and scan results.";
+    public override string Description => "MCP servers configured for each connector, their scan results and enforcement decisions.";
 
-    public ObservableCollection<McpRow> Mcps { get; } = new();
+    protected override string Noun => "mcp";
 
-    public ObservableCollection<EnforcementRow> Blocked { get; } = new();
+    protected override string NounLabel => "MCP server";
 
-    public ObservableCollection<EnforcementRow> Allowed { get; } = new();
+    protected override string NounPlural => "MCP servers";
 
-    public ObservableCollection<string> Connectors { get; } = new();
+    protected override string ItemsKey => "mcp_servers";
 
-    public bool IsLoadingState => State == GovernListState.Loading;
+    public IReadOnlyList<string> TransportChoices { get; } = new[] { TransportInfer, "stdio", "sse" };
 
-    public bool IsNotConnectedState => State == GovernListState.NotConnected;
+    public bool HasSetFormError => SetFormError.Length > 0;
 
-    public bool IsEmptyState => State == GovernListState.Empty;
+    protected override string BuildEmptyTitle(string scope) => $"No MCP servers configured for {scope}";
 
-    public bool IsErrorState => State == GovernListState.Error;
+    protected override string BuildEmptyDetail(string scope) =>
+        "For Claude Code, DefenseClaw 0.8.10 reads the mcpServers key of settings.json. Servers added with 'claude mcp add' " +
+        "are stored in ~\\.claude.json instead and are not listed here, so an empty list means nothing was found in the " +
+        "file it reads. Use Add MCP server to register one through DefenseClaw (it is scanned first).";
 
-    public bool IsLoadedState => State == GovernListState.Loaded;
-
-    public bool IsNotLoading => State != GovernListState.Loading;
-
-    public bool IsIdle => !IsBusy;
-
-    /// <summary>True only when the list was read and is empty — never when it could not be read.</summary>
-    public bool NoBlockedItems => !HasBlockedItems && !HasBlockedUnavailable;
-
-    public bool NoAllowedItems => !HasAllowedItems && !HasAllowedUnavailable;
-
-    public bool HasBlockedUnavailable => !string.IsNullOrEmpty(BlockedUnavailable);
-
-    public bool HasAllowedUnavailable => !string.IsNullOrEmpty(AllowedUnavailable);
-
-    /// <summary>"Blocked (3)", or "Blocked (unavailable)" — a count of 0 would claim a read that never happened.</summary>
-    public string BlockedHeader => HasBlockedUnavailable ? "Blocked (unavailable)" : $"Blocked ({Blocked.Count})";
-
-    public string AllowedHeader => HasAllowedUnavailable ? "Allowed (unavailable)" : $"Allowed ({Allowed.Count})";
-
-    public bool ShowBanner => State is GovernListState.NotConnected or GovernListState.Empty or GovernListState.Error;
-
-    public InfoBarSeverity BannerSeverity => State == GovernListState.Error ? InfoBarSeverity.Warning : InfoBarSeverity.Informational;
-
-    public override async Task InitializeAsync(CancellationToken cancellationToken = default)
+    protected override GovernRow? ParseRow(JsonElement item, string? groupConnector)
     {
-        BuildConnectorList();
-        await LoadAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    [RelayCommand]
-    private Task RefreshAsync() => LoadAsync(CancellationToken.None);
-
-    [RelayCommand]
-    private void ToggleSetForm() => IsSetFormOpen = !IsSetFormOpen;
-
-    [RelayCommand]
-    private void BlockMcp(McpRow? row)
-    {
-        if (row is null)
+        var name = GovernJson.Str(item, "name");
+        if (name is null)
         {
-            return;
+            return null;
         }
 
-        var target = TargetOf(row);
-        var connector = EffectiveConnector(row.Connector);
-        var argv = BuildScopedArgv("mcp", "block", target, includeReason: true, connector);
-        BeginConfirm($"Block MCP server “{target}” for {ScopeText(connector)}?", argv, () => RunMutationAsync(argv, $"Blocked “{target}”."));
-    }
+        var state = GovernJson.Interpret(item);
 
-    [RelayCommand]
-    private void AllowMcp(McpRow? row)
-    {
-        if (row is null)
+        // MCP items carry no status of their own; a server with no decision on it is simply configured.
+        if (state.Status is null)
         {
-            return;
+            state = state with { Status = "configured" };
         }
 
-        var target = TargetOf(row);
-        var connector = EffectiveConnector(row.Connector);
-        var argv = BuildScopedArgv("mcp", "allow", target, includeReason: true, connector);
-        BeginConfirm($"Allow MCP server “{target}” for {ScopeText(connector)}?", argv, () => RunMutationAsync(argv, $"Allowed “{target}”."));
+        var connector = ResolveConnector(GovernJson.Str(item, "connector"), groupConnector);
+        var transport = GovernJson.Str(item, "transport");
+        var command = GovernJson.Str(item, "command");
+        var args = GovernJson.JoinedArray(item, "args");
+        var url = GovernJson.Str(item, "url");
+        var launch = command is null ? null : (args is null ? command : command + " " + args);
+
+        var fields = new List<GovernField>();
+        AddField(fields, "Name", name);
+        AddField(fields, "Connector", connector);
+        AddField(fields, "Transport", transport);
+        AddField(fields, "Command", launch);
+        AddField(fields, "URL", url);
+        AddField(fields, "Enforcement", state.ActionsText);
+        AddField(fields, "Scan", state.ScanLabel);
+
+        // No 'mcp info' exists, so the raw JSON in the details is the per-server view. Info is not offered.
+        var verbs = (StandardVerbs(state, canDisable: false, canQuarantine: false) & ~GovernVerbs.Info) | GovernVerbs.Unset;
+
+        return new GovernRow(this)
+        {
+            Noun = Noun,
+            Name = name,
+            Connector = connector,
+            MetaLine = JoinMeta(("transport", transport), ("command", launch), ("url", url)),
+            StateLabel = state.Label,
+            StateTone = state.Tone,
+            ScanLabel = state.ScanLabel,
+            ScanTone = state.ScanTone,
+            ActionsText = state.ActionsText,
+            IsBlocked = state.Blocked,
+            IsAllowed = state.Allowed,
+            IsQuarantined = state.Quarantined,
+            IsDisabled = state.Disabled,
+            NeedsAttention = state.NeedsAttention,
+            RawJson = GovernJson.Pretty(item),
+            Fields = fields,
+            Verbs = verbs,
+        };
     }
 
-    /// <summary>
-    /// Removes the server from connector config. Bare, <c>mcp unset</c> removes it from EVERY
-    /// configured connector that has it (see <c>mcp unset --help</c>), so a row that carries no
-    /// connector — and a toolbar left on "All" — says that in the heading.
-    /// </summary>
-    [RelayCommand]
-    private void UnsetMcp(McpRow? row)
+    protected override string? NoteFor(GovernVerbs verb, GovernRow row) => verb switch
     {
-        if (row is null)
+        GovernVerbs.Block or GovernVerbs.Allow =>
+            "In DefenseClaw 0.8.10 this decision gates its own 'mcp set' and 'mcp scan'; it does not by itself stop a server that is already configured.",
+        GovernVerbs.Unset =>
+            "Edits the connector's MCP config file (for Claude Code, settings.json) and removes the server there. Add it back with Add MCP server.",
+        _ => base.NoteFor(verb, row),
+    };
+
+    // ---- Add / update an MCP server (mcp set) --------------------------------------------------------------------
+
+    [RelayCommand]
+    private void ToggleSetForm()
+    {
+        IsSetFormOpen = !IsSetFormOpen;
+        SetFormError = string.Empty;
+    }
+
+    protected override bool CloseTransientUi()
+    {
+        if (!IsSetFormOpen)
         {
-            return;
+            return false;
         }
 
-        var target = TargetOf(row);
-        var connector = EffectiveConnector(row.Connector);
-        var argv = BuildScopedArgv("mcp", "unset", target, includeReason: false, connector);
-        BeginConfirm($"Remove MCP server “{target}” from the config of {ScopeText(connector)}?", argv, () => RunMutationAsync(argv, $"Removed “{target}”."));
+        IsSetFormOpen = false;
+        SetFormError = string.Empty;
+        return true;
     }
 
     [RelayCommand]
     private void SubmitSetForm()
     {
-        if (string.IsNullOrWhiteSpace(SetName))
+        var name = SetName.Trim();
+        var command = SetCommand.Trim();
+        var url = SetUrl.Trim();
+        var transport = SetTransport == TransportInfer ? string.Empty : SetTransport.Trim();
+
+        if (name.Length == 0)
         {
-            ShowResult("Name required", "Enter a server name before saving.", InfoBarSeverity.Warning);
+            SetFormError = "Enter a server name.";
             return;
         }
 
-        var argv = new List<string> { "mcp", "set", SetName.Trim() };
-
-        if (!string.IsNullOrWhiteSpace(SetCommand))
+        // 'mcp set' refuses both and neither: a mixed entry would scan one thing and run another.
+        if (command.Length == 0 && url.Length == 0)
         {
-            argv.Add("--command");
-            argv.Add(SetCommand.Trim());
+            SetFormError = "Enter either a command (a local server) or a URL (a remote server).";
+            return;
         }
 
-        if (!string.IsNullOrWhiteSpace(SetArgs))
+        if (command.Length > 0 && url.Length > 0)
         {
-            argv.Add("--args");
-            argv.Add(SetArgs.Trim());
+            SetFormError = "Enter a command or a URL, not both: the scan and the running server would differ.";
+            return;
         }
 
-        if (!string.IsNullOrWhiteSpace(SetUrl))
+        if (url.Length > 0 && !(Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"))
         {
-            argv.Add("--url");
-            argv.Add(SetUrl.Trim());
+            SetFormError = "The URL must be an absolute http:// or https:// address.";
+            return;
         }
 
-        if (!string.IsNullOrWhiteSpace(SetTransport))
+        if (transport == "stdio" && url.Length > 0)
         {
-            argv.Add("--transport");
-            argv.Add(SetTransport.Trim());
+            SetFormError = "The stdio transport runs a local command; clear the URL or choose sse.";
+            return;
         }
 
-        // `mcp set --env` is repeatable KEY=VAL: one flag per variable. A single box is split into
-        // entries on newlines and semicolons (a comma is a legal character in a value, so it is
-        // NOT a separator); each becomes its own --env. Sending the whole box as one argument
-        // would make "A=1;B=2" the value of A.
-        var envPairs = new List<string>();
-        foreach (var entry in SetEnv.Split(EnvSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        if (transport == "sse" && command.Length > 0)
         {
-            var eq = entry.IndexOf('=', StringComparison.Ordinal);
-            if (eq <= 0)
-            {
-                ShowResult(
-                    "Env entry not understood",
-                    $"“{entry}” is not KEY=VAL. Put one KEY=VAL per line (or separate them with “;”).",
-                    InfoBarSeverity.Warning);
-                return;
-            }
+            SetFormError = "The sse transport connects to a URL; clear the command or choose stdio.";
+            return;
+        }
 
-            envPairs.Add(entry);
+        if (!TryBuildArgs(out var argsJson, out var argsError))
+        {
+            SetFormError = argsError;
+            return;
+        }
+
+        if (argsJson is not null && command.Length == 0)
+        {
+            SetFormError = "Arguments belong to a command; clear them or enter a command instead of a URL.";
+            return;
+        }
+
+        if (!TryBuildEnv(out var envPairs, out var envError))
+        {
+            SetFormError = envError;
+            return;
+        }
+
+        SetFormError = string.Empty;
+
+        var options = new List<string>();
+        if (command.Length > 0)
+        {
+            options.Add("--command");
+            options.Add(command);
+        }
+
+        if (argsJson is not null)
+        {
+            options.Add("--args");
+            options.Add(argsJson);
+        }
+
+        if (url.Length > 0)
+        {
+            options.Add("--url");
+            options.Add(url);
+        }
+
+        if (transport.Length > 0)
+        {
+            options.Add("--transport");
+            options.Add(transport);
         }
 
         foreach (var pair in envPairs)
         {
-            argv.Add("--env");
-            argv.Add(pair);
+            options.Add("--env");
+            options.Add(pair);
         }
 
         if (SetSkipScan)
         {
-            argv.Add("--skip-scan");
+            options.Add("--skip-scan");
         }
 
-        AppendConnectorScope(argv);
-
-        var name = SetName.Trim();
-        var note = envPairs.Count > 0
-            ? "Environment values are part of this command line: they are shown here, recorded in the Activity panel and visible to other processes on this machine. Do not use this for secrets."
-            : string.Empty;
-
-        BeginConfirm(
-            $"Add or update MCP server “{name}” in {ScopeText(ToolbarConnector())}?",
-            argv,
-            () => RunMutationAsync(argv, $"Saved “{name}”."),
-            note);
-    }
-
-    [RelayCommand]
-    private async Task ConfirmYesAsync()
-    {
-        IsConfirmOpen = false;
-        var action = _pendingAction;
-        _pendingAction = null;
-
-        if (action is not null)
-        {
-            await action().ConfigureAwait(true);
-        }
-    }
-
-    [RelayCommand]
-    private void ConfirmNo()
-    {
-        IsConfirmOpen = false;
-        _pendingAction = null;
-    }
-
-    private static string TargetOf(McpRow row) => string.IsNullOrWhiteSpace(row.Name) ? row.DisplayName : row.Name;
-
-    private List<string> BuildScopedArgv(string group, string verb, string target, bool includeReason, string? connector)
-    {
-        var argv = new List<string> { group, verb, target };
-
-        if (includeReason && !string.IsNullOrWhiteSpace(Reason))
-        {
-            argv.Add("--reason");
-            argv.Add(Reason.Trim());
-        }
-
+        var connector = ToolbarConnector();
         if (connector is not null)
         {
-            argv.Add("--connector");
-            argv.Add(connector);
+            options.Add("--connector");
+            options.Add(connector);
         }
 
-        return argv;
-    }
-
-    /// <summary>The toolbar's connector, or null for "All configured connectors" / nothing chosen.</summary>
-    private string? ToolbarConnector() =>
-        !string.IsNullOrWhiteSpace(SelectedConnector) && !string.Equals(SelectedConnector, AllConnectorsLabel, StringComparison.Ordinal)
-            ? SelectedConnector
-            : null;
-
-    /// <summary>
-    /// The connector a row-level command should name: the row's own when it has one — the
-    /// operator clicked that connector's server — then the toolbar's, then none. With none the
-    /// verb is bare, which the CLI applies across every configured connector; the confirm
-    /// heading says so via <see cref="ScopeText"/>.
-    /// </summary>
-    private string? EffectiveConnector(string? rowConnector) =>
-        string.IsNullOrWhiteSpace(rowConnector) ? ToolbarConnector() : rowConnector.Trim();
-
-    private static string ScopeText(string? connector) =>
-        connector is null ? "ALL configured connectors" : $"connector “{connector}”";
-
-    private void AppendConnectorScope(List<string> argv)
-    {
-        if (ToolbarConnector() is { } connector)
+        var notes = new List<string>();
+        notes.Add(SetSkipScan
+            ? "The security scan is skipped: this server is added with no check at all."
+            : "Unless the scan is skipped, DefenseClaw starts the server (runs the command, or connects to the URL) to scan it, and refuses it on HIGH or CRITICAL findings.");
+        if (envPairs.Count > 0)
         {
-            argv.Add("--connector");
-            argv.Add(connector);
+            notes.Add("Environment values are part of this command line: they are shown here, recorded in Activity and visible to other processes on this machine. Do not put secrets in them.");
         }
-    }
 
-    private void BeginConfirm(string heading, IReadOnlyList<string> argv, Func<Task> action, string note = "")
-    {
-        ConfirmHeading = heading;
-        ConfirmNote = note;
-        ConfirmCommandText = "defenseclaw " + string.Join(' ', argv.Select(QuoteForDisplay));
-        _pendingAction = action;
-        IsConfirmOpen = true;
-    }
-
-    private static string QuoteForDisplay(string value) =>
-        value.Length == 0 || value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
-
-    private async Task RunMutationAsync(IReadOnlyList<string> argv, string successMessage)
-    {
-        IsBusy = true;
-        try
+        BeginReview(new GovernPlan
         {
-            var invocation = await Services.Cli.RunAsync(argv).ConfigureAwait(true);
-            if (invocation.ExitCode == 0)
-            {
-                ShowResult("Done", successMessage, InfoBarSeverity.Success);
-                IsSetFormOpen = false;
-            }
-            else
-            {
-                var errorLine = invocation.OutputLines.LastOrDefault(l => l.Stream == CliStream.StandardError);
-                var detail = invocation.FailureReason ?? errorLine?.Text ?? $"Exit code {invocation.ExitCode?.ToString() ?? "unknown"}.";
-                ShowResult("Command failed", detail, InfoBarSeverity.Error);
-            }
-        }
-        // CliRunner throws these two synchronously, before any process exists. Uncaught, they
-        // reach the dispatcher's fault handler and replace the dashboard with an error dialog;
-        // here they are just a failed command with a reason.
-        catch (CliNotFoundException ex)
-        {
-            ShowResult("Command failed", $"The defenseclaw CLI could not be found. {ex.Message}", InfoBarSeverity.Error);
-        }
-        catch (SecretInArgumentException ex)
-        {
-            ShowResult("Command refused", ex.Message, InfoBarSeverity.Error);
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-
-        await LoadAsync(CancellationToken.None).ConfigureAwait(true);
-    }
-
-    private void ShowResult(string title, string message, InfoBarSeverity severity)
-    {
-        ResultTitle = title;
-        ResultMessage = message;
-        ResultSeverity = severity;
-        IsResultOpen = true;
-    }
-
-    private void BuildConnectorList()
-    {
-        Connectors.Clear();
-        Connectors.Add(AllConnectorsLabel);
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var config = Services.Config.Config;
-
-        void Add(string? name)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return;
-            }
-
-            var trimmed = name.Trim();
-            if (seen.Add(trimmed))
-            {
-                Connectors.Add(trimmed);
-            }
-        }
-
-        Add(config.Claw.Mode);
-        Add(config.Guardrail.Connector);
-        foreach (var key in config.Guardrail.Connectors.Keys)
-        {
-            Add(key);
-        }
-
-        SelectedConnector = AllConnectorsLabel;
-    }
-
-    private async Task LoadAsync(CancellationToken cancellationToken)
-    {
-        IsBusy = true;
-        try
-        {
-            var mcps = await Services.Gateway.GetRawJsonAsync(McpsPath, cancellationToken: cancellationToken).ConfigureAwait(true);
-            ApplyMcps(mcps);
-
-            var blocked = await Services.Gateway.GetEnforceBlockedAsync(cancellationToken).ConfigureAwait(true);
-            BlockedUnavailable = ApplyEnforcement(Blocked, blocked);
-            HasBlockedItems = Blocked.Count > 0;
-            OnPropertyChanged(nameof(BlockedHeader));
-
-            var allowed = await Services.Gateway.GetEnforceAllowedAsync(cancellationToken).ConfigureAwait(true);
-            AllowedUnavailable = ApplyEnforcement(Allowed, allowed);
-            HasAllowedItems = Allowed.Count > 0;
-            OnPropertyChanged(nameof(AllowedHeader));
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    private void ApplyMcps(GatewayResult<JsonDocument> result)
-    {
-        Mcps.Clear();
-
-        switch (result.Status)
-        {
-            case GatewayStatus.Ok:
-                using (var document = result.Value)
-                {
-                    foreach (var row in ParseRows(document!.RootElement))
-                    {
-                        Mcps.Add(row);
-                    }
-                }
-
-                State = Mcps.Count == 0 ? GovernListState.Empty : GovernListState.Loaded;
-                BannerMessage = Mcps.Count == 0 ? "No MCP servers are configured for the connector(s) in scope." : null;
-                break;
-
-            case GatewayStatus.NotConnected:
-                result.Value?.Dispose();
-                State = GovernListState.NotConnected;
-                BannerMessage =
-                    "MCP governance data appears here once a fleet connector is wired up. " +
-                    "This install is running standalone - that is a normal, supported mode, not an error.";
-                break;
-
-            case GatewayStatus.Unauthorized:
-                result.Value?.Dispose();
-                State = GovernListState.Error;
-                BannerMessage = $"The gateway rejected the request: no usable bearer token via {Services.Token.VariableName}.";
-                break;
-
-            case GatewayStatus.Unreachable:
-                result.Value?.Dispose();
-                State = GovernListState.Error;
-                BannerMessage = "The gateway is not reachable. " + (result.ErrorMessage ?? string.Empty);
-                break;
-
-            default:
-                result.Value?.Dispose();
-                State = GovernListState.Error;
-                BannerMessage = result.ErrorMessage ?? "MCP servers could not be read.";
-                break;
-        }
+            Heading = $"Add or update MCP server “{name}” in {ScopeText(connector)}?",
+            Argv = BuildArgv(Noun, "set", options, name),
+            Note = string.Join(" ", notes),
+            SuccessMessage = $"Saved “{name}”.",
+            OnSuccess = () => IsSetFormOpen = false,
+        });
     }
 
     /// <summary>
-    /// Fills <paramref name="target"/> from one enforcement list. Returns null when the list was
-    /// read (empty or not), or "unavailable (&lt;reason&gt;)" when it was not — 401, gateway down,
-    /// not connected — in which case the rows are cleared too, because rows from an earlier read
-    /// would offer actions on entries nobody can currently see. The caller shows the reason where
-    /// "No blocked MCP servers." would otherwise have said the opposite.
+    /// One argument per line becomes a JSON array (<c>--args</c> accepts a JSON array or a comma list; the array
+    /// keeps commas inside an argument intact). A single line that is already a JSON array is validated and passed as is.
     /// </summary>
-    private string? ApplyEnforcement(ObservableCollection<EnforcementRow> target, GatewayResult<IReadOnlyList<EnforcementEntry>> result)
+    private bool TryBuildArgs(out string? argsJson, out string error)
     {
-        target.Clear();
+        argsJson = null;
+        error = string.Empty;
 
-        if (!result.IsOk || result.Value is null)
+        var lines = SetArgs.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (lines.Length == 0)
         {
-            return $"unavailable ({DescribeEnforcementFailure(result.Status, result.ErrorMessage)})";
+            return true;
         }
 
-        foreach (var entry in result.Value)
+        if (lines.Length == 1 && lines[0].StartsWith('['))
         {
-            if (entry.Kind is not null && !string.Equals(entry.Kind, EnforcementKind, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            target.Add(new EnforcementRow
-            {
-                DisplayName = entry.DisplayName,
-                Kind = entry.Kind,
-                Reason = entry.Reason,
-                Scope = entry.Scope,
-                Connector = entry.Connector,
-            });
-        }
-
-        return null;
-    }
-
-    /// <summary>Same wording the Overview panel uses for the same failures.</summary>
-    private string DescribeEnforcementFailure(GatewayStatus status, string? message) => status switch
-    {
-        GatewayStatus.NotConnected => "the enforcement subsystem is not connected on this install",
-        GatewayStatus.Unauthorized => $"the gateway needs a bearer token; none was found via {Services.Token.VariableName}",
-        GatewayStatus.Unreachable => "the gateway is not answering",
-        _ => message ?? "the gateway did not return the list",
-    };
-
-    private static IEnumerable<McpRow> ParseRows(JsonElement root)
-    {
-        if (root.ValueKind != JsonValueKind.Array)
-        {
-            yield break;
-        }
-
-        foreach (var element in root.EnumerateArray())
-        {
-            McpEntry? typed = null;
             try
             {
-                typed = element.Deserialize<McpEntry>(RowJsonOptions);
+                using var document = JsonDocument.Parse(lines[0]);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                {
+                    error = "The arguments look like JSON but are not an array. Use [\"-y\", \"pkg\"] or one argument per line.";
+                    return false;
+                }
+
+                argsJson = lines[0];
+                return true;
             }
             catch (JsonException)
             {
-                // Shape drifted from the guessed model; the row still renders from raw JSON.
-            }
-
-            yield return new McpRow
-            {
-                DisplayName = typed?.DisplayName ?? BestEffortName(element),
-                Name = typed?.Name,
-                Status = typed?.Status,
-                Connector = typed?.Connector,
-                Enabled = typed?.Enabled,
-                Command = typed?.Command,
-                Transport = typed?.Transport,
-                RawJson = FormatJson(element),
-            };
-        }
-    }
-
-    private static string BestEffortName(JsonElement element)
-    {
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var key in new[] { "name", "id", "path" })
-            {
-                if (element.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String)
-                {
-                    var text = value.GetString();
-                    if (!string.IsNullOrWhiteSpace(text))
-                    {
-                        return text;
-                    }
-                }
+                error = "The arguments start with “[” but are not valid JSON. Use [\"-y\", \"pkg\"] or one argument per line.";
+                return false;
             }
         }
 
-        return "(unnamed)";
+        argsJson = JsonSerializer.Serialize(lines, ArgsJson);
+        return true;
     }
 
-    private static string FormatJson(JsonElement element)
+    /// <summary><c>--env</c> is repeatable KEY=VAL, one flag per line (a comma is legal inside a value, so it never splits).</summary>
+    private bool TryBuildEnv(out List<string> pairs, out string error)
     {
-        try
+        pairs = new List<string>();
+        error = string.Empty;
+
+        foreach (var entry in SetEnv.Split(new[] { '\r', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            return JsonSerializer.Serialize(element, new JsonSerializerOptions { WriteIndented = true });
+            var eq = entry.IndexOf('=', StringComparison.Ordinal);
+            if (eq <= 0 || !EnvKeyPattern.IsMatch(entry[..eq]))
+            {
+                error = $"“{entry}” is not KEY=VAL. Put one KEY=VAL per line; the key may use letters, digits and underscores.";
+                return false;
+            }
+
+            pairs.Add(entry);
         }
-        catch (JsonException)
-        {
-            return element.GetRawText();
-        }
-    }
 
-    public enum GovernListState
-    {
-        Loading,
-        NotConnected,
-        Empty,
-        Error,
-        Loaded,
-    }
-
-    public sealed class McpRow
-    {
-        public required string DisplayName { get; init; }
-
-        public string? Name { get; init; }
-
-        public string? Status { get; init; }
-
-        public string? Connector { get; init; }
-
-        public bool? Enabled { get; init; }
-
-        public string? Command { get; init; }
-
-        public string? Transport { get; init; }
-
-        public string RawJson { get; init; } = string.Empty;
-    }
-
-    public sealed class EnforcementRow
-    {
-        public required string DisplayName { get; init; }
-
-        public string? Kind { get; init; }
-
-        public string? Reason { get; init; }
-
-        public string? Scope { get; init; }
-
-        public string? Connector { get; init; }
+        return true;
     }
 }

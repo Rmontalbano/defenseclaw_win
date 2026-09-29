@@ -1,0 +1,181 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.CommandPaletteControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             IsTabStop="False">
+    <!--
+        Command palette overlay (Ctrl+K). A scrim + dialog card like every other overlay in the app.
+        Keyboard-first: focus lives in the search box; Up/Down move the highlighted row (skipping
+        unavailable ones), Enter runs it, Esc closes. The result list is a plain ListBox so each
+        row is a real list item to UI Automation, named through PaletteItem.AutomationName. The
+        footer line is a polite live region: it says which row is highlighted and how many matched.
+        Only fixed app actions and panels are listed; the box never runs typed text.
+    -->
+    <Grid x:Name="Scrim"
+          Style="{StaticResource DcScrim}"
+          KeyboardNavigation.TabNavigation="Cycle"
+          KeyboardNavigation.ControlTabNavigation="Cycle"
+          MouseLeftButtonDown="OnScrimMouseDown">
+        <Border Style="{StaticResource DcDialogCard}"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Top"
+                MaxWidth="640"
+                Margin="24,72,24,24"
+                Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ui:TextBox x:Name="SearchBox"
+                            Grid.Row="0"
+                            PlaceholderText="Type a command or a panel name"
+                            Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="Search commands"
+                            AutomationProperties.HelpText="Type to filter. Up and Down choose a result, Enter runs it, Escape closes the palette." />
+
+                <Grid Grid.Row="1" Margin="0,8,0,0">
+                    <ListBox x:Name="ResultsList"
+                             MaxHeight="360"
+                             IsTabStop="False"
+                             ItemsSource="{Binding Results}"
+                             SelectedItem="{Binding Selected, Mode=TwoWay}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             AutomationProperties.Name="Command results">
+                        <ListBox.ItemContainerStyle>
+                            <!--
+                                A quiet highlight rather than WPF-UI's full accent fill: the row keeps its
+                                text colours (accent blue under secondary text would fall below AA), and the
+                                selection is carried by a fill plus a 3 px accent bar.
+                            -->
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
+                                <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+                                <Setter Property="Padding" Value="10,6,10,6" />
+                                <Setter Property="Margin" Value="0,0,0,2" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="FocusVisualStyle" Value="{StaticResource DcFocusVisualStyleInset}" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="Row"
+                                                    Padding="{TemplateBinding Padding}"
+                                                    Background="Transparent"
+                                                    CornerRadius="{StaticResource DcRadiusS}"
+                                                    SnapsToDevicePixels="True">
+                                                <Grid>
+                                                    <Border x:Name="Bar"
+                                                            Width="3"
+                                                            Margin="-8,2,0,2"
+                                                            HorizontalAlignment="Left"
+                                                            CornerRadius="1.5"
+                                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                            Visibility="Collapsed" />
+                                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                      VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                                    <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <EventSetter Event="PreviewMouseLeftButtonUp" Handler="OnItemMouseUp" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                    <Setter Property="Opacity" Value="0.55" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+
+                                    <StackPanel Grid.Column="0" Margin="0,2,12,2">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource DcBody}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       TextWrapping="NoWrap"
+                                                       Text="{Binding Title}" />
+                                            <Border Style="{StaticResource DcChip}" Margin="8,0,0,0">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Category}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap"
+                                                   Text="{Binding DetailLine}" />
+                                    </StackPanel>
+
+                                    <Border Grid.Column="1"
+                                            Style="{StaticResource DcKeyCap}"
+                                            Visibility="{Binding HasShortcut, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Style="{StaticResource DcKeyCapText}" Text="{Binding Shortcut}" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock Margin="0,24,0,24"
+                               Text="No commands match. Try &quot;restart&quot;, &quot;config&quot; or a panel name.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcEmptyDetail}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Results.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+
+                <Grid Grid.Row="2" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="StatusText"
+                               Grid.Column="0"
+                               Style="{StaticResource DcCaption}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               AutomationProperties.LiveSetting="Polite"
+                               Text="{Binding StatusLine}" />
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Style="{StaticResource DcKeyCap}"><TextBlock Style="{StaticResource DcKeyCapText}" Text="↑↓" /></Border>
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="6,0,12,0" VerticalAlignment="Center" Text="choose" />
+                        <Border Style="{StaticResource DcKeyCap}"><TextBlock Style="{StaticResource DcKeyCapText}" Text="Enter" /></Border>
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="6,0,12,0" VerticalAlignment="Center" Text="run" />
+                        <Border Style="{StaticResource DcKeyCap}"><TextBlock Style="{StaticResource DcKeyCapText}" Text="Esc" /></Border>
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="6,0,0,0" VerticalAlignment="Center" Text="close" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

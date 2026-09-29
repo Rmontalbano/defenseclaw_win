@@ -1,0 +1,121 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.ShortcutsOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             IsTabStop="False">
+    <!--
+        Keyboard shortcuts overlay (F1, or ? outside a text box). Read-only reference built from
+        ShellShortcuts, so what it lists is what the shell's key handler actually does. Esc, the
+        Close button or a click on the veil closes it; Tab cycles inside the card.
+    -->
+    <UserControl.Resources>
+        <!-- One shortcut: the sentence on the left, the chord as key caps on the right. -->
+        <DataTemplate x:Key="ShortcutRowTemplate">
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Style="{StaticResource DcBody}"
+                           Margin="0,0,16,0"
+                           VerticalAlignment="Center"
+                           Text="{Binding Description}" />
+                <ItemsControl Grid.Column="1"
+                              IsTabStop="False"
+                              VerticalAlignment="Center"
+                              ItemsSource="{Binding Parts}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource DcKeyCap}" Margin="3,0,0,0">
+                                <TextBlock Style="{StaticResource DcKeyCapText}" Text="{Binding}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid x:Name="Scrim"
+          Style="{StaticResource DcScrim}"
+          KeyboardNavigation.TabNavigation="Cycle"
+          KeyboardNavigation.ControlTabNavigation="Cycle"
+          MouseLeftButtonDown="OnScrimMouseDown">
+        <Border Style="{StaticResource DcDialogCard}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                MaxWidth="920"
+                Margin="24">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Style="{StaticResource DcSectionHeader}"
+                               Margin="0"
+                               VerticalAlignment="Center"
+                               Text="Keyboard shortcuts" />
+                    <ui:Button x:Name="CloseButton"
+                               Grid.Column="1"
+                               ToolTip="Close (Esc)"
+                               AutomationProperties.Name="Close keyboard shortcuts"
+                               Click="OnCloseClicked">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Dismiss24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1"
+                              Style="{StaticResource DcPageScroll}"
+                              MaxHeight="520"
+                              Focusable="False">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="240" />
+                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="1.4*" MinWidth="300" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" DataContext="{Binding Panels}">
+                            <TextBlock Style="{StaticResource DcCardTitle}" Text="{Binding Title}" />
+                            <ItemsControl IsTabStop="False"
+                                          ItemsSource="{Binding Rows}"
+                                          ItemTemplate="{StaticResource ShortcutRowTemplate}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Text="Any panel can also be reached from the sidebar or the command palette." />
+                        </StackPanel>
+
+                        <ItemsControl Grid.Column="2"
+                                      IsTabStop="False"
+                                      ItemsSource="{Binding Others}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,16">
+                                        <TextBlock Style="{StaticResource DcCardTitle}" Text="{Binding Title}" />
+                                        <ItemsControl IsTabStop="False"
+                                                      ItemsSource="{Binding Rows}"
+                                                      ItemTemplate="{StaticResource ShortcutRowTemplate}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -113,6 +113,16 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// <summary>Every panel, in sidebar order.</summary>
     public IReadOnlyList<PanelDescriptor> Panels { get; }
 
+    /// <summary>
+    /// Every panel in the order the sidebar shows them: group by group (<see cref="Groups"/>),
+    /// catalog order within a group. This — not <see cref="Panels"/>, which only happens to be
+    /// grouped already — is the order the Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…3 chords count in.
+    /// </summary>
+    public IReadOnlyList<PanelDescriptor> SidebarOrder =>
+        _sidebarOrder ??= Groups.SelectMany(InGroup).ToArray();
+
+    private PanelDescriptor[]? _sidebarOrder;
+
     /// <summary>The panel the shell opens on first launch.</summary>
     public PanelDescriptor Default => Panels[0];
 
@@ -136,6 +146,44 @@ public sealed class PanelCatalog : INavigationViewPageProvider
 
     public PanelDescriptor? ById(string id) =>
         Panels.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The panel on screen right now — the one whose view-model the catalog last marked active —
+    /// or null before the first navigation and while the window is hidden or minimized. What the
+    /// shell's F5 and "Refresh" palette entry act on. UI thread only.
+    /// </summary>
+    public PanelDescriptor? ActivePanel
+    {
+        get
+        {
+            foreach (var (pageType, viewModel) in _viewModels)
+            {
+                if (viewModel.IsActive)
+                {
+                    return ByViewType(pageType);
+                }
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>The view-model of <see cref="ActivePanel"/>, or null. UI thread only.</summary>
+    public PanelViewModelBase? ActiveViewModel
+    {
+        get
+        {
+            foreach (var viewModel in _viewModels.Values)
+            {
+                if (viewModel.IsActive)
+                {
+                    return viewModel;
+                }
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>
     /// Tells the catalog whether the dashboard window is currently one the operator can see

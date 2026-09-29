@@ -75,6 +75,14 @@ public sealed class DiscoveryComponentCard
 
     public string HeaderDisplay => $"{Vendor} · {Product}  —  {ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
 
+    /// <summary>Tone key for the confidence badge: green from 80 %, amber from 50 %, otherwise neutral (a low score is not an alarm).</summary>
+    public string ConfidenceKey => MaxConfidence >= 0.8 ? "Ok" : MaxConfidence >= 0.5 ? "Warn" : "Neutral";
+
+    public string SignalCountDisplay => $"{Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
+
+    /// <summary>What a screen reader announces for the card.</summary>
+    public override string ToString() => HeaderDisplay;
+
     private static string Distinct(IEnumerable<string?> values)
     {
         var list = values.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(v => v, StringComparer.OrdinalIgnoreCase).ToList();
@@ -101,6 +109,8 @@ public sealed record DiscoveryScanEvent(
         $"({ActiveSignals?.ToString(CultureInfo.InvariantCulture) ?? "?"} active, " +
         $"+{NewSignals?.ToString(CultureInfo.InvariantCulture) ?? "0"}/-{GoneSignals?.ToString(CultureInfo.InvariantCulture) ?? "0"}) " +
         $"via {Source ?? "unknown"} in {DurationMs?.ToString(CultureInfo.InvariantCulture) ?? "?"} ms — {Result ?? "?"}";
+
+    public override string ToString() => $"Scan at {TimestampDisplay}: {Summary}";
 }
 
 /// <summary>One row of the connector-level discovery table (agent_discovery.json).</summary>
@@ -122,6 +132,9 @@ public sealed record AgentDiscoveryRow(
             (_, true, _) => "Configured only",
             _ => "Not detected",
         };
+
+    public override string ToString() =>
+        $"Connector {Name}: {StatusDisplay}{(string.IsNullOrEmpty(Version) ? string.Empty : ", version " + Version)}";
 }
 
 /// <summary>The currently selected/pinned connector (agent_selection.json), if any.</summary>
@@ -136,6 +149,8 @@ public sealed record AgentSelectionRow(
     public string SelectedAtDisplay => SelectedAt is { } dt ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
 
     public string ExpiresAtDisplay => ExpiresAt is { } dt ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
+
+    public override string ToString() => $"Selected connector {Connector}, selected {SelectedAtDisplay}, expires {ExpiresAtDisplay}";
 }
 
 /// <summary>
@@ -145,6 +160,14 @@ public sealed record AgentSelectionRow(
 public sealed record DiscoverySourceInfo(string Label, string Detail, DateTimeOffset? LastUpdated, bool Available)
 {
     public string LastUpdatedDisplay => LastUpdated is { } dt ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : "—";
+
+    /// <summary>Tone key: a source that could not be read is amber, one that answered is neutral.</summary>
+    public string AvailabilityKey => Available ? "Ok" : "Warn";
+
+    public string AvailabilityText => Available ? "Read" : "Not available";
+
+    public override string ToString() =>
+        $"{Label}: {Detail}. {(Available ? "Read" : "Not available")}, updated {LastUpdatedDisplay}";
 }
 
 /// <summary>
@@ -188,12 +211,36 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _hasNoComponents;
 
+    /// <summary>Components exist but the search box hides all of them.</summary>
+    [ObservableProperty]
+    private bool _showNoMatch;
+
+    [ObservableProperty]
+    private string _emptyTitle = string.Empty;
+
+    [ObservableProperty]
+    private string _emptyDetail = string.Empty;
+
     public AiDiscoveryPanelViewModel(AppServices services)
         : base(services)
     {
         CardsView = CollectionViewSource.GetDefaultView(_allCards);
         CardsView.Filter = FilterCard;
+        Review = new DiscoverActionReview(services);
+
+        // The old code toggled IsRunningDiscover around its own run; the shared review dialog owns the
+        // run now, so mirror its state to keep NotRunningDiscover meaningful for any binding.
+        Review.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DiscoverActionReview.IsRunning))
+            {
+                IsRunningDiscover = Review.IsRunning;
+            }
+        };
     }
+
+    /// <summary>The shared confirm-and-run dialog every change on this panel goes through.</summary>
+    public DiscoverActionReview Review { get; }
 
     public override string Title => "AI Discovery";
 
@@ -218,7 +265,41 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
         await LoadAsync(cancellationToken).ConfigureAwait(true);
 
     [RelayCommand]
-    private async Task RefreshAsync() => await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+    private async Task RefreshAsync()
+    {
+        LastRunSummary = null;
+        await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// One-shot catch-up when the panel comes back on screen after its data has gone stale. Nothing runs
+    /// on a timer: the gateway status call costs a CLI process (about a second), so it happens here, on
+    /// Refresh, and after a change — never in the background.
+    /// </summary>
+    protected override void OnActivated()
+    {
+        if (_loadRunning || (_loadedAt is { } at && DateTimeOffset.Now - at < StaleAfter))
+        {
+            return;
+        }
+
+        _ = LoadSafelyAsync();
+    }
+
+    private async Task LoadSafelyAsync()
+    {
+        try
+        {
+            await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // A background catch-up must not take the panel down; the message is shown in the banner.
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceError($"AI Discovery catch-up failed: {ex}");
+            ErrorMessage = $"Could not refresh AI Discovery: {ex.Message}";
+        }
+#pragma warning restore CA1031
+    }
 
     /// <summary>
     /// Offers to run <c>defenseclaw agent discovery scan</c> — the command that updates what the
@@ -236,19 +317,29 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
     /// </para>
     /// </summary>
     [RelayCommand]
-    private Task RunScanAsync() =>
-        RunCliAsync(
+    private void RunScan()
+    {
+        var argv = new[] { "agent", "discovery", "scan" };
+        Review.Open(
             "Run an AI discovery scan?",
-            new[] { "agent", "discovery", "scan" },
-            "It asks the running DefenseClaw gateway (sidecar) to scan this machine for AI tools right now — the " +
+            "It asks the running DefenseClaw gateway (sidecar) to scan this machine for AI tools right now: the " +
             "same scan it already runs on its own schedule. The result is written to ai_discovery_state.json and " +
             "inventory.db, which is what the cards on this page read, and the sidecar records it in the audit " +
             "trail as an ai.discovery event like any scheduled scan (plus whatever telemetry export you have " +
             "configured for those events).\n\n" +
-            "It needs the gateway running with AI discovery enabled; otherwise the command fails (HTTP 503 or " +
-            "\"sidecar unavailable\") and nothing changes. It does not refresh the connector table below.\n\n" +
-            "The exact command, its live output and its exit code are recorded in the Activity panel, and this " +
-            "page re-reads its files afterwards.");
+            "It needs the gateway running with AI discovery turned on; otherwise the command fails (HTTP 503 or " +
+            "\"sidecar unavailable\") and nothing changes. It does not refresh the connector table under Sources.",
+            new[]
+            {
+                new DiscoverStep(
+                    argv,
+                    "Ask the gateway for one immediate AI discovery scan.",
+                    CommandTier.StateChanging,
+                    TimeSpan.FromMinutes(3)),
+            },
+            result => AfterRunAsync(result, argv),
+            primaryText: "Run scan");
+    }
 
     /// <summary>
     /// Offers to run <c>defenseclaw agent discover --refresh --no-emit-otel</c>, which re-detects
@@ -259,65 +350,50 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
     /// <c>defenseclaw agent discover --help</c>.
     /// </summary>
     [RelayCommand]
-    private Task RefreshConnectorsAsync() =>
-        RunCliAsync(
+    private void RefreshConnectors()
+    {
+        var argv = new[] { "agent", "discover", "--refresh", "--no-emit-otel" };
+        Review.Open(
             "Re-detect installed agents?",
-            new[] { "agent", "discover", "--refresh", "--no-emit-otel" },
             "It re-checks which agent CLIs (Claude Code, Codex, …) are installed on this machine and rewrites " +
-            "agent_discovery.json — the \"Connector discovery\" table under Sources. Without --refresh the CLI " +
+            "agent_discovery.json, the \"Connector discovery\" table under Sources. Without --refresh the CLI " +
             "would hand back a cached result up to 24 hours old. --no-emit-otel keeps it from sending a discovery " +
             "report through the sidecar.\n\n" +
-            "It does not change the AI component cards; use \"Run AI discovery scan\" for those.\n\n" +
-            "The exact command, its live output and its exit code are recorded in the Activity panel, and this " +
-            "page re-reads its files afterwards.");
+            "It does not change the AI component cards; use \"Run AI discovery scan\" for those.",
+            new[] { new DiscoverStep(argv, "Re-detect which agent CLIs are installed.", CommandTier.StateChanging) },
+            result => AfterRunAsync(result, argv),
+            primaryText: "Re-detect");
+    }
 
-    /// <summary>Confirm, run <c>defenseclaw &lt;argv&gt;</c>, summarize, and re-read the panel's files.</summary>
-    private async Task RunCliAsync(string dialogTitle, string[] argv, string explanation)
+    /// <summary>Summarizes the finished run on the panel and re-reads everything it may have changed.</summary>
+    private async Task AfterRunAsync(DiscoverReviewResult result, IReadOnlyList<string> argv)
     {
-        var command = "defenseclaw " + string.Join(' ', argv);
+        var command = DiscoverCli.CommandLine(argv);
+        var last = result.Invocations.Count > 0 ? result.Invocations[^1] : null;
 
-        var dialog = new Wpf.Ui.Controls.MessageBox
-        {
-            Title = dialogTitle,
-            Content = $"This will run:\n\n    {command}\n\n{explanation}",
-            PrimaryButtonText = "Run",
-            CloseButtonText = "Cancel",
-            IsPrimaryButtonEnabled = true,
-        };
-
-        var result = await dialog.ShowDialogAsync().ConfigureAwait(true);
-        if (result != Wpf.Ui.Controls.MessageBoxResult.Primary)
-        {
-            return;
-        }
-
-        IsRunningDiscover = true;
-        LastRunSummary = "Running…";
-
-        try
-        {
-            var invocation = await Services.Cli.RunAsync(argv).ConfigureAwait(true);
-
-            // FailureReason covers every way a run ends without a normal exit (timeout, cancel,
-            // could not start), so word it as "did not complete", not as "could not start".
-            LastRunSummary = invocation.FailureReason is { Length: > 0 } reason
+        LastRunSummary = last is null
+            ? $"{command} did not start."
+            : last.FailureReason is { Length: > 0 } reason
                 ? $"{command} did not complete: {reason}"
-                : $"{command} finished at {invocation.FinishedAt?.ToLocalTime():HH:mm:ss} " +
-                  $"(exit {invocation.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}). See Activity for full output.";
-        }
-        catch (CliNotFoundException ex)
+                : $"{command} finished at {last.FinishedAt?.ToLocalTime():HH:mm:ss} " +
+                  $"(exit {last.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}). See Activity for full output.";
+
+        // A gateway restart or config write may have happened; pick the new config up before re-reading.
+        Services.ReloadConfig();
+
+        for (var i = 0; i < 50 && _loadRunning; i++)
         {
-            LastRunSummary = $"Could not run: {ex.Message}";
-        }
-        finally
-        {
-            IsRunningDiscover = false;
+            await Task.Delay(100).ConfigureAwait(true);
         }
 
         await LoadAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
-    partial void OnSearchTextChanged(string value) => CardsView.Refresh();
+    partial void OnSearchTextChanged(string value)
+    {
+        CardsView.Refresh();
+        UpdateEmptyState();
+    }
 
     private bool FilterCard(object obj)
     {
@@ -338,35 +414,62 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
+        // One read at a time: Initialize, the activation catch-up, Refresh and a finished action can all ask.
+        if (_loadRunning)
+        {
+            return;
+        }
+
+        _loadRunning = true;
         IsLoading = true;
         ErrorMessage = null;
         Sources.Clear();
 
         try
         {
-            var (signals, signalSource) = await LoadSignalsAsync(cancellationToken).ConfigureAwait(true);
-
-            _allCards.Clear();
-            foreach (var card in BuildCards(signals))
+            try
             {
-                _allCards.Add(card);
+                var (signals, signalSource) = await LoadSignalsAsync(cancellationToken).ConfigureAwait(true);
+
+                _allCards.Clear();
+                foreach (var card in BuildCards(signals))
+                {
+                    _allCards.Add(card);
+                }
+
+                CardsView.Refresh();
+                Sources.Add(signalSource);
+                _signalSourceAvailable = signalSource.Available;
+                _signalCacheUpdatedAt = signalSource.LastUpdated;
+
+                _loadedAt = DateTimeOffset.Now;
+                var asOf = _loadedAt.Value.ToString("HH:mm", CultureInfo.InvariantCulture);
+                StatusMessage = _allCards.Count == 0
+                    ? $"No AI components discovered yet · as of {asOf}"
+                    : $"{_allCards.Count} component{(_allCards.Count == 1 ? string.Empty : "s")} from " +
+                      $"{signals.Count} signal{(signals.Count == 1 ? string.Empty : "s")} · as of {asOf}";
+
+                await LoadScanHistoryAsync(cancellationToken).ConfigureAwait(true);
+                await LoadAgentDiscoveryAsync(cancellationToken).ConfigureAwait(true);
+                await LoadAgentSelectionAsync(cancellationToken).ConfigureAwait(true);
+
+                // What is configured comes from the in-memory config (no I/O), so the coverage card is
+                // useful immediately; the gateway's live answer refines it below.
+                BuildCoverage(live: null, liveProblem: null);
+                UpdateEmptyState();
+            }
+            finally
+            {
+                IsLoading = false;
             }
 
-            CardsView.Refresh();
-            Sources.Add(signalSource);
-
-            HasNoComponents = _allCards.Count == 0;
-            StatusMessage = _allCards.Count == 0
-                ? "No AI components discovered yet."
-                : $"{_allCards.Count} component{(_allCards.Count == 1 ? string.Empty : "s")} from {signals.Count} signal{(signals.Count == 1 ? string.Empty : "s")}.";
-
-            await LoadScanHistoryAsync(cancellationToken).ConfigureAwait(true);
-            await LoadAgentDiscoveryAsync(cancellationToken).ConfigureAwait(true);
-            await LoadAgentSelectionAsync(cancellationToken).ConfigureAwait(true);
+            // The live parts cost a CLI process and a REST call; they run together, after the cards are up.
+            await Task.WhenAll(LoadLiveStatusAsync(cancellationToken), LoadRuntimeAsync(cancellationToken))
+                .ConfigureAwait(true);
         }
         finally
         {
-            IsLoading = false;
+            _loadRunning = false;
         }
     }
 

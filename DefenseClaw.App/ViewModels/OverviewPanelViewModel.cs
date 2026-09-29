@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Audit;
+using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
@@ -119,6 +120,64 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _isRefreshing;
 
+    // ---- Doctor card ---------------------------------------------------------------------
+    // Read from <data dir>\doctor_cache.json, which `defenseclaw doctor` rewrites on every run
+    // (see DoctorCacheReader). The panel never runs doctor on its own: the file is read once on
+    // activation, on Refresh and after a run the operator started, and its age text is re-derived
+    // (no I/O) on each poll so "as of" and STALE cannot go silently out of date.
+
+    /// <summary>Results older than this are shown as STALE (the DefenseClaw TUI uses the same window).</summary>
+    public static readonly TimeSpan DoctorStaleAfter = TimeSpan.FromMinutes(15);
+
+    private DoctorCacheSnapshot? _doctorSnapshot;
+    private CancellationTokenSource? _doctorCts;
+
+    /// <summary>True when a cache file exists and parsed; drives the counts + failing-checks half of the card.</summary>
+    [ObservableProperty]
+    private bool _doctorHasData;
+
+    /// <summary>No cache yet (doctor was never run on this install) - a normal state, not a fault.</summary>
+    [ObservableProperty]
+    private bool _doctorIsEmpty = true;
+
+    [ObservableProperty]
+    private string _doctorVerdict = string.Empty;
+
+    [ObservableProperty]
+    private string _doctorSummary = string.Empty;
+
+    [ObservableProperty]
+    private string _doctorAsOfText = string.Empty;
+
+    /// <summary>Ok / Warn / Bad / Neutral - tone of the verdict line.</summary>
+    [ObservableProperty]
+    private string _doctorStateKey = "Neutral";
+
+    [ObservableProperty]
+    private bool _doctorIsStale;
+
+    [ObservableProperty]
+    private string _doctorProblemsNote = string.Empty;
+
+    [ObservableProperty]
+    private bool _doctorHasProblems;
+
+    /// <summary>Set when the cache file exists but could not be read/parsed: distinct from "never run".</summary>
+    [ObservableProperty]
+    private string _doctorReadError = string.Empty;
+
+    [ObservableProperty]
+    private bool _doctorHasReadError;
+
+    [ObservableProperty]
+    private bool _isDoctorRunning;
+
+    [ObservableProperty]
+    private string _doctorRunMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool _doctorHasRunMessage;
+
     public OverviewPanelViewModel(AppServices services)
         : base(services)
     {
@@ -127,6 +186,15 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         DataDirectoryText = Services.Paths.DataDirectory;
         Apply(Services.Monitor.Current);
     }
+
+    /// <summary>What the Run doctor button executes: <c>defenseclaw doctor</c>, never <c>--fix</c>.</summary>
+    public string DoctorCommandText => "defenseclaw doctor";
+
+    /// <summary>Failing then warning checks from the cache (all of them, capped for the card).</summary>
+    public ObservableCollection<DoctorCheckRow> DoctorChecks { get; } = new();
+
+    /// <summary>PASS / FAIL / WARN / SKIP counts from the cache.</summary>
+    public ObservableCollection<CountTile> DoctorTiles { get; } = new();
 
     public override string Title => "Overview";
 
@@ -151,6 +219,10 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         Apply(Services.Monitor.Current);
+
+        // The doctor card first: it is one small file read, so the card is populated before the
+        // slower audit / enforcement / status reads below finish.
+        await ReloadDoctorCacheAsync(cancellationToken);
         await RefreshDataAsync(cancellationToken);
     }
 
@@ -169,6 +241,10 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         Apply(Services.Monitor.Current);
         RefreshDataIfDue();
+
+        // One file read per activation: a doctor run from a terminal (or the TUI) while the panel
+        // was away rewrote the cache, and this is the only time it is picked up without a Refresh.
+        _ = ReloadDoctorCacheAsync(CancellationToken.None);
     }
 
     protected override void OnDeactivated()
@@ -177,6 +253,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         Services.ConfigReloaded -= OnConfigReloaded;
     }
 
+    /// <summary>Also what F5 invokes: an <see cref="IAsyncRelayCommand"/> that disables itself while it runs.</summary>
     [RelayCommand]
     private async Task RefreshAsync()
     {
@@ -186,7 +263,217 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         _scannerPathsProbedAt = DateTimeOffset.MinValue;
         Apply(snapshot);
         _lastDataRefresh = DateTimeOffset.MinValue;
+        await ReloadDoctorCacheAsync(CancellationToken.None);
         await RefreshDataAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Runs <c>defenseclaw doctor</c> (10-30 s of live probes; it writes only its own results
+    /// cache), then re-reads that cache. The tier comes from <see cref="CommandTiers"/> rather than
+    /// being assumed: plain <c>doctor</c> classifies as read-only and runs with no review, and if
+    /// that ever stopped being true this action refuses rather than silently running an unreviewed
+    /// state-changing command. <c>doctor --fix</c> is deliberately not offered here.
+    /// </summary>
+    [RelayCommand]
+    private async Task RunDoctorAsync()
+    {
+        var argv = new[] { "doctor" };
+        if (CommandTiers.Classify(argv) != CommandTier.ReadOnly)
+        {
+            SetDoctorRunMessage("Doctor is no longer classified read-only, so it will not run without a review step.");
+            return;
+        }
+
+        // The command disables itself while it runs, so there is never a previous source to replace.
+        var cts = new CancellationTokenSource();
+        _doctorCts = cts;
+
+        IsDoctorRunning = true;
+        SetDoctorRunMessage("Running 'defenseclaw doctor' - it probes every configured service and usually takes 10-30 seconds. The previous results stay visible until it finishes.");
+
+        try
+        {
+            var invocation = await Services.Cli.RunAsync(argv, cancellationToken: cts.Token).ConfigureAwait(true);
+            var finished = DateTimeOffset.Now.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+            if (invocation.FailureReason is { Length: > 0 } reason)
+            {
+                // Cancelled or timed out: the CLI never reached the point where it writes the cache.
+                SetDoctorRunMessage($"Doctor did not finish: {reason}. The results below are from the previous run.");
+            }
+            else if (invocation.ExitCode == 0)
+            {
+                SetDoctorRunMessage($"Doctor finished at {finished}: every check passed.");
+            }
+            else
+            {
+                // Exit 1 means "found failures", which is the tool working, not the tool failing.
+                SetDoctorRunMessage(
+                    $"Doctor finished at {finished} (exit {(invocation.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? "?")}). " +
+                    "It reported failures or warnings - see the list below, or Activity for the full output.");
+            }
+        }
+        catch (CliNotFoundException ex)
+        {
+            SetDoctorRunMessage($"'defenseclaw' was not found: {ex.Message}");
+        }
+        catch (SecretInArgumentException ex)
+        {
+            SetDoctorRunMessage(ex.Message);
+        }
+        finally
+        {
+            IsDoctorRunning = false;
+            _doctorCts = null;
+            cts.Dispose();
+        }
+
+        await ReloadDoctorCacheAsync(CancellationToken.None);
+    }
+
+    /// <summary>Stops a doctor run in flight; the run's whole process tree is killed by the runner.</summary>
+    [RelayCommand]
+    private void CancelDoctor()
+    {
+        try
+        {
+            _doctorCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The run finished in the instant the button was pressed; nothing left to cancel.
+        }
+    }
+
+    private void SetDoctorRunMessage(string message)
+    {
+        DoctorRunMessage = message;
+        DoctorHasRunMessage = message.Length > 0;
+    }
+
+    /// <summary>
+    /// Reads and parses <c>doctor_cache.json</c>. A missing file is "never run" (normal on a fresh
+    /// install), an unreadable or malformed one is a separate, visible state - the card never
+    /// shows stale or partial numbers as if they were results.
+    /// </summary>
+    private async Task ReloadDoctorCacheAsync(CancellationToken cancellationToken)
+    {
+        var path = Services.Paths.DoctorCachePath;
+        try
+        {
+            if (!File.Exists(path))
+            {
+                _doctorSnapshot = null;
+                DoctorReadError = string.Empty;
+                DoctorHasReadError = false;
+            }
+            else
+            {
+                var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(true);
+                _doctorSnapshot = DoctorCacheReader.Parse(json);
+                DoctorReadError = string.Empty;
+                DoctorHasReadError = false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            _doctorSnapshot = null;
+            DoctorReadError = $"{path} could not be read: {ex.Message}";
+            DoctorHasReadError = true;
+        }
+
+        ApplyDoctorState();
+    }
+
+    /// <summary>
+    /// Derives everything the card shows from the parsed cache and the clock. No I/O, so it is
+    /// safe to call on every poll: that is what keeps "as of 14:02 - 9 m ago" and the STALE
+    /// badge honest between reads.
+    /// </summary>
+    private void ApplyDoctorState()
+    {
+        var snapshot = _doctorSnapshot;
+        if (snapshot is null)
+        {
+            DoctorHasData = false;
+            DoctorIsEmpty = !DoctorHasReadError;
+            DoctorVerdict = string.Empty;
+            DoctorSummary = string.Empty;
+            DoctorAsOfText = string.Empty;
+            DoctorIsStale = false;
+            DoctorStateKey = "Neutral";
+            DoctorHasProblems = false;
+            DoctorProblemsNote = string.Empty;
+            SyncTiles(DoctorTiles, Array.Empty<CountTile>());
+            SyncByEquality(DoctorChecks, Array.Empty<DoctorCheckRow>(), static row => row.Label);
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var stale = snapshot.IsStale(now, DoctorStaleAfter);
+
+        DoctorHasData = true;
+        DoctorIsEmpty = false;
+        DoctorIsStale = stale;
+        DoctorAsOfText = snapshot.CapturedAt is { } at
+            ? $"as of {FormatCapturedAt(at)} - {Relative(at)}"
+            : "capture time unknown";
+
+        DoctorSummary =
+            $"{snapshot.Passed.ToString("N0", CultureInfo.CurrentCulture)} pass · " +
+            $"{snapshot.Failed.ToString("N0", CultureInfo.CurrentCulture)} fail · " +
+            $"{snapshot.Warned.ToString("N0", CultureInfo.CurrentCulture)} warn · " +
+            $"{snapshot.Skipped.ToString("N0", CultureInfo.CurrentCulture)} skip";
+
+        if (snapshot.Failed > 0)
+        {
+            DoctorVerdict = snapshot.Failed == 1 ? "1 check failed" : $"{snapshot.Failed} checks failed";
+            DoctorStateKey = "Bad";
+        }
+        else if (snapshot.Warned > 0)
+        {
+            DoctorVerdict = snapshot.Warned == 1 ? "1 warning" : $"{snapshot.Warned} warnings";
+            DoctorStateKey = "Warn";
+        }
+        else if (snapshot.Passed > 0)
+        {
+            DoctorVerdict = "All checks passed";
+
+            // An old all-green is not evidence of anything current: neutral, not green.
+            DoctorStateKey = stale ? "Neutral" : "Ok";
+        }
+        else
+        {
+            DoctorVerdict = "No checks recorded";
+            DoctorStateKey = "Neutral";
+        }
+
+        SyncTiles(DoctorTiles, new[]
+        {
+            new CountTile { Label = "PASS", Value = snapshot.Passed.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = snapshot.Passed > 0 ? "Ok" : "Info" },
+            new CountTile { Label = "FAIL", Value = snapshot.Failed.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = snapshot.Failed > 0 ? "Critical" : "Info" },
+            new CountTile { Label = "WARN", Value = snapshot.Warned.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = snapshot.Warned > 0 ? "High" : "Info" },
+            new CountTile { Label = "SKIP", Value = snapshot.Skipped.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = "Info" },
+        });
+
+        var problems = snapshot.Problems();
+        var shown = problems.Take(MaxDoctorProblemsShown).ToList();
+        DoctorHasProblems = shown.Count > 0;
+        DoctorProblemsNote = problems.Count > shown.Count
+            ? $"and {problems.Count - shown.Count} more - run 'defenseclaw doctor' in a terminal for the full list."
+            : string.Empty;
+        SyncByEquality(DoctorChecks, shown, static row => row.Label);
+    }
+
+    /// <summary>Failing/warning checks shown on the card before "and N more".</summary>
+    private const int MaxDoctorProblemsShown = 8;
+
+    private static string FormatCapturedAt(DateTimeOffset at)
+    {
+        var local = at.ToLocalTime();
+        return local.Date == DateTimeOffset.Now.Date
+            ? local.ToString("HH:mm", CultureInfo.CurrentCulture)
+            : local.ToString("MMM d HH:mm", CultureInfo.CurrentCulture);
     }
 
     /// <summary>
@@ -241,6 +528,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         BuildServices(health);
         BuildScanners(snapshot, health);
         BuildConnectors(snapshot, health);
+
+        // No I/O: re-derives the doctor card's "as of" text and STALE flag from the clock.
+        ApplyDoctorState();
     }
 
     /// <summary>
@@ -987,6 +1277,18 @@ public sealed record AttentionRow
     public string? Command { get; init; }
 
     public bool HasCommand => !string.IsNullOrWhiteSpace(Command);
+
+    /// <summary>
+    /// What a screen reader announces for the row (UI Automation falls back to
+    /// <c>ToString()</c> for an item with no explicit name). Without this it read the record's
+    /// generated dump - including the raw PowerShell in <see cref="Command"/>. The command itself
+    /// is reachable in the row's own text box; here it is only mentioned.
+    /// </summary>
+    public override string ToString()
+    {
+        var text = $"{SeverityKey}: {Title}. {Detail}".TrimEnd();
+        return HasCommand ? text + " A suggested command is available." : text;
+    }
 }
 
 /// <summary>One subsystem row in the Services box. A record for the same reason as <see cref="AttentionRow"/>.</summary>
@@ -1009,6 +1311,12 @@ public sealed record ServiceRow
     public bool HasPosture => Posture.Length > 0;
 
     public bool HasDetail => Detail.Length > 0;
+
+    /// <summary>The screen-reader sentence for the row; see <see cref="AttentionRow.ToString"/>.</summary>
+    public override string ToString() => JoinSentences(Name, StateText, SinceText, Posture, Detail);
+
+    internal static string JoinSentences(params string[] parts) =>
+        string.Join(". ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 }
 
 /// <summary>One row in the Scanners box. A record for the same reason as <see cref="AttentionRow"/>.</summary>
@@ -1021,6 +1329,9 @@ public sealed record ScannerRow
     public string StateKey { get; init; } = "Neutral";
 
     public string Detail { get; init; } = string.Empty;
+
+    /// <summary>The screen-reader sentence for the row; see <see cref="AttentionRow.ToString"/>.</summary>
+    public override string ToString() => ServiceRow.JoinSentences(Name, StateText, Detail);
 }
 
 /// <summary>
@@ -1087,6 +1398,18 @@ public sealed partial class ConnectorRow : ObservableObject
         Counters = fresh.Counters;
         LastActivity = fresh.LastActivity;
     }
+
+    /// <summary>
+    /// The screen-reader sentence for the card: name, state, posture, then the live counters. A
+    /// class (not a record), so without this the item was announced as its type name.
+    /// </summary>
+    public override string ToString() => ServiceRow.JoinSentences(
+        $"Connector {Name}",
+        StateText,
+        $"mode {Mode}",
+        $"fail-mode {FailMode}",
+        HasWarning ? WarningText : string.Empty,
+        Counters);
 }
 
 /// <summary>A number tile: severity counts and the enforcement rollup. A record for the same reason as <see cref="AttentionRow"/>.</summary>
@@ -1101,4 +1424,147 @@ public sealed record CountTile
     public string Caption { get; init; } = string.Empty;
 
     public bool HasCaption => Caption.Length > 0;
+
+    /// <summary>
+    /// "CountTile { Label = CRITICAL, Value = 412, ... }" is what a screen reader used to say.
+    /// Now it is "CRITICAL: 412" (plus the caption when there is one).
+    /// </summary>
+    public override string ToString() => HasCaption ? $"{Label}: {Value}. {Caption}" : $"{Label}: {Value}";
+}
+
+/// <summary>
+/// One failing or warning line from <c>doctor_cache.json</c>, shown on the Overview doctor card.
+/// A record for the same reason as <see cref="AttentionRow"/>: an unchanged row keeps its visuals.
+/// </summary>
+public sealed record DoctorCheckRow
+{
+    public required string Label { get; init; }
+
+    public string Detail { get; init; } = string.Empty;
+
+    /// <summary><c>pass</c> / <c>fail</c> / <c>warn</c> / <c>skip</c>, lower-case as the CLI writes it.</summary>
+    public string Status { get; init; } = "skip";
+
+    /// <summary>Bad / Warn / Ok / Neutral - the tone key for the badge.</summary>
+    public string StatusKey => Status switch
+    {
+        "fail" => "Bad",
+        "warn" => "Warn",
+        "pass" => "Ok",
+        _ => "Neutral",
+    };
+
+    /// <summary>FAIL / WARN / PASS / SKIP.</summary>
+    public string StatusText => Status.ToUpperInvariant();
+
+    public bool HasDetail => Detail.Length > 0;
+
+    public override string ToString() =>
+        HasDetail ? $"{StatusText}: {Label}. {Detail}" : $"{StatusText}: {Label}";
+}
+
+/// <summary>
+/// <c>doctor_cache.json</c> after parsing: the four counts the CLI recorded, when it recorded
+/// them, and every check line. The counts are the CLI's own and are used as written - a check
+/// with no label is counted but never listed, so they can exceed the number of listed checks.
+/// </summary>
+public sealed record DoctorCacheSnapshot(
+    int Passed,
+    int Failed,
+    int Warned,
+    int Skipped,
+    DateTimeOffset? CapturedAt,
+    IReadOnlyList<DoctorCheckRow> Checks)
+{
+    /// <summary>
+    /// True when the results are older than <paramref name="window"/>, or carry no capture time
+    /// at all (which cannot be told apart from very old, so it is treated as stale).
+    /// </summary>
+    public bool IsStale(DateTimeOffset now, TimeSpan window) =>
+        CapturedAt is not { } at || now - at > window;
+
+    /// <summary>Failing checks first, then warnings - the TUI's ordering - each in file order.</summary>
+    public IReadOnlyList<DoctorCheckRow> Problems() =>
+        Checks.Where(c => c.Status == "fail").Concat(Checks.Where(c => c.Status == "warn")).ToList();
+}
+
+/// <summary>
+/// Parses <c>&lt;data dir&gt;\doctor_cache.json</c>, the file <c>defenseclaw doctor</c> rewrites
+/// atomically at the end of every run. Schema (from <c>cmd_doctor.py: _write_doctor_cache</c>,
+/// confirmed against the live file): <c>{"passed","failed","warned","skipped": int,
+/// "checks": [{"status": pass|fail|warn|skip, "label", "detail"}], "captured_at": "...Z"}</c>.
+/// Tolerant by design: every field is optional, unknown fields and statuses are ignored, and only
+/// a document that is not a JSON object at all is an error.
+/// </summary>
+internal static class DoctorCacheReader
+{
+    /// <exception cref="JsonException">Not valid JSON, or not a JSON object.</exception>
+    internal static DoctorCacheSnapshot Parse(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException("doctor_cache.json is not a JSON object.");
+        }
+
+        var checks = new List<DoctorCheckRow>();
+        if (root.TryGetProperty("checks", out var list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in list.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var label = ReadString(item, "label");
+                if (label.Length == 0)
+                {
+                    continue;
+                }
+
+                var status = ReadString(item, "status").ToLowerInvariant();
+                checks.Add(new DoctorCheckRow
+                {
+                    Label = label,
+                    Detail = ReadString(item, "detail"),
+                    Status = status is "pass" or "fail" or "warn" or "skip" ? status : "skip",
+                });
+            }
+        }
+
+        DateTimeOffset? capturedAt = null;
+        if (DateTimeOffset.TryParse(
+                ReadString(root, "captured_at"),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal,
+                out var parsed))
+        {
+            capturedAt = parsed;
+        }
+
+        return new DoctorCacheSnapshot(
+            ReadCount(root, "passed"),
+            ReadCount(root, "failed"),
+            ReadCount(root, "warned"),
+            ReadCount(root, "skipped"),
+            capturedAt,
+            checks);
+    }
+
+    private static string ReadString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
+
+    private static int ReadCount(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) &&
+        value.ValueKind == JsonValueKind.Number &&
+        value.TryGetInt32(out var number) &&
+        number >= 0
+            ? number
+            : 0;
 }

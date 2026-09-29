@@ -18,6 +18,14 @@
                 -->
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
+
+                <!--
+                    The shared design system (Dc* keys): spacing, type, cards, tone badges,
+                    page header, toolbar, empty state, focus ring. Must stay AFTER the two WPF-UI
+                    dictionaries above - it is built on their brushes and re-points WPF-UI's
+                    focus-visual keys. See Themes\DefenseClaw.xaml for the key index.
+                -->
+                <ResourceDictionary Source="Themes/DefenseClaw.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />

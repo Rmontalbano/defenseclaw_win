@@ -18,9 +18,9 @@ using YamlDotNet.RepresentationModel;
 namespace DefenseClaw.App.ViewModels.ConfigEditor;
 
 /// <summary>
-/// Orchestrates the whole config editor window: loads config.yaml and the effective
-/// configuration once, keeps RAW and FORM in sync through the raw text as the single
-/// source of truth, and drives the save pipeline.
+/// Orchestrates the whole config editor window: loads config.yaml and the CLI's masked
+/// source view of it (<c>config show --source</c>) once, keeps RAW and FORM in sync through
+/// the raw text as the single source of truth, and drives the save pipeline.
 /// <para>
 /// <b>Why RAW text is the source of truth.</b> A FORM edit never mutates a parallel typed
 /// model — it calls <see cref="YamlSectionEditor"/> to patch the relevant section of the
@@ -49,9 +49,28 @@ namespace DefenseClaw.App.ViewModels.ConfigEditor;
 /// once a save has written a file that failed validation, later saves (which back up that
 /// unvalidated file) do not replace the offered backup until a save validates.
 /// </para>
+/// <para>
+/// <b>Masked values never come back.</b> The CLI's source view masks secrets, header values and
+/// parts of URLs. FORM builds those fields read-only (<see cref="ConfigFormBuilder"/>), a field
+/// that is not editable never commits (<see cref="FormField"/>), this view-model refuses a
+/// commit whose value is a mask placeholder or that belongs to a secret/masked field, and
+/// <see cref="PublishPatchedSection"/> refuses any patch that would leave more mask
+/// placeholders in the document than it had before. Four independent guards, one invariant:
+/// FORM never writes a masked value into config.yaml.
+/// </para>
 /// </summary>
 public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 {
+    /// <summary>
+    /// Argv for the FORM source. <c>--source</c> answers with every section of a v8 file (the
+    /// <c>--effective</c> view answers with <c>observability</c> only on 0.8.10). Never
+    /// <c>--reveal</c>: this app does not ask the CLI for secret values.
+    /// </summary>
+    internal static readonly string[] SourceArgv = { "config", "show", "--source", "--format", "yaml" };
+
+    /// <summary>Fallback for CLIs old enough not to know <c>--source</c>: same masking, effective view.</summary>
+    internal static readonly string[] EffectiveArgv = { "config", "show", "--effective", "--format", "yaml" };
+
     private readonly AppServices _services;
     private readonly DefenseClawPaths _paths;
     private readonly CliRunner _cli;
@@ -67,7 +86,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     private FileSignature? _unvalidatedSignature;
 
     private ConfigDocument _document;
-    private string _effectiveYaml = string.Empty;
+
+    /// <summary>The CLI's masked view of config.yaml as of the last load / successful save. Empty when it could not be fetched.</summary>
+    private string _formSourceYaml = string.Empty;
     private bool _suppressRawChangeTracking;
     private bool _needsFormRebuild;
 
@@ -97,7 +118,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private string? _loadError;
 
-    /// <summary>Set when the effective configuration could not be fetched — FORM is unavailable, RAW still works.</summary>
+    /// <summary>Set when the CLI's source view of the configuration could not be fetched or read — FORM is unavailable, RAW still works.</summary>
     [ObservableProperty]
     private string? _formUnavailableReason;
 
@@ -142,6 +163,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
         _cli = services.Cli;
         _saveService = new ConfigSaveService(_paths, _cli);
         _document = ConfigStore.Parse(string.Empty);
+        Sections.CollectionChanged += (_, _) => RaiseFormEmptyState();
     }
 
     public ObservableCollection<FormSection> Sections { get; } = new();
@@ -169,7 +191,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
     public bool ShowSaveSuccessBanner => ShowSaveResultBanner && !SaveResultIsError;
 
-    public bool ShowSaveErrorBanner => ShowSaveResultBanner && SaveResultIsError;
+    /// <summary>The save error banner, except for drift — the drift banner already carries that message, so showing both would say it twice.</summary>
+    public bool ShowSaveErrorBanner => ShowSaveResultBanner && SaveResultIsError && !ShowDriftBanner;
+
+    partial void OnShowDriftBannerChanged(bool value) => OnPropertyChanged(nameof(ShowSaveErrorBanner));
 
     /// <summary>
     /// Restore is offered while the file on disk is one this editor wrote that failed
@@ -222,7 +247,40 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
     partial void OnLastBackupPathChanged(string? value) => OnPropertyChanged(nameof(ShowRestoreAction));
 
-    partial void OnParseErrorChanged(string? value) => OnPropertyChanged(nameof(ShowFormStaleNotice));
+    partial void OnParseErrorChanged(string? value)
+    {
+        OnPropertyChanged(nameof(ShowFormStaleNotice));
+        RaiseFormEmptyState();
+    }
+
+    partial void OnIsLoadingChanged(bool value) => RaiseFormEmptyState();
+
+    partial void OnFormUnavailableReasonChanged(string? value) => RaiseFormEmptyState();
+
+    partial void OnLoadErrorChanged(string? value) => RaiseFormEmptyState();
+
+    /// <summary>True when FORM has no sections to draw and nothing is loading — the tab shows an explanation instead of a blank page.</summary>
+    public bool ShowFormEmptyState => !IsLoading && Sections.Count == 0;
+
+    /// <summary>Why FORM is empty, in the terms of the state that caused it (mac pattern #1: never one scary "empty").</summary>
+    public string FormEmptyTitle =>
+        LoadFailed ? "config.yaml could not be loaded"
+        : ParseError is not null ? "FORM cannot be built from invalid YAML"
+        : FormUnavailableReason is not null ? "FORM is unavailable"
+        : "No settings to show";
+
+    public string FormEmptyDetail =>
+        LoadFailed ? "FORM needs the file to load. Fix the error above and press Reload."
+        : ParseError is not null ? "Fix the YAML in the RAW tab, then switch back to FORM."
+        : FormUnavailableReason is not null ? "RAW editing still works — see the notice above for why FORM could not be built."
+        : "config.yaml has no sections yet. Add settings in the RAW tab, or use the Setup panel's wizards.";
+
+    private void RaiseFormEmptyState()
+    {
+        OnPropertyChanged(nameof(ShowFormEmptyState));
+        OnPropertyChanged(nameof(FormEmptyTitle));
+        OnPropertyChanged(nameof(FormEmptyDetail));
+    }
 
     partial void OnRawTextChanged(string value)
     {
@@ -258,7 +316,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Loads config.yaml and fetches the effective configuration once. Call after the window is constructed.</summary>
+    /// <summary>Loads config.yaml and fetches the CLI's masked source view of it once. Call after the window is constructed.</summary>
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         IsLoading = true;
@@ -314,9 +372,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
             HasSecretReferences = SensitiveKeyClassifier.ContainsSensitiveReferences(rawText);
 
-            await FetchEffectiveConfigAsync(cancellationToken).ConfigureAwait(true);
+            await FetchFormSourceAsync(cancellationToken).ConfigureAwait(true);
 
-            if (_effectiveYaml.Length == 0)
+            if (_formSourceYaml.Length == 0)
             {
                 Sections.Clear();
             }
@@ -346,7 +404,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
         IsRawModified = false;
 
         _document = ConfigStore.Parse(string.Empty);
-        _effectiveYaml = string.Empty;
+        _formSourceYaml = string.Empty;
         NeedsFormRebuild = false;
         Sections.Clear();
         FormUnavailableReason = "FORM is unavailable until config.yaml loads successfully (see the error above).";
@@ -361,7 +419,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     /// </summary>
     public void NotifyFormTabSelected()
     {
-        if (LoadFailed || _effectiveYaml.Length == 0 || !NeedsFormRebuild)
+        if (LoadFailed || _formSourceYaml.Length == 0 || !NeedsFormRebuild)
         {
             return;
         }
@@ -411,6 +469,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
             SaveResultMessage = outcome.Message;
             SaveResultIsError = !outcome.Success;
+            DriftMessage = outcome.Stage == SaveStage.DriftDetected ? outcome.Message : string.Empty;
             ShowSaveResultBanner = true;
             ShowDriftBanner = outcome.Stage == SaveStage.DriftDetected;
 
@@ -450,6 +509,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
                 // Typing that happened while the save was in flight is not saved yet.
                 IsRawModified = !string.Equals(RawText, textToSave, StringComparison.Ordinal);
                 ClearParseErrorIfParses(textToSave);
+
+                // Re-base FORM on the file we just wrote (one quiet CLI read; see the method).
+                await RefreshFormSourceAfterSaveAsync(textToSave).ConfigureAwait(true);
             }
         }
         finally
@@ -501,46 +563,134 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
     private bool CanRestore() => LastBackupPath is not null;
 
-    private async Task FetchEffectiveConfigAsync(CancellationToken cancellationToken)
+    /// <summary>What a FORM-source fetch produced: the masked YAML, or the reason there is none.</summary>
+    private sealed record FormSourceResult(string? Yaml, string? Failure);
+
+    /// <summary>
+    /// Runs a command that must be read-only. The tier comes from <see cref="CommandTiers"/>, the one
+    /// classifier every review surface in the app shares: a verb it does not call read-only would need a
+    /// confirmation step, which this window does not have, so it is refused rather than run.
+    /// </summary>
+    private Task<CliInvocation> RunReadOnlyAsync(string[] argv, CancellationToken cancellationToken)
+    {
+        if (CommandTiers.Classify(argv) != CommandTier.ReadOnly)
+        {
+            throw new InvalidOperationException(
+                $"Refusing to run 'defenseclaw {string.Join(' ', argv)}' without review: it is not a read-only command.");
+        }
+
+        return _cli.RunAsync(argv, cancellationToken: cancellationToken);
+    }
+
+    private static string OutputText(CliInvocation invocation, CliStream stream) =>
+        string.Join(
+            Environment.NewLine,
+            invocation.OutputLines.Where(l => l.Stream == stream).Select(l => l.Text));
+
+    /// <summary>
+    /// Reads the masked source view of config.yaml. <c>--source</c> first; a CLI too old to know that option
+    /// (usage error naming it) is asked for <c>--effective</c> instead, which carries the same masking.
+    /// </summary>
+    private async Task<FormSourceResult> ReadFormSourceAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var invocation = await _cli
-                .RunAsync(new[] { "config", "show", "--effective", "--format", "yaml" }, cancellationToken: cancellationToken)
-                .ConfigureAwait(true);
+            var argv = SourceArgv;
+            var invocation = await RunReadOnlyAsync(argv, cancellationToken).ConfigureAwait(true);
+
+            if (string.IsNullOrEmpty(invocation.FailureReason) &&
+                invocation.ExitCode is not 0 &&
+                OutputText(invocation, CliStream.StandardError).Contains("no such option", StringComparison.OrdinalIgnoreCase))
+            {
+                argv = EffectiveArgv;
+                invocation = await RunReadOnlyAsync(argv, cancellationToken).ConfigureAwait(true);
+            }
 
             if (invocation.FailureReason is { Length: > 0 } failure)
             {
-                FormUnavailableReason = $"Could not run defenseclaw: {failure}";
-                _effectiveYaml = string.Empty;
-                return;
+                return new FormSourceResult(null, $"Could not run defenseclaw: {failure}");
             }
 
             if (invocation.ExitCode is not 0)
             {
-                var stderr = string.Join(
-                    Environment.NewLine,
-                    invocation.OutputLines.Where(l => l.Stream == CliStream.StandardError).Select(l => l.Text));
-                FormUnavailableReason = $"defenseclaw config show --effective exited {invocation.ExitCode}: {stderr}";
-                _effectiveYaml = string.Empty;
-                return;
+                return new FormSourceResult(
+                    null,
+                    $"defenseclaw {string.Join(' ', argv)} exited {invocation.ExitCode}: {OutputText(invocation, CliStream.StandardError)}");
             }
 
-            _effectiveYaml = string.Join(
-                Environment.NewLine,
-                invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput).Select(l => l.Text));
-            FormUnavailableReason = null;
+            return new FormSourceResult(OutputText(invocation, CliStream.StandardOutput), null);
         }
         catch (CliNotFoundException)
         {
-            FormUnavailableReason = "The defenseclaw CLI was not found on PATH. FORM view needs it to read the effective configuration — RAW editing still works.";
-            _effectiveYaml = string.Empty;
+            return new FormSourceResult(
+                null,
+                "The defenseclaw CLI was not found on PATH. FORM view needs it to read config.yaml's masked source view — RAW editing still works.");
         }
+    }
+
+    private async Task FetchFormSourceAsync(CancellationToken cancellationToken)
+    {
+        var result = await ReadFormSourceAsync(cancellationToken).ConfigureAwait(true);
+        if (result.Yaml is null)
+        {
+            FormUnavailableReason = result.Failure;
+            _formSourceYaml = string.Empty;
+            return;
+        }
+
+        _formSourceYaml = result.Yaml;
+        FormUnavailableReason = null;
+    }
+
+    /// <summary>
+    /// After a save that validated, the CLI's source view describes the file we just wrote, so FORM is
+    /// re-based on it (sections added or removed in RAW now show up without a Reload). One call, once, on
+    /// the user's own action — not polling — and quiet: if it fails the tree already on screen stays and no
+    /// banner is raised, because the save itself succeeded.
+    /// </summary>
+    private async Task RefreshFormSourceAfterSaveAsync(string savedText)
+    {
+        var result = await ReadFormSourceAsync(CancellationToken.None).ConfigureAwait(true);
+        if (result.Yaml is not { Length: > 0 } yaml)
+        {
+            return;
+        }
+
+        _formSourceYaml = yaml;
+        FormUnavailableReason = null;
+
+        // If the user typed while the save and the fetch were in flight, RAW is ahead of the file: the
+        // tab-selection rebuild will pick up the new source against the newer text.
+        if (!string.Equals(RawText, savedText, StringComparison.Ordinal))
+        {
+            NeedsFormRebuild = true;
+            return;
+        }
+
+        // A save made after FORM edits saved exactly what the tree already shows (a FORM edit patches
+        // _document and RAW together), so rebuilding would only throw the operator's scroll position
+        // away. Rebuild only when the text was typed in RAW and the tree has never seen it.
+        if (string.Equals(_document.RawText, savedText, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            _document = ConfigStore.Parse(savedText, _paths.ConfigFilePath);
+        }
+        catch (ConfigParseException)
+        {
+            return;
+        }
+
+        RebuildForm();
+        NeedsFormRebuild = false;
     }
 
     private void RebuildForm()
     {
-        var result = ConfigFormBuilder.Build(_effectiveYaml, _document, OnFieldCommitted, OnListCommitted);
+        var result = ConfigFormBuilder.Build(_formSourceYaml, _document, OnFieldCommitted, OnListCommitted);
 
         Sections.Clear();
         foreach (var section in result.Sections)
@@ -550,6 +700,12 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
         FormWarnings = result.Warnings;
         OnPropertyChanged(nameof(FormWarnings));
+
+        // A source the builder could not read at all is "FORM unavailable", not "nothing to show".
+        if (result.Sections.Count == 0 && result.Warnings.Count > 0)
+        {
+            FormUnavailableReason = string.Join(" ", result.Warnings);
+        }
     }
 
     /// <summary>
@@ -580,9 +736,39 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// Refuses a commit that could carry a masked value into config.yaml — the second of the four guards
+    /// (see the class remarks). Independent of how the field was built: a locked, secret or masked field is
+    /// refused, and so is any value that is itself a mask placeholder (a pasted "[REDACTED]" included).
+    /// </summary>
+    private bool RefuseMaskedCommit(FormField field)
+    {
+        var isMaskedText = (field.Kind is FormFieldKind.String or FormFieldKind.EnvName) &&
+                           SensitiveKeyClassifier.IsMaskedValue(field.TextValue);
+
+        if (field.IsMasked || field.Kind == FormFieldKind.Secret || !field.IsEditable || isMaskedText)
+        {
+            FieldErrorMessage = $"Could not apply '{field.DisplayName}': it holds a secret or a value the CLI masks, and this form never writes masked text back. Edit it in the RAW tab.";
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool RefuseMaskedCommit(FormListField list)
+    {
+        if (!list.IsEditable || list.Items.Any(SensitiveKeyClassifier.IsMaskedValue))
+        {
+            FieldErrorMessage = $"Could not apply '{list.DisplayName}': it holds a value the CLI masks, and this form never writes masked text back. Edit it in the RAW tab.";
+            return true;
+        }
+
+        return false;
+    }
+
     private void OnFieldCommitted(FormField field)
     {
-        if (!CanApplyFormEdit(field.DisplayName))
+        if (!CanApplyFormEdit(field.DisplayName) || RefuseMaskedCommit(field))
         {
             return;
         }
@@ -613,7 +799,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
     private void OnListCommitted(FormListField list)
     {
-        if (!CanApplyFormEdit(list.DisplayName))
+        if (!CanApplyFormEdit(list.DisplayName) || RefuseMaskedCommit(list))
         {
             return;
         }
@@ -673,6 +859,14 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
             !patchedSectionYieldsExpectedValue(patchedSectionText))
         {
             FieldErrorMessage = $"Could not apply '{displayName}': the patched YAML did not read back as expected — edit it in the RAW tab instead.";
+            return;
+        }
+
+        // The last guard: whatever the patch was, it must not leave more mask placeholders in the
+        // document than it started with. A count that goes up means a masked value went in.
+        if (SensitiveKeyClassifier.CountMaskMarkers(newRawText) > SensitiveKeyClassifier.CountMaskMarkers(_document.RawText))
+        {
+            FieldErrorMessage = $"Could not apply '{displayName}': the change would write masked text into config.yaml. Edit it in the RAW tab instead.";
             return;
         }
 

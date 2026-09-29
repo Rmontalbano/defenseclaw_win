@@ -6,35 +6,22 @@
         Filters above, virtualized monospace list below. gateway.log / watchdog.log carry no
         timestamp and almost never a level - just "[component] message" - so the component
         checklist is the filter axis that matters here, not severity.
+
+        On the shared Dc* design system; the one local style is the source toggle's active-state
+        trigger (a visual that exists only here). Keyboard: Ctrl+F focuses the filter box (the
+        code-behind handles ApplicationCommands.Find), Esc clears the filter text.
     -->
     <UserControl.Resources>
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="Padding" Value="14" />
-        </Style>
-
-        <Style x:Key="Secondary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Tertiary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <!-- Source toggle: the two buttons share this base and each adds its own "am I active" trigger. -->
-        <Style x:Key="SourceButton" TargetType="{x:Type ui:Button}">
+        <!-- Source toggle: the two buttons share this base and each adds its own "am I active" trigger.
+             An explicit Style bypasses the toolbar's implicit button style, so the gaps are set here. -->
+        <Style x:Key="SourceButton" TargetType="{x:Type ui:Button}" BasedOn="{StaticResource {x:Type ui:Button}}">
             <Setter Property="Appearance" Value="Secondary" />
-            <Setter Property="Padding" Value="12,5,12,5" />
-            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Margin" Value="0,0,6,8" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="24,20,24,20">
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -43,31 +30,30 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,14">
-            <StackPanel>
-                <TextBlock FontSize="26"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding Title}" />
-                <TextBlock Margin="0,4,0,0"
-                           FontSize="13"
-                           Style="{StaticResource Secondary}"
-                           Text="{Binding Description}" />
-            </StackPanel>
-        </Grid>
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+        </HeaderedContentControl>
 
         <!-- Filters -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
             <StackPanel>
-                <WrapPanel>
+                <WrapPanel Style="{StaticResource DcToolbarPanel}">
                     <ui:Button Content="gateway.log"
                                Command="{Binding SelectSourceCommand}"
-                               CommandParameter="Gateway">
+                               CommandParameter="Gateway"
+                               ToolTip="Show gateway.log">
                         <ui:Button.Style>
                             <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource SourceButton}">
+                                <Setter Property="AutomationProperties.Name" Value="gateway.log" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding ActiveSource}" Value="Gateway">
                                         <Setter Property="Appearance" Value="Primary" />
+                                        <Setter Property="AutomationProperties.Name" Value="gateway.log, currently shown" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -75,21 +61,26 @@
                     </ui:Button>
 
                     <ui:Button Content="watchdog.log"
-                               Margin="0,0,16,0"
+                               Margin="0,0,16,8"
                                Command="{Binding SelectSourceCommand}"
-                               CommandParameter="Watchdog">
+                               CommandParameter="Watchdog"
+                               ToolTip="Show watchdog.log">
                         <ui:Button.Style>
                             <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource SourceButton}">
+                                <Setter Property="AutomationProperties.Name" Value="watchdog.log" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding ActiveSource}" Value="Watchdog">
                                         <Setter Property="Appearance" Value="Primary" />
+                                        <Setter Property="AutomationProperties.Name" Value="watchdog.log, currently shown" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </ui:Button.Style>
                     </ui:Button>
 
-                    <ItemsControl ItemsSource="{Binding ComponentFilters}" VerticalAlignment="Center">
+                    <ItemsControl VerticalAlignment="Center"
+                                  ItemsSource="{Binding ComponentFilters}"
+                                  AutomationProperties.Name="Component filters">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
@@ -97,51 +88,48 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <CheckBox Margin="0,0,12,0"
-                                          VerticalAlignment="Center"
+                                <CheckBox MinWidth="0"
                                           Content="{Binding Name}"
-                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                          AutomationProperties.HelpText="Shows or hides log lines from this component." />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </WrapPanel>
 
-                <WrapPanel Margin="0,10,0,0">
-                    <ui:TextBox Width="280"
-                                Margin="0,0,16,0"
-                                VerticalAlignment="Center"
+                <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                    <ui:TextBox x:Name="FilterBox"
+                                Width="280"
                                 PlaceholderText="Filter by raw line text…"
+                                AutomationProperties.Name="Filter log lines"
+                                AutomationProperties.HelpText="Shows only lines that contain this text. Shortcut Ctrl+F; Esc clears it."
                                 Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
 
-                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0" VerticalAlignment="Center">
-                        <ui:ToggleSwitch IsChecked="{Binding AutoScroll, Mode=TwoWay}" />
-                        <TextBlock Margin="8,0,0,0"
-                                   VerticalAlignment="Center"
-                                   Style="{StaticResource Secondary}"
-                                   Text="{Binding LiveStateText}" />
-                    </StackPanel>
+                    <ui:ToggleSwitch Content="{Binding LiveStateText}"
+                                     IsChecked="{Binding AutoScroll, Mode=TwoWay}"
+                                     AutomationProperties.Name="Follow the newest line"
+                                     AutomationProperties.HelpText="On: the list scrolls to each new line as it arrives (live). Off: the list stays where you are (paused)." />
 
-                    <ui:Button Margin="0,0,8,0"
-                               Padding="10,5,10,5"
+                    <ui:Button Content="Clear"
                                Appearance="Secondary"
-                               Content="Clear"
-                               Command="{Binding ClearCommand}">
+                               Command="{Binding ClearCommand}"
+                               AutomationProperties.HelpText="Empty the buffered lines for the source on screen. The log file itself is untouched.">
                         <ui:Button.Icon>
                             <ui:SymbolIcon Symbol="Broom24" />
                         </ui:Button.Icon>
                     </ui:Button>
 
-                    <ui:Button Padding="10,5,10,5"
+                    <ui:Button Content="Copy selection"
                                Appearance="Secondary"
-                               Content="Copy selection"
-                               Command="{Binding CopySelectionCommand}">
+                               Command="{Binding CopySelectionCommand}"
+                               AutomationProperties.HelpText="Copy the selected log lines to the clipboard.">
                         <ui:Button.Icon>
                             <ui:SymbolIcon Symbol="Copy24" />
                         </ui:Button.Icon>
                     </ui:Button>
                 </WrapPanel>
 
-                <ui:InfoBar Margin="0,10,0,0"
+                <ui:InfoBar Margin="0,0,12,8"
                             Severity="Informational"
                             Title="Log file rotated"
                             IsOpen="{Binding ShowRotationNotice, Mode=TwoWay}"
@@ -150,7 +138,7 @@
         </Border>
 
         <!-- List -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="4">
+        <Border Grid.Row="2" Style="{StaticResource DcCardFlush}">
             <Grid>
                 <ListBox x:Name="LogListBox"
                          ItemsSource="{Binding DisplayedLines}"
@@ -162,25 +150,33 @@
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling"
+                         AutomationProperties.Name="Log lines"
                          SelectionChanged="OnSelectionChanged">
+                    <!-- WPF-UI's list item pads 12 px on every side: a one-line log entry became a 42 px row and only
+                         three fit on screen. A log is read by the screenful, so rows are 24 px. -->
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                            <Setter Property="Padding" Value="8,3,8,3" />
+                            <Setter Property="MinHeight" Value="0" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Grid Margin="4,1,4,1">
+                            <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="140" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0"
-                                           FontFamily="Cascadia Mono, Consolas"
-                                           FontSize="12"
+                                           Style="{StaticResource DcMono}"
+                                           TextWrapping="NoWrap"
                                            TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           ToolTip="{Binding ComponentText}"
                                            Text="{Binding ComponentText}" />
                                 <TextBlock Grid.Column="1"
-                                           FontFamily="Cascadia Mono, Consolas"
-                                           FontSize="12"
+                                           Style="{StaticResource DcMono}"
                                            TextWrapping="NoWrap"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                            Text="{Binding Message}" />
                             </Grid>
                         </DataTemplate>
@@ -188,33 +184,26 @@
                 </ListBox>
 
                 <!-- Empty is a state, not a failure: say which one, and never treat a missing file as an error. -->
-                <StackPanel HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
+                <StackPanel Style="{StaticResource DcEmptyState}"
                             MaxWidth="420"
                             Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock HorizontalAlignment="Center"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="{Binding EmptyTitle}" />
-                    <TextBlock Margin="0,6,0,0"
-                               TextAlignment="Center"
-                               Style="{StaticResource Tertiary}"
-                               Text="{Binding EmptyDetail}" />
+                    <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="DocumentBulletList24" />
+                    <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- Status -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="4,10,0,0">
-            <TextBlock FontFamily="Cascadia Mono, Consolas"
-                       FontSize="11"
-                       Style="{StaticResource Tertiary}"
-                       Text="{Binding StatusPath}" />
-            <TextBlock Margin="16,0,0,0"
-                       FontSize="11"
-                       Style="{StaticResource Tertiary}"
+        <WrapPanel Grid.Row="3" Margin="0,10,0,0">
+            <TextBox Style="{StaticResource DcMonoTextBox}"
+                     VerticalAlignment="Center"
+                     Margin="0,0,16,0"
+                     AutomationProperties.Name="Log file path"
+                     Text="{Binding StatusPath, Mode=OneWay}" />
+            <TextBlock Style="{StaticResource DcCaption}"
+                       VerticalAlignment="Center"
                        Text="{Binding StatusLineCount}" />
-        </StackPanel>
+        </WrapPanel>
     </Grid>
 </UserControl>

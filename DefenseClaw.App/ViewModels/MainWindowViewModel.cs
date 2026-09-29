@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
@@ -39,17 +38,50 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _stateDetail = "Waiting for the first gateway poll…";
 
+    /// <summary>
+    /// Design-system tone key for the state pill and its dot (<c>Ok / Warn / Bad / Neutral</c>).
+    /// A string, not a brush: <c>DcBadge</c> / <c>DcToneDot</c> resolve it against WPF-UI theme
+    /// brushes, so the strip follows a live light/dark switch — a frozen C#-built brush could not.
+    /// </summary>
     [ObservableProperty]
-    private Brush _stateBrush = Brushes.Gray;
+    private string _stateTone = "Neutral";
+
+    /// <summary>Screen-reader name of the state pill ("Gateway status: Running"); the detail sentence next to it is read on its own.</summary>
+    [ObservableProperty]
+    private string _stateAutomationName = "Gateway status: checking";
 
     [ObservableProperty]
     private string _connectorSummary = "—";
 
+    /// <summary>The connector chip text ("Connector: claudecode").</summary>
+    [ObservableProperty]
+    private string _connectorChipText = "No connector";
+
     [ObservableProperty]
     private string _alertSummary = "Alerts: —";
 
+    /// <summary><c>Critical</c> when the last alert list held a CRITICAL, else <c>Neutral</c>.</summary>
+    [ObservableProperty]
+    private string _alertTone = "Neutral";
+
+    /// <summary>The alert chip's tooltip / screen-reader sentence (also the reason when unavailable).</summary>
+    [ObservableProperty]
+    private string _alertDetail = "Alerts have not been polled yet.";
+
     [ObservableProperty]
     private string _versionSummary = string.Empty;
+
+    /// <summary>False until the gateway has reported a version; hides the version chip.</summary>
+    [ObservableProperty]
+    private bool _hasVersion;
+
+    /// <summary>The command palette overlay is showing. Set by the window, which also manages focus.</summary>
+    [ObservableProperty]
+    private bool _isPaletteOpen;
+
+    /// <summary>The keyboard-shortcuts overlay is showing. Set by the window, which also manages focus.</summary>
+    [ObservableProperty]
+    private bool _isShortcutsOpen;
 
     [ObservableProperty]
     private bool _showDegradedBanner;
@@ -148,21 +180,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Snapshot = snapshot;
         StateLabel = snapshot.StateLabel;
         StateDetail = snapshot.Detail;
-        StateBrush = StateBrushes.For(ShieldIconFactory.StateFor(snapshot));
+        StateTone = GatewayPresentation.StateTone(snapshot);
+        StateAutomationName = $"Gateway status: {snapshot.StateLabel}";
         ConnectorSummary = snapshot.ConnectorSummary;
-        VersionSummary = string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
-            ? string.Empty
-            : $"DefenseClaw {snapshot.BinaryVersion}";
+        ConnectorChipText = GatewayPresentation.ConnectorText(snapshot);
+        VersionSummary = GatewayPresentation.VersionText(snapshot);
+        HasVersion = VersionSummary.Length > 0;
 
         // The Initial snapshot carries no alert answer and no "unavailable" reason, so without
-        // the PolledAt test it would render as a confident "0 alerts in the last poll" before
-        // any poll has happened.
-        AlertSummary = snapshot.AlertsUnavailable is { Length: > 0 } reason
-            ? reason
-            : snapshot.PolledAt == DateTimeOffset.MinValue
-                ? "Alerts: —"
-                : $"{snapshot.AlertCount} alert{(snapshot.AlertCount == 1 ? string.Empty : "s")} in the last poll" +
-                  (snapshot.CriticalAlertCount > 0 ? $" · {snapshot.CriticalAlertCount} CRITICAL" : string.Empty);
+        // the PolledAt test inside GatewayPresentation it would render as a confident "0 alerts"
+        // before any poll has happened.
+        AlertSummary = GatewayPresentation.AlertText(snapshot);
+        AlertTone = GatewayPresentation.AlertTone(snapshot);
+        AlertDetail = GatewayPresentation.AlertDetail(snapshot);
 
         // The banner covers three different situations, and each gets its own words: the
         // sidecar is not answering, it answered but not cleanly (IsDegraded includes both), or
@@ -196,37 +226,5 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         ConfigErrorMessage = _services.ConfigLoadError ?? string.Empty;
         ShowConfigErrorBanner = ConfigErrorMessage.Length > 0;
-    }
-}
-
-/// <summary>
-/// The status-dot brush per <see cref="ShieldState"/>, allocated once and frozen. The dot's
-/// colour only ever takes one of four values, but the view-models used to build a new
-/// <see cref="SolidColorBrush"/> for it on every snapshot: a fresh unfrozen
-/// <see cref="Freezable"/> per poll per view-model, and — because each was a new reference — a
-/// guaranteed <c>PropertyChanged</c> and Ellipse re-render even when the colour had not
-/// moved. A shared, frozen, reference-stable brush makes the generated property setter's
-/// equality check suppress all of that, and frozen brushes are safe to share across the
-/// shell's view-models (and to read off the UI thread).
-/// </summary>
-internal static class StateBrushes
-{
-    private static readonly Dictionary<ShieldState, Brush> Cache = Build();
-
-    /// <summary>The shared frozen brush for <paramref name="state"/>; never null.</summary>
-    public static Brush For(ShieldState state) =>
-        Cache.TryGetValue(state, out var brush) ? brush : Cache[ShieldState.Stopped];
-
-    private static Dictionary<ShieldState, Brush> Build()
-    {
-        var cache = new Dictionary<ShieldState, Brush>();
-        foreach (var state in Enum.GetValues<ShieldState>())
-        {
-            var brush = new SolidColorBrush(ShieldIconFactory.ColorFor(state));
-            brush.Freeze();
-            cache[state] = brush;
-        }
-
-        return cache;
     }
 }

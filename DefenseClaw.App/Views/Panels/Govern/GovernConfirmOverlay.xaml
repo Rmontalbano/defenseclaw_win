@@ -1,0 +1,86 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.Govern.GovernConfirmOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             IsTabStop="False">
+    <!--
+        The review step every state-changing Govern command goes through (DataContext = a
+        GovernPanelViewModelBase): the exact argv in a selectable mono box, what kind of command it is,
+        a consequence note, and Cancel / Run. A destructive command is marked and gets a danger button;
+        focus starts on Cancel for it, on Run otherwise. Esc closes it (the panel handles the key), and
+        Tab cycles inside the dialog while it is open.
+    -->
+    <Grid x:Name="Overlay"
+          Style="{StaticResource DcScrim}"
+          KeyboardNavigation.TabNavigation="Cycle"
+          KeyboardNavigation.ControlTabNavigation="Cycle"
+          Visibility="{Binding IsConfirmOpen, Converter={StaticResource BoolToVisibility}}">
+        <Border Style="{StaticResource DcDialogCard}"
+                AutomationProperties.Name="Review command"
+                AutomationProperties.HelpText="Nothing runs until you press Run. Escape cancels.">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <Border Style="{StaticResource DcBadge}"
+                            Tag="Bad"
+                            Visibility="{Binding IsConfirmDestructive, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="Destructive" />
+                    </Border>
+                    <Border Style="{StaticResource DcChip}"
+                            Visibility="{Binding IsConfirmNotDestructive, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ConfirmTierText}" />
+                    </Border>
+                </StackPanel>
+
+                <TextBlock Style="{StaticResource DcSectionHeader}"
+                           Text="{Binding ConfirmHeading}"
+                           AutomationProperties.LiveSetting="Assertive" />
+
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Text="This is the exact command that will run. Nothing happens until you confirm." />
+
+                <TextBlock Margin="0,8,0,0" Text="{Binding ConfirmNote}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                            <Style.Triggers>
+                                <Trigger Property="Text" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <Border Style="{StaticResource DcCodeBlock}" Margin="0,10,0,0">
+                    <TextBox Style="{StaticResource DcMonoTextBox}"
+                             MaxHeight="180"
+                             VerticalScrollBarVisibility="Auto"
+                             Text="{Binding ConfirmCommandText, Mode=OneWay}"
+                             AutomationProperties.Name="Command that will run" />
+                </Border>
+
+                <StackPanel Margin="0,16,0,0"
+                            HorizontalAlignment="Right"
+                            Orientation="Horizontal">
+                    <ui:Button Margin="0,0,8,0"
+                               Content="Copy command"
+                               Command="{Binding CopyCommandLineCommand}"
+                               AutomationProperties.Name="Copy the command to the clipboard" />
+                    <ui:Button x:Name="CancelButton"
+                               Margin="0,0,8,0"
+                               Content="Cancel"
+                               Command="{Binding ConfirmNoCommand}" />
+                    <ui:Button x:Name="RunButton"
+                               Appearance="Primary"
+                               Content="Run command"
+                               Command="{Binding ConfirmYesCommand}"
+                               Visibility="{Binding IsConfirmNotDestructive, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button x:Name="RunDangerButton"
+                               Appearance="Danger"
+                               Content="Run destructive command"
+                               Command="{Binding ConfirmYesCommand}"
+                               Visibility="{Binding IsConfirmDestructive, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

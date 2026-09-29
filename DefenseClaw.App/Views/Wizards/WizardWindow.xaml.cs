@@ -37,6 +37,22 @@ public sealed partial class WizardWindow : FluentWindow
 
     private void OnCloseRequested(object? sender, EventArgs e) => Close();
 
+    /// <summary>
+    /// Esc closes the wizard — or, while a command runs, raises the "stop it?" question, and dismisses that
+    /// question if it is already up. Handled on the bubbling phase so a combo box that is open closes its
+    /// own drop-down with the first Esc and the wizard only sees the second.
+    /// </summary>
+    protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (e.Key == System.Windows.Input.Key.Escape && !e.Handled)
+        {
+            e.Handled = true;
+            _viewModel.HandleEscape();
+        }
+    }
+
     protected override void OnClosing(CancelEventArgs e)
     {
         // Once the dispatcher is shutting down the close is going to happen whatever this says, and

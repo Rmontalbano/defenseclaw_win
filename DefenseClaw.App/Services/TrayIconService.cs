@@ -2,8 +2,9 @@ using System.Windows;
 using System.Windows.Controls;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views;
+using DefenseClaw.App.Views.Shell;
+using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Gateway.Models;
-using DefenseClaw.Core.Install;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using Drawing = System.Drawing;
@@ -43,6 +44,7 @@ public sealed class TrayIconService : IDisposable
     /// </summary>
     private Drawing.Icon? _ownedIcon;
     private MenuItem? _gatewayItem;
+    private MenuItem? _restartItem;
     private MenuItem? _autostartItem;
 
     /// <summary>
@@ -156,10 +158,18 @@ public sealed class TrayIconService : IDisposable
         _ = menu.Items.Add(open);
 
         // Gateway control goes through CliRunner, so the invocation — exact argv, output,
-        // exit code — lands in the Activity panel like every other mutation this app makes.
+        // exit code — lands in the Activity panel like every other mutation this app makes. Each
+        // verb is StateChanging (CommandTiers), so each opens the review dialog first.
         _gatewayItem = new MenuItem { Header = "Start Gateway" };
-        _gatewayItem.Click += async (_, _) => await ToggleGatewayAsync();
+        _gatewayItem.Click += async (_, _) =>
+            await RunGatewayActionAsync(_services.Monitor.Current.IsRunning ? GatewayAction.Stop : GatewayAction.Start);
         _ = menu.Items.Add(_gatewayItem);
+
+        _restartItem = new MenuItem { Header = "Restart Gateway" };
+        _restartItem.Click += async (_, _) => await RunGatewayActionAsync(GatewayAction.Restart);
+        _ = menu.Items.Add(_restartItem);
+
+        _ = menu.Items.Add(new Separator());
 
         _autostartItem = new MenuItem
         {
@@ -167,14 +177,7 @@ public sealed class TrayIconService : IDisposable
             IsCheckable = true,
             IsChecked = AutostartManager.IsEnabled,
         };
-        _autostartItem.Click += (_, _) =>
-        {
-            var on = AutostartManager.Toggle();
-            _autostartItem.IsChecked = on;
-            Notify("Start with Windows", on
-                ? "DefenseClaw will start minimized to the tray when you sign in."
-                : "Autostart removed.", NotificationIcon.Info);
-        };
+        _autostartItem.Click += (_, _) => _ = ToggleAutostart();
         _ = menu.Items.Add(_autostartItem);
 
         // The checkmark is re-read every time the menu opens: Task Manager's Startup tab and
@@ -229,24 +232,74 @@ public sealed class TrayIconService : IDisposable
 
     private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e) => Apply(e.Snapshot);
 
-    /// <summary>Runs `defenseclaw-gateway start` or `stop` depending on the current state.</summary>
-    private async Task ToggleGatewayAsync()
+    /// <summary>
+    /// Flips Start-with-Windows, mirrors the result on the menu's checkmark and says so in a toast.
+    /// Shared by the tray menu and the command palette so both behave and read the same.
+    /// </summary>
+    /// <returns>The new state: true when the app will now start at sign-in.</returns>
+    public bool ToggleAutostart()
     {
-        if (_gatewayActionRunning)
+        var on = AutostartManager.Toggle();
+
+        if (_autostartItem is not null)
+        {
+            _autostartItem.IsChecked = on;
+        }
+
+        Notify("Start with Windows", on
+            ? "DefenseClaw will start minimized to the tray when you sign in."
+            : "Autostart removed.", NotificationIcon.Info);
+        return on;
+    }
+
+    /// <summary>
+    /// Runs <c>defenseclaw-gateway start | stop | restart</c> (verified against the CLI's help; see
+    /// <see cref="GatewayControl"/>) after the operator has reviewed the exact command.
+    /// <para>
+    /// Every verb here is <c>StateChanging</c> in <see cref="CommandTiers"/>, so it always goes
+    /// through <see cref="GatewayActionDialog"/> first — the tray menu and the command palette share
+    /// this one path. The run itself is a <see cref="CliRunner"/> call, so the argv, output and exit
+    /// code land in the Activity panel, and the result is toasted. The busy flag is held from the
+    /// moment the review opens until the run and its follow-up poll finish, so a second click cannot
+    /// stack a second dialog or a second command.
+    /// </para>
+    /// </summary>
+    /// <param name="action">Start, stop or restart.</param>
+    /// <param name="owner">The visible dashboard to centre the review over, or null.</param>
+    public async Task RunGatewayActionAsync(GatewayAction action, Window? owner = null)
+    {
+        if (_disposed || _gatewayActionRunning)
         {
             return;
         }
 
-        var stopping = _services.Monitor.Current.IsRunning;
+        var title = GatewayControl.Title(action);
+
+        var (allowed, reason) = GatewayControl.Availability(action, _services.Monitor.Current);
+        if (!allowed)
+        {
+            Notify(title, reason ?? "Not available right now.", NotificationIcon.Info);
+            return;
+        }
+
+        var argv = GatewayControl.Argv(action);
+
         _gatewayActionRunning = true;
         try
         {
-            var invocation = await _services.Cli.RunGatewayAsync(new[] { stopping ? "stop" : "start" });
+            if (CommandTiers.Classify(argv) != CommandTier.ReadOnly && !GatewayActionDialog.Confirm(owner, action))
+            {
+                return;
+            }
+
+            var invocation = await _services.Cli.RunGatewayAsync(argv);
             Notify(
-                stopping ? "Stop Gateway" : "Start Gateway",
+                title,
                 invocation.ExitCode == 0
-                    ? $"defenseclaw-gateway {(stopping ? "stop" : "start")} succeeded."
-                    : $"Exit code {invocation.ExitCode} — see the Activity panel for output.",
+                    ? GatewayControl.SucceededText(action)
+                    : invocation.ExitCode is { } code
+                        ? $"Exit code {code} — see the Activity panel for output."
+                        : $"{invocation.FailureReason ?? "The command did not finish"} — see the Activity panel.",
                 invocation.ExitCode == 0 ? NotificationIcon.Info : NotificationIcon.Warning);
             _ = await _services.Monitor.RefreshAsync();
         }
@@ -314,16 +367,40 @@ public sealed class TrayIconService : IDisposable
                 NotificationIcon.Error);
         }
 
-        if (_lastState == AppGatewayState.Running && snapshot.State is AppGatewayState.GatewayStopped or AppGatewayState.Degraded)
+        // Gateway lost / recovered are edges, not levels: one toast per transition. While the operator's
+        // own start / stop / restart is running the state is expected to bounce, and that action has
+        // its own toast, so neither edge is announced then. (The recovery that lands after the
+        // command returns — the gateway finishing its start — still is.)
+        if (!_gatewayActionRunning)
         {
-            Notify("Gateway lost", snapshot.Detail, NotificationIcon.Warning);
+            if (_lastState == AppGatewayState.Running && snapshot.State is AppGatewayState.GatewayStopped or AppGatewayState.Degraded)
+            {
+                Notify("Gateway lost", snapshot.Detail, NotificationIcon.Warning);
+            }
+            else if (snapshot.State == AppGatewayState.Running && _lastState is AppGatewayState.GatewayStopped or AppGatewayState.Degraded)
+            {
+                Notify("Gateway recovered", "The DefenseClaw gateway is answering again.", NotificationIcon.Info);
+            }
         }
+
         _lastState = snapshot.State;
 
+        // Menu availability shares GatewayControl's rules with the command palette; the reason is
+        // the item's tooltip so a greyed-out entry says why.
         if (_gatewayItem is not null)
         {
+            var action = snapshot.IsRunning ? GatewayAction.Stop : GatewayAction.Start;
+            var (allowed, reason) = GatewayControl.Availability(action, snapshot);
             _gatewayItem.Header = snapshot.IsRunning ? "Stop Gateway" : "Start Gateway";
-            _gatewayItem.IsEnabled = snapshot.Install is not (null or InstallState.NotInstalled);
+            _gatewayItem.IsEnabled = allowed;
+            _gatewayItem.ToolTip = allowed ? GatewayControl.Summary(action) : reason;
+        }
+
+        if (_restartItem is not null)
+        {
+            var (allowed, reason) = GatewayControl.Availability(GatewayAction.Restart, snapshot);
+            _restartItem.IsEnabled = allowed;
+            _restartItem.ToolTip = allowed ? GatewayControl.Summary(GatewayAction.Restart) : reason;
         }
     }
 

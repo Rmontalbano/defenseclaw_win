@@ -85,6 +85,23 @@ public sealed class CliInvocation
     public const long MaxRetainedOutputBytes = 256 * 1024;
 
     /// <summary>
+    /// The line ceiling for a run that asked to keep its whole output
+    /// (<see cref="CliRunOptions.RetainFullOutput"/>): 200,000 lines. Roughly a hundred times the
+    /// ordinary cap - room for the largest <c>&lt;noun&gt; list --json</c> a real install can print
+    /// with an order of magnitude to spare - while still being a ceiling, because a resident tray app
+    /// must never hold an unbounded transcript. Past it the run falls back to exactly the ordinary
+    /// behaviour: oldest lines dropped, and an explicit <see cref="CliStream.Notice"/> marker.
+    /// </summary>
+    public const int MaxFullOutputLines = 200_000;
+
+    /// <summary>
+    /// The byte ceiling for a run that asked to keep its whole output: 16 MiB, counted the same way
+    /// as <see cref="MaxRetainedOutputBytes"/> (UTF-16 text plus a fixed per-line overhead). Whichever
+    /// of this and <see cref="MaxFullOutputLines"/> is reached first binds.
+    /// </summary>
+    public const long MaxFullOutputBytes = 16L * 1024 * 1024;
+
+    /// <summary>
     /// Per-line allowance added to the text's own byte cost, approximating the
     /// <see cref="CliOutputLine"/> record, its slot in the backing list, and the string
     /// object header. Deliberately an estimate: the cap exists to bound growth, not to
@@ -120,15 +137,36 @@ public sealed class CliInvocation
     /// <summary>When the most recent trim ran; used to timestamp synthesized truncation markers honestly.</summary>
     private DateTimeOffset _lastTruncationAt;
 
-    internal CliInvocation(string executable, IReadOnlyList<string> argv, DateTimeOffset startedAt)
+    /// <summary>Retention ceilings for this invocation: the ordinary caps, or the full-output ceilings.</summary>
+    private readonly int _maxLines;
+
+    private readonly long _maxBytes;
+
+    internal CliInvocation(string executable, IReadOnlyList<string> argv, DateTimeOffset startedAt, bool retainFullOutput = false)
     {
         Id = Guid.NewGuid().ToString("n");
         Executable = executable;
         Argv = argv;
         StartedAt = startedAt;
+        RetainsFullOutput = retainFullOutput;
+        _maxLines = retainFullOutput ? MaxFullOutputLines : MaxRetainedOutputLines;
+        _maxBytes = retainFullOutput ? MaxFullOutputBytes : MaxRetainedOutputBytes;
     }
 
     public string Id { get; }
+
+    /// <summary>
+    /// True when the run was started with <see cref="CliRunOptions.RetainFullOutput"/>: its transcript
+    /// is kept up to <see cref="MaxFullOutputLines"/> / <see cref="MaxFullOutputBytes"/> instead of the
+    /// ordinary <see cref="MaxRetainedOutputLines"/> / <see cref="MaxRetainedOutputBytes"/>.
+    /// </summary>
+    public bool RetainsFullOutput { get; }
+
+    /// <summary>The most transcript lines this invocation retains before it drops the oldest.</summary>
+    public int RetainedLineLimit => _maxLines;
+
+    /// <summary>The most transcript bytes (as counted by the retention budget) this invocation retains.</summary>
+    public long RetainedByteLimit => _maxBytes;
 
     /// <summary>Full path of the binary that was launched.</summary>
     public string Executable { get; }
@@ -157,6 +195,23 @@ public sealed class CliInvocation
 
     /// <summary>True when a secret was piped in on stdin. The secret itself is never stored.</summary>
     public bool UsedStdinSecret { get; internal set; }
+
+    /// <summary>
+    /// True when the run was started with <see cref="CliRunOptions.SurvivesShutdown"/> — in
+    /// practice the in-app upgrade installer. Such a run is not stopped by app exit and is
+    /// refused by <see cref="CliRunner.Cancel(CliInvocation, out string)"/>: killing an installer
+    /// part-way can leave the machine with a half-replaced DefenseClaw. The Activity panel reads
+    /// this to disable Cancel with a reason instead of offering a button that can only fail.
+    /// </summary>
+    public bool SurvivesShutdown { get; internal set; }
+
+    /// <summary>
+    /// Set by <see cref="CliRunner.Cancel(CliInvocation, out string)"/> the moment a cancel is
+    /// accepted, before the run has finished reporting. Lets a panel show "cancelling…" between
+    /// the click and the process tree actually being gone. Once the run finishes,
+    /// <see cref="FailureReason"/> (starting with <c>cancelled</c>) is the record of what happened.
+    /// </summary>
+    public bool CancelRequested { get; internal set; }
 
     /// <summary>
     /// The whole retained transcript as an independent array, safe to hand to any thread.
@@ -332,12 +387,14 @@ public sealed class CliInvocation
     /// </summary>
     public CliInvocation Snapshot()
     {
-        var copy = new CliInvocation(Executable, Argv, StartedAt)
+        var copy = new CliInvocation(Executable, Argv, StartedAt, RetainsFullOutput)
         {
             FinishedAt = FinishedAt,
             ExitCode = ExitCode,
             FailureReason = FailureReason,
             UsedStdinSecret = UsedStdinSecret,
+            SurvivesShutdown = SurvivesShutdown,
+            CancelRequested = CancelRequested,
         };
 
         lock (_gate)
@@ -366,13 +423,13 @@ public sealed class CliInvocation
     /// </summary>
     private void TrimLocked(DateTimeOffset at)
     {
-        if (_outputLines.Count <= MaxRetainedOutputLines && _retainedBytes <= MaxRetainedOutputBytes)
+        if (_outputLines.Count <= _maxLines && _retainedBytes <= _maxBytes)
         {
             return;
         }
 
-        var targetLines = MaxRetainedOutputLines * TrimLowWaterNumerator / TrimLowWaterDenominator;
-        var targetBytes = MaxRetainedOutputBytes * TrimLowWaterNumerator / TrimLowWaterDenominator;
+        var targetLines = _maxLines * TrimLowWaterNumerator / TrimLowWaterDenominator;
+        var targetBytes = _maxBytes * TrimLowWaterNumerator / TrimLowWaterDenominator;
 
         var drop = 0;
         var lines = _outputLines.Count;
@@ -401,12 +458,12 @@ public sealed class CliInvocation
     /// lost and why, because the alternative — a console that just starts mid-run — reads as
     /// a bug rather than as a documented cap.
     /// </summary>
-    private static CliOutputLine TruncationMarker(DateTimeOffset at, int droppedLines) =>
+    private CliOutputLine TruncationMarker(DateTimeOffset at, int droppedLines) =>
         new(
             at,
             CliStream.Notice,
             $"[output truncated] {droppedLines} earlier line(s) dropped — DefenseClaw for Windows retains at " +
-            $"most {MaxRetainedOutputLines} lines / {MaxRetainedOutputBytes / 1024} KiB of output per invocation. " +
+            $"most {_maxLines} lines / {_maxBytes / 1024} KiB of output per invocation. " +
             "The exit code and failure reason below are unaffected.");
 
     /// <summary>Approximate retained cost of a line: the text itself as UTF-16, plus fixed overhead.</summary>

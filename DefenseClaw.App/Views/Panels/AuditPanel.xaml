@@ -7,78 +7,13 @@
         detail pane that pretty-prints structured_json. Column widths are repeated between the
         header and the row template on purpose: shared-size groups defeat UI virtualization,
         and this table has to stay smooth over tens of thousands of rows.
+
+        On the shared Dc* design system: the row is the same grid it always was (the wave-1/2
+        virtualization design is untouched) with the severity bar, severity text and cells restyled.
+        Keyboard: Ctrl+F focuses the search box (ApplicationCommands.Find, handled in the
+        code-behind), Esc closes the detail pane.
     -->
-    <UserControl.Resources>
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="Padding" Value="14" />
-        </Style>
-
-        <Style x:Key="Secondary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Tertiary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="FilterLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Margin" Value="0,0,0,3" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-        </Style>
-
-        <Style x:Key="ColumnHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-        </Style>
-
-        <!-- Row accent: severity as a left bar, so scanning the list is a colour scan. -->
-        <Style x:Key="SeverityBar" TargetType="Border">
-            <Setter Property="Width" Value="3" />
-            <Setter Property="CornerRadius" Value="2" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Critical">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="High">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Medium">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="SeverityText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Critical">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="High">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding SeverityKey}" Value="Medium">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorAttentionBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-    </UserControl.Resources>
-
-    <Grid Margin="24,20,24,20">
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -86,109 +21,112 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <StackPanel Grid.Column="0">
-                <TextBlock FontSize="26"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding Title}" />
-                <TextBlock Margin="0,4,0,0"
-                           FontSize="13"
-                           Style="{StaticResource Secondary}"
-                           Text="{Binding Description}" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:Button Margin="0,0,8,0"
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <ui:Button Content="Reset filters"
                            Appearance="Secondary"
-                           Content="Reset filters"
-                           Command="{Binding ResetFiltersCommand}" />
-                <ui:Button Content="Refresh" Command="{Binding RefreshCommand}">
+                           Command="{Binding ResetFiltersCommand}"
+                           AutomationProperties.HelpText="Set every filter back to its default: all buckets, any severity, all connectors, the last 24 hours, no text." />
+                <ui:Button Content="Refresh"
+                           Command="{Binding RefreshCommand}"
+                           AutomationProperties.HelpText="Run the current query again from the newest event. Shortcut F5.">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
-        </Grid>
+        </HeaderedContentControl>
 
-        <!-- Filter bar -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+        <!-- Filter bar. Each field is a label over its control; the toolbar's implicit styles space
+             the controls, the labels carry no margin of their own beyond the gap under them. -->
+        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
             <StackPanel>
-                <WrapPanel>
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Style="{StaticResource FilterLabel}" Text="Bucket" />
-                        <ComboBox Width="170"
+                <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Bucket" />
+                        <ComboBox Width="150"
                                   ItemsSource="{Binding Buckets}"
-                                  SelectedItem="{Binding SelectedBucket, Mode=TwoWay}" />
+                                  SelectedItem="{Binding SelectedBucket, Mode=TwoWay}"
+                                  AutomationProperties.Name="Bucket" />
                     </StackPanel>
 
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Style="{StaticResource FilterLabel}" Text="Minimum severity" />
-                        <ComboBox Width="170"
-                                  ItemsSource="{Binding Severities}"
-                                  SelectedItem="{Binding SelectedSeverity, Mode=TwoWay}" />
-                    </StackPanel>
-
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Style="{StaticResource FilterLabel}" Text="Connector" />
-                        <ComboBox Width="200"
-                                  ItemsSource="{Binding Connectors}"
-                                  SelectedItem="{Binding SelectedConnector, Mode=TwoWay}" />
-                    </StackPanel>
-
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Style="{StaticResource FilterLabel}" Text="Time range" />
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Minimum severity" />
                         <ComboBox Width="140"
+                                  ItemsSource="{Binding Severities}"
+                                  SelectedItem="{Binding SelectedSeverity, Mode=TwoWay}"
+                                  AutomationProperties.Name="Minimum severity" />
+                    </StackPanel>
+
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Connector" />
+                        <ComboBox Width="150"
+                                  ItemsSource="{Binding Connectors}"
+                                  SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                                  AutomationProperties.Name="Connector" />
+                    </StackPanel>
+
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Time range" />
+                        <ComboBox Width="150"
                                   ItemsSource="{Binding Ranges}"
-                                  SelectedItem="{Binding SelectedRange, Mode=TwoWay}" />
+                                  SelectedItem="{Binding SelectedRange, Mode=TwoWay}"
+                                  AutomationProperties.Name="Time range" />
                     </StackPanel>
 
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Style="{StaticResource FilterLabel}" Text="Action (pick to fill)" />
-                        <ComboBox Width="190"
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Action (pick to fill)" />
+                        <ComboBox Width="180"
                                   ItemsSource="{Binding Actions}"
-                                  SelectedItem="{Binding SelectedActionOption, Mode=TwoWay}" />
+                                  SelectedItem="{Binding SelectedActionOption, Mode=TwoWay}"
+                                  AutomationProperties.Name="Action, pick to fill the action filter" />
                     </StackPanel>
 
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Style="{StaticResource FilterLabel}" Text="Action contains" />
-                        <ui:TextBox Width="170"
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Action contains" />
+                        <ui:TextBox Width="140"
                                     PlaceholderText="substring"
+                                    AutomationProperties.Name="Action contains"
                                     Text="{Binding ActionFilter, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
                     </StackPanel>
 
-                    <StackPanel Margin="0,0,0,8">
-                        <TextBlock Style="{StaticResource FilterLabel}" Text="Search details / event / tool / target" />
-                        <ui:TextBox Width="240"
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Search details / event / tool / target" />
+                        <ui:TextBox x:Name="SearchBox"
+                                    Width="220"
                                     PlaceholderText="free text"
+                                    AutomationProperties.Name="Search details, event, tool and target"
+                                    AutomationProperties.HelpText="Shortcut Ctrl+F."
                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
                     </StackPanel>
                 </WrapPanel>
 
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock FontSize="11" Style="{StaticResource Tertiary}" Text="{Binding ResultSummary}" />
-                    <TextBlock Margin="12,0,0,0"
-                               FontSize="11"
+                <WrapPanel Margin="0,0,12,8">
+                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,12,0" Text="{Binding ResultSummary}" />
+                    <TextBlock Style="{StaticResource DcToneText}"
+                               Tag="Warn"
+                               FontSize="12"
                                TextWrapping="Wrap"
-                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                Text="{Binding StatusNote}" />
-                </StackPanel>
+                </WrapPanel>
             </StackPanel>
         </Border>
 
         <!-- Rows + detail -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*" MinWidth="440" />
-                <ColumnDefinition Width="2*" MinWidth="300" />
+                <ColumnDefinition Width="3*" MinWidth="360" />
+                <ColumnDefinition Width="{StaticResource DcColumnGap}" />
+                <ColumnDefinition Width="2*" MinWidth="260" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,12,0" Padding="6">
+            <Border Grid.Column="0" Style="{StaticResource DcCardFlush}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -197,21 +135,21 @@
                     </Grid.RowDefinitions>
 
                     <!-- Column header. Widths mirror the row template below. -->
-                    <Grid Grid.Row="0" Margin="25,4,10,6">
+                    <Grid Grid.Row="0" Margin="19,4,4,6">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="66" />
+                            <ColumnDefinition Width="68" />
                             <ColumnDefinition Width="56" />
                             <ColumnDefinition Width="1.1*" />
-                            <ColumnDefinition Width="1.3*" />
-                            <ColumnDefinition Width="0.6*" />
-                            <ColumnDefinition Width="1.8*" />
+                            <ColumnDefinition Width="1.2*" />
+                            <ColumnDefinition Width="0.9*" />
+                            <ColumnDefinition Width="1.4*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource ColumnHeader}" Text="TIME" />
-                        <TextBlock Grid.Column="1" Style="{StaticResource ColumnHeader}" Text="SEVERITY" />
-                        <TextBlock Grid.Column="2" Style="{StaticResource ColumnHeader}" Text="BUCKET" />
-                        <TextBlock Grid.Column="3" Style="{StaticResource ColumnHeader}" Text="ACTION" />
-                        <TextBlock Grid.Column="4" Style="{StaticResource ColumnHeader}" Text="CONN." />
-                        <TextBlock Grid.Column="5" Style="{StaticResource ColumnHeader}" Text="SUMMARY" />
+                        <TextBlock Grid.Column="0" Style="{StaticResource DcColumnHeader}" Text="TIME" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource DcColumnHeader}" Text="SEVERITY" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource DcColumnHeader}" Text="BUCKET" />
+                        <TextBlock Grid.Column="3" Style="{StaticResource DcColumnHeader}" Text="ACTION" />
+                        <TextBlock Grid.Column="4" Style="{StaticResource DcColumnHeader}" Text="CONN." />
+                        <TextBlock Grid.Column="5" Style="{StaticResource DcColumnHeader}" Text="SUMMARY" />
                     </Grid>
 
                     <ListView Grid.Row="1"
@@ -223,7 +161,16 @@
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling"
-                              VirtualizingPanel.ScrollUnit="Pixel">
+                              VirtualizingPanel.ScrollUnit="Pixel"
+                              AutomationProperties.Name="Audit events">
+                        <!-- WPF-UI's list item pads 12 px on every side, which made each one-line event a 46 px row
+                             and left room for three of them. A table is read by the screenful: rows are ~30 px. -->
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource {x:Type ListViewItem}}">
+                                <Setter Property="Padding" Value="6,2,6,2" />
+                                <Setter Property="MinHeight" Value="0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate>
                                 <!-- Star widths, not fixed: the panel has to stay readable when
@@ -232,54 +179,62 @@
                                 <Grid Margin="0,3,0,3">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="66" />
+                                        <ColumnDefinition Width="68" />
                                         <ColumnDefinition Width="56" />
                                         <ColumnDefinition Width="1.1*" />
-                                        <ColumnDefinition Width="1.3*" />
-                                        <ColumnDefinition Width="0.6*" />
-                                        <ColumnDefinition Width="1.8*" />
+                                        <ColumnDefinition Width="1.2*" />
+                                        <ColumnDefinition Width="0.9*" />
+                                        <ColumnDefinition Width="1.4*" />
                                     </Grid.ColumnDefinitions>
 
-                                    <Border Grid.Column="0" Style="{StaticResource SeverityBar}" />
+                                    <Border Grid.Column="0"
+                                            Style="{StaticResource DcToneBar}"
+                                            Width="3"
+                                            Margin="0,0,8,0"
+                                            Tag="{Binding SeverityKey}" />
 
                                     <TextBlock Grid.Column="1"
-                                               FontSize="11"
+                                               Style="{StaticResource DcCaption}"
                                                VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="NoWrap"
+                                               TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding RawTimestamp}"
                                                Text="{Binding TimestampText}" />
 
                                     <TextBlock Grid.Column="2"
+                                               Style="{StaticResource DcToneText}"
+                                               Tag="{Binding SeverityKey}"
+                                               FontSize="11"
                                                VerticalAlignment="Center"
-                                               Style="{StaticResource SeverityText}"
                                                Text="{Binding Severity}" />
 
                                     <TextBlock Grid.Column="3"
-                                               FontSize="11"
+                                               Style="{StaticResource DcCaption}"
                                                VerticalAlignment="Center"
+                                               TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                Text="{Binding Bucket}" />
 
                                     <TextBlock Grid.Column="4"
-                                               FontSize="11"
+                                               Style="{StaticResource DcCaption}"
                                                VerticalAlignment="Center"
+                                               TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                Text="{Binding Action}" />
 
                                     <TextBlock Grid.Column="5"
-                                               FontSize="11"
+                                               Style="{StaticResource DcCaption}"
                                                VerticalAlignment="Center"
+                                               TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                                Text="{Binding Connector}" />
 
                                     <TextBlock Grid.Column="6"
-                                               FontSize="11"
+                                               Style="{StaticResource DcCaption}"
                                                VerticalAlignment="Center"
+                                               TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               ToolTip="{Binding Summary}"
                                                Text="{Binding Summary}" />
                                 </Grid>
                             </DataTemplate>
@@ -288,19 +243,12 @@
 
                     <!-- Empty is a state, not a failure: say which one. -->
                     <StackPanel Grid.Row="1"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
+                                Style="{StaticResource DcEmptyState}"
                                 MaxWidth="420"
                                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock HorizontalAlignment="Center"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="{Binding EmptyTitle}" />
-                        <TextBlock Margin="0,6,0,0"
-                                   TextAlignment="Center"
-                                   Style="{StaticResource Tertiary}"
-                                   Text="{Binding EmptyDetail}" />
+                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="DatabaseSearch24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                     </StackPanel>
 
                     <StackPanel Grid.Row="2"
@@ -310,18 +258,20 @@
                         <ui:Button Content="Load more"
                                    Appearance="Secondary"
                                    Command="{Binding LoadMoreCommand}"
+                                   AutomationProperties.HelpText="Load the next 100 events after the last one shown."
                                    Visibility="{Binding HasMore, Converter={StaticResource BoolToVisibility}}" />
                         <ui:ProgressRing Width="20"
                                          Height="20"
                                          Margin="10,0,0,0"
                                          IsIndeterminate="True"
+                                         AutomationProperties.Name="Loading"
                                          Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Detail pane -->
-            <Border Grid.Column="1" Style="{StaticResource Card}">
+            <Border Grid.Column="2" Style="{StaticResource DcCardCompact}">
                 <Grid>
                     <!--
                         A ContentControl still applies its ContentTemplate when Content is null,
@@ -329,93 +279,98 @@
                         the whole ScrollViewer on HasSelection is the fix - and HasSelection is a
                         plain bool, so the app-level BoolToVisibility converter covers it.
                     -->
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer Style="{StaticResource DcPageScroll}"
                                   Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
-                        <ContentControl Content="{Binding SelectedRow}">
-                            <ContentControl.ContentTemplate>
-                                <DataTemplate>
-                                    <StackPanel>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Style="{StaticResource SeverityText}"
-                                                       FontSize="13"
-                                                       VerticalAlignment="Center"
-                                                       Text="{Binding Severity}" />
-                                            <TextBlock Margin="10,0,0,0"
-                                                       FontSize="15"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                       Text="{Binding Action}" />
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Style="{StaticResource DcCardTitle}"
+                                           VerticalAlignment="Center"
+                                           Text="Event details" />
+                                <ui:Button Grid.Column="1"
+                                           Appearance="Transparent"
+                                           Command="{Binding ClearSelectionCommand}"
+                                           ToolTip="Close details (Esc)"
+                                           AutomationProperties.Name="Close event details"
+                                           AutomationProperties.HelpText="Closes this pane. Shortcut Esc.">
+                                    <ui:Button.Icon>
+                                        <ui:SymbolIcon Symbol="Dismiss24" />
+                                    </ui:Button.Icon>
+                                </ui:Button>
+                            </Grid>
+
+                            <ContentControl Content="{Binding SelectedRow}" IsTabStop="False">
+                                <ContentControl.ContentTemplate>
+                                    <DataTemplate>
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource DcToneText}"
+                                                           Tag="{Binding SeverityKey}"
+                                                           FontSize="13"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding Severity}" />
+                                                <TextBlock Style="{StaticResource DcSectionHeader}"
+                                                           Margin="10,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding Action}" />
+                                            </StackPanel>
+
+                                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                       Margin="0,6,0,0"
+                                                       Text="{Binding Summary}" />
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Margin="0,4,0,0"
+                                                       Text="{Binding TimestampText}" />
+
+                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="Columns" />
+                                            <ItemsControl ItemsSource="{Binding Fields}"
+                                                          AutomationProperties.Name="Event columns">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,0,0,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="112" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0"
+                                                                       Style="{StaticResource DcMono}"
+                                                                       Margin="0,0,10,0"
+                                                                       Text="{Binding Name}" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Style="{StaticResource DcCaption}"
+                                                                       Text="{Binding Value}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="structured_json" />
+                                            <Border Style="{StaticResource DcCodeBlock}">
+                                                <ScrollViewer MaxHeight="420"
+                                                              VerticalScrollBarVisibility="Auto"
+                                                              HorizontalScrollBarVisibility="Auto">
+                                                    <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                             TextWrapping="NoWrap"
+                                                             AutomationProperties.Name="structured_json"
+                                                             Text="{Binding StructuredJson, Mode=OneWay}" />
+                                                </ScrollViewer>
+                                            </Border>
                                         </StackPanel>
-
-                                        <TextBlock Margin="0,6,0,0"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                   TextWrapping="Wrap"
-                                                   Text="{Binding Summary}" />
-                                        <TextBlock Margin="0,4,0,0"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                   Text="{Binding TimestampText}" />
-
-                                        <TextBlock Margin="0,14,0,4"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                   Text="Columns" />
-                                        <ItemsControl ItemsSource="{Binding Fields}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid Margin="0,0,0,4">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="112" />
-                                                            <ColumnDefinition Width="*" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0"
-                                                                   Margin="0,0,10,0"
-                                                                   FontSize="11"
-                                                                   FontFamily="Cascadia Mono, Consolas"
-                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                   Text="{Binding Name}" />
-                                                        <TextBlock Grid.Column="1"
-                                                                   FontSize="11"
-                                                                   TextWrapping="Wrap"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                                   Text="{Binding Value}" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-
-                                        <TextBlock Margin="0,14,0,4"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                   Text="structured_json" />
-                                        <Border Padding="10"
-                                                CornerRadius="6"
-                                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
-                                            <TextBox FontFamily="Cascadia Mono, Consolas"
-                                                     FontSize="11"
-                                                     IsReadOnly="True"
-                                                     BorderThickness="0"
-                                                     Background="Transparent"
-                                                     TextWrapping="NoWrap"
-                                                     MaxHeight="420"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Auto"
-                                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                     Text="{Binding StructuredJson, Mode=OneWay}" />
-                                        </Border>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ContentControl.ContentTemplate>
-                        </ContentControl>
+                                    </DataTemplate>
+                                </ContentControl.ContentTemplate>
+                            </ContentControl>
+                        </StackPanel>
                     </ScrollViewer>
 
-                    <TextBlock HorizontalAlignment="Center"
+                    <TextBlock MaxWidth="240"
                                VerticalAlignment="Center"
-                               MaxWidth="240"
-                               TextAlignment="Center"
                                Text="Select a row to see every column and its pretty-printed structured_json.">
                         <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource Tertiary}">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcEmptyDetail}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasSelection}" Value="True">
                                         <Setter Property="Visibility" Value="Collapsed" />

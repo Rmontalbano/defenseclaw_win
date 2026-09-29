@@ -3,186 +3,336 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              d:DataContext="{d:DesignInstance Type=vm:AiDiscoveryPanelViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <Grid Margin="28,24,28,20">
+    <!--
+        Migrated to the shared design system (Themes\DefenseClaw.xaml); no local styles.
+        Order is deliberate: coverage first (what was looked at, and when), then what was found, then
+        the runtime section, then where the data came from.
+    -->
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,10">
-            <TextBlock FontSize="26"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding Title}" />
-            <TextBlock Margin="0,4,0,0"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding Description}" />
-        </StackPanel>
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding StatusMessage}" />
+                <ui:Button Content="Refresh"
+                           Command="{Binding RefreshCommand}"
+                           AutomationProperties.HelpText="Re-read the discovery files and ask the gateway for its live status (F5).">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+            </StackPanel>
+        </HeaderedContentControl>
 
-        <!-- Honesty banner: what confidence means and does not mean -->
-        <ui:InfoBar Grid.Row="1"
-                    Margin="0,0,0,10"
-                    Title="About these confidence numbers"
-                    IsClosable="False"
-                    IsOpen="True"
-                    Severity="Informational"
-                    Message="Confidence comes from signature/heuristic matches — process names, config files, MCP registrations, package manifests, environment variable names — not verified installs. A high score does not prove the product is present, and a genuinely running tool can be missed if nothing matched. Evidence below is a hashed fingerprint (type, quality, match kind); DefenseClaw does not retain literal file paths." />
-
-        <!-- Toolbar -->
-        <Grid Grid.Row="2" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <ui:TextBox Grid.Column="0"
-                        PlaceholderText="Search vendor, product, category…"
-                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-
-            <TextBlock Grid.Column="1"
-                       Margin="14,0,0,0"
-                       VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis"
-                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                       Text="{Binding LastRunSummary}" />
-
-            <TextBlock Grid.Column="2"
-                       Margin="0,0,14,0"
-                       VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding StatusMessage}" />
-
-            <ui:Button Grid.Column="3"
-                       Margin="0,0,8,0"
-                       Padding="10,4,10,4"
-                       Content="Refresh"
-                       Command="{Binding RefreshCommand}" />
-
-            <ui:Button Grid.Column="4"
-                       Margin="0,0,8,0"
-                       Padding="10,4,10,4"
-                       Content="Re-detect agents…"
-                       ToolTip="defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards."
-                       Command="{Binding RefreshConnectorsCommand}"
-                       IsEnabled="{Binding NotRunningDiscover}" />
-
-            <ui:Button Grid.Column="5"
-                       Padding="10,4,10,4"
-                       Appearance="Caution"
-                       Content="Run AI discovery scan…"
-                       ToolTip="defenseclaw agent discovery scan: asks the running sidecar for one immediate AI discovery scan, which is what the component cards read."
-                       Command="{Binding RunScanCommand}"
-                       IsEnabled="{Binding NotRunningDiscover}" />
-        </Grid>
-
-        <!-- Cards + sources -->
-        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
             <StackPanel>
-                <ItemsControl ItemsSource="{Binding CardsView}">
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            Title="AI Discovery"
+                            IsClosable="False"
+                            IsOpen="{Binding HasError}"
+                            Message="{Binding ErrorMessage}"
+                            Severity="Warning" />
+
+                <!-- Coverage: what is being looked at, what is not, and what the last scan covered. -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcCardTitle}" Text="Discovery coverage" />
+                            <Border Style="{StaticResource DcBadge}"
+                                    Tag="{Binding CoverageBadgeKey}"
+                                    Margin="10,0,0,8"
+                                    VerticalAlignment="Top">
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding CoverageBadgeText}" />
+                            </Border>
+                            <ui:ProgressRing Width="18"
+                                             Height="18"
+                                             Margin="10,0,0,8"
+                                             IsIndeterminate="True"
+                                             AutomationProperties.Name="Asking the gateway for its live status"
+                                             Visibility="{Binding IsLiveLoading, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource DcBody}" Text="{Binding CoverageHeadline}" />
+                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                   Margin="0,6,0,0"
+                                   Text="{Binding CoverageLooksAt}" />
+                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                   Margin="0,6,0,0"
+                                   Text="{Binding CoverageGaps}"
+                                   Visibility="{Binding HasCoverageGaps, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                   Margin="0,6,0,0"
+                                   Text="{Binding CoverageLastScan}" />
+
+                        <ui:InfoBar Margin="0,10,0,0"
+                                    IsClosable="False"
+                                    IsOpen="{Binding HasCoverageNote}"
+                                    Message="{Binding CoverageNote}"
+                                    Severity="Warning" />
+
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,10,0,0"
+                                   Text="{Binding CoverageCaveatText}" />
+
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,12,0,0">
+                            <ui:Button Appearance="Primary"
+                                       Content="Run scan…"
+                                       Command="{Binding RunScanCommand}"
+                                       ToolTip="defenseclaw agent discovery scan: asks the running gateway for one immediate AI discovery scan, which is what the component cards read."
+                                       AutomationProperties.HelpText="Asks the gateway for one immediate AI discovery scan. Shows the exact command first." />
+                            <ui:Button Content="{Binding ToggleDiscoveryText}"
+                                       Command="{Binding ToggleDiscoveryCommand}"
+                                       AutomationProperties.HelpText="Turns the AI discovery service on or off in config.yaml. Shows the exact command first." />
+                            <CheckBox Content="Restart the gateway now"
+                                      IsChecked="{Binding RestartOnToggle}"
+                                      ToolTip="On: turning discovery on or off also restarts the gateway so it takes effect. Off: only config.yaml changes; it applies at the next restart."
+                                      AutomationProperties.HelpText="Applies to turning AI Discovery on or off." />
+                            <ui:Button Content="Re-detect agents…"
+                                       Command="{Binding RefreshConnectorsCommand}"
+                                       ToolTip="defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards."
+                                       AutomationProperties.HelpText="Re-checks which agent command-line tools are installed. Shows the exact command first." />
+                        </WrapPanel>
+
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="{Binding LastRunSummary}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Honesty banner: what confidence means and does not mean -->
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            Title="About these confidence numbers"
+                            IsClosable="False"
+                            IsOpen="True"
+                            Severity="Informational"
+                            Message="Confidence comes from signature/heuristic matches (process names, config files, MCP registrations, package manifests, environment variable names), not verified installs. A high score does not prove the product is present, and a genuinely running tool can be missed if nothing matched. Evidence is a hashed fingerprint (type, quality, match kind); DefenseClaw does not retain literal file paths." />
+
+                <!-- Components -->
+                <TextBlock Style="{StaticResource DcSectionHeader}" Text="Detected components" />
+
+                <Border Style="{StaticResource DcToolbar}">
+                    <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                        <ui:TextBox x:Name="SearchBox"
+                                    Width="300"
+                                    PlaceholderText="Search vendor, product, category…  (Ctrl+F)"
+                                    AutomationProperties.Name="Search components"
+                                    Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    </WrapPanel>
+                </Border>
+
+                <ItemsControl ItemsSource="{Binding CardsView}"
+                              Focusable="False"
+                              AutomationProperties.Name="Detected AI components">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <ui:CardExpander Margin="0,0,0,10" Header="{Binding HeaderDisplay}">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-
-                                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                            <ui:CardExpander Margin="{StaticResource DcCardGap}"
+                                             AutomationProperties.Name="{Binding HeaderDisplay}">
+                                <ui:CardExpander.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource DcBody}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding Vendor}" />
+                                        <TextBlock Style="{StaticResource DcBody}"
+                                                   Margin="6,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding Product}" />
+                                        <Border Style="{StaticResource DcBadge}"
+                                                Tag="{Binding ConfidenceKey}"
+                                                Margin="12,0,0,0"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource DcBadgeText}"
+                                                       Text="{Binding ConfidenceDisplay, StringFormat='{}{0} confidence'}" />
+                                        </Border>
+                                        <Border Style="{StaticResource DcChip}"
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SignalCountDisplay}" />
+                                        </Border>
+                                    </StackPanel>
+                                </ui:CardExpander.Header>
+                                <StackPanel>
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Detectors" />
-                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding DetectorsDisplay}" />
+                                        <StackPanel Grid.Column="0" Style="{StaticResource DcField}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Detectors" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding DetectorsDisplay}" />
                                         </StackPanel>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Categories" />
-                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding CategoriesDisplay}" />
+                                        <StackPanel Grid.Column="1" Style="{StaticResource DcField}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Categories" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding CategoriesDisplay}" />
                                         </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Sources" />
-                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding SourcesDisplay}" />
+                                        <StackPanel Grid.Column="2" Style="{StaticResource DcField}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Sources" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding SourcesDisplay}" />
                                         </StackPanel>
                                     </Grid>
-
-                                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="First seen" />
-                                            <TextBlock Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding FirstSeenDisplay}" />
+                                        <StackPanel Grid.Column="0" Style="{StaticResource DcField}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="First seen" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding FirstSeenDisplay}" />
                                         </StackPanel>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="Last seen" />
-                                            <TextBlock Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding LastSeenDisplay}" />
+                                        <StackPanel Grid.Column="1" Style="{StaticResource DcField}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Last seen" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding LastSeenDisplay}" />
                                         </StackPanel>
                                     </Grid>
-
-                                    <TextBlock Grid.Row="2"
-                                               Margin="0,0,0,4"
-                                               TextWrapping="Wrap"
-                                               FontStyle="Italic"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               Text="{Binding EvidenceSummary}" />
-                                </Grid>
+                                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding EvidenceSummary}" />
+                                </StackPanel>
                             </ui:CardExpander>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <TextBlock Margin="0,10,0,10"
-                           HorizontalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="No AI components discovered yet — run an AI discovery scan above, or wait for the gateway's next scheduled one."
-                           Visibility="{Binding HasNoComponents, Converter={StaticResource BoolToVisibility}}" />
+                <!-- Empty: discovery off / no scan yet / latest scan found nothing -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding HasNoComponents, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}">
+                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                    </StackPanel>
+                </Border>
 
-                <!-- Sources section -->
-                <ui:CardExpander Margin="0,4,0,0" Header="Sources — where these cards came from" IsExpanded="True">
-                    <StackPanel Margin="0,8,0,0">
-                        <ItemsControl ItemsSource="{Binding Sources}">
+                <!-- Empty: the search hides everything -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}">
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No component matches the search" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear or change the search text above." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Runtime coverage: explicit state for versions that do not have it -->
+                <TextBlock Style="{StaticResource DcSectionHeader}" Text="Runtime" />
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcCardTitle}" Text="{Binding RuntimeTitle}" />
+                            <Border Style="{StaticResource DcBadge}"
+                                    Tag="{Binding RuntimeBadgeKey}"
+                                    Margin="10,0,0,8"
+                                    VerticalAlignment="Top">
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding RuntimeBadgeText}" />
+                            </Border>
+                            <ui:ProgressRing Width="18"
+                                             Height="18"
+                                             Margin="10,0,0,8"
+                                             IsIndeterminate="True"
+                                             AutomationProperties.Name="Asking the gateway for runtime coverage"
+                                             Visibility="{Binding IsRuntimeLoading, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource DcTextSecondary}" Text="{Binding RuntimeDetail}" />
+
+                        <ItemsControl Margin="0,10,0,0"
+                                      Focusable="False"
+                                      AutomationProperties.Name="Runtime coverage planes"
+                                      ItemsSource="{Binding RuntimePlanes}"
+                                      Visibility="{Binding HasRuntimeSnapshot, Converter={StaticResource BoolToVisibility}}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="0,0,0,10">
+                                    <StackPanel Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Style="{StaticResource DcBadge}" Tag="{Binding StateKey}" Margin="0,0,8,0">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StateText}" />
+                                            </Border>
+                                            <TextBlock Style="{StaticResource DcBody}" VerticalAlignment="Center" Text="{Binding Name}" />
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   Margin="0,4,0,0"
+                                                   Text="{Binding Reason}"
+                                                   Visibility="{Binding HasReason, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <ui:DataGrid Margin="0,10,0,0"
+                                     MaxHeight="260"
+                                     AutoGenerateColumns="False"
+                                     IsReadOnly="True"
+                                     GridLinesVisibility="Horizontal"
+                                     HeadersVisibility="Column"
+                                     AutomationProperties.Name="Runtime findings"
+                                     ItemsSource="{Binding RuntimeFindings}"
+                                     Visibility="{Binding HasRuntimeSnapshot, Converter={StaticResource BoolToVisibility}}">
+                            <ui:DataGrid.Columns>
+                                <DataGridTextColumn Width="90" Header="Severity" Binding="{Binding Severity}" />
+                                <DataGridTextColumn Width="70" Header="Score" Binding="{Binding ScoreDisplay}" />
+                                <DataGridTextColumn Width="*" Header="Process" Binding="{Binding Process}" />
+                                <DataGridTextColumn Width="70" Header="PID" Binding="{Binding PidDisplay}" />
+                                <DataGridTextColumn Width="140" Header="Agent" Binding="{Binding Agent}" />
+                                <DataGridTextColumn Width="*" Header="Providers" Binding="{Binding Providers}" />
+                            </ui:DataGrid.Columns>
+                        </ui:DataGrid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Sources section -->
+                <ui:CardExpander Header="Sources: where these cards came from" IsExpanded="True">
+                    <StackPanel Margin="0,8,0,0">
+                        <ItemsControl ItemsSource="{Binding Sources}"
+                                      Focusable="False"
+                                      AutomationProperties.Name="Data sources">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
-                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding Label}" />
-                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding Detail}" />
+                                            <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Label}" />
+                                            <TextBlock Style="{StaticResource DcTextSecondary}" Text="{Binding Detail}" />
                                         </StackPanel>
-                                        <TextBlock Grid.Column="1"
-                                                   VerticalAlignment="Top"
-                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
-                                            <Run Text="updated " />
-                                            <Run Text="{Binding LastUpdatedDisplay, Mode=OneWay}" />
-                                        </TextBlock>
+                                        <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                            <Border Style="{StaticResource DcBadge}"
+                                                    Tag="{Binding AvailabilityKey}"
+                                                    HorizontalAlignment="Right">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding AvailabilityText}" />
+                                            </Border>
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Margin="0,4,0,0"
+                                                       HorizontalAlignment="Right">
+                                                <Run Text="updated " />
+                                                <Run Text="{Binding LastUpdatedDisplay, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </StackPanel>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
                         <Expander Margin="0,6,0,0" Header="Recent scans (ai.discovery audit bucket)">
-                            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ScanHistory}">
+                            <ItemsControl Margin="0,8,0,0"
+                                          Focusable="False"
+                                          AutomationProperties.Name="Recent discovery scans"
+                                          ItemsSource="{Binding ScanHistory}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,0,0,4">
@@ -190,8 +340,8 @@
                                                 <ColumnDefinition Width="150" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding TimestampDisplay}" />
-                                            <TextBlock Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding Summary}" />
+                                            <TextBlock Grid.Column="0" Style="{StaticResource DcCaption}" Text="{Binding TimestampDisplay}" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource DcBody}" Text="{Binding Summary}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -205,6 +355,7 @@
                                          IsReadOnly="True"
                                          GridLinesVisibility="Horizontal"
                                          HeadersVisibility="Column"
+                                         AutomationProperties.Name="Connector discovery"
                                          ItemsSource="{Binding ConnectorDiscovery}">
                                 <ui:DataGrid.Columns>
                                     <DataGridTextColumn Width="120" Header="Connector" Binding="{Binding Name}" />
@@ -224,6 +375,7 @@
                                          IsReadOnly="True"
                                          GridLinesVisibility="Horizontal"
                                          HeadersVisibility="Column"
+                                         AutomationProperties.Name="Connector selection"
                                          ItemsSource="{Binding ConnectorSelections}">
                                 <ui:DataGrid.Columns>
                                     <DataGridTextColumn Width="120" Header="Connector" Binding="{Binding Connector}" />
@@ -239,5 +391,8 @@
                 </ui:CardExpander>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
+        <panels:DiscoverReviewOverlay Grid.RowSpan="2" DataContext="{Binding Review}" />
     </Grid>
 </UserControl>

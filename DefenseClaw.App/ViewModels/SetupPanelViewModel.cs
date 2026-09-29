@@ -5,12 +5,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Wizards;
+using DefenseClaw.Core.Cli;
 
 namespace DefenseClaw.App.ViewModels;
 
 /// <summary>
 /// The Setup hub: every <c>defenseclaw setup</c> flow the installed CLI exposes, as a
-/// searchable card grid, plus the connector roster the wizards act on.
+/// searchable card grid, the connector roster the wizards act on, and the guardrail quick controls.
 /// <para>
 /// <b>The card list is not written down anywhere.</b> It comes from
 /// <see cref="WizardCatalog"/>, which parses the live CLI's help at runtime — so a setup
@@ -26,18 +27,26 @@ namespace DefenseClaw.App.ViewModels;
 /// <para>
 /// Uncertified cards stay launchable on purpose. The mac app's lesson — and the codex ghost
 /// this project chased — is that hiding the option teaches nothing; the warning travels with
-/// the operator into the wizard and onto its review screen instead.
+/// the operator into the wizard and onto its review screen instead. Targets that <i>cannot</i> work
+/// on Windows (unsupported connectors, interactive-only wizards, Docker stacks) are the exception:
+/// they sit in a last "not available" group, disabled, each with its reason and where to go instead
+/// (<see cref="WizardWindowsPolicy"/>).
 /// </para>
 /// <para>
 /// <b>Lifecycle.</b> The connector roster is re-derived on every gateway state change, but only
 /// while this panel is <see cref="PanelViewModelBase.IsActive"/>: the subscription, and the
 /// card updates that ride the catalog's <c>DefinitionChanged</c>, are attached in
 /// <see cref="OnActivated"/> and detached in <see cref="OnDeactivated"/>, with one catch-up pass
-/// on the way back in. A hidden tray app must not rebuild a card grid for nobody.
+/// on the way back in. A hidden tray app must not rebuild a card grid for nobody. The guardrail
+/// status is a CLI call (about 1.7 s), so it is read once on activation when it is stale and on
+/// Refresh — never on a timer.
 /// </para>
 /// </summary>
 public sealed partial class SetupPanelViewModel : PanelViewModelBase
 {
+    /// <summary>How long a <c>guardrail status</c> read is trusted when the panel is re-entered.</summary>
+    private static readonly TimeSpan GuardrailFreshFor = TimeSpan.FromMinutes(2);
+
     private readonly WizardCatalog _catalog;
     private readonly List<WizardCardViewModel> _all = new();
 
@@ -137,6 +146,13 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         {
             ApplyFilters();
         }
+
+        // One read of the guardrail posture when there is none yet or it has gone stale — a CLI call,
+        // so never more often than that.
+        if (_guardrailLoadedAt is null || DateTimeOffset.UtcNow - _guardrailLoadedAt > GuardrailFreshFor)
+        {
+            _ = LoadGuardrailAsync();
+        }
     }
 
     protected override void OnDeactivated()
@@ -183,7 +199,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private async Task LaunchAsync(WizardCardViewModel? card)
     {
-        if (card is null)
+        if (card is null || !card.IsAvailable)
         {
             return;
         }
@@ -200,13 +216,27 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
             card.IsOpening = false;
         }
 
-        // A wizard that ran may have changed the roster; the monitor's next poll would catch
-        // it, but re-reading config now makes the change visible immediately.
+        // A wizard that ran may have changed the roster and the guardrail; the monitor's next poll would
+        // catch the roster, but re-reading now makes the change visible immediately.
         BuildConnectors();
+        _ = LoadGuardrailAsync();
     }
 
+    /// <summary>
+    /// The page-level refresh (F5 and the header button): the guardrail posture and the connector
+    /// roster. Deliberately not the catalog — that is thirty-odd CLI help probes; see
+    /// <see cref="ReloadCatalogCommand"/>.
+    /// </summary>
     [RelayCommand]
     private async Task RefreshAsync()
+    {
+        BuildConnectors();
+        await LoadGuardrailAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Forgets every cached help screen and re-asks the CLI which setup targets it has.</summary>
+    [RelayCommand]
+    private async Task ReloadCatalogAsync()
     {
         // A second press while a read is in flight would interleave two reloads into one list.
         if (IsLoading)
@@ -380,6 +410,467 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
             _catalog.ProbeCount,
             pending > 0 ? $" · {pending} still loading" : string.Empty);
     }
+
+    // ------------------------------------------------------------------ guardrail quick controls
+    //
+    // `defenseclaw guardrail status` is text (no --json), so it is parsed by GuardrailStatusParser and
+    // shown verbatim as well. The verbs are the ones the CLI documents for day-to-day posture:
+    // `guardrail enable|disable [--connector X] [--restart|--no-restart] [--yes]` and
+    // `guardrail fail-mode open|closed [--connector X] [--restart|--no-restart] [--yes]` (verified against
+    // each verb's --help). All of them restart the gateway by default, so every one goes through a review
+    // that shows the exact argv, the CommandTiers tier, and offers --no-restart.
+
+    private DateTimeOffset? _guardrailLoadedAt;
+    private bool _guardrailReading;
+    private string _pendingGuardrailVerb = string.Empty;
+    private string? _pendingGuardrailArg;
+
+    [ObservableProperty]
+    private bool _isGuardrailBusy;
+
+    [ObservableProperty]
+    private string _guardrailHeadline = "The guardrail posture has not been read yet.";
+
+    /// <summary>Ok / Warn / Neutral — tone of the headline badge.</summary>
+    [ObservableProperty]
+    private string _guardrailHeadlineKey = "Neutral";
+
+    [ObservableProperty]
+    private string _guardrailAsOf = string.Empty;
+
+    [ObservableProperty]
+    private string _guardrailError = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasGuardrailError;
+
+    [ObservableProperty]
+    private string _guardrailRaw = string.Empty;
+
+    [ObservableProperty]
+    private bool _showGuardrailRaw;
+
+    /// <summary>A read succeeded and found no connector: a normal fresh install, not a fault.</summary>
+    [ObservableProperty]
+    private bool _showNoGuardrailRoster;
+
+    [ObservableProperty]
+    private bool _showEnableGuardrail = true;
+
+    [ObservableProperty]
+    private bool _showDisableGuardrail = true;
+
+    [ObservableProperty]
+    private GuardrailScopeOption? _selectedGuardrailScope;
+
+    [ObservableProperty]
+    private bool _isGuardrailReviewOpen;
+
+    [ObservableProperty]
+    private string _guardrailReviewHeading = string.Empty;
+
+    [ObservableProperty]
+    private string _guardrailReviewCommand = string.Empty;
+
+    [ObservableProperty]
+    private string _guardrailReviewTierText = string.Empty;
+
+    /// <summary>Ok / Warn / Bad — tone key for the review's tier badge.</summary>
+    [ObservableProperty]
+    private string _guardrailReviewTierKey = "Warn";
+
+    [ObservableProperty]
+    private string _guardrailReviewNote = string.Empty;
+
+    [ObservableProperty]
+    private string _guardrailReviewRestartText = string.Empty;
+
+    /// <summary>The review's "restart the gateway" checkbox; off adds <c>--no-restart</c>.</summary>
+    [ObservableProperty]
+    private bool _guardrailRestartAfter = true;
+
+    /// <summary>True for a destructive tier or for <c>disable</c> (which tears the live hooks down): danger-styled confirm.</summary>
+    [ObservableProperty]
+    private bool _guardrailReviewIsDanger;
+
+    [ObservableProperty]
+    private bool _isGuardrailRunning;
+
+    [ObservableProperty]
+    private bool _hasGuardrailResult;
+
+    [ObservableProperty]
+    private string _guardrailResultHeading = string.Empty;
+
+    [ObservableProperty]
+    private string _guardrailResultBadge = string.Empty;
+
+    [ObservableProperty]
+    private string _guardrailResultKey = "Neutral";
+
+    [ObservableProperty]
+    private string _guardrailResultText = string.Empty;
+
+    /// <summary>The roster rows of the last successful read.</summary>
+    public ObservableCollection<GuardrailRowViewModel> GuardrailRows { get; } = new();
+
+    /// <summary>Drift and other "!" notes the CLI printed under the roster.</summary>
+    public ObservableCollection<string> GuardrailWarnings { get; } = new();
+
+    /// <summary>"All connectors" plus one entry per connector in the roster; only offered when there are two or more.</summary>
+    public ObservableCollection<GuardrailScopeOption> GuardrailScopes { get; } = new();
+
+    public bool HasGuardrailRows => GuardrailRows.Count > 0;
+
+    public bool HasGuardrailWarnings => GuardrailWarnings.Count > 0;
+
+    /// <summary><c>--connector</c> is for multi-connector installs; with one connector there is nothing to scope.</summary>
+    public bool HasMultipleGuardrailConnectors => GuardrailRows.Count > 1;
+
+    /// <summary>Controls are off while a read or a change is in flight.</summary>
+    public bool CanUseGuardrailControls => !IsGuardrailBusy && !IsGuardrailRunning;
+
+    partial void OnIsGuardrailBusyChanged(bool value) => OnPropertyChanged(nameof(CanUseGuardrailControls));
+
+    partial void OnIsGuardrailRunningChanged(bool value) => OnPropertyChanged(nameof(CanUseGuardrailControls));
+
+    partial void OnGuardrailRestartAfterChanged(bool value) => RefreshGuardrailReview();
+
+    /// <summary>Reads <c>guardrail status</c> once. Overlapping calls collapse into the one in flight.</summary>
+    private async Task LoadGuardrailAsync()
+    {
+        if (_guardrailReading)
+        {
+            return;
+        }
+
+        _guardrailReading = true;
+        IsGuardrailBusy = true;
+
+        try
+        {
+            var invocation = await Services.Cli.RunAsync(new[] { "guardrail", "status" }).ConfigureAwait(true);
+            ApplyGuardrailRead(invocation);
+        }
+        catch (CliNotFoundException ex)
+        {
+            SetGuardrailError("defenseclaw was not found, so the guardrail posture cannot be read. " + ex.Message);
+        }
+        finally
+        {
+            _guardrailReading = false;
+            IsGuardrailBusy = false;
+        }
+    }
+
+    private void ApplyGuardrailRead(CliInvocation invocation)
+    {
+        var text = JoinStdout(invocation);
+
+        if (invocation.FailureReason is { Length: > 0 } reason)
+        {
+            SetGuardrailError("guardrail status did not finish: " + reason + ".");
+            return;
+        }
+
+        if (invocation.ExitCode is not 0)
+        {
+            var detail = string.Join(' ', LastLines(invocation, 3));
+            var code = invocation.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? "without a code";
+            SetGuardrailError($"guardrail status exited {code}. {detail}".Trim());
+            return;
+        }
+
+        var status = GuardrailStatusParser.Parse(text);
+        _guardrailLoadedAt = DateTimeOffset.UtcNow;
+        GuardrailAsOf = "as of " + DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
+        GuardrailError = string.Empty;
+        HasGuardrailError = false;
+        GuardrailRaw = status.Raw;
+
+        var keepScope = SelectedGuardrailScope?.Key ?? string.Empty;
+
+        var rows = status.Connectors.Select(r => new GuardrailRowViewModel(r)).ToList();
+        SyncCollection(GuardrailRows, rows, r => r.Key + "|" + r.Name, static (a, b) => a.IsSameAs(b));
+
+        GuardrailWarnings.Clear();
+        foreach (var warning in status.Warnings)
+        {
+            GuardrailWarnings.Add(warning);
+        }
+
+        GuardrailScopes.Clear();
+        GuardrailScopes.Add(new GuardrailScopeOption("All connectors", string.Empty));
+        foreach (var row in rows.Where(r => r.Key.Length > 0))
+        {
+            GuardrailScopes.Add(new GuardrailScopeOption(row.Name.Length > 0 ? row.Name : row.Key, row.Key));
+        }
+
+        SelectedGuardrailScope = GuardrailScopes.FirstOrDefault(s => s.Key == keepScope) ?? GuardrailScopes[0];
+
+        (GuardrailHeadline, GuardrailHeadlineKey) = status.Enabled switch
+        {
+            true => ("The guardrail is enabled.", "Ok"),
+            false => ("The guardrail is disabled: no connector is being enforced.", "Warn"),
+            _ => ("The CLI's status text could not be interpreted; the verbatim output is below.", "Neutral"),
+        };
+
+        ShowEnableGuardrail = status.Enabled != true;
+        ShowDisableGuardrail = status.Enabled != false;
+        ShowNoGuardrailRoster = rows.Count == 0;
+
+        OnPropertyChanged(nameof(HasGuardrailRows));
+        OnPropertyChanged(nameof(HasGuardrailWarnings));
+        OnPropertyChanged(nameof(HasMultipleGuardrailConnectors));
+    }
+
+    private void SetGuardrailError(string message)
+    {
+        GuardrailError = message;
+        HasGuardrailError = true;
+    }
+
+    /// <summary>Stdout lines of a finished invocation, one string.</summary>
+    private static string JoinStdout(CliInvocation invocation) => string.Join(
+        '\n',
+        invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput).Select(l => l.Text));
+
+    /// <summary>The last <paramref name="count"/> non-empty lines of either stream.</summary>
+    private static IEnumerable<string> LastLines(CliInvocation invocation, int count) => invocation.OutputLines
+        .Select(l => l.Text.Trim())
+        .Where(t => t.Length > 0)
+        .TakeLast(count);
+
+    [RelayCommand]
+    private void EnableGuardrail() => BeginGuardrailReview("enable", null);
+
+    [RelayCommand]
+    private void DisableGuardrail() => BeginGuardrailReview("disable", null);
+
+    [RelayCommand]
+    private void SetFailModeOpen() => BeginGuardrailReview("fail-mode", "open");
+
+    [RelayCommand]
+    private void SetFailModeClosed() => BeginGuardrailReview("fail-mode", "closed");
+
+    [RelayCommand]
+    private void CancelGuardrailReview() => IsGuardrailReviewOpen = false;
+
+    [RelayCommand]
+    private void DismissGuardrailResult() => HasGuardrailResult = false;
+
+    private void BeginGuardrailReview(string verb, string? arg)
+    {
+        if (!CanUseGuardrailControls)
+        {
+            return;
+        }
+
+        _pendingGuardrailVerb = verb;
+        _pendingGuardrailArg = arg;
+        GuardrailRestartAfter = true;
+        HasGuardrailResult = false;
+
+        var scope = SelectedGuardrailScope is { Key.Length: > 0 } s ? $" for {s.Label}" : string.Empty;
+        GuardrailReviewHeading = verb switch
+        {
+            "enable" => "Enable the guardrail" + scope + "?",
+            "disable" => "Disable the guardrail" + scope + "?",
+            _ => $"Set the hook fail mode to {arg}{scope}?",
+        };
+
+        GuardrailReviewNote = (verb, arg) switch
+        {
+            ("disable", _) => "Disabling tears down the connector hooks (for example the live Claude Code hooks), so agents on this machine " +
+                              "run without DefenseClaw protection until you enable the guardrail again. The connector's policy is kept.",
+            ("enable", _) => "Re-enables the guardrail from the existing configuration and runs connector setup at the next gateway start.",
+            (_, "closed") => "Closed blocks a tool call or prompt whenever the gateway answers with an error or cannot be reached — " +
+                             "including while the gateway restarts. Use it where every prompt must be inspected.",
+            _ => "Open allows the tool call or prompt and logs the failure, so a misbehaving gateway never blocks an agent. Recommended for almost all installs.",
+        };
+
+        RefreshGuardrailReview();
+        IsGuardrailReviewOpen = true;
+    }
+
+    /// <summary>The exact argv for the pending verb, from the review's current choices.</summary>
+    private string[] BuildGuardrailArgv()
+    {
+        var argv = new List<string> { "guardrail", _pendingGuardrailVerb };
+        if (_pendingGuardrailArg is not null)
+        {
+            argv.Add(_pendingGuardrailArg);
+        }
+
+        // These verbs ask "Continue?" without it, and the app has no way to answer.
+        argv.Add("--yes");
+
+        if (SelectedGuardrailScope is { Key.Length: > 0 } scope)
+        {
+            argv.Add("--connector");
+            argv.Add(scope.Key);
+        }
+
+        if (!GuardrailRestartAfter)
+        {
+            argv.Add("--no-restart");
+        }
+
+        return argv.ToArray();
+    }
+
+    private void RefreshGuardrailReview()
+    {
+        if (_pendingGuardrailVerb.Length == 0)
+        {
+            return;
+        }
+
+        var argv = BuildGuardrailArgv();
+        var tier = CommandTiers.Classify(argv);
+
+        GuardrailReviewCommand = "defenseclaw " + string.Join(' ', argv.Select(a => a.Any(char.IsWhiteSpace) ? $"\"{a}\"" : a));
+        GuardrailReviewTierText = WizardReview.TierText(tier);
+        GuardrailReviewTierKey = WizardReview.TierKey(tier);
+        GuardrailReviewIsDanger = tier == CommandTier.Destructive || _pendingGuardrailVerb == "disable";
+        GuardrailReviewRestartText = GuardrailRestartAfter
+            ? WizardReview.RestartSentence + " Agents that use DefenseClaw hooks may lose the gateway for a few seconds while it comes back."
+            : "The gateway is not restarted, so hooks are not regenerated until it next restarts: the change is saved but not yet in effect.";
+    }
+
+    [RelayCommand]
+    private async Task ConfirmGuardrailAsync()
+    {
+        if (!IsGuardrailReviewOpen || IsGuardrailRunning)
+        {
+            return;
+        }
+
+        var argv = BuildGuardrailArgv();
+        IsGuardrailRunning = true;
+
+        try
+        {
+            var invocation = await Services.Cli.RunAsync(argv).ConfigureAwait(true);
+            IsGuardrailReviewOpen = false;
+            ShowGuardrailResult(argv, invocation);
+
+            // Follow-ups are gated on the previous exit code: a failed change leaves the roster as it was
+            // read, and re-reading it would only show the same thing while hiding the error.
+            if (invocation.ExitCode is 0 && invocation.FailureReason is null)
+            {
+                IsGuardrailRunning = false;
+                await LoadGuardrailAsync().ConfigureAwait(true);
+            }
+        }
+        catch (CliNotFoundException ex)
+        {
+            IsGuardrailReviewOpen = false;
+            HasGuardrailResult = true;
+            GuardrailResultHeading = "defenseclaw was not found";
+            GuardrailResultBadge = "not run";
+            GuardrailResultKey = "Bad";
+            GuardrailResultText = ex.Message;
+        }
+        finally
+        {
+            IsGuardrailRunning = false;
+        }
+    }
+
+    private void ShowGuardrailResult(IReadOnlyList<string> argv, CliInvocation invocation)
+    {
+        HasGuardrailResult = true;
+        GuardrailResultHeading = "defenseclaw " + string.Join(' ', argv) + " finished";
+
+        (GuardrailResultBadge, GuardrailResultKey) = (invocation.FailureReason, invocation.ExitCode) switch
+        {
+            ({ Length: > 0 } reason, _) => (reason.StartsWith("cancelled", StringComparison.Ordinal) ? "cancelled" : "failed", "Warn"),
+            (_, 0) => ("exit 0", "Ok"),
+            (_, { } code) => ("exit " + code.ToString(CultureInfo.CurrentCulture), "Bad"),
+            _ => ("exit unknown", "Neutral"),
+        };
+
+        var lines = invocation.OutputLines.Select(l => l.Text.TrimEnd()).Where(t => t.Length > 0).TakeLast(40);
+        GuardrailResultText = invocation.FailureReason is { Length: > 0 } failure
+            ? failure + "\n" + string.Join('\n', lines)
+            : string.Join('\n', lines);
+    }
+
+}
+
+/// <summary>One entry in the guardrail scope combo: a connector key for <c>--connector</c>, or empty for all of them.</summary>
+public sealed record GuardrailScopeOption(string Label, string Key)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>One connector in the guardrail roster: its posture as <c>guardrail status</c> printed it.</summary>
+public sealed class GuardrailRowViewModel
+{
+    private readonly GuardrailConnectorRow _row;
+
+    public GuardrailRowViewModel(GuardrailConnectorRow row)
+    {
+        _row = row ?? throw new ArgumentNullException(nameof(row));
+    }
+
+    public string Name => _row.Name.Length > 0 ? _row.Name : _row.Key;
+
+    public string Key => _row.Key;
+
+    public string State => _row.State;
+
+    public string Mode => _row.Mode;
+
+    public string Fail => _row.Fail;
+
+    /// <summary>Ok when enabled, Warn otherwise — the state chip's tone.</summary>
+    public string StateKey => string.Equals(State, "enabled", StringComparison.OrdinalIgnoreCase) ? "Ok" : "Warn";
+
+    /// <summary>Observe + fail-closed is the recurring bad default: records only, yet still blocks on a gateway error.</summary>
+    public bool HasMismatch =>
+        string.Equals(Mode, "observe", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Fail, "closed", StringComparison.OrdinalIgnoreCase);
+
+    public string FailKey => HasMismatch ? "Warn" : "Neutral";
+
+    /// <summary>The remaining columns as one line: "rule pack default · HILT off · scan regex_only · judge off".</summary>
+    public string Detail
+    {
+        get
+        {
+            var parts = new List<string>();
+            AddPart(parts, "rule pack", _row.Column("Rule pack"));
+            AddPart(parts, "HILT", _row.Column("HILT"));
+            AddPart(parts, "scan", _row.Column("Scan"));
+            AddPart(parts, "judge", _row.Column("Judge"));
+            return string.Join(" · ", parts);
+        }
+    }
+
+    public string MismatchNote =>
+        "observe + fail-closed: this connector never blocks on policy, but does block whenever the gateway errors.";
+
+    public bool IsSameAs(GuardrailRowViewModel other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return _row.Columns.Count == other._row.Columns.Count &&
+               _row.Columns.Zip(other._row.Columns).All(p => p.First.Key == p.Second.Key && p.First.Value == p.Second.Value);
+    }
+
+    private static void AddPart(List<string> parts, string label, string value)
+    {
+        if (value.Length > 0)
+        {
+            parts.Add(label + " " + value);
+        }
+    }
+
+    /// <summary>What a screen reader announces for the row.</summary>
+    public override string ToString() =>
+        $"{Name}: {State}, mode {Mode}, fail-{Fail}" + (HasMismatch ? ". Observe with fail-closed." : string.Empty);
 }
 
 /// <summary>One hub section: a <see cref="WizardGroups"/> bucket and its cards.</summary>
@@ -396,6 +887,11 @@ public sealed class WizardGroupViewModel
     public ObservableCollection<WizardCardViewModel> Cards { get; }
 
     public string CountText => Cards.Count.ToString(CultureInfo.CurrentCulture);
+
+    /// <summary>What a screen reader announces for the group heading.</summary>
+    public string AutomationName => $"{Name}, {Cards.Count} setup target(s)";
+
+    public override string ToString() => AutomationName;
 }
 
 /// <summary>One wizard card. Rebuilt in place as the per-target help lands.</summary>
@@ -410,7 +906,7 @@ public sealed partial class WizardCardViewModel : ObservableObject
     [ObservableProperty]
     private string _badge = string.Empty;
 
-    /// <summary>Ok / Warn / Bad / Neutral — the badge colour key the XAML triggers on.</summary>
+    /// <summary>Ok / Warn / Bad / Neutral — the badge tone key (<c>DcBadge Tag</c>).</summary>
     [ObservableProperty]
     private string _badgeKey = "Neutral";
 
@@ -422,6 +918,10 @@ public sealed partial class WizardCardViewModel : ObservableObject
 
     [ObservableProperty]
     private string _stepNote = string.Empty;
+
+    /// <summary>Why this card cannot be launched on Windows, or empty when it can.</summary>
+    [ObservableProperty]
+    private string _unavailableReason = string.Empty;
 
     public WizardCardViewModel(WizardDefinition definition)
     {
@@ -445,18 +945,32 @@ public sealed partial class WizardCardViewModel : ObservableObject
     /// <summary>The command this card runs, shown small on the card so nothing is a surprise.</summary>
     public string CommandHint => "defenseclaw setup " + Target;
 
+    public bool IsAvailable => UnavailableReason.Length == 0;
+
+    public bool HasUnavailableReason => UnavailableReason.Length > 0;
+
+    /// <summary>The name a screen reader announces for the card.</summary>
+    public string AutomationName => IsAvailable
+        ? $"{Title} setup. {Badge}."
+        : $"{Title} setup, not available on this machine. {UnavailableReason}";
+
+    /// <summary>The name of the card's button: "Configure Claude Code" — the bare word alone says nothing in a list of cards.</summary>
+    public string LaunchAutomationName => "Configure " + Title;
+
     public void Apply(WizardDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
         Definition = definition;
-        Group = definition.Group;
         PlatformStatus = definition.PlatformStatus;
         Title = definition.Title;
         Summary = definition.Description;
         Badge = PlatformStatusText.Badge(definition.PlatformStatus);
         BadgeKey = PlatformStatusText.Key(definition.PlatformStatus);
         IsDetailLoaded = definition.IsDetailLoaded;
+
+        UnavailableReason = WizardWindowsPolicy.UnavailableReason(Target, definition.PlatformStatus) ?? string.Empty;
+        Group = IsAvailable ? definition.Group : WizardGroups.Unavailable;
 
         StepNote = definition.DetailError is { Length: > 0 } error
             ? error
@@ -467,6 +981,11 @@ public sealed partial class WizardCardViewModel : ObservableObject
                     definition.Steps.Count,
                     definition.IsCurated ? "curated layout" : "generated from --help")
                 : "reading --help…";
+
+        OnPropertyChanged(nameof(IsAvailable));
+        OnPropertyChanged(nameof(HasUnavailableReason));
+        OnPropertyChanged(nameof(AutomationName));
+        OnPropertyChanged(nameof(LaunchAutomationName));
     }
 
     public bool Matches(string needle) =>
@@ -474,6 +993,8 @@ public sealed partial class WizardCardViewModel : ObservableObject
         Target.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
         Summary.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
         Group.Contains(needle, StringComparison.OrdinalIgnoreCase);
+
+    public override string ToString() => AutomationName;
 }
 
 /// <summary>One connector in the roster strip, with its mode and hook fail-mode.</summary>
@@ -504,6 +1025,12 @@ public sealed class ConnectorChipViewModel
 
     public string SourceNote => FromConfig ? "config.yaml" : "/health only";
 
+    /// <summary>Warn when observe is paired with fail-closed, otherwise neutral — the fail-mode chip's tone.</summary>
+    public string FailKey => HasMismatch ? "Warn" : "Neutral";
+
+    /// <summary>The tooltip: the mismatch explanation when there is one, otherwise where the values came from.</summary>
+    public string ToolTipText => HasMismatch ? MismatchNote : "Read from " + SourceNote;
+
     /// <summary>True when <paramref name="other"/> would render exactly like this chip.</summary>
     public bool IsSameAs(ConnectorChipViewModel other)
     {
@@ -515,4 +1042,8 @@ public sealed class ConnectorChipViewModel
                HasMismatch == other.HasMismatch &&
                FromConfig == other.FromConfig;
     }
+
+    /// <summary>What a screen reader announces for the chip.</summary>
+    public override string ToString() =>
+        $"{Name}: {Mode}, {FailMode}, from {SourceNote}" + (HasMismatch ? ". " + MismatchNote : string.Empty);
 }

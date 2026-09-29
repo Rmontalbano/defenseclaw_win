@@ -55,6 +55,9 @@ public sealed class ConfigSaveService
     /// <summary>How many numeric suffixes to try when a same-millisecond backup name is already taken.</summary>
     private const int MaxBackupNameAttempts = 100;
 
+    /// <summary>Verified against `defenseclaw config validate --help` on 0.8.10: "Verify the config file parses and references valid enums." Exit 0/1; `--quiet` is deliberately not used so failures explain themselves.</summary>
+    private static readonly string[] ValidateArgv = { "config", "validate" };
+
     private readonly DefenseClawPaths _paths;
     private readonly CliRunner? _cli;
 
@@ -81,6 +84,19 @@ public sealed class ConfigSaveService
         ArgumentNullException.ThrowIfNull(newRawText);
 
         var path = _paths.ConfigFilePath;
+
+        // 0. The validate step at the end runs a CLI verb without a confirmation, which is only allowed for a
+        //    read-only verb by the shared classifier. Checked here, before anything touches disk, so a
+        //    classifier change can never leave a half-finished save behind.
+        if (_cli is not null && CommandTiers.Classify(ValidateArgv) != CommandTier.ReadOnly)
+        {
+            return new SaveOutcome(
+                false,
+                SaveStage.WriteFailed,
+                "Nothing was saved: `defenseclaw config validate` is no longer classified read-only, so the save pipeline would need a review step before running it.",
+                null,
+                null);
+        }
 
         // 1. Drift check, before anything touches disk.
         var onDiskNow = FileSignature.Capture(path);
@@ -132,7 +148,7 @@ public sealed class ConfigSaveService
             CliInvocation invocation;
             try
             {
-                invocation = await _cli.RunAsync(new[] { "config", "validate" }, cancellationToken: cancellationToken).ConfigureAwait(false);
+                invocation = await _cli.RunAsync(ValidateArgv, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             catch (CliNotFoundException)
             {

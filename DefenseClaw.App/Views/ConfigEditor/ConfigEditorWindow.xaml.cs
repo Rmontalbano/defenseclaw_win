@@ -2,6 +2,8 @@ using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.ViewModels.ConfigEditor;
 using ICSharpCode.AvalonEdit.Search;
@@ -45,7 +47,8 @@ public partial class ConfigEditorWindow : FluentWindow
         DataContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
-        RawEditor.SyntaxHighlighting = YamlHighlighting.Instance;
+        ApplyHighlighting();
+        ApplicationThemeManager.Changed += OnAppThemeChanged;
         RawEditor.ShowLineNumbers = true;
         RawEditor.Options.EnableHyperlinks = false;
         RawEditor.Options.ShowTabs = false;
@@ -53,10 +56,12 @@ public partial class ConfigEditorWindow : FluentWindow
         RawEditor.TextChanged += OnEditorTextChanged;
 
         RootTabs.SelectionChanged += OnTabSelectionChanged;
+        PreviewKeyDown += OnWindowPreviewKeyDown;
 
         Loaded += OnLoaded;
         Closed += (_, _) =>
         {
+            ApplicationThemeManager.Changed -= OnAppThemeChanged;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             if (ReferenceEquals(_current, this))
             {
@@ -64,6 +69,13 @@ public partial class ConfigEditorWindow : FluentWindow
             }
         };
     }
+
+    /// <summary>The YAML palette that reads on the current theme (see <see cref="YamlHighlighting"/>): light hues on the light theme, the original dark ones otherwise.</summary>
+    private void ApplyHighlighting() =>
+        RawEditor.SyntaxHighlighting = YamlHighlighting.ForTheme(ApplicationThemeManager.GetAppTheme() != ApplicationTheme.Light);
+
+    private void OnAppThemeChanged(ApplicationTheme theme, Color systemAccent) =>
+        _ = Dispatcher.BeginInvoke(new Action(ApplyHighlighting));
 
     /// <summary>Opens the config editor, or brings the already-open one to the front.</summary>
     public static void Show(AppServices services)
@@ -94,6 +106,73 @@ public partial class ConfigEditorWindow : FluentWindow
     {
         Loaded -= OnLoaded;
         await _viewModel.LoadAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Window-level shortcuts. <b>Ctrl+S</b> runs Save when Save is enabled (it is the same command the
+    /// button uses, so the same CanExecute applies). <b>Esc</b> closes the on-disk preview when it is open
+    /// and otherwise does nothing — it deliberately does not close the window, which could throw away
+    /// unsaved edits.
+    /// </summary>
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _viewModel.ShowOnDiskPreview)
+        {
+            _viewModel.DismissOnDiskPreviewCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            SaveFromKeyboard();
+        }
+    }
+
+    /// <summary>
+    /// FORM boxes commit on <c>LostFocus</c>, so a value typed into the focused box has not reached the
+    /// view-model when Ctrl+S is pressed — and a Save would then miss it. When focus is inside the FORM
+    /// tab, clearing it first makes WPF commit the pending edit (synchronously), then focus is put back.
+    /// The RAW editor needs none of this: its text is pushed to the view-model on every change.
+    /// </summary>
+    private void SaveFromKeyboard()
+    {
+        if (!_viewModel.SaveCommand.CanExecute(null))
+        {
+            return;
+        }
+
+        UIElement? restoreFocusTo = null;
+        if (Keyboard.FocusedElement is UIElement focused && IsInside(FormScroll, focused))
+        {
+            restoreFocusTo = focused;
+            _ = Keyboard.Focus(null);
+        }
+
+        if (_viewModel.SaveCommand.CanExecute(null))
+        {
+            _viewModel.SaveCommand.Execute(null);
+        }
+
+        _ = restoreFocusTo?.Focus();
+    }
+
+    private static bool IsInside(DependencyObject ancestor, DependencyObject? node)
+    {
+        while (node is not null)
+        {
+            if (ReferenceEquals(node, ancestor))
+            {
+                return true;
+            }
+
+            node = node is Visual
+                ? VisualTreeHelper.GetParent(node)
+                : LogicalTreeHelper.GetParent(node);
+        }
+
+        return false;
     }
 
     private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)

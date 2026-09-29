@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -35,13 +37,20 @@ namespace DefenseClaw.App.ViewModels;
 /// </para>
 /// <para>
 /// <b>When the timer runs.</b> Only while the panel is active <i>and</i> some row is still
-/// running — never from the constructor, and never while the dashboard is in the tray. A tick
+/// running - never from the constructor, and never while the dashboard is in the tray. A tick
 /// that finds nothing running does no work but still wakes the dispatcher twice a second, and
 /// this timer used to do exactly that for the whole life of the process once the panel had
 /// been visited. The runner's two events stay attached (they only fire when a command
 /// starts or ends, and keep <see cref="Rows"/> current while the panel is away); the
 /// live-output and elapsed-time work waits for <see cref="OnActivated"/>, which ticks every
 /// row once so nothing is stale when the panel is seen.
+/// </para>
+/// <para>
+/// <b>Per-entry actions.</b> Each row shows its <see cref="CommandTier"/>, and offers Copy argv,
+/// Copy output, Export log (a user-chosen file) and - while it runs - Cancel, which asks
+/// <see cref="CliRunner.Cancel(CliInvocation, out string)"/> to kill the process tree. The runner
+/// refuses runs that survive app shutdown (the upgrade installer); such a row shows Cancel
+/// disabled with the reason instead of a button that can only fail.
 /// </para>
 /// </summary>
 public sealed partial class ActivityPanelViewModel : PanelViewModelBase
@@ -52,6 +61,14 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
 
     [ObservableProperty]
     private bool _isEmpty = true;
+
+    /// <summary>One-line result of the last row action (copied, exported, cancel refused...).</summary>
+    [ObservableProperty]
+    private string _noticeText = string.Empty;
+
+    /// <summary>Two-way with the notice's InfoBar, so its close button dismisses it.</summary>
+    [ObservableProperty]
+    private bool _hasNotice;
 
     public ActivityPanelViewModel(AppServices services)
         : base(services)
@@ -82,7 +99,9 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     public string CapacityNote =>
         $"Showing the last {Services.Cli.ActivityCapacity.ToString(CultureInfo.CurrentCulture)} invocations, in memory only. " +
         $"Each one keeps up to {CliInvocation.MaxRetainedOutputLines.ToString(CultureInfo.CurrentCulture)} lines " +
-        $"({(CliInvocation.MaxRetainedOutputBytes / 1024).ToString(CultureInfo.CurrentCulture)} KiB) of output - past that the oldest lines are dropped and the invocation says how many. " +
+        $"({(CliInvocation.MaxRetainedOutputBytes / 1024).ToString(CultureInfo.CurrentCulture)} KiB) of output " +
+        $"(a list the app parses as JSON keeps up to {CliInvocation.MaxFullOutputLines.ToString("N0", CultureInfo.CurrentCulture)} lines / " +
+        $"{(CliInvocation.MaxFullOutputBytes / (1024 * 1024)).ToString(CultureInfo.CurrentCulture)} MiB) - past that the oldest lines are dropped and the invocation says how many. " +
         "Nothing here survives an app restart.";
 
     public string EmptyTitle => "No CLI activity yet";
@@ -111,6 +130,18 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
 
     protected override void OnDeactivated() => _timer.Stop();
 
+    /// <summary>
+    /// What F5 invokes. Re-syncs the list with the runner's ring (rows that are already shown are
+    /// kept, so an expanded output stays expanded) and ticks everything that is still running.
+    /// It runs no command: the list is in-memory state, not a poll of the CLI.
+    /// </summary>
+    [RelayCommand]
+    private void Refresh()
+    {
+        LoadActivity();
+        TickRunningRows();
+    }
+
     [RelayCommand]
     private void ClearActivity()
     {
@@ -118,14 +149,46 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
         LoadActivity();
     }
 
-    /// <summary>Reads the runner's in-memory ring buffer. Not file/DB/process I/O - just a snapshot of a list already in memory.</summary>
+    [RelayCommand]
+    private void DismissNotice()
+    {
+        HasNotice = false;
+        NoticeText = string.Empty;
+    }
+
+    /// <summary>Row actions report here; the panel shows the latest one in an InfoBar.</summary>
+    private void ShowNotice(string message)
+    {
+        NoticeText = message;
+        HasNotice = message.Length > 0;
+    }
+
+    private ActivityRow CreateRow(CliInvocation invocation) => new(invocation, Services.Cli, ShowNotice);
+
+    /// <summary>
+    /// Reads the runner's in-memory ring buffer. Not file/DB/process I/O - just a snapshot of a
+    /// list already in memory. Rows for invocations that are already shown are reused rather than
+    /// rebuilt, so a refresh does not collapse an expanded output or drop its scroll position.
+    /// </summary>
     private void LoadActivity()
     {
-        Rows.Clear();
+        var existing = new Dictionary<string, ActivityRow>(Rows.Count, StringComparer.Ordinal);
+        foreach (var row in Rows)
+        {
+            _ = existing.TryAdd(row.Invocation.Id, row);
+        }
+
+        var desired = new List<ActivityRow>();
         foreach (var invocation in Services.Cli.Activity)
         {
-            Rows.Add(new ActivityRow(invocation));
+            desired.Add(existing.TryGetValue(invocation.Id, out var reused) ? reused : CreateRow(invocation));
         }
+
+        SyncCollection(
+            Rows,
+            desired,
+            static row => row.Invocation.Id,
+            static (kept, wanted) => ReferenceEquals(kept, wanted));
 
         IsEmpty = Rows.Count == 0;
         EnsureTimerState();
@@ -161,7 +224,14 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
 
         dispatcher.BeginInvoke(() =>
         {
-            Rows.Insert(0, new ActivityRow(invocation));
+            // LoadActivity may already have picked this one up from the ring between the runner
+            // recording it and this callback running; never show an invocation twice.
+            if (Rows.Any(r => ReferenceEquals(r.Invocation, invocation)))
+            {
+                return;
+            }
+
+            Rows.Insert(0, CreateRow(invocation));
             while (Rows.Count > Services.Cli.ActivityCapacity)
             {
                 Rows.RemoveAt(Rows.Count - 1);
@@ -241,11 +311,22 @@ public sealed partial class ActivityRow : ObservableObject
     [ObservableProperty]
     private bool _isExpanded;
 
+    /// <summary>True while the run can be cancelled: running, not exempt, and not already being cancelled.</summary>
+    [ObservableProperty]
+    private bool _canCancel;
+
+    /// <summary>Why Cancel is (dis)abled - also the button's tooltip. Empty once the run has finished.</summary>
+    [ObservableProperty]
+    private string _cancelHint = string.Empty;
+
     /// <summary>
     /// Reused across ticks so a running row allocates nothing in steady state - it is cleared
     /// and refilled with only the lines that arrived since the last tick.
     /// </summary>
     private readonly List<CliOutputLine> _outputBuffer = new();
+
+    private readonly CliRunner? _runner;
+    private readonly Action<string>? _notify;
 
     /// <summary>
     /// Position in <see cref="Invocation"/>'s monotonic append sequence - deliberately not an
@@ -254,9 +335,27 @@ public sealed partial class ActivityRow : ObservableObject
     /// </summary>
     private int _outputCursor;
 
-    public ActivityRow(CliInvocation invocation)
+    /// <param name="invocation">The live instance from the runner's activity ring.</param>
+    /// <param name="runner">Needed for Cancel; a row built without one simply cannot cancel.</param>
+    /// <param name="notify">Receives a one-line result for each row action.</param>
+    public ActivityRow(CliInvocation invocation, CliRunner? runner = null, Action<string>? notify = null)
     {
         Invocation = invocation;
+        _runner = runner;
+        _notify = notify;
+
+        // Fixed for the life of the row: the tier is a function of the argv alone.
+        var tier = CommandTiers.Classify(invocation.Argv);
+        var (tierText, tierKey, tierHelp) = tier switch
+        {
+            CommandTier.ReadOnly => ("Read-only", "Neutral", "Only reads state; runs without a confirmation step."),
+            CommandTier.Destructive => ("Destructive", "Bad", "Removes or resets something; needs a confirmation with the exact command."),
+            _ => ("State-changing", "Medium", "Changes DefenseClaw state; needs a confirmation with the exact command."),
+        };
+        TierText = tierText;
+        TierKey = tierKey;
+        TierHelp = tierHelp;
+
         Tick();
     }
 
@@ -269,7 +368,29 @@ public sealed partial class ActivityRow : ObservableObject
 
     public string CommandLine => Invocation.CommandLine;
 
+    /// <summary>The argv as an operator would type it: the tool's name (no install path), then the arguments.</summary>
+    public string ShortCommand =>
+        string.Join(' ', new[] { Path.GetFileNameWithoutExtension(Invocation.Executable) }
+            .Concat(Invocation.Argv)
+            .Select(QuoteForDisplay));
+
+    /// <summary>Read-only / State-changing / Destructive, from <see cref="CommandTiers"/>.</summary>
+    public string TierText { get; }
+
+    /// <summary>Neutral / Medium / Bad - the tone key for the tier badge (destructive is red).</summary>
+    public string TierKey { get; }
+
+    public string TierHelp { get; }
+
     public ObservableCollection<CliOutputRow> Output { get; } = new();
+
+    /// <summary>
+    /// What a screen reader announces for the row (UI Automation falls back to
+    /// <c>ToString()</c> for an item with no explicit name): the command, its state and tier, and
+    /// when it started - not the type name.
+    /// </summary>
+    public override string ToString() =>
+        $"{ShortCommand}. {ExitBadgeText}. {TierText}. Started {StartedText}, {DurationText}.";
 
     /// <summary>
     /// Re-reads the invocation and applies it. Safe to call from the UI thread while the
@@ -289,6 +410,7 @@ public sealed partial class ActivityRow : ObservableObject
         var finishedAt = Invocation.FinishedAt;
         var exitCode = Invocation.ExitCode;
         var failureReason = Invocation.FailureReason;
+        var cancelRequested = Invocation.CancelRequested;
         var isRunning = finishedAt is null;
 
         IsRunning = isRunning;
@@ -299,33 +421,95 @@ public sealed partial class ActivityRow : ObservableObject
             ? FormatDuration(finished - startedAt)
             : FormatDuration(DateTimeOffset.UtcNow - startedAt);
 
-        ApplyBadge(isRunning, exitCode, failureReason);
+        ApplyBadge(isRunning, exitCode, failureReason, cancelRequested);
+        ApplyCancelState(isRunning, cancelRequested);
         SyncOutput();
     }
 
+    /// <summary>Copies the exact command line (executable and argv, quoted where a shell would need it).</summary>
     [RelayCommand]
-    private void Copy()
+    private void Copy() => CopyText(CommandLine, "Copied the command line.");
+
+    /// <summary>
+    /// Copies the retained transcript as plain text, one line per line, exactly as it is shown
+    /// (including the truncation marker when output was dropped). Read on click, from the whole
+    /// retained transcript - not only what the row has rendered so far.
+    /// </summary>
+    [RelayCommand]
+    private void CopyOutput() =>
+        CopyText(
+            string.Join(Environment.NewLine, Invocation.OutputLines.Select(l => l.Text)),
+            Invocation.OutputLines.Count == 0 ? "There is no output to copy yet." : "Copied the output.");
+
+    /// <summary>
+    /// Saves the command, its outcome and its transcript to a file the operator chooses. The
+    /// transcript is what the runner already scrubbed of secrets on capture; argv never holds one.
+    /// </summary>
+    [RelayCommand]
+    private void ExportLog()
     {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export command log",
+            FileName = SuggestFileName(Invocation),
+            DefaultExt = ".log",
+            AddExtension = true,
+            OverwritePrompt = true,
+            Filter = "Log files (*.log)|*.log|Text files (*.txt)|*.txt|All files (*.*)|*.*",
+        };
+
+        var owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
+        var chosen = owner is null ? dialog.ShowDialog() : dialog.ShowDialog(owner);
+        if (chosen != true)
+        {
+            return;
+        }
+
         try
         {
-            Clipboard.SetText(CommandLine);
+            File.WriteAllText(dialog.FileName, BuildLogExport(Invocation), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            _notify?.Invoke($"Exported the log to {dialog.FileName}.");
         }
-        catch (System.Runtime.InteropServices.ExternalException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Another process owns the clipboard; nothing useful to do about it.
+            _notify?.Invoke($"Could not write {dialog.FileName}: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Takes the three values rather than the invocation, so it is reading exactly what
+    /// Asks the runner to kill this run's whole process tree. The runner says no, with a reason,
+    /// for a run that survives app shutdown (the upgrade installer) or one that already finished;
+    /// the reason is shown rather than swallowed. On success the row flips to "cancelling..."
+    /// at once and settles when the run reports back.
+    /// </summary>
+    [RelayCommand]
+    private void Cancel()
+    {
+        if (_runner is null)
+        {
+            _notify?.Invoke("This entry cannot be cancelled from here.");
+            return;
+        }
+
+        var accepted = _runner.Cancel(Invocation, out var reason);
+        if (!accepted)
+        {
+            _notify?.Invoke(reason);
+        }
+
+        Tick();
+    }
+
+    /// <summary>
+    /// Takes the values rather than the invocation, so it is reading exactly what
     /// <see cref="Tick"/> read - a second read of a live field could disagree with the one
     /// the duration and running flag were computed from.
     /// </summary>
-    private void ApplyBadge(bool isRunning, int? exitCode, string? failureReason)
+    private void ApplyBadge(bool isRunning, int? exitCode, string? failureReason, bool cancelRequested)
     {
         if (isRunning)
         {
-            ExitBadgeText = "running";
+            ExitBadgeText = cancelRequested ? "cancelling…" : "running";
             ExitBadgeKey = "Neutral";
             HasFailure = false;
             FailureText = string.Empty;
@@ -334,7 +518,8 @@ public sealed partial class ActivityRow : ObservableObject
 
         if (failureReason is { Length: > 0 } failure)
         {
-            ExitBadgeText = "failed";
+            // "cancelled" is the operator's own doing, not a fault - but it is not a success either.
+            ExitBadgeText = failure.StartsWith("cancelled", StringComparison.Ordinal) ? "cancelled" : "failed";
             ExitBadgeKey = "Warn";
             HasFailure = true;
             FailureText = failure;
@@ -353,6 +538,32 @@ public sealed partial class ActivityRow : ObservableObject
         {
             ExitBadgeText = "exit unknown";
             ExitBadgeKey = "Neutral";
+        }
+    }
+
+    private void ApplyCancelState(bool isRunning, bool cancelRequested)
+    {
+        if (!isRunning)
+        {
+            CanCancel = false;
+            CancelHint = string.Empty;
+        }
+        else if (Invocation.SurvivesShutdown)
+        {
+            CanCancel = false;
+            CancelHint =
+                "This is the upgrade installer. It cannot be cancelled from here: killing it part-way can leave " +
+                "DefenseClaw half-installed, so it stops only when it finishes.";
+        }
+        else if (cancelRequested)
+        {
+            CanCancel = false;
+            CancelHint = "Cancelling - waiting for the process tree to exit.";
+        }
+        else
+        {
+            CanCancel = _runner is not null;
+            CancelHint = "Kill this command and everything it started.";
         }
     }
 
@@ -377,6 +588,121 @@ public sealed partial class ActivityRow : ObservableObject
         }
     }
 
+    private void CopyText(string text, string success)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+            _notify?.Invoke(success);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Another process owns the clipboard; say so rather than pretending it worked.
+            _notify?.Invoke("Could not copy: another program is holding the clipboard. Try again.");
+        }
+    }
+
+    /// <summary>
+    /// The text of an exported log: a short header (what ran, when, how it ended) followed by
+    /// the transcript. Standard-error lines carry a <c>[stderr]</c> prefix so the two streams stay
+    /// distinguishable in a flat file; notices (the truncation marker) are kept verbatim.
+    /// </summary>
+    internal static string BuildLogExport(CliInvocation invocation)
+    {
+        var lines = invocation.OutputLines;
+        var builder = new StringBuilder();
+
+        _ = builder.AppendLine("DefenseClaw for Windows - command log");
+        _ = builder.Append("Command:  ").AppendLine(invocation.CommandLine);
+        _ = builder.Append("Started:  ").AppendLine(invocation.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture));
+
+        if (invocation.FinishedAt is { } finished)
+        {
+            _ = builder.Append("Finished: ").AppendLine(finished.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture));
+            _ = builder.Append("Duration: ").AppendLine(FormatDuration(finished - invocation.StartedAt));
+        }
+        else
+        {
+            _ = builder.AppendLine("Finished: (still running when exported - this is a snapshot)");
+        }
+
+        _ = builder.Append("Result:   ").AppendLine(DescribeResult(invocation));
+
+        if (invocation.UsedStdinSecret)
+        {
+            _ = builder.AppendLine("Stdin:    a secret was piped in on stdin; its value is never recorded");
+        }
+
+        if (invocation.IsOutputTruncated)
+        {
+            _ = builder.Append("Note:     ").Append(invocation.DroppedOutputLineCount.ToString(CultureInfo.InvariantCulture))
+                .AppendLine(" earlier line(s) were dropped to stay inside the retention budget");
+        }
+
+        _ = builder.AppendLine(new string('-', 72));
+
+        foreach (var line in lines)
+        {
+            _ = builder.AppendLine(line.Stream == CliStream.StandardError ? "[stderr] " + line.Text : line.Text);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string DescribeResult(CliInvocation invocation)
+    {
+        if (invocation.IsRunning)
+        {
+            return invocation.CancelRequested ? "running (cancel requested)" : "running";
+        }
+
+        if (invocation.FailureReason is { Length: > 0 } reason)
+        {
+            return reason;
+        }
+
+        return invocation.ExitCode is { } code
+            ? $"exit {code.ToString(CultureInfo.InvariantCulture)}"
+            : "exit code unknown";
+    }
+
+    /// <summary>
+    /// <c>defenseclaw-doctor-20260928-221009.log</c>: the tool, the command path up to the first
+    /// flag (at most three words), and the start time - only characters a file name can hold.
+    /// </summary>
+    internal static string SuggestFileName(CliInvocation invocation)
+    {
+        var words = new List<string> { Path.GetFileNameWithoutExtension(invocation.Executable) };
+        words.AddRange(invocation.Argv.TakeWhile(a => !a.StartsWith('-')).Take(CommandTiers.MaxPathTokens));
+
+        var safe = new StringBuilder();
+        foreach (var word in words)
+        {
+            foreach (var ch in word)
+            {
+                _ = safe.Append(char.IsAsciiLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-');
+            }
+
+            _ = safe.Append('-');
+        }
+
+        var stem = safe.ToString().Trim('-');
+        while (stem.Contains("--", StringComparison.Ordinal))
+        {
+            stem = stem.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        if (stem.Length > 60)
+        {
+            stem = stem[..60].TrimEnd('-');
+        }
+
+        return $"{(stem.Length == 0 ? "command" : stem)}-{invocation.StartedAt.ToLocalTime().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.log";
+    }
+
+    private static string QuoteForDisplay(string value) =>
+        value.Length == 0 || value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
+
     private static string Relative(DateTimeOffset value)
     {
         var delta = DateTimeOffset.UtcNow - value;
@@ -398,4 +724,8 @@ public sealed partial class ActivityRow : ObservableObject
 }
 
 /// <summary>One captured line of subprocess output.</summary>
-public sealed record CliOutputRow(string Text, bool IsError);
+public sealed record CliOutputRow(string Text, bool IsError)
+{
+    /// <summary>The line as a screen reader should say it (a record dumps its members otherwise).</summary>
+    public override string ToString() => IsError ? $"error: {Text}" : Text;
+}

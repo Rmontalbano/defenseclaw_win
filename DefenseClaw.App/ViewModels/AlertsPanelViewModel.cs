@@ -3,11 +3,13 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Audit;
+using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Gateway.Models;
 using Microsoft.Data.Sqlite;
 
@@ -53,6 +55,18 @@ namespace DefenseClaw.App.ViewModels;
 /// <see cref="AlertItem.SeverityKey"/> folds those into the bucket the row is coloured as,
 /// and the toggles filter on that same key, so a row is always hidden by exactly the toggle
 /// its chip looks like.
+/// </para>
+/// <para>
+/// <b>Acknowledge / dismiss.</b> <c>defenseclaw alerts acknowledge|dismiss --severity X</c>
+/// acts on the <i>whole severity class</i> in DefenseClaw, not on the handful of rows this list
+/// loaded, so the panel never runs it blind: the operator picks the action, the panel runs the
+/// same command with <c>--dry-run</c> (which the CLI documents as changing nothing) and shows what
+/// would match, and only a preview that exited 0 with matches enables the real run, which is
+/// gated on the preview's exit code and passes <c>--yes</c> (the CLI's own broad-selector
+/// confirmation) instead of piping a <c>y</c> to a prompt. Afterwards the alert list is re-read and
+/// then filtered against the read-only <c>alert_acknowledgement_projection</c> table in audit.db, so
+/// an alert the gateway still serves after it was acknowledged is hidden rather than left on
+/// screen looking untouched.
 /// </para>
 /// </summary>
 public sealed partial class AlertsPanelViewModel : PanelViewModelBase
@@ -120,15 +134,138 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private string _emptyDetail = "The first alert poll has not completed.";
 
+    // ---- Acknowledge / dismiss review ------------------------------------------------------
+
+    private const string AcknowledgeVerb = "acknowledge";
+    private const string DismissVerb = "dismiss";
+
+    /// <summary>Alert ids per projection lookup (the list is at most a few hundred; SQLite allows far more parameters).</summary>
+    private const int MaxAckLookup = 500;
+
+    /// <summary>First line of the CLI's dry-run: <c>Preview: 25 alert(s) matched; digest=sha256:v1:...</c>.</summary>
+    private static readonly Regex PreviewMatchedPattern = new(
+        @"Preview:\s*(?<n>\d+)\s+alert\(s\)\s+matched",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
+
+    /// <summary>
+    /// Alert ids that <c>alert_acknowledgement_projection</c> says were acknowledged or dismissed.
+    /// Grows only (an acknowledgement is not undone from here), so a lookup that finishes after
+    /// the list has moved on cannot make a later list wrong. UI thread only.
+    /// </summary>
+    private readonly HashSet<string> _acknowledgedKeys = new(StringComparer.Ordinal);
+
+    private readonly SemaphoreSlim _ackGate = new(1, 1);
+    private string _reviewVerb = AcknowledgeVerb;
+    private CancellationTokenSource? _previewCts;
+    private int _previewVersion;
+    private bool _openingReview;
+
+    /// <summary>Alerts in the loaded list that are not acknowledged - what the toggles and text filter act on.</summary>
+    private int _poolCount;
+
+    [ObservableProperty]
+    private bool _isReviewOpen;
+
+    [ObservableProperty]
+    private string _reviewHeading = string.Empty;
+
+    [ObservableProperty]
+    private string _confirmButtonText = "Acknowledge";
+
+    [ObservableProperty]
+    private SeverityChoice? _reviewSeverity;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmReview))]
+    private bool _isPreviewing;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmReview))]
+    private bool _isApplying;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmReview))]
+    private bool _previewSucceeded;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConfirmReview))]
+    private int _previewMatched;
+
+    [ObservableProperty]
+    private string _previewSummary = string.Empty;
+
+    /// <summary>The dry-run's own output, verbatim (matched count, digest, the first ids).</summary>
+    [ObservableProperty]
+    private string _previewOutput = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasPreviewOutput;
+
+    [ObservableProperty]
+    private string _reviewError = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasReviewError;
+
+    /// <summary>The exact command the confirm button runs, as shown (mono, selectable) in the dialog.</summary>
+    [ObservableProperty]
+    private string _confirmCommandText = string.Empty;
+
+    [ObservableProperty]
+    private string _tierText = "State-changing";
+
+    /// <summary>Medium (state-changing) or Bad (destructive) - the tone key of the tier badge.</summary>
+    [ObservableProperty]
+    private string _tierKey = "Medium";
+
+    /// <summary>True for <c>dismiss</c>: the confirm button turns danger-styled and the tier badge says so.</summary>
+    [ObservableProperty]
+    private bool _isDestructive;
+
+    [ObservableProperty]
+    private bool _isNotDestructive = true;
+
+    /// <summary>Result of the last acknowledge/dismiss (success). Two-way with the InfoBar's close button.</summary>
+    [ObservableProperty]
+    private bool _showActionSuccess;
+
+    [ObservableProperty]
+    private bool _showActionError;
+
+    [ObservableProperty]
+    private string _actionBannerText = string.Empty;
+
+    /// <summary>Loaded alerts hidden because audit.db records them as acknowledged or dismissed.</summary>
+    [ObservableProperty]
+    private int _hiddenAcknowledgedCount;
+
     public AlertsPanelViewModel(AppServices services)
         : base(services)
     {
         foreach (var severity in new[] { "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO" })
         {
             var filter = new SeverityFilter(severity);
-            filter.PropertyChanged += (_, _) => ApplyFilters();
+
+            // Only the on/off switch re-filters. The chip also carries a count that this panel
+            // rewrites on every pass, and reacting to that would re-run the pass forever.
+            filter.PropertyChanged += (_, e) =>
+            {
+                if (string.Equals(e.PropertyName, nameof(SeverityFilter.IsEnabled), StringComparison.Ordinal))
+                {
+                    ApplyFilters();
+                }
+            };
             SeverityFilters.Add(filter);
         }
+
+        // "all" is last on purpose, and never the default: it reaches every active alert.
+        foreach (var value in new[] { "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "ERROR" })
+        {
+            ReviewSeverities.Add(new SeverityChoice(value, value));
+        }
+
+        ReviewSeverities.Add(new SeverityChoice("all", "All severities (every active alert)"));
 
         // Relative timestamps go stale silently, which is the worst way for a monitoring
         // panel to lie. One timer re-stamps the rows - but only while someone can read them;
@@ -147,8 +284,19 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
 
     public ObservableCollection<SeverityFilter> SeverityFilters { get; } = new();
 
+    /// <summary>What <c>--severity</c> the review dialog can target (the CLI's own set, plus "all").</summary>
+    public ObservableCollection<SeverityChoice> ReviewSeverities { get; } = new();
+
     /// <summary>Drives the detail pane's placeholder; no converter needed for the inverse.</summary>
     public bool HasSelection => SelectedAlert is not null;
+
+    /// <summary>
+    /// The confirm button is live only for a preview that ran to exit 0, matched something, and is
+    /// not being redone or applied right now - the follow-up is gated on the previous exit code.
+    /// </summary>
+    public bool CanConfirmReview => PreviewSucceeded && PreviewMatched > 0 && !IsPreviewing && !IsApplying;
+
+    public bool HasHiddenAcknowledged => HiddenAcknowledgedCount > 0;
 
     public override Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -203,6 +351,421 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         {
             filter.IsEnabled = true;
         }
+    }
+
+    /// <summary>Closes the detail pane (Esc, or its own close button).</summary>
+    [RelayCommand]
+    private void ClearSelection() => SelectedAlert = null;
+
+    partial void OnHiddenAcknowledgedCountChanged(int value) => OnPropertyChanged(nameof(HasHiddenAcknowledged));
+
+    partial void OnReviewSeverityChanged(SeverityChoice? value)
+    {
+        // Picking another severity in the open dialog is a different command, so it gets its own
+        // preview. Setting the default while the dialog is being opened is not a pick.
+        if (!_openingReview && IsReviewOpen && value is not null)
+        {
+            _ = PreviewAsync();
+        }
+    }
+
+    [RelayCommand]
+    private Task OpenAcknowledgeAsync() => OpenReviewAsync(AcknowledgeVerb);
+
+    [RelayCommand]
+    private Task OpenDismissAsync() => OpenReviewAsync(DismissVerb);
+
+    [RelayCommand]
+    private void CancelReview()
+    {
+        CancelPreview();
+        IsPreviewing = false;
+        IsReviewOpen = false;
+    }
+
+    [RelayCommand]
+    private void DismissActionBanner()
+    {
+        ShowActionSuccess = false;
+        ShowActionError = false;
+    }
+
+    private async Task OpenReviewAsync(string verb)
+    {
+        _reviewVerb = verb;
+        _openingReview = true;
+        try
+        {
+            ReviewHeading = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismiss alerts" : "Acknowledge alerts";
+            ReviewSeverity = DefaultReviewSeverity();
+            SetReviewError(string.Empty);
+            IsReviewOpen = true;
+        }
+        finally
+        {
+            _openingReview = false;
+        }
+
+        await PreviewAsync();
+    }
+
+    /// <summary>
+    /// The severity the dialog opens on: the selected alert's, else the most severe class that has
+    /// anything loaded. Never "all" - a broad selector is something the operator has to choose.
+    /// </summary>
+    private SeverityChoice DefaultReviewSeverity()
+    {
+        var wanted = SelectedAlert?.Severity;
+        if (wanted is not null &&
+            ReviewSeverities.FirstOrDefault(c => string.Equals(c.Value, wanted, StringComparison.OrdinalIgnoreCase)) is { } exact)
+        {
+            return exact;
+        }
+
+        foreach (var filter in SeverityFilters)
+        {
+            if (filter.Count > 0 &&
+                ReviewSeverities.FirstOrDefault(c => string.Equals(c.Value, filter.Severity, StringComparison.Ordinal)) is { } loaded)
+            {
+                return loaded;
+            }
+        }
+
+        return ReviewSeverities[0];
+    }
+
+    /// <summary>
+    /// Runs the dry-run for the chosen action and severity and reports what it would touch. The
+    /// dry-run is safe to run unreviewed on the strength of the CLI's own help ("Preview the exact
+    /// matched IDs without mutating them"); the real command below is what needs the confirmation,
+    /// and its tier comes from <see cref="CommandTiers"/> (dismiss is destructive, acknowledge is
+    /// state-changing). A preview superseded by another pick, or by closing the dialog, is
+    /// cancelled and its result discarded.
+    /// </summary>
+    private async Task PreviewAsync()
+    {
+        if (ReviewSeverity is not { } choice)
+        {
+            return;
+        }
+
+        CancelPreview();
+        var cts = new CancellationTokenSource();
+        _previewCts = cts;
+        var version = Volatile.Read(ref _previewVersion);
+
+        var verb = _reviewVerb;
+        var previewArgv = new[] { "alerts", verb, "--severity", choice.Value, "--dry-run" };
+        var applyArgv = new[] { "alerts", verb, "--severity", choice.Value, "--yes" };
+
+        ConfirmCommandText = "defenseclaw " + string.Join(' ', applyArgv);
+        var tier = CommandTiers.Classify(applyArgv);
+        IsDestructive = tier == CommandTier.Destructive;
+        IsNotDestructive = !IsDestructive;
+        TierText = IsDestructive ? "Destructive" : "State-changing";
+        TierKey = IsDestructive ? "Bad" : "Medium";
+        ConfirmButtonText = string.Equals(verb, DismissVerb, StringComparison.Ordinal)
+            ? (choice.IsAll ? "Dismiss all alerts" : $"Dismiss all {choice.Value}")
+            : (choice.IsAll ? "Acknowledge all alerts" : $"Acknowledge all {choice.Value}");
+
+        IsPreviewing = true;
+        PreviewSucceeded = false;
+        PreviewMatched = 0;
+        PreviewOutput = string.Empty;
+        HasPreviewOutput = false;
+        SetReviewError(string.Empty);
+        PreviewSummary = "Previewing: running the same command with --dry-run, which changes nothing…";
+
+        try
+        {
+            var invocation = await Services.Cli.RunAsync(previewArgv, cancellationToken: cts.Token).ConfigureAwait(true);
+            if (version != Volatile.Read(ref _previewVersion))
+            {
+                return;
+            }
+
+            var stdout = StreamText(invocation, CliStream.StandardOutput, maxLines: 30);
+            PreviewOutput = stdout;
+            HasPreviewOutput = stdout.Length > 0;
+
+            if (invocation.FailureReason is { Length: > 0 } reason)
+            {
+                PreviewSummary = "The preview did not complete, so nothing can be applied.";
+                SetReviewError($"The dry run did not complete: {reason}.");
+                return;
+            }
+
+            if (invocation.ExitCode != 0)
+            {
+                // The follow-up is gated on this exit code: no green preview, no apply button.
+                PreviewSummary = "The preview failed, so nothing can be applied.";
+                SetReviewError(ErrorTail(invocation, "The dry run failed"));
+                return;
+            }
+
+            var match = PreviewMatchedPattern.Match(stdout);
+            if (!match.Success ||
+                !int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var matched))
+            {
+                PreviewSummary = "The preview finished, but its output was not in the expected form, so nothing can be applied.";
+                SetReviewError("Expected a line like 'Preview: N alert(s) matched'. The full output is shown above and in Activity.");
+                return;
+            }
+
+            PreviewMatched = matched;
+            PreviewSucceeded = true;
+            PreviewSummary = DescribePreview(matched, choice, verb);
+        }
+        catch (CliNotFoundException ex)
+        {
+            PreviewSummary = "The DefenseClaw CLI was not found, so nothing can be applied.";
+            SetReviewError(ex.Message);
+        }
+        finally
+        {
+            if (version == Volatile.Read(ref _previewVersion))
+            {
+                IsPreviewing = false;
+            }
+
+            if (ReferenceEquals(_previewCts, cts))
+            {
+                _previewCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Runs the real command - only reachable for a preview that exited 0 and matched something -
+    /// then re-reads the alert list and the acknowledgement projection. On failure the dialog
+    /// stays open with the CLI's own error and the full output is in Activity.
+    /// </summary>
+    [RelayCommand]
+    private async Task ConfirmReviewAsync()
+    {
+        if (!CanConfirmReview || ReviewSeverity is not { } choice)
+        {
+            return;
+        }
+
+        var verb = _reviewVerb;
+        var argv = new[] { "alerts", verb, "--severity", choice.Value, "--yes" };
+
+        IsApplying = true;
+        SetReviewError(string.Empty);
+
+        try
+        {
+            var invocation = await Services.Cli.RunAsync(argv).ConfigureAwait(true);
+
+            if (invocation.FailureReason is { Length: > 0 } reason)
+            {
+                SetReviewError($"'defenseclaw alerts {verb}' did not complete: {reason}. Check Activity, then run the preview again.");
+                return;
+            }
+
+            if (invocation.ExitCode != 0)
+            {
+                SetReviewError(ErrorTail(invocation, $"'defenseclaw alerts {verb}' failed"));
+                return;
+            }
+
+            IsReviewOpen = false;
+            var done = StreamText(invocation, CliStream.StandardOutput, maxLines: 30)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .LastOrDefault();
+            ShowActionResult(
+                string.IsNullOrWhiteSpace(done)
+                    ? $"Ran 'defenseclaw alerts {verb} --severity {choice.Value}'."
+                    : done,
+                isError: false);
+
+            await ReloadAfterDispositionAsync();
+        }
+        catch (CliNotFoundException ex)
+        {
+            SetReviewError(ex.Message);
+        }
+        finally
+        {
+            IsApplying = false;
+        }
+    }
+
+    /// <summary>
+    /// Re-fetches the alert list now (not on the 30 s throttle) and then hides whatever
+    /// <c>alert_acknowledgement_projection</c> still marks as acknowledged, in case the gateway
+    /// keeps serving it.
+    /// </summary>
+    private async Task ReloadAfterDispositionAsync()
+    {
+        var snapshot = await Services.Monitor.RefreshAlertsNowAsync();
+        _lastFallbackLoad = DateTimeOffset.MinValue;
+        Apply(snapshot);
+        await RefreshAcknowledgedAsync();
+    }
+
+    private void CancelPreview()
+    {
+        _ = Interlocked.Increment(ref _previewVersion);
+        var cts = _previewCts;
+        _previewCts = null;
+        try
+        {
+            cts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The preview finished in the instant it was superseded; there is nothing to stop.
+        }
+    }
+
+    private void SetReviewError(string message)
+    {
+        ReviewError = message;
+        HasReviewError = message.Length > 0;
+    }
+
+    private void ShowActionResult(string message, bool isError)
+    {
+        ActionBannerText = message;
+        ShowActionSuccess = !isError;
+        ShowActionError = isError;
+    }
+
+    private string DescribePreview(int matched, SeverityChoice choice, string verb)
+    {
+        var scope = choice.IsAll ? "active alert" : $"active {choice.Value} alert";
+        if (matched == 0)
+        {
+            return $"No {scope} matches, so there is nothing to {verb}.";
+        }
+
+        var doing = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissing" : "Acknowledging";
+        var everything = choice.IsAll ? "every active alert of every severity" : $"the whole {choice.Value} severity class";
+        var plural = matched == 1 ? string.Empty : "s";
+        return
+            $"{matched.ToString("N0", CultureInfo.CurrentCulture)} {scope}{plural} match. {doing} applies to {everything} " +
+            $"in DefenseClaw, not only the {_all.Count.ToString("N0", CultureInfo.CurrentCulture)} loaded in this list.";
+    }
+
+    /// <summary>One stream of an invocation's transcript as text, capped so a chatty run cannot flood a dialog.</summary>
+    private static string StreamText(CliInvocation invocation, CliStream stream, int maxLines)
+    {
+        var lines = invocation.OutputLines
+            .Where(l => l.Stream == stream && !string.IsNullOrWhiteSpace(l.Text))
+            .Select(l => l.Text.TrimEnd())
+            .ToList();
+
+        return lines.Count <= maxLines
+            ? string.Join('\n', lines)
+            : string.Join('\n', lines.Take(maxLines)) + $"\n… and {lines.Count - maxLines} more line(s) - see Activity";
+    }
+
+    /// <summary>The CLI's own error, in its own words: the last few stderr lines (click prints <c>Error: ...</c>).</summary>
+    private static string ErrorTail(CliInvocation invocation, string prefix)
+    {
+        var tail = invocation.OutputLines
+            .Where(l => l.Stream == CliStream.StandardError && !string.IsNullOrWhiteSpace(l.Text))
+            .Select(l => l.Text.Trim())
+            .TakeLast(3)
+            .ToList();
+
+        if (tail.Count == 0)
+        {
+            tail = invocation.OutputLines
+                .Where(l => l.Stream == CliStream.StandardOutput && !string.IsNullOrWhiteSpace(l.Text))
+                .Select(l => l.Text.Trim())
+                .TakeLast(2)
+                .ToList();
+        }
+
+        var code = invocation.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "?";
+        return tail.Count == 0
+            ? $"{prefix} (exit {code}) and printed nothing. See Activity."
+            : $"{prefix} (exit {code}): {string.Join(" ", tail)}";
+    }
+
+    /// <summary>
+    /// Reads which of the loaded alerts audit.db already records as acknowledged or dismissed
+    /// (<c>alert_acknowledgement_projection</c>, opened read-only) and folds them into the hidden
+    /// set. Best-effort: an unreadable database or a build without the table leaves the list exactly
+    /// as the gateway served it.
+    /// </summary>
+    private async Task RefreshAcknowledgedAsync()
+    {
+        if (!Services.Audit.Exists || _all.Count == 0)
+        {
+            return;
+        }
+
+        var ids = _all.Select(a => a.Key).Distinct(StringComparer.Ordinal).Take(MaxAckLookup).ToArray();
+        var path = Services.Paths.AuditDatabasePath;
+
+        await _ackGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            var found = await Task.Run(() => ReadAcknowledgedIds(path, ids)).ConfigureAwait(true);
+
+            var changed = false;
+            foreach (var id in found)
+            {
+                changed |= _acknowledgedKeys.Add(id);
+            }
+
+            if (changed)
+            {
+                ApplyFilters();
+            }
+        }
+#pragma warning disable CA1031 // The projection is a nicety; a locked DB or an older schema must not fault the panel.
+        catch (Exception ex) when (ex is SqliteException or IOException or InvalidOperationException)
+        {
+            // Leave the list as the gateway served it.
+        }
+#pragma warning restore CA1031
+        finally
+        {
+            _ = _ackGate.Release();
+        }
+    }
+
+    private static List<string> ReadAcknowledgedIds(string databasePath, IReadOnlyList<string> ids)
+    {
+        var found = new List<string>();
+        if (ids.Count == 0)
+        {
+            return found;
+        }
+
+        using var connection = new SqliteConnection(AuditReader.BuildReadOnlyConnectionString(databasePath));
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+
+        // Only the parameter names are concatenated; every id goes in as a bound value.
+        var names = new string[ids.Count];
+        for (var i = 0; i < ids.Count; i++)
+        {
+            names[i] = "@p" + i.ToString(CultureInfo.InvariantCulture);
+            _ = command.Parameters.AddWithValue(names[i], ids[i]);
+        }
+
+        command.CommandText =
+            "SELECT alert_id FROM alert_acknowledgement_projection WHERE alert_id IN (" + string.Join(',', names) + ")";
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            if (!reader.IsDBNull(0))
+            {
+                found.Add(reader.GetString(0));
+            }
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -273,6 +836,10 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
 
         ProjectGatewayAlerts(snapshot.RecentAlerts);
         ApplyFilters();
+
+        // One lookup per new list (this branch is skipped for the same list instance above), off
+        // the UI thread; it only ever removes rows the gateway should not have served.
+        _ = RefreshAcknowledgedAsync();
     }
 
     /// <summary>
@@ -370,6 +937,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
                 "No findings recorded",
                 "The gateway is not serving alerts and audit.db holds no security.finding rows yet.");
             ApplyFilters();
+            _ = RefreshAcknowledgedAsync();
         }
 #pragma warning disable CA1031 // The fallback is a nicety; a locked DB must not fault the panel.
         catch (Exception ex) when (ex is SqliteException or IOException or InvalidOperationException)
@@ -408,12 +976,22 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     /// </summary>
     private void ShowEmptyText()
     {
-        if (_all.Count > 0 && Alerts.Count == 0)
+        if (_poolCount > 0 && Alerts.Count == 0)
         {
             EmptyTitle = "No alerts match the current filters";
             EmptyDetail =
-                $"{_all.Count} alert(s) are loaded but hidden by the severity toggles or the text filter. " +
+                $"{_poolCount} alert(s) are loaded but hidden by the severity toggles or the text filter. " +
                 "Use Clear to show them again.";
+            return;
+        }
+
+        if (_all.Count > 0 && _poolCount == 0)
+        {
+            // Everything loaded is acknowledged or dismissed: a good outcome, not an error.
+            EmptyTitle = "Every loaded alert is acknowledged";
+            EmptyDetail =
+                $"{_all.Count} loaded alert(s) are recorded as acknowledged or dismissed in audit.db and are hidden. " +
+                "New findings appear here as they arrive.";
             return;
         }
 
@@ -444,7 +1022,16 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         var needle = FilterText.Trim();
         var selectedKey = SelectedAlert?.Key;
 
-        IEnumerable<AlertItem> query = _all;
+        // Acknowledged / dismissed alerts (per audit.db's projection) are not part of the pool the
+        // toggles and the text filter act on, whatever the source still serves. Counted, not silent.
+        var pool = _acknowledgedKeys.Count == 0
+            ? _all
+            : _all.Where(item => !_acknowledgedKeys.Contains(item.Key)).ToList();
+        _poolCount = pool.Count;
+        HiddenAcknowledgedCount = _all.Count - pool.Count;
+        UpdateSeverityCounts(pool);
+
+        IEnumerable<AlertItem> query = pool;
 
         if (anyToggleOff)
         {
@@ -473,15 +1060,28 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
 
         IsEmpty = Alerts.Count == 0;
         ShowEmptyText();
-        CountSummary = _all.Count == 0
+
+        var summary = _all.Count == 0
             ? string.Empty
             : CollapseRepeats
-                ? $"{Alerts.Count} group(s) · {filtered.Count} of {_all.Count} alerts"
-                : $"{Alerts.Count} of {_all.Count} alerts";
+                ? $"{Alerts.Count} group(s) · {filtered.Count} of {pool.Count} alerts"
+                : $"{Alerts.Count} of {pool.Count} alerts";
+        CountSummary = HiddenAcknowledgedCount > 0
+            ? $"{summary} · {HiddenAcknowledgedCount} acknowledged hidden"
+            : summary;
 
         SelectedAlert = selectedKey is null
             ? null
             : Alerts.FirstOrDefault(a => string.Equals(a.Key, selectedKey, StringComparison.Ordinal));
+    }
+
+    /// <summary>Writes each severity chip's count from the un-filtered pool (a chip that is off still says how many it hides).</summary>
+    private void UpdateSeverityCounts(IReadOnlyList<AlertItem> pool)
+    {
+        foreach (var filter in SeverityFilters)
+        {
+            filter.Count = pool.Count(item => string.Equals(item.SeverityKey, filter.SeverityKey, StringComparison.Ordinal));
+        }
     }
 
     private static List<AlertItem> Collapse(IReadOnlyList<AlertItem> items)
@@ -543,11 +1143,21 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     }
 }
 
-/// <summary>One severity toggle above the list.</summary>
+/// <summary>
+/// One severity chip above the list: an on/off filter that carries the tone of its severity and
+/// says how many loaded alerts it stands for. Its own state change is only <see cref="IsEnabled"/>
+/// (<see cref="Count"/> is rewritten by the panel on every pass and must not re-trigger a pass).
+/// </summary>
 public sealed partial class SeverityFilter : ObservableObject
 {
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AutomationName))]
     private bool _isEnabled = true;
+
+    /// <summary>How many loaded, un-acknowledged alerts have this severity (regardless of the toggle).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AutomationName))]
+    private int _count;
 
     public SeverityFilter(string severity)
     {
@@ -558,10 +1168,33 @@ public sealed partial class SeverityFilter : ObservableObject
     public string Severity { get; }
 
     public string SeverityKey => AlertItem.KeyFor(Severity);
+
+    /// <summary>"HIGH: 25 alerts, shown" - the chip's state in words, for screen readers and tooltips.</summary>
+    public string AutomationName =>
+        $"{Severity} severity filter: {Count.ToString(CultureInfo.CurrentCulture)} alert{(Count == 1 ? string.Empty : "s")}, " +
+        (IsEnabled ? "shown" : "hidden");
+
+    public override string ToString() => AutomationName;
+}
+
+/// <summary>
+/// One <c>--severity</c> choice in the acknowledge/dismiss review: the value the CLI takes and the
+/// words the dialog shows for it.
+/// </summary>
+public sealed record SeverityChoice(string Value, string Label)
+{
+    /// <summary>True for <c>all</c>, the one choice that reaches every active alert.</summary>
+    public bool IsAll => string.Equals(Value, "all", StringComparison.Ordinal);
+
+    public override string ToString() => Label;
 }
 
 /// <summary>One key/value row in the detail pane.</summary>
-public sealed record AlertField(string Name, string Value);
+public sealed record AlertField(string Name, string Value)
+{
+    /// <summary>"name: value" - what a screen reader says instead of the record's member dump.</summary>
+    public override string ToString() => $"{Name}: {Value}";
+}
 
 /// <summary>
 /// One alert row. Built from either <c>/alerts</c> or a <c>security.finding</c> audit row —
@@ -627,6 +1260,23 @@ public sealed partial class AlertItem : ObservableObject
     public bool IsRepeated => RepeatCount > 1;
 
     public string RepeatText => "x" + RepeatCount.ToString(CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// What a screen reader announces for the row (UI Automation falls back to
+    /// <c>ToString()</c> for an item with no explicit name): severity, rule, title, target, how
+    /// often it repeated and when it happened.
+    /// </summary>
+    public override string ToString()
+    {
+        var parts = new List<string> { $"{Severity} alert", RuleId, Headline, TargetRef };
+        if (IsRepeated)
+        {
+            parts.Add($"repeated {RepeatCount.ToString(CultureInfo.CurrentCulture)} times");
+        }
+
+        parts.Add(RelativeTime);
+        return string.Join(". ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+    }
 
     public static AlertItem FromGateway(GatewayAlert alert)
     {

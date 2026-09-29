@@ -286,6 +286,12 @@ public sealed class WizardCatalog
             (steps, curated) = WizardStepFactory.Build(target, help);
         }
 
+        // What this platform must not offer comes out first (a suppressed flag simply is not rendered —
+        // the CLI's own default applies), then every secret-taking flag is given the route that tells the
+        // operator where its value lives. Neither step needs the network or the CLI.
+        steps = WizardWindowsPolicy.Filter(target, steps);
+        steps = SecretRoutes.Annotate(target, steps);
+
         // The per-target help is authoritative for certification; the summary hint from the
         // top-level screen was only ever a stand-in until this landed. For a target that is not
         // a connector the parser reports NotApplicable rather than Certified (see
@@ -302,6 +308,7 @@ public sealed class WizardCatalog
             HelpText = result.Text,
             IsCurated = curated,
             IsDetailLoaded = true,
+            CrossValidator = WizardWindowsPolicy.CrossValidatorFor(target),
         }, generation);
     }
 

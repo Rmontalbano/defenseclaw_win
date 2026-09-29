@@ -11,45 +11,60 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Topmost="True"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual"
+        AutomationProperties.Name="DefenseClaw status">
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <!-- A CRITICAL in the last alert list turns the count red; everything else reads as plain text. -->
+        <Style x:Key="AlertValue" TargetType="TextBlock" BasedOn="{StaticResource DcFieldValueInline}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding AlertTone}" Value="Critical">
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
-    <Border Margin="10"
+
+    <!--
+        The left-click tray flyout. Same vocabulary as the dashboard's status strip: the state pill
+        (tone from the theme, not from a frozen brush, so it follows light/dark), the detail
+        sentence, then the facts as key/value rows. Dc styles throughout.
+    -->
+    <Border Style="{StaticResource DcDialogCard}"
+            Margin="10"
             Padding="16"
-            CornerRadius="8"
-            BorderThickness="1"
-            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-            Background="{DynamicResource ApplicationBackgroundBrush}">
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top">
         <Border.Effect>
             <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.35" Color="Black" />
         </Border.Effect>
 
         <StackPanel>
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="10"
-                         Height="10"
-                         VerticalAlignment="Center"
-                         Fill="{Binding StateBrush}" />
-                <TextBlock Margin="8,0,0,0"
-                           VerticalAlignment="Center"
-                           FontSize="15"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding StateLabel}" />
-            </StackPanel>
+            <Border Style="{StaticResource DcBadge}"
+                    Tag="{Binding StateTone}"
+                    Padding="10,4,12,4"
+                    HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Style="{StaticResource DcToneDot}"
+                             Tag="{Binding StateTone}"
+                             Margin="0,0,8,0" />
+                    <TextBlock Style="{StaticResource DcBadgeText}"
+                               FontSize="13"
+                               VerticalAlignment="Center"
+                               Text="{Binding StateLabel}" />
+                </StackPanel>
+            </Border>
 
-            <TextBlock Margin="0,6,0,0"
-                       FontSize="12"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+            <TextBlock Style="{StaticResource DcCaption}"
+                       Margin="0,8,0,0"
                        Text="{Binding StateDetail}" />
 
-            <TextBlock Margin="0,6,0,0"
+            <TextBlock Style="{StaticResource DcToneText}"
+                       Tag="Warn"
                        FontSize="12"
+                       Margin="0,8,0,0"
                        TextWrapping="Wrap"
-                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                       Visibility="{Binding HasFailModeNote, Converter={StaticResource BoolToVis}}"
+                       Visibility="{Binding HasFailModeNote, Converter={StaticResource BoolToVisibility}}"
                        Text="{Binding FailModeNote}" />
 
             <Separator Margin="0,12,0,10" Opacity="0.4" />
@@ -64,43 +79,53 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,10,4"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           FontSize="12" Text="Connectors" />
-                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,4"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           FontSize="12" TextWrapping="Wrap" Text="{Binding ConnectorSummary}" />
+                <TextBlock Grid.Row="0" Grid.Column="0"
+                           Style="{StaticResource DcFieldLabelInline}"
+                           Text="Connectors" />
+                <TextBlock Grid.Row="0" Grid.Column="1"
+                           Style="{StaticResource DcFieldValueInline}"
+                           Text="{Binding ConnectorSummary}" />
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,10,4"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           FontSize="12" Text="Alerts" />
-                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,4"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           FontSize="12" TextWrapping="Wrap" Text="{Binding AlertSummary}" />
+                <TextBlock Grid.Row="1" Grid.Column="0"
+                           Style="{StaticResource DcFieldLabelInline}"
+                           Text="Alerts" />
+                <TextBlock Grid.Row="1" Grid.Column="1"
+                           Style="{StaticResource AlertValue}"
+                           Text="{Binding AlertSummary}" />
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,10,4"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           FontSize="12" Text="Gateway" />
-                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,4"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           FontSize="12" TextWrapping="Wrap" Text="{Binding VersionSummary}" />
+                <TextBlock Grid.Row="2" Grid.Column="0"
+                           Style="{StaticResource DcFieldLabelInline}"
+                           Text="Version" />
+                <TextBlock Grid.Row="2" Grid.Column="1"
+                           Style="{StaticResource DcFieldValueInline}"
+                           Text="{Binding VersionSummary}" />
 
-                <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,10,0"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           FontSize="12" Text="Polled" />
+                <TextBlock Grid.Row="3" Grid.Column="0"
+                           Style="{StaticResource DcFieldLabelInline}"
+                           Text="Endpoint" />
                 <TextBlock Grid.Row="3" Grid.Column="1"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           FontSize="12" Text="{Binding LastPolled}" />
+                           Style="{StaticResource DcFieldValueInline}"
+                           Text="{Binding EndpointSummary}" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0"
+                           Style="{StaticResource DcFieldLabelInline}"
+                           Text="Polled" />
+                <TextBlock Grid.Row="4" Grid.Column="1"
+                           Style="{StaticResource DcFieldValueInline}"
+                           Text="{Binding LastPolled}" />
             </Grid>
 
-            <StackPanel Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+            <StackPanel Style="{StaticResource DcActionBar}"
+                        Margin="0,16,0,0"
+                        HorizontalAlignment="Right">
                 <ui:Button Appearance="Primary"
                            Content="Open Dashboard"
                            Command="{Binding OpenDashboardCommand}" />
-                <ui:Button Margin="8,0,0,0"
-                           Content="Exit"
+                <ui:Button Content="Exit"
+                           AutomationProperties.HelpText="Quit DefenseClaw for real. Closing the dashboard only hides it to the tray."
                            Command="{Binding ExitCommand}" />
             </StackPanel>
         </StackPanel>

@@ -75,8 +75,38 @@ public sealed record CliRunOptions
         SurvivesShutdown = true,
     };
 
+    /// <summary>
+    /// For a call whose stdout is parsed by the app — <c>&lt;noun&gt; list --json</c>, <c>info --json</c>,
+    /// <c>status --json</c>: the runner's inferred timeout and <see cref="RetainFullOutput"/>. Without
+    /// it a long JSON document (a few dozen skills at ~35 indented lines each is already past the
+    /// ordinary 2,000-line cap) loses its head and no longer parses. The Activity panel still shows
+    /// the whole thing, since it reads the same transcript.
+    /// </summary>
+    public static CliRunOptions JsonRead { get; } = new() { RetainFullOutput = true };
+
     /// <summary>An explicit ceiling for this call, overriding the runner's inferred one.</summary>
     public static CliRunOptions WithTimeout(TimeSpan timeout) => new() { Timeout = timeout };
+
+    /// <summary>
+    /// Lifts this invocation's retention caps from the ordinary
+    /// <see cref="CliInvocation.MaxRetainedOutputLines"/> / <see cref="CliInvocation.MaxRetainedOutputBytes"/>
+    /// (2,000 lines / 256 KiB, oldest dropped) up to <see cref="CliInvocation.MaxFullOutputLines"/> /
+    /// <see cref="CliInvocation.MaxFullOutputBytes"/> (200,000 lines / 16 MiB).
+    /// <para>
+    /// <b>Why it exists.</b> The ordinary cap is right for a status line or a mutation's chatter, and wrong
+    /// for output a program has to read whole: dropping the <i>oldest</i> lines of a JSON document
+    /// removes the opening bracket, so the parse fails and the panel shows an error for a healthy CLI.
+    /// The cap exists to bound memory in a tray app that runs for weeks, not to make machine-parsed
+    /// output incomplete, so callers that parse stdout opt in (see <see cref="JsonRead"/>).
+    /// </para>
+    /// <para>
+    /// <b>It is still a ceiling.</b> Past the full-output limits the invocation behaves exactly as an
+    /// ordinary one does: drop-oldest, with an explicit <see cref="CliStream.Notice"/> marker, so a
+    /// runaway process cannot pin an unbounded transcript. Nothing else changes: the timeout, the
+    /// secret scrubbing and shutdown behaviour are independent of this flag.
+    /// </para>
+    /// </summary>
+    public bool RetainFullOutput { get; init; }
 
     /// <summary>
     /// How long the child may run before its whole process tree is killed.
@@ -122,15 +152,19 @@ public sealed record CliRunOptions
 /// entry's retained transcript in lines and bytes. Both are needed — an entry cap alone
 /// leaves total memory a function of how chatty the commands were, which is exactly the
 /// unbounded case for a tray app that stays resident for weeks. Argv, exit code and
-/// failure reason are never trimmed by either cap.
+/// failure reason are never trimmed by either cap. A call whose output is machine-parsed opts
+/// into higher per-invocation ceilings with <see cref="CliRunOptions.RetainFullOutput"/>
+/// (<see cref="CliRunOptions.JsonRead"/>); it is still bounded, just far above the ordinary cap.
 /// </para>
 /// <para>
 /// <b>Every child has a bounded life.</b> A child that never exits used to wedge whatever
 /// awaited it — a panel's busy flag, the tray's Start/Stop Gateway latch — for as long as the
 /// app ran, because most call sites pass no <see cref="CancellationToken"/>. So the runner
-/// applies its own ceiling to every run (<see cref="ResolveTimeout"/>), and there are three
-/// ways a run can be ended early: the timeout, the caller's token, and app exit
-/// (<see cref="Shutdown"/>). All three do the same thing: <see cref="Process.Kill(bool)"/> with
+/// applies its own ceiling to every run (<see cref="ResolveTimeout"/>), and there are four
+/// ways a run can be ended early: the timeout, the caller's token, an operator's
+/// <see cref="Cancel(CliInvocation, out string)"/> (the Activity panel's button, which holds
+/// the invocation and not the token), and app exit (<see cref="Shutdown"/>). All four do the
+/// same thing: <see cref="Process.Kill(bool)"/> with
 /// <c>entireProcessTree: true</c> — the CLIs are Python launchers and PowerShell wrappers, so
 /// killing only the direct child would leave the interpreter or installer it spawned running —
 /// then finish the invocation with a <see cref="CliInvocation.FailureReason"/> that says which
@@ -243,6 +277,8 @@ public sealed class CliRunner : IDisposable
     /// practice the in-app upgrade. <see cref="Shutdown"/> deliberately leaves such a run alone,
     /// so the shell asks before quitting over one rather than silently orphaning it.
     /// </summary>
+    private static readonly System.Text.UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
     public bool HasShutdownSurvivingRun
     {
         get
@@ -469,16 +505,22 @@ public sealed class CliRunner : IDisposable
         var timeout = ResolveTimeout(executablePath, args, options);
         var survivesShutdown = options?.SurvivesShutdown ?? false;
 
-        var invocation = new CliInvocation(executablePath, args.ToArray(), DateTimeOffset.UtcNow)
+        var invocation = new CliInvocation(
+            executablePath,
+            args.ToArray(),
+            DateTimeOffset.UtcNow,
+            retainFullOutput: options?.RetainFullOutput ?? false)
         {
             UsedStdinSecret = stdinSecret is { IsEmpty: false },
+            SurvivesShutdown = survivesShutdown,
         };
 
         Record(invocation);
 
         // Registered before the started event so that Shutdown, which reads this list, cannot
-        // slip between "recorded" and "tracked" and miss a run.
-        var run = TryRegister(survivesShutdown);
+        // slip between "recorded" and "tracked" and miss a run. It is also what Cancel looks a
+        // run up in, so the invocation travels with it.
+        var run = TryRegister(survivesShutdown, invocation);
 
         try
         {
@@ -590,11 +632,113 @@ public sealed class CliRunner : IDisposable
     public void Dispose() => _ = Shutdown();
 
     /// <summary>
+    /// Stops one run in flight on the operator's say-so — the Activity panel's Cancel button. The
+    /// whole process tree is killed (<see cref="Process.Kill(bool)"/> with
+    /// <c>entireProcessTree: true</c>, as for a timeout or shutdown) and the invocation finishes
+    /// with a <see cref="CliInvocation.FailureReason"/> starting <c>cancelled</c> and no exit code,
+    /// exactly like a caller-token cancellation. The run's own <c>await</c> returns normally; this
+    /// method does not wait for that.
+    /// <para>
+    /// <b>Never throws for an ordinary "no".</b> Returns <c>false</c> with a human sentence in
+    /// <paramref name="reason"/> when there is nothing to cancel:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>the invocation has already finished (a no-op — nothing is touched, and
+    /// its recorded outcome stays exactly as it was);</description></item>
+    /// <item><description>the run was started with <see cref="CliRunOptions.SurvivesShutdown"/> —
+    /// the upgrade installer, which is refused because killing it part-way can leave the machine
+    /// with a half-replaced DefenseClaw. Only the token its own caller holds ends such a run;</description></item>
+    /// <item><description>the invocation is not one this runner is running (for example a
+    /// <see cref="CliInvocation.Snapshot"/> copy, or an invocation from another runner).</description></item>
+    /// </list>
+    /// Cancelling a run that is not the given one never happens: runs are matched by reference,
+    /// so a sibling started at the same moment is left alone.
+    /// </summary>
+    /// <param name="invocation">The live instance from <see cref="Activity"/> or <see cref="InvocationStarted"/>.</param>
+    /// <param name="reason">
+    /// Why nothing was cancelled, or — on success — a short confirmation. Never <c>null</c>.
+    /// </param>
+    /// <returns><c>true</c> when the cancel was accepted and the kill has been issued.</returns>
+    public bool Cancel(CliInvocation invocation, out string reason)
+    {
+        ArgumentNullException.ThrowIfNull(invocation);
+
+        // A run that has finished — or is finishing: FinishedAt is set before the completion event —
+        // has nothing left to cancel, and must not be touched or re-labelled.
+        if (!invocation.IsRunning)
+        {
+            reason = "Already finished — there is nothing to cancel.";
+            return false;
+        }
+
+        InFlightRun? run;
+        lock (_gate)
+        {
+            run = _inFlight.FirstOrDefault(r => ReferenceEquals(r.Invocation, invocation));
+        }
+
+        if (run is null)
+        {
+            reason = "This invocation is not running under this runner, so it cannot be cancelled from here.";
+            return false;
+        }
+
+        if (run.SurvivesShutdown)
+        {
+            reason =
+                "This run survives app shutdown (it is the DefenseClaw upgrade installer). Killing it part-way " +
+                "can leave DefenseClaw half-installed, so it cannot be cancelled from here — let it finish.";
+            return false;
+        }
+
+        // Order matters: the request is signalled first (it also flags the run as "cancelled by an
+        // operator" for the recorded reason), so the supervising task sees its own cancellation
+        // before it can see the child's exit and misfile a killed process as "exit -1". The direct
+        // kill after it is the same belt-and-braces Shutdown uses: the child is gone even if the
+        // continuation is slow to be scheduled. It runs on the pool, not here - enumerating and
+        // killing a process tree takes real time and this is called from a button click.
+        invocation.CancelRequested = true;
+        run.RequestCancel();
+        if (run.CurrentProcess is { } process)
+        {
+            _ = Task.Run(() => TryKill(process));
+        }
+
+        reason = "Cancel requested — the process tree is being killed.";
+        return true;
+    }
+
+    /// <summary>
+    /// <see cref="Cancel(CliInvocation, out string)"/> by <see cref="CliInvocation.Id"/>, for a
+    /// caller that kept the id rather than the instance. An id that is not in
+    /// <see cref="Activity"/> (never existed, or aged out of the ring) is a <c>false</c> with a reason.
+    /// </summary>
+    public bool Cancel(string invocationId, out string reason)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(invocationId);
+
+        CliInvocation? match;
+        lock (_gate)
+        {
+            match = _activity.FirstOrDefault(i => string.Equals(i.Id, invocationId, StringComparison.Ordinal));
+        }
+
+        if (match is null)
+        {
+            reason = "No invocation with that id is in the activity list (it never existed, or has aged out).";
+            return false;
+        }
+
+        return Cancel(match, out reason);
+    }
+
+    /// <summary>
     /// Adds a run to the in-flight set, or returns <c>null</c> when shutdown has begun and this
     /// run is not exempt — in which case nothing may be started. Exempt runs are always tracked
-    /// (so that a later diagnostic can see them) but are never selected as shutdown victims.
+    /// (so that a later diagnostic can see them, and so <see cref="Cancel(CliInvocation, out string)"/>
+    /// can say why it refuses them) but are never selected as shutdown victims.
     /// </summary>
-    private InFlightRun? TryRegister(bool survivesShutdown)
+    private InFlightRun? TryRegister(bool survivesShutdown, CliInvocation invocation)
     {
         lock (_gate)
         {
@@ -603,7 +747,7 @@ public sealed class CliRunner : IDisposable
                 return null;
             }
 
-            var run = new InFlightRun(survivesShutdown);
+            var run = new InFlightRun(survivesShutdown, invocation);
             _inFlight.Add(run);
             return run;
         }
@@ -631,6 +775,14 @@ public sealed class CliRunner : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = true,
+
+            // DefenseClaw's CLI (Python) and gateway (Go) both write UTF-8 when piped — measured on 0.8.10:
+            // `guardrail status` emits e2 80 a2 for its bullet. Left unset, .NET decodes with the legacy
+            // console code page and every non-ASCII glyph (•, —, ✓) turns into mojibake in Activity and
+            // in anything that parses the text. No BOM on stdin: a BOM would prefix the first line read.
+            StandardOutputEncoding = Utf8NoBom,
+            StandardErrorEncoding = Utf8NoBom,
+            StandardInputEncoding = Utf8NoBom,
             WorkingDirectory = _paths.DataDirectoryExists ? _paths.DataDirectory : Environment.CurrentDirectory,
         };
 
@@ -655,10 +807,12 @@ public sealed class CliRunner : IDisposable
         // One token for everything that may end this run early. The timeout is armed here, before
         // the launch, so the clock covers the whole life of the child. Shutdown is linked in only
         // for runs that are allowed to be ended by it — an exempt run's stop token is its
-        // caller's and its timeout, nothing else.
+        // caller's and its timeout, nothing else. The run's own cancel source is linked for every
+        // run, but Cancel refuses to fire it for an exempt one.
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(
             callerToken,
-            run.SurvivesShutdown ? CancellationToken.None : _shutdown.Token);
+            run.SurvivesShutdown ? CancellationToken.None : _shutdown.Token,
+            run.CancelToken);
 
         if (timeout is { } limit)
         {
@@ -797,13 +951,14 @@ public sealed class CliRunner : IDisposable
     }
 
     /// <summary>
-    /// The caller's token outranks shutdown, which outranks the timeout: someone who explicitly
-    /// cancelled should be told they did, and an app that is exiting is a better explanation than
-    /// a clock that happened to expire in the same moment.
+    /// The caller's token and an operator's <see cref="Cancel(CliInvocation, out string)"/> outrank
+    /// shutdown, which outranks the timeout: someone who explicitly cancelled should be told they
+    /// did, and an app that is exiting is a better explanation than a clock that happened to
+    /// expire in the same moment.
     /// </summary>
     private StopKind ClassifyStop(CancellationToken callerToken, InFlightRun run)
     {
-        if (callerToken.IsCancellationRequested)
+        if (callerToken.IsCancellationRequested || run.CancelRequested)
         {
             return StopKind.Cancelled;
         }
@@ -973,13 +1128,42 @@ public sealed class CliRunner : IDisposable
     private sealed class InFlightRun
     {
         private Process? _process;
+        private int _cancelRequested;
 
-        public InFlightRun(bool survivesShutdown)
+        /// <summary>
+        /// Fired only by <see cref="RequestCancel"/>. Deliberately never disposed, for the same
+        /// reason <c>_shutdown</c> is not: a <see cref="Cancel(CliInvocation, out string)"/> that
+        /// lands in the instant the run finishes would otherwise race a disposed source. It owns no
+        /// timer and no wait handle, so there is nothing to leak; the linked source that does
+        /// register on it is disposed with the run and unregisters.
+        /// </summary>
+        private readonly CancellationTokenSource _cancel = new();
+
+        public InFlightRun(bool survivesShutdown, CliInvocation invocation)
         {
             SurvivesShutdown = survivesShutdown;
+            Invocation = invocation;
         }
 
         public bool SurvivesShutdown { get; }
+
+        /// <summary>The live invocation this run is producing; how <c>Cancel</c> finds it by reference.</summary>
+        public CliInvocation Invocation { get; }
+
+        public CancellationToken CancelToken => _cancel.Token;
+
+        /// <summary>True once an operator cancel was accepted; read to word the recorded reason.</summary>
+        public bool CancelRequested => Volatile.Read(ref _cancelRequested) != 0;
+
+        /// <summary>
+        /// Flags the run as cancelled by an operator <b>before</b> firing the token, so whoever
+        /// observes the cancellation always finds the flag already set.
+        /// </summary>
+        public void RequestCancel()
+        {
+            Volatile.Write(ref _cancelRequested, 1);
+            _cancel.Cancel();
+        }
 
         /// <summary>Completed by the run's own <c>finally</c>, after the completion event.</summary>
         public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

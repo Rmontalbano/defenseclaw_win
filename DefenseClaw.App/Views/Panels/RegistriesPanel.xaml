@@ -3,11 +3,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              d:DataContext="{d:DesignInstance Type=vm:RegistriesPanelViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <Grid Margin="28,24,28,20">
+    <!--
+        Migrated to the shared design system (Themes\DefenseClaw.xaml); no local styles. Reads come from
+        `registry list` (JSON) plus the selected source's index.json; every change goes through the shared
+        review dialog (DiscoverReviewOverlay) that shows the exact command first.
+    -->
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -16,184 +22,365 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0">
-                <TextBlock FontSize="26"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding Title}" />
-                <TextBlock Margin="0,4,0,0"
-                           FontSize="13"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="{Binding Description}" />
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding StatusMessage}" />
+                <ui:Button Content="Refresh"
+                           Command="{Binding RefreshCommand}"
+                           AutomationProperties.HelpText="Re-read the registry sources (F5).">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                    </ui:Button.Icon>
+                </ui:Button>
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                <TextBlock Margin="0,0,14,0"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Text="{Binding StatusMessage}" />
-                <ui:Button Padding="10,4,10,4" Content="Refresh" Command="{Binding RefreshCommand}" />
-            </StackPanel>
-        </Grid>
+        </HeaderedContentControl>
 
-        <!-- What a registry source is, and the CLI error banner if the read failed -->
-        <StackPanel Grid.Row="1" Margin="0,0,0,10">
-            <ui:InfoBar IsClosable="False"
-                        IsOpen="True"
-                        Severity="Informational"
-                        Title="What a registry source is"
-                        Message="A fetchable manifest (corporate HTTPS YAML, smithery.ai, a git repo with defenseclaw-registry.yaml, …) that DefenseClaw ingests on demand. Synced entries are scanned with the normal skill/MCP scanners and clean ones are auto-promoted into policy. Read here via 'defenseclaw registry list --json' — nothing on this panel writes anything." />
+        <!-- Toolbar: actions on the list / the selected source -->
+        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
+            <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                <ui:Button Appearance="Primary"
+                           Content="Add source…"
+                           Command="{Binding OpenAddFormCommand}"
+                           AutomationProperties.HelpText="Register a new registry source. Nothing is fetched until you sync it." />
+                <ui:Button Content="Sync selected…"
+                           Command="{Binding SyncSelectedCommand}"
+                           IsEnabled="{Binding HasSelectedSource}"
+                           AutomationProperties.HelpText="Fetch, scan and promote the selected source's entries." />
+                <ui:Button Content="Sync all…"
+                           Command="{Binding SyncAllCommand}"
+                           IsEnabled="{Binding HasSources}"
+                           AutomationProperties.HelpText="Fetch, scan and promote entries from every enabled source." />
+                <ui:Button Content="{Binding ToggleEnabledText}"
+                           Command="{Binding ToggleSelectedEnabledCommand}"
+                           IsEnabled="{Binding HasSelectedSource}"
+                           AutomationProperties.HelpText="Turn the selected source on or off." />
+                <ui:Button Content="Remove…"
+                           Command="{Binding RemoveSelectedCommand}"
+                           IsEnabled="{Binding HasSelectedSource}"
+                           AutomationProperties.HelpText="Delete the selected source, the rules it promoted and its cache." />
+            </WrapPanel>
+        </Border>
 
-            <ui:InfoBar Margin="0,6,0,0"
+        <!-- Banners, policy switches, add form, progress -->
+        <StackPanel Grid.Row="2">
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        IsClosable="False"
+                        IsOpen="{Binding HasActionMessage}"
+                        Message="{Binding ActionMessage}"
+                        Severity="{Binding ActionSeverity}" />
+
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
                         Title="Could not read registry sources"
                         IsClosable="False"
                         IsOpen="{Binding HasCliError}"
                         Message="{Binding CliErrorMessage}"
                         Severity="Warning" />
-        </StackPanel>
 
-        <ui:ProgressRing Grid.Row="2"
-                         Width="28"
-                         Height="28"
-                         HorizontalAlignment="Left"
-                         IsIndeterminate="True"
-                         Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+            <!-- Default-deny switches (asset_policy.<type>.registry_required) -->
+            <Border Style="{StaticResource DcCardCompact}"
+                    Margin="{StaticResource DcCardGap}"
+                    Visibility="{Binding ShowPolicyCard, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcCardTitle}" Text="Default-deny for registries" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Text="Off by default. When on, a skill or MCP server has to match a rule from a registry to be admitted; anything else falls back to the default action. Turning it on before approving entries blocks everything not already covered." />
+                    <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
+                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding SkillsRegistryText}" />
+                        <ui:Button Content="Require…"
+                                   Command="{Binding SetRegistryRequiredCommand}"
+                                   CommandParameter="skill:on"
+                                   IsEnabled="{Binding SkillsRegistryOptional}"
+                                   AutomationProperties.Name="Require a registry for skills" />
+                        <ui:Button Content="Make optional…"
+                                   Command="{Binding SetRegistryRequiredCommand}"
+                                   CommandParameter="skill:off"
+                                   IsEnabled="{Binding SkillsRegistryRequired}"
+                                   AutomationProperties.Name="Make the registry optional for skills" />
+                    </WrapPanel>
+                    <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding McpsRegistryText}" />
+                        <ui:Button Content="Require…"
+                                   Command="{Binding SetRegistryRequiredCommand}"
+                                   CommandParameter="mcp:on"
+                                   IsEnabled="{Binding McpsRegistryOptional}"
+                                   AutomationProperties.Name="Require a registry for MCP servers" />
+                        <ui:Button Content="Make optional…"
+                                   Command="{Binding SetRegistryRequiredCommand}"
+                                   CommandParameter="mcp:off"
+                                   IsEnabled="{Binding McpsRegistryRequired}"
+                                   AutomationProperties.Name="Make the registry optional for MCP servers" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
 
-        <!-- Sources, or the empty state -->
-        <Grid Grid.Row="3">
-            <Border CornerRadius="8"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    Visibility="{Binding HasNoSources, Converter={StaticResource BoolToVisibility}}">
-                <StackPanel MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock HorizontalAlignment="Center"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                               Text="No registry sources configured" />
-                    <TextBlock Margin="0,6,0,12"
-                               HorizontalAlignment="Center"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               Text="Add one from a terminal — this app never runs mutating registry commands for you:" />
+            <!-- Add form -->
+            <Border Style="{StaticResource DcCard}"
+                    Margin="{StaticResource DcCardGap}"
+                    Visibility="{Binding IsAddFormOpen, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcCardTitle}" Text="Add a registry source" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="{StaticResource DcColumnGap}" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                    <Border Padding="12,8,12,8"
-                            CornerRadius="4"
-                            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
-                        <StackPanel>
-                            <TextBox FontFamily="Cascadia Mono, Consolas"
-                                     IsReadOnly="True"
-                                     BorderThickness="0"
-                                     Background="Transparent"
-                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                     Text="defenseclaw registry add &lt;id&gt; --url &lt;manifest-url&gt;" />
-                            <TextBox Margin="0,6,0,0"
-                                     FontFamily="Cascadia Mono, Consolas"
-                                     IsReadOnly="True"
-                                     BorderThickness="0"
-                                     Background="Transparent"
-                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                     Text="defenseclaw registry wizard" />
+                        <StackPanel Grid.Row="0" Grid.Column="0" Style="{StaticResource DcField}">
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Source id" />
+                            <ui:TextBox PlaceholderText="corp-skills"
+                                        AutomationProperties.Name="Source id"
+                                        Text="{Binding AddId, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
-                    </Border>
 
-                    <StackPanel Margin="0,14,0,0" Visibility="{Binding HasConfigSection, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                   Text="config.yaml does have a registry: section though — raw text:" />
-                        <Border Margin="0,6,0,0"
-                                MaxHeight="160"
-                                Padding="10"
-                                CornerRadius="4"
-                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <TextBlock FontFamily="Cascadia Mono, Consolas"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           Text="{Binding ConfigSectionYaml}" />
-                            </ScrollViewer>
-                        </Border>
+                        <StackPanel Grid.Row="0" Grid.Column="2" Style="{StaticResource DcField}">
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Kind" />
+                            <ComboBox HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="Source kind"
+                                      ItemsSource="{Binding AddKindOptions}"
+                                      SelectedItem="{Binding AddKind}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="0" Style="{StaticResource DcField}">
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Content" />
+                            <ComboBox HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="Declared content"
+                                      ItemsSource="{Binding AddContentOptions}"
+                                      SelectedItem="{Binding AddContent}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="2" Style="{StaticResource DcField}">
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Auth environment variable (optional)" />
+                            <ui:TextBox PlaceholderText="CORP_REGISTRY_TOKEN"
+                                        AutomationProperties.Name="Auth environment variable name"
+                                        AutomationProperties.HelpText="The name of an environment variable that holds a bearer token. Never type the token itself."
+                                        Text="{Binding AddAuthEnv, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,4,0,0"
+                                       Text="The variable's name, not the token. Set the variable yourself (Setup, keys, or your environment)." />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Style="{StaticResource DcField}">
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="URL or path" />
+                            <ui:TextBox PlaceholderText="https://catalog.example.com/skills.yaml"
+                                        AutomationProperties.Name="Manifest URL or path"
+                                        Text="{Binding AddUrl, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,4,0,0"
+                                       Text="{Binding AddUrlHint}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                        <CheckBox Content="Enabled" IsChecked="{Binding AddEnabled}" />
+                        <CheckBox Content="Sync right after adding"
+                                  IsChecked="{Binding AddSyncAfter}"
+                                  IsEnabled="{Binding AddEnabled}"
+                                  AutomationProperties.HelpText="Runs a second command that fetches and scans the source, only if the add succeeds." />
+                    </WrapPanel>
+
+                    <TextBlock Style="{StaticResource DcToneText}"
+                               Tag="Bad"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"
+                               AutomationProperties.LiveSetting="Assertive"
+                               Text="{Binding AddValidationMessage}"
+                               Visibility="{Binding HasAddValidationMessage, Converter={StaticResource BoolToVisibility}}" />
+
+                    <StackPanel Style="{StaticResource DcActionBar}" HorizontalAlignment="Right">
+                        <ui:Button Content="Cancel" Command="{Binding CancelAddFormCommand}" />
+                        <ui:Button Appearance="Primary"
+                                   Content="Review and add…"
+                                   Command="{Binding SubmitAddCommand}"
+                                   AutomationProperties.HelpText="Shows the exact command before anything runs." />
                     </StackPanel>
                 </StackPanel>
             </Border>
 
+            <ui:ProgressRing Width="28"
+                             Height="28"
+                             HorizontalAlignment="Left"
+                             Margin="{StaticResource DcCardGap}"
+                             IsIndeterminate="True"
+                             AutomationProperties.Name="Reading registry sources"
+                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+
+        <!-- Sources + detail, or an empty state -->
+        <Grid Grid.Row="3">
+            <!-- Nothing configured: the normal state on a standalone install. -->
+            <Border Style="{StaticResource DcCard}"
+                    Visibility="{Binding ShowNotConfigured, Converter={StaticResource BoolToVisibility}}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No registry sources yet" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                   Text="A registry is a catalog of skills or MCP servers that DefenseClaw can pull on demand: a company HTTPS manifest, smithery.ai, or a git repository with a defenseclaw-registry.yaml. Each synced entry is scanned, and clean ones can be promoted into your allow policy. Registries are optional; skills and MCP servers work without one." />
+
+                        <StackPanel Margin="0,16,0,0" HorizontalAlignment="Center">
+                            <TextBlock Style="{StaticResource DcCaption}" Text="1.  Add a source. Nothing is fetched yet." />
+                            <TextBlock Style="{StaticResource DcCaption}" Text="2.  Sync it. Its entries are downloaded and scanned." />
+                            <TextBlock Style="{StaticResource DcCaption}" Text="3.  Approve or reject entries, or require a registry for skills or MCP servers." />
+                        </StackPanel>
+
+                        <ui:Button Appearance="Primary"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,16,0,0"
+                                   Content="Add a registry source…"
+                                   Command="{Binding OpenAddFormCommand}" />
+
+                        <StackPanel Margin="0,20,0,0"
+                                    Visibility="{Binding HasConfigSection, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcCardTitle}"
+                                       Text="config.yaml does have a registries section, though. Raw text:" />
+                            <Border Style="{StaticResource DcCodeBlock}" MaxHeight="160">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <TextBlock Style="{StaticResource DcMono}" Text="{Binding ConfigSectionYaml}" />
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- The read failed: not the same thing as "none configured". -->
+            <Border Style="{StaticResource DcCard}"
+                    Visibility="{Binding ShowUnavailable, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="520">
+                    <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Warning24" />
+                    <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Registry sources could not be read" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}"
+                               Text="The DefenseClaw command did not answer, so this panel cannot say whether any sources are configured. The reason is in the banner above." />
+                    <ui:Button HorizontalAlignment="Center"
+                               Margin="0,16,0,0"
+                               Content="Try again"
+                               Command="{Binding RefreshCommand}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Sources and the selected one's details -->
             <Grid Visibility="{Binding HasSources, Converter={StaticResource BoolToVisibility}}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.4*" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="1*" MinWidth="260" />
+                    <ColumnDefinition Width="1.3*" />
+                    <ColumnDefinition Width="{StaticResource DcColumnGap}" />
+                    <ColumnDefinition Width="1*" MinWidth="340" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0"
-                        CornerRadius="8"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <Border Grid.Column="0" Style="{StaticResource DcCardFlush}">
                     <ui:DataGrid AutoGenerateColumns="False"
                                  IsReadOnly="True"
                                  GridLinesVisibility="Horizontal"
                                  HeadersVisibility="Column"
                                  SelectionMode="Single"
+                                 AutomationProperties.Name="Registry sources"
                                  ItemsSource="{Binding Sources}"
                                  SelectedItem="{Binding SelectedSource}">
                         <ui:DataGrid.Columns>
-                            <DataGridTextColumn Width="160" Header="Id" Binding="{Binding Id}" />
-                            <DataGridTextColumn Width="100" Header="Type" Binding="{Binding Kind}" />
+                            <DataGridTextColumn Width="150" Header="Id" Binding="{Binding Id}" />
+                            <DataGridTextColumn Width="100" Header="Kind" Binding="{Binding KindDisplay}" />
+                            <DataGridTextColumn Width="80" Header="On" Binding="{Binding EnabledDisplay}" />
+                            <DataGridTextColumn Width="70" Header="Content" Binding="{Binding ContentDisplay}" />
+                            <DataGridTextColumn Width="170" Header="Entries" Binding="{Binding EntriesDisplay}" />
+                            <DataGridTextColumn Width="130" Header="Last sync" Binding="{Binding LastSyncDisplay}" />
                             <DataGridTextColumn Width="*" Header="Location" Binding="{Binding Location}" />
-                            <DataGridTextColumn Width="140" Header="Entries" Binding="{Binding EntriesSummary}" />
                         </ui:DataGrid.Columns>
                     </ui:DataGrid>
                 </Border>
 
-                <Border Grid.Column="2"
-                        Padding="14"
-                        CornerRadius="8"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0"
-                                   Margin="0,0,0,8"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                   Text="Raw fields" />
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding SelectedSource.Fields}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,0,0,8">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="Auto" />
-                                            </Grid.RowDefinitions>
-                                            <TextBlock Grid.Row="0"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                       Text="{Binding Key}" />
-                                            <TextBlock Grid.Row="1"
-                                                       TextWrapping="Wrap"
-                                                       FontFamily="Cascadia Mono, Consolas"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                       Text="{Binding Value}" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
+                <Border Grid.Column="2" Style="{StaticResource DcCardCompact}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                       Margin="0,40,0,0"
+                                       Text="Select a source to see its entries and details."
+                                       Visibility="{Binding HasNoSelectedSource, Converter={StaticResource BoolToVisibility}}" />
+
+                            <StackPanel Visibility="{Binding HasSelectedSource, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource DcSectionHeader}" Text="{Binding SelectedSource.Id}" />
+                                <WrapPanel Margin="0,0,0,12">
+                                    <Border Style="{StaticResource DcBadge}"
+                                            Margin="{StaticResource DcInlineGap}"
+                                            Tag="{Binding SelectedSource.EnabledKey}">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SelectedSource.EnabledDisplay}" />
+                                    </Border>
+                                    <Border Style="{StaticResource DcChip}" Margin="{StaticResource DcInlineGap}">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SelectedSource.KindDisplay}" />
+                                    </Border>
+                                    <Border Style="{StaticResource DcChip}" Margin="{StaticResource DcInlineGap}">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SelectedSource.ContentDisplay}" />
+                                    </Border>
+                                </WrapPanel>
+
+                                <TextBlock Style="{StaticResource DcCardTitle}" Text="Cached entries" />
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Margin="0,0,0,8"
+                                           Text="{Binding EntriesMessage}" />
+                                <ui:ProgressRing Width="20"
+                                                 Height="20"
+                                                 HorizontalAlignment="Left"
+                                                 IsIndeterminate="True"
+                                                 AutomationProperties.Name="Reading cached entries"
+                                                 Visibility="{Binding IsEntriesLoading, Converter={StaticResource BoolToVisibility}}" />
+                                <ui:DataGrid AutoGenerateColumns="False"
+                                             IsReadOnly="True"
+                                             MaxHeight="260"
+                                             GridLinesVisibility="Horizontal"
+                                             HeadersVisibility="Column"
+                                             SelectionMode="Single"
+                                             AutomationProperties.Name="Cached entries of the selected source"
+                                             ItemsSource="{Binding Entries}"
+                                             SelectedItem="{Binding SelectedEntry}">
+                                    <ui:DataGrid.Columns>
+                                        <DataGridTextColumn Width="*" Header="Name" Binding="{Binding Name}" />
+                                        <DataGridTextColumn Width="60" Header="Type" Binding="{Binding TypeDisplay}" />
+                                        <DataGridTextColumn Width="80" Header="Status" Binding="{Binding StatusDisplay}" />
+                                        <DataGridTextColumn Width="80" Header="Review" Binding="{Binding ReviewDisplay}" />
+                                    </ui:DataGrid.Columns>
+                                </ui:DataGrid>
+                                <StackPanel Style="{StaticResource DcActionBar}" Margin="0,8,0,16">
+                                    <ui:Button Content="Approve…"
+                                               Command="{Binding ApproveEntryCommand}"
+                                               IsEnabled="{Binding CanReviewEntry}"
+                                               AutomationProperties.HelpText="Approve the selected entry and promote it into the allow policy." />
+                                    <ui:Button Content="Reject…"
+                                               Command="{Binding RejectEntryCommand}"
+                                               IsEnabled="{Binding CanReviewEntry}"
+                                               AutomationProperties.HelpText="Reject the selected entry so it stays blocked." />
+                                </StackPanel>
+
+                                <TextBlock Style="{StaticResource DcCardTitle}" Text="Raw fields" />
+                                <ItemsControl ItemsSource="{Binding SelectedSource.Fields}"
+                                              Focusable="False"
+                                              AutomationProperties.Name="Raw fields of the selected source">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Style="{StaticResource DcField}">
+                                                <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Key}" />
+                                                <TextBlock Style="{StaticResource DcFieldValueMono}" Text="{Binding Value}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
             </Grid>
         </Grid>
+
+        <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
+        <panels:DiscoverReviewOverlay Grid.RowSpan="4" DataContext="{Binding Review}" />
     </Grid>
 </UserControl>

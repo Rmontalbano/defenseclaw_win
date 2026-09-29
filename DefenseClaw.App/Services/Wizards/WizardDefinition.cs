@@ -65,8 +65,11 @@ public enum WizardFieldKind
     Toggle,
 
     /// <summary>
-    /// A real secret. Never reaches argv — <see cref="Core.Cli.CliRunner"/> would refuse
-    /// it anyway — so the value is piped to the child process's stdin instead.
+    /// A flag that takes a real secret. Never reaches argv (<see cref="Core.Cli.CliRunner"/> would refuse
+    /// it) and — verified on 0.8.10 — is never read from stdin by the CLI either, so this app does not
+    /// collect the value at all: the field renders as a credential card that names the environment
+    /// variable and points the operator at <c>defenseclaw keys set</c> in a real terminal. See
+    /// <see cref="SecretRoute"/> for the evidence.
     /// </summary>
     Secret,
 
@@ -76,6 +79,16 @@ public enum WizardFieldKind
     /// values.
     /// </summary>
     EnvVarName,
+
+    /// <summary>
+    /// A flag documented "(repeatable)": a multi-line box, one value per line, emitted as one
+    /// <c>--flag value</c> pair per non-empty line. Appended after <see cref="EnvVarName"/> so no
+    /// existing numeric value moves.
+    /// </summary>
+    Lines,
+
+    /// <summary>A decimal number (Click <c>FLOAT</c>): rendered as text, validated as a number.</summary>
+    Number,
 }
 
 /// <summary>Tri-state values a <see cref="WizardFieldKind.Toggle"/> can hold.</summary>
@@ -123,8 +136,36 @@ public sealed class WizardField
 
     public IReadOnlyList<WizardChoice> Choices { get; init; } = Array.Empty<WizardChoice>();
 
-    /// <summary>Pre-filled answer. For toggles: <see cref="ToggleValues"/>.</summary>
+    /// <summary>
+    /// The answer the field starts with: the current configuration when it is known
+    /// (<see cref="BaselineSource"/> names where it came from), otherwise the CLI's documented default.
+    /// For toggles: <see cref="ToggleValues"/>.
+    /// </summary>
     public string DefaultValue { get; init; } = string.Empty;
+
+    /// <summary>
+    /// What the setting <b>is</b> when this flag is left off the command line: the CLI's own default for
+    /// an option that has one (<c>--mode</c> falls back to <c>observe</c>), otherwise the current
+    /// configuration (an option that defaults to None leaves the stored value alone). A field is written
+    /// into argv only when its answer differs from this, so a wizard run never re-sends — or, worse,
+    /// silently overrides — a setting the operator did not touch. See <see cref="WizardDefinition.BuildArgvDefault"/>.
+    /// </summary>
+    public string BaselineValue { get; init; } = string.Empty;
+
+    /// <summary>Where <see cref="DefaultValue"/> was read from ("config.yaml guardrail.connectors.claudecode"), or empty.</summary>
+    public string BaselineSource { get; init; } = string.Empty;
+
+    /// <summary>
+    /// True when emptying the field is a real change to send as <c>--flag ""</c> (the CLI documents
+    /// "pass empty to clear" for <c>--block-message</c> and <c>--rule-pack-dir</c>).
+    /// </summary>
+    public bool AllowEmptyWhenChanged { get; init; }
+
+    /// <summary>
+    /// For a <see cref="WizardFieldKind.Secret"/> field: how the secret reaches the CLI without passing
+    /// through this app. Always set on secret fields by <see cref="SecretRoutes.Annotate"/>.
+    /// </summary>
+    public SecretRoute? Credential { get; init; }
 
     public bool IsPositional { get; init; }
 
@@ -149,6 +190,41 @@ public sealed class WizardField
     public string FlagDisplay => Kind == WizardFieldKind.Toggle && NegativeFlag is { Length: > 0 }
         ? $"{Flag} / {NegativeFlag}"
         : Flag ?? "(positional)";
+
+    /// <summary>
+    /// A copy that starts from <paramref name="defaultValue"/> (the current configuration) and treats
+    /// <paramref name="baselineValue"/> as "what omitting the flag leaves". Fields are immutable
+    /// definitions shared by every open wizard, so applying the operator's configuration means
+    /// building new ones, never editing these.
+    /// </summary>
+    public WizardField WithAnswers(string defaultValue, string baselineValue, string source) =>
+        Clone(defaultValue, baselineValue, source, Credential);
+
+    /// <summary>A copy carrying <paramref name="route"/>.</summary>
+    public WizardField WithCredential(SecretRoute route) =>
+        Clone(DefaultValue, BaselineValue, BaselineSource, route);
+
+    private WizardField Clone(string defaultValue, string baselineValue, string source, SecretRoute? credential) => new()
+    {
+        Id = Id,
+        Label = Label,
+        Kind = Kind,
+        Flag = Flag,
+        NegativeFlag = NegativeFlag,
+        Help = Help,
+        Choices = Choices,
+        DefaultValue = defaultValue,
+        BaselineValue = baselineValue,
+        BaselineSource = source,
+        AllowEmptyWhenChanged = AllowEmptyWhenChanged,
+        Credential = credential,
+        IsPositional = IsPositional,
+        PositionalOrder = PositionalOrder,
+        IsRequired = IsRequired,
+        Placeholder = Placeholder,
+        VisibleWhenFieldId = VisibleWhenFieldId,
+        VisibleWhenValues = VisibleWhenValues,
+    };
 }
 
 /// <summary>One page of a wizard. The review page is synthesised by the view-model, not defined here.</summary>
@@ -195,6 +271,12 @@ public static class WizardGroups
     public const string Observability = "Observability";
     public const string Other = "Other";
 
+    /// <summary>
+    /// Targets that exist in the CLI but cannot work here (unsupported connectors, interactive-only
+    /// wizards, Docker stacks). Shown last, disabled, each with its reason — never silently hidden.
+    /// </summary>
+    public const string Unavailable = "Not available on this machine";
+
     /// <summary>Display order in the hub.</summary>
     public static readonly IReadOnlyList<string> Ordered = new[]
     {
@@ -204,6 +286,7 @@ public static class WizardGroups
         Observability,
         Credentials,
         Other,
+        Unavailable,
     };
 
     public static int IndexOf(string group)
@@ -260,6 +343,46 @@ public sealed class WizardDefinition
     public string HelpText { get; init; } = string.Empty;
 
     /// <summary>
+    /// One sentence saying where the pre-filled answers came from and what is sent ("Pre-filled from
+    /// config.yaml → guardrail.connectors.claudecode. Only fields you change are sent."). Empty when
+    /// nothing was pre-filled from the configuration.
+    /// </summary>
+    public string BaselineNote { get; init; } = string.Empty;
+
+    /// <summary>
+    /// A caution about the pre-fill itself — set when the configuration could not be read, so the
+    /// wizard cannot see what a setting currently is and an omitted flag may reset it. Shown as a warning
+    /// on every page.
+    /// </summary>
+    public string BaselineWarning { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Checks that span fields (splunk needs a pipeline picked, say). Returns a message, or null when
+    /// the answers are consistent. Run on Next and before the review page is trusted.
+    /// </summary>
+    public Func<WizardValues, string?>? CrossValidator { get; init; }
+
+    /// <summary>A copy with different pages and pre-fill notes; everything else carries over.</summary>
+    public WizardDefinition With(IReadOnlyList<WizardStep> steps, string baselineNote, string baselineWarning) => new()
+    {
+        Target = Target,
+        Title = Title,
+        Group = Group,
+        Description = Description,
+        Steps = steps,
+        PlatformStatus = PlatformStatus,
+        PlatformNote = PlatformNote,
+        IsDetailLoaded = IsDetailLoaded,
+        DetailError = DetailError,
+        IsCurated = IsCurated,
+        HelpText = HelpText,
+        FinalArgvBuilder = FinalArgvBuilder,
+        BaselineNote = baselineNote,
+        BaselineWarning = baselineWarning,
+        CrossValidator = CrossValidator,
+    };
+
+    /// <summary>
     /// Turns answers into the exact argv handed to <see cref="Core.Cli.CliRunner"/> —
     /// the same list the review screen prints. Overridable per definition; the default is
     /// <see cref="BuildArgvDefault"/>.
@@ -271,9 +394,65 @@ public sealed class WizardDefinition
 
     public IReadOnlyList<string> BuildArgv(WizardValues values) => FinalArgvBuilder(this, values);
 
-    /// <summary>True when this run will pipe a secret to the child's stdin.</summary>
-    public bool UsesStdinSecret(WizardValues values) =>
-        VisibleFields(values).Any(f => f.IsSecret && values[f.Id].Length > 0);
+    /// <summary>Visible secret-taking fields: the credentials this run depends on but never carries.</summary>
+    public IEnumerable<WizardField> VisibleCredentials(WizardValues values) =>
+        VisibleFields(values).Where(f => f.IsSecret);
+
+    /// <summary>
+    /// The fields the operator changed from where they started, as human sentences for the review page
+    /// ("Mode: action → observe"). Compares against <see cref="WizardField.DefaultValue"/> — what the
+    /// configuration held when the wizard opened — not against the CLI baseline, so a change back to the
+    /// CLI default still shows up as the change it is.
+    /// </summary>
+    public IReadOnlyList<string> DescribeChanges(WizardValues values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        var lines = new List<string>();
+        foreach (var field in VisibleFields(values))
+        {
+            if (field.IsSecret || field.IsPositional || WizardFieldBuilder.IsNonInteractiveFlag(field.Flag))
+            {
+                continue;
+            }
+
+            var now = Normalize(field, values[field.Id]);
+            var was = Normalize(field, field.DefaultValue);
+            if (string.Equals(now, was, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            lines.Add(string.Create(
+                CultureInfo.CurrentCulture,
+                $"{field.Label}: {Display(field, was, unsetText: "(not set)")} → {Display(field, now, unsetText: "(cleared)")}"));
+        }
+
+        return lines;
+    }
+
+    private static string Normalize(WizardField field, string raw) => field.Kind == WizardFieldKind.Lines
+        ? string.Join('\n', SplitLines(raw))
+        : raw.Trim();
+
+    private static string Display(WizardField field, string value, string unsetText)
+    {
+        if (value.Length == 0)
+        {
+            return unsetText;
+        }
+
+        if (field.Kind is WizardFieldKind.Toggle or WizardFieldKind.Switch)
+        {
+            return IsOn(value) ? "on" : "off";
+        }
+
+        return field.Kind == WizardFieldKind.Lines ? value.Replace("\n", " | ", StringComparison.Ordinal) : value;
+    }
+
+    /// <summary>Non-empty, trimmed lines of a multi-line answer.</summary>
+    internal static IReadOnlyList<string> SplitLines(string raw) =>
+        raw.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>Fields whose gates are satisfied by the current answers.</summary>
     public IEnumerable<WizardField> VisibleFields(WizardValues values)
@@ -344,19 +523,30 @@ public sealed class WizardDefinition
         return argv;
     }
 
+    /// <summary>
+    /// Writes one field into argv <b>only if its answer differs from <see cref="WizardField.BaselineValue"/></b>
+    /// — what the setting already is when the flag is omitted. That is the whole of the S3 fix: a
+    /// connector wizard used to re-send <c>--mode observe --restart …</c> from static defaults, which
+    /// downgrades a connector that is in action mode. Now an untouched field sends nothing, and
+    /// <c>--mode</c> (whose CLI default really does override the stored value) is sent exactly when the
+    /// answer is not that default.
+    /// </summary>
     private static void Emit(List<string> argv, WizardField field, string raw)
     {
         var value = raw.Trim();
+        var baseline = field.BaselineValue.Trim();
 
         switch (field.Kind)
         {
-            // Secrets go to stdin. Reaching argv is a hard failure in CliRunner, and the
-            // review screen says so out loud rather than quietly dropping the value.
+            // A secret never reaches argv or stdin: it lives in ~/.defenseclaw/.env and the CLI reads
+            // it by variable name. See SecretRoute.
             case WizardFieldKind.Secret:
                 return;
 
             case WizardFieldKind.Switch:
-                if (IsOn(value) && field.Flag is { Length: > 0 } switchFlag)
+                // A bare switch can only be turned on; on-by-default ones (--yes) have an "off" baseline
+                // so they are still sent.
+                if (IsOn(value) && !IsOn(baseline) && field.Flag is { Length: > 0 } switchFlag)
                 {
                     argv.Add(switchFlag);
                 }
@@ -364,6 +554,11 @@ public sealed class WizardDefinition
                 return;
 
             case WizardFieldKind.Toggle:
+                if (string.Equals(value, baseline, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
                 if (IsOn(value) && field.Flag is { Length: > 0 } positive)
                 {
                     argv.Add(positive);
@@ -375,11 +570,40 @@ public sealed class WizardDefinition
 
                 return;
 
+            case WizardFieldKind.Lines:
+                var lines = SplitLines(raw);
+                var repeated = field.Flag;
+                if (string.IsNullOrEmpty(repeated) ||
+                    lines.SequenceEqual(SplitLines(field.BaselineValue), StringComparer.Ordinal))
+                {
+                    return;
+                }
+
+                foreach (var line in lines)
+                {
+                    argv.Add(repeated);
+                    argv.Add(line);
+                }
+
+                return;
+
             default:
-                if (value.Length > 0 && field.Flag is { Length: > 0 } flag)
+                var flag = field.Flag;
+                if (string.IsNullOrEmpty(flag) || string.Equals(value, baseline, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                if (value.Length > 0)
                 {
                     argv.Add(flag);
                     argv.Add(value);
+                }
+                else if (field.AllowEmptyWhenChanged)
+                {
+                    // "Empty means inherit": clearing a stored value is a change worth sending.
+                    argv.Add(flag);
+                    argv.Add(string.Empty);
                 }
 
                 return;

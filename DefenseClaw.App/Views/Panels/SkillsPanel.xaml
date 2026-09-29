@@ -2,19 +2,22 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:local="clr-namespace:DefenseClaw.App.Views.Panels">
+             xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             d:DataContext="{d:DesignInstance Type=vm:SkillsPanelViewModel}"
+             mc:Ignorable="d">
     <!--
-        Skills panel: GET /skills + the skill slice of /enforce/blocked and
-        /enforce/allowed, with block/allow mutations gated behind the confirm overlay at
-        the bottom of this file. See ViewModels\SkillsPanelViewModel.cs for the data and
-        command logic - this view only lays it out and binds to it.
+        Skills panel. Data is the CLI command 'skill list' with its JSON flag (one read per visit / Refresh / scope change),
+        not the gateway's /skills, which answers "not connected" on a standalone install.
+        Row layout, the review dialog and the result card are shared with the other Govern panels
+        (Views\Panels\Govern\); the logic lives in ViewModels\Govern\GovernPanelViewModelBase.cs.
+        Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the dialog / result card / clears the filter.
     -->
-    <UserControl.Resources>
-        <local:SkillsTruthyToVisibilityConverter x:Key="Truthy" />
-    </UserControl.Resources>
-
-    <Grid Margin="28,24,28,24">
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -22,278 +25,186 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,14">
-            <TextBlock FontSize="26"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding Title}" />
-            <TextBlock Margin="0,4,0,0"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding Description}" />
-        </StackPanel>
-
-        <!-- Toolbar -->
-        <Border Grid.Row="1"
-                Margin="0,0,0,14"
-                Padding="12,10"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel Orientation="Horizontal">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <ui:ProgressRing Width="16"
+                                 Height="16"
+                                 IsIndeterminate="True"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
+                                 AutomationProperties.Name="Working" />
+                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding HeaderStatusText}" />
                 <ui:Button Content="Refresh"
                            Command="{Binding RefreshCommand}"
-                           IsEnabled="{Binding IsIdle}" />
-                <TextBlock Margin="18,0,6,0"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="Connector scope:" />
-                <ComboBox MinWidth="180"
-                          VerticalAlignment="Center"
-                          ItemsSource="{Binding Connectors}"
-                          SelectedItem="{Binding SelectedConnector, Mode=TwoWay}" />
-                <TextBlock Margin="18,0,6,0"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="Reason:" />
-                <ui:TextBox MinWidth="220"
-                            VerticalAlignment="Center"
-                            PlaceholderText="Optional, recorded on the mutation"
-                            Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                           IsEnabled="{Binding IsIdle}"
+                           ToolTip="Read the skill list again (F5)">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                    </ui:Button.Icon>
+                </ui:Button>
             </StackPanel>
+        </HeaderedContentControl>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
+            <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                <ui:TextBox x:Name="FilterBox"
+                            Width="240"
+                            PlaceholderText="Filter skills (Ctrl+F)"
+                            Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="Filter skills"
+                            AutomationProperties.HelpText="Matches name, description, connector, state and scan result. Escape clears it." />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
+                    <ComboBox Width="160"
+                              ItemsSource="{Binding StatusFilters}"
+                              SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
+                              AutomationProperties.Name="Show skills in state" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
+                    <ComboBox MinWidth="200"
+                              ItemsSource="{Binding Connectors}"
+                              SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                              AutomationProperties.Name="Connector scope"
+                              AutomationProperties.HelpText="Which connector's skills to list, and which connector block, allow and the other actions apply to when a row does not name one." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
+                    <ui:TextBox MinWidth="180"
+                                Width="220"
+                                PlaceholderText="Recorded with the action"
+                                Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                AutomationProperties.Name="Reason"
+                                AutomationProperties.HelpText="Sent as --reason with block, allow, disable and quarantine." />
+                </StackPanel>
+            </WrapPanel>
         </Border>
 
-        <!-- Mutation result -->
-        <ui:InfoBar Grid.Row="2"
-                    Margin="0,0,0,14"
-                    Title="{Binding ResultTitle}"
-                    Message="{Binding ResultMessage}"
-                    Severity="{Binding ResultSeverity}"
-                    IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
-                    IsClosable="True" />
+        <!-- Result of the last action, result of a read-only command, and a stale-data warning -->
+        <StackPanel Grid.Row="2">
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="{Binding ResultTitle}"
+                        Message="{Binding ResultMessage}"
+                        Severity="{Binding ResultSeverity}"
+                        IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
+                        IsClosable="True"
+                        AutomationProperties.LiveSetting="Polite" />
+            <govern:GovernOutputCard />
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="Showing an older read"
+                        Message="{Binding RefreshWarning}"
+                        Severity="Warning"
+                        IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                        IsClosable="False"
+                        AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
 
-        <!-- Content -->
-        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <ui:InfoBar Margin="0,0,0,14"
-                            Title="Skills"
-                            Message="{Binding BannerMessage}"
-                            Severity="{Binding BannerSeverity}"
-                            IsOpen="{Binding ShowBanner}"
-                            IsClosable="False" />
+        <TextBlock Grid.Row="3"
+                   Style="{StaticResource DcCaption}"
+                   Margin="{StaticResource DcCardGap}"
+                   Text="{Binding CaptionText}" />
 
-                <ui:ProgressRing Width="32"
-                                  Height="32"
-                                  Margin="0,24,0,0"
-                                  HorizontalAlignment="Center"
-                                  IsIndeterminate="True"
-                                  Visibility="{Binding IsLoadingState, Converter={StaticResource BoolToVisibility}}" />
+        <!-- Content: exactly one of these is visible -->
+        <Grid Grid.Row="4">
+            <!--
+                Everything but the list scrolls as one block: the empty and error cards carry a paragraph of
+                explanation, and in a short window the row they sit in is smaller than the card, which used to
+                clip it (an empty card, or a sentence cut mid-line). MinHeight = the viewport keeps the loading
+                spinner centred when there is room. The list below has its own scroller and sits on top.
+            -->
+            <ScrollViewer Style="{StaticResource DcPageScroll}" Focusable="False">
+                <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}"
+                                Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
+                        <ui:ProgressRing Width="32"
+                                         Height="32"
+                                         IsIndeterminate="True"
+                                         AutomationProperties.Name="Reading skills" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading skills from the CLI…" />
+                    </StackPanel>
 
-                <ItemsControl Visibility="{Binding IsLoadedState, Converter={StaticResource BoolToVisibility}}"
-                              ItemsSource="{Binding Skills}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <VirtualizingStackPanel VirtualizationMode="Recycling" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <ui:CardExpander Margin="0,0,0,8">
-                                <ui:CardExpander.Header>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="12"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding Status, StringFormat='status: {0}'}"
-                                                       Visibility="{Binding Status, Converter={StaticResource Truthy}}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="12"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding Connector, StringFormat='connector: {0}'}"
-                                                       Visibility="{Binding Connector, Converter={StaticResource Truthy}}" />
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                            <ui:Button Margin="0,0,6,0"
-                                                       Content="Block"
-                                                       Command="{Binding DataContext.BlockSkillCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                       CommandParameter="{Binding}" />
-                                            <ui:Button Content="Allow"
-                                                       Command="{Binding DataContext.AllowSkillCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                       CommandParameter="{Binding}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </ui:CardExpander.Header>
-
-                                <Border Padding="4"
-                                        Background="{DynamicResource LayerFillColorDefaultBrush}">
-                                    <TextBox MaxHeight="220"
-                                             VerticalScrollBarVisibility="Auto"
-                                             HorizontalScrollBarVisibility="Auto"
-                                             FontFamily="Consolas"
-                                             FontSize="12"
-                                             IsReadOnly="True"
-                                             TextWrapping="NoWrap"
-                                             Text="{Binding RawJson, Mode=OneWay}" />
-                                </Border>
-                            </ui:CardExpander>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <!-- Enforcement overrides -->
-                <Grid Margin="0,18,0,0" Visibility="{Binding IsNotLoading, Converter={StaticResource BoolToVisibility}}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0"
-                            Padding="12"
-                            CornerRadius="8"
-                            BorderThickness="1"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding BlockedHeader}" />
-                            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Blocked}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,4"
-                                                Padding="8"
-                                                CornerRadius="4"
-                                                Background="{DynamicResource LayerFillColorDefaultBrush}">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Reason, StringFormat='reason: {0}'}"
-                                                           Visibility="{Binding Reason, Converter={StaticResource Truthy}}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Scope, StringFormat='scope: {0}'}"
-                                                           Visibility="{Binding Scope, Converter={StaticResource Truthy}}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Text="No blocked skills."
-                                       Visibility="{Binding DataContext.NoBlockedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
-                            <!-- The list could not be read: say so, rather than "No blocked skills." -->
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       Text="{Binding BlockedUnavailable}"
-                                       Visibility="{Binding HasBlockedUnavailable, Converter={StaticResource BoolToVisibility}}" />
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowCliMissing, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
                         </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="2"
-                            Padding="12"
-                            CornerRadius="8"
-                            BorderThickness="1"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding AllowedHeader}" />
-                            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Allowed}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,4"
-                                                Padding="8"
-                                                CornerRadius="4"
-                                                Background="{DynamicResource LayerFillColorDefaultBrush}">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Reason, StringFormat='reason: {0}'}"
-                                                           Visibility="{Binding Reason, Converter={StaticResource Truthy}}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Scope, StringFormat='scope: {0}'}"
-                                                           Visibility="{Binding Scope, Converter={StaticResource Truthy}}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Text="No allow-listed skills."
-                                       Visibility="{Binding DataContext.NoAllowedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       Text="{Binding AllowedUnavailable}"
-                                       Visibility="{Binding HasAllowedUnavailable, Converter={StaticResource BoolToVisibility}}" />
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="PuzzlePiece24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No skills match the filter" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every skill the CLI listed. Clear it to see them all." />
+                            <ui:Button Margin="0,12,0,0"
+                                       HorizontalAlignment="Center"
+                                       Content="Clear filter"
+                                       Command="{Binding ClearFilterCommand}" />
                         </StackPanel>
                     </Border>
                 </Grid>
-            </StackPanel>
-        </ScrollViewer>
+            </ScrollViewer>
 
-        <!-- Confirm-mutation overlay: shows the exact argv before anything runs. -->
-        <Grid Grid.Row="0"
-              Grid.RowSpan="4"
-              Background="#88000000"
-              Visibility="{Binding IsConfirmOpen, Converter={StaticResource BoolToVisibility}}">
-            <Border MaxWidth="560"
-                    Padding="20"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    CornerRadius="8"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    Background="{DynamicResource ApplicationBackgroundBrush}">
-                <StackPanel>
-                    <TextBlock FontSize="16"
-                               FontWeight="SemiBold"
-                               TextWrapping="Wrap"
-                               Text="{Binding ConfirmHeading}" />
-                    <TextBlock Margin="0,10,0,0"
-                               FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="This is the exact command that will run. Nothing happens until you confirm." />
-                    <Border Margin="0,10,0,0"
-                            Padding="10"
-                            CornerRadius="4"
-                            Background="{DynamicResource LayerFillColorDefaultBrush}">
-                        <TextBox FontFamily="Consolas"
-                                 FontSize="12"
-                                 IsReadOnly="True"
-                                 TextWrapping="Wrap"
-                                 Text="{Binding ConfirmCommandText, Mode=OneWay}" />
-                    </Border>
-                    <StackPanel Margin="0,16,0,0"
-                                HorizontalAlignment="Right"
-                                Orientation="Horizontal">
-                        <ui:Button Margin="0,0,8,0"
-                                   Content="Cancel"
-                                   Command="{Binding ConfirmNoCommand}" />
-                        <ui:Button Appearance="Primary"
-                                   Content="Run command"
-                                   Command="{Binding ConfirmYesCommand}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+            <ItemsControl AutomationProperties.Name="Skills"
+                          ItemsSource="{Binding Rows}"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Standard"
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
+                <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer Style="{StaticResource DcPageScroll}"
+                                      CanContentScroll="True"
+                                      Focusable="False">
+                            <ItemsPresenter />
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <govern:GovernRowView />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </Grid>
+
+        <!-- Review dialog for every state-changing command -->
+        <govern:GovernConfirmOverlay Grid.Row="0" Grid.RowSpan="5" />
     </Grid>
 </UserControl>

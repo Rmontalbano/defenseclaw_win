@@ -1,0 +1,61 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.Govern.GovernOutputCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             IsTabStop="False">
+    <!--
+        Result of a read-only row command (skill info, plugin info, tool status), shown inline so the
+        operator keeps their place in the list. DataContext = a GovernPanelViewModelBase. Esc closes it.
+    -->
+    <Border Style="{StaticResource DcCard}"
+            Margin="{StaticResource DcCardGap}"
+            AutomationProperties.Name="Command result"
+            Visibility="{Binding IsOutputOpen, Converter={StaticResource BoolToVisibility}}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Grid.Column="0"
+                       Style="{StaticResource DcCardTitle}"
+                       Text="{Binding OutputTitle}"
+                       AutomationProperties.LiveSetting="Polite" />
+
+            <StackPanel Grid.Row="0"
+                        Grid.Column="1"
+                        Orientation="Horizontal">
+                <ui:Button Margin="0,0,8,8"
+                           Content="Copy"
+                           Command="{Binding CopyOutputCommand}"
+                           AutomationProperties.Name="Copy the result to the clipboard">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="Copy24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+                <ui:Button Margin="0,0,0,8"
+                           Content="Close"
+                           Command="{Binding CloseOutputCommand}"
+                           AutomationProperties.Name="Close the result" />
+            </StackPanel>
+
+            <Border Grid.Row="1"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="2"
+                    Style="{StaticResource DcCodeBlock}">
+                <TextBox Style="{StaticResource DcMonoTextBox}"
+                         MaxHeight="280"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         TextWrapping="NoWrap"
+                         Text="{Binding OutputText, Mode=OneWay}"
+                         AutomationProperties.Name="Command output" />
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

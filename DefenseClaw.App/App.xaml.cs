@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
+using Microsoft.Win32;
 using Wpf.Ui.Appearance;
 
 namespace DefenseClaw.App;
@@ -64,6 +65,9 @@ public partial class App : Application
     private MainWindow? _window;
     private DateTimeOffset _lastFaultDialogUtc = DateTimeOffset.MinValue;
 
+    /// <summary>The OS theme the WPF-UI dictionaries were last brought in line with; see <see cref="ApplyTheme"/>.</summary>
+    private SystemTheme _appliedSystemTheme;
+
     /// <summary>
     /// True once the tray, the window and the poll loop exist. Gates whether a dispatcher
     /// fault is survivable; see the type doc for the reasoning.
@@ -123,6 +127,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+
         // Tray first so the shield leaves the notification area immediately; the CLI shutdown
         // below is bounded but not instant, and a ghost icon for a few seconds looks like a hang.
         _tray?.Dispose();
@@ -156,6 +162,38 @@ public partial class App : Application
     {
         ThemeMode = ThemeMode.System;
         ApplicationThemeManager.ApplySystemTheme();
+        _appliedSystemTheme = ApplicationThemeManager.GetSystemTheme();
+
+        // SystemThemeWatcher (started by MainWindow) keeps the theme in step, but only once that
+        // window has a handle. An autostarted "--minimized" session may go a whole day without
+        // showing it, and the tray flyout — which reads the same DynamicResource theme brushes —
+        // would keep yesterday's light/dark until then. This listens for the OS's own signal too.
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+    }
+
+    /// <summary>
+    /// Re-applies the OS theme when it actually changed. Raised on a system thread for every
+    /// "General" preference change (there are many, most irrelevant), so it hops to the dispatcher
+    /// and compares first: an unchanged theme costs one property read, not a dictionary swap.
+    /// </summary>
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != UserPreferenceCategory.General)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            var current = ApplicationThemeManager.GetSystemTheme();
+            if (current == _appliedSystemTheme)
+            {
+                return;
+            }
+
+            _appliedSystemTheme = current;
+            ApplicationThemeManager.ApplySystemTheme();
+        });
     }
 
     private void OnActivationRequested(object? sender, EventArgs e)

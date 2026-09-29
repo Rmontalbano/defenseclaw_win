@@ -183,6 +183,25 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
         }
     }
 
+    /// <summary>
+    /// What F5 invokes. The tailers already keep both buffers current for the life of the process,
+    /// so there is no file to re-read: Refresh re-projects the active source's buffer through the
+    /// current filters (rebuilding the component checklist from what the buffer holds) and the
+    /// code-behind then scrolls to the newest line when live. It does no I/O and, like every
+    /// projection, waits for the seed to finish on the very first visit.
+    /// </summary>
+    [RelayCommand]
+    private void Refresh()
+    {
+        if (!_seeded)
+        {
+            return;
+        }
+
+        RebuildComponentFilters();
+        ApplyFilters();
+    }
+
     [RelayCommand]
     private void Clear()
     {
@@ -528,6 +547,9 @@ public sealed partial class ComponentFilterOption : ObservableObject
     }
 
     public string Name { get; }
+
+    /// <summary>The component name, which is what a screen reader should say for the checklist item.</summary>
+    public override string ToString() => Name;
 }
 
 /// <summary>One rendered log line: a dimmed component prefix plus the message.</summary>
@@ -553,4 +575,10 @@ public sealed class LogEntry
     public string ComponentText { get; }
 
     public bool HasComponent { get; }
+
+    /// <summary>
+    /// What a screen reader announces for the line (UI Automation falls back to <c>ToString()</c>
+    /// for a list item with no explicit name), instead of the type name.
+    /// </summary>
+    public override string ToString() => HasComponent ? $"{ComponentText}: {Message}" : Message;
 }

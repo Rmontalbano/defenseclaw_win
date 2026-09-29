@@ -6,110 +6,77 @@
         Newest-first list of every subprocess this app has run. The list is in memory only, so
         it is empty until something has been run in this session - the empty state carries the
         weight of explaining the panel rather than the list itself.
+
+        Each entry shows its review tier (Read-only / State-changing / Destructive), its exit
+        badge, and the actions: Cancel (only while it runs), Copy argv, Copy output, Export log.
+        Everything is on the shared Dc* design system; the one local style is the stderr line.
     -->
     <UserControl.Resources>
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="Padding" Value="14" />
-        </Style>
-
-        <Style x:Key="Secondary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Tertiary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <!-- Exit-code badge: background tint plus matching foreground, both theme-aware. -->
-        <Style x:Key="Badge" TargetType="Border">
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="8,3,8,3" />
-            <Setter Property="MinWidth" Value="76" />
-            <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
+        <!-- One line of captured output; a stderr line reads in the critical tone. -->
+        <Style x:Key="OutputLine" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
             <Style.Triggers>
-                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Ok">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Bad">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Warn">
-                    <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="BadgeText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Ok">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Bad">
+                <DataTrigger Binding="{Binding IsError}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Warn">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="24,20,24,20">
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <StackPanel Grid.Column="0">
-                <TextBlock FontSize="26"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding Title}" />
-                <TextBlock Margin="0,4,0,0"
-                           FontSize="13"
-                           Style="{StaticResource Secondary}"
-                           Text="{Binding Description}" />
-                <TextBlock Margin="0,4,0,0"
-                           FontSize="11"
-                           Style="{StaticResource Tertiary}"
-                           Text="{Binding CapacityNote}" />
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Margin="0,4,0,0"
+                               Text="{Binding CapacityNote}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <ui:Button Content="Refresh"
+                           Appearance="Secondary"
+                           Command="{Binding RefreshCommand}"
+                           AutomationProperties.HelpText="Re-sync the list with the commands this session has run. Runs nothing. Shortcut F5.">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+                <ui:Button Content="Clear"
+                           Appearance="Secondary"
+                           Command="{Binding ClearActivityCommand}"
+                           AutomationProperties.HelpText="Forget every entry in this list. Commands that are still running keep running.">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="Delete24" />
+                    </ui:Button.Icon>
+                </ui:Button>
             </StackPanel>
+        </HeaderedContentControl>
 
-            <ui:Button Grid.Column="1"
-                       VerticalAlignment="Top"
-                       Appearance="Secondary"
-                       Content="Clear"
-                       Command="{Binding ClearActivityCommand}">
-                <ui:Button.Icon>
-                    <ui:SymbolIcon Symbol="Delete24" />
-                </ui:Button.Icon>
-            </ui:Button>
-        </Grid>
+        <!-- Result of the last row action: copied, exported, cancel refused... -->
+        <ui:InfoBar Grid.Row="1"
+                    Margin="{StaticResource DcCardGap}"
+                    Severity="Informational"
+                    IsClosable="True"
+                    IsOpen="{Binding HasNotice, Mode=TwoWay}"
+                    Message="{Binding NoticeText}"
+                    AutomationProperties.LiveSetting="Polite" />
 
         <!-- List -->
-        <Grid Grid.Row="1">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl ItemsSource="{Binding Rows}">
+        <Grid Grid.Row="2">
+            <ScrollViewer Style="{StaticResource DcPageScroll}">
+                <ItemsControl ItemsSource="{Binding Rows}"
+                              AutomationProperties.Name="Commands run in this session, newest first">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                            <Border Style="{StaticResource DcCardCompact}" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -117,80 +84,113 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBlock Grid.Column="0"
-                                                   FontFamily="Cascadia Mono, Consolas"
-                                                   FontSize="13"
-                                                   TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                   Text="{Binding CommandLine}" />
+                                        <!-- Selectable, so a path or id in the argv can be copied piecemeal. -->
+                                        <TextBox Grid.Column="0"
+                                                 Style="{StaticResource DcMonoTextBox}"
+                                                 VerticalAlignment="Center"
+                                                 AutomationProperties.Name="Command line"
+                                                 Text="{Binding CommandLine, Mode=OneWay}" />
 
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
-                                            <Border Margin="0,0,8,0"
-                                                    Padding="6,1,6,1"
-                                                    CornerRadius="9"
-                                                    VerticalAlignment="Center"
-                                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                        <WrapPanel Grid.Column="1"
+                                                   Margin="10,0,0,0"
+                                                   VerticalAlignment="Top"
+                                                   HorizontalAlignment="Right">
+                                            <Border Style="{StaticResource DcBadge}"
+                                                    Tag="{Binding TierKey}"
+                                                    Margin="0,0,8,0"
+                                                    ToolTip="{Binding TierHelp}"
+                                                    AutomationProperties.Name="{Binding TierText, StringFormat='Review tier: {0}'}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding TierText}" />
+                                            </Border>
+
+                                            <Border Style="{StaticResource DcChip}"
+                                                    Margin="0,0,8,0"
+                                                    ToolTip="A secret was piped in on stdin. Its value is never recorded."
                                                     Visibility="{Binding UsedStdinSecret, Converter={StaticResource BoolToVisibility}}">
-                                                <TextBlock FontSize="10"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="stdin secret" />
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="stdin secret" />
                                             </Border>
 
-                                            <Border Style="{StaticResource Badge}">
-                                                <TextBlock Style="{StaticResource BadgeText}" Text="{Binding ExitBadgeText}" />
+                                            <Border Style="{StaticResource DcBadge}"
+                                                    Tag="{Binding ExitBadgeKey}"
+                                                    MinWidth="76"
+                                                    AutomationProperties.Name="{Binding ExitBadgeText, StringFormat='Result: {0}'}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ExitBadgeText}" />
                                             </Border>
-
-                                            <ui:Button Margin="8,0,0,0"
-                                                       Padding="6,4,6,4"
-                                                       Appearance="Secondary"
-                                                       ToolTip="Copy command"
-                                                       Command="{Binding CopyCommand}">
-                                                <ui:Button.Icon>
-                                                    <ui:SymbolIcon Symbol="Copy24" />
-                                                </ui:Button.Icon>
-                                            </ui:Button>
-                                        </StackPanel>
+                                        </WrapPanel>
                                     </Grid>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                        <TextBlock Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding StartedText}" />
-                                        <TextBlock Margin="10,0,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding RelativeStartText}" />
-                                        <TextBlock Margin="10,0,0,0" Style="{StaticResource Tertiary}" FontSize="11" Text="{Binding DurationText, StringFormat='duration {0}'}" />
-                                    </StackPanel>
+                                    <WrapPanel Margin="0,6,0,0">
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,10,0" Text="{Binding StartedText}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,10,0" Text="{Binding RelativeStartText}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding DurationText, StringFormat='duration {0}'}" />
+                                    </WrapPanel>
 
-                                    <TextBlock Margin="0,4,0,0"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                    <TextBlock Style="{StaticResource DcToneText}"
+                                               Tag="Warn"
+                                               Margin="0,4,0,0"
+                                               FontSize="12"
                                                TextWrapping="Wrap"
                                                Visibility="{Binding HasFailure, Converter={StaticResource BoolToVisibility}}"
                                                Text="{Binding FailureText}" />
 
-                                    <Expander Margin="0,8,0,0"
+                                    <!-- Row actions. Cancel exists only while the run does; for the upgrade
+                                         installer it stays visible but disabled, with the reason as its tooltip. -->
+                                    <WrapPanel Margin="0,8,0,0">
+                                        <ui:Button Content="Cancel"
+                                                   Appearance="Danger"
+                                                   Margin="0,0,8,4"
+                                                   IsEnabled="{Binding CanCancel}"
+                                                   Command="{Binding CancelCommand}"
+                                                   ToolTip="{Binding CancelHint}"
+                                                   ToolTipService.ShowOnDisabled="True"
+                                                   AutomationProperties.Name="Cancel this command"
+                                                   AutomationProperties.HelpText="{Binding CancelHint}"
+                                                   Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                                        <ui:Button Content="Copy argv"
+                                                   Appearance="Secondary"
+                                                   Margin="0,0,8,4"
+                                                   Command="{Binding CopyCommand}"
+                                                   ToolTip="Copy the exact command line"
+                                                   AutomationProperties.Name="Copy argv"
+                                                   AutomationProperties.HelpText="Copies the exact command line that was run.">
+                                            <ui:Button.Icon>
+                                                <ui:SymbolIcon Symbol="Copy24" />
+                                            </ui:Button.Icon>
+                                        </ui:Button>
+                                        <ui:Button Content="Copy output"
+                                                   Appearance="Secondary"
+                                                   Margin="0,0,8,4"
+                                                   Command="{Binding CopyOutputCommand}"
+                                                   ToolTip="Copy everything this command has printed so far"
+                                                   AutomationProperties.Name="Copy output"
+                                                   AutomationProperties.HelpText="Copies the captured output of this command as plain text.">
+                                            <ui:Button.Icon>
+                                                <ui:SymbolIcon Symbol="Copy24" />
+                                            </ui:Button.Icon>
+                                        </ui:Button>
+                                        <ui:Button Content="Export log"
+                                                   Appearance="Secondary"
+                                                   Margin="0,0,8,4"
+                                                   Command="{Binding ExportLogCommand}"
+                                                   ToolTip="Save the command, its result and its output to a file you choose"
+                                                   AutomationProperties.Name="Export log"
+                                                   AutomationProperties.HelpText="Opens a save dialog and writes the command, its result and its output to the file you choose.">
+                                            <ui:Button.Icon>
+                                                <ui:SymbolIcon Symbol="Save24" />
+                                            </ui:Button.Icon>
+                                        </ui:Button>
+                                    </WrapPanel>
+
+                                    <Expander Margin="0,4,0,0"
                                               Header="Output"
-                                              IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
-                                        <Border Margin="0,6,0,0"
-                                                Padding="10"
-                                                CornerRadius="6"
-                                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
-                                            <ItemsControl ItemsSource="{Binding Output}">
+                                              IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                              AutomationProperties.Name="Output">
+                                        <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0">
+                                            <ItemsControl ItemsSource="{Binding Output}"
+                                                          AutomationProperties.Name="Command output">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <TextBlock FontFamily="Cascadia Mono, Consolas"
-                                                                   FontSize="12"
-                                                                   TextWrapping="Wrap"
-                                                                   Text="{Binding Text}">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding IsError}" Value="True">
-                                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
+                                                        <TextBlock Style="{StaticResource OutputLine}" Text="{Binding Text}" />
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
@@ -204,19 +204,11 @@
             </ScrollViewer>
 
             <!-- Empty is the expected state today, not a failure: say exactly why. -->
-            <StackPanel HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        MaxWidth="480"
+            <StackPanel Style="{StaticResource DcEmptyState}"
                         Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock HorizontalAlignment="Center"
-                           FontSize="16"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="{Binding EmptyTitle}" />
-                <TextBlock Margin="0,6,0,0"
-                           TextAlignment="Center"
-                           Style="{StaticResource Tertiary}"
-                           Text="{Binding EmptyDetail}" />
+                <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="History24" />
+                <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
             </StackPanel>
         </Grid>
     </Grid>

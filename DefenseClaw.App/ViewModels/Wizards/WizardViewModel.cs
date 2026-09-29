@@ -7,7 +7,6 @@ using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
-using DefenseClaw.Core.Config;
 
 namespace DefenseClaw.App.ViewModels.Wizards;
 
@@ -19,7 +18,20 @@ namespace DefenseClaw.App.ViewModels.Wizards;
 /// exact argv about to run, because this app's whole contract is that it never edits
 /// DefenseClaw state itself — it shells out, and the operator gets to read the command first.
 /// The same list is what reaches <see cref="CliRunner.RunAsync"/>, so the screen cannot drift
-/// from what executes: both come from <see cref="WizardDefinition.BuildArgv"/>.
+/// from what executes: both come from <see cref="WizardDefinition.BuildArgv"/>. The review also says
+/// how much the command changes (<see cref="CommandTiers"/>), whether it restarts the gateway, what the
+/// operator changed from the current configuration, and — for a target with a <c>--dry-run</c> — offers
+/// to preview it first.
+/// </para>
+/// <para>
+/// <b>Only what changed is sent.</b> The pages start from the current configuration
+/// (<see cref="WizardBaseline"/>) and a field reaches argv only when its answer differs from what
+/// leaving it off would mean. An untouched wizard therefore cannot downgrade a connector.
+/// </para>
+/// <para>
+/// <b>No secret ever passes through here.</b> A secret-taking flag is shown as a credential card
+/// (which variable, is it set, how to store it in a real console); the wizard neither collects nor pipes
+/// the value. See <see cref="SecretRoute"/> for why that is the only correct behaviour on Windows.
 /// </para>
 /// <para>
 /// <b>Live output.</b> <see cref="CliRunner.OutputReceived"/> carries no invocation id, so —
@@ -37,10 +49,11 @@ namespace DefenseClaw.App.ViewModels.Wizards;
 /// retried from the review page as it stands. Only a <i>successful</i> run locks
 /// <see cref="ExecuteCommand"/> (a setup verb applied twice is not something to allow by a stray
 /// double-click); the deliberate way past that is <see cref="RunAgainCommand"/>, which returns to
-/// a fresh review page. A run in flight is held on a token of its own, so <see cref="CancelCommand"/>
-/// and closing the window can stop it — after a confirmation, because <c>setup</c> verbs write
-/// configuration and a killed one can leave it half-applied. <see cref="CliRunner"/> kills the whole
-/// process tree on cancellation and reports it as <c>cancelled — process tree killed</c>.
+/// a fresh review page. A dry-run preview never locks anything. A run in flight is held on a token of
+/// its own, so <see cref="CancelCommand"/> and closing the window can stop it — after a confirmation,
+/// because <c>setup</c> verbs write configuration and a killed one can leave it half-applied.
+/// <see cref="CliRunner"/> kills the whole process tree on cancellation and reports it as
+/// <c>cancelled — process tree killed</c>.
 /// </para>
 /// </summary>
 public sealed partial class WizardViewModel : ObservableObject, IDisposable
@@ -106,17 +119,43 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _commandText = string.Empty;
 
+    /// <summary>"Read-only", "Changes state" or "Destructive" — see <see cref="WizardReview.TierText"/>.</summary>
     [ObservableProperty]
-    private string _stdinNote = string.Empty;
+    private string _tierText = string.Empty;
+
+    /// <summary>Ok / Warn / Bad — the tone key for the tier badge.</summary>
+    [ObservableProperty]
+    private string _tierKey = "Warn";
 
     [ObservableProperty]
-    private bool _hasStdinSecret;
+    private bool _isDestructive;
 
     [ObservableProperty]
-    private bool _hasStdinConflict;
+    private string _restartWarning = string.Empty;
 
     [ObservableProperty]
-    private string _stdinConflictNote = string.Empty;
+    private bool _hasRestartWarning;
+
+    [ObservableProperty]
+    private string _changeSummary = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasChanges;
+
+    [ObservableProperty]
+    private bool _hasReviewCredentials;
+
+    [ObservableProperty]
+    private string _reviewProblem = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasReviewProblem;
+
+    [ObservableProperty]
+    private string _promptWarning = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasPromptWarning;
 
     [ObservableProperty]
     private string _validationSummary = string.Empty;
@@ -136,9 +175,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     private bool _hasRun;
 
     /// <summary>
-    /// True when the run on display exited 0 with no failure reason. Only this — not
-    /// <see cref="HasRun"/> — locks <see cref="CanExecute"/>: a failed or cancelled attempt is
-    /// exactly the case where the operator needs to be able to try again.
+    /// True when the run on display exited 0 with no failure reason and was the real command. Only
+    /// this — not <see cref="HasRun"/> — locks <see cref="CanExecute"/>: a failed, cancelled or
+    /// preview-only attempt is exactly the case where the operator needs to be able to go on.
     /// </summary>
     [ObservableProperty]
     private bool _lastRunSucceeded;
@@ -163,11 +202,16 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     public WizardViewModel(AppServices services, WizardDefinition definition)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
-        Definition = definition ?? throw new ArgumentNullException(nameof(definition));
+        ArgumentNullException.ThrowIfNull(definition);
 
-        foreach (var step in definition.Steps)
+        // The catalog's definition is a cache over --help and knows nothing of this machine; the pages
+        // start from what config.yaml says now. Applied per open wizard, never to the shared definition.
+        Definition = WizardBaseline.Apply(definition, services.Config, services.ConfigLoadError is null);
+        Credentials = new WizardCredentials(services.Paths);
+
+        foreach (var step in Definition.Steps)
         {
-            var fields = step.Fields.Select(f => new WizardFieldViewModel(f, _values)).ToArray();
+            var fields = step.Fields.Select(f => new WizardFieldViewModel(f, _values, Credentials)).ToArray();
             foreach (var field in fields)
             {
                 field.PropertyChanged += OnFieldChanged;
@@ -181,6 +225,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         _timer.Tick += (_, _) => PullOutput();
 
         ApplyGates();
+        RefreshCredentials();
         GoTo(0);
     }
 
@@ -188,6 +233,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     public event EventHandler? CloseRequested;
 
     public WizardDefinition Definition { get; }
+
+    /// <summary>Presence checks and the "type it into a console" launcher for secret fields.</summary>
+    public WizardCredentials Credentials { get; }
 
     public string Title => Definition.Title;
 
@@ -199,6 +247,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<CliOutputRow> Output { get; } = new();
 
+    /// <summary>The visible secret fields, for the review page's credential list.</summary>
+    public ObservableCollection<WizardFieldViewModel> ReviewCredentials { get; } = new();
+
+    /// <summary>Sentences for what the operator changed from the current configuration.</summary>
+    public ObservableCollection<string> ReviewChanges { get; } = new();
+
     public string CertificationBadge => PlatformStatusText.Badge(Definition.PlatformStatus);
 
     public string CertificationKey => PlatformStatusText.Key(Definition.PlatformStatus);
@@ -207,6 +261,14 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         PlatformStatusText.Warning(Definition.PlatformStatus, Definition.PlatformNote);
 
     public bool HasCertificationWarning => CertificationWarning.Length > 0;
+
+    public string BaselineNote => Definition.BaselineNote;
+
+    public bool HasBaselineNote => Definition.BaselineNote.Length > 0;
+
+    public string BaselineWarning => Definition.BaselineWarning;
+
+    public bool HasBaselineWarning => Definition.BaselineWarning.Length > 0;
 
     /// <summary>Resolved path of the binary that will run, shown under the argv.</summary>
     public string ExecutablePath => _services.Paths.CliPath ?? "defenseclaw (not found on PATH)";
@@ -219,18 +281,40 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
     public string HelpText => Definition.HelpText;
 
+    /// <summary>What a screen reader announces for the window: the wizard and where in it we are.</summary>
+    public string WindowAutomationName => $"Setup wizard: {Title}. {ProgressText}";
+
     public bool CanGoBack => PageIndex > 0 && !IsRunning;
 
     public bool CanGoNext => !IsReview && !IsRunning;
 
     /// <summary>
-    /// Review page, nothing in flight, and the last run (if any) did not succeed. A successful run
-    /// disables Execute until <see cref="RunAgainCommand"/> or a change of answers resets it.
+    /// Review page, nothing in flight, nothing blocking, and the last real run (if any) did not
+    /// succeed. A successful run disables Execute until <see cref="RunAgainCommand"/> or a change of
+    /// answers resets it.
     /// </summary>
-    public bool CanExecute => IsReview && !IsRunning && !(HasRun && LastRunSucceeded);
+    public bool CanExecute => IsReview && !IsRunning && !HasReviewProblem && !(HasRun && LastRunSucceeded);
 
     /// <summary>True after a successful run: the explicit way to run the same command again.</summary>
     public bool CanRunAgain => IsReview && !IsRunning && HasRun && LastRunSucceeded;
+
+    /// <summary>The ordinary primary "Execute" button: the review page of a command that is not destructive.</summary>
+    public bool ShowExecute => IsReview && !IsDestructive;
+
+    /// <summary>The danger-styled "Execute" button: same command and enablement, for a destructive tier.</summary>
+    public bool ShowDangerExecute => IsReview && IsDestructive;
+
+    /// <summary>True when the target has a <c>--dry-run</c> and it is not already part of the command.</summary>
+    public bool CanPreview => IsReview && !IsRunning && !HasReviewProblem && SupportsPreview && !_previewFlagInCommand;
+
+    /// <summary>
+    /// The command being built documents a <c>--dry-run</c> that writes nothing (its help says "Preview …
+    /// without writing"). Judged on the <i>visible</i> fields: a group's <c>add</c> has one, its <c>list</c>
+    /// does not, and appending the flag to the wrong subcommand would only be an error.
+    /// </summary>
+    public bool SupportsPreview => Definition.VisibleFields(_values).Any(f => f.Flag == "--dry-run");
+
+    private bool _previewFlagInCommand;
 
     /// <summary>Visible pages only: a gated page the current answers exclude is not a page.</summary>
     private IReadOnlyList<WizardStepViewModel> VisibleSteps =>
@@ -273,6 +357,21 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Escape, from anywhere in the window: dismisses the stop question if it is up, otherwise does what
+    /// the Cancel/Close button does (which, mid-run, asks before stopping anything).
+    /// </summary>
+    public void HandleEscape()
+    {
+        if (IsStopConfirmVisible)
+        {
+            KeepRunning();
+            return;
+        }
+
+        Cancel();
     }
 
     /// <summary>
@@ -393,29 +492,40 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     /// The one mutation this wizard performs. Runs through <see cref="CliRunner"/> so the
     /// argv, the live output and the exit code are recorded in Activity like every other
     /// change the app makes.
-    /// <para>
-    /// The run holds a token of its own (<see cref="_runCts"/>) so that <see cref="ConfirmStopCommand"/>
-    /// can end it. Cancelling makes the runner kill the whole process tree and report
-    /// <c>cancelled — process tree killed</c> as data on the returned invocation — it does not throw,
-    /// so the outcome arrives through <see cref="ApplyResult"/> like any other.
-    /// </para>
     /// </summary>
     [RelayCommand]
-    private async Task ExecuteAsync()
+    private Task ExecuteAsync() => !CanExecute || _disposed
+        ? Task.CompletedTask
+        : RunCoreAsync(Definition.BuildArgv(_values), preview: false);
+
+    /// <summary>
+    /// Runs the same command with <c>--dry-run</c> added and shows what it would write. Offered only for a
+    /// target whose help documents a preview that writes nothing; it never locks Execute.
+    /// </summary>
+    [RelayCommand]
+    private Task PreviewAsync()
     {
-        if (!CanExecute || _disposed)
+        if (!CanPreview || _disposed)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var argv = Definition.BuildArgv(_values);
-        var secret = ResolveSecret(out var secretError);
-        if (secretError is { Length: > 0 })
-        {
-            SetValidation(secretError);
-            return;
-        }
+        var argv = Definition.BuildArgv(_values).Append("--dry-run").ToArray();
+        return RunCoreAsync(argv, preview: true);
+    }
 
+    /// <summary>
+    /// Shared by Execute and Preview. The run holds a token of its own (<see cref="_runCts"/>) so that
+    /// <see cref="ConfirmStopCommand"/> can end it. Cancelling makes the runner kill the whole process
+    /// tree and report <c>cancelled — process tree killed</c> as data on the returned invocation — it does
+    /// not throw, so the outcome arrives through <see cref="ApplyResult"/> like any other.
+    /// <para>
+    /// No secret is passed: the runner is called without a stdin secret because none of these commands
+    /// reads one (see <see cref="SecretRoute"/>).
+    /// </para>
+    /// </summary>
+    private async Task RunCoreAsync(IReadOnlyList<string> argv, bool preview)
+    {
         // A retry after a failed or cancelled attempt starts from a clean console and badge, not
         // the previous attempt's.
         ResetRunState();
@@ -424,7 +534,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         _closeAfterStop = false;
         _runCts = new CancellationTokenSource();
         var token = _runCts.Token;
-        ResultMessage = "Running. Cancel stops the command and everything it started.";
+        ResultMessage = preview
+            ? "Previewing with --dry-run. Nothing is written. Cancel stops the command."
+            : "Running. Cancel stops the command and everything it started.";
         IsRunning = true;
         RaiseNavigationState();
 
@@ -433,10 +545,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         try
         {
-            var invocation = await _services.Cli.RunAsync(argv, secret, token).ConfigureAwait(true);
+            var invocation = await _services.Cli.RunAsync(argv, null, token).ConfigureAwait(true);
             _invocation = invocation;
             PullOutput();
-            ApplyResult(invocation);
+            ApplyResult(invocation, preview);
         }
         catch (CliNotFoundException ex)
         {
@@ -444,8 +556,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
         catch (SecretInArgumentException ex)
         {
-            // Defence in depth: the field model keeps secrets out of argv, and the runner
-            // refuses them anyway. If this ever fires, the wizard is the bug.
+            // Defence in depth: nothing in this wizard puts a secret in argv, and the runner refuses
+            // one anyway (for example the gateway token). If this ever fires, the wizard is the bug.
             Fail(ex.Message);
         }
         finally
@@ -515,9 +627,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void ApplyResult(CliInvocation invocation)
+    private void ApplyResult(CliInvocation invocation, bool preview)
     {
         LastRunSucceeded = false;
+        var prefix = preview ? "preview · " : string.Empty;
 
         if (invocation.FailureReason is { Length: > 0 } failure)
         {
@@ -525,14 +638,16 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             // so an operator's confirmed Cancel reads as what it was rather than as a failure.
             if (failure.StartsWith("cancelled", StringComparison.Ordinal))
             {
-                ExitBadgeText = "cancelled";
+                ExitBadgeText = prefix + "cancelled";
                 ExitBadgeKey = "Warn";
-                ResultMessage = failure + ". The command may have left setup half-applied — read the output " +
-                                "above and the Activity panel before running it again.";
+                ResultMessage = preview
+                    ? failure + ". A preview writes nothing, so there is nothing to clean up."
+                    : failure + ". The command may have left setup half-applied — read the output " +
+                      "above and the Activity panel before running it again.";
                 return;
             }
 
-            ExitBadgeText = "failed";
+            ExitBadgeText = prefix + "failed";
             ExitBadgeKey = "Warn";
             ResultMessage = failure;
             return;
@@ -540,16 +655,23 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         if (invocation.ExitCode is { } code)
         {
-            ExitBadgeText = "exit " + code.ToString(CultureInfo.CurrentCulture);
+            ExitBadgeText = prefix + "exit " + code.ToString(CultureInfo.CurrentCulture);
             ExitBadgeKey = code == 0 ? "Ok" : "Bad";
-            LastRunSucceeded = code == 0;
-            ResultMessage = code == 0
-                ? "The command completed. Its argv, output and exit code are in the Activity panel."
-                : "The command failed. The output above is kept exactly as it was produced.";
+
+            // A preview never counts as "the run": Execute must stay available after one.
+            LastRunSucceeded = code == 0 && !preview;
+
+            ResultMessage = (preview, code) switch
+            {
+                (true, 0) => "Preview finished. Nothing was written. Read the output, then press Execute to apply it for real.",
+                (true, _) => "The preview failed. The output above is kept exactly as it was produced; nothing was written.",
+                (false, 0) => "The command completed. Its argv, output and exit code are in the Activity panel.",
+                _ => "The command failed. The output above is kept exactly as it was produced.",
+            };
             return;
         }
 
-        ExitBadgeText = "exit unknown";
+        ExitBadgeText = prefix + "exit unknown";
         ExitBadgeKey = "Neutral";
         ResultMessage = "The process ended without reporting an exit code.";
     }
@@ -592,33 +714,6 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         ResultMessage = message;
     }
 
-    /// <summary>
-    /// Collects the one secret this run may carry. stdin takes a single value, so two filled
-    /// secret fields is a validation failure rather than a silent choice between them.
-    /// </summary>
-    private SecretValue? ResolveSecret(out string? error)
-    {
-        error = null;
-
-        var filled = _fields
-            .Where(f => f.IsVisible && f.IsSecret && f.Value.Trim().Length > 0)
-            .ToArray();
-
-        if (filled.Length == 0)
-        {
-            return null;
-        }
-
-        if (filled.Length > 1)
-        {
-            error = "Only one secret can be piped to the command's stdin. Clear all but one: " +
-                    string.Join(", ", filled.Select(f => f.Label));
-            return null;
-        }
-
-        return new SecretValue(filled[0].Value.Trim());
-    }
-
     private void OnFieldChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (!string.Equals(e.PropertyName, nameof(WizardFieldViewModel.Value), StringComparison.Ordinal))
@@ -631,7 +726,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         ResetRunState();
 
         ApplyGates();
-        RefreshCommand();
+
+        // Some credential variables depend on another answer (the destination preset, the key's env name).
+        RefreshCredentials();
+        RefreshReview();
     }
 
     /// <summary>Re-evaluates every step and field gate against the current answers.</summary>
@@ -645,6 +743,17 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             {
                 field.IsVisible = step.IsVisible &&
                     WizardDefinition.IsVisible(field.Field.VisibleWhenFieldId, field.Field.VisibleWhenValues, _values);
+            }
+        }
+    }
+
+    private void RefreshCredentials(bool fresh = false)
+    {
+        foreach (var field in _fields)
+        {
+            if (field.IsSecret)
+            {
+                field.RefreshCredential(fresh);
             }
         }
     }
@@ -667,7 +776,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             PageTitle = "Review";
             PageSubtitle = "This is the exact command that will run. Nothing has changed yet.";
             ProgressText = $"Step {pages.Count + 1} of {pages.Count + 1}";
-            RefreshCommand();
+
+            // A value stored in a console while the operator was on an earlier page counts on the review.
+            RefreshCredentials(fresh: true);
+            RefreshReview();
         }
         else
         {
@@ -678,6 +790,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         SetValidation(string.Empty);
         RaiseNavigationState();
+        OnPropertyChanged(nameof(WindowAutomationName));
     }
 
     private bool ValidateCurrentPage()
@@ -697,6 +810,13 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             }
         }
 
+        // Rules that span fields (splunk: pick a pipeline) only make sense once the page's own answers
+        // are individually valid, and are reported in the footer because no single field owns them.
+        if (errors.Count == 0 && Definition.CrossValidator?.Invoke(_values) is { Length: > 0 } crossProblem)
+        {
+            errors.Add(crossProblem);
+        }
+
         SetValidation(string.Join("  ", errors));
         return errors.Count == 0;
     }
@@ -707,7 +827,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         HasValidationSummary = message.Length > 0;
     }
 
-    private void RefreshCommand()
+    /// <summary>
+    /// Rebuilds everything the review page says: the exact command, how much it changes, the restart
+    /// notice, what the operator changed, which credentials it relies on, and any reason it cannot run.
+    /// Cheap — it derives from the answers in memory and starts nothing.
+    /// </summary>
+    private void RefreshReview()
     {
         if (!IsReview)
         {
@@ -716,29 +841,53 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         var argv = Definition.BuildArgv(_values);
         CommandText = "defenseclaw " + string.Join(' ', argv.Select(Quote));
+        _previewFlagInCommand = argv.Contains("--dry-run", StringComparer.Ordinal);
 
-        var secrets = _fields.Where(f => f.IsVisible && f.IsSecret && f.Value.Trim().Length > 0).ToArray();
-        HasStdinSecret = secrets.Length > 0;
-        StdinNote = HasStdinSecret
-            ? $"{string.Join(", ", secrets.Select(s => s.Label))} will be written to the command's stdin, not to the command line. " +
-              "It is not in the argv above, and it will not appear in the Activity panel or in captured output."
-            : string.Empty;
+        var tier = CommandTiers.Classify(argv);
+        TierText = WizardReview.TierText(tier);
+        TierKey = WizardReview.TierKey(tier);
+        IsDestructive = tier == CommandTier.Destructive;
 
-        // A secret can only reach the CLI through the prompt it would have typed into. If the
-        // command was also told not to prompt, the value is silently dropped — say so here
-        // rather than letting the operator find out from a half-configured destination.
-        var suppressors = _fields
-            .Where(f => f.IsVisible &&
-                        WizardFieldBuilder.IsNonInteractiveFlag(f.Field.Flag) &&
-                        string.Equals(f.Value, ToggleValues.On, StringComparison.OrdinalIgnoreCase))
+        RestartWarning = WizardReview.RestartWarning(Definition, _values, argv);
+        HasRestartWarning = RestartWarning.Length > 0;
+
+        ReviewChanges.Clear();
+        foreach (var line in Definition.DescribeChanges(_values))
+        {
+            ReviewChanges.Add(line);
+        }
+
+        HasChanges = ReviewChanges.Count > 0;
+        ChangeSummary = HasChanges
+            ? "Changed from the current configuration:"
+            : "Nothing was changed from the current configuration. Running this re-applies it as it stands.";
+
+        ReviewCredentials.Clear();
+        foreach (var field in _fields.Where(f => f.IsVisible && f.IsSecret))
+        {
+            ReviewCredentials.Add(field);
+        }
+
+        HasReviewCredentials = ReviewCredentials.Count > 0;
+
+        ReviewProblem = Definition.CrossValidator?.Invoke(_values) ?? string.Empty;
+        HasReviewProblem = ReviewProblem.Length > 0;
+
+        // A non-interactive switch that is off means the CLI will try to ask a question, and this app
+        // has no way to answer: it would stop at the first prompt.
+        var prompting = _fields
+            .Where(f => f.IsVisible && f.Field.Kind == WizardFieldKind.Switch &&
+                        WizardFieldBuilder.IsNonInteractiveFlag(f.Field.Flag) && !f.IsOn)
             .Select(f => f.Field.Flag!)
             .ToArray();
 
-        HasStdinConflict = HasStdinSecret && suppressors.Length > 0;
-        StdinConflictNote = HasStdinConflict
-            ? $"{string.Join(" and ", suppressors)} tells this command not to prompt, so the value piped on stdin will not be read. " +
-              "Turn that off to let the command ask for it, or put the secret in ~/.defenseclaw/.env and point the matching *-env flag at its variable name — which is what DefenseClaw stores anyway."
+        PromptWarning = prompting.Length > 0
+            ? $"{string.Join(" and ", prompting)} is off, so the command will try to prompt for input. This app cannot answer prompts, " +
+              "so it will stop at the first question. Turn it back on unless you are only previewing."
             : string.Empty;
+        HasPromptWarning = PromptWarning.Length > 0;
+
+        RaiseNavigationState();
     }
 
     private void RaiseNavigationState()
@@ -747,9 +896,13 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanGoNext));
         OnPropertyChanged(nameof(CanExecute));
         OnPropertyChanged(nameof(CanRunAgain));
+        OnPropertyChanged(nameof(CanPreview));
+        OnPropertyChanged(nameof(ShowExecute));
+        OnPropertyChanged(nameof(ShowDangerExecute));
         BackCommand.NotifyCanExecuteChanged();
         NextCommand.NotifyCanExecuteChanged();
         ExecuteCommand.NotifyCanExecuteChanged();
+        PreviewCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>Display quoting only: the runner uses ArgumentList, so nothing is ever re-parsed.</summary>

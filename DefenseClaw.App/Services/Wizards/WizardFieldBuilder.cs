@@ -12,8 +12,11 @@ namespace DefenseClaw.App.Services.Wizards;
 /// <c>-env</c> is therefore an ordinary text field: its value is a variable name and is safe
 /// on the command line. Flags that take the secret itself (<c>--token</c>,
 /// <c>--access-token</c>, <c>--hec-token</c>) become <see cref="WizardFieldKind.Secret"/>,
-/// which never reaches argv — <see cref="Core.Cli.CliRunner"/> throws if it ever did — and is
-/// piped to the child's stdin instead.
+/// which never reaches argv — <see cref="Core.Cli.CliRunner"/> throws if it ever did. It is not
+/// piped to stdin either: the CLI reads none of these flags from stdin, and its hidden-prompt
+/// reader (<c>getpass</c>) ignores a redirected pipe on Windows. Such a field is rendered as a
+/// credential card that names the environment variable and hands the operator to
+/// <c>defenseclaw keys set</c> in a real console — see <see cref="SecretRoute"/>.
 /// </para>
 /// </summary>
 public static class WizardFieldBuilder
@@ -75,6 +78,7 @@ public static class WizardFieldBuilder
 
         var kind = KindFor(option);
         var id = (idPrefix ?? string.Empty) + Identifier(option.Flag);
+        var baseline = BaselineFor(option, kind);
 
         return new WizardField
         {
@@ -86,11 +90,37 @@ public static class WizardFieldBuilder
             Help = option.Description,
             Choices = ChoicesFor(option, kind),
             DefaultValue = DefaultFor(option, kind),
+            BaselineValue = baseline,
+            AllowEmptyWhenChanged = AllowsEmpty(option, kind),
             Placeholder = PlaceholderFor(option, kind),
             VisibleWhenFieldId = visibleWhenFieldId,
             VisibleWhenValues = visibleWhenValues ?? Array.Empty<string>(),
         };
     }
+
+    /// <summary>
+    /// What the setting is when the flag is omitted. For an option with a documented CLI default that is
+    /// the default (Click applies it); otherwise it is unset, and a configuration-aware caller
+    /// (<see cref="WizardBaseline"/>) replaces it with the stored value. The one exception is a bare
+    /// non-interactive switch: it is <i>off</i> until sent, even though the wizard starts it on, so it is
+    /// still written into argv (the app has no TTY to answer prompts with).
+    /// </summary>
+    private static string BaselineFor(ParsedOption option, WizardFieldKind kind) => kind switch
+    {
+        WizardFieldKind.Switch => ToggleValues.Off,
+        WizardFieldKind.Secret => string.Empty,
+        _ => DefaultFor(option, kind),
+    };
+
+    /// <summary>
+    /// True for options the help says can be cleared by passing an empty value ("empty = inherit",
+    /// <c>pass "" to clear</c>): there, deleting the text is itself a change to send.
+    /// </summary>
+    private static bool AllowsEmpty(ParsedOption option, WizardFieldKind kind) =>
+        kind is WizardFieldKind.Text or WizardFieldKind.Path &&
+        (option.Description.Contains("empty =", StringComparison.OrdinalIgnoreCase) ||
+         option.Description.Contains("pass \"\"", StringComparison.Ordinal) ||
+         option.Description.Contains("to clear", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Field for a positional argument lifted out of the usage line.</summary>
     public static WizardField FromPositional(
@@ -156,7 +186,21 @@ public static class WizardFieldBuilder
             return WizardFieldKind.Integer;
         }
 
+        // Click's FLOAT (galileo / observability / webhook --timeout): a decimal, not free text.
+        if (metavar == "FLOAT")
+        {
+            return WizardFieldKind.Number;
+        }
+
         var flag = option.Flag;
+
+        // "(repeatable)": the CLI takes the flag several times. One text box would send "a,b" as a single
+        // value, so it becomes a multi-line box that emits one --flag value pair per line (S4).
+        if (option.Description.Contains("repeatable", StringComparison.OrdinalIgnoreCase) &&
+            !flag.EndsWith("-env", StringComparison.Ordinal))
+        {
+            return WizardFieldKind.Lines;
+        }
 
         // "--judge-api-key-env" holds a variable NAME: safe in argv, and it is what the CLI persists.
         if (flag.EndsWith("-env", StringComparison.Ordinal) || flag.Contains("-env-", StringComparison.Ordinal))
@@ -169,10 +213,11 @@ public static class WizardFieldBuilder
             return WizardFieldKind.Secret;
         }
 
+        // "-path" alone is not enough: --url-path is the path part of a URL ("/v1/logs"), not a file.
         if (metavar is "FILE" or "DIRECTORY" or "PATH" ||
             flag.EndsWith("-dir", StringComparison.Ordinal) ||
             flag.EndsWith("-file", StringComparison.Ordinal) ||
-            flag.EndsWith("-path", StringComparison.Ordinal))
+            (flag.EndsWith("-path", StringComparison.Ordinal) && !flag.Contains("url", StringComparison.Ordinal)))
         {
             return WizardFieldKind.Path;
         }
@@ -253,9 +298,11 @@ public static class WizardFieldBuilder
     private static string PlaceholderFor(ParsedOption option, WizardFieldKind kind) => kind switch
     {
         WizardFieldKind.EnvVarName => "ENV_VAR_NAME",
-        WizardFieldKind.Secret => "piped to stdin, never to argv",
+        WizardFieldKind.Secret => "stored with `defenseclaw keys set`, never typed here",
         WizardFieldKind.Path => "path",
-        WizardFieldKind.Integer => "number",
+        WizardFieldKind.Integer => "whole number",
+        WizardFieldKind.Number => "number, e.g. 15 or 2.5",
+        WizardFieldKind.Lines => "one value per line",
         _ => option.Default is { Length: > 0 } value ? value : string.Empty,
     };
 

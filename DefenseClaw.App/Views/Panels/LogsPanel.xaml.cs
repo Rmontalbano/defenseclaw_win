@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using DefenseClaw.App.ViewModels;
 
@@ -29,6 +30,13 @@ namespace DefenseClaw.App.Views.Panels;
 /// subscription is now (re)attached on every Loaded and dropped on every Unloaded, and both
 /// are idempotent, so the sequence of events the framework raises does not matter.
 /// </para>
+/// <para>
+/// <b>Keyboard.</b> Ctrl+F is <see cref="ApplicationCommands.Find"/>'s own gesture; the panel handles
+/// that command by focusing the filter box, so the shell can also aim it at this page from outside
+/// (<c>ApplicationCommands.Find.Execute(null, page)</c>). Esc clears the filter text when there is
+/// any (a control that handled Esc itself first keeps it: the handler is on the bubbling
+/// <c>KeyDown</c>). The panel has no detail pane or overlay for Esc to close.
+/// </para>
 /// </summary>
 public sealed partial class LogsPanel : UserControl
 {
@@ -48,6 +56,34 @@ public sealed partial class LogsPanel : UserControl
         DataContextChanged += OnDataContextChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+
+        _ = CommandBindings.Add(new CommandBinding(ApplicationCommands.Find, OnFind, OnCanFind));
+        KeyDown += OnKeyDown;
+    }
+
+    /// <summary>Moves keyboard focus to the filter box and selects its text, ready to type over.</summary>
+    public void FocusFilter()
+    {
+        _ = FilterBox.Focus();
+        Keyboard.Focus(FilterBox);
+        FilterBox.SelectAll();
+    }
+
+    private void OnCanFind(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = true;
+
+    private void OnFind(object sender, ExecutedRoutedEventArgs e)
+    {
+        FocusFilter();
+        e.Handled = true;
+    }
+
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && !e.Handled && _viewModel is { FilterText.Length: > 0 } viewModel)
+        {
+            viewModel.FilterText = string.Empty;
+            e.Handled = true;
+        }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

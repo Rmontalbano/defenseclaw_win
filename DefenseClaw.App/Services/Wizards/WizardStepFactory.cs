@@ -247,7 +247,8 @@ public static class WizardStepFactory
             help,
             "--replace",
             "--workspace",
-            "--with-local-stack",
+            // --with-local-stack is deliberately absent: WizardWindowsPolicy removes it (the CLI crashes
+            // after saving when it is used on Windows) and its default is already "off".
             "--restart",
             "--yes"));
 

@@ -4,8 +4,8 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
                  Title="Setup wizard"
-                 Width="860"
-                 Height="720"
+                 Width="900"
+                 Height="760"
                  MinWidth="700"
                  MinHeight="560"
                  ExtendsContentIntoTitleBar="True"
@@ -16,42 +16,35 @@
         One window per wizard run. Pages left to right, review last and always: the app never
         edits DefenseClaw state itself, so the operator reads the exact argv before anything
         happens, and the same list is what CliRunner executes.
+
+        Styling is the shared Dc* dictionary (Themes\DefenseClaw.xaml); only three visuals live here
+        because they exist in this window alone. Accessibility: every control carries the field's label
+        as its automation name, validation and result text are live regions, Esc closes (or, mid-run,
+        asks before stopping), and there is no secret input anywhere - a secret-taking flag is a
+        credential card (see SecretRoute), never a text box.
     -->
     <ui:FluentWindow.Resources>
         <wizards:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
 
-        <Style x:Key="Secondary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Tertiary" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="Mono" TargetType="TextBox">
-            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="IsReadOnly" Value="True" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        </Style>
-
-        <!-- Exit-code and certification badges share one colour key: Ok / Warn / Bad / Neutral. -->
-        <Style x:Key="Badge" TargetType="Border">
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="8,2,8,2" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
-        </Style>
-
-        <Style x:Key="BadgeText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
+        <!-- A field's name: body text, semibold. -->
+        <Style x:Key="FieldName" TargetType="TextBlock" BasedOn="{StaticResource DcBody}">
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- The flag a field becomes, inside a chip. -->
+        <Style x:Key="FlagText" TargetType="TextBlock" BasedOn="{StaticResource DcBadgeText}">
+            <Setter Property="FontFamily" Value="{StaticResource DcMonoFontFamily}" />
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+
+        <!-- One line of console output: stderr lines read amber. -->
+        <Style x:Key="OutputLine" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsError}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
     </ui:FluentWindow.Resources>
 
@@ -67,7 +60,7 @@
 
         <!-- Header: what is being configured, how certified it is, and where in the flow we are. -->
         <Border Grid.Row="1"
-                Padding="24,10,24,14"
+                Padding="24,8,24,12"
                 BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
             <Grid>
@@ -78,45 +71,30 @@
 
                 <StackPanel Grid.Column="0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                        <TextBlock Style="{StaticResource DcSectionHeader}"
+                                   Margin="0"
+                                   VerticalAlignment="Center"
+                                   AutomationProperties.HeadingLevel="Level1"
                                    Text="{Binding PageTitle}" />
-                        <Border Margin="12,0,0,0">
-                            <Border.Style>
-                                <Style TargetType="Border" BasedOn="{StaticResource Badge}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding CertificationKey}" Value="Ok">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding CertificationKey}" Value="Warn">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding CertificationKey}" Value="Bad">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <TextBlock Style="{StaticResource BadgeText}" Text="{Binding CertificationBadge}" />
+                        <Border Margin="12,0,0,0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource DcBadge}"
+                                Tag="{Binding CertificationKey}">
+                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding CertificationBadge}" />
                         </Border>
                     </StackPanel>
 
                     <TextBlock Margin="0,4,0,0"
-                               FontSize="12"
-                               Style="{StaticResource Secondary}"
+                               Style="{StaticResource DcCaption}"
                                Text="{Binding PageSubtitle}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock HorizontalAlignment="Right"
-                               FontSize="12"
-                               Style="{StaticResource Secondary}"
+                               Style="{StaticResource DcCaption}"
                                Text="{Binding ProgressText}" />
                     <TextBlock HorizontalAlignment="Right"
-                               FontSize="11"
-                               FontFamily="Cascadia Mono, Consolas"
-                               Style="{StaticResource Tertiary}"
+                               Style="{StaticResource DcMono}"
                                Text="{Binding Target, StringFormat='setup {0}'}" />
                 </StackPanel>
             </Grid>
@@ -125,43 +103,65 @@
         <!-- Body: either the current field page or the review page. -->
         <Grid Grid.Row="2" Margin="24,14,24,0">
             <!-- Field page -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <ScrollViewer Style="{StaticResource DcPageScroll}"
                           Visibility="{Binding IsReview, Converter={StaticResource InverseBoolToVisibility}}">
                 <StackPanel>
-                    <ui:InfoBar Margin="0,0,0,12"
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
                                 IsClosable="False"
                                 Severity="Warning"
                                 Title="Certification"
                                 IsOpen="{Binding HasCertificationWarning, Mode=OneWay}"
                                 Message="{Binding CertificationWarning}" />
 
-                    <ItemsControl ItemsSource="{Binding CurrentStep.Fields}">
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                IsClosable="False"
+                                Severity="Warning"
+                                Title="Current settings could not be read"
+                                IsOpen="{Binding HasBaselineWarning, Mode=OneWay}"
+                                Message="{Binding BaselineWarning}" />
+
+                    <TextBlock Margin="{StaticResource DcCardGap}"
+                               Style="{StaticResource DcCaption}"
+                               Visibility="{Binding HasBaselineNote, Converter={StaticResource BoolToVisibility}}"
+                               Text="{Binding BaselineNote}" />
+
+                    <ItemsControl ItemsSource="{Binding CurrentStep.Fields}"
+                                  IsTabStop="False">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="0,0,0,16"
+                                <StackPanel Margin="{StaticResource DcSectionGap}"
                                             Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                   Text="{Binding Label}" />
-                                        <TextBlock Margin="8,0,0,0"
-                                                   VerticalAlignment="Center"
-                                                   FontSize="11"
-                                                   FontFamily="Cascadia Mono, Consolas"
-                                                   Style="{StaticResource Tertiary}"
-                                                   Text="{Binding FlagDisplay}" />
+                                        <TextBlock Style="{StaticResource FieldName}" Text="{Binding Label}" />
+                                        <Border Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcChip}">
+                                            <TextBlock Style="{StaticResource FlagText}" Text="{Binding FlagDisplay}" />
+                                        </Border>
+                                        <Border Margin="6,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource DcChip}"
+                                                Visibility="{Binding IsFromConfig, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="from config.yaml" />
+                                        </Border>
+                                        <Border Margin="6,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource DcBadge}"
+                                                Tag="Medium"
+                                                Visibility="{Binding IsChanged, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="changed" />
+                                        </Border>
                                     </StackPanel>
 
                                     <TextBlock Margin="0,2,0,6"
-                                               FontSize="12"
                                                MaxWidth="720"
                                                HorizontalAlignment="Left"
-                                               Style="{StaticResource Secondary}"
+                                               Style="{StaticResource DcCaption}"
                                                Text="{Binding Help}" />
 
-                                    <!-- Text / integer / env-var-name -->
+                                    <!-- Text / integer / number / env-var-name -->
                                     <ui:TextBox Width="420"
                                                 HorizontalAlignment="Left"
+                                                AutomationProperties.Name="{Binding AutomationName}"
+                                                AutomationProperties.HelpText="{Binding Help}"
                                                 PlaceholderText="{Binding Placeholder}"
                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
                                                 Visibility="{Binding IsText, Converter={StaticResource BoolToVisibility}}" />
@@ -169,13 +169,31 @@
                                     <!-- Path: same control, hinted for a filesystem location -->
                                     <ui:TextBox Width="420"
                                                 HorizontalAlignment="Left"
+                                                AutomationProperties.Name="{Binding AutomationName}"
+                                                AutomationProperties.HelpText="{Binding Help}"
                                                 PlaceholderText="{Binding Placeholder}"
                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
                                                 Visibility="{Binding IsPath, Converter={StaticResource BoolToVisibility}}" />
 
+                                    <!-- Repeatable flag: one value per line, one flag-and-value pair each -->
+                                    <ui:TextBox Width="420"
+                                                MinLines="3"
+                                                MaxLines="8"
+                                                HorizontalAlignment="Left"
+                                                AcceptsReturn="True"
+                                                TextWrapping="Wrap"
+                                                VerticalScrollBarVisibility="Auto"
+                                                AutomationProperties.Name="{Binding AutomationName}"
+                                                AutomationProperties.HelpText="One value per line. Each line becomes its own flag on the command."
+                                                PlaceholderText="{Binding Placeholder}"
+                                                Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                Visibility="{Binding IsLines, Converter={StaticResource BoolToVisibility}}" />
+
                                     <!-- Choice and tri-state paired flags -->
                                     <ComboBox Width="420"
                                               HorizontalAlignment="Left"
+                                              AutomationProperties.Name="{Binding AutomationName}"
+                                              AutomationProperties.HelpText="{Binding Help}"
                                               DisplayMemberPath="Label"
                                               ItemsSource="{Binding Choices}"
                                               SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
@@ -183,27 +201,78 @@
 
                                     <!-- Bare switch: present in argv when on, absent when off -->
                                     <ui:ToggleSwitch HorizontalAlignment="Left"
+                                                     AutomationProperties.Name="{Binding AutomationName}"
+                                                     AutomationProperties.HelpText="{Binding Help}"
                                                      IsChecked="{Binding IsOn, Mode=TwoWay}"
                                                      Visibility="{Binding IsSwitch, Converter={StaticResource BoolToVisibility}}" />
 
-                                    <!-- Secret: never rendered as plain text, never placed in argv -->
-                                    <StackPanel Visibility="{Binding IsSecret, Converter={StaticResource BoolToVisibility}}">
-                                        <ui:PasswordBox Width="420"
-                                                        HorizontalAlignment="Left"
-                                                        PlaceholderText="{Binding Placeholder}"
-                                                        Password="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBlock Margin="0,4,0,0"
-                                                   MaxWidth="560"
-                                                   HorizontalAlignment="Left"
-                                                   FontSize="11"
-                                                   Style="{StaticResource Tertiary}"
-                                                   Text="{Binding SecretNote}" />
-                                    </StackPanel>
+                                    <!--
+                                        Secret: there is no input. The flag takes the secret itself and the CLI
+                                        reads it from nowhere but its own command line, so this card names the
+                                        variable the command reads, says whether it is set, and hands the operator
+                                        to `defenseclaw keys set` in a real console.
+                                    -->
+                                    <Border MaxWidth="720"
+                                            HorizontalAlignment="Left"
+                                            Style="{StaticResource DcCardCompact}"
+                                            Visibility="{Binding IsSecret, Converter={StaticResource BoolToVisibility}}">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource DcCardTitle}"
+                                                       Text="{Binding CredentialPurpose}" />
+
+                                            <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
+                                                <Ellipse Margin="0,0,8,0"
+                                                         Style="{StaticResource DcToneDot}"
+                                                         Tag="{Binding CredentialStatusKey}" />
+                                                <TextBlock Style="{StaticResource DcBody}"
+                                                           AutomationProperties.LiveSetting="Polite"
+                                                           Text="{Binding CredentialStatus}" />
+                                            </StackPanel>
+
+                                            <TextBlock Margin="0,0,0,8"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Text="{Binding CredentialExplanation}" />
+
+                                            <Border Style="{StaticResource DcCodeBlock}">
+                                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="Command that stores the secret"
+                                                         Text="{Binding CredentialCommand, Mode=OneWay}" />
+                                            </Border>
+
+                                            <TextBlock Margin="0,8,0,0"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Text="{Binding CredentialConsequence, StringFormat='If it is still unset when the command runs: {0}'}" />
+
+                                            <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                                                <ui:Button Margin="0,0,8,0"
+                                                           Appearance="Secondary"
+                                                           Content="Copy command"
+                                                           Command="{Binding CopyCredentialCommand}" />
+                                                <ui:Button Margin="0,0,8,0"
+                                                           Appearance="Secondary"
+                                                           Content="Open a terminal to store it"
+                                                           IsEnabled="{Binding CanOpenTerminal}"
+                                                           ToolTip="Opens a console window running the command above. You type the value at its hidden prompt; it never passes through this app."
+                                                           Command="{Binding OpenCredentialTerminalCommand}" />
+                                                <ui:Button Appearance="Secondary"
+                                                           Content="Re-check"
+                                                           ToolTip="Look again for the variable in ~/.defenseclaw/.env"
+                                                           Command="{Binding RecheckCredentialCommand}" />
+                                            </StackPanel>
+
+                                            <TextBlock Margin="0,8,0,0"
+                                                       Style="{StaticResource DcCaption}"
+                                                       AutomationProperties.LiveSetting="Polite"
+                                                       Visibility="{Binding HasCredentialMessage, Converter={StaticResource BoolToVisibility}}"
+                                                       Text="{Binding CredentialMessage}" />
+                                        </StackPanel>
+                                    </Border>
 
                                     <TextBlock Margin="0,4,0,0"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                               Style="{StaticResource DcToneText}"
+                                               Tag="Bad"
                                                TextWrapping="Wrap"
+                                               AutomationProperties.LiveSetting="Assertive"
                                                Visibility="{Binding HasValidationError, Converter={StaticResource BoolToVisibility}}"
                                                Text="{Binding ValidationError}" />
                                 </StackPanel>
@@ -211,138 +280,194 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <TextBlock Margin="0,4,0,16"
-                               FontSize="11"
-                               Style="{StaticResource Tertiary}"
+                    <Expander Margin="{StaticResource DcCardGap}"
+                              Header="What the CLI says about this command"
+                              Visibility="{Binding HasHelpText, Converter={StaticResource BoolToVisibility}}">
+                        <Border Style="{StaticResource DcCodeBlock}">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     AutomationProperties.Name="Help text printed by the CLI for this command"
+                                     Text="{Binding HelpText, Mode=OneWay}" />
+                        </Border>
+                    </Expander>
+
+                    <TextBlock Margin="0,0,0,16"
+                               Style="{StaticResource DcCaption}"
                                Text="{Binding SourceNote}" />
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Review page -->
-            <Grid Visibility="{Binding IsReview, Converter={StaticResource BoolToVisibility}}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <StackPanel Grid.Row="0">
-                    <ui:InfoBar Margin="0,0,0,12"
+            <!-- Review page: scrolls as a whole so the output never squeezes what precedes it. -->
+            <ScrollViewer Style="{StaticResource DcPageScroll}"
+                          Visibility="{Binding IsReview, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
                                 IsClosable="False"
                                 Severity="Warning"
                                 Title="Certification"
                                 IsOpen="{Binding HasCertificationWarning, Mode=OneWay}"
                                 Message="{Binding CertificationWarning}" />
 
-                    <TextBlock Margin="0,0,0,6"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                               Text="Command" />
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                IsClosable="False"
+                                Severity="Warning"
+                                Title="Current settings could not be read"
+                                IsOpen="{Binding HasBaselineWarning, Mode=OneWay}"
+                                Message="{Binding BaselineWarning}" />
 
-                    <Border Padding="14"
-                            CornerRadius="6"
-                            BorderThickness="1"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                    <!-- The command, and how much it changes. -->
+                    <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource DcCardTitle}"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"
+                                   Text="Command" />
+                        <Border VerticalAlignment="Center"
+                                Style="{StaticResource DcBadge}"
+                                Tag="{Binding TierKey}"
+                                AutomationProperties.Name="{Binding TierText, StringFormat='Command tier: {0}'}">
+                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding TierText}" />
+                        </Border>
+                    </StackPanel>
+
+                    <Border Style="{StaticResource DcCodeBlock}">
                         <StackPanel>
-                            <TextBox Style="{StaticResource Mono}" Text="{Binding CommandText, Mode=OneWay}" />
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     AutomationProperties.Name="The exact command that will run"
+                                     Text="{Binding CommandText, Mode=OneWay}" />
                             <TextBlock Margin="0,8,0,0"
-                                       FontSize="11"
-                                       Style="{StaticResource Tertiary}"
+                                       Style="{StaticResource DcCaption}"
                                        Text="{Binding ExecutablePath, StringFormat='resolves to {0}'}" />
                         </StackPanel>
                     </Border>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <ui:Button Padding="10,5,10,5"
+                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <ui:Button Margin="0,0,8,0"
                                    Appearance="Secondary"
                                    Content="Copy command"
                                    Command="{Binding CopyCommandCommand}" />
-                        <Border Margin="12,0,0,0"
+                        <ui:Button Margin="0,0,8,0"
+                                   Appearance="Secondary"
+                                   Content="Preview (dry run)"
+                                   ToolTip="Runs the same command with --dry-run: shows what it would write, writes nothing."
+                                   Visibility="{Binding CanPreview, Converter={StaticResource BoolToVisibility}}"
+                                   Command="{Binding PreviewCommand}" />
+                        <Border VerticalAlignment="Center"
+                                Style="{StaticResource DcBadge}"
+                                Tag="{Binding ExitBadgeKey}"
                                 Visibility="{Binding HasRun, Converter={StaticResource BoolToVisibility}}">
-                            <Border.Style>
-                                <Style TargetType="Border" BasedOn="{StaticResource Badge}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Ok">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Warn">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding ExitBadgeKey}" Value="Bad">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <TextBlock Style="{StaticResource BadgeText}" Text="{Binding ExitBadgeText}" />
+                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ExitBadgeText}" />
                         </Border>
                     </StackPanel>
 
+                    <!-- Rule 3: a command that restarts the gateway says so. -->
                     <ui:InfoBar Margin="0,12,0,0"
                                 IsClosable="False"
-                                Severity="Informational"
-                                Title="A secret is piped on stdin"
-                                IsOpen="{Binding HasStdinSecret, Mode=OneWay}"
-                                Message="{Binding StdinNote}" />
+                                Severity="Warning"
+                                Title="Gateway restart"
+                                IsOpen="{Binding HasRestartWarning, Mode=OneWay}"
+                                Message="{Binding RestartWarning}" />
+
+                    <ui:InfoBar Margin="0,8,0,0"
+                                IsClosable="False"
+                                Severity="Error"
+                                Title="This command cannot run yet"
+                                IsOpen="{Binding HasReviewProblem, Mode=OneWay}"
+                                Message="{Binding ReviewProblem}" />
 
                     <ui:InfoBar Margin="0,8,0,0"
                                 IsClosable="False"
                                 Severity="Warning"
-                                Title="The command will not read that secret"
-                                IsOpen="{Binding HasStdinConflict, Mode=OneWay}"
-                                Message="{Binding StdinConflictNote}" />
+                                Title="The command may prompt"
+                                IsOpen="{Binding HasPromptWarning, Mode=OneWay}"
+                                Message="{Binding PromptWarning}" />
+
+                    <!-- What the operator changed (and, when nothing, that a run re-applies as-is). -->
+                    <TextBlock Margin="0,12,0,4"
+                               Style="{StaticResource DcCardTitle}"
+                               AutomationProperties.LiveSetting="Polite"
+                               Text="{Binding ChangeSummary}" />
+                    <ItemsControl ItemsSource="{Binding ReviewChanges}" IsTabStop="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="8,0,0,2"
+                                           Style="{StaticResource DcBody}"
+                                           Text="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Credentials the command reads (never carries). -->
+                    <StackPanel Visibility="{Binding HasReviewCredentials, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Margin="0,12,0,4"
+                                   Style="{StaticResource DcCardTitle}"
+                                   Text="Credentials this command relies on" />
+                        <ItemsControl ItemsSource="{Binding ReviewCredentials}" IsTabStop="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,8" Style="{StaticResource DcSubtleRow}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Margin="0,0,8,0"
+                                                         Style="{StaticResource DcToneDot}"
+                                                         Tag="{Binding CredentialStatusKey}" />
+                                                <TextBlock Style="{StaticResource DcBody}"
+                                                           Text="{Binding CredentialPurpose}" />
+                                            </StackPanel>
+                                            <TextBlock Margin="18,2,0,0"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Text="{Binding CredentialStatus}" />
+                                            <TextBlock Margin="18,2,0,0"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Text="This app does not send it; the command reads it by name." />
+                                            <StackPanel Margin="18,8,0,0" Orientation="Horizontal">
+                                                <ui:Button Margin="0,0,8,0"
+                                                           Appearance="Secondary"
+                                                           Content="Open a terminal to store it"
+                                                           IsEnabled="{Binding CanOpenTerminal}"
+                                                           Command="{Binding OpenCredentialTerminalCommand}" />
+                                                <ui:Button Appearance="Secondary"
+                                                           Content="Re-check"
+                                                           Command="{Binding RecheckCredentialCommand}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
 
                     <TextBlock Margin="0,12,0,6"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Style="{StaticResource DcCardTitle}"
                                Text="Output" />
+
+                    <Border Height="220"
+                            Margin="0,0,0,12"
+                            Style="{StaticResource DcCardCompact}">
+                        <Grid>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Output}" IsTabStop="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Style="{StaticResource OutputLine}"
+                                                       AutomationProperties.Name="{Binding Text}"
+                                                       Text="{Binding Text}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="420"
+                                       Style="{StaticResource DcEmptyDetail}"
+                                       Visibility="{Binding HasRun, Converter={StaticResource InverseBoolToVisibility}}"
+                                       Text="Nothing has run yet. Output streams here line by line once you press Execute, and the same invocation appears in the Activity panel." />
+                        </Grid>
+                    </Border>
                 </StackPanel>
-
-                <Border Grid.Row="1"
-                        Margin="0,0,0,4"
-                        Padding="10"
-                        CornerRadius="6"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                    <Grid>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding Output}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock FontFamily="Cascadia Mono, Consolas"
-                                                   FontSize="12"
-                                                   TextWrapping="Wrap"
-                                                   Text="{Binding Text}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsError}" Value="True">
-                                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-
-                        <TextBlock HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   MaxWidth="420"
-                                   TextAlignment="Center"
-                                   Style="{StaticResource Tertiary}"
-                                   Visibility="{Binding HasRun, Converter={StaticResource InverseBoolToVisibility}}"
-                                   Text="Nothing has run yet. Output streams here line by line once you press Execute, and the same invocation appears in the Activity panel." />
-                    </Grid>
-                </Border>
-            </Grid>
+            </ScrollViewer>
         </Grid>
 
-        <!-- Footer: validation, then navigation. -->
+        <!-- Footer: validation and results (live regions), then navigation. -->
         <Border Grid.Row="3"
                 Padding="24,12,24,16"
                 Margin="0,10,0,0"
@@ -355,13 +480,14 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                    <TextBlock FontSize="12"
-                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                    <TextBlock Style="{StaticResource DcToneText}"
+                               Tag="Bad"
                                TextWrapping="Wrap"
+                               AutomationProperties.LiveSetting="Assertive"
                                Visibility="{Binding HasValidationSummary, Converter={StaticResource BoolToVisibility}}"
                                Text="{Binding ValidationSummary}" />
-                    <TextBlock FontSize="12"
-                               Style="{StaticResource Secondary}"
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               AutomationProperties.LiveSetting="Polite"
                                Text="{Binding ResultMessage}" />
                 </StackPanel>
 
@@ -379,7 +505,14 @@
                                Appearance="Primary"
                                Content="Execute"
                                IsEnabled="{Binding CanExecute}"
-                               Visibility="{Binding IsReview, Converter={StaticResource BoolToVisibility}}"
+                               Visibility="{Binding ShowExecute, Converter={StaticResource BoolToVisibility}}"
+                               Command="{Binding ExecuteCommand}" />
+                    <!-- A destructive tier (setup remove ...) gets the danger appearance. -->
+                    <ui:Button Margin="0,0,8,0"
+                               Appearance="Danger"
+                               Content="Execute (destructive)"
+                               IsEnabled="{Binding CanExecute}"
+                               Visibility="{Binding ShowDangerExecute, Converter={StaticResource BoolToVisibility}}"
                                Command="{Binding ExecuteCommand}" />
                     <!--
                         After a successful run Execute is locked so a setup verb is not applied twice by
@@ -395,9 +528,11 @@
                         whether to stop the command (the overlay below), after one it dismisses.
                     -->
                     <ui:Button Content="Cancel"
+                               ToolTip="Esc"
                                Visibility="{Binding HasRun, Converter={StaticResource InverseBoolToVisibility}}"
                                Command="{Binding CancelCommand}" />
                     <ui:Button Content="Close"
+                               ToolTip="Esc"
                                Visibility="{Binding HasRun, Converter={StaticResource BoolToVisibility}}"
                                Command="{Binding CancelCommand}" />
                 </StackPanel>
@@ -408,39 +543,29 @@
             Stop confirmation. Raised by Cancel, and by closing the window (X / Alt+F4), while a
             command is running: a setup verb writes configuration, so ending one partway can leave
             it half-applied and that should be a decision, not a click. Covers everything below the
-            title bar and leaves the title bar alone so the window stays closable — a close attempt
+            title bar and leaves the title bar alone so the window stays closable - a close attempt
             just raises this again. An overlay rather than a modal dialog on purpose: it is raised
             from Window.Closing, where a blocking dialog could hold up an app exit.
         -->
         <Grid Grid.Row="1"
               Grid.RowSpan="3"
-              Background="#B0000000"
+              Style="{StaticResource DcScrim}"
               Visibility="{Binding IsStopConfirmVisible, Converter={StaticResource BoolToVisibility}}">
-            <Border MaxWidth="560"
-                    Margin="24"
-                    Padding="22"
-                    CornerRadius="10"
-                    BorderThickness="1"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Center"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    Background="{DynamicResource ApplicationBackgroundBrush}">
+            <Border Margin="24" Style="{StaticResource DcDialogCard}">
                 <StackPanel>
-                    <TextBlock FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                    <TextBlock Style="{StaticResource DcSectionHeader}"
                                Text="Stop the running setup command?" />
 
-                    <TextBlock Margin="0,8,0,16"
-                               FontSize="12"
-                               Style="{StaticResource Secondary}"
+                    <TextBlock Margin="0,0,0,16"
+                               Style="{StaticResource DcCaption}"
+                               AutomationProperties.LiveSetting="Assertive"
                                Text="{Binding StopConfirmMessage}" />
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <ui:Button Margin="0,0,8,0"
                                    Content="Keep running"
                                    Command="{Binding KeepRunningCommand}" />
-                        <ui:Button Appearance="Primary"
+                        <ui:Button Appearance="Danger"
                                    Content="Stop the command"
                                    Command="{Binding ConfirmStopCommand}" />
                     </StackPanel>

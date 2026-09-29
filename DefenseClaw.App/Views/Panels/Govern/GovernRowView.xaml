@@ -1,0 +1,214 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.Govern.GovernRowView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             AutomationProperties.Name="{Binding AutomationName}"
+             IsTabStop="False">
+    <!--
+        One row of the Govern lists (Skills, MCPs, Plugins, Tools). DataContext = GovernRow.
+        Layout is a single column that wraps at any width: title and copy button, then badges, then the
+        secondary lines, then the action buttons, then a collapsed details expander. Nothing sits beside
+        the title, so a long id can never be clipped or run under a button.
+        A row that is not a real item (Plugins' listing artifacts) is dimmed and offers Info only.
+    -->
+    <Grid Margin="0,0,0,8">
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsArtifact}" Value="True">
+                        <Setter Property="Opacity" Value="0.8" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
+
+        <Border Style="{StaticResource DcCardCompact}">
+            <StackPanel>
+                <!-- Title + copy -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Style="{StaticResource DcBody}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Text="{Binding DisplayTitle}"
+                               ToolTip="{Binding DisplayTitle}" />
+                    <ui:Button Grid.Column="1"
+                               Margin="8,0,0,0"
+                               Padding="6"
+                               VerticalAlignment="Top"
+                               Appearance="Transparent"
+                               ToolTip="Copy the name"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="CopyName"
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Copy name {0}'}">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Copy24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </Grid>
+
+                <!-- Badges -->
+                <WrapPanel Margin="0,6,0,0">
+                    <Border Style="{StaticResource DcBadge}"
+                            Margin="0,0,6,4"
+                            Tag="{Binding StateTone}"
+                            Visibility="{Binding HasState, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StateLabel}" />
+                    </Border>
+                    <Border Style="{StaticResource DcBadge}"
+                            Margin="0,0,6,4"
+                            Tag="{Binding ScanTone}"
+                            Visibility="{Binding HasScan, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ScanLabel}" />
+                    </Border>
+                    <Border Style="{StaticResource DcChip}"
+                            Margin="0,0,6,4"
+                            Visibility="{Binding HasConnector, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ConnectorLabel}" />
+                    </Border>
+                    <Border Style="{StaticResource DcBadge}"
+                            Margin="0,0,6,4"
+                            Tag="Warn"
+                            Visibility="{Binding IsArtifact, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="Listing artifact" />
+                    </Border>
+                </WrapPanel>
+
+                <!-- Secondary lines -->
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,2,0,0"
+                           Text="{Binding ArtifactNote}"
+                           Visibility="{Binding HasArtifactNote, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,2,0,0"
+                           MaxHeight="52"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Description}"
+                           ToolTip="{Binding Description}"
+                           Visibility="{Binding HasDescription, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,2,0,0"
+                           Text="{Binding MetaLine}"
+                           Visibility="{Binding HasMeta, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,2,0,0"
+                           Text="{Binding Reason, StringFormat='Reason: {0}'}"
+                           Visibility="{Binding HasReason, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,2,0,0"
+                           Text="{Binding ActionsText, StringFormat='Enforcement: {0}'}"
+                           Visibility="{Binding HasActionsText, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,2,0,0"
+                           Text="{Binding UpdatedText, StringFormat='Updated {0}'}"
+                           Visibility="{Binding HasUpdated, Converter={StaticResource BoolToVisibility}}" />
+
+                <!-- Actions. Anything that changes state opens a review with the exact command first. -->
+                <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
+                    <ui:Button Content="{Binding InfoLabel}"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Info"
+                               ToolTip="Read-only: runs immediately and shows the result here"
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Show details of {0}'}"
+                               Visibility="{Binding CanInfo, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Block"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Block"
+                               ToolTip="Opens a review of the exact command first"
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Block {0}'}"
+                               Visibility="{Binding CanBlock, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Allow"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Allow"
+                               ToolTip="Opens a review of the exact command first"
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Allow {0}'}"
+                               Visibility="{Binding CanAllow, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Unblock"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Unblock"
+                               ToolTip="Clears the block/allow decision. Opens a review first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Unblock {0}'}"
+                               Visibility="{Binding CanUnblock, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Disable"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Disable"
+                               ToolTip="Runtime-only disable. Opens a review first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Disable {0}'}"
+                               Visibility="{Binding CanDisable, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Enable"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Enable"
+                               ToolTip="Clears the runtime disable. Opens a review first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Enable {0}'}"
+                               Visibility="{Binding CanEnable, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Restore"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Restore"
+                               ToolTip="Moves quarantined files back. Opens a review first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Restore {0}'}"
+                               Visibility="{Binding CanRestore, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Quarantine…"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Quarantine"
+                               ToolTip="Moves the files into quarantine. Destructive: opens a review first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Quarantine {0}'}"
+                               Visibility="{Binding CanQuarantine, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Remove…"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Remove"
+                               ToolTip="Deletes the files. Destructive: opens a review first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Remove {0}'}"
+                               Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Unset…"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Unset"
+                               ToolTip="Removes the server from the connector's config. Destructive: opens a review first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Remove {0} from the connector config'}"
+                               Visibility="{Binding CanUnset, Converter={StaticResource BoolToVisibility}}" />
+                </WrapPanel>
+
+                <!-- Details -->
+                <Expander Margin="0,2,0,0"
+                          Header="Details and raw JSON"
+                          AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Details and raw JSON of {0}'}">
+                    <StackPanel Margin="0,8,0,0">
+                        <ItemsControl Grid.IsSharedSizeScope="True"
+                                      ItemsSource="{Binding Fields}"
+                                      Focusable="False"
+                                      IsTabStop="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="GovernFieldKey" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="{Binding Label}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource DcFieldValueInline}" Text="{Binding Value}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Style="{StaticResource DcFieldLabel}"
+                                   Margin="0,8,0,4"
+                                   Text="Exactly as the CLI printed it" />
+                        <Border Style="{StaticResource DcCodeBlock}">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     MaxHeight="220"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"
+                                     TextWrapping="NoWrap"
+                                     Text="{Binding RawJson, Mode=OneWay}"
+                                     AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Raw JSON of {0}'}" />
+                        </Border>
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

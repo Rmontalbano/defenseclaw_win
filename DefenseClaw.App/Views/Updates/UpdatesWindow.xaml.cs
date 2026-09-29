@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows.Input;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.ViewModels.Updates;
@@ -61,7 +62,49 @@ public sealed partial class UpdatesWindow : FluentWindow
         DataContext = viewModel;
 
         ((INotifyCollectionChanged)_viewModel.Upgrade.Output).CollectionChanged += OnUpgradeOutputChanged;
+        _viewModel.Upgrade.PropertyChanged += OnUpgradePropertyChanged;
+        PreviewKeyDown += OnWindowPreviewKeyDown;
         Closed += OnClosed;
+    }
+
+    /// <summary>True while the confirm overlay is open (or was, until the last property change) — decides whether focus is handed back on close.</summary>
+    private bool _confirmWasOpen;
+
+    /// <summary>Esc cancels the confirm overlay — the safe answer, and the same as the Cancel button. Nothing else in this window uses Esc.</summary>
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _viewModel.Upgrade.IsConfirmVisible)
+        {
+            _viewModel.Upgrade.CancelConfirmCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Keyboard focus follows the overlay: into it (on Cancel, the safe default) when it opens — the page
+    /// behind it is disabled, so focus would otherwise be dropped — and back to the button that opened it
+    /// when it closes.
+    /// </summary>
+    private void OnUpgradePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(UpgradeSectionViewModel.IsConfirmVisible))
+        {
+            return;
+        }
+
+        var open = _viewModel.Upgrade.IsConfirmVisible;
+        if (open == _confirmWasOpen)
+        {
+            return;
+        }
+
+        _confirmWasOpen = open;
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                _ = open ? ConfirmCancelButton.Focus() : RunUpgradeButton.Focus();
+            }));
     }
 
     /// <summary>
@@ -162,6 +205,8 @@ public sealed partial class UpdatesWindow : FluentWindow
     private void OnClosed(object? sender, EventArgs e)
     {
         Closed -= OnClosed;
+        PreviewKeyDown -= OnWindowPreviewKeyDown;
+        _viewModel.Upgrade.PropertyChanged -= OnUpgradePropertyChanged;
         ((INotifyCollectionChanged)_viewModel.Upgrade.Output).CollectionChanged -= OnUpgradeOutputChanged;
         _viewModel.Dispose();
 

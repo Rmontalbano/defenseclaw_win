@@ -62,10 +62,19 @@ public sealed class InventoryComponentRow
         : "—";
 
     public string LastSeenDisplay => LastSeen is { } seen ? seen.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
+
+    /// <summary>What a screen reader announces for the row (the default would be the type name).</summary>
+    public override string ToString() =>
+        $"{Name}, {VendorDisplay}, {EcosystemDisplay}" +
+        (string.IsNullOrWhiteSpace(Version) ? string.Empty : $", version {Version}") +
+        $", {InstallCountDisplay} install{(InstallCount == 1 ? string.Empty : "s")}";
 }
 
 /// <summary>One row of a raw detail/key-value listing (component detail pane, table browser row inspector).</summary>
-public sealed record InventoryKeyValueRow(string Key, string Value);
+public sealed record InventoryKeyValueRow(string Key, string Value)
+{
+    public override string ToString() => $"{Key}: {Value}";
+}
 
 /// <summary>A discovered table or view, with its row count, for the table-browser expander.</summary>
 public sealed partial class InventoryTableSummary : ObservableObject
@@ -99,6 +108,8 @@ public sealed partial class InventoryTableSummary : ObservableObject
     public string Summary => IsView
         ? "view · row count not computed (a view is evaluated on every read) · first 200 rows once loaded"
         : $"table · {RowCountDisplay} rows (first 200 shown)";
+
+    public override string ToString() => $"{Kind} {Name}, {RowCountDisplay} rows";
 }
 
 /// <summary>
@@ -131,7 +142,12 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     public const string GroupByVendor = "Vendor";
     public const string GroupByType = "Type";
 
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(2);
+
     private readonly List<InventoryComponentRow> _allComponents = new();
+
+    private bool _loadRunning;
+    private DateTimeOffset? _loadedAt;
 
     /// <summary>The load the table browser is currently waiting on; cancelled when the selection changes.</summary>
     private CancellationTokenSource? _browseCts;
@@ -221,7 +237,12 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         ComponentsView = CollectionViewSource.GetDefaultView(_allComponents);
         ComponentsView.Filter = FilterComponent;
         ApplyGrouping();
+        Review = new DiscoverActionReview(services);
+        BuildBomConnectors();
     }
+
+    /// <summary>The shared confirm-and-run dialog (used by "Generate AI BOM").</summary>
+    public DiscoverActionReview Review { get; }
 
     public override string Title => "Inventory";
 
@@ -245,7 +266,40 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAsync(CancellationToken.None).ConfigureAwait(true);
 
-    partial void OnSearchTextChanged(string value) => ComponentsView.Refresh();
+    /// <summary>
+    /// One-shot catch-up when the panel returns to the screen after its data has gone stale (no timer, no
+    /// CLI: it re-reads inventory.db). The first visit is covered by <see cref="InitializeAsync"/>.
+    /// </summary>
+    protected override void OnActivated()
+    {
+        if (_loadRunning || (_loadedAt is { } at && DateTimeOffset.Now - at < StaleAfter))
+        {
+            return;
+        }
+
+        _ = LoadSafelyAsync();
+    }
+
+    private async Task LoadSafelyAsync()
+    {
+        try
+        {
+            await LoadAsync(CancellationToken.None, refreshTables: false).ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // A background catch-up must not take the panel down; the message is shown in the banner.
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceError($"Inventory catch-up failed: {ex}");
+            ErrorMessage = $"Could not refresh the inventory: {ex.Message}";
+        }
+#pragma warning restore CA1031
+    }
+
+    partial void OnSearchTextChanged(string value)
+    {
+        ComponentsView.Refresh();
+        UpdateEmptyState();
+    }
 
     partial void OnGroupByChanged(string value)
     {
@@ -336,8 +390,15 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         pending?.Cancel();
     }
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    private async Task LoadAsync(CancellationToken cancellationToken, bool refreshTables = true)
     {
+        // One read at a time: Initialize, the activation catch-up, Refresh and a finished BOM run can all ask.
+        if (_loadRunning)
+        {
+            return;
+        }
+
+        _loadRunning = true;
         IsLoading = true;
         ErrorMessage = null;
 
@@ -345,21 +406,34 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         {
             if (!Services.Inventory.Exists)
             {
-                ErrorMessage = $"inventory.db not found at {Services.Inventory.DatabasePath}. " +
-                    "It is created the first time AI discovery runs — nothing to show yet.";
+                // Normal until AI discovery has run once, so this is an empty state, not a warning.
+                DatabaseMissing = true;
                 _allComponents.Clear();
                 Tables.Clear();
                 ScanNote = null;
+                UsingFallbackView = false;
                 ComponentsView.Refresh();
+                StatusMessage = $"No inventory.db yet · as of {DateTimeOffset.Now.ToString("HH:mm", CultureInfo.InvariantCulture)}";
+                _loadedAt = DateTimeOffset.Now;
+                HasLoaded = true;
+                UpdateEmptyState();
                 return;
             }
 
-            var tables = await Services.Inventory.ListTablesAsync(cancellationToken).ConfigureAwait(true);
+            DatabaseMissing = false;
 
-            Tables.Clear();
-            foreach (var table in tables)
+            // The table list and its counts are the expensive part (a capped COUNT on a multi-million-row
+            // table); the activation catch-up only refreshes the rollup, and Refresh does everything.
+            IReadOnlyList<InventoryTable>? tables = null;
+            if (refreshTables || Tables.Count == 0)
             {
-                Tables.Add(new InventoryTableSummary(table.Name, table.IsView));
+                tables = await Services.Inventory.ListTablesAsync(cancellationToken).ConfigureAwait(true);
+
+                Tables.Clear();
+                foreach (var table in tables)
+                {
+                    Tables.Add(new InventoryTableSummary(table.Name, table.IsView));
+                }
             }
 
             // The rollup for the latest full scan — not a browse of ai_components_v, which is 14-20 s
@@ -384,17 +458,25 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
             }
 
             ComponentsView.Refresh();
+            _loadedAt = DateTimeOffset.Now;
+            var asOf = _loadedAt.Value.ToString("HH:mm", CultureInfo.InvariantCulture);
             StatusMessage = rollup is null
-                ? "Component rollup unavailable for this inventory.db."
-                : BuildStatusMessage(rollup.Scan);
+                ? $"Component rollup unavailable · as of {asOf}"
+                : $"{BuildStatusMessage(rollup.Scan)} · as of {asOf}";
+            HasLoaded = true;
+            UpdateEmptyState();
 
             // Fire off row counts for the table browser without blocking the main load —
             // a capped COUNT on a multi-million-row table (ai_signals on this box) is not free.
-            _ = LoadTableCountsAsync(tables.Select(t => t.Name).ToArray(), cancellationToken);
+            if (tables is not null)
+            {
+                _ = LoadTableCountsAsync(tables.Select(t => t.Name).ToArray(), cancellationToken);
+            }
         }
         catch (Exception ex) when (ex is IOException or SqliteException or UnauthorizedAccessException)
         {
             ErrorMessage = $"Could not read inventory.db: {ex.Message}";
+            HasLoaded = true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -403,6 +485,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         finally
         {
             IsLoading = false;
+            _loadRunning = false;
         }
     }
 

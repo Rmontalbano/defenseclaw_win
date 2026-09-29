@@ -2,19 +2,21 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:local="clr-namespace:DefenseClaw.App.Views.Panels">
+             xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             d:DataContext="{d:DesignInstance Type=vm:McpsPanelViewModel}"
+             mc:Ignorable="d">
     <!--
-        MCPs panel: GET /mcps + the mcp slice of /enforce/blocked and /enforce/allowed,
-        with block/allow/set/unset mutations gated behind the confirm overlay at the
-        bottom of this file. See ViewModels\McpsPanelViewModel.cs for the data and command
-        logic - this view only lays it out and binds to it.
+        MCPs panel. Data is the CLI command 'mcp list' with its JSON flag (one read per visit / Refresh / scope change).
+        Row actions and the review dialog are shared with the other Govern panels; the "Add MCP server"
+        form (mcp set) is the one panel-specific piece. Keys: F5 refresh (shell), Ctrl+F filter, Esc closes
+        the dialog / form / result card / clears the filter.
     -->
-    <UserControl.Resources>
-        <local:McpsTruthyToVisibilityConverter x:Key="Truthy" />
-    </UserControl.Resources>
-
-    <Grid Margin="28,24,28,24">
+    <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -23,106 +25,150 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,14">
-            <TextBlock FontSize="26"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       Text="{Binding Title}" />
-            <TextBlock Margin="0,4,0,0"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding Description}" />
-        </StackPanel>
-
-        <!-- Toolbar -->
-        <Border Grid.Row="1"
-                Margin="0,0,0,14"
-                Padding="12,10"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-            <StackPanel Orientation="Horizontal">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+            <HeaderedContentControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+                </StackPanel>
+            </HeaderedContentControl.Header>
+            <StackPanel Style="{StaticResource DcActionBar}">
+                <ui:ProgressRing Width="16"
+                                 Height="16"
+                                 IsIndeterminate="True"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
+                                 AutomationProperties.Name="Working" />
+                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding HeaderStatusText}" />
                 <ui:Button Content="Refresh"
                            Command="{Binding RefreshCommand}"
-                           IsEnabled="{Binding IsIdle}" />
-                <TextBlock Margin="18,0,6,0"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="Connector scope:" />
-                <ComboBox MinWidth="180"
-                          VerticalAlignment="Center"
-                          ItemsSource="{Binding Connectors}"
-                          SelectedItem="{Binding SelectedConnector, Mode=TwoWay}" />
-                <TextBlock Margin="18,0,6,0"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="Reason:" />
-                <ui:TextBox MinWidth="220"
-                            VerticalAlignment="Center"
-                            PlaceholderText="Optional, recorded on the mutation"
-                            Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <ui:Button Margin="18,0,0,0"
-                           Content="Add MCP server…"
-                           Command="{Binding ToggleSetFormCommand}" />
+                           IsEnabled="{Binding IsIdle}"
+                           ToolTip="Read the MCP server list again (F5)">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                    </ui:Button.Icon>
+                </ui:Button>
             </StackPanel>
+        </HeaderedContentControl>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
+            <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                <ui:TextBox x:Name="FilterBox"
+                            Width="240"
+                            PlaceholderText="Filter MCP servers (Ctrl+F)"
+                            Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="Filter MCP servers"
+                            AutomationProperties.HelpText="Matches name, transport, command, URL, connector and state. Escape clears it." />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
+                    <ComboBox Width="160"
+                              ItemsSource="{Binding StatusFilters}"
+                              SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
+                              AutomationProperties.Name="Show MCP servers in state" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
+                    <ComboBox MinWidth="200"
+                              ItemsSource="{Binding Connectors}"
+                              SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                              AutomationProperties.Name="Connector scope"
+                              AutomationProperties.HelpText="Which connector's MCP servers to list, and which connector Add MCP server writes to. All configured connectors means every one." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
+                    <ui:TextBox MinWidth="180"
+                                Width="220"
+                                PlaceholderText="Recorded with the action"
+                                Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                AutomationProperties.Name="Reason"
+                                AutomationProperties.HelpText="Sent as --reason with block and allow." />
+                </StackPanel>
+                <ui:Button Content="Add MCP server…"
+                           Command="{Binding ToggleSetFormCommand}"
+                           IsEnabled="{Binding IsIdle}"
+                           ToolTip="Register or update a server with 'defenseclaw mcp set'. You review the command first.">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="PlugConnected24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+            </WrapPanel>
         </Border>
 
-        <!-- Set MCP server mini form -->
+        <!-- Add / update an MCP server (mcp set) -->
         <Border Grid.Row="2"
-                Margin="0,0,0,14"
-                Padding="14"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                Style="{StaticResource DcCard}"
+                Margin="{StaticResource DcCardGap}"
                 Visibility="{Binding IsSetFormOpen, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
-                <TextBlock FontWeight="SemiBold" Text="Add or update an MCP server (defenseclaw mcp set)" />
-                <UniformGrid Margin="0,10,0,0" Columns="3">
-                    <StackPanel Margin="0,0,8,8">
-                        <TextBlock FontSize="12" Text="Name (required)" />
-                        <ui:TextBox Text="{Binding SetName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                    <StackPanel Margin="0,0,8,8">
-                        <TextBlock FontSize="12" Text="Command (e.g. npx, uvx)" />
-                        <ui:TextBox Text="{Binding SetCommand, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                    <StackPanel Margin="0,0,0,8">
-                        <TextBlock FontSize="12" Text="Args (JSON array or CSV)" />
-                        <ui:TextBox Text="{Binding SetArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                    <StackPanel Margin="0,0,8,8">
-                        <TextBlock FontSize="12" Text="URL (sse/http transport)" />
-                        <ui:TextBox Text="{Binding SetUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                    <StackPanel Margin="0,0,8,8">
-                        <TextBlock FontSize="12" Text="Transport (stdio, sse)" />
-                        <ui:TextBox Text="{Binding SetTransport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                </UniformGrid>
+                <TextBlock Style="{StaticResource DcCardTitle}" Text="Add or update an MCP server" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Text="Runs 'defenseclaw mcp set'. Give either a command (a local server) or a URL (a remote server), not both. The scope is the connector chosen in the toolbar; 'All configured connectors' writes to every one. You review the exact command before anything runs." />
 
-                <!-- Env is repeatable KEY=VAL on the CLI, so it gets a multi-line box of its own
-                     (a UniformGrid cell would stretch every other cell to match). One entry per
-                     line, or separated by semicolons; each becomes its own env flag. -->
-                <StackPanel Margin="0,0,0,8">
-                    <TextBlock FontSize="12" Text="Env (one KEY=VAL per line, or separated by ;)" />
-                    <ui:TextBox AcceptsReturn="True"
-                                MinLines="2"
-                                MaxLines="6"
-                                TextWrapping="Wrap"
-                                VerticalScrollBarVisibility="Auto"
-                                Text="{Binding SetEnv, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Margin="0,4,0,0"
-                               FontSize="11"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                               Text="Env values are placed on the command line: they show in the confirm box and the Activity panel and are visible to other processes on this machine. Do not put secrets here." />
-                </StackPanel>
-                <CheckBox Margin="0,4,0,0"
-                          Content="Skip security scan before adding"
+                <WrapPanel Margin="0,12,0,0">
+                    <StackPanel Width="280" Margin="0,0,12,8">
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Name (required)" />
+                        <ui:TextBox Text="{Binding SetName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="Server name" />
+                    </StackPanel>
+                    <StackPanel Width="280" Margin="0,0,12,8">
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Transport" />
+                        <ComboBox HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding TransportChoices}"
+                                  SelectedItem="{Binding SetTransport, Mode=TwoWay}"
+                                  AutomationProperties.Name="Transport"
+                                  AutomationProperties.HelpText="stdio runs a local command, sse connects to a URL. Leave it on infer to send no --transport." />
+                    </StackPanel>
+                    <StackPanel Width="280" Margin="0,0,12,8">
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Command (local server, e.g. npx or uvx)" />
+                        <ui:TextBox Text="{Binding SetCommand, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="Command" />
+                    </StackPanel>
+                    <StackPanel Width="280" Margin="0,0,12,8">
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="URL (remote server, http or https)" />
+                        <ui:TextBox Text="{Binding SetUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="URL" />
+                    </StackPanel>
+                    <StackPanel Width="280" Margin="0,0,12,8">
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Arguments (one per line, or a JSON array)" />
+                        <ui:TextBox AcceptsReturn="True"
+                                    MinLines="3"
+                                    MaxLines="6"
+                                    TextWrapping="NoWrap"
+                                    VerticalScrollBarVisibility="Auto"
+                                    HorizontalScrollBarVisibility="Auto"
+                                    Text="{Binding SetArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="Command arguments"
+                                    AutomationProperties.HelpText="One argument per line; sent to the CLI as a JSON array, so commas inside an argument are safe. Only for a command, not a URL." />
+                    </StackPanel>
+                    <StackPanel Width="280" Margin="0,0,12,8">
+                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Environment (one KEY=VAL per line)" />
+                        <ui:TextBox AcceptsReturn="True"
+                                    MinLines="3"
+                                    MaxLines="6"
+                                    TextWrapping="NoWrap"
+                                    VerticalScrollBarVisibility="Auto"
+                                    HorizontalScrollBarVisibility="Auto"
+                                    Text="{Binding SetEnv, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="Environment variables"
+                                    AutomationProperties.HelpText="Sent as one --env flag per line. Values are visible in the confirm box, Activity and to other processes: no secrets." />
+                    </StackPanel>
+                </WrapPanel>
+
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Text="Environment values are placed on the command line: they show in the review, in Activity and to other processes on this machine. Do not put secrets here." />
+
+                <CheckBox Margin="0,8,0,0"
+                          Content="Skip the security scan (the server is added unchecked)"
                           IsChecked="{Binding SetSkipScan, Mode=TwoWay}" />
+
+                <TextBlock Style="{StaticResource DcToneText}"
+                           Tag="Bad"
+                           Margin="0,10,0,0"
+                           TextWrapping="Wrap"
+                           Text="{Binding SetFormError}"
+                           Visibility="{Binding HasSetFormError, Converter={StaticResource BoolToVisibility}}"
+                           AutomationProperties.LiveSetting="Assertive" />
+
                 <StackPanel Margin="0,12,0,0"
                             HorizontalAlignment="Right"
                             Orientation="Horizontal">
@@ -136,245 +182,125 @@
             </StackPanel>
         </Border>
 
-        <!-- Mutation result -->
-        <ui:InfoBar Grid.Row="3"
-                    Margin="0,0,0,14"
-                    Title="{Binding ResultTitle}"
-                    Message="{Binding ResultMessage}"
-                    Severity="{Binding ResultSeverity}"
-                    IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
-                    IsClosable="True" />
+        <!-- Result of the last action, result of a read-only command, and a stale-data warning -->
+        <StackPanel Grid.Row="3">
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="{Binding ResultTitle}"
+                        Message="{Binding ResultMessage}"
+                        Severity="{Binding ResultSeverity}"
+                        IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
+                        IsClosable="True"
+                        AutomationProperties.LiveSetting="Polite" />
+            <govern:GovernOutputCard />
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="Showing an older read"
+                        Message="{Binding RefreshWarning}"
+                        Severity="Warning"
+                        IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                        IsClosable="False"
+                        AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
 
-        <!-- Content -->
-        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <ui:InfoBar Margin="0,0,0,14"
-                            Title="MCP servers"
-                            Message="{Binding BannerMessage}"
-                            Severity="{Binding BannerSeverity}"
-                            IsOpen="{Binding ShowBanner}"
-                            IsClosable="False" />
+        <TextBlock Grid.Row="4"
+                   Style="{StaticResource DcCaption}"
+                   Margin="{StaticResource DcCardGap}"
+                   Text="{Binding CaptionText}" />
 
-                <ui:ProgressRing Width="32"
-                                  Height="32"
-                                  Margin="0,24,0,0"
-                                  HorizontalAlignment="Center"
-                                  IsIndeterminate="True"
-                                  Visibility="{Binding IsLoadingState, Converter={StaticResource BoolToVisibility}}" />
+        <!-- Content: exactly one of these is visible -->
+        <Grid Grid.Row="5">
+            <!--
+                Everything but the list scrolls as one block: the empty and error cards carry a paragraph of
+                explanation, and in a short window the row they sit in is smaller than the card, which used to
+                clip it (an empty card, or a sentence cut mid-line). MinHeight = the viewport keeps the loading
+                spinner centred when there is room. The list below has its own scroller and sits on top.
+            -->
+            <ScrollViewer Style="{StaticResource DcPageScroll}" Focusable="False">
+                <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}"
+                                Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
+                        <ui:ProgressRing Width="32"
+                                         Height="32"
+                                         IsIndeterminate="True"
+                                         AutomationProperties.Name="Reading MCP servers" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading MCP servers from the CLI…" />
+                    </StackPanel>
 
-                <ItemsControl Visibility="{Binding IsLoadedState, Converter={StaticResource BoolToVisibility}}"
-                              ItemsSource="{Binding Mcps}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <VirtualizingStackPanel VirtualizationMode="Recycling" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <ui:CardExpander Margin="0,0,0,8">
-                                <ui:CardExpander.Header>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="12"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding Command, StringFormat='command: {0}'}"
-                                                       Visibility="{Binding Command, Converter={StaticResource Truthy}}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="12"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       Text="{Binding Transport, StringFormat='transport: {0}'}"
-                                                       Visibility="{Binding Transport, Converter={StaticResource Truthy}}" />
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                            <ui:Button Margin="0,0,6,0"
-                                                       Content="Block"
-                                                       Command="{Binding DataContext.BlockMcpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                       CommandParameter="{Binding}" />
-                                            <ui:Button Margin="0,0,6,0"
-                                                       Content="Allow"
-                                                       Command="{Binding DataContext.AllowMcpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                       CommandParameter="{Binding}" />
-                                            <ui:Button Content="Unset"
-                                                       Command="{Binding DataContext.UnsetMcpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                       CommandParameter="{Binding}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </ui:CardExpander.Header>
-
-                                <Border Padding="4"
-                                        Background="{DynamicResource LayerFillColorDefaultBrush}">
-                                    <TextBox MaxHeight="220"
-                                             VerticalScrollBarVisibility="Auto"
-                                             HorizontalScrollBarVisibility="Auto"
-                                             FontFamily="Consolas"
-                                             FontSize="12"
-                                             IsReadOnly="True"
-                                             TextWrapping="NoWrap"
-                                             Text="{Binding RawJson, Mode=OneWay}" />
-                                </Border>
-                            </ui:CardExpander>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <!-- Enforcement overrides -->
-                <Grid Margin="0,18,0,0" Visibility="{Binding IsNotLoading, Converter={StaticResource BoolToVisibility}}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0"
-                            Padding="12"
-                            CornerRadius="8"
-                            BorderThickness="1"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding BlockedHeader}" />
-                            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Blocked}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,4"
-                                                Padding="8"
-                                                CornerRadius="4"
-                                                Background="{DynamicResource LayerFillColorDefaultBrush}">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Reason, StringFormat='reason: {0}'}"
-                                                           Visibility="{Binding Reason, Converter={StaticResource Truthy}}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Scope, StringFormat='scope: {0}'}"
-                                                           Visibility="{Binding Scope, Converter={StaticResource Truthy}}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Text="No blocked MCP servers."
-                                       Visibility="{Binding DataContext.NoBlockedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
-                            <!-- The list could not be read: say so, rather than "No blocked MCP servers." -->
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       Text="{Binding BlockedUnavailable}"
-                                       Visibility="{Binding HasBlockedUnavailable, Converter={StaticResource BoolToVisibility}}" />
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowCliMissing, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
                         </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="2"
-                            Padding="12"
-                            CornerRadius="8"
-                            BorderThickness="1"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{Binding AllowedHeader}" />
-                            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Allowed}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,4"
-                                                Padding="8"
-                                                CornerRadius="4"
-                                                Background="{DynamicResource LayerFillColorDefaultBrush}">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Reason, StringFormat='reason: {0}'}"
-                                                           Visibility="{Binding Reason, Converter={StaticResource Truthy}}" />
-                                                <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Text="{Binding Scope, StringFormat='scope: {0}'}"
-                                                           Visibility="{Binding Scope, Converter={StaticResource Truthy}}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Text="No allow-listed MCP servers."
-                                       Visibility="{Binding DataContext.NoAllowedItems, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}" />
-                            <TextBlock Margin="0,4,0,0"
-                                       FontStyle="Italic"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       Text="{Binding AllowedUnavailable}"
-                                       Visibility="{Binding HasAllowedUnavailable, Converter={StaticResource BoolToVisibility}}" />
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="PlugConnected24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource DcCard}"
+                            VerticalAlignment="Top"
+                            Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}">
+                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No MCP servers match the filter" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every server the CLI listed. Clear it to see them all." />
+                            <ui:Button Margin="0,12,0,0"
+                                       HorizontalAlignment="Center"
+                                       Content="Clear filter"
+                                       Command="{Binding ClearFilterCommand}" />
                         </StackPanel>
                     </Border>
                 </Grid>
-            </StackPanel>
-        </ScrollViewer>
+            </ScrollViewer>
 
-        <!-- Confirm-mutation overlay: shows the exact argv before anything runs. -->
-        <Grid Grid.Row="0"
-              Grid.RowSpan="5"
-              Background="#88000000"
-              Visibility="{Binding IsConfirmOpen, Converter={StaticResource BoolToVisibility}}">
-            <Border MaxWidth="560"
-                    Padding="20"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    CornerRadius="8"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    Background="{DynamicResource ApplicationBackgroundBrush}">
-                <StackPanel>
-                    <TextBlock FontSize="16"
-                               FontWeight="SemiBold"
-                               TextWrapping="Wrap"
-                               Text="{Binding ConfirmHeading}" />
-                    <TextBlock Margin="0,10,0,0"
-                               FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="This is the exact command that will run. Nothing happens until you confirm." />
-                    <TextBlock Margin="0,8,0,0"
-                               FontSize="12"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                               Text="{Binding ConfirmNote}"
-                               Visibility="{Binding ConfirmNote, Converter={StaticResource Truthy}}" />
-                    <Border Margin="0,10,0,0"
-                            Padding="10"
-                            CornerRadius="4"
-                            Background="{DynamicResource LayerFillColorDefaultBrush}">
-                        <TextBox FontFamily="Consolas"
-                                 FontSize="12"
-                                 IsReadOnly="True"
-                                 TextWrapping="Wrap"
-                                 Text="{Binding ConfirmCommandText, Mode=OneWay}" />
-                    </Border>
-                    <StackPanel Margin="0,16,0,0"
-                                HorizontalAlignment="Right"
-                                Orientation="Horizontal">
-                        <ui:Button Margin="0,0,8,0"
-                                   Content="Cancel"
-                                   Command="{Binding ConfirmNoCommand}" />
-                        <ui:Button Appearance="Primary"
-                                   Content="Run command"
-                                   Command="{Binding ConfirmYesCommand}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+            <ItemsControl AutomationProperties.Name="MCP servers"
+                          ItemsSource="{Binding Rows}"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Standard"
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
+                <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer Style="{StaticResource DcPageScroll}"
+                                      CanContentScroll="True"
+                                      Focusable="False">
+                            <ItemsPresenter />
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <govern:GovernRowView />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </Grid>
+
+        <!-- Review dialog for every state-changing command -->
+        <govern:GovernConfirmOverlay Grid.Row="0" Grid.RowSpan="6" />
     </Grid>
 </UserControl>

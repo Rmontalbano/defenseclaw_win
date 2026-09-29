@@ -11,9 +11,19 @@ using YamlDotNet.Serialization;
 namespace DefenseClaw.App.ViewModels.ConfigEditor;
 
 /// <summary>
-/// Builds the FORM tab's section tree from <c>defenseclaw config show --effective</c>
+/// Builds the FORM tab's section tree from <c>defenseclaw config show --source --format yaml</c>
 /// output, cross-referenced against the raw <c>config.yaml</c> so each field knows
 /// whether <see cref="YamlSectionEditor"/> can actually locate it for editing.
+/// <para>
+/// <b>Why <c>--source</c>.</b> On DefenseClaw 0.8.10 (config v8) <c>config show --effective</c> returns
+/// only the <c>observability</c> section, so FORM was empty. <c>--source</c> returns every section that
+/// is in config.yaml (verified: <c>ai_discovery</c>, <c>cisco_ai_defense</c>, <c>claw</c>,
+/// <c>config_version</c>, <c>gateway</c>, <c>guardrail</c>, <c>llm</c>, <c>observability</c>) with the
+/// file's own values — but <b>masked</b>: secrets and header values are <c>[REDACTED]</c>, and URLs with
+/// userinfo, a path or a query come back partly redacted. Every field whose key is secret-shaped, whose
+/// value is a mask placeholder, or which sits under a headers map is therefore built read-only (see
+/// <see cref="SensitiveKeyClassifier"/>): FORM can show it, never write it.
+/// </para>
 /// <para>
 /// Top-level keys become <see cref="FormSection"/> cards. Within a section, scalars
 /// become typed fields, sequences of scalars become simple list editors, and nested
@@ -21,14 +31,29 @@ namespace DefenseClaw.App.ViewModels.ConfigEditor;
 /// — a sequence containing mappings, or nesting past <see cref="MaxDepth"/> — renders as
 /// a read-only, pretty-printed <see cref="RawBlockNode"/> instead of failing the whole
 /// section. This is exactly the "unknown/complex nodes render read-only" rule from the
-/// spec, and it is why a section like <c>observability</c> — whose effective view is
-/// mostly compiler-generated bucket/route/provenance tables — still renders (as a handful
-/// of real fields plus several raw blocks) instead of not rendering at all.
+/// spec, and it is why a section like <c>observability</c> — mostly bucket/route tables once
+/// it is configured — still renders (as a handful of real fields plus raw blocks) instead of
+/// not rendering at all.
 /// </para>
 /// </summary>
 public static class ConfigFormBuilder
 {
     private const int MaxDepth = 8;
+
+    /// <summary>Top-level scalars that are shown but never editable from FORM, with the reason.</summary>
+    private static readonly Dictionary<string, string> ManagedKeys = new(StringComparer.Ordinal)
+    {
+        ["config_version"] = "The config schema version is managed by DefenseClaw — editing it by hand can make the CLI reject or migrate the file. Use the RAW tab if you really need to.",
+    };
+
+    private const string SecretReason =
+        "Secret — shown masked, never written from this form. Edit it in the RAW tab, or keep the value out of config.yaml: store it with `defenseclaw keys set <ENV_NAME>` and point the matching *_env setting at that name.";
+
+    private const string MaskedReason =
+        "Part of this value is masked by `defenseclaw config show --source`, so FORM cannot write it back without destroying the real value. Edit it in the RAW tab.";
+
+    private const string HeaderMapReason =
+        "Header values are masked by `defenseclaw config show --source`. Edit them in the RAW tab.";
 
     // Only for rendering RawBlockNode.Yaml — re-serializes a subtree rather than slicing the
     // original text by YamlNode.Start/End marks, which turned out to span only a node's
@@ -40,39 +65,45 @@ public static class ConfigFormBuilder
 
     public sealed record BuildResult(IReadOnlyList<FormSection> Sections, IReadOnlyList<string> Warnings);
 
-    /// <param name="effectiveYaml">Stdout of <c>defenseclaw config show --effective --format yaml</c>.</param>
+    /// <param name="sourceYaml">Stdout of <c>defenseclaw config show --source --format yaml</c> (masked).</param>
     /// <param name="document">The raw config.yaml, for editability probing and current-on-disk field lookups.</param>
     /// <param name="onFieldCommitted">Invoked whenever a generated field or list changes.</param>
     public static BuildResult Build(
-        string effectiveYaml,
+        string sourceYaml,
         ConfigDocument document,
         Action<FormField> onFieldCommitted,
         Action<FormListField> onListCommitted)
     {
-        ArgumentNullException.ThrowIfNull(effectiveYaml);
+        ArgumentNullException.ThrowIfNull(sourceYaml);
         ArgumentNullException.ThrowIfNull(document);
 
         var warnings = new List<string>();
         var stream = new YamlStream();
         try
         {
-            using var reader = new StringReader(effectiveYaml);
+            using var reader = new StringReader(sourceYaml);
             stream.Load(reader);
         }
         catch (YamlException ex)
         {
-            warnings.Add($"Could not parse the effective configuration: {ex.Message}");
+            warnings.Add($"Could not parse the configuration the CLI returned: {ex.Message}");
             return new BuildResult(Array.Empty<FormSection>(), warnings);
         }
 
         if (stream.Documents.Count == 0 || stream.Documents[0].RootNode is not YamlMappingNode root)
         {
-            warnings.Add("The effective configuration did not contain a YAML mapping at its root.");
+            warnings.Add("The configuration the CLI returned did not contain a YAML mapping at its root.");
             return new BuildResult(Array.Empty<FormSection>(), warnings);
         }
 
         var sections = new List<FormSection>();
-        foreach (var (keyNode, valueNode) in Entries(root))
+
+        // The CLI sorts keys alphabetically; the schema version reads better last than first.
+        var ordered = Entries(root)
+            .OrderBy(entry => ManagedKeys.ContainsKey(ScalarText(entry.Key)) ? 1 : 0)
+            .ToList();
+
+        foreach (var (keyNode, valueNode) in ordered)
         {
             var key = ScalarText(keyNode);
             if (key.Length == 0)
@@ -172,23 +203,67 @@ public static class ConfigFormBuilder
         Action<FormField> onFieldCommitted)
     {
         var (kind, value) = ClassifyScalar(key, scalar);
-        var (isEditable, reason) = ProbeScalar(document, path);
+        var text = scalar.Value ?? string.Empty;
 
-        // A plain (unquoted) effective scalar that is not a bool or an int but still reads as
-        // a non-string — a float, "null"/"yes", a date — would be written back through the
-        // string path, which quotes it ('0.85'), silently changing its YAML type. Refuse the
-        // edit instead; RAW keeps the type intact.
-        if (isEditable &&
-            kind == FormFieldKind.String &&
-            scalar.Style == ScalarStyle.Plain &&
-            YamlSectionEditor.LooksLikeNonStringPlainScalar(scalar.Value ?? string.Empty))
+        // Masking comes first and overrides everything the raw-document probe would say: the text this
+        // field holds came from `config show --source`, and if it is a placeholder (or the field is a
+        // secret, or sits under a headers map) FORM must never write it back. There is no path from
+        // here to a config.yaml edit for such a field — it is built non-editable, it never commits, and
+        // the view-model refuses it a second time.
+        bool isEditable;
+        string? reason;
+        var isMasked = false;
+
+        if (kind == FormFieldKind.Secret)
         {
-            (isEditable, reason) = (false, "This value is a number, date or null/yes/no word rather than a string — edit it in the RAW tab so its type is preserved.");
+            (isEditable, reason, isMasked) = (false, SecretReason, true);
+        }
+        else if (SensitiveKeyClassifier.IsMaskedValue(text))
+        {
+            (isEditable, reason, isMasked) = (false, MaskedReason, true);
+        }
+        else if (HasHeaderMapAncestor(path))
+        {
+            (isEditable, reason, isMasked) = (false, HeaderMapReason, true);
+        }
+        else if (path.Count == 1 && ManagedKeys.TryGetValue(path[0], out var managedReason))
+        {
+            (isEditable, reason) = (false, managedReason);
+        }
+        else
+        {
+            (isEditable, reason) = ProbeScalar(document, path);
+
+            // A plain (unquoted) scalar that is not a bool or an int but still reads as a
+            // non-string — a float, "null"/"yes", a date — would be written back through the
+            // string path, which quotes it ('0.85'), silently changing its YAML type. Refuse the
+            // edit instead; RAW keeps the type intact.
+            if (isEditable &&
+                kind == FormFieldKind.String &&
+                scalar.Style == ScalarStyle.Plain &&
+                YamlSectionEditor.LooksLikeNonStringPlainScalar(text))
+            {
+                (isEditable, reason) = (false, "This value is a number, date or null/yes/no word rather than a string — edit it in the RAW tab so its type is preserved.");
+            }
         }
 
         var dotted = string.Join('.', path);
 
-        group.Fields.Add(new FormField(key, Humanize(key), dotted, kind, value, isEditable, reason, onFieldCommitted));
+        group.Fields.Add(new FormField(key, Humanize(key), dotted, kind, value, isEditable, reason, onFieldCommitted, isMasked));
+    }
+
+    /// <summary>True when any ancestor key of the value at <paramref name="path"/> is a headers map (the CLI masks every string beneath one).</summary>
+    private static bool HasHeaderMapAncestor(IReadOnlyList<string> path)
+    {
+        for (var i = 0; i < path.Count - 1; i++)
+        {
+            if (SensitiveKeyClassifier.IsHeaderMapKey(path[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AddSequenceEntry(
@@ -204,8 +279,29 @@ public static class ConfigFormBuilder
 
         if (seq.Children.All(c => c is YamlScalarNode))
         {
-            var items = seq.Children.Cast<YamlScalarNode>().Select(s => s.Value ?? string.Empty);
-            var (isEditable, reason) = ProbeList(document, path);
+            var items = seq.Children.Cast<YamlScalarNode>().Select(s => s.Value ?? string.Empty).ToList();
+
+            // A list is rewritten whole when it changes, so one masked item (or a secret-shaped or
+            // headers key) would be written back as its placeholder: lock the whole list instead.
+            bool isEditable;
+            string? reason;
+            if (SensitiveKeyClassifier.IsSecretKey(key) && items.Count > 0)
+            {
+                (isEditable, reason) = (false, SecretReason);
+            }
+            else if (items.Any(SensitiveKeyClassifier.IsMaskedValue))
+            {
+                (isEditable, reason) = (false, MaskedReason);
+            }
+            else if (SensitiveKeyClassifier.IsHeaderMapKey(key) || HasHeaderMapAncestor(path))
+            {
+                (isEditable, reason) = (false, HeaderMapReason);
+            }
+            else
+            {
+                (isEditable, reason) = ProbeList(document, path);
+            }
+
             group.Lists.Add(new FormListField(key, Humanize(key), dotted, items, isEditable, reason, onListCommitted));
             return;
         }
@@ -252,7 +348,7 @@ public static class ConfigFormBuilder
         var lookup = YamlSectionEditor.FindScalar(sectionText, path);
         if (!lookup.Found)
         {
-            return (false, "Not set explicitly in config.yaml (showing the effective default). Add it in RAW to edit here.");
+            return (false, "This key is not on a line of its own in config.yaml (it may be written inline, or the RAW tab changed since the form was built) — edit it in the RAW tab.");
         }
 
         if (lookup.Ambiguous)
@@ -279,7 +375,7 @@ public static class ConfigFormBuilder
         var lookup = YamlSectionEditor.FindList(sectionText, path);
         if (!lookup.Found)
         {
-            return (false, "Not set explicitly in config.yaml (showing the effective default). Add it in RAW to edit here.");
+            return (false, "This list is not written as a block of '- item' lines in config.yaml (it may be inline, or the RAW tab changed since the form was built) — edit it in the RAW tab.");
         }
 
         if (lookup.Ambiguous)
@@ -304,11 +400,6 @@ public static class ConfigFormBuilder
             return (FormFieldKind.EnvName, raw);
         }
 
-        if (SensitiveKeyClassifier.IsSecretKey(key))
-        {
-            return (FormFieldKind.Secret, raw);
-        }
-
         // Only unquoted scalars are candidates for bool/int — the source file quotes
         // things like '~' precisely to keep them strings, and that choice must survive.
         if (node.Style == ScalarStyle.Plain)
@@ -323,6 +414,8 @@ public static class ConfigFormBuilder
                 return (FormFieldKind.Bool, false);
             }
 
+            // A plain number under a secret-shaped key (`max_tokens: 4096`) is not a secret: `config show`
+            // masks a secret's text, so an unmasked number here is an ordinary setting.
             if (raw.Length > 0 &&
                 (raw[0] == '-' || char.IsDigit(raw[0])) &&
                 long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) &&
@@ -330,6 +423,11 @@ public static class ConfigFormBuilder
             {
                 return (FormFieldKind.Int, (int)number);
             }
+        }
+
+        if (SensitiveKeyClassifier.IsSecretKey(key))
+        {
+            return (FormFieldKind.Secret, raw);
         }
 
         return (FormFieldKind.String, raw);
