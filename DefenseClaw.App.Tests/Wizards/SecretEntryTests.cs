@@ -181,9 +181,9 @@ public class SecretEntryTests
                 Assert.False(vm.HasValidationSummary, vm.ValidationSummary);
             }
 
-            Assert.Contains("setup splunk", vm.CommandText, StringComparison.Ordinal);
-            Assert.DoesNotContain(Value, vm.CommandText, StringComparison.Ordinal);
-            Assert.DoesNotContain("--access-token", vm.CommandText, StringComparison.Ordinal);
+            Assert.Contains("setup splunk", vm.CommandReview!.CommandText, StringComparison.Ordinal);
+            Assert.DoesNotContain(Value, vm.CommandReview!.CommandText, StringComparison.Ordinal);
+            Assert.DoesNotContain("--access-token", vm.CommandReview!.CommandText, StringComparison.Ordinal);
             Assert.Equal(string.Empty, token.Value);
             Assert.DoesNotContain(Value, string.Join('\n', vm.Definition.BuildArgv(new WizardValues())), StringComparison.Ordinal);
 

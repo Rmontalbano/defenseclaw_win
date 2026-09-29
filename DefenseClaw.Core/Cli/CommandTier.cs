@@ -82,9 +82,17 @@ public static class CommandTiers
     {
         ArgumentNullException.ThrowIfNull(argv);
 
-        if (argv.Count == 0 || argv.Any(a => ReadOnlyFlags.Contains(a)))
+        if (argv.Count == 0)
         {
-            return argv.Count == 0 ? CommandTier.StateChanging : CommandTier.ReadOnly;
+            return CommandTier.StateChanging;
+        }
+
+        // Options end at "--": anything after it is a positional target, so a skill named "--help" or
+        // "--dry-run" (skill quarantine -- --help) must not read as a preview flag.
+        var options = argv.TakeWhile(a => a != "--").ToArray();
+        if (options.Any(ReadOnlyFlags.Contains))
+        {
+            return CommandTier.ReadOnly;
         }
 
         var path = argv.TakeWhile(a => !a.StartsWith('-')).Take(MaxPathTokens).ToArray();
@@ -97,7 +105,7 @@ public static class CommandTiers
         // The first recognised verb decides; destructive words anywhere in the path already won above
         // (over-warning is the safe direction). Unrecognised paths default to asking.
         var verb = path.FirstOrDefault(t => ReadOnlyVerbs.Contains(t) || StateChangingVerbs.Contains(t));
-        return verb is not null && ReadOnlyVerbs.Contains(verb) && !argv.Any(MutatingFlags.Contains)
+        return verb is not null && ReadOnlyVerbs.Contains(verb) && !options.Any(MutatingFlags.Contains)
             ? CommandTier.ReadOnly
             : CommandTier.StateChanging;
     }

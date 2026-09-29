@@ -10,7 +10,7 @@ A **read-mostly companion** for a local DefenseClaw installation: a system-tray 
 
 ## Design principle
 
-**All state changes go through the `defenseclaw` CLI.** The app never writes DefenseClaw state directly; every mutation is executed as a logged CLI invocation whose exact argv, live output, and exit status appear in the Activity panel. Secrets are passed via stdin, never argv.
+**All state changes go through the `defenseclaw` CLI.** The app never writes DefenseClaw state directly; every mutation is executed as a logged CLI invocation whose exact argv, live output, and exit status appear in the Activity panel. Secrets never go on argv: they reach the CLI through its own console prompt, stdin, or, for commands with an environment-variable fallback (Splunk and observability tokens), that one child process's environment.
 
 ## Data sources
 

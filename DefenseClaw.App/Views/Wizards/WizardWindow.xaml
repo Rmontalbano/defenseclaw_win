@@ -359,9 +359,24 @@
                                                 Compact="True"
                                                 CommandMaxHeight="Infinity">
                         <shell:CommandReviewControl.ExtraContent>
-                            <TextBlock Margin="0,0,0,4"
-                                       Style="{StaticResource DcCaption}"
-                                       Text="{Binding ExecutablePath, StringFormat='resolves to {0}'}" />
+                            <StackPanel>
+                                <TextBlock Margin="0,0,0,4"
+                                           Style="{StaticResource DcCaption}"
+                                           Text="{Binding ExecutablePath, StringFormat='resolves to {0}'}" />
+                                <!-- Secrets typed in the app ride in the child's environment, by name, value masked. -->
+                                <ItemsControl ItemsSource="{Binding EnvironmentNotes}"
+                                              IsTabStop="False"
+                                              Visibility="{Binding HasEnvironmentNotes, Converter={StaticResource BoolToVisibility}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Margin="0,0,0,4"
+                                                       Style="{StaticResource DcCaption}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </shell:CommandReviewControl.ExtraContent>
                         <shell:CommandReviewControl.FooterContent>
                             <StackPanel Orientation="Horizontal">
@@ -432,7 +447,7 @@
                                                        Text="{Binding CredentialStatus}" />
                                             <TextBlock Margin="18,2,0,0"
                                                        Style="{StaticResource DcCaption}"
-                                                       Text="This app does not send it; the command reads it by name." />
+                                                       Text="{Binding CredentialReviewNote}" />
                                             <StackPanel Margin="18,8,0,0" Orientation="Horizontal">
                                                 <ui:Button Margin="0,0,8,0"
                                                            Appearance="Secondary"
