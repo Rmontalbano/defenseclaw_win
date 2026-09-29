@@ -50,6 +50,18 @@ namespace DefenseClaw.App.ViewModels.ConfigEditor;
 /// unvalidated file) do not replace the offered backup until a save validates.
 /// </para>
 /// <para>
+/// <b>Unsaved edits are never dropped silently.</b> "Modified" means the RAW text differs from the
+/// text last read from, or written to, config.yaml (<c>_diskText</c>) — FORM edits publish into RAW, so
+/// one flag covers both tabs — and a save that the CLI rejected stays modified until the next load or
+/// edit. Everything that would replace the buffer (the Reload button, Restore, and the window closing
+/// or the app exiting, see <see cref="ConfirmCloseAsync"/>) first goes through
+/// <see cref="ResolveUnsavedChangesAsync"/>: Save (which must succeed *and* validate before the caller
+/// carries on), Discard, or Cancel. The prompt is a seam (<see cref="UnsavedChangesPrompt"/>) and an
+/// unanswered one means Cancel, so nothing here can discard by default. A change to config.yaml made
+/// behind the editor's back (<see cref="HandleDiskChangeAsync"/>) reloads a clean buffer and, for a dirty
+/// one, only raises an inline notice — an automatic reload never overwrites edits.
+/// </para>
+/// <para>
 /// <b>Masked values never come back.</b> The CLI's source view masks secrets, header values and
 /// parts of URLs. FORM builds those fields read-only (<see cref="ConfigFormBuilder"/>), a field
 /// that is not editable never commits (<see cref="FormField"/>), this view-model refuses a
@@ -59,7 +71,7 @@ namespace DefenseClaw.App.ViewModels.ConfigEditor;
 /// FORM never writes a masked value into config.yaml.
 /// </para>
 /// </summary>
-public sealed partial class ConfigEditorWindowViewModel : ObservableObject
+public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDisposable
 {
     /// <summary>
     /// Argv for the FORM source. <c>--source</c> answers with every section of a v8 file (the
@@ -77,6 +89,21 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     /// production, which leaves <see cref="ReadFormSourceAsync"/> exactly as it was.
     /// </summary>
     internal Func<CancellationToken, Task<string>>? FormSourceOverride { get; set; }
+
+    /// <summary>
+    /// How the editor asks "save, discard or cancel?". Set by the window (a dialog) and by tests (a canned
+    /// answer). Left null — no UI attached — the answer is <see cref="UnsavedChangesChoice.Cancel"/>, so a
+    /// view-model nobody wired a prompt to can refuse to drop edits but can never drop them.
+    /// </summary>
+    internal Func<UnsavedChangesRequest, Task<UnsavedChangesChoice>>? UnsavedChangesPrompt { get; set; }
+
+    /// <summary>
+    /// Commits an edit that is still inside a FORM control. FORM boxes commit on <c>LostFocus</c>, so a value that
+    /// has been typed but not tabbed out of has not reached this view-model — and would be lost by a close or a
+    /// reload that only looked at <see cref="HasUnsavedChanges"/>. The window sets it (it moves focus off the
+    /// FORM tab and back); everything that asks "is there anything to lose?" calls it first.
+    /// </summary>
+    internal Action? CommitPendingEdits { get; set; }
 
     private readonly AppServices _services;
     private readonly DefenseClawPaths _paths;
@@ -99,11 +126,42 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     private bool _suppressRawChangeTracking;
     private bool _needsFormRebuild;
 
+    /// <summary>
+    /// What config.yaml held when the editor last read it, or what the editor last wrote to it (whether or not the
+    /// CLI then accepted it). <see cref="IsRawModified"/> is "RAW differs from this" — so typing something and
+    /// deleting it again is not a change, and a FORM edit that lands in RAW is.
+    /// </summary>
+    private string _diskText = string.Empty;
+
+    /// <summary>The save in flight, if any: a close or reload that arrives during it waits for the outcome instead of guessing.</summary>
+    private Task<SaveOutcome?>? _activeSave;
+
+    /// <summary>True while a save/discard/cancel question is open or being acted on; a second trigger (a second X click, the tray Exit) is refused rather than stacked.</summary>
+    private bool _resolvingUnsaved;
+
+    /// <summary>True while <see cref="HandleDiskChangeAsync"/> runs, so a burst of change notifications is one reaction.</summary>
+    private bool _diskChangeBusy;
+
+    private bool _watchingDisk;
+    private bool _disposed;
+
+    /// <summary>The on-disk signature the "changed on disk" notice was raised for; "Keep my edits" silences that version only.</summary>
+    private FileSignature? _externalChangeSignature;
+
     [ObservableProperty]
     private string _rawText = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
     private bool _isRawModified;
+
+    /// <summary>
+    /// Shown, for a buffer with unsaved edits, when config.yaml changes on disk behind the editor. Never replaced by
+    /// a silent reload — it offers Reload (drop my edits) or Keep my edits.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowExternalChangeBanner))]
+    private bool _showExternalChangeNotice;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
@@ -201,7 +259,20 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     /// <summary>The save error banner, except for drift — the drift banner already carries that message, so showing both would say it twice.</summary>
     public bool ShowSaveErrorBanner => ShowSaveResultBanner && SaveResultIsError && !ShowDriftBanner;
 
-    partial void OnShowDriftBannerChanged(bool value) => OnPropertyChanged(nameof(ShowSaveErrorBanner));
+    partial void OnShowDriftBannerChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowSaveErrorBanner));
+        OnPropertyChanged(nameof(ShowExternalChangeBanner));
+    }
+
+    /// <summary>
+    /// True when the editor holds edits that are not in config.yaml — typed in RAW or applied from FORM (FORM edits
+    /// publish into RAW, so this is the single answer for both tabs). See the class remarks for what "modified" means.
+    /// </summary>
+    public bool HasUnsavedChanges => IsRawModified;
+
+    /// <summary>The "changed on disk" notice, except while the save-time drift banner is up: that one already says it, with the same buttons.</summary>
+    public bool ShowExternalChangeBanner => ShowExternalChangeNotice && !ShowDriftBanner;
 
     /// <summary>
     /// Restore is offered while the file on disk is one this editor wrote that failed
@@ -291,7 +362,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
 
     partial void OnRawTextChanged(string value)
     {
-        IsRawModified = true;
+        IsRawModified = !string.Equals(value, _diskText, StringComparison.Ordinal);
 
         // Programmatic publishes (a load, a FORM edit) set this around the assignment; see
         // SetRawTextWithoutRebuildFlag for why the flag is reset there and not here.
@@ -324,7 +395,14 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     }
 
     /// <summary>Loads config.yaml and fetches the CLI's masked source view of it once. Call after the window is constructed.</summary>
-    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    public Task LoadAsync(CancellationToken cancellationToken = default) => LoadCoreAsync(cancellationToken, keepEditedBuffer: false);
+
+    /// <param name="cancellationToken">Cancels the read of config.yaml.</param>
+    /// <param name="keepEditedBuffer">
+    /// For a reload nobody asked for (the file changed behind the editor): if unsaved edits appear while the file is
+    /// being read, the load stands down — buffer, signature and banners untouched — instead of replacing them.
+    /// </param>
+    private async Task LoadCoreAsync(CancellationToken cancellationToken, bool keepEditedBuffer)
     {
         IsLoading = true;
         try
@@ -332,6 +410,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
             // Signature first, then the read: if the file changes in between, the text is
             // newer than the signature and the next save reports drift (safe) instead of
             // the text being older than the signature and hiding it.
+            var previousSignature = _loadedSignature;
             _loadedSignature = _saveService.CaptureSignature();
 
             // The file on disk is no longer the one our unvalidated save produced (someone
@@ -354,10 +433,22 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
                 return;
             }
 
+            if (keepEditedBuffer && HasUnsavedChanges)
+            {
+                // Typing that landed while the file was being read wins over a reload nobody asked for. The signature
+                // goes back too, so a Save still reports that the file moved.
+                _loadedSignature = previousSignature;
+                return;
+            }
+
             LoadError = null;
 
+            // Set before the assignment so the change hook compares against the file just read, and cleared
+            // again after it: an unchanged text raises no hook, so a sticky "modified" would otherwise survive.
+            _diskText = rawText;
             SetRawTextWithoutRebuildFlag(rawText);
             IsRawModified = false;
+            ClearExternalChange();
 
             var parsed = false;
             try
@@ -407,8 +498,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
         LoadError = message;
         ParseError = null;
 
+        _diskText = string.Empty;
         SetRawTextWithoutRebuildFlag(string.Empty);
         IsRawModified = false;
+        ClearExternalChange();
 
         _document = ConfigStore.Parse(string.Empty);
         _formSourceYaml = string.Empty;
@@ -444,13 +537,230 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// The Reload button. With unsaved edits it asks first (save / discard / cancel) — Save must succeed and
+    /// validate before the reload goes ahead, Cancel leaves everything as it is.
+    /// </summary>
     [RelayCommand]
     private async Task ReloadAsync()
+    {
+        if (!await ResolveUnsavedChangesAsync(UnsavedChangesContext.Reload).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        await ReloadCoreAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The "changed on disk" notice's Reload: the operator has just been told the file moved and chose to take
+    /// the file's version over their edits, so there is no second question.
+    /// </summary>
+    [RelayCommand]
+    private Task ReloadDiscardingEditsAsync() => ReloadCoreAsync();
+
+    /// <summary>The "changed on disk" notice's Keep my edits: stop nagging about this version of the file; a Save will still report the drift.</summary>
+    [RelayCommand]
+    private void KeepEdits() => ShowExternalChangeNotice = false;
+
+    private async Task ReloadCoreAsync(bool keepEditedBuffer = false)
     {
         ShowDriftBanner = false;
         ShowSaveResultBanner = false;
         ShowOnDiskPreview = false;
-        await LoadAsync().ConfigureAwait(true);
+        await LoadCoreAsync(CancellationToken.None, keepEditedBuffer).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The prompt-and-act step every operation that would replace the buffer goes through. Returns true when the
+    /// caller may carry on: there was nothing to lose, or the operator chose Discard, or chose Save and the save
+    /// wrote config.yaml <i>and</i> the CLI validated it. Returns false — the caller must stop and leave the
+    /// window as it is — on Cancel, on an unanswered prompt, on a failed save (its error is on the banner), when
+    /// the operator typed again while the save ran, and when another question is already open.
+    /// <para>
+    /// "Saved" means <see cref="SaveOutcome.Success"/>, the same bar the Save button's green banner uses; that
+    /// includes a machine with no CLI on PATH, where the write happened but nothing could validate it (the banner
+    /// says so).
+    /// </para>
+    /// </summary>
+    internal async Task<bool> ResolveUnsavedChangesAsync(UnsavedChangesContext context)
+    {
+        if (_resolvingUnsaved)
+        {
+            return false;
+        }
+
+        _resolvingUnsaved = true;
+        var proceed = false;
+        try
+        {
+            // A save that is already running decides what "unsaved" means; let it land first.
+            if (_activeSave is { IsCompleted: false } inFlight)
+            {
+                _ = await inFlight.ConfigureAwait(true);
+            }
+
+            CommitPendingEdits?.Invoke();
+
+            // Restore replaces the file with the backup, so what would be lost is anything beyond what is already
+            // on disk (the text of a save the CLI rejected is on disk and is exactly what Restore is for).
+            var needsAnswer = context == UnsavedChangesContext.Restore
+                ? !string.Equals(RawText, _diskText, StringComparison.Ordinal)
+                : HasUnsavedChanges;
+            if (!needsAnswer)
+            {
+                proceed = true;
+                return proceed;
+            }
+
+            var fileChanged = !LoadFailed && _saveService.CaptureSignature() != _loadedSignature;
+            var request = UnsavedChangesRequest.Create(context, ParseError is not null, fileChanged);
+            if (!CanSave())
+            {
+                request = request with { CanSave = false, SaveLabel = null, DefaultChoice = UnsavedChangesChoice.Cancel };
+            }
+
+            var prompt = UnsavedChangesPrompt;
+            var choice = prompt is null
+                ? UnsavedChangesChoice.Cancel
+                : await prompt(request).ConfigureAwait(true);
+
+            switch (choice)
+            {
+                case UnsavedChangesChoice.Discard:
+                    proceed = true;
+                    return true;
+
+                case UnsavedChangesChoice.Save when request.CanSave:
+                    var outcome = await SaveCoreAsync().ConfigureAwait(true);
+                    proceed = outcome is { Success: true } && !HasUnsavedChanges;
+                    return proceed;
+
+                default:
+                    return false;
+            }
+        }
+        finally
+        {
+            _resolvingUnsaved = false;
+
+            // Nothing was dropped and nothing was saved: a change to the file that arrived while the question was
+            // open was not looked at (see HandleDiskChangeAsync), so look now.
+            if (!proceed)
+            {
+                _ = HandleDiskChangeAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Asked before the window closes or the app exits. True: nothing to lose, the operator discarded, or the
+    /// edits were saved and validated — go ahead. False: stay open (cancelled, save failed, or another question is
+    /// already open).
+    /// </summary>
+    public Task<bool> ConfirmCloseAsync() => ResolveUnsavedChangesAsync(UnsavedChangesContext.Close);
+
+    /// <summary>
+    /// The synchronous half of closing, for a <c>Closing</c> handler that cannot await: commits a FORM edit still
+    /// in its box, then says whether the close must be put on hold for <see cref="ConfirmCloseAsync"/> — there are
+    /// unsaved edits, a save is running, or a question is already open.
+    /// </summary>
+    public bool CloseNeedsConfirmation()
+    {
+        CommitPendingEdits?.Invoke();
+        return HasUnsavedChanges || IsSaving || _resolvingUnsaved;
+    }
+
+    /// <summary>
+    /// Starts reacting to <c>config.yaml</c> changes reported by the shell (<see cref="AppServices.ConfigReloaded"/>,
+    /// already marshalled onto the UI thread). Off until asked, so a view-model built without a window — every unit
+    /// test — never has a watcher thread poking at it; <see cref="HandleDiskChangeAsync"/> is the reaction and is
+    /// called directly there.
+    /// </summary>
+    public void WatchDiskChanges()
+    {
+        if (_watchingDisk || _disposed)
+        {
+            return;
+        }
+
+        _watchingDisk = true;
+        _services.ConfigReloaded += OnServicesConfigReloaded;
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        if (_watchingDisk)
+        {
+            _watchingDisk = false;
+            _services.ConfigReloaded -= OnServicesConfigReloaded;
+        }
+    }
+
+    private void OnServicesConfigReloaded(object? sender, EventArgs e) => _ = HandleDiskChangeAsync();
+
+    /// <summary>
+    /// config.yaml (or .env) changed on disk. Nothing to do when config.yaml is what the editor last read or wrote —
+    /// the editor's own save, a .env edit and a duplicate notification all look like that. Otherwise the file was
+    /// edited behind the editor's back, and: a clean buffer is reloaded (nothing to lose); a buffer with unsaved
+    /// edits is <b>never</b> touched — it raises <see cref="ShowExternalChangeNotice"/> and leaves the choice
+    /// (Reload, or Keep my edits) to the operator.
+    /// </summary>
+    internal async Task HandleDiskChangeAsync()
+    {
+        // Loading, saving and a pending question all own the buffer right now; the drift check on Save is the
+        // backstop for a change that lands in their window, and a cancelled question re-checks (see the finally there).
+        if (_disposed || _diskChangeBusy || _resolvingUnsaved || IsLoading || IsSaving || LoadFailed)
+        {
+            return;
+        }
+
+        _diskChangeBusy = true;
+        try
+        {
+            var onDisk = _saveService.CaptureSignature();
+            if (onDisk == _loadedSignature || _disposed)
+            {
+                return;
+            }
+
+            CommitPendingEdits?.Invoke();
+
+            if (!HasUnsavedChanges)
+            {
+                await ReloadCoreAsync(keepEditedBuffer: true).ConfigureAwait(true);
+
+                // Reloaded: done. Edits typed while the file was being read stopped the reload instead, and the
+                // notice below is then the answer.
+                if (!HasUnsavedChanges)
+                {
+                    return;
+                }
+            }
+
+            // Once per version of the file: a Keep my edits answer stands until the file changes again.
+            if (_externalChangeSignature != onDisk)
+            {
+                _externalChangeSignature = onDisk;
+                ShowExternalChangeNotice = true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // LoadAsync already turns a failed read into LoadError; this only keeps a change notification from
+            // faulting the task nobody awaits.
+        }
+        finally
+        {
+            _diskChangeBusy = false;
+        }
+    }
+
+    private void ClearExternalChange()
+    {
+        _externalChangeSignature = null;
+        ShowExternalChangeNotice = false;
     }
 
     [RelayCommand]
@@ -464,8 +774,27 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     private void DismissOnDiskPreview() => ShowOnDiskPreview = false;
 
     [RelayCommand(CanExecute = nameof(CanSave))]
-    private async Task SaveAsync()
+    private async Task SaveAsync() => _ = await SaveCoreAsync().ConfigureAwait(true);
+
+    /// <summary>
+    /// The save, for the button and for the save/discard/cancel prompt alike. Null when Save is not available right
+    /// now; otherwise the pipeline's outcome (also shown on the banner). Tracked in <c>_activeSave</c> so a close or
+    /// reload that arrives while it runs can wait for it.
+    /// </summary>
+    private Task<SaveOutcome?> SaveCoreAsync()
     {
+        var save = RunSaveAsync();
+        _activeSave = save;
+        return save;
+    }
+
+    private async Task<SaveOutcome?> RunSaveAsync()
+    {
+        if (!CanSave())
+        {
+            return null;
+        }
+
         IsSaving = true;
         ShowSaveResultBanner = false;
         try
@@ -500,8 +829,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
             if (outcome.Stage is SaveStage.Succeeded or SaveStage.ValidationFailed)
             {
                 _loadedSignature = _saveService.CaptureSignature();
+                _diskText = textToSave;
                 HasSecretReferences = SensitiveKeyClassifier.ContainsSensitiveReferences(textToSave);
                 UnvalidatedSignature = outcome.Success ? null : _loadedSignature;
+                ClearExternalChange();
             }
             else if (outcome.Stage == SaveStage.DriftDetected)
             {
@@ -520,6 +851,14 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
                 // Re-base FORM on the file we just wrote (one quiet CLI read; see the method).
                 await RefreshFormSourceAfterSaveAsync(textToSave).ConfigureAwait(true);
             }
+            else if (outcome.Stage == SaveStage.ValidationFailed)
+            {
+                // The file on disk is our text but the CLI rejected it: still "not saved", so the badge stays lit
+                // and closing asks — until the next load, save or edit says otherwise.
+                IsRawModified = true;
+            }
+
+            return outcome;
         }
         finally
         {
@@ -552,6 +891,12 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     private async Task RestoreFromBackupAsync()
     {
         if (LastBackupPath is null)
+        {
+            return;
+        }
+
+        // Restore reloads the editor from the backed-up file, so edits made since the last write would go with it.
+        if (!await ResolveUnsavedChangesAsync(UnsavedChangesContext.Restore).ConfigureAwait(true))
         {
             return;
         }

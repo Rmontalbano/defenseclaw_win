@@ -659,11 +659,14 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         var high = snapshot.RecentAlerts.Count(a => string.Equals(a.Severity, "HIGH", StringComparison.OrdinalIgnoreCase));
         if (high > 0)
         {
+            // The row's tone is the finding's own severity: HIGH is the High (amber) tone everywhere else in the
+            // app (Alerts, Audit, the doctor WARN tile). The detail below is what says these are usually benign;
+            // painting the row Medium (blue) understated it (CUST-180).
             rows.Add(new AttentionRow
             {
                 Title = $"{high} HIGH finding{(high == 1 ? string.Empty : "s")} in the last {GatewayMonitor.AlertLimit} alerts",
                 Detail = "On a development box these are usually the agent's own commands tripping hook rules.",
-                SeverityKey = "Medium",
+                SeverityKey = "High",
             });
         }
 

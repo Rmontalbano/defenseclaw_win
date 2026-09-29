@@ -37,6 +37,25 @@ internal sealed class ConfigEditorHarness : IDisposable
 
     public string ConfigPath => _temp.File("config.yaml");
 
+    /// <summary>The isolated services the view-model runs on (a test that needs the shell's <c>ConfigReloaded</c> event raises it through these).</summary>
+    public AppServices Services => _services;
+
+    /// <summary>
+    /// Makes the view-model's CLI resolve to something that cannot be started: a file called <c>defenseclaw.exe</c> that is not a
+    /// program, in the bin directory the isolated paths point at. Every <c>config validate</c> after this ends in "validation could
+    /// not run", the <see cref="SaveStage.ValidationFailed"/> outcome — the real CLI is never involved. Call it
+    /// before the first save (a missing executable is cached for a moment).
+    /// </summary>
+    public void PlantUnrunnableCli()
+    {
+        var bin = Path.Combine(_temp.Path, "no-such-bin");
+        _ = Directory.CreateDirectory(bin);
+        File.WriteAllText(Path.Combine(bin, "defenseclaw.exe"), "this is not a program");
+    }
+
+    /// <summary>Rewrites config.yaml the way another tool would, behind the editor's back.</summary>
+    public void WriteConfigExternally(string text) => File.WriteAllText(ConfigPath, text);
+
     /// <summary>An LF-written expectation in this file's line ending.</summary>
     public string L(string lfText) => LineEndings.With(lfText, Eol);
 
@@ -56,6 +75,13 @@ internal sealed class ConfigEditorHarness : IDisposable
 
         var temp = new TempDirectory();
         var services = TestServices.Create(temp, fileText);
+
+        // The shell's file watcher reads config.yaml (to hash it) on its own thread whenever the directory moves, and a
+        // save's File.Replace onto a file that is open for that read fails with a sharing violation. That is a race this
+        // suite must not depend on the timing of; a test that needs the shell's "config changed" event raises it itself
+        // (AppServices.ReloadConfig), which never needed the watcher.
+        services.ConfigWatcher.Dispose();
+
         var vm = new ConfigEditorWindowViewModel(services);
         if (!withoutCli)
         {

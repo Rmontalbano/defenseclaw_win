@@ -55,6 +55,12 @@ public sealed class ConfigSaveService
     /// <summary>How many numeric suffixes to try when a same-millisecond backup name is already taken.</summary>
     private const int MaxBackupNameAttempts = 100;
 
+    /// <summary>How many times the final swap onto config.yaml is tried before a sharing violation is reported as a failed write.</summary>
+    internal const int ReplaceAttempts = 6;
+
+    /// <summary>Wait before retry N of the swap is this times N (50, 100, 150, 200, 250 ms: about three quarters of a second in all).</summary>
+    internal static readonly TimeSpan ReplaceRetryDelay = TimeSpan.FromMilliseconds(50);
+
     /// <summary>Verified against `defenseclaw config validate --help` on 0.8.10: "Verify the config file parses and references valid enums." Exit 0/1; `--quiet` is deliberately not used so failures explain themselves.</summary>
     private static readonly string[] ValidateArgv = { "config", "validate" };
 
@@ -272,13 +278,30 @@ public sealed class ConfigSaveService
         {
             await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken).ConfigureAwait(false);
 
-            if (File.Exists(path))
+            // The swap is retried on an IOException: a file watcher (this app's own ConfigChangeToken hashes
+            // config.yaml whenever the directory moves), an indexer or an antivirus scanner that has config.yaml open
+            // for a moment turns File.Replace into a sharing violation ("Unable to remove the file to be replaced").
+            // That is transient and the temp file is still intact, so waiting it out beats telling the operator their
+            // save failed. A failure that outlasts the retries is reported exactly as before.
+            for (var attempt = 1; ; attempt++)
             {
-                File.Replace(tempPath, path, null);
-            }
-            else
-            {
-                File.Move(tempPath, path);
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        File.Replace(tempPath, path, null);
+                    }
+                    else
+                    {
+                        File.Move(tempPath, path);
+                    }
+
+                    break;
+                }
+                catch (IOException) when (attempt < ReplaceAttempts)
+                {
+                    await Task.Delay(ReplaceRetryDelay * attempt, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
         finally

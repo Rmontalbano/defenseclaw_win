@@ -34,6 +34,9 @@
         Keyboard (code-behind): Ctrl+S saves when Save is enabled (a focused FORM box is committed
         first), Esc closes the on-disk preview.
 
+        Closing (X, Alt+F4) and the tray Exit with unsaved edits ask save / discard / cancel first
+        (UnsavedChangesDialog); so does the Reload button. See ConfigEditorWindow.OnClosing.
+
         Every style is a shared Dc* key (Themes\DefenseClaw.xaml); nothing here hard-codes a colour.
     -->
     <ui:FluentWindow.Resources>
@@ -361,7 +364,7 @@
                         Visibility="{Binding IsRawModified, Converter={StaticResource BoolToVisibility}}">
                     <TextBlock Style="{StaticResource DcBadgeText}" Text="MODIFIED" />
                 </Border>
-                <ui:Button AutomationProperties.HelpText="Reloads config.yaml from disk. Unsaved edits are discarded."
+                <ui:Button AutomationProperties.HelpText="Reloads config.yaml from disk. With unsaved edits it asks whether to save, discard or cancel first."
                            Command="{Binding ReloadCommand}"
                            Content="Reload">
                     <ui:Button.Icon>
@@ -424,6 +427,35 @@
                            Appearance="Secondary"
                            Command="{Binding ReloadCommand}"
                            Content="Reload" />
+            </StackPanel>
+
+            <!--
+                config.yaml changed on disk while the editor holds unsaved edits (a clean editor just reloads, so
+                this never appears for one). The edits are never replaced by themselves: Reload drops them on
+                purpose, Keep my edits leaves them alone, and a Save would still report the drift.
+            -->
+            <ui:InfoBar Title="config.yaml changed on disk"
+                        Margin="{StaticResource DcCardGap}"
+                        IsClosable="False"
+                        IsOpen="{Binding ShowExternalChangeBanner}"
+                        Message="Something else edited the file while you had unsaved changes here. Your edits have not been touched. Reload to take the file's version and drop your edits, or keep your edits and compare them first."
+                        Severity="Warning" />
+            <StackPanel Margin="{StaticResource DcCardGap}"
+                        Orientation="Horizontal"
+                        Visibility="{Binding ShowExternalChangeBanner, Converter={StaticResource BoolToVisibility}}">
+                <ui:Button Appearance="Secondary"
+                           AutomationProperties.HelpText="Replaces the editor with the file on disk. Your unsaved edits are dropped."
+                           Command="{Binding ReloadDiscardingEditsCommand}"
+                           Content="Reload (drop my edits)" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Secondary"
+                           AutomationProperties.HelpText="Dismisses this notice and keeps the text in the editor. Saving will still report that the file changed."
+                           Command="{Binding KeepEditsCommand}"
+                           Content="Keep my edits" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Secondary"
+                           Command="{Binding ViewOnDiskCommand}"
+                           Content="View on-disk version" />
             </StackPanel>
 
             <!-- The on-disk text, for comparing against the editor after a drift warning. Esc closes it. -->

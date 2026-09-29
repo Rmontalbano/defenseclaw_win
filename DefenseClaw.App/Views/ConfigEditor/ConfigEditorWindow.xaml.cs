@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -28,6 +29,13 @@ namespace DefenseClaw.App.Views.ConfigEditor;
 /// <see cref="ConfigEditorWindowViewModel.RawText"/> in both directions without an
 /// infinite update loop.
 /// </para>
+/// <para>
+/// <b>Closing with unsaved edits.</b> <see cref="OnClosing"/> holds a close that would drop edits (RAW or FORM),
+/// asks save / discard / cancel through <see cref="UnsavedChangesDialog"/>, and closes for real only once the
+/// view-model says so (Discard, or a Save that wrote <i>and</i> validated). The app's tray Exit cannot rely on
+/// <c>Closing</c> — <c>Application.Shutdown</c> ignores <c>Cancel</c> — so it asks first through
+/// <see cref="CloseForExitAsync"/>.
+/// </para>
 /// </summary>
 public partial class ConfigEditorWindow : FluentWindow
 {
@@ -35,6 +43,14 @@ public partial class ConfigEditorWindow : FluentWindow
 
     private readonly ConfigEditorWindowViewModel _viewModel;
     private bool _syncingEditorText;
+
+    /// <summary>Set once the view-model has said the close may go ahead, so the <c>Close()</c> that follows is not asked about again.</summary>
+    private bool _closeApproved;
+
+    /// <summary>True while a close question is being asked or acted on; a second X click or Alt+F4 meanwhile is not a second answer.</summary>
+    private bool _closeFlowRunning;
+
+    private bool _closed;
 
     public ConfigEditorWindow(AppServices services)
     {
@@ -46,6 +62,9 @@ public partial class ConfigEditorWindow : FluentWindow
         _viewModel = new ConfigEditorWindowViewModel(services);
         DataContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        _viewModel.UnsavedChangesPrompt = request => Task.FromResult(UnsavedChangesDialog.Ask(this, request));
+        _viewModel.CommitPendingEdits = CommitPendingFormEdit;
+        _viewModel.WatchDiskChanges();
 
         ApplyHighlighting();
         ApplicationThemeManager.Changed += OnAppThemeChanged;
@@ -61,8 +80,10 @@ public partial class ConfigEditorWindow : FluentWindow
         Loaded += OnLoaded;
         Closed += (_, _) =>
         {
+            _closed = true;
             ApplicationThemeManager.Changed -= OnAppThemeChanged;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.Dispose();
             if (ReferenceEquals(_current, this))
             {
                 _current = null;
@@ -88,6 +109,108 @@ public partial class ConfigEditorWindow : FluentWindow
 
         _current = new ConfigEditorWindow(services);
         _current.Show();
+    }
+
+    /// <summary>
+    /// The tray Exit's question, asked before the app shuts down: closes the editor if it can be closed without
+    /// losing edits and says so. <see langword="true"/> means no editor is left open (there was none, it was clean,
+    /// the operator discarded, or the edits were saved and validated) and the exit may go ahead;
+    /// <see langword="false"/> means the operator cancelled or the save failed and the exit must be abandoned.
+    /// <para>
+    /// It closes the window itself, rather than approving a later close, so an approval can never outlive an exit
+    /// that something else then calls off. Call it as the last check before <c>Shutdown</c>.
+    /// </para>
+    /// </summary>
+    public static async Task<bool> CloseForExitAsync()
+    {
+        if (_current is not { } window)
+        {
+            return true;
+        }
+
+        return await window.CloseAfterConfirmationAsync(bringToFront: true).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Asks whatever must be asked and, if the answer allows it, closes the window. True when the window is closed
+    /// (or needed no question), false when it stays open.
+    /// </summary>
+    private async Task<bool> CloseAfterConfirmationAsync(bool bringToFront)
+    {
+        if (_closeFlowRunning)
+        {
+            return false;
+        }
+
+        _closeFlowRunning = true;
+        try
+        {
+            if (_viewModel.CloseNeedsConfirmation())
+            {
+                if (bringToFront)
+                {
+                    // The question is about this window's edits; make sure it is on screen to be read.
+                    ShowAndActivate();
+                }
+
+                if (!await _viewModel.ConfirmCloseAsync().ConfigureAwait(true))
+                {
+                    return false;
+                }
+            }
+
+            if (!_closed)
+            {
+                _closeApproved = true;
+                Close();
+            }
+
+            return true;
+        }
+        finally
+        {
+            _closeFlowRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Holds a close that would lose edits. The title-bar X, Alt+F4 and the system menu land here; the window stays
+    /// open while <see cref="CloseAfterConfirmationAsync"/> asks, then closes itself only if the answer allows it.
+    /// A close WPF forces regardless — <c>Application.Shutdown</c> ignores <c>Cancel</c> — is let through untouched
+    /// (a question nobody could answer would only be left on screen), which is why the app asks first, via
+    /// <see cref="CloseForExitAsync"/>.
+    /// </summary>
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (!e.Cancel && !_closeApproved && !Dispatcher.HasShutdownStarted)
+        {
+            if (_closeFlowRunning)
+            {
+                // A question is already open (or a save is finishing): a second close request is not a second answer.
+                e.Cancel = true;
+            }
+            else if (_viewModel.CloseNeedsConfirmation())
+            {
+                e.Cancel = true;
+                _ = CloseAfterConfirmationAsync(bringToFront: false);
+            }
+        }
+
+        base.OnClosing(e);
+    }
+
+    /// <summary>
+    /// Lets a FORM edit that is still inside its box reach the view-model. FORM boxes commit on <c>LostFocus</c>, and
+    /// a title-bar click or a tray Exit does not move keyboard focus, so without this the typed value would be
+    /// invisible to the "any unsaved edits?" check. Focus is put back afterwards so typing can continue.
+    /// </summary>
+    private void CommitPendingFormEdit()
+    {
+        if (Keyboard.FocusedElement is UIElement focused && IsInside(FormScroll, focused))
+        {
+            _ = Keyboard.Focus(null);
+            _ = focused.Focus();
+        }
     }
 
     private void ShowAndActivate()

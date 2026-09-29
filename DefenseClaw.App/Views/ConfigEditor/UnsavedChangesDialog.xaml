@@ -1,0 +1,66 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.ConfigEditor.UnsavedChangesDialog"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="Unsaved changes"
+                 Width="520"
+                 SizeToContent="Height"
+                 ResizeMode="NoResize"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 ShowInTaskbar="False"
+                 AutomationProperties.Name="Unsaved changes in the config editor">
+    <!--
+        The save / discard / cancel question for the config editor. Same shape as GatewayActionDialog: a small
+        modal FluentWindow with the Dc* type styles, built as a window rather than a MessageBox because it needs
+        three purpose-labelled buttons ("Save and close", "Discard and close", "Cancel"), a default that depends
+        on the text being saved, and the app's own chrome. Esc = Cancel (IsCancel). Enter presses the default
+        button, which is Save unless the text is not valid YAML or a save would be refused, and then Cancel;
+        Discard is never the default. Text and labels come from UnsavedChangesRequest, set in code-behind.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     Title="Unsaved changes"
+                     ShowMinimize="False"
+                     ShowMaximize="False" />
+
+        <StackPanel Grid.Row="1" Margin="24,8,24,24">
+            <TextBlock x:Name="HeadingText"
+                       Style="{StaticResource DcSectionHeader}" />
+
+            <TextBlock x:Name="MessageText"
+                       Style="{StaticResource DcBody}" />
+
+            <ui:InfoBar x:Name="WarningBar"
+                        Margin="0,12,0,0"
+                        IsClosable="False"
+                        IsOpen="False"
+                        Severity="Warning"
+                        Title="Before you decide" />
+
+            <StackPanel Margin="0,20,0,0"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal">
+                <ui:Button x:Name="SaveButton"
+                           Appearance="Primary"
+                           AutomationProperties.HelpText="Back up and write config.yaml, validate it, then carry on only if that worked."
+                           Click="OnSaveClicked" />
+                <ui:Button x:Name="DiscardButton"
+                           Margin="8,0,0,0"
+                           AutomationProperties.HelpText="Carry on without saving. The edits in the editor are dropped."
+                           Click="OnDiscardClicked" />
+                <ui:Button x:Name="CancelButton"
+                           Margin="8,0,0,0"
+                           Content="Cancel"
+                           IsCancel="True"
+                           AutomationProperties.HelpText="Keep the editor and its edits exactly as they are. Esc does the same." />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

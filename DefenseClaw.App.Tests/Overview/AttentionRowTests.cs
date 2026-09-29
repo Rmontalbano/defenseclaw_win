@@ -303,7 +303,7 @@ public sealed class AttentionRowTests : IDisposable
     }
 
     [Fact]
-    public void High_alerts_are_counted_case_insensitively_and_rated_medium_because_they_are_usually_the_agents_own_commands()
+    public void High_alerts_are_counted_case_insensitively_and_use_the_high_tone()
     {
         var vm = Panel();
         var alerts = new[] { Alert("1", "HIGH"), Alert("2", "high"), Alert("3", "MEDIUM"), Alert("4", "HIGH") };
@@ -312,7 +312,7 @@ public sealed class AttentionRowTests : IDisposable
 
         var row = Only(vm);
         Assert.Equal("3 HIGH findings in the last 25 alerts", row.Title);
-        Assert.Equal("Medium", row.SeverityKey);
+        Assert.Equal("High", row.SeverityKey);
     }
 
     [Fact]
