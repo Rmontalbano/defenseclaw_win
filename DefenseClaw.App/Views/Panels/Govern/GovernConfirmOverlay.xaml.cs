@@ -1,32 +1,16 @@
-using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Threading;
-using DefenseClaw.App.ViewModels;
 
 namespace DefenseClaw.App.Views.Panels.Govern;
 
 /// <summary>
-/// The confirm dialog of the Govern panels. Moves keyboard focus into the dialog when it opens — onto Cancel
-/// for a destructive command so Enter can never run it by accident, onto Run otherwise.
+/// The confirm dialog of the Govern panels: a frame for the shared
+/// <see cref="Shell.CommandReviewControl"/>, which handles focus (Cancel first for a destructive command),
+/// Esc, Copy and the accessibility text. Nothing else to do here.
 /// </summary>
 public partial class GovernConfirmOverlay : UserControl
 {
     public GovernConfirmOverlay()
     {
         InitializeComponent();
-        Overlay.IsVisibleChanged += OnOverlayVisibleChanged;
-    }
-
-    private void OnOverlayVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
-    {
-        if (e.NewValue is not true)
-        {
-            return;
-        }
-
-        var destructive = DataContext is GovernPanelViewModelBase { IsConfirmDestructive: true };
-        Dispatcher.BeginInvoke(
-            DispatcherPriority.Input,
-            new Action(() => (destructive ? (Control)CancelButton : RunButton).Focus()));
     }
 }

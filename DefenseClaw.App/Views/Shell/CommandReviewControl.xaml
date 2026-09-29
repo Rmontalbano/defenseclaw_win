@@ -1,0 +1,193 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.CommandReviewControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             x:Name="Root"
+             IsTabStop="False"
+             Focusable="False"
+             AutomationProperties.Name="{Binding Review.AutomationName, RelativeSource={RelativeSource Self}}"
+             AutomationProperties.HelpText="{Binding Review.AutomationHelp, RelativeSource={RelativeSource Self}}">
+    <!--
+        The one review-before-run control: every surface that shows an operator the exact command
+        before it runs (Govern panels, Discover panels, the gateway tray/palette dialog, the wizard's
+        review page, the guardrail review) draws it, driven by a CommandReview.
+
+        It renders the tier badge (Read-only neutral, Changes state amber, Destructive red), the title
+        and one-line summary, the exact argv of every step in a selectable mono block, warnings, and
+        the buttons. Behaviour lives in CommandReviewControl.xaml.cs and is the same everywhere:
+        a destructive command opens with focus on Cancel and gets the danger-styled confirm, any
+        other opens on the confirm; Esc cancels; focus goes back to where it was when the review
+        closes; the tier and the command are announced.
+
+        Hosts supply the frame (a DcScrim + DcDialogCard for the overlays, a Window for the tray
+        dialog, nothing for the wizard's inline use) and the commands. Two content slots let a host add
+        its own parts without forking the control: ExtraContent sits under the command (a checkbox, a
+        run result) and FooterContent beside the Copy button.
+    -->
+    <UserControl.Resources>
+        <!--
+            The Dc* styles are DynamicResource references, not StaticResource: they resolve when the control
+            joins a page rather than while its XAML loads, so the control can be built (and tested) before an
+            Application exists. The app looks identical.
+        -->
+        <BooleanToVisibilityConverter x:Key="ReviewBoolToVisibility" />
+
+        <!-- One command: optional step heading + purpose, the argv, and the run status once it has one. -->
+        <DataTemplate x:Key="StepTemplate">
+            <StackPanel Margin="0,0,0,10">
+                <Grid Margin="0,0,0,4"
+                      Visibility="{Binding ShowStepHeadings, RelativeSource={RelativeSource AncestorType=shell:CommandReviewControl}, Converter={StaticResource ReviewBoolToVisibility}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Style="{DynamicResource DcCardTitle}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               Text="{Binding Heading}" />
+                    <Border Grid.Column="1"
+                            Style="{DynamicResource DcBadge}"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            Tag="{Binding TierKey}">
+                        <TextBlock Style="{DynamicResource DcBadgeText}" Text="{Binding TierLabel}" />
+                    </Border>
+                    <TextBlock Grid.Column="2"
+                               Style="{DynamicResource DcCaption}"
+                               VerticalAlignment="Center"
+                               Text="{Binding Purpose}" />
+                </Grid>
+
+                <Border Style="{DynamicResource DcCodeBlock}">
+                    <TextBox Style="{DynamicResource DcMonoTextBox}"
+                             IsReadOnly="True"
+                             TextAlignment="Left"
+                             VerticalScrollBarVisibility="Auto"
+                             MaxHeight="{Binding CommandMaxHeight, RelativeSource={RelativeSource AncestorType=shell:CommandReviewControl}}"
+                             AutomationProperties.Name="{Binding AutomationName}"
+                             Text="{Binding CommandText, Mode=OneWay}" />
+                </Border>
+
+                <Border Style="{DynamicResource DcBadge}"
+                        HorizontalAlignment="Left"
+                        Margin="0,6,0,0"
+                        Tag="{Binding StatusKey}"
+                        Visibility="{Binding HasStatus, Converter={StaticResource ReviewBoolToVisibility}}"
+                        AutomationProperties.LiveSetting="Polite">
+                    <TextBlock Style="{DynamicResource DcBadgeText}" TextWrapping="Wrap" Text="{Binding StatusText}" />
+                </Border>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="WarningTemplate">
+            <ui:InfoBar Margin="0,0,0,8"
+                        IsClosable="False"
+                        IsOpen="True"
+                        Severity="Warning"
+                        Title="{Binding Title}"
+                        Message="{Binding Message}" />
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel x:Name="Layout" LastChildFill="True">
+        <!-- Buttons stay in view when a long body scrolls. -->
+        <Grid x:Name="ButtonBar" DockPanel.Dock="Bottom" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <ui:Button x:Name="CopyButton"
+                           Appearance="Secondary"
+                           Content="Copy command"
+                           Click="OnCopyClick"
+                           AutomationProperties.Name="Copy the command to the clipboard" />
+                <TextBlock x:Name="CopyStatus"
+                           Style="{DynamicResource DcCaption}"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"
+                           Visibility="Collapsed"
+                           AutomationProperties.LiveSetting="Polite" />
+                <ContentPresenter x:Name="FooterPresenter"
+                                  Margin="8,0,0,0"
+                                  VerticalAlignment="Center"
+                                  Content="{Binding FooterContent, ElementName=Root}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button x:Name="CancelButton"
+                           Margin="0,0,8,0"
+                           Command="{Binding CancelCommand, ElementName=Root}"
+                           AutomationProperties.HelpText="Close without running anything. Escape does the same." />
+                <ui:Button x:Name="ConfirmButton"
+                           Appearance="Primary"
+                           Command="{Binding ConfirmCommand, ElementName=Root}"
+                           AutomationProperties.HelpText="Runs the command shown above." />
+                <ui:Button x:Name="CloseButton"
+                           Appearance="Primary"
+                           Command="{Binding CancelCommand, ElementName=Root}"
+                           AutomationProperties.HelpText="Close this dialog." />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer x:Name="Body"
+                      Focusable="False"
+                      IsTabStop="False"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      PreviewMouseWheel="OnBodyPreviewMouseWheel">
+            <StackPanel>
+                <!-- Tier first: it is the thing to read before anything else. Announced whenever it changes. -->
+                <Grid x:Name="Header" AutomationProperties.LiveSetting="Assertive">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel x:Name="Badges" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Border x:Name="TierBadge" Style="{DynamicResource DcBadge}" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TierText" Style="{DynamicResource DcBadgeText}" />
+                        </Border>
+                        <Border x:Name="RestartBadge" Style="{DynamicResource DcBadge}" Tag="Warn" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Style="{DynamicResource DcBadgeText}" Text="Restarts the gateway" />
+                        </Border>
+                    </StackPanel>
+
+                    <TextBlock x:Name="TitleText" Style="{DynamicResource DcSectionHeader}" />
+                </Grid>
+
+                <TextBlock x:Name="SummaryText"
+                           Style="{DynamicResource DcTextSecondary}"
+                           Margin="0,0,0,12"
+                           Visibility="Collapsed" />
+
+                <TextBlock x:Name="ExactCaption"
+                           Style="{DynamicResource DcCaption}"
+                           Margin="0,0,0,6"
+                           Text="This is the exact command that will run. Nothing happens until you confirm." />
+
+                <ItemsControl x:Name="StepList"
+                              Focusable="False"
+                              IsTabStop="False"
+                              ItemTemplate="{StaticResource StepTemplate}" />
+
+                <ContentPresenter x:Name="ExtraPresenter" Content="{Binding ExtraContent, ElementName=Root}" />
+
+                <ItemsControl x:Name="WarningList"
+                              Margin="0,4,0,0"
+                              Focusable="False"
+                              IsTabStop="False"
+                              ItemTemplate="{StaticResource WarningTemplate}" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

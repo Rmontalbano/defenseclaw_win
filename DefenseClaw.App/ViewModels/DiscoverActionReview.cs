@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -21,45 +20,6 @@ public sealed record DiscoverStep(
 
 /// <summary>What a reviewed action did, handed to the panel so it can re-read its state.</summary>
 public sealed record DiscoverReviewResult(bool Succeeded, IReadOnlyList<CliInvocation> Invocations);
-
-/// <summary>Display and run-state of one step in the review dialog.</summary>
-public sealed partial class DiscoverStepRow : ObservableObject
-{
-    [ObservableProperty]
-    private string _statusText = "Not run yet";
-
-    [ObservableProperty]
-    private string _statusKey = "Neutral";
-
-    public DiscoverStepRow(int number, DiscoverStep step, CommandTier tier)
-    {
-        Number = number;
-        Step = step;
-        Tier = tier;
-        CommandText = DiscoverCli.CommandLine(step.Argv);
-    }
-
-    public int Number { get; }
-
-    public DiscoverStep Step { get; }
-
-    public CommandTier Tier { get; }
-
-    /// <summary>The exact command, as it will run.</summary>
-    public string CommandText { get; }
-
-    public string Purpose => Step.Purpose;
-
-    public string Heading => $"Step {Number}";
-
-    public void SetStatus(string text, string key)
-    {
-        StatusText = text;
-        StatusKey = key;
-    }
-
-    public override string ToString() => $"Step {Number}: {CommandText}. {Purpose} {StatusText}.";
-}
 
 /// <summary>
 /// Helpers shared by the Discover panels for talking to the CLI.
@@ -97,20 +57,10 @@ internal static class DiscoverCli
             invocation.OutputLines.Where(l => l.Stream == CliStream.StandardError).Select(l => l.Text));
 
     public static string CommandLine(IEnumerable<string> argv) =>
-        "defenseclaw " + string.Join(' ', argv.Select(Quote));
+        CommandReview.CommandLine(CommandReview.DefaultExecutable, argv);
 
     /// <summary>Display quoting only (the runner passes an argument list, no shell is involved).</summary>
-    public static string Quote(string argument)
-    {
-        if (argument.Length == 0)
-        {
-            return "\"\"";
-        }
-
-        return argument.IndexOfAny(new[] { ' ', '\t', '"' }) >= 0
-            ? "\"" + argument.Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
-            : argument;
-    }
+    public static string Quote(string argument) => CommandReview.Quote(argument);
 
     /// <summary>The first JSON value in <paramref name="text"/>, skipping any banner line the CLI printed before it.</summary>
     public static string TrimToJson(string text)
@@ -121,22 +71,21 @@ internal static class DiscoverCli
 }
 
 /// <summary>
-/// The confirm-and-run overlay every mutating action on the Discover panels goes through: it shows the
-/// exact argv (selectable, copyable), the command's tier from <see cref="CommandTiers"/> (a Destructive
-/// step gets a red badge and a danger-styled primary button), whether it restarts the gateway, and then
-/// runs the steps in order — a step only runs if every step before it exited 0 (catalog section 4 item
+/// The confirm-and-run overlay every mutating action on the Discover panels goes through. It builds a
+/// <see cref="CommandReview"/> for the shared <c>CommandReviewControl</c> — the exact argv of each step
+/// (selectable, copyable), the strictest tier of them from <see cref="CommandTiers"/> (a Destructive step gets a
+/// red badge and a danger-styled confirm button), whether it restarts the gateway — and then
+/// runs the steps in order: a step only runs if every step before it exited 0 (catalog section 4 item
 /// 8f). Every run goes through <see cref="CliRunner"/>, so it lands in the Activity panel with its full
 /// output; the result shown here is a short tail of that.
 /// </summary>
 public sealed partial class DiscoverActionReview : ObservableObject
 {
-    public const string RestartWarning =
-        "This restarts the DefenseClaw gateway. Connector hooks and telemetry may report it as unavailable for a few seconds.";
-
     private const int MaxOutputLinesPerStep = 30;
     private const int MaxLineChars = 300;
 
     private readonly AppServices _services;
+    private readonly List<DiscoverStep> _plan = new();
     private Func<DiscoverReviewResult, Task>? _onFinished;
     private Action? _onCancelled;
 
@@ -145,50 +94,23 @@ public sealed partial class DiscoverActionReview : ObservableObject
         _services = services ?? throw new ArgumentNullException(nameof(services));
     }
 
-    public ObservableCollection<DiscoverStepRow> Steps { get; } = new();
-
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConfirming))]
-    [NotifyPropertyChangedFor(nameof(ShowRunButton))]
-    [NotifyPropertyChangedFor(nameof(ShowDangerButton))]
     private bool _isOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConfirming))]
-    [NotifyPropertyChangedFor(nameof(ShowRunButton))]
-    [NotifyPropertyChangedFor(nameof(ShowDangerButton))]
+    [NotifyPropertyChangedFor(nameof(Phase))]
     private bool _isRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConfirming))]
-    [NotifyPropertyChangedFor(nameof(ShowRunButton))]
-    [NotifyPropertyChangedFor(nameof(ShowDangerButton))]
+    [NotifyPropertyChangedFor(nameof(Phase))]
     private bool _isFinished;
 
+    /// <summary>What the dialog shows: the title, tier, steps and warnings. Set before <see cref="IsOpen"/> flips.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowRunButton))]
-    [NotifyPropertyChangedFor(nameof(ShowDangerButton))]
-    [NotifyPropertyChangedFor(nameof(TierKey))]
-    private bool _isDestructive;
-
-    [ObservableProperty]
-    private string _heading = string.Empty;
-
-    [ObservableProperty]
-    private string _explanation = string.Empty;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasWarning))]
-    private string? _warningText;
-
-    [ObservableProperty]
-    private string _primaryText = "Run";
-
-    [ObservableProperty]
-    private string _tierLabel = "Changes state";
-
-    [ObservableProperty]
-    private bool _restartsGateway;
+    private CommandReview? _commandReview;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasResult))]
@@ -204,34 +126,21 @@ public sealed partial class DiscoverActionReview : ObservableObject
     /// <summary>The dialog is up and waiting for a decision.</summary>
     public bool IsConfirming => IsOpen && !IsRunning && !IsFinished;
 
-    public bool ShowRunButton => IsConfirming && !IsDestructive;
-
-    public bool ShowDangerButton => IsConfirming && IsDestructive;
-
-    public bool HasWarning => !string.IsNullOrWhiteSpace(WarningText);
+    /// <summary>Which buttons the shared control offers: Cancel and confirm, none while running, then Close.</summary>
+    public CommandReviewPhase Phase => IsRunning
+        ? CommandReviewPhase.Running
+        : IsFinished ? CommandReviewPhase.Finished : CommandReviewPhase.Review;
 
     public bool HasResult => !string.IsNullOrWhiteSpace(ResultText);
 
     public bool HasResultOutput => !string.IsNullOrWhiteSpace(ResultOutput);
-
-    public bool MultipleSteps => Steps.Count > 1;
-
-    /// <summary>Tone key for the tier badge: Destructive is red, anything else that changes state is amber.</summary>
-    public string TierKey => IsDestructive ? "Bad" : "Warn";
-
-    public string RestartNotice => RestartWarning;
-
-    /// <summary>Every command in the review, one per line, for the Copy button.</summary>
-    public string CommandText => string.Join(Environment.NewLine, Steps.Select(s => s.CommandText));
 
     /// <summary>The stricter of the classifier's verdict and the step's own floor; never ReadOnly (a review exists because something changes).</summary>
     public static CommandTier EffectiveTier(DiscoverStep step)
     {
         ArgumentNullException.ThrowIfNull(step);
 
-        var classified = CommandTiers.Classify(step.Argv);
-        var tier = classified > step.MinimumTier ? classified : step.MinimumTier;
-        return tier == CommandTier.ReadOnly ? CommandTier.StateChanging : tier;
+        return CommandReview.ResolveTier(step.Argv, CommandReview.Stricter(step.MinimumTier, CommandTier.StateChanging));
     }
 
     /// <summary>
@@ -239,6 +148,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
     /// </summary>
     /// <param name="onFinished">Called after the last step ran (or a step failed and the rest were skipped), with what happened.</param>
     /// <param name="onCancelled">Called when the operator dismisses the dialog without running anything.</param>
+    /// <param name="primaryText">The confirm button's text; null keeps "Run command" / "Run destructive command".</param>
     public void Open(
         string heading,
         string explanation,
@@ -246,7 +156,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
         Func<DiscoverReviewResult, Task>? onFinished = null,
         bool restartsGateway = false,
         string? warning = null,
-        string primaryText = "Run",
+        string? primaryText = null,
         Action? onCancelled = null)
     {
         ArgumentNullException.ThrowIfNull(steps);
@@ -255,36 +165,43 @@ public sealed partial class DiscoverActionReview : ObservableObject
             return;
         }
 
-        Steps.Clear();
-        var strictest = CommandTier.StateChanging;
-        for (var i = 0; i < steps.Count; i++)
-        {
-            var tier = EffectiveTier(steps[i]);
-            if (tier > strictest)
-            {
-                strictest = tier;
-            }
+        _plan.Clear();
+        _plan.AddRange(steps);
 
-            Steps.Add(new DiscoverStepRow(i + 1, steps[i], tier));
+        var warnings = new List<CommandReviewWarning>();
+        if (restartsGateway)
+        {
+            warnings.Add(CommandReviewWarning.GatewayRestart());
+        }
+
+        if (!string.IsNullOrWhiteSpace(warning))
+        {
+            warnings.Add(new CommandReviewWarning("Before you continue", warning));
         }
 
         _onFinished = onFinished;
         _onCancelled = onCancelled;
 
-        Heading = heading;
-        Explanation = explanation;
-        WarningText = warning;
-        PrimaryText = primaryText;
-        RestartsGateway = restartsGateway;
-        IsDestructive = strictest == CommandTier.Destructive;
-        TierLabel = IsDestructive ? "Destructive" : "Changes state";
         ResultText = null;
         ResultOutput = null;
         ResultKey = "Neutral";
         IsFinished = false;
         IsRunning = false;
-        OnPropertyChanged(nameof(MultipleSteps));
-        OnPropertyChanged(nameof(CommandText));
+        CommandReview = new CommandReview
+        {
+            Title = heading,
+            Summary = explanation,
+            Steps = steps
+                .Select((s, i) => new CommandReviewStep(
+                    s.Argv,
+                    s.Purpose,
+                    CommandReview.Stricter(s.MinimumTier, CommandTier.StateChanging),
+                    number: steps.Count > 1 ? i + 1 : 0))
+                .ToArray(),
+            Warnings = warnings,
+            RestartsGateway = restartsGateway,
+            ConfirmLabel = primaryText ?? string.Empty,
+        };
         IsOpen = true;
     }
 
@@ -320,22 +237,9 @@ public sealed partial class DiscoverActionReview : ObservableObject
     }
 
     [RelayCommand]
-    private void Copy()
-    {
-        try
-        {
-            System.Windows.Clipboard.SetText(CommandText);
-        }
-        catch (System.Runtime.InteropServices.COMException)
-        {
-            // The clipboard is locked by another process; the command text is selectable in the dialog too.
-        }
-    }
-
-    [RelayCommand]
     private async Task ConfirmAsync()
     {
-        if (!IsConfirming)
+        if (!IsConfirming || CommandReview is not { } review)
         {
             return;
         }
@@ -350,8 +254,10 @@ public sealed partial class DiscoverActionReview : ObservableObject
 
         try
         {
-            foreach (var row in Steps)
+            for (var i = 0; i < review.Steps.Count; i++)
             {
+                var row = review.Steps[i];
+                var step = _plan[i];
                 if (!succeeded)
                 {
                     row.SetStatus("Skipped: an earlier step did not succeed", "Neutral");
@@ -361,9 +267,9 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 row.SetStatus("Running…", "Warn");
                 try
                 {
-                    var options = row.Step.Timeout is { } timeout ? CliRunOptions.WithTimeout(timeout) : null;
+                    var options = step.Timeout is { } timeout ? CliRunOptions.WithTimeout(timeout) : null;
                     var invocation = await _services.Cli
-                        .RunAsync(row.Step.Argv, cancellationToken: CancellationToken.None, options: options)
+                        .RunAsync(step.Argv, cancellationToken: CancellationToken.None, options: options)
                         .ConfigureAwait(true);
                     invocations.Add(invocation);
 
@@ -382,7 +288,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                         row.SetStatus("Succeeded (exit 0)", "Ok");
                     }
 
-                    AppendOutput(output, row, invocation, label: Steps.Count > 1);
+                    AppendOutput(output, i + 1, invocation, label: review.Steps.Count > 1);
                 }
                 catch (CliNotFoundException ex)
                 {
@@ -426,7 +332,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
         }
     }
 
-    private static void AppendOutput(StringBuilder builder, DiscoverStepRow row, CliInvocation invocation, bool label)
+    private static void AppendOutput(StringBuilder builder, int stepNumber, CliInvocation invocation, bool label)
     {
         var lines = invocation.OutputLines
             .Select(l => l.Text)
@@ -439,7 +345,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
 
         if (label)
         {
-            builder.AppendLine($"Step {row.Number}:");
+            builder.AppendLine($"Step {stepNumber}:");
         }
 
         var skipped = Math.Max(0, lines.Count - MaxOutputLinesPerStep);

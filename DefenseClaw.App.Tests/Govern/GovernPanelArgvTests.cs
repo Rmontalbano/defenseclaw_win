@@ -77,7 +77,7 @@ public sealed class GovernPanelArgvTests : IDisposable
         Act(vm, Skill(vm, """[{"name": "list"}]"""), GovernVerbs.Block);
         Assert.Equal("defenseclaw skill block -- list", vm.ConfirmCommandText);
         Assert.False(vm.IsConfirmDestructive);
-        Assert.Equal("Changes DefenseClaw state", vm.ConfirmTierText);
+        Assert.Equal("Changes state", vm.ConfirmTierText);
     }
 
     [Fact]
@@ -133,9 +133,8 @@ public sealed class GovernPanelArgvTests : IDisposable
         Act(vm, row, GovernVerbs.Block);
 
         Assert.Contains("Block skill “x” for connector “codex”?", vm.ConfirmHeading, StringComparison.Ordinal);
-        Assert.Equal("Changes DefenseClaw state", vm.ConfirmTierText);
+        Assert.Equal("Changes state", vm.ConfirmTierText);
         Assert.False(vm.IsConfirmDestructive);
-        Assert.True(vm.IsConfirmNotDestructive);
     }
 
     [Theory]

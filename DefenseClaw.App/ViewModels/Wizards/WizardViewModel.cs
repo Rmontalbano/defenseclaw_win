@@ -118,25 +118,15 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _progressText = string.Empty;
 
+    /// <summary>
+    /// What the review page's command block says: the exact argv, the tier from <see cref="CommandTiers"/> and the
+    /// gateway-restart warning, in the model every confirmation surface shares.
+    /// </summary>
     [ObservableProperty]
-    private string _commandText = string.Empty;
-
-    /// <summary>"Read-only", "Changes state" or "Destructive" — see <see cref="WizardReview.TierText"/>.</summary>
-    [ObservableProperty]
-    private string _tierText = string.Empty;
-
-    /// <summary>Ok / Warn / Bad — the tone key for the tier badge.</summary>
-    [ObservableProperty]
-    private string _tierKey = "Warn";
+    private CommandReview? _commandReview;
 
     [ObservableProperty]
     private bool _isDestructive;
-
-    [ObservableProperty]
-    private string _restartWarning = string.Empty;
-
-    [ObservableProperty]
-    private bool _hasRestartWarning;
 
     [ObservableProperty]
     private string _changeSummary = string.Empty;
@@ -479,19 +469,6 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         // However the window closed, nothing the operator typed into a password box outlives it.
         ClearSecretEntries();
-    }
-
-    [RelayCommand]
-    private void CopyCommand()
-    {
-        try
-        {
-            Clipboard.SetText(CommandText);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // Another process owns the clipboard; nothing useful to do about it.
-        }
     }
 
     /// <summary>
@@ -872,16 +849,20 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         var argv = Definition.BuildArgv(_values);
-        CommandText = "defenseclaw " + string.Join(' ', argv.Select(Quote));
         _previewFlagInCommand = argv.Contains("--dry-run", StringComparer.Ordinal);
 
-        var tier = CommandTiers.Classify(argv);
-        TierText = WizardReview.TierText(tier);
-        TierKey = WizardReview.TierKey(tier);
-        IsDestructive = tier == CommandTier.Destructive;
-
-        RestartWarning = WizardReview.RestartWarning(Definition, _values, argv);
-        HasRestartWarning = RestartWarning.Length > 0;
+        var restartWarning = WizardReview.RestartWarning(Definition, _values, argv);
+        var review = new CommandReview
+        {
+            Title = "Command",
+            Steps = new[] { new CommandReviewStep(argv) },
+            RestartsGateway = restartWarning.Length > 0,
+            Warnings = restartWarning.Length > 0
+                ? new[] { CommandReviewWarning.GatewayRestart(restartWarning) }
+                : Array.Empty<CommandReviewWarning>(),
+        };
+        CommandReview = review;
+        IsDestructive = review.IsDestructive;
 
         ReviewChanges.Clear();
         foreach (var line in Definition.DescribeChanges(_values))
@@ -936,8 +917,4 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         ExecuteCommand.NotifyCanExecuteChanged();
         PreviewCommand.NotifyCanExecuteChanged();
     }
-
-    /// <summary>Display quoting only: the runner uses ArgumentList, so nothing is ever re-parsed.</summary>
-    private static string Quote(string value) =>
-        value.Length == 0 || value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
 }

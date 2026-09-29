@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
+                 xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
                  Title="Setup wizard"
                  Width="900"
                  Height="760"
@@ -349,57 +350,36 @@
                                 IsOpen="{Binding HasBaselineWarning, Mode=OneWay}"
                                 Message="{Binding BaselineWarning}" />
 
-                    <!-- The command, and how much it changes. -->
-                    <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource DcCardTitle}"
-                                   Margin="0,0,10,0"
-                                   VerticalAlignment="Center"
-                                   Text="Command" />
-                        <Border VerticalAlignment="Center"
-                                Style="{StaticResource DcBadge}"
-                                Tag="{Binding TierKey}"
-                                AutomationProperties.Name="{Binding TierText, StringFormat='Command tier: {0}'}">
-                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding TierText}" />
-                        </Border>
-                    </StackPanel>
-
-                    <Border Style="{StaticResource DcCodeBlock}">
-                        <StackPanel>
-                            <TextBox Style="{StaticResource DcMonoTextBox}"
-                                     AutomationProperties.Name="The exact command that will run"
-                                     Text="{Binding CommandText, Mode=OneWay}" />
-                            <TextBlock Margin="0,8,0,0"
+                    <!--
+                        The command, how much it changes, and the gateway-restart warning: the shared review
+                        control, inline (no Cancel / Run of its own; Execute is in the footer).
+                    -->
+                    <shell:CommandReviewControl Review="{Binding CommandReview}"
+                                                ShowActions="False"
+                                                Compact="True"
+                                                CommandMaxHeight="Infinity">
+                        <shell:CommandReviewControl.ExtraContent>
+                            <TextBlock Margin="0,0,0,4"
                                        Style="{StaticResource DcCaption}"
                                        Text="{Binding ExecutablePath, StringFormat='resolves to {0}'}" />
-                        </StackPanel>
-                    </Border>
-
-                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <ui:Button Margin="0,0,8,0"
-                                   Appearance="Secondary"
-                                   Content="Copy command"
-                                   Command="{Binding CopyCommandCommand}" />
-                        <ui:Button Margin="0,0,8,0"
-                                   Appearance="Secondary"
-                                   Content="Preview (dry run)"
-                                   ToolTip="Runs the same command with --dry-run: shows what it would write, writes nothing."
-                                   Visibility="{Binding CanPreview, Converter={StaticResource BoolToVisibility}}"
-                                   Command="{Binding PreviewCommand}" />
-                        <Border VerticalAlignment="Center"
-                                Style="{StaticResource DcBadge}"
-                                Tag="{Binding ExitBadgeKey}"
-                                Visibility="{Binding HasRun, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ExitBadgeText}" />
-                        </Border>
-                    </StackPanel>
-
-                    <!-- Rule 3: a command that restarts the gateway says so. -->
-                    <ui:InfoBar Margin="0,12,0,0"
-                                IsClosable="False"
-                                Severity="Warning"
-                                Title="Gateway restart"
-                                IsOpen="{Binding HasRestartWarning, Mode=OneWay}"
-                                Message="{Binding RestartWarning}" />
+                        </shell:CommandReviewControl.ExtraContent>
+                        <shell:CommandReviewControl.FooterContent>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Margin="0,0,8,0"
+                                           Appearance="Secondary"
+                                           Content="Preview (dry run)"
+                                           ToolTip="Runs the same command with --dry-run: shows what it would write, writes nothing."
+                                           Visibility="{Binding CanPreview, Converter={StaticResource BoolToVisibility}}"
+                                           Command="{Binding PreviewCommand}" />
+                                <Border VerticalAlignment="Center"
+                                        Style="{StaticResource DcBadge}"
+                                        Tag="{Binding ExitBadgeKey}"
+                                        Visibility="{Binding HasRun, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ExitBadgeText}" />
+                                </Border>
+                            </StackPanel>
+                        </shell:CommandReviewControl.FooterContent>
+                    </shell:CommandReviewControl>
 
                     <ui:InfoBar Margin="0,8,0,0"
                                 IsClosable="False"

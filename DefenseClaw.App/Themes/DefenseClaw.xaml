@@ -206,6 +206,9 @@
         <Setter Property="FontSize" Value="12" />
         <Setter Property="IsReadOnly" Value="True" />
         <Setter Property="TextWrapping" Value="Wrap" />
+        <!-- Set outright: left to its default, a wrapped TextBox draws every full line justified, which stretches
+             single spaces in an argv into wide gaps and misstates what will run. -->
+        <Setter Property="TextAlignment" Value="Left" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
         <!-- WPF-UI's TextBox is at least 32 tall and 88 wide: a one-line path or command sat at the top of a

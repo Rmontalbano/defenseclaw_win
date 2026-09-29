@@ -99,14 +99,18 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     [ObservableProperty] private string? _refreshWarning;
 
     [ObservableProperty] private bool _isConfirmOpen;
-    [ObservableProperty] private string _confirmHeading = string.Empty;
-    [ObservableProperty] private string _confirmNote = string.Empty;
-    [ObservableProperty] private string _confirmCommandText = string.Empty;
-    [ObservableProperty] private string _confirmTierText = string.Empty;
 
+    /// <summary>
+    /// What the confirm overlay shows. Set before <see cref="IsConfirmOpen"/> flips, and kept after the overlay
+    /// closes (the overlay is collapsed by then).
+    /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsConfirmNotDestructive))]
-    private bool _isConfirmDestructive;
+    [NotifyPropertyChangedFor(nameof(ConfirmHeading))]
+    [NotifyPropertyChangedFor(nameof(ConfirmNote))]
+    [NotifyPropertyChangedFor(nameof(ConfirmCommandText))]
+    [NotifyPropertyChangedFor(nameof(ConfirmTierText))]
+    [NotifyPropertyChangedFor(nameof(IsConfirmDestructive))]
+    private CommandReview? _confirmReview;
 
     [ObservableProperty] private bool _isResultOpen;
     [ObservableProperty] private string _resultTitle = string.Empty;
@@ -164,7 +168,16 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     public bool IsIdle => !IsBusy;
 
-    public bool IsConfirmNotDestructive => !IsConfirmDestructive;
+    /// <summary>The review's fields, flat, for callers that only need one of them.</summary>
+    public string ConfirmHeading => ConfirmReview?.Title ?? string.Empty;
+
+    public string ConfirmNote => ConfirmReview?.Summary ?? string.Empty;
+
+    public string ConfirmCommandText => ConfirmReview?.CommandText ?? string.Empty;
+
+    public string ConfirmTierText => ConfirmReview?.TierLabel ?? string.Empty;
+
+    public bool IsConfirmDestructive => ConfirmReview?.IsDestructive ?? false;
 
     public bool ShowLoading => State == GovernState.Loading;
 
@@ -808,23 +821,19 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     /// <summary>Opens the confirm overlay for <paramref name="plan"/>. Nothing runs until the operator confirms.</summary>
     protected void BeginReview(GovernPlan plan)
     {
-        var tier = TierFor(plan.Argv);
-        if (tier == CommandTier.ReadOnly)
-        {
-            // Everything reviewed here is meant to change something; never show it as harmless.
-            tier = CommandTier.StateChanging;
-        }
+        // Everything reviewed here is meant to change something, so it is never shown as harmless; the plan can
+        // only raise the tier from there. The verb path alone (TierFor) is a floor of its own, so an operator-typed
+        // flag value that spells --help cannot lower what the review derives from the whole argv.
+        var floor = CommandReview.Stricter(
+            CommandReview.Stricter(CommandTier.StateChanging, TierFor(plan.Argv)),
+            plan.MinimumTier ?? CommandTier.ReadOnly);
 
-        if (plan.MinimumTier is { } minimum && minimum > tier)
+        ConfirmReview = new CommandReview
         {
-            tier = minimum;
-        }
-
-        ConfirmHeading = plan.Heading;
-        ConfirmNote = plan.Note ?? string.Empty;
-        ConfirmCommandText = "defenseclaw " + string.Join(' ', plan.Argv.Select(QuoteForDisplay));
-        IsConfirmDestructive = tier == CommandTier.Destructive;
-        ConfirmTierText = IsConfirmDestructive ? "Destructive" : "Changes DefenseClaw state";
+            Title = plan.Heading,
+            Summary = plan.Note ?? string.Empty,
+            Steps = new[] { new CommandReviewStep(plan.Argv, floor: floor) },
+        };
         _pendingPlan = plan;
         IsConfirmOpen = true;
     }
@@ -849,9 +858,6 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         _pendingPlan = null;
     }
 
-    [RelayCommand]
-    private void CopyCommandLine() => CopyToClipboard(ConfirmCommandText);
-
     /// <summary>
     /// Closes the topmost transient surface (confirm overlay, then the detail card, then the panel's own
     /// form). Returns true when something was closed, so the view can mark Esc as handled.
@@ -875,9 +881,6 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     /// <summary>Closes the panel's own form or drawer; true when one was open.</summary>
     protected virtual bool CloseTransientUi() => false;
-
-    private static string QuoteForDisplay(string value) =>
-        value.Length == 0 || value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
 
     private async Task RunMutationAsync(GovernPlan plan)
     {

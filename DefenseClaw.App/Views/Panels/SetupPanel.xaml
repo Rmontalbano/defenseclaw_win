@@ -2,7 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards">
+             xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
+             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell">
     <!--
         The Setup hub. Cards are generated from the CLI's own setup help at runtime, so this
         file describes a card, not a catalogue - adding a setup target upstream needs no edit
@@ -461,63 +462,27 @@
 
         <!--
             Guardrail review. Every guardrail verb restarts the gateway by default, and disable removes
-            the live connector hooks, so nothing runs from a button press alone: this shows the exact
-            argv, the CommandTiers tier and the restart, and offers the no-restart option. Esc dismisses it.
+            the live connector hooks, so nothing runs from a button press alone: the shared review control
+            shows the exact argv, the CommandTiers tier and the restart, and the checkbox below the
+            command offers the no-restart option (it changes the argv, so the review is rebuilt). Esc dismisses it.
         -->
         <Grid Grid.Row="0"
               Grid.RowSpan="2"
               Style="{StaticResource DcScrim}"
+              KeyboardNavigation.TabNavigation="Cycle"
+              KeyboardNavigation.ControlTabNavigation="Cycle"
               Visibility="{Binding IsGuardrailReviewOpen, Converter={StaticResource BoolToVisibility}}">
             <Border Margin="24" Style="{StaticResource DcDialogCard}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcSectionHeader}" Text="{Binding GuardrailReviewHeading}" />
-
-                    <Border Margin="0,0,0,8"
-                            HorizontalAlignment="Left"
-                            Style="{StaticResource DcBadge}"
-                            Tag="{Binding GuardrailReviewTierKey}"
-                            AutomationProperties.Name="{Binding GuardrailReviewTierText, StringFormat='Command tier: {0}'}">
-                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding GuardrailReviewTierText}" />
-                    </Border>
-
-                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding GuardrailReviewNote}" />
-
-                    <TextBlock Margin="0,10,0,4"
-                               Style="{StaticResource DcCaption}"
-                               Text="This is the exact command that will run. Nothing happens until you confirm." />
-                    <Border Style="{StaticResource DcCodeBlock}">
-                        <TextBox Style="{StaticResource DcMonoTextBox}"
-                                 AutomationProperties.Name="The exact command that will run"
-                                 Text="{Binding GuardrailReviewCommand, Mode=OneWay}" />
-                    </Border>
-
-                    <CheckBox Margin="0,10,0,0"
-                              Content="Restart the gateway after the change"
-                              IsChecked="{Binding GuardrailRestartAfter, Mode=TwoWay}"
-                              AutomationProperties.HelpText="Unchecking adds --no-restart to the command" />
-
-                    <ui:InfoBar Margin="0,8,0,0"
-                                IsClosable="False"
-                                IsOpen="True"
-                                Severity="Warning"
-                                Title="Gateway"
-                                Message="{Binding GuardrailReviewRestartText}" />
-
-                    <StackPanel Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <ui:Button Margin="0,0,8,0"
-                                   Content="Cancel"
-                                   ToolTip="Esc"
-                                   Command="{Binding CancelGuardrailReviewCommand}" />
-                        <ui:Button Appearance="Primary"
-                                   Content="Run command"
-                                   Visibility="{Binding GuardrailReviewIsDanger, Converter={StaticResource InverseBoolToVisibility}}"
-                                   Command="{Binding ConfirmGuardrailCommand}" />
-                        <ui:Button Appearance="Danger"
-                                   Content="Run command (destructive)"
-                                   Visibility="{Binding GuardrailReviewIsDanger, Converter={StaticResource BoolToVisibility}}"
-                                   Command="{Binding ConfirmGuardrailCommand}" />
-                    </StackPanel>
-                </StackPanel>
+                <shell:CommandReviewControl Review="{Binding GuardrailReview}"
+                                            ConfirmCommand="{Binding ConfirmGuardrailCommand}"
+                                            CancelCommand="{Binding CancelGuardrailReviewCommand}">
+                    <shell:CommandReviewControl.ExtraContent>
+                        <CheckBox Margin="0,4,0,10"
+                                  Content="Restart the gateway after the change"
+                                  IsChecked="{Binding GuardrailRestartAfter, Mode=TwoWay}"
+                                  AutomationProperties.HelpText="Unchecking adds --no-restart to the command" />
+                    </shell:CommandReviewControl.ExtraContent>
+                </shell:CommandReviewControl>
             </Border>
         </Grid>
     </Grid>

@@ -424,6 +424,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     private bool _guardrailReading;
     private string _pendingGuardrailVerb = string.Empty;
     private string? _pendingGuardrailArg;
+    private string _guardrailReviewHeading = string.Empty;
+    private string _guardrailReviewNote = string.Empty;
 
     [ObservableProperty]
     private bool _isGuardrailBusy;
@@ -466,32 +468,16 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _isGuardrailReviewOpen;
 
+    /// <summary>
+    /// What the guardrail review dialog shows, in the model every confirmation surface shares. Rebuilt whenever the
+    /// restart checkbox changes the argv; <c>disable</c> (which tears the live hooks down) is floored to Destructive.
+    /// </summary>
     [ObservableProperty]
-    private string _guardrailReviewHeading = string.Empty;
-
-    [ObservableProperty]
-    private string _guardrailReviewCommand = string.Empty;
-
-    [ObservableProperty]
-    private string _guardrailReviewTierText = string.Empty;
-
-    /// <summary>Ok / Warn / Bad — tone key for the review's tier badge.</summary>
-    [ObservableProperty]
-    private string _guardrailReviewTierKey = "Warn";
-
-    [ObservableProperty]
-    private string _guardrailReviewNote = string.Empty;
-
-    [ObservableProperty]
-    private string _guardrailReviewRestartText = string.Empty;
+    private CommandReview? _guardrailReview;
 
     /// <summary>The review's "restart the gateway" checkbox; off adds <c>--no-restart</c>.</summary>
     [ObservableProperty]
     private bool _guardrailRestartAfter = true;
-
-    /// <summary>True for a destructive tier or for <c>disable</c> (which tears the live hooks down): danger-styled confirm.</summary>
-    [ObservableProperty]
-    private bool _guardrailReviewIsDanger;
 
     [ObservableProperty]
     private bool _isGuardrailRunning;
@@ -672,14 +658,14 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         HasGuardrailResult = false;
 
         var scope = SelectedGuardrailScope is { Key.Length: > 0 } s ? $" for {s.Label}" : string.Empty;
-        GuardrailReviewHeading = verb switch
+        _guardrailReviewHeading = verb switch
         {
             "enable" => "Enable the guardrail" + scope + "?",
             "disable" => "Disable the guardrail" + scope + "?",
             _ => $"Set the hook fail mode to {arg}{scope}?",
         };
 
-        GuardrailReviewNote = (verb, arg) switch
+        _guardrailReviewNote = (verb, arg) switch
         {
             ("disable", _) => "Disabling tears down the connector hooks (for example the live Claude Code hooks), so agents on this machine " +
                               "run without DefenseClaw protection until you enable the guardrail again. The connector's policy is kept.",
@@ -726,16 +712,26 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
             return;
         }
 
-        var argv = BuildGuardrailArgv();
-        var tier = CommandTiers.Classify(argv);
-
-        GuardrailReviewCommand = "defenseclaw " + string.Join(' ', argv.Select(a => a.Any(char.IsWhiteSpace) ? $"\"{a}\"" : a));
-        GuardrailReviewTierText = WizardReview.TierText(tier);
-        GuardrailReviewTierKey = WizardReview.TierKey(tier);
-        GuardrailReviewIsDanger = tier == CommandTier.Destructive || _pendingGuardrailVerb == "disable";
-        GuardrailReviewRestartText = GuardrailRestartAfter
-            ? WizardReview.RestartSentence + " Agents that use DefenseClaw hooks may lose the gateway for a few seconds while it comes back."
-            : "The gateway is not restarted, so hooks are not regenerated until it next restarts: the change is saved but not yet in effect.";
+        GuardrailReview = new CommandReview
+        {
+            Title = _guardrailReviewHeading,
+            Summary = _guardrailReviewNote,
+            Steps = new[]
+            {
+                new CommandReviewStep(
+                    BuildGuardrailArgv(),
+                    floor: _pendingGuardrailVerb == "disable" ? CommandTier.Destructive : CommandTier.StateChanging),
+            },
+            RestartsGateway = GuardrailRestartAfter,
+            Warnings = new[]
+            {
+                GuardrailRestartAfter
+                    ? CommandReviewWarning.GatewayRestart()
+                    : new CommandReviewWarning(
+                        "Gateway not restarted",
+                        "The gateway is not restarted, so hooks are not regenerated until it next restarts: the change is saved but not yet in effect."),
+            },
+        };
     }
 
     [RelayCommand]
