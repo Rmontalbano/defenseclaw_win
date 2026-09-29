@@ -311,6 +311,22 @@ public sealed partial class ActivityRow : ObservableObject
     [ObservableProperty]
     private bool _isExpanded;
 
+    /// <summary>
+    /// Whether the output list keeps its newest line in view as output arrives. On by default; the view turns it
+    /// off when the operator scrolls up to read (and back on when they scroll to the end again), and the Follow
+    /// checkbox flips it directly, so the two stay one setting. Two-way with the view.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isFollowing = true;
+
+    /// <summary>The Output expander's header: what the transcript holds now, e.g. <c>Output · 1,204 lines</c>.</summary>
+    [ObservableProperty]
+    private string _outputHeader = "Output";
+
+    /// <summary>True until the run has printed a line.</summary>
+    [ObservableProperty]
+    private bool _isOutputEmpty = true;
+
     /// <summary>True while the run can be cancelled: running, not exempt, and not already being cancelled.</summary>
     [ObservableProperty]
     private bool _canCancel;
@@ -319,21 +335,8 @@ public sealed partial class ActivityRow : ObservableObject
     [ObservableProperty]
     private string _cancelHint = string.Empty;
 
-    /// <summary>
-    /// Reused across ticks so a running row allocates nothing in steady state - it is cleared
-    /// and refilled with only the lines that arrived since the last tick.
-    /// </summary>
-    private readonly List<CliOutputLine> _outputBuffer = new();
-
     private readonly CliRunner? _runner;
     private readonly Action<string>? _notify;
-
-    /// <summary>
-    /// Position in <see cref="Invocation"/>'s monotonic append sequence - deliberately not an
-    /// index into its retained lines, which shift when a chatty invocation trims itself. See
-    /// <see cref="CliInvocation.CopyNewLines"/>.
-    /// </summary>
-    private int _outputCursor;
 
     /// <param name="invocation">The live instance from the runner's activity ring.</param>
     /// <param name="runner">Needed for Cancel; a row built without one simply cannot cancel.</param>
@@ -382,7 +385,18 @@ public sealed partial class ActivityRow : ObservableObject
 
     public string TierHelp { get; }
 
-    public ObservableCollection<CliOutputRow> Output { get; } = new();
+    /// <summary>
+    /// The incremental line model behind <see cref="Output"/>: the invocation's transcript, kept up to date from its
+    /// cursor and trimmed the way the invocation trims itself. See <see cref="ActivityTranscript"/>.
+    /// </summary>
+    public ActivityTranscript Transcript { get; } = new();
+
+    /// <summary>
+    /// The lines the output list binds to. That list is a virtualizing, recycling <c>ListBox</c> with a bounded
+    /// height (the Logs panel's pattern): a transcript can be 200,000 lines long (a <see cref="CliRunOptions.JsonRead"/>
+    /// invocation), and only the few dozen lines in view are ever turned into elements.
+    /// </summary>
+    public TranscriptCollection Output => Transcript.Lines;
 
     /// <summary>
     /// What a screen reader announces for the row (UI Automation falls back to
@@ -568,24 +582,35 @@ public sealed partial class ActivityRow : ObservableObject
     }
 
     /// <summary>
-    /// Appends whatever arrived since the last tick, so the bound collection is never rebuilt.
-    /// <para>
-    /// The cursor is a position in the invocation's append sequence, not an index into its
-    /// retained lines. That distinction is load-bearing once an invocation is chatty enough
-    /// to trim itself: a remembered <c>OutputLines.Count</c> would point past the first
-    /// unread line after a trim and skip everything the trim shifted underneath it, silently.
-    /// A row that fell behind a trim gets a notice line saying how much it missed instead.
-    /// </para>
+    /// Appends whatever arrived since the last tick and drops what the invocation has since trimmed, so the bound
+    /// collection is never rebuilt. The cursor bookkeeping - a position in the invocation's append sequence, not an index
+    /// into its retained lines, which shift when a chatty invocation trims itself - lives in <see cref="ActivityTranscript"/>.
     /// </summary>
     private void SyncOutput()
     {
-        _outputBuffer.Clear();
-        _outputCursor = Invocation.CopyNewLines(_outputCursor, _outputBuffer);
-
-        foreach (var line in _outputBuffer)
+        if (!Transcript.Pull(Invocation))
         {
-            Output.Add(new CliOutputRow(line.Text, line.Stream == CliStream.StandardError));
+            return;
         }
+
+        IsOutputEmpty = Transcript.LineCount == 0 && Transcript.DroppedLineCount == 0;
+        OutputHeader = Transcript.Describe();
+    }
+
+    /// <summary>
+    /// Copies the lines selected in the output list (Ctrl+C, or the list's context menu), in transcript order however the
+    /// selection was made. The whole transcript is Copy output.
+    /// </summary>
+    public void CopyLines(IEnumerable<ActivityOutputLine> selected)
+    {
+        var text = ActivityTranscript.FormatLines(selected, out var count);
+        if (count == 0)
+        {
+            _notify?.Invoke("Select one or more output lines first, or use Copy output for all of it.");
+            return;
+        }
+
+        CopyText(text, count == 1 ? "Copied 1 line." : $"Copied {count.ToString("N0", CultureInfo.CurrentCulture)} lines.");
     }
 
     private void CopyText(string text, string success)

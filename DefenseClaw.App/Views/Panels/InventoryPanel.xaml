@@ -8,14 +8,61 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <!-- Migrated to the shared design system (Themes\DefenseClaw.xaml); no local styles. -->
+    <!--
+        Migrated to the shared design system (Themes\DefenseClaw.xaml); the local styles below are the components
+        grid's cell text and the narrow/wide switch of its master-detail block.
+
+        Layout. At the window's 940 x 620 DIP minimum the page has ~663 x 498 DIP to itself (sidebar, title bar
+        and status strip take the rest), which is less than the toolbar, the scan note, the grid and the table
+        browser add up to. So the header stays put and everything under it is one scrolling page (PageScroll).
+        A ScrollViewer measures its content with unlimited height, and a DataGrid measured that way realizes
+        every row - so nothing here is star-sized inside the scroller. Instead the code-behind gives the
+        components block a definite height (whatever is left of the viewport under the toolbar and banners, and
+        never less than 300) and the table browser keeps its fixed 320: each grid still gets a bounded viewport
+        and virtualizes on its own. The page scrolls only when the pieces do not fit.
+    -->
+    <UserControl.Resources>
+        <!-- Cell text: trimmed with an ellipsis (the 10 DIP margin keeps it off the next column's text), and the full value in a tooltip (only when it is actually trimmed: see OnCellToolTipOpening). -->
+        <Style x:Key="InventoryCellText" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+            <EventSetter Event="ToolTipOpening" Handler="OnCellToolTipOpening" />
+        </Style>
+
+        <!--
+            Narrow layout (the code-behind sets the block's Tag to "Narrow" below ~860 DIPs of block width): the
+            grid takes the full width and the raw-row detail drops underneath it, so the six columns that matter
+            (vendor, name, ecosystem, framework, version, installs) all fit at the minimum window width instead
+            of sharing it with a 260 DIP side pane.
+        -->
+        <Style x:Key="InventoryMasterCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, ElementName=MasterDetail}" Value="Narrow">
+                    <Setter Property="Grid.ColumnSpan" Value="3" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The wide position is a style setter, not a local Grid.Column: a local value would beat the narrow trigger. -->
+        <Style x:Key="InventoryDetailCard" TargetType="Border" BasedOn="{StaticResource DcCardCompact}">
+            <Setter Property="Grid.Column" Value="2" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, ElementName=MasterDetail}" Value="Narrow">
+                    <Setter Property="Grid.Row" Value="1" />
+                    <Setter Property="Grid.Column" Value="0" />
+                    <Setter Property="Grid.ColumnSpan" Value="3" />
+                    <Setter Property="Height" Value="220" />
+                    <Setter Property="Margin" Value="0,12,0,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" MinHeight="260" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -38,252 +85,307 @@
             </StackPanel>
         </HeaderedContentControl>
 
-        <!-- Toolbar: search, group-by, AI BOM -->
-        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
-            <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                <ui:TextBox x:Name="SearchBox"
-                            Width="340"
-                            PlaceholderText="Search name, vendor, framework…  (Ctrl+F)"
-                            AutomationProperties.Name="Search components"
-                            Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+        <ScrollViewer x:Name="PageScroll"
+                      Grid.Row="1"
+                      Style="{StaticResource DcPageScroll}"
+                      AutomationProperties.Name="Inventory page">
+            <StackPanel x:Name="PageContent">
+                <!-- Toolbar, banners and the generated AI BOM: measured by the code-behind to size the grid under them. -->
+                <StackPanel x:Name="Chrome">
+                    <!-- Toolbar: search, group-by, AI BOM -->
+                    <Border Style="{StaticResource DcToolbar}">
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                            <ui:TextBox x:Name="SearchBox"
+                                        Width="340"
+                                        PlaceholderText="Search name, vendor, framework…  (Ctrl+F)"
+                                        AutomationProperties.Name="Search components"
+                                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Group by" />
-                    <ComboBox Width="110"
-                              AutomationProperties.Name="Group by"
-                              ItemsSource="{Binding GroupByOptions}"
-                              SelectedItem="{Binding GroupBy}" />
-                </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Group by" />
+                                <ComboBox Width="110"
+                                          AutomationProperties.Name="Group by"
+                                          ItemsSource="{Binding GroupByOptions}"
+                                          SelectedItem="{Binding GroupBy}" />
+                            </StackPanel>
 
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="AI BOM" />
-                    <ComboBox Width="220"
-                              AutomationProperties.Name="Connector for the AI BOM"
-                              ItemsSource="{Binding BomConnectors}"
-                              SelectedItem="{Binding SelectedBomConnector}" />
-                </StackPanel>
-                <ui:Button Content="Generate AI BOM…"
-                           Command="{Binding GenerateAiBomCommand}"
-                           ToolTip="defenseclaw aibom scan --json: inventories the connectors' skills, plugins, MCP servers, agents, tools, models and memory. Records a scan event in audit.db, so it asks first."
-                           AutomationProperties.HelpText="Builds an AI bill of materials. Records a scan event, so it shows the exact command first." />
-            </WrapPanel>
-        </Border>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="AI BOM" />
+                                <ComboBox Width="220"
+                                          AutomationProperties.Name="Connector for the AI BOM"
+                                          ItemsSource="{Binding BomConnectors}"
+                                          SelectedItem="{Binding SelectedBomConnector}" />
+                            </StackPanel>
+                            <ui:Button Content="Generate AI BOM…"
+                                       Command="{Binding GenerateAiBomCommand}"
+                                       ToolTip="defenseclaw aibom scan --json: inventories the connectors' skills, plugins, MCP servers, agents, tools, models and memory. Records a scan event in audit.db, so it asks first."
+                                       AutomationProperties.HelpText="Builds an AI bill of materials. Records a scan event, so it shows the exact command first." />
+                        </WrapPanel>
+                    </Border>
 
-        <!-- Banners and the generated AI BOM -->
-        <StackPanel Grid.Row="2">
-            <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                        Title="inventory.db"
-                        IsClosable="False"
-                        IsOpen="{Binding HasError}"
-                        Message="{Binding ErrorMessage}"
-                        Severity="Warning" />
+                    <!-- Banners and the generated AI BOM -->
+                    <StackPanel>
+                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                    Title="inventory.db"
+                                    IsClosable="False"
+                                    IsOpen="{Binding HasError}"
+                                    Message="{Binding ErrorMessage}"
+                                    Severity="Warning" />
 
-            <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                        Title="Where these numbers come from"
-                        IsClosable="False"
-                        IsOpen="{Binding HasScanNote}"
-                        Message="{Binding ScanNote}"
-                        Severity="Informational" />
+                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                    Title="Where these numbers come from"
+                                    IsClosable="False"
+                                    IsOpen="{Binding HasScanNote}"
+                                    Message="{Binding ScanNote}"
+                                    Severity="Informational" />
 
-            <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                        Title="No component rollup for this inventory.db"
-                        IsClosable="False"
-                        IsOpen="{Binding UsingFallbackView}"
-                        Message="This inventory.db does not have the scan tables the rollup is built from (ai_scans, ai_signals and ai_confidence_snapshots, with their scan_id columns), so there is nothing to group. Use the table browser at the bottom to inspect whatever tables this install does have."
-                        Severity="Informational" />
+                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                    Title="No component rollup for this inventory.db"
+                                    IsClosable="False"
+                                    IsOpen="{Binding UsingFallbackView}"
+                                    Message="This inventory.db does not have the scan tables the rollup is built from (ai_scans, ai_signals and ai_confidence_snapshots, with their scan_id columns), so there is nothing to group. Use the table browser at the bottom to inspect whatever tables this install does have."
+                                    Severity="Informational" />
 
-            <Border Style="{StaticResource DcCardCompact}"
-                    Margin="{StaticResource DcCardGap}"
-                    Visibility="{Binding HasBom, Converter={StaticResource BoolToVisibility}}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcCardTitle}" Text="AI BOM" />
-                    <TextBlock Style="{StaticResource DcTextSecondary}"
-                               AutomationProperties.LiveSetting="Polite"
-                               Text="{Binding BomStatus}" />
-                    <ItemsControl Margin="0,8,0,0"
-                                  Focusable="False"
-                                  AutomationProperties.Name="AI BOM summary by connector"
-                                  ItemsSource="{Binding BomRows}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Style="{StaticResource DcField}">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Connector}" />
-                                    <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding Summary}" />
+                        <Border Style="{StaticResource DcCardCompact}"
+                                Margin="{StaticResource DcCardGap}"
+                                Visibility="{Binding HasBom, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource DcCardTitle}" Text="AI BOM" />
+                                <TextBlock Style="{StaticResource DcTextSecondary}"
+                                           AutomationProperties.LiveSetting="Polite"
+                                           Text="{Binding BomStatus}" />
+                                <ItemsControl Margin="0,8,0,0"
+                                              Focusable="False"
+                                              AutomationProperties.Name="AI BOM summary by connector"
+                                              ItemsSource="{Binding BomRows}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Style="{StaticResource DcField}">
+                                                <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Connector}" />
+                                                <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding Summary}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <StackPanel Style="{StaticResource DcActionBar}" HorizontalAlignment="Left">
+                                    <ui:Button Content="Save JSON…"
+                                               Command="{Binding SaveBomCommand}"
+                                               IsEnabled="{Binding CanSaveBom}"
+                                               AutomationProperties.HelpText="Save the generated AI BOM to a file you choose." />
                                 </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <StackPanel Style="{StaticResource DcActionBar}" HorizontalAlignment="Left">
-                        <ui:Button Content="Save JSON…"
-                                   Command="{Binding SaveBomCommand}"
-                                   IsEnabled="{Binding CanSaveBom}"
-                                   AutomationProperties.HelpText="Save the generated AI BOM to a file you choose." />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </StackPanel>
-            </Border>
-        </StackPanel>
 
-        <!-- Main content: grid + detail pane -->
-        <Grid Grid.Row="3">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.2*" />
-                <ColumnDefinition Width="{StaticResource DcColumnGap}" />
-                <ColumnDefinition Width="1*" MinWidth="260" />
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0" Style="{StaticResource DcCardFlush}">
-                <Grid>
-                    <ui:DataGrid AutoGenerateColumns="False"
-                                 IsReadOnly="True"
-                                 GridLinesVisibility="Horizontal"
-                                 HeadersVisibility="Column"
-                                 SelectionMode="Single"
-                                 AutomationProperties.Name="AI components in the latest scan"
-                                 ItemsSource="{Binding ComponentsView}"
-                                 SelectedItem="{Binding SelectedComponent}"
-                                 Visibility="{Binding ShowComponentsGrid, Converter={StaticResource BoolToVisibility}}">
-                        <ui:DataGrid.GroupStyle>
-                            <GroupStyle>
-                                <GroupStyle.HeaderTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Style="{StaticResource DcBody}"
-                                                   Margin="6,10,0,4"
-                                                   FontWeight="SemiBold"
-                                                   Text="{Binding Name, StringFormat='{}{0}'}" />
-                                    </DataTemplate>
-                                </GroupStyle.HeaderTemplate>
-                            </GroupStyle>
-                        </ui:DataGrid.GroupStyle>
-                        <ui:DataGrid.Columns>
-                            <DataGridTextColumn Width="140" Header="Vendor" Binding="{Binding VendorDisplay}" />
-                            <DataGridTextColumn Width="200" Header="Name" Binding="{Binding Name}" />
-                            <DataGridTextColumn Width="90" Header="Ecosystem" Binding="{Binding EcosystemDisplay}" />
-                            <DataGridTextColumn Width="180" Header="Framework" Binding="{Binding Framework}" />
-                            <DataGridTextColumn Width="80" Header="Version" Binding="{Binding Version}" />
-                            <DataGridTextColumn Width="70" Header="Installs" Binding="{Binding InstallCountDisplay}" />
-                            <DataGridTextColumn Width="130" Header="Identity" Binding="{Binding IdentityDisplay}" />
-                            <DataGridTextColumn Width="130" Header="Presence" Binding="{Binding PresenceDisplay}" />
-                            <DataGridTextColumn Width="130" Header="Last seen" Binding="{Binding LastSeenDisplay}" />
-                        </ui:DataGrid.Columns>
-                    </ui:DataGrid>
-
-                    <!-- Why the grid is empty: no database yet / no rollup / nothing found / search hides all -->
-                    <StackPanel Style="{StaticResource DcEmptyState}"
-                                MaxWidth="440"
-                                Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVisibility}}">
-                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
-                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
-                    </StackPanel>
-
-                    <ui:ProgressRing IsIndeterminate="True"
-                                     Width="32"
-                                     Height="32"
-                                     AutomationProperties.Name="Reading inventory.db"
-                                     Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
-                </Grid>
-            </Border>
-
-            <Border Grid.Column="2" Style="{StaticResource DcCardCompact}">
-                <Grid>
+                <!--
+                    Main content: grid + detail pane. Row 0's height is set in code (see UpdateLayoutSizes) so the
+                    grid inside always has a definite, bounded height; row 1 is the detail pane when the block is
+                    narrow and empty (zero high) when it is wide.
+                -->
+                <Grid x:Name="MasterDetail" Tag="Wide">
                     <Grid.RowDefinitions>
+                        <RowDefinition x:Name="MasterRow" Height="300" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2.2*" />
+                        <ColumnDefinition Width="{StaticResource DcColumnGap}" />
+                        <ColumnDefinition Width="1*" MinWidth="260" />
+                    </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="0" Style="{StaticResource DcCardTitle}" Text="Raw row detail" />
+                    <Border Grid.Column="0" Style="{StaticResource InventoryMasterCard}">
+                        <Grid>
+                            <!--
+                                Column widths are star weights with a floor (MinWidth) each, resolved to plain widths by
+                                the code-behind (ApplyColumnWidths / ColumnSizing): a wide grid shares its width between
+                                the columns (no dead space at the right edge); a narrow one gives the first six columns -
+                                vendor to installs - the whole width and scrolls sideways to identity, presence and last
+                                seen, instead of squeezing all nine. The DataGrid's own star sizing is not used because
+                                it goes stale when the grid starts empty, which this one always does.
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding DetailRows}"
-                                      Focusable="False"
-                                      AutomationProperties.Name="Every column of the selected component">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Style="{StaticResource DcField}">
-                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Key}" />
-                                        <TextBlock Style="{StaticResource DcFieldValueMono}" Text="{Binding Value}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                                Virtualization needs both CanContentScroll (WPF-UI's DataGrid style leaves it off, which
+                                makes the grid measure - and realize - every row) and VirtualizingWhenGrouping (WPF turns
+                                virtualization off for grouped items unless it is asked for).
+                            -->
+                            <ui:DataGrid x:Name="ComponentsGrid"
+                                         AutoGenerateColumns="False"
+                                         IsReadOnly="True"
+                                         GridLinesVisibility="Horizontal"
+                                         HeadersVisibility="Column"
+                                         SelectionMode="Single"
+                                         ScrollViewer.CanContentScroll="True"
+                                         VirtualizingPanel.IsVirtualizing="True"
+                                         VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                         VirtualizingPanel.VirtualizationMode="Recycling"
+                                         AutomationProperties.Name="AI components in the latest scan"
+                                         ItemsSource="{Binding ComponentsView}"
+                                         SelectedItem="{Binding SelectedComponent}"
+                                         Visibility="{Binding ShowComponentsGrid, Converter={StaticResource BoolToVisibility}}">
+                                <ui:DataGrid.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.HeaderTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Style="{StaticResource DcBody}"
+                                                           Margin="6,10,0,4"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding Name, StringFormat='{}{0}'}" />
+                                            </DataTemplate>
+                                        </GroupStyle.HeaderTemplate>
+                                    </GroupStyle>
+                                </ui:DataGrid.GroupStyle>
+                                <ui:DataGrid.Columns>
+                                    <DataGridTextColumn Width="1.3*" MinWidth="110" Header="Vendor"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding VendorDisplay}" />
+                                    <DataGridTextColumn Width="2.2*" MinWidth="140" Header="Name"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding Name}" />
+                                    <DataGridTextColumn Width="0.8*" MinWidth="100" Header="Ecosystem"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding EcosystemDisplay}" />
+                                    <DataGridTextColumn Width="1.2*" MinWidth="104" Header="Framework"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding Framework}" />
+                                    <DataGridTextColumn Width="0.7*" MinWidth="80" Header="Version"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding Version}" />
+                                    <DataGridTextColumn Width="0.5*" MinWidth="80" Header="Installs"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding InstallCountDisplay}" />
+                                    <DataGridTextColumn Width="1.1*" MinWidth="112" Header="Identity"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding IdentityDisplay}" />
+                                    <DataGridTextColumn Width="1.1*" MinWidth="112" Header="Presence"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding PresenceDisplay}" />
+                                    <DataGridTextColumn Width="1.2*" MinWidth="140" Header="Last seen"
+                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        Binding="{Binding LastSeenDisplay}" />
+                                </ui:DataGrid.Columns>
+                            </ui:DataGrid>
 
-                    <TextBlock Grid.Row="1"
-                               Style="{StaticResource DcEmptyDetail}"
-                               VerticalAlignment="Center"
-                               Text="Select a row to see every column."
-                               Visibility="{Binding NoComponentSelected, Converter={StaticResource BoolToVisibility}}" />
+                            <!-- Why the grid is empty: no database yet / no rollup / nothing found / search hides all -->
+                            <StackPanel Style="{StaticResource DcEmptyState}"
+                                        MaxWidth="440"
+                                        Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVisibility}}">
+                                <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
+                                <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                                <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                            </StackPanel>
+
+                            <ui:ProgressRing IsIndeterminate="True"
+                                             Width="32"
+                                             Height="32"
+                                             AutomationProperties.Name="Reading inventory.db"
+                                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="DetailCard" Style="{StaticResource InventoryDetailCard}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Style="{StaticResource DcCardTitle}" Text="Raw row detail" />
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding DetailRows}"
+                                              Focusable="False"
+                                              AutomationProperties.Name="Every column of the selected component">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Style="{StaticResource DcField}">
+                                                <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Key}" />
+                                                <TextBlock Style="{StaticResource DcFieldValueMono}" Text="{Binding Value}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <TextBlock Grid.Row="1"
+                                       Style="{StaticResource DcEmptyDetail}"
+                                       VerticalAlignment="Center"
+                                       Text="Select a row to see every column."
+                                       Visibility="{Binding NoComponentSelected, Converter={StaticResource BoolToVisibility}}" />
+                        </Grid>
+                    </Border>
                 </Grid>
-            </Border>
-        </Grid>
 
-        <!-- Table browser: power-user access to every other table/view InventoryReader discovers -->
-        <ui:CardExpander Grid.Row="4"
-                         Margin="0,12,0,0"
-                         Header="Table browser (all tables in inventory.db)"
-                         Visibility="{Binding HasDatabase, Converter={StaticResource BoolToVisibility}}">
-            <Grid Margin="0,10,0,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="320" />
-                </Grid.RowDefinitions>
+                <!-- Table browser: power-user access to every other table/view InventoryReader discovers -->
+                <ui:CardExpander x:Name="TableBrowser"
+                                 Margin="0,12,0,0"
+                                 Header="Table browser (all tables in inventory.db)"
+                                 Visibility="{Binding HasDatabase, Converter={StaticResource BoolToVisibility}}">
+                    <Grid Margin="0,10,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="320" />
+                        </Grid.RowDefinitions>
 
-                <WrapPanel Grid.Row="0" Style="{StaticResource DcToolbarPanel}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Table or view" />
-                        <ComboBox Width="240"
-                                  AutomationProperties.Name="Table or view to browse"
-                                  ItemsSource="{Binding Tables}"
-                                  SelectedItem="{Binding SelectedTable}"
-                                  DisplayMemberPath="Name" />
-                    </StackPanel>
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding SelectedTable.Summary, Mode=OneWay}" />
-                </WrapPanel>
+                        <WrapPanel Grid.Row="0" Style="{StaticResource DcToolbarPanel}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Table or view" />
+                                <ComboBox Width="240"
+                                          AutomationProperties.Name="Table or view to browse"
+                                          ItemsSource="{Binding Tables}"
+                                          SelectedItem="{Binding SelectedTable}"
+                                          DisplayMemberPath="Name" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding SelectedTable.Summary, Mode=OneWay}" />
+                        </WrapPanel>
 
-                <!-- Cost warning for a selected view, with the explicit "load anyway" (ai_components_v aggregates every scan: 15-20 s). -->
-                <StackPanel Grid.Row="1">
-                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                                Title="Slow to open"
-                                IsClosable="False"
-                                IsOpen="{Binding HasTableBrowserNote}"
-                                Message="{Binding TableBrowserNote}"
-                                Severity="Warning" />
-                    <ui:Button Margin="{StaticResource DcCardGap}"
-                               HorizontalAlignment="Left"
-                               Content="Load this view anyway"
-                               Command="{Binding LoadSelectedViewCommand}"
-                               Visibility="{Binding IsViewLoadPending, Converter={StaticResource BoolToVisibility}}" />
-                </StackPanel>
+                        <!-- Cost warning for a selected view, with the explicit "load anyway" (ai_components_v aggregates every scan: 15-20 s). -->
+                        <StackPanel Grid.Row="1">
+                            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                        Title="Slow to open"
+                                        IsClosable="False"
+                                        IsOpen="{Binding HasTableBrowserNote}"
+                                        Message="{Binding TableBrowserNote}"
+                                        Severity="Warning" />
+                            <ui:Button Margin="{StaticResource DcCardGap}"
+                                       HorizontalAlignment="Left"
+                                       Content="Load this view anyway"
+                                       Command="{Binding LoadSelectedViewCommand}"
+                                       Visibility="{Binding IsViewLoadPending, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
 
-                <ui:InfoBar Grid.Row="2"
-                            Margin="{StaticResource DcCardGap}"
-                            Title="Could not browse table"
-                            IsClosable="False"
-                            IsOpen="{Binding HasTableBrowserError}"
-                            Message="{Binding TableBrowserError}"
-                            Severity="Warning" />
+                        <ui:InfoBar Grid.Row="2"
+                                    Margin="{StaticResource DcCardGap}"
+                                    Title="Could not browse table"
+                                    IsClosable="False"
+                                    IsOpen="{Binding HasTableBrowserError}"
+                                    Message="{Binding TableBrowserError}"
+                                    Severity="Warning" />
 
-                <Grid Grid.Row="3">
-                    <ui:DataGrid AutoGenerateColumns="True"
-                                 IsReadOnly="True"
-                                 GridLinesVisibility="Horizontal"
-                                 HeadersVisibility="Column"
-                                 AutomationProperties.Name="Rows of the selected table"
-                                 ItemsSource="{Binding BrowsedRows}" />
-                    <ui:ProgressRing IsIndeterminate="True"
-                                     Width="28"
-                                     Height="28"
-                                     AutomationProperties.Name="Loading the table"
-                                     Visibility="{Binding IsTableLoading, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Style="{StaticResource DcEmptyDetail}"
-                               VerticalAlignment="Center"
-                               Text="Pick a table above to browse its rows."
-                               Visibility="{Binding NoTableSelected, Converter={StaticResource BoolToVisibility}}" />
-                </Grid>
-            </Grid>
-        </ui:CardExpander>
+                        <Grid Grid.Row="3">
+                            <ui:DataGrid x:Name="BrowserGrid"
+                                         AutoGenerateColumns="True"
+                                         IsReadOnly="True"
+                                         GridLinesVisibility="Horizontal"
+                                         HeadersVisibility="Column"
+                                         ScrollViewer.CanContentScroll="True"
+                                         AutomationProperties.Name="Rows of the selected table"
+                                         ItemsSource="{Binding BrowsedRows}" />
+                            <ui:ProgressRing IsIndeterminate="True"
+                                             Width="28"
+                                             Height="28"
+                                             AutomationProperties.Name="Loading the table"
+                                             Visibility="{Binding IsTableLoading, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                       VerticalAlignment="Center"
+                                       Text="Pick a table above to browse its rows."
+                                       Visibility="{Binding NoTableSelected, Converter={StaticResource BoolToVisibility}}" />
+                        </Grid>
+                    </Grid>
+                </ui:CardExpander>
+            </StackPanel>
+        </ScrollViewer>
 
         <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
         <panels:DiscoverReviewOverlay Grid.RowSpan="5" DataContext="{Binding Review}" />

@@ -1,7 +1,8 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.ActivityPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels">
     <!--
         Newest-first list of every subprocess this app has run. The list is in memory only, so
         it is empty until something has been run in this session - the empty state carries the
@@ -9,16 +10,37 @@
 
         Each entry shows its review tier (Read-only / State-changing / Destructive), its exit
         badge, and the actions: Cancel (only while it runs), Copy argv, Copy output, Export log.
-        Everything is on the shared Dc* design system; the one local style is the stderr line.
+        Everything is on the shared Dc* design system; the local styles are the output line
+        (stderr and notice tones) and its list row.
+
+        Output. A transcript can run to 200,000 lines (a JSON read keeps them all), so each entry's output is a
+        virtualizing, recycling ListBox with a bounded height - the pattern of the Logs panel and the Updates console -
+        and only the lines in view become elements. The bound height is what makes virtualization possible: a list
+        given unlimited room (as it is inside this page's ScrollViewer) realizes every line. The list scrolls on its own,
+        hands the mouse wheel to the page at its ends (panels:NestedScroll), follows the newest line while the run is going
+        unless the operator has scrolled up (panels:TranscriptList), and its lines are selectable (Ctrl+A, Ctrl+C or
+        the context menu copy them; Copy output copies all of it).
     -->
     <UserControl.Resources>
-        <!-- One line of captured output; a stderr line reads in the critical tone. -->
+        <!-- One line of captured output; a stderr line reads in the critical tone, this app's own notice (the truncation marker) in the caution tone. -->
         <Style x:Key="OutputLine" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsError}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding IsNotice}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                    <Setter Property="FontStyle" Value="Italic" />
+                </DataTrigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- WPF-UI pads a list item 12 px on every side; a transcript is read by the screenful, so rows are as tight as the text. -->
+        <Style x:Key="OutputRow" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <Setter Property="Padding" Value="6,1,6,1" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
         </Style>
     </UserControl.Resources>
 
@@ -182,18 +204,62 @@
                                     </WrapPanel>
 
                                     <Expander Margin="0,4,0,0"
-                                              Header="Output"
+                                              Header="{Binding OutputHeader}"
                                               IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
                                               AutomationProperties.Name="Output">
-                                        <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0">
-                                            <ItemsControl ItemsSource="{Binding Output}"
-                                                          AutomationProperties.Name="Command output">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Style="{StaticResource OutputLine}" Text="{Binding Text}" />
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                        <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0" Padding="6,6,6,6">
+                                            <StackPanel>
+                                                <!-- Only while the run is going: a finished transcript has nothing to follow. Turning it off is what
+                                                     scrolling up does; this is the same setting, reachable without a mouse. -->
+                                                <CheckBox HorizontalAlignment="Right"
+                                                          Margin="0,0,6,4"
+                                                          Content="Follow output"
+                                                          IsChecked="{Binding IsFollowing, Mode=TwoWay}"
+                                                          Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}"
+                                                          AutomationProperties.Name="Follow output"
+                                                          AutomationProperties.HelpText="On: the list stays on the newest line as output arrives. Scrolling up turns it off; scrolling back to the end turns it on again." />
+
+                                                <Grid>
+                                                    <ListBox ItemsSource="{Binding Output}"
+                                                             MaxHeight="360"
+                                                             Padding="0"
+                                                             BorderThickness="0"
+                                                             Background="Transparent"
+                                                             SelectionMode="Extended"
+                                                             HorizontalContentAlignment="Stretch"
+                                                             ItemContainerStyle="{StaticResource OutputRow}"
+                                                             ScrollViewer.CanContentScroll="True"
+                                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                             VirtualizingPanel.IsVirtualizing="True"
+                                                             VirtualizingPanel.VirtualizationMode="Recycling"
+                                                             panels:TranscriptList.Enable="True"
+                                                             panels:TranscriptList.Follow="{Binding IsFollowing, Mode=TwoWay}"
+                                                             AutomationProperties.Name="Command output"
+                                                             AutomationProperties.HelpText="Output lines. Arrow keys move, Ctrl+A selects every line, Ctrl+C copies the selected lines.">
+                                                        <ListBox.ContextMenu>
+                                                            <ContextMenu>
+                                                                <MenuItem Header="Copy selected lines"
+                                                                          Command="ApplicationCommands.Copy"
+                                                                          CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                                <MenuItem Header="Select all lines"
+                                                                          Command="ApplicationCommands.SelectAll"
+                                                                          CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                            </ContextMenu>
+                                                        </ListBox.ContextMenu>
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Style="{StaticResource OutputLine}" Text="{Binding DisplayText}" />
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+
+                                                    <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                                               Margin="0,4,0,4"
+                                                               Text="No output captured yet."
+                                                               Visibility="{Binding IsOutputEmpty, Converter={StaticResource BoolToVisibility}}" />
+                                                </Grid>
+                                            </StackPanel>
                                         </Border>
                                     </Expander>
                                 </StackPanel>

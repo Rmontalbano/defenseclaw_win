@@ -1,0 +1,354 @@
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Globalization;
+using System.Text;
+using DefenseClaw.Core.Cli;
+
+namespace DefenseClaw.App.ViewModels;
+
+/// <summary>
+/// One line of an Activity entry's transcript, as the output list shows it: what the child printed
+/// (<see cref="CliStream.StandardOutput"/>), what it printed on stderr, or a notice this app injected
+/// (<see cref="CliStream.Notice"/>, today only the truncation marker).
+/// </summary>
+public sealed class ActivityOutputLine
+{
+    /// <summary>The marker at the head of a truncated transcript has no source line, so no position in the append sequence.</summary>
+    public const long NoSequence = -1;
+
+    public ActivityOutputLine(long sequence, string text, CliStream stream)
+    {
+        Sequence = sequence;
+        Text = text;
+        Stream = stream;
+    }
+
+    /// <summary>
+    /// Position in the invocation's append sequence (see <see cref="CliInvocation.CopyNewLines"/>) - stable while
+    /// earlier lines are trimmed away, so it puts a selection back in transcript order.
+    /// </summary>
+    public long Sequence { get; }
+
+    public string Text { get; }
+
+    public CliStream Stream { get; }
+
+    public bool IsError => Stream == CliStream.StandardError;
+
+    public bool IsNotice => Stream == CliStream.Notice;
+
+    /// <summary>
+    /// What the list draws. A blank line still has to be a row with a height: an empty <c>TextBlock</c> measures
+    /// as nothing, and a virtualizing panel would then realize every blank row in a run of them.
+    /// </summary>
+    public string DisplayText => Text.Length == 0 ? " " : Text;
+
+    /// <summary>The line as a screen reader should say it: the stream is part of the meaning, and colour is not announced.</summary>
+    public string AutomationName => Stream switch
+    {
+        CliStream.StandardError => $"error: {Text}",
+        CliStream.Notice => $"notice: {Text}",
+        _ => Text,
+    };
+
+    public override string ToString() => AutomationName;
+}
+
+/// <summary>
+/// The rows an Activity entry's output list binds to. An <see cref="ObservableCollection{T}"/> with the two bulk
+/// operations a transcript needs: adding many lines at once and dropping the oldest lines.
+/// <para>
+/// Small changes raise one ordinary event per line, which is what lets a virtualizing list keep its scroll
+/// position and its selection across a tick (a trim of the head, for example, moves the view up by exactly the
+/// lines removed). A change bigger than <see cref="BulkThreshold"/> raises a single <c>Reset</c> instead: that
+/// many individual events cost the list more than rebuilding it, and removing lines one by one from the front of a
+/// 200,000-line list is quadratic.
+/// </para>
+/// </summary>
+public sealed class TranscriptCollection : ObservableCollection<ActivityOutputLine>
+{
+    /// <summary>The most lines a change may touch before it is reported as one <c>Reset</c> rather than one event per line.</summary>
+    public const int BulkThreshold = 1_000;
+
+    /// <summary>
+    /// Raised just before <see cref="RemoveRange"/> removes anything, while the list bound to this collection still shows
+    /// the lines about to go. Lines leave from the front, above whatever an operator scrolled up to read, and a list keeps
+    /// its numeric scroll offset when that happens - so the view slides down the transcript by exactly the lines removed.
+    /// This is the moment a list can note which line it is showing, to put it back afterwards.
+    /// </summary>
+    public event EventHandler? HeadRemoving;
+
+    public void AddRange(IReadOnlyList<ActivityOutputLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        if (lines.Count <= BulkThreshold)
+        {
+            foreach (var line in lines)
+            {
+                Add(line);
+            }
+
+            return;
+        }
+
+        ((List<ActivityOutputLine>)Items).AddRange(lines);
+        RaiseReset();
+    }
+
+    public void RemoveRange(int index, int count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        HeadRemoving?.Invoke(this, EventArgs.Empty);
+
+        if (count <= BulkThreshold)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                RemoveAt(index);
+            }
+
+            return;
+        }
+
+        ((List<ActivityOutputLine>)Items).RemoveRange(index, count);
+        RaiseReset();
+    }
+
+    private void RaiseReset()
+    {
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
+}
+
+/// <summary>
+/// The incremental line model behind one Activity entry's output list: a window on the invocation's transcript that
+/// is brought up to date from the invocation's cursor rather than rebuilt.
+/// <para>
+/// <b>Append.</b> Each <see cref="Pull"/> asks <see cref="CliInvocation.CopyNewLines"/> for what arrived since the
+/// last one and appends only that; the cursor is a position in the invocation's append sequence, so a trim of the
+/// invocation cannot make it skip or repeat a line.
+/// </para>
+/// <para>
+/// <b>Trim.</b> The invocation keeps its transcript inside a budget by dropping the oldest lines
+/// (<see cref="CliInvocation.MaxRetainedOutputLines"/>, or the far larger ceiling of a run that keeps its whole
+/// output). The window mirrors that: after every pull, lines the invocation no longer retains are removed from the
+/// head, so the list is never longer than what Copy output and Export log would produce, and never holds more than
+/// the invocation's own cap - a long run does not keep growing on screen after the runner has stopped keeping
+/// it. A reader that fell so far behind that lines were dropped before it saw them starts over from the oldest
+/// retained line.
+/// </para>
+/// <para>
+/// <b>The marker.</b> Once anything has been dropped, the first row is the invocation's own truncation notice
+/// (<see cref="CliStream.Notice"/>), replaced in place as the count grows - the same line Copy output and Export log
+/// begin with. It is not a source line: it has no sequence and is never counted in <see cref="LineCount"/>.
+/// </para>
+/// <para>UI thread only: <see cref="Lines"/> is bound to a list.</para>
+/// </summary>
+public sealed class ActivityTranscript
+{
+    private readonly List<CliOutputLine> _fetched = new();
+    private readonly List<ActivityOutputLine> _batch = new();
+
+    /// <summary>Where the next <see cref="CliInvocation.CopyNewLines"/> resumes: a position in the append sequence, not an index into <see cref="Lines"/>.</summary>
+    private int _cursor;
+
+    /// <summary>Append-sequence position of the first source line held (meaningful while <see cref="LineCount"/> is not 0).</summary>
+    private long _headSequence;
+
+    /// <summary>The number of dropped lines the marker row currently reports; 0 while there is no marker.</summary>
+    private long _markerDropped;
+
+    public TranscriptCollection Lines { get; } = new();
+
+    /// <summary>Source lines held (the marker is not one).</summary>
+    public int LineCount { get; private set; }
+
+    /// <summary>Lines the invocation had dropped, as of the last <see cref="Pull"/>.</summary>
+    public long DroppedLineCount { get; private set; }
+
+    private int MarkerOffset => _markerDropped > 0 ? 1 : 0;
+
+    /// <summary>
+    /// Brings the window up to date with <paramref name="invocation"/>. Safe to call while the process is still
+    /// writing on another thread. Returns whether <see cref="Lines"/> changed.
+    /// </summary>
+    public bool Pull(CliInvocation invocation)
+    {
+        ArgumentNullException.ThrowIfNull(invocation);
+
+        var changed = false;
+
+        _fetched.Clear();
+        var newCursor = invocation.CopyNewLines(_cursor, _fetched);
+        _cursor = newCursor;
+
+        // CopyNewLines puts a synthesized notice in front when this reader fell behind a trim. That notice only knows
+        // how many lines this reader missed; the head marker below reports the total, so it is left out here (and is
+        // not a position in the append sequence, so it must not be counted in it either).
+        var fresh = 0;
+        foreach (var line in _fetched)
+        {
+            if (line.Stream != CliStream.Notice)
+            {
+                fresh++;
+            }
+        }
+
+        if (fresh > 0)
+        {
+            var firstSequence = newCursor - (long)fresh;
+            if (LineCount > 0 && _headSequence + LineCount != firstSequence)
+            {
+                // Lines went missing between the last pull and this one: what is held is not contiguous with what
+                // arrived. Every held line is older than the invocation's retained window, so start over from it.
+                Lines.RemoveRange(MarkerOffset, LineCount);
+                LineCount = 0;
+            }
+
+            if (LineCount == 0)
+            {
+                _headSequence = firstSequence;
+            }
+
+            _batch.Clear();
+            var sequence = firstSequence;
+            foreach (var line in _fetched)
+            {
+                if (line.Stream != CliStream.Notice)
+                {
+                    _batch.Add(new ActivityOutputLine(sequence++, line.Text, line.Stream));
+                }
+            }
+
+            Lines.AddRange(_batch);
+            LineCount += _batch.Count;
+            changed = true;
+        }
+
+        ReleaseBuffers();
+
+        // Mirror the invocation's own head trim.
+        var dropped = invocation.DroppedOutputLineCount;
+        DroppedLineCount = dropped;
+
+        var stale = (int)Math.Min(LineCount, Math.Max(0, dropped - _headSequence));
+        if (stale > 0)
+        {
+            Lines.RemoveRange(MarkerOffset, stale);
+            LineCount -= stale;
+            _headSequence += stale;
+            changed = true;
+        }
+
+        if (dropped != _markerDropped && ApplyMarker(invocation, dropped))
+        {
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// The scratch lists are reused tick to tick so a steady stream allocates nothing, but a first pull of a 200,000-line
+    /// transcript would leave them holding that much capacity (and references to every line) for as long as the entry lives.
+    /// </summary>
+    private void ReleaseBuffers()
+    {
+        const int KeepCapacity = 4096;
+
+        _fetched.Clear();
+        _batch.Clear();
+        if (_fetched.Capacity > KeepCapacity)
+        {
+            _fetched.TrimExcess();
+            _batch.TrimExcess();
+        }
+    }
+
+    /// <summary>
+    /// Text of a set of selected rows in transcript order, one line each (the marker sorts first), and how many
+    /// lines that is. A list reports its selection in the order it was made, which is not the order it is read in.
+    /// </summary>
+    public static string FormatLines(IEnumerable<ActivityOutputLine> selected, out int count)
+    {
+        ArgumentNullException.ThrowIfNull(selected);
+
+        var ordered = selected.OrderBy(line => line.Sequence).ToList();
+        count = ordered.Count;
+
+        var builder = new StringBuilder();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            if (i > 0)
+            {
+                _ = builder.Append(Environment.NewLine);
+            }
+
+            _ = builder.Append(ordered[i].Text);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>The line count as the entry's header states it: <c>Output</c>, <c>Output · 1,204 lines</c>, or with what was dropped.</summary>
+    public string Describe()
+    {
+        if (LineCount == 0 && DroppedLineCount == 0)
+        {
+            return "Output";
+        }
+
+        var shown = LineCount.ToString("N0", CultureInfo.CurrentCulture);
+        var noun = LineCount == 1 ? "line" : "lines";
+        return DroppedLineCount > 0
+            ? $"Output · {shown} {noun} shown, {DroppedLineCount.ToString("N0", CultureInfo.CurrentCulture)} earlier dropped"
+            : $"Output · {shown} {noun}";
+    }
+
+    /// <summary>
+    /// Puts the invocation's own truncation notice at the head, or replaces the one that is there. Read from
+    /// <see cref="CliInvocation.OutputLines"/> - a full copy of the retained transcript, but only when a trim has
+    /// just happened, which is once per quarter of the budget rather than once per tick - so the text is always the
+    /// one Copy output and Export log start with, whatever the runner decides it says.
+    /// </summary>
+    private bool ApplyMarker(CliInvocation invocation, long dropped)
+    {
+        if (dropped == 0)
+        {
+            return false;
+        }
+
+        var retained = invocation.OutputLines;
+        if (retained.Count == 0 || retained[0].Stream != CliStream.Notice)
+        {
+            // Nothing to show yet; the next pull tries again because _markerDropped is unchanged.
+            return false;
+        }
+
+        var marker = new ActivityOutputLine(ActivityOutputLine.NoSequence, retained[0].Text, CliStream.Notice);
+        if (_markerDropped == 0)
+        {
+            Lines.Insert(0, marker);
+        }
+        else
+        {
+            Lines[0] = marker;
+        }
+
+        _markerDropped = dropped;
+        return true;
+    }
+}
