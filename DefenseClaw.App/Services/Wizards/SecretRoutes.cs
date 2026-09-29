@@ -1,28 +1,36 @@
 namespace DefenseClaw.App.Services.Wizards;
 
 /// <summary>
-/// How one secret-taking setup flag is satisfied <b>without this app ever holding the value</b>.
+/// How one secret-taking setup flag is satisfied. There are two routes, and which one a flag gets is a
+/// fact about the installed CLI, established from its source rather than assumed.
 /// <para>
-/// <b>Why the app cannot deliver a secret itself (verified, DefenseClaw 0.8.10 on Windows).</b>
-/// Five setup flags take the secret <i>itself</i> — <c>setup gateway --token</c>,
+/// <b>Never on argv.</b> Five setup flags take the secret <i>itself</i> — <c>setup gateway --token</c>,
 /// <c>setup llm --api-key</c>, <c>setup splunk --access-token / --hec-token</c> and
-/// <c>setup observability add --token</c>. Every one of them is argv-only: the CLI reads none of
-/// them from stdin. The one verb built for storing a secret, <c>keys set NAME</c>, prompts through
+/// <c>setup observability add --token</c> — and this app never puts a value on a command line (argv is visible
+/// to every process on the machine, and <see cref="Core.Cli.CliRunner"/> refuses it). None of them is read from
+/// stdin either. The one verb built for storing a secret, <c>keys set NAME</c>, prompts through
 /// <c>click.prompt(hide_input=True)</c>, which on Windows is <c>getpass.win_getpass</c> →
-/// <c>msvcrt.getwch()</c>: it reads the <i>console input buffer</i>, never a redirected pipe (a probe
-/// that launched the same prompt exactly as <see cref="Core.Cli.CliRunner"/> does — hidden console,
-/// redirected stdin, value piped in — was still waiting for input after 8 s). So a value piped to any
-/// of these commands was silently dropped, and <c>keys set --value</c> would put it on the command
-/// line, which this app never does.
+/// <c>msvcrt.getwch()</c>: it reads the <i>console input buffer</i>, never a redirected pipe (a probe that
+/// launched the same prompt exactly as the runner does — hidden console, redirected stdin, value piped in — was
+/// still waiting for input after 8 s).
 /// </para>
 /// <para>
-/// The route that does work is the one DefenseClaw itself is built around: the secret lives in
-/// <c>~/.defenseclaw/.env</c> under a variable NAME, config.yaml stores only the name, and the CLI loads
-/// <c>.env</c> into its environment at start-up (<c>config._load_dotenv_into_os</c>). The operator
-/// stores the value once in a real console (<c>defenseclaw keys set NAME</c>), and the wizard's
-/// command then refers to it by name (<c>llm --api-key-env NAME</c>) or lets the CLI's own
-/// environment fallback pick it up (<c>splunk</c>: <c>SPLUNK_ACCESS_TOKEN</c> /
-/// <c>DEFENSECLAW_SPLUNK_HEC_TOKEN</c>; <c>observability add</c>: the preset's <c>token_env</c>).
+/// <b>Route 1 — a real console (every flag).</b> The secret lives in <c>~/.defenseclaw/.env</c> under a variable
+/// NAME, config.yaml stores only the name, and the CLI loads <c>.env</c> into its environment at start-up
+/// (<c>config._load_dotenv_into_os</c>). The operator stores the value once in a real console
+/// (<c>defenseclaw keys set NAME</c>) and the wizard's command reads it by name.
+/// </para>
+/// <para>
+/// <b>Route 2 — typed in the app, delivered in the child's environment (only where the CLI reads one).</b>
+/// Three of the flags have an environment-variable fallback that <i>replaces the prompt and the flag</i> and is
+/// honoured with no console attached: <c>setup splunk --access-token</c> (<c>SPLUNK_ACCESS_TOKEN</c>),
+/// <c>setup splunk --hec-token</c> (<c>DEFENSECLAW_SPLUNK_HEC_TOKEN</c>) and — through Click's own
+/// <c>envvar=</c> on the option — <c>setup observability add --token</c>
+/// (<c>DEFENSECLAW_SETUP_OBSERVABILITY_TOKEN</c>). For those the wizard shows a password box and hands the
+/// value to <see cref="Core.Cli.CliRunOptions.EnvironmentOverlay"/> for that one run: it is in the child's
+/// environment block, not on argv, and the CLI then persists it to <c>.env</c> itself. The other two
+/// (<c>gateway --token</c>, <c>llm --api-key</c>) have no environment fallback — their value is read from the
+/// flag or not at all — so they keep Route 1 only.
 /// </para>
 /// </summary>
 public sealed class SecretRoute
@@ -31,22 +39,51 @@ public sealed class SecretRoute
     public required string Purpose { get; init; }
 
     /// <summary>
-    /// The variable NAME the CLI will read the secret from, given the current answers. Null when the
-    /// name is not knowable (an unknown destination type, or a flag this app has no route for).
+    /// The variable NAME the command ends up reading the secret from — where it is stored — given the current
+    /// answers. Null when the name is not knowable (an unknown destination type, or a flag this app has no route
+    /// for). This is what the credential card checks for a stored value.
     /// </summary>
     public required Func<WizardValues, string?> EnvName { get; init; }
 
     /// <summary>What happens if the variable is still unset when the command runs.</summary>
     public required string IfMissing { get; init; }
+
+    /// <summary>
+    /// The variable the CLI reads <i>as its replacement for the flag</i>, so that a value supplied in the child's
+    /// environment is used exactly as if it had been typed after the flag. Null (the default) means the CLI has no
+    /// such fallback and the route is terminal-only. May differ from <see cref="EnvName"/>: an observability
+    /// destination is read from <c>DEFENSECLAW_SETUP_OBSERVABILITY_TOKEN</c> but stored as its preset's own name.
+    /// </summary>
+    public Func<WizardValues, string?>? InAppEnvName { get; init; }
+
+    /// <summary>
+    /// The valid variable name the in-app route would use for the current answers, or null when this flag has
+    /// no such route (or, for an observability preset, no token at all). A name that is not a legal environment
+    /// variable name is treated as no route rather than passed on.
+    /// </summary>
+    public string? InAppVariable(WizardValues values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        var name = InAppEnvName?.Invoke(values)?.Trim();
+        return Core.Cli.CliRunOptions.IsValidEnvironmentName(name) ? name : null;
+    }
 }
 
 /// <summary>The verified table of secret flags and where each one is read from.</summary>
 public static class SecretRoutes
 {
     /// <summary>
+    /// The variable <c>setup observability add --token</c> is bound to by Click's <c>envvar=</c>
+    /// (<c>cmd_setup_observability.py</c>, 0.8.10). The CLI advertises it in the option's help
+    /// (<c>[env var: …]</c>), which is what <see cref="RouteFor"/> checks before offering the in-app route.
+    /// </summary>
+    public const string ObservabilityTokenEnvVar = "DEFENSECLAW_SETUP_OBSERVABILITY_TOKEN";
+
+    /// <summary>
     /// <c>setup observability add &lt;preset&gt;</c> → the preset's <c>token_env</c>, from
-    /// <c>defenseclaw/observability/presets.py</c> in the installed 0.8.10. Only used to show which
-    /// variable to store and whether it is set; the CLI makes its own decision at run time.
+    /// <c>defenseclaw/observability/presets.py</c> in the installed 0.8.10. Where the token is stored and
+    /// whether it is set; the CLI makes its own decision at run time.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> ObservabilityTokenEnv =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -109,6 +146,9 @@ public static class SecretRoutes
 
         switch (target, flag)
         {
+            // Terminal only: `--api-key` is read from the flag and from nowhere else (cmd_setup.py:
+            // `if api_key: _save_secret_to_dotenv(...)`; the option has no envvar=), so a value in the child's
+            // environment would be ignored.
             case ("llm", "--api-key"):
             {
                 var nameFieldId = everyField.FirstOrDefault(f => f.Flag == "--api-key-env")?.Id;
@@ -125,6 +165,8 @@ public static class SecretRoutes
                 };
             }
 
+            // Terminal only: `if token is not None: _save_secret_to_dotenv(...)` — the flag is the only source. An
+            // OPENCLAW_GATEWAY_TOKEN in the environment is consulted (`gw.resolved_token()`) but never written to .env.
             case ("gateway", "--token"):
                 return new SecretRoute
                 {
@@ -133,22 +175,30 @@ public static class SecretRoutes
                     IfMissing = "The sidecar cannot authenticate to a remote gateway until the token is stored.",
                 };
 
+            // In-app: `token = access_token or os.environ.get("SPLUNK_ACCESS_TOKEN", "")` (cmd_setup.py, _setup_o11y);
+            // a non-empty result skips the hide_input prompt, and the value is then persisted to .env.
             case ("splunk", "--access-token"):
                 return new SecretRoute
                 {
                     Purpose = "Splunk Observability Cloud access token",
                     EnvName = _ => "SPLUNK_ACCESS_TOKEN",
+                    InAppEnvName = _ => "SPLUNK_ACCESS_TOKEN",
                     IfMissing = "The CLI stops with \"--access-token required (or set SPLUNK_ACCESS_TOKEN env var)\" and changes nothing.",
                 };
 
+            // In-app: `token = hec_token or os.environ.get("DEFENSECLAW_SPLUNK_HEC_TOKEN", "")` (_setup_enterprise).
             case ("splunk", "--hec-token"):
                 return new SecretRoute
                 {
                     Purpose = "Splunk Enterprise HEC token",
                     EnvName = _ => "DEFENSECLAW_SPLUNK_HEC_TOKEN",
+                    InAppEnvName = _ => "DEFENSECLAW_SPLUNK_HEC_TOKEN",
                     IfMissing = "The CLI stops with \"--hec-token required (or set DEFENSECLAW_SPLUNK_HEC_TOKEN env var)\" and changes nothing.",
                 };
 
+            // In-app, but only while the installed CLI still advertises the binding in its own help: Click's
+            // `envvar="DEFENSECLAW_SETUP_OBSERVABILITY_TOKEN"` prints "[env var: …]" on the option. A CLI that
+            // dropped it would ignore the environment, so the route quietly falls back to the terminal instead.
             case ("observability", "--token"):
             {
                 var presetFieldId = everyField
@@ -156,14 +206,24 @@ public static class SecretRoutes
                                          f.VisibleWhenValues.SequenceEqual(field.VisibleWhenValues, StringComparer.Ordinal))
                     ?.Id;
 
+                string? StoredName(WizardValues values)
+                {
+                    var preset = presetFieldId is null ? string.Empty : values[presetFieldId].Trim();
+                    return ObservabilityTokenEnv.TryGetValue(preset, out var name) ? name : null;
+                }
+
+                var advertised = field.Help.Contains(ObservabilityTokenEnvVar, StringComparison.Ordinal);
+
                 return new SecretRoute
                 {
                     Purpose = "telemetry destination token",
-                    EnvName = values =>
-                    {
-                        var preset = presetFieldId is null ? string.Empty : values[presetFieldId].Trim();
-                        return ObservabilityTokenEnv.TryGetValue(preset, out var name) ? name : null;
-                    },
+                    EnvName = StoredName,
+
+                    // Also needs a preset that has a token at all: for the generic OTLP/HTTP presets the CLI
+                    // accepts --token and discards it, and there is no stored name to check for either.
+                    InAppEnvName = advertised
+                        ? values => StoredName(values) is null ? null : ObservabilityTokenEnvVar
+                        : null,
                     IfMissing = "The destination is still created, but exporting to it fails to authenticate until the token is stored " +
                                 "(the CLI prints a \"not set\" warning).",
                 };

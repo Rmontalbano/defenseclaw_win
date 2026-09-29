@@ -29,9 +29,11 @@ namespace DefenseClaw.App.ViewModels.Wizards;
 /// leaving it off would mean. An untouched wizard therefore cannot downgrade a connector.
 /// </para>
 /// <para>
-/// <b>No secret ever passes through here.</b> A secret-taking flag is shown as a credential card
-/// (which variable, is it set, how to store it in a real console); the wizard neither collects nor pipes
-/// the value. See <see cref="SecretRoute"/> for why that is the only correct behaviour on Windows.
+/// <b>A secret is never on argv or on stdin.</b> A secret-taking flag is shown as a credential card
+/// (which variable, is it set, how to store it in a real console). Where the CLI itself reads the secret from an
+/// environment variable, the card also has a password box, and the typed value is handed to the run as an
+/// environment variable of that one child (<see cref="BuildRunOptions"/>) and cleared when the run ends; see
+/// <c>WizardViewModel.Secrets.cs</c> and <see cref="SecretRoute"/> for which flags qualify and why.
 /// </para>
 /// <para>
 /// <b>Live output.</b> <see cref="CliRunner.OutputReceived"/> carries no invocation id, so —
@@ -215,6 +217,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             foreach (var field in fields)
             {
                 field.PropertyChanged += OnFieldChanged;
+                field.PropertyChanged += OnSecretEntryChanged;
                 _fields.Add(field);
             }
 
@@ -473,6 +476,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         {
             // Already released by a run that just finished.
         }
+
+        // However the window closed, nothing the operator typed into a password box outlives it.
+        ClearSecretEntries();
     }
 
     [RelayCommand]
@@ -520,12 +526,17 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     /// tree and report <c>cancelled — process tree killed</c> as data on the returned invocation — it does
     /// not throw, so the outcome arrives through <see cref="ApplyResult"/> like any other.
     /// <para>
-    /// No secret is passed: the runner is called without a stdin secret because none of these commands
-    /// reads one (see <see cref="SecretRoute"/>).
+    /// No secret is piped: the runner is called without a stdin secret because none of these commands reads
+    /// one (see <see cref="SecretRoute"/>). A secret the operator typed for an environment-variable route travels
+    /// only in <see cref="BuildRunOptions"/>'s overlay, to the real command and not to a preview, and every typed
+    /// secret is cleared when a real run ends — whether it succeeded, failed or was stopped.
     /// </para>
     /// </summary>
     private async Task RunCoreAsync(IReadOnlyList<string> argv, bool preview)
     {
+        var suppliedSecrets = !preview && HasSuppliedSecrets;
+        var previewSkipsSecrets = preview && HasSuppliedSecrets;
+
         // A retry after a failed or cancelled attempt starts from a clean console and badge, not
         // the previous attempt's.
         ResetRunState();
@@ -545,13 +556,21 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         try
         {
-            var invocation = await _services.Cli.RunAsync(argv, null, token).ConfigureAwait(true);
+            // Null unless a typed secret is being supplied, in which case it carries the variable and nothing
+            // else is different from a plain run. A preview never gets one: the value goes to a single child.
+            var options = preview ? null : BuildRunOptions();
+            var invocation = await _services.Cli.RunAsync(argv, null, token, options).ConfigureAwait(true);
             _invocation = invocation;
             PullOutput();
             ApplyResult(invocation, preview);
         }
         catch (CliNotFoundException ex)
         {
+            Fail(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            // Options the runner refused (a variable name it does not accept). Nothing was started.
             Fail(ex.Message);
         }
         catch (SecretInArgumentException ex)
@@ -576,6 +595,19 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
             IsRunning = false;
             HasRun = true;
+
+            // The run is over, however it ended: the typed secret goes with it. The result line says so, and
+            // says what a preview left alone, so an empty box is never a mystery.
+            if (suppliedSecrets)
+            {
+                ClearSecretEntries(SecretClearedSentence);
+                ResultMessage = (ResultMessage + " " + SecretClearedSentence).Trim();
+            }
+            else if (previewSkipsSecrets)
+            {
+                ResultMessage = (ResultMessage + " The value you entered is not used by a preview; it is supplied only when you press Execute.").Trim();
+            }
+
             RaiseNavigationState();
 
             if (closeNow)

@@ -20,8 +20,8 @@
         Styling is the shared Dc* dictionary (Themes\DefenseClaw.xaml); only three visuals live here
         because they exist in this window alone. Accessibility: every control carries the field's label
         as its automation name, validation and result text are live regions, Esc closes (or, mid-run,
-        asks before stopping), and there is no secret input anywhere - a secret-taking flag is a
-        credential card (see SecretRoute), never a text box.
+        asks before stopping), and a secret is never a text box: a secret-taking flag is a credential
+        card (see SecretRoute) with, where the CLI reads an environment variable, a PasswordBox.
     -->
     <ui:FluentWindow.Resources>
         <wizards:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
@@ -207,10 +207,12 @@
                                                      Visibility="{Binding IsSwitch, Converter={StaticResource BoolToVisibility}}" />
 
                                     <!--
-                                        Secret: there is no input. The flag takes the secret itself and the CLI
-                                        reads it from nowhere but its own command line, so this card names the
-                                        variable the command reads, says whether it is set, and hands the operator
-                                        to `defenseclaw keys set` in a real console.
+                                        Secret: never a text box and never argv. The flag takes the secret itself, so
+                                        this card names the variable the command reads, says whether it is set, and
+                                        hands the operator to `defenseclaw keys set` in a real console. Where the CLI
+                                        also reads the secret from an environment variable (OffersInAppEntry) there is
+                                        a password box too: the value is held as a SecureString (SecretEntryBox, no
+                                        binding), supplied in the child's environment for one run, then cleared.
                                     -->
                                     <Border MaxWidth="720"
                                             HorizontalAlignment="Left"
@@ -227,6 +229,39 @@
                                                 <TextBlock Style="{StaticResource DcBody}"
                                                            AutomationProperties.LiveSetting="Polite"
                                                            Text="{Binding CredentialStatus}" />
+                                            </StackPanel>
+
+                                            <!-- Typed here: supplied as an environment variable for one run. -->
+                                            <StackPanel Margin="0,0,0,12"
+                                                        Visibility="{Binding OffersInAppEntry, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Margin="0,0,0,6"
+                                                           Style="{StaticResource DcCaption}"
+                                                           Text="{Binding InAppExplanation}" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <PasswordBox Width="420"
+                                                                 wizards:SecretEntryBox.Attach="True"
+                                                                 AutomationProperties.Name="{Binding InAppAutomationName}"
+                                                                 AutomationProperties.HelpText="{Binding InAppExplanation}"
+                                                                 ToolTip="Supplied to the command as an environment variable for one run. Never on the command line." />
+                                                    <ui:Button Margin="8,0,0,0"
+                                                               Appearance="Secondary"
+                                                               Content="Clear"
+                                                               ToolTip="Forget the value you typed"
+                                                               IsEnabled="{Binding HasEntry}"
+                                                               Command="{Binding DiscardEntryCommand}" />
+                                                </StackPanel>
+                                                <TextBlock Margin="0,6,0,0"
+                                                           Style="{StaticResource DcToneText}"
+                                                           Tag="Bad"
+                                                           TextWrapping="Wrap"
+                                                           AutomationProperties.LiveSetting="Assertive"
+                                                           Visibility="{Binding HasEntryProblem, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding EntryProblem}" />
+                                                <TextBlock Margin="0,6,0,0"
+                                                           Style="{StaticResource DcCaption}"
+                                                           AutomationProperties.LiveSetting="Polite"
+                                                           Visibility="{Binding HasEntryProblem, Converter={StaticResource InverseBoolToVisibility}}"
+                                                           Text="{Binding EntryStatus}" />
                                             </StackPanel>
 
                                             <TextBlock Margin="0,0,0,8"

@@ -197,6 +197,24 @@ public sealed class CliInvocation
     public bool UsedStdinSecret { get; internal set; }
 
     /// <summary>
+    /// The <b>names</b> of the environment variables the runner set for this child from
+    /// <see cref="CliRunOptions.EnvironmentOverlay"/> (empty values, which are skipped, are not listed),
+    /// ordered by name. Only names are ever recorded: the values are applied to the child's environment
+    /// block and appear nowhere on this object, in <see cref="Argv"/>, in <see cref="CommandLine"/> or in the
+    /// transcript. The Activity panel reads <see cref="EnvironmentDisplay"/> to say so.
+    /// </summary>
+    public IReadOnlyList<string> EnvironmentNames { get; internal set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// A line for the Activity panel: <c>env: SPLUNK_ACCESS_TOKEN=•••</c> — each name with its value masked —
+    /// or an empty string when the run had no overlay. Built from <see cref="EnvironmentNames"/>, so it cannot
+    /// carry a value; the mask is a fixed literal, not the value's length.
+    /// </summary>
+    public string EnvironmentDisplay => EnvironmentNames.Count == 0
+        ? string.Empty
+        : "env: " + string.Join(' ', EnvironmentNames.Select(n => n + "=•••"));
+
+    /// <summary>
     /// True when the run was started with <see cref="CliRunOptions.SurvivesShutdown"/> — in
     /// practice the in-app upgrade installer. Such a run is not stopped by app exit and is
     /// refused by <see cref="CliRunner.Cancel(CliInvocation, out string)"/>: killing an installer
@@ -294,7 +312,8 @@ public sealed class CliInvocation
 
     /// <summary>
     /// Display form for the Activity panel and wizard review screens. Quotes only where
-    /// a shell would need it; this is for humans, not for re-execution.
+    /// a shell would need it; this is for humans, not for re-execution. Argv only — a run's
+    /// environment overlay is shown separately by <see cref="EnvironmentDisplay"/>.
     /// </summary>
     public string CommandLine =>
         string.Join(' ', new[] { Executable }.Concat(Argv).Select(Quote));
@@ -393,6 +412,7 @@ public sealed class CliInvocation
             ExitCode = ExitCode,
             FailureReason = FailureReason,
             UsedStdinSecret = UsedStdinSecret,
+            EnvironmentNames = EnvironmentNames,
             SurvivesShutdown = SurvivesShutdown,
             CancelRequested = CancelRequested,
         };

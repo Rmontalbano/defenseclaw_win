@@ -14,7 +14,7 @@ public sealed class SecretInArgumentException : InvalidOperationException
 {
     public SecretInArgumentException(int argumentIndex)
         : base($"Refusing to run: argument at index {argumentIndex} contains a secret. " +
-               "Pass secrets via the stdinSecret parameter instead — never on the command line.")
+               "Pass secrets via the stdinSecret parameter or the CliRunOptions environment overlay instead — never on the command line.")
     {
         ArgumentIndex = argumentIndex;
     }
@@ -48,6 +48,12 @@ public sealed class CliNotFoundException : FileNotFoundException
 /// </summary>
 public sealed record CliRunOptions
 {
+    // Declared before the presets below: static initialisers run in textual order, and every preset
+    // reads this as the default of EnvironmentOverlay.
+    private static readonly IReadOnlyDictionary<string, SecretValue> NoEnvironment =
+        new System.Collections.ObjectModel.ReadOnlyDictionary<string, SecretValue>(
+            new Dictionary<string, SecretValue>(0, StringComparer.OrdinalIgnoreCase));
+
     /// <summary>Nothing overridden: the runner's inferred timeout, and the run is ended at app exit.</summary>
     public static CliRunOptions Default { get; } = new();
 
@@ -86,6 +92,101 @@ public sealed record CliRunOptions
 
     /// <summary>An explicit ceiling for this call, overriding the runner's inferred one.</summary>
     public static CliRunOptions WithTimeout(TimeSpan timeout) => new() { Timeout = timeout };
+
+    /// <summary>
+    /// The longest environment variable name the overlay accepts. Far beyond any real one; it only
+    /// exists so a runaway string cannot be turned into a child's environment block.
+    /// </summary>
+    public const int MaxEnvironmentNameLength = 128;
+
+    /// <summary>
+    /// True for a name the overlay will set: a letter or underscore, then letters, digits and
+    /// underscores. Deliberately stricter than what Windows allows — no <c>=</c>, no spaces, no
+    /// punctuation — because the name comes from a table in this app and a value that does not fit
+    /// this shape is a bug, not something to pass to <c>CreateProcess</c>.
+    /// </summary>
+    public static bool IsValidEnvironmentName(string? name)
+    {
+        if (string.IsNullOrEmpty(name) || name.Length > MaxEnvironmentNameLength)
+        {
+            return false;
+        }
+
+        if (!(char.IsAsciiLetter(name[0]) || name[0] == '_'))
+        {
+            return false;
+        }
+
+        foreach (var c in name)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Environment variables set for <b>this one child</b>, on top of the app's own environment — the
+    /// way to hand a CLI a secret it reads from an environment variable without putting the value on
+    /// argv (visible to every process on the machine) and without a console to type it into.
+    /// <para>
+    /// <b>The values never leave the child.</b> They are applied to the child's
+    /// <see cref="System.Diagnostics.ProcessStartInfo.Environment"/> and nowhere else: the app's own
+    /// process environment is not touched (so a later run does not inherit them), the invocation
+    /// records only the <i>names</i> (<see cref="CliInvocation.EnvironmentNames"/>), the display
+    /// command line is argv alone, and — exactly as for <c>stdinSecret</c> — each value is refused if it
+    /// turns up in argv and is scrubbed out of captured output. <see cref="SecretValue.ToString"/> is
+    /// redacted, so an accidental log line prints a placeholder.
+    /// </para>
+    /// <para>
+    /// An entry whose value <see cref="SecretValue.IsEmpty"/> is <b>skipped</b>, not set to an empty
+    /// string: DefenseClaw's own <c>.env</c> loader never overwrites a variable that is already present,
+    /// and an empty one is present — setting it would shadow the value stored in
+    /// <c>~/.defenseclaw/.env</c>.
+    /// </para>
+    /// <para>
+    /// Names are matched case-insensitively (as Windows does). Build it with
+    /// <see cref="WithEnvironment(string, SecretValue)"/>; <see cref="CliRunner"/> re-validates whatever it
+    /// is given and throws <see cref="ArgumentException"/> (naming the variable, never the value) before
+    /// anything is recorded or started.
+    /// </para>
+    /// </summary>
+    public IReadOnlyDictionary<string, SecretValue> EnvironmentOverlay { get; init; } = NoEnvironment;
+
+    /// <summary>
+    /// A copy of these options that also sets <paramref name="name"/> to <paramref name="value"/> in the
+    /// child's environment (replacing an earlier entry of the same name). See <see cref="EnvironmentOverlay"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is not a valid variable name.</exception>
+    public CliRunOptions WithEnvironment(string name, SecretValue value)
+    {
+        if (!IsValidEnvironmentName(name))
+        {
+            throw new ArgumentException(
+                "Environment variable names must be letters, digits and underscores, starting with a letter or underscore.",
+                nameof(name));
+        }
+
+        ArgumentNullException.ThrowIfNull(value);
+
+        var merged = new Dictionary<string, SecretValue>(EnvironmentOverlay, StringComparer.OrdinalIgnoreCase)
+        {
+            [name] = value,
+        };
+
+        return this with { EnvironmentOverlay = new System.Collections.ObjectModel.ReadOnlyDictionary<string, SecretValue>(merged) };
+    }
+
+    // The synthesized ToString would list the overlay's contents through its own ToString; naming the
+    // variables here keeps a stray log of the options useful without printing a value, redacted or not.
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        builder.Append(System.Globalization.CultureInfo.InvariantCulture, $"RetainFullOutput = {RetainFullOutput}, Timeout = {Timeout}, SurvivesShutdown = {SurvivesShutdown}, EnvironmentNames = [{string.Join(", ", EnvironmentOverlay.Keys)}]");
+        return true;
+    }
 
     /// <summary>
     /// Lifts this invocation's retention caps from the ordinary
@@ -139,9 +240,10 @@ public sealed record CliRunOptions
 /// <see cref="Activity"/> for the Activity panel to show.
 /// </para>
 /// <para>
-/// Secrets are accepted only through <c>stdinSecret</c>. Anything that would put one in
+/// Secrets are accepted only through <c>stdinSecret</c> or the per-run environment overlay
+/// (<see cref="CliRunOptions.EnvironmentOverlay"/>). Anything that would put one in
 /// argv throws <see cref="SecretInArgumentException"/>. On the way out, the run's own
-/// <c>stdinSecret</c> and every secret passed to <see cref="RegisterSecret"/> are scrubbed from
+/// <c>stdinSecret</c>, its overlay values and every secret passed to <see cref="RegisterSecret"/> are scrubbed from
 /// captured output before it is stored or streamed — the wizards promise the value "will not
 /// appear in the Activity panel or in captured output", and a child that echoes what it read on
 /// stdin would otherwise break that promise.
@@ -498,10 +600,11 @@ public sealed class CliRunner : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(executablePath);
         ArgumentNullException.ThrowIfNull(args);
 
-        GuardArguments(args, stdinSecret);
-
         // Resolved before anything is recorded so a bad option is a plain argument error and
         // leaves no half-recorded invocation behind.
+        var environment = ResolveEnvironment(options);
+        GuardArguments(args, stdinSecret, environment);
+
         var timeout = ResolveTimeout(executablePath, args, options);
         var survivesShutdown = options?.SurvivesShutdown ?? false;
 
@@ -513,6 +616,7 @@ public sealed class CliRunner : IDisposable
         {
             UsedStdinSecret = stdinSecret is { IsEmpty: false },
             SurvivesShutdown = survivesShutdown,
+            EnvironmentNames = environment.Select(e => e.Name).ToArray(),
         };
 
         Record(invocation);
@@ -533,7 +637,7 @@ public sealed class CliRunner : IDisposable
             }
             else
             {
-                await SuperviseAsync(invocation, run, executablePath, args, stdinSecret, cancellationToken, timeout)
+                await SuperviseAsync(invocation, run, executablePath, args, stdinSecret, environment, cancellationToken, timeout)
                     .ConfigureAwait(false);
             }
         }
@@ -764,6 +868,7 @@ public sealed class CliRunner : IDisposable
         string executablePath,
         IReadOnlyList<string> args,
         SecretValue? stdinSecret,
+        IReadOnlyList<EnvironmentEntry> environment,
         CancellationToken callerToken,
         TimeSpan? timeout)
     {
@@ -791,18 +896,29 @@ public sealed class CliRunner : IDisposable
             startInfo.ArgumentList.Add(arg);
         }
 
+        // Touched only when there is something to overlay: reading Environment copies the whole
+        // parent environment into the start info, which a plain run has no reason to do. This sets
+        // the child's block and nothing else — Environment.SetEnvironmentVariable is never called, so
+        // the value cannot reach a later run, another panel's child, or this process's own environment.
+        foreach (var entry in environment)
+        {
+            startInfo.Environment[entry.Name] = entry.Value.Reveal();
+        }
+
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
 
         // Both streams complete asynchronously; wait for them so no trailing output is lost.
         var stdoutDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stderrDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // The per-call stdin secret is scrubbed from this run's output alongside the registered
-        // ones. It is not in _knownSecrets (it belongs to this one call), so without passing it
-        // down a child that echoes its stdin — a CLI reporting "invalid key: <key>" — would put the
-        // very value the wizard promised to keep out of the Activity panel straight into it.
-        process.OutputDataReceived += (_, e) => Capture(invocation, CliStream.StandardOutput, e.Data, stdoutDone, stdinSecret);
-        process.ErrorDataReceived += (_, e) => Capture(invocation, CliStream.StandardError, e.Data, stderrDone, stdinSecret);
+        // The per-call secrets — the stdin one and every environment value — are scrubbed from this
+        // run's output alongside the registered ones. They are not in _knownSecrets (they belong to
+        // this one call), so without passing them down a child that echoes what it was given — a CLI
+        // reporting "invalid key: <key>" — would put the very value the wizard promised to keep out
+        // of the Activity panel straight into it.
+        var callSecrets = CallSecrets(stdinSecret, environment);
+        process.OutputDataReceived += (_, e) => Capture(invocation, CliStream.StandardOutput, e.Data, stdoutDone, callSecrets);
+        process.ErrorDataReceived += (_, e) => Capture(invocation, CliStream.StandardError, e.Data, stderrDone, callSecrets);
 
         // One token for everything that may end this run early. The timeout is armed here, before
         // the launch, so the clock covers the whole life of the child. Shutdown is linked in only
@@ -825,6 +941,13 @@ public sealed class CliRunner : IDisposable
             // call, or a shutdown that began between registration and here.
             stop.Token.ThrowIfCancellationRequested();
             process.Start();
+
+            // The child has its own copy of the block now. Dropping ours keeps the plaintext from
+            // sitting in the start info for the rest of a run that can last half an hour.
+            foreach (var entry in environment)
+            {
+                _ = startInfo.Environment.Remove(entry.Name);
+            }
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
@@ -989,7 +1112,7 @@ public sealed class CliRunner : IDisposable
     /// <paramref name="stdinSecret"/> plus everything passed to
     /// <see cref="RegisterSecret"/>.
     /// </summary>
-    private void GuardArguments(IReadOnlyList<string> args, SecretValue? stdinSecret)
+    private void GuardArguments(IReadOnlyList<string> args, SecretValue? stdinSecret, IReadOnlyList<EnvironmentEntry> environment)
     {
         List<SecretValue> secrets;
         lock (_gate)
@@ -1001,6 +1124,9 @@ public sealed class CliRunner : IDisposable
         {
             secrets.Add(stdinSecret);
         }
+
+        // A value handed over in the environment must not also be on the command line.
+        secrets.AddRange(environment.Select(e => e.Value));
 
         if (secrets.Count == 0)
         {
@@ -1032,12 +1158,73 @@ public sealed class CliRunner : IDisposable
         }
     }
 
+    /// <summary>One validated, non-empty overlay entry: a variable name and the value it is set to.</summary>
+    private readonly record struct EnvironmentEntry(string Name, SecretValue Value);
+
+    /// <summary>
+    /// Checks <see cref="CliRunOptions.EnvironmentOverlay"/> and returns the entries that will be set,
+    /// ordered by name. Empty values are dropped (see the option's remarks). Messages name the
+    /// variable, never its value.
+    /// </summary>
+    /// <exception cref="ArgumentException">An invalid or duplicated name, or a null value.</exception>
+    private static EnvironmentEntry[] ResolveEnvironment(CliRunOptions? options)
+    {
+        var overlay = options?.EnvironmentOverlay;
+        if (overlay is null || overlay.Count == 0)
+        {
+            return Array.Empty<EnvironmentEntry>();
+        }
+
+        var entries = new List<EnvironmentEntry>(overlay.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, value) in overlay)
+        {
+            if (!CliRunOptions.IsValidEnvironmentName(name))
+            {
+                throw new ArgumentException(
+                    "An environment variable name in the overlay is not valid: names are letters, digits and underscores, " +
+                    "starting with a letter or underscore.",
+                    nameof(options));
+            }
+
+            if (value is null)
+            {
+                throw new ArgumentException($"Environment variable {name} has no value object.", nameof(options));
+            }
+
+            if (!seen.Add(name))
+            {
+                throw new ArgumentException($"Environment variable {name} appears twice in the overlay.", nameof(options));
+            }
+
+            if (!value.IsEmpty)
+            {
+                entries.Add(new EnvironmentEntry(name, value));
+            }
+        }
+
+        entries.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
+        return entries.ToArray();
+    }
+
+    private static SecretValue[] CallSecrets(SecretValue? stdinSecret, IReadOnlyList<EnvironmentEntry> environment)
+    {
+        var secrets = new List<SecretValue>(environment.Count + 1);
+        if (stdinSecret is { IsEmpty: false })
+        {
+            secrets.Add(stdinSecret);
+        }
+
+        secrets.AddRange(environment.Select(e => e.Value));
+        return secrets.ToArray();
+    }
+
     private void Capture(
         CliInvocation invocation,
         CliStream stream,
         string? data,
         TaskCompletionSource completion,
-        SecretValue? callSecret)
+        IReadOnlyList<SecretValue> callSecrets)
     {
         if (data is null)
         {
@@ -1045,15 +1232,15 @@ public sealed class CliRunner : IDisposable
             return;
         }
 
-        var line = new CliOutputLine(DateTimeOffset.UtcNow, stream, Scrub(data, callSecret));
+        var line = new CliOutputLine(DateTimeOffset.UtcNow, stream, Scrub(data, callSecrets));
         invocation.Append(line);
         OutputReceived?.Invoke(this, line);
     }
 
     /// <summary>
     /// Removes every secret that leaked into subprocess output: each one passed to
-    /// <see cref="RegisterSecret"/>, plus <paramref name="callSecret"/> — the per-call
-    /// <c>stdinSecret</c> of the run this line belongs to.
+    /// <see cref="RegisterSecret"/>, plus <paramref name="callSecrets"/> — the per-call
+    /// <c>stdinSecret</c> and environment values of the run this line belongs to.
     /// <para>
     /// Occurrences are replaced wherever they appear in a line, with no minimum length (unlike the
     /// argv guard, which skips substring checks below <see cref="MinimumSubstringGuardLength"/>):
@@ -1062,7 +1249,7 @@ public sealed class CliRunner : IDisposable
     /// splits it across lines; the secrets this app pipes in (tokens, API keys) are single-line.
     /// </para>
     /// </summary>
-    private string Scrub(string text, SecretValue? callSecret)
+    private string Scrub(string text, IReadOnlyList<SecretValue> callSecrets)
     {
         List<SecretValue>? secrets = null;
         lock (_gate)
@@ -1081,7 +1268,12 @@ public sealed class CliRunner : IDisposable
             }
         }
 
-        return callSecret is { IsEmpty: false } ? callSecret.Scrub(text) : text;
+        foreach (var secret in callSecrets)
+        {
+            text = secret.Scrub(text);
+        }
+
+        return text;
     }
 
     private void Record(CliInvocation invocation)

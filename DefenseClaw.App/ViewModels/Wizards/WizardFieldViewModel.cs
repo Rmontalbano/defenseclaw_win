@@ -1,8 +1,10 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services.Wizards;
+using DefenseClaw.Core.Config;
 
 namespace DefenseClaw.App.ViewModels.Wizards;
 
@@ -16,15 +18,22 @@ namespace DefenseClaw.App.ViewModels.Wizards;
 /// files plus its wizards, and a converter class per control kind would not earn its keep.
 /// </para>
 /// <para>
-/// <b>A secret field has no value.</b> <see cref="IsSecret"/> fields never hold, receive or send a
-/// secret: they show the credential card (which variable, is it set, how to store it) and nothing else.
-/// The reasons are in <see cref="SecretRoute"/>.
+/// <b>A secret field has no <see cref="Value"/>.</b> <see cref="IsSecret"/> fields never put a secret into
+/// <see cref="Value"/>, <see cref="WizardValues"/> or argv. They show the credential card (which variable, is it set,
+/// how to store it in a real console) and — only where the CLI reads the secret from an environment variable
+/// (<see cref="SecretRoute.InAppEnvName"/>) — a password box. What is typed there is held as a
+/// <see cref="SecureString"/> (the box's own copy, never a <c>string</c> property), read out only when a run needs it
+/// (<see cref="MaterializeSecret"/>) and dropped when the run ends (<see cref="ClearEntry"/>). The reasons and the
+/// evidence are in <see cref="SecretRoute"/>.
 /// </para>
 /// </summary>
 public sealed partial class WizardFieldViewModel : ObservableObject
 {
     private readonly WizardValues _values;
     private readonly WizardCredentials? _credentials;
+
+    /// <summary>The typed secret, exactly as the password box holds it. Null when nothing is held.</summary>
+    private SecureString? _entry;
 
     [ObservableProperty]
     private string _value = string.Empty;
@@ -51,6 +60,28 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// <summary>Set after the terminal button is pressed, or when it could not open one.</summary>
     [ObservableProperty]
     private string _credentialMessage = string.Empty;
+
+    /// <summary>
+    /// The variable the CLI will read the secret from if this app supplies it (empty when the flag has no
+    /// in-app route). A <i>name</i>, never a value. Re-derived by <see cref="RefreshCredential"/>.
+    /// </summary>
+    [ObservableProperty]
+    private string _inAppEnvName = string.Empty;
+
+    /// <summary>True while a typed value is held. Says nothing about what the value is.</summary>
+    [ObservableProperty]
+    private bool _hasEntry;
+
+    /// <summary>Why the typed value cannot be sent (a control character in it), or empty.</summary>
+    [ObservableProperty]
+    private string _entryProblem = string.Empty;
+
+    /// <summary>
+    /// Set when the app itself dropped a typed value — the run ended, or the destination it was typed for
+    /// changed — so the operator is told rather than left wondering why the box is empty.
+    /// </summary>
+    [ObservableProperty]
+    private string _entryNotice = string.Empty;
 
     public WizardFieldViewModel(WizardField field, WizardValues values, WizardCredentials? credentials = null)
     {
@@ -99,7 +130,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
     public bool IsPath => Field.Kind == WizardFieldKind.Path;
 
-    /// <summary>The credential card is shown instead of an input. See the type remarks.</summary>
+    /// <summary>The credential card is shown instead of an ordinary input. See the type remarks.</summary>
     public bool IsSecret => Field.Kind == WizardFieldKind.Secret;
 
     /// <summary>A repeatable flag: a multi-line box, one value per line.</summary>
@@ -141,11 +172,158 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
     public bool HasCredentialMessage => CredentialMessage.Length > 0;
 
-    /// <summary>Why the app does not take the value itself, in one paragraph, for the card.</summary>
-    public string CredentialExplanation =>
-        "This app never takes the secret itself. The command reads it from a variable in ~/.defenseclaw/.env, and " +
-        "`defenseclaw keys set` — the CLI's own hidden prompt — is the only way to store it that does not put it on a command " +
-        "line, and on Windows it reads a real console, not a pipe.";
+    /// <summary>
+    /// The terminal route in one paragraph, for the card. Where the app can also take the value
+    /// (<see cref="OffersInAppEntry"/>) it is the alternative; otherwise it is the only way.
+    /// </summary>
+    public string CredentialExplanation => OffersInAppEntry
+        ? "Or store it once from a real console instead: `defenseclaw keys set` is the CLI's own hidden prompt, and the " +
+          "command then reads the value from ~/.defenseclaw/.env by name. On Windows that prompt reads a console, not a pipe."
+        : "This app never takes the secret itself. The command reads it from a variable in ~/.defenseclaw/.env, and " +
+          "`defenseclaw keys set` — the CLI's own hidden prompt — is the only way to store it that does not put it on a command " +
+          "line, and on Windows it reads a real console, not a pipe.";
+
+    // ------------------------------------------------------------------ in-app entry
+
+    /// <summary>
+    /// A password box is shown: the CLI reads this secret from an environment variable, so this app can take the
+    /// value and supply it in the child's environment for one run. See <see cref="SecretRoute.InAppEnvName"/>.
+    /// </summary>
+    public bool OffersInAppEntry => IsSecret && InAppEnvName.Length > 0;
+
+    public bool HasEntryProblem => EntryProblem.Length > 0;
+
+    public bool HasEntryNotice => EntryNotice.Length > 0;
+
+    /// <summary>The name a screen reader announces for the password box.</summary>
+    public string InAppAutomationName => CredentialPurpose + " (hidden entry)";
+
+    /// <summary>What supplying the value does, in one paragraph, for the card. Names, never a value.</summary>
+    public string InAppExplanation
+    {
+        get
+        {
+            var stored = CredentialEnvName.Length > 0 && !string.Equals(CredentialEnvName, InAppEnvName, StringComparison.Ordinal)
+                ? $" the CLI stores it as {CredentialEnvName} in ~/.defenseclaw/.env."
+                : " the CLI stores it in ~/.defenseclaw/.env.";
+
+            return $"Type it here and this app supplies it to the command as the environment variable {InAppEnvName} — for that one " +
+                   $"run only, never on the command line — and{stored} The box is cleared as soon as the run ends.";
+        }
+    }
+
+    /// <summary>One line under the box: what is held, or why it cannot be used. Never the value or its length.</summary>
+    public string EntryStatus => EntryProblem.Length > 0
+        ? EntryProblem
+        : HasEntry
+            ? $"A value is entered (hidden). It goes to the command as {InAppEnvName}, then is cleared."
+            : EntryNotice.Length > 0
+                ? EntryNotice
+                : "Nothing entered. The command uses the stored variable, if any.";
+
+    /// <summary>
+    /// What the review page says about this credential: how the command will get it. For an in-app secret with
+    /// a value it is the sentence the review must carry — supplied as an environment variable NAME, value masked.
+    /// </summary>
+    public string CredentialReviewNote
+    {
+        get
+        {
+            if (!OffersInAppEntry)
+            {
+                return "This app does not send it; the command reads it by name.";
+            }
+
+            return HasEntry
+                ? $"Supplied to the command as the environment variable {InAppEnvName}=••• (value masked; this run only, not on the command line)."
+                : $"Nothing entered here; the command reads {(CredentialEnvName.Length > 0 ? CredentialEnvName : InAppEnvName)} from ~/.defenseclaw/.env if it is stored. Go back to type a value.";
+        }
+    }
+
+    /// <summary>Raised when <see cref="ClearEntry"/> dropped a held value, so the password box can empty itself.</summary>
+    public event EventHandler? EntryCleared;
+
+    /// <summary>
+    /// The password box reports what is typed. <paramref name="value"/> must be a copy the caller hands over
+    /// (<c>PasswordBox.SecurePassword</c> is one); this takes ownership and disposes the previous entry.
+    /// </summary>
+    public void SetEntry(SecureString? value)
+    {
+        if (!OffersInAppEntry)
+        {
+            // Not a field that takes a value here: refuse to hold one rather than keep it unused.
+            value?.Dispose();
+            return;
+        }
+
+        var shape = SecretEntry.Inspect(value);
+        var usable = !shape.IsEmpty && !shape.HasControlCharacter;
+
+        // A value the CLI would refuse is not held: better an empty state and a message than a secret kept
+        // for nothing.
+        var previous = _entry;
+        _entry = usable ? value : null;
+        if (!usable)
+        {
+            value?.Dispose();
+        }
+
+        previous?.Dispose();
+
+        EntryProblem = shape.HasControlCharacter
+            ? "That value has a line break or another control character in it, which the CLI refuses. Paste it again."
+            : string.Empty;
+
+        // Typing something new answers a "was cleared" notice; the empty report a cleared box sends back
+        // (PasswordBox.Clear raises PasswordChanged) must not wipe the notice that explains the clearing.
+        if (!shape.IsEmpty)
+        {
+            EntryNotice = string.Empty;
+        }
+
+        HasEntry = usable;
+        NotifyEntryChanged();
+    }
+
+    /// <summary>
+    /// The held value as a <see cref="SecretValue"/> for the run that is about to start, or null when there is
+    /// nothing usable (no value, only whitespace, or a control character in it). The caller passes it straight to
+    /// <see cref="Core.Cli.CliRunOptions.WithEnvironment"/>; nothing here keeps it.
+    /// </summary>
+    internal SecretValue? MaterializeSecret() => OffersInAppEntry ? SecretEntry.ToSecret(_entry) : null;
+
+    /// <summary>
+    /// Drops the held value and tells the password box to empty itself. Called when a run has ended, when the
+    /// wizard closes, and when the destination the value was typed for changes.
+    /// </summary>
+    /// <param name="notice">A sentence for <see cref="EntryStatus"/> saying why, or empty for none.</param>
+    public void ClearEntry(string notice = "")
+    {
+        var held = _entry is not null || EntryProblem.Length > 0;
+
+        _entry?.Dispose();
+        _entry = null;
+
+        EntryProblem = string.Empty;
+        EntryNotice = held ? notice : string.Empty;
+        HasEntry = false;
+        NotifyEntryChanged();
+
+        if (held)
+        {
+            EntryCleared?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>The card's Clear button: forget what was typed.</summary>
+    [RelayCommand]
+    private void DiscardEntry() => ClearEntry();
+
+    private void NotifyEntryChanged()
+    {
+        OnPropertyChanged(nameof(EntryStatus));
+        OnPropertyChanged(nameof(CredentialReviewNote));
+    }
 
     /// <summary>
     /// Re-derives which variable the command will read (it can depend on other answers, such as the
@@ -161,7 +339,18 @@ public sealed partial class WizardFieldViewModel : ObservableObject
         }
 
         var name = Field.Credential?.EnvName(_values)?.Trim() ?? string.Empty;
+        var inApp = Field.Credential?.InAppVariable(_values) ?? string.Empty;
+
+        // A value typed for one destination must not follow the operator to another (choosing a different
+        // preset changes where the token is stored), and must not outlive its route disappearing.
+        if (_entry is not null &&
+            (!string.Equals(name, CredentialEnvName, StringComparison.Ordinal) || inApp.Length == 0))
+        {
+            ClearEntry("The value you entered was cleared because the destination changed. Enter it again.");
+        }
+
         CredentialEnvName = name;
+        InAppEnvName = inApp;
 
         if (name.Length == 0)
         {
@@ -183,6 +372,8 @@ public sealed partial class WizardFieldViewModel : ObservableObject
         OnPropertyChanged(nameof(HasCredentialEnvName));
         OnPropertyChanged(nameof(CredentialCommand));
         OnPropertyChanged(nameof(CanOpenTerminal));
+        OnPropertyChanged(nameof(InAppExplanation));
+        NotifyEntryChanged();
     }
 
     [RelayCommand]
@@ -226,9 +417,10 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// <summary>Validates in isolation; returns the message, or empty when the answer is fine.</summary>
     public string Validate()
     {
+        // A secret has no Value to check; the only thing that can be wrong is a typed entry the CLI would refuse.
         if (IsSecret)
         {
-            return string.Empty;
+            return EntryProblem;
         }
 
         var value = Value.Trim();
@@ -289,6 +481,17 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     partial void OnValidationErrorChanged(string value) => OnPropertyChanged(nameof(HasValidationError));
 
     partial void OnCredentialMessageChanged(string value) => OnPropertyChanged(nameof(HasCredentialMessage));
+
+    partial void OnInAppEnvNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(OffersInAppEntry));
+        OnPropertyChanged(nameof(CredentialExplanation));
+        OnPropertyChanged(nameof(InAppExplanation));
+    }
+
+    partial void OnEntryProblemChanged(string value) => OnPropertyChanged(nameof(HasEntryProblem));
+
+    partial void OnEntryNoticeChanged(string value) => OnPropertyChanged(nameof(HasEntryNotice));
 
     /// <summary>What a screen reader announces when this row is reached as an item.</summary>
     public override string ToString() => Label + " (" + FlagDisplay + ")";

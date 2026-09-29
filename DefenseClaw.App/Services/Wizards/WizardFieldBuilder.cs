@@ -16,7 +16,9 @@ namespace DefenseClaw.App.Services.Wizards;
 /// piped to stdin either: the CLI reads none of these flags from stdin, and its hidden-prompt
 /// reader (<c>getpass</c>) ignores a redirected pipe on Windows. Such a field is rendered as a
 /// credential card that names the environment variable and hands the operator to
-/// <c>defenseclaw keys set</c> in a real console — see <see cref="SecretRoute"/>.
+/// <c>defenseclaw keys set</c> in a real console — and, where the CLI reads the secret from an environment
+/// variable, also takes it in a password box and supplies it in the child's environment — see
+/// <see cref="SecretRoute"/>.
 /// </para>
 /// </summary>
 public static class WizardFieldBuilder
@@ -298,7 +300,7 @@ public static class WizardFieldBuilder
     private static string PlaceholderFor(ParsedOption option, WizardFieldKind kind) => kind switch
     {
         WizardFieldKind.EnvVarName => "ENV_VAR_NAME",
-        WizardFieldKind.Secret => "stored with `defenseclaw keys set`, never typed here",
+        WizardFieldKind.Secret => "stored with `defenseclaw keys set` or typed in the hidden box, never on the command line",
         WizardFieldKind.Path => "path",
         WizardFieldKind.Integer => "whole number",
         WizardFieldKind.Number => "number, e.g. 15 or 2.5",

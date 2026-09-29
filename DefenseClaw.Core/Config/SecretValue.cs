@@ -28,7 +28,7 @@ public sealed class SecretValue : IEquatable<SecretValue>
 
     /// <summary>
     /// Returns the raw secret. Only call this when handing the value to a sink that
-    /// genuinely needs it (an Authorization header, a child process's stdin).
+    /// genuinely needs it (an Authorization header, a child process's stdin or environment block).
     /// </summary>
     public string Reveal() => _value;
 

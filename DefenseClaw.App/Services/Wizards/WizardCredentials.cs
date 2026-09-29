@@ -28,10 +28,12 @@ public enum CredentialPresence
 /// The credential side of the wizards: "is the variable the command will read set?" and "let me type
 /// it into a real console".
 /// <para>
-/// <b>The app never sees a secret.</b> The presence check reads <c>.env</c> only to learn whether a key
+/// <b>This class never sees a secret.</b> The presence check reads <c>.env</c> only to learn whether a key
 /// has a non-empty value and immediately discards the text; nothing is cached, logged or returned.
-/// Storing a value is done by <c>defenseclaw keys set NAME</c> in a console the operator types into —
-/// see <see cref="SecretRoute"/> for why no piped route exists on Windows.
+/// Storing a value from here is done by <c>defenseclaw keys set NAME</c> in a console the operator types into —
+/// see <see cref="SecretRoute"/> for why no piped route exists on Windows. (A value typed into the wizard's
+/// password box, for the flags whose CLI reads an environment variable, never passes through this class either:
+/// it goes from the box to the run's environment overlay.)
 /// </para>
 /// </summary>
 public sealed class WizardCredentials

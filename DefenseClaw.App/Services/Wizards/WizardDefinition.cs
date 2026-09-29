@@ -66,10 +66,12 @@ public enum WizardFieldKind
 
     /// <summary>
     /// A flag that takes a real secret. Never reaches argv (<see cref="Core.Cli.CliRunner"/> would refuse
-    /// it) and — verified on 0.8.10 — is never read from stdin by the CLI either, so this app does not
-    /// collect the value at all: the field renders as a credential card that names the environment
-    /// variable and points the operator at <c>defenseclaw keys set</c> in a real terminal. See
-    /// <see cref="SecretRoute"/> for the evidence.
+    /// it) and — verified on 0.8.10 — is never read from stdin by the CLI either. The field renders as a
+    /// credential card that names the environment variable and points the operator at
+    /// <c>defenseclaw keys set</c> in a real terminal; where the CLI also reads the secret from an environment
+    /// variable, the card has a password box too, and the value reaches that one run in the child's
+    /// environment (<see cref="Core.Cli.CliRunOptions.EnvironmentOverlay"/>), never in <see cref="WizardValues"/>.
+    /// See <see cref="SecretRoute"/> for the evidence.
     /// </summary>
     Secret,
 
@@ -539,7 +541,8 @@ public sealed class WizardDefinition
         switch (field.Kind)
         {
             // A secret never reaches argv or stdin: it lives in ~/.defenseclaw/.env and the CLI reads
-            // it by variable name. See SecretRoute.
+            // it by variable name — or, typed in the app, travels in the child's environment (see
+            // WizardViewModel.BuildRunOptions), which is not argv. See SecretRoute.
             case WizardFieldKind.Secret:
                 return;
 
