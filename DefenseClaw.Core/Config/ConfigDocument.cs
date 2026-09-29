@@ -42,9 +42,31 @@ public sealed class ConfigDocument
     public string? SectionText(string name) => Sections.TryGetValue(name, out var text) ? text : null;
 
     /// <summary>
+    /// The line terminator this file uses: <c>"\r\n"</c> when its first line break is a CRLF (a file
+    /// Windows tooling wrote — the DefenseClaw CLI's own <c>config.yaml</c> is one), otherwise
+    /// <c>"\n"</c>, which is also the answer for text with no line break at all. Anything the app
+    /// has to add to the file itself — the newline that closes a last line, the one that separates
+    /// an appended section — uses this, so a CRLF file is never left with a stray bare LF.
+    /// </summary>
+    public string LineEnding => DetectLineEnding(RawText) ?? "\n";
+
+    /// <summary>
+    /// <paramref name="text"/> (a section block bound for this document) with its last line
+    /// terminated, using the block's own line ending when it has one and the file's otherwise.
+    /// Text that already ends in a line break is returned unchanged.
+    /// </summary>
+    public string WithTrailingLineEnding(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        return text.EndsWith('\n') ? text : text + (DetectLineEnding(text) ?? LineEnding);
+    }
+
+    /// <summary>
     /// Returns <see cref="RawText"/> with one top-level section's block swapped for
     /// <paramref name="replacement"/>, leaving every other byte alone. Appends the
-    /// section when it is absent.
+    /// section when it is absent. Any line break this has to add (see
+    /// <see cref="WithTrailingLineEnding"/>) matches the file's own, so a CRLF file stays CRLF.
     /// </summary>
     public string WithSectionReplaced(string name, string replacement)
     {
@@ -53,8 +75,8 @@ public sealed class ConfigDocument
 
         if (!Sections.TryGetValue(name, out var existing))
         {
-            var separator = RawText.Length == 0 || RawText.EndsWith('\n') ? string.Empty : "\n";
-            return RawText + separator + EnsureTrailingNewline(replacement);
+            var separator = RawText.Length == 0 || RawText.EndsWith('\n') ? string.Empty : LineEnding;
+            return RawText + separator + WithTrailingLineEnding(replacement);
         }
 
         var index = RawText.IndexOf(existing, StringComparison.Ordinal);
@@ -65,10 +87,19 @@ public sealed class ConfigDocument
 
         return string.Concat(
             RawText.AsSpan(0, index),
-            EnsureTrailingNewline(replacement),
+            WithTrailingLineEnding(replacement),
             RawText.AsSpan(index + existing.Length));
     }
 
-    private static string EnsureTrailingNewline(string text) =>
-        text.EndsWith('\n') ? text : text + "\n";
+    /// <summary>The terminator of the first line break in <paramref name="text"/>, or <see langword="null"/> when there is none.</summary>
+    private static string? DetectLineEnding(string text)
+    {
+        var lf = text.IndexOf('\n');
+        if (lf < 0)
+        {
+            return null;
+        }
+
+        return lf > 0 && text[lf - 1] == '\r' ? "\r\n" : "\n";
+    }
 }

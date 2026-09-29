@@ -131,14 +131,23 @@ public class GuardrailStatusParserTests
         Assert.Equal("Claude Code", status.Connectors[0].Name);
     }
 
-    [Fact]
-    public void Windows_line_endings_parse_the_same()
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    [InlineData("\r\r\n")]
+    [InlineData("\r")]
+    public void Windows_line_endings_parse_the_same(string eol)
     {
-        var status = GuardrailStatusParser.Parse(Status(Table(TwoConnectors)).Replace("\n", "\r\n", StringComparison.Ordinal));
+        // A CRLF-writing child piped through a second translation prints "\r\r\n"; a lone "\r" is old-Mac text.
+        var status = GuardrailStatusParser.Parse(Status(Table(TwoConnectors)).Replace("\n", eol, StringComparison.Ordinal));
 
+        Assert.True(status.Enabled);
         Assert.Equal(2, status.Connectors.Count);
         Assert.Equal("Claude Code", status.Connectors[0].Name);
+        Assert.Equal("closed", status.Connectors[0].Fail);
+        Assert.Equal("on", status.Connectors[1].Column("Judge"));
         Assert.Equal("4000", status.Port);
+        Assert.Equal("runtime fail-mode drift: settings.json says open, the gateway says closed", Assert.Single(status.Warnings));
         Assert.DoesNotContain("\r", status.Warnings[0], StringComparison.Ordinal);
     }
 

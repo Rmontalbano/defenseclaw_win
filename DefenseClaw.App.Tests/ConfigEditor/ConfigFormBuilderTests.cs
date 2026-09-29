@@ -37,10 +37,11 @@ public class ConfigFormBuilderTests
         }
     }
 
-    private static Built Build(string source = ConfigSamples.MaskedSource, string raw = ConfigSamples.Raw)
+    private static Built Build(string? source = null, string? raw = null)
     {
         var built = new Built();
-        built.Result = ConfigFormBuilder.Build(source, ConfigStore.Parse(raw), built.FieldCommits.Add, built.ListCommits.Add);
+        built.Result = ConfigFormBuilder.Build(
+            source ?? ConfigSamples.MaskedSource, ConfigStore.Parse(raw ?? ConfigSamples.Raw), built.FieldCommits.Add, built.ListCommits.Add);
         return built;
     }
 

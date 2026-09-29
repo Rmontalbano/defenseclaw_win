@@ -6,10 +6,12 @@ namespace DefenseClaw.App.Tests.TestSupport;
 /// <summary>
 /// Click help screens shaped like the real 0.8.10 ones, and the same pipeline <c>WizardCatalog</c> runs on
 /// them (parse, curate, Windows policy, secret routes) — minus the CLI probe, which is what makes it testable.
+/// The screens are held as LF whatever the source file was checked out with (see <see cref="LineEndings"/>);
+/// <see cref="LineEndings.With"/> turns one into the CRLF text the real CLI pipes.
 /// </summary>
 internal static class WizardSamples
 {
-    public const string ClaudeCodeHelp = """
+    public static readonly string ClaudeCodeHelp = LineEndings.Normalize("""
         Usage: defenseclaw setup claude-code [OPTIONS]
 
           Configure DefenseClaw hooks for Claude Code.
@@ -43,9 +45,9 @@ internal static class WizardSamples
                                           [default: restart]
           -y, --yes                       Do not prompt.
           --help                          Show this message and exit.
-        """;
+        """);
 
-    public const string LlmHelp = """
+    public static readonly string LlmHelp = LineEndings.Normalize("""
         Usage: defenseclaw setup llm [OPTIONS]
 
           Configure the unified LLM provider block.
@@ -62,9 +64,9 @@ internal static class WizardSamples
           --region TEXT         Cloud region.
           --non-interactive     Never prompt.
           --help                Show this message and exit.
-        """;
+        """);
 
-    public const string ObservabilityHelp = """
+    public static readonly string ObservabilityHelp = LineEndings.Normalize("""
         Usage: defenseclaw setup observability [OPTIONS] COMMAND [ARGS]...
 
           Manage telemetry destinations.
@@ -75,9 +77,9 @@ internal static class WizardSamples
         Commands:
           add   Add a destination from a preset.
           list  List configured destinations.
-        """;
+        """);
 
-    public const string ObservabilityAddHelp = """
+    public static readonly string ObservabilityAddHelp = LineEndings.Normalize("""
         Usage: defenseclaw setup observability add [OPTIONS] <preset>
 
           Add a destination from a preset.
@@ -86,7 +88,7 @@ internal static class WizardSamples
           --token TEXT   Destination token.
           --name TEXT    Destination name.
           --help         Show this message and exit.
-        """;
+        """);
 
     /// <summary>The curated + filtered + annotated definition the catalog would build for claude-code.</summary>
     public static WizardDefinition ClaudeCode()

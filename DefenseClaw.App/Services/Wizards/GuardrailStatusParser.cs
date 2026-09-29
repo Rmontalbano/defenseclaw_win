@@ -73,7 +73,7 @@ public static partial class GuardrailStatusParser
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var lines = CliText.NormalizeLineEndings(text).Split('\n');
         bool? enabled = null;
         var port = string.Empty;
         var warnings = new List<string>();

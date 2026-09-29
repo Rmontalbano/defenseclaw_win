@@ -184,6 +184,103 @@ public class ConfigStoreTests
         Assert.Equal("claw:\n  mode: claudecode\ngateway:\n  api_port: 18970\n", updated);
     }
 
+    // ------------------------------------------------------------------ line endings
+    //
+    // The DefenseClaw CLI writes config.yaml with CRLF on Windows. Whatever this library has to add to that file
+    // itself — the newline that closes a last line, the one that separates an appended section — must be the file's
+    // own, or a FORM edit leaves a CRLF file with a stray bare LF. The literals below are built from the line ending
+    // under test, so they mean the same however this source file was checked out.
+
+    [Theory]
+    [InlineData("a: 1\nb: 2\n", "\n")]
+    [InlineData("a: 1\r\nb: 2\r\n", "\r\n")]
+    [InlineData("a: 1\r\nb: 2\n", "\r\n")]
+    [InlineData("a: 1\nb: 2\r\n", "\n")]
+    [InlineData("a: 1", "\n")]
+    [InlineData("", "\n")]
+    [InlineData("\r\n", "\r\n")]
+    public void LineEnding_is_the_files_first_line_break_and_LF_when_there_is_none(string yaml, string expected)
+    {
+        Assert.Equal(expected, ConfigStore.Parse(yaml).LineEnding);
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void Sections_keep_their_own_line_terminators(string eol)
+    {
+        var document = ConfigStore.Parse($"claw:{eol}  mode: claudecode{eol}gateway:{eol}  api_port: 18970{eol}");
+
+        Assert.Equal($"claw:{eol}  mode: claudecode{eol}", document.SectionText("claw"));
+        Assert.Equal($"gateway:{eol}  api_port: 18970{eol}", document.SectionText("gateway"));
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void WithSectionReplaced_in_the_middle_changes_only_that_section(string eol)
+    {
+        var yaml = $"claw:{eol}  mode: claudecode{eol}gateway:{eol}  api_port: 18970{eol}guardrail:{eol}  mode: observe{eol}";
+        var document = ConfigStore.Parse(yaml);
+
+        var updated = document.WithSectionReplaced("gateway", $"gateway:{eol}  api_port: 4000{eol}");
+
+        Assert.Equal($"claw:{eol}  mode: claudecode{eol}gateway:{eol}  api_port: 4000{eol}guardrail:{eol}  mode: observe{eol}", updated);
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void WithSectionReplaced_closes_an_unterminated_last_line_with_the_files_own_line_ending(string eol)
+    {
+        var yaml = $"claw:{eol}  mode: claudecode{eol}gateway:{eol}  api_port: 18970";
+        var document = ConfigStore.Parse(yaml);
+
+        var updated = document.WithSectionReplaced("gateway", $"gateway:{eol}  api_port: 4000");
+
+        Assert.Equal($"claw:{eol}  mode: claudecode{eol}gateway:{eol}  api_port: 4000{eol}", updated);
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void WithSectionReplaced_uses_the_files_line_ending_for_a_replacement_that_has_none_of_its_own(string eol)
+    {
+        var yaml = $"claw:{eol}  mode: claudecode{eol}gateway:{eol}  api_port: 18970{eol}";
+        var document = ConfigStore.Parse(yaml);
+
+        var updated = document.WithSectionReplaced("gateway", "gateway: {}");
+
+        Assert.Equal($"claw:{eol}  mode: claudecode{eol}gateway: {{}}{eol}", updated);
+    }
+
+    [Theory]
+    [InlineData("\n", true)]
+    [InlineData("\n", false)]
+    [InlineData("\r\n", true)]
+    [InlineData("\r\n", false)]
+    public void WithSectionReplaced_appends_a_missing_section_in_the_files_line_ending(string eol, bool endsWithNewline)
+    {
+        var yaml = $"claw:{eol}  mode: claudecode" + (endsWithNewline ? eol : string.Empty);
+        var document = ConfigStore.Parse(yaml);
+
+        var updated = document.WithSectionReplaced("gateway", $"gateway:{eol}  api_port: 18970");
+
+        Assert.Equal($"claw:{eol}  mode: claudecode{eol}gateway:{eol}  api_port: 18970{eol}", updated);
+    }
+
+    [Theory]
+    [InlineData("a: 1\r\n", "b: 2", "b: 2\r\n")]
+    [InlineData("a: 1\n", "b: 2", "b: 2\n")]
+    [InlineData("", "b: 2", "b: 2\n")]
+    [InlineData("a: 1", "b: 2", "b: 2\n")]
+    [InlineData("a: 1\r\n", "b: 2\r\n", "b: 2\r\n")]
+    [InlineData("a: 1\r\n", "b:\n  c: 2", "b:\n  c: 2\n")]
+    public void WithTrailingLineEnding_terminates_a_block_with_its_own_line_ending_else_the_files(string yaml, string text, string expected)
+    {
+        Assert.Equal(expected, ConfigStore.Parse(yaml).WithTrailingLineEnding(text));
+    }
+
     [Fact]
     public void Missing_config_file_yields_defaults_rather_than_throwing()
     {

@@ -7,8 +7,8 @@ namespace DefenseClaw.App.Tests.TestSupport;
 /// </summary>
 internal static class ConfigSamples
 {
-    /// <summary>The file on disk.</summary>
-    public const string Raw = """
+    /// <summary>The file on disk (LF; <see cref="LineEndings.With"/> gives the CRLF form).</summary>
+    public static readonly string Raw = LineEndings.Normalize("""
         config_version: 8
         gateway:
           host: 127.0.0.1
@@ -39,10 +39,10 @@ internal static class ConfigSamples
           - https://h.example.test/secret-path
         observability: {}
 
-        """;
+        """);
 
     /// <summary>What the CLI prints for <see cref="Raw"/>: sorted keys, secrets and header values masked.</summary>
-    public const string MaskedSource = """
+    public static readonly string MaskedSource = LineEndings.Normalize("""
         config_version: 8
         gateway:
           api_port: 18970
@@ -74,5 +74,5 @@ internal static class ConfigSamples
           temperature: 0.2
         observability: {}
 
-        """;
+        """);
 }

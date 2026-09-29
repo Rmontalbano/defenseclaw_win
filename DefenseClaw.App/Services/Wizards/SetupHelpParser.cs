@@ -94,8 +94,11 @@ public sealed record ParsedHelp
 /// </summary>
 public static class SetupHelpParser
 {
+    // Horizontal whitespace only after the status word. A bare "\s*" there also crossed line breaks, so a
+    // status line with no note followed by a bulleted line ("- something") read that dash as the separator
+    // and took the next line as the note.
     private static readonly Regex PlatformStatusPattern = new(
-        @"Platform status on \w+:\s*(?<status>[a-z_]+)\s*(?:[—–-]\s*(?<note>.*))?",
+        @"Platform status on \w+:\s*(?<status>[a-z_]+)[ \t]*(?:[—–-][ \t]*(?<note>.*))?",
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         TimeSpan.FromSeconds(1));
 
@@ -118,13 +121,17 @@ public static class SetupHelpParser
     {
         ArgumentNullException.ThrowIfNull(helpText);
 
-        var lines = helpText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        // Real help text arrives CRLF (the CLI's stdout on Windows), so normalise once, up front: every
+        // later step — the column-0 heading checks, the indent arithmetic, the status match — then sees
+        // exactly the LF layout it was written against.
+        var normalized = CliText.NormalizeLineEndings(helpText);
+        var lines = normalized.Split('\n');
 
         var usage = ExtractUsage(lines);
         var description = ExtractDescription(lines);
         var options = ParseOptions(lines);
         var (status, note) = ExtractPlatformStatus(
-            description.Length > 0 ? description : helpText,
+            description.Length > 0 ? description : normalized,
             connectorShaped: IsConnectorShaped(options));
 
         return new ParsedHelp
@@ -160,7 +167,9 @@ public static class SetupHelpParser
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        var match = PlatformStatusPattern.Match(text);
+        // Public entry point, so it cannot assume Parse got here first: a CRLF screen handed straight in
+        // must still read its status line (and note) the same as the LF one.
+        var match = PlatformStatusPattern.Match(CliText.NormalizeLineEndings(text));
         if (!match.Success)
         {
             return (connectorShaped ? PlatformStatus.Certified : PlatformStatus.NotApplicable, string.Empty);

@@ -9,7 +9,7 @@ namespace DefenseClaw.App.Tests.Wizards;
 /// </summary>
 public class WizardBaselineTests
 {
-    private const string ObserveConfig = """
+    private static readonly string ObserveConfig = LineEndings.Normalize("""
         guardrail:
           connector: claudecode
           connectors:
@@ -18,9 +18,9 @@ public class WizardBaselineTests
               hook_fail_mode: closed
               block_message: ''
               rule_pack_dir: ''
-        """;
+        """);
 
-    private const string ActionConfig = """
+    private static readonly string ActionConfig = LineEndings.Normalize("""
         guardrail:
           connector: claudecode
           connectors:
@@ -29,7 +29,7 @@ public class WizardBaselineTests
               hook_fail_mode: closed
               block_message: ''
               rule_pack_dir: ''
-        """;
+        """);
 
     private static WizardDefinition Applied(string configYaml, bool readable = true) =>
         WizardBaseline.Apply(WizardSamples.ClaudeCode(), WizardSamples.Config(configYaml), readable);

@@ -894,7 +894,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     /// <summary>True when re-splitting the patched text gives the new section text and leaves every other section exactly as it was.</summary>
     private static bool OnlySectionChanged(ConfigDocument before, ConfigDocument after, string sectionName, string patchedSectionText)
     {
-        var expectedSection = patchedSectionText.EndsWith('\n') ? patchedSectionText : patchedSectionText + "\n";
+        // WithSectionReplaced closes an unterminated last line with the file's own line ending, so this
+        // has to ask the same question: a hard-coded "\n" would refuse every edit to a CRLF file's
+        // final section when that file has no newline at the end.
+        var expectedSection = before.WithTrailingLineEnding(patchedSectionText);
         if (!string.Equals(after.SectionText(sectionName), expectedSection, StringComparison.Ordinal))
         {
             return false;
