@@ -25,6 +25,35 @@
     <ApplicationIcon>Assets\DefenseClaw.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!--
+    Release publish tuning. Only the self-contained single-file publish (the release recipe in
+    .github/workflows/ci.yml) sees this; build, test and any other publish are untouched.
+
+    This is a login-autostart tray app, so what a user feels is how fast it gets to a tray icon.
+    The app is NOT trimmed and must stay that way (WPF's BAML/reflection, the config model and the
+    view-model bindings are all reflection-driven); nothing below trims.
+
+    PublishReadyToRun: precompiles the app and its NuGet assemblies (App, Core, WPF-UI, YamlDotNet,
+    CommunityToolkit, AvalonEdit, H.NotifyIcon, ...), so startup runs native code instead of
+    JIT-compiling ~1,000 methods first. Measured with a startup harness (not the app exe): 1,049
+    methods / ~130-150 ms of JIT down to 359 / ~55 ms. The shared framework already ships
+    precompiled and is left as Microsoft built it: PublishReadyToRunComposite=false. The default for a
+    self-contained publish is a composite image that recompiles the framework too (+25 MB, and a
+    ~99 MB image the single-file host has to extract on first run) for no measurable wall-clock gain.
+
+    EnableCompressionInSingleFile: 186 MB -> 81 MB (the download). Unlike a self-extracted native
+    library, a compressed managed assembly is inflated in memory on every launch, not once, so this
+    is a real per-start cost (+15-80 ms in the harness). It was more than paid back there by
+    starting a file less than half the size (hundreds of ms before Main on the dev machine), but
+    that part depends on the machine's disk and antivirus: if a cold-start measurement of the
+    real exe says otherwise, deleting the one line turns it off.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and '$(SelfContained)' == 'true' and '$(PublishSingleFile)' == 'true'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRunComposite>false</PublishReadyToRunComposite>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\DefenseClaw.Core\DefenseClaw.Core.csproj" />
   </ItemGroup>

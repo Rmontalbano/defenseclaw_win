@@ -13,9 +13,15 @@ namespace DefenseClaw.App;
 /// Application entry point and composition root driver.
 /// <para>
 /// Order matters here: last-resort exception handlers, then the single-instance check,
+/// then the config read (started on a pool thread) overlapped with theming,
 /// then services (which resolves the gateway token and hands it to
-/// <c>CliRunner.RegisterSecret</c> before anything can shell out), then theming, then the
-/// tray, then the window, then the poll loop.
+/// <c>CliRunner.RegisterSecret</c> before anything can shell out), then the tray, then — unless
+/// the launch is <c>--minimized</c> — the window, then the poll loop.
+/// </para>
+/// <para>
+/// <b>The dashboard window is built on demand</b> (<see cref="DashboardHost"/>): an autostart
+/// launch is tray-only, so it never constructs the window at all until the operator asks for it.
+/// Nothing in this class may assume it exists — go through <see cref="_dashboard"/>.
 /// </para>
 /// <para>
 /// <b>Why the handlers are wired first.</b> This app runs with
@@ -29,7 +35,8 @@ namespace DefenseClaw.App;
 /// <para>
 /// <b>Continue-or-die criterion.</b> <see cref="DispatcherUnhandledException"/> is marked
 /// handled only once <see cref="_shellReady"/> is true — that is, once the tray icon, the
-/// window and the poll loop all exist. Before that point the object graph is half-built:
+/// window (unless the launch is <c>--minimized</c>) and the poll loop all exist. Before that
+/// point the object graph is half-built:
 /// there may be no tray icon to quit from and no monitoring to preserve, so swallowing
 /// would produce an invisible process with no user-reachable control surface. Those faults
 /// are logged and allowed to terminate the process. After that point the tray is a
@@ -62,15 +69,15 @@ public partial class App : Application
     private AppServices? _services;
     private PanelCatalog? _catalog;
     private TrayIconService? _tray;
-    private MainWindow? _window;
+    private DashboardHost? _dashboard;
     private DateTimeOffset _lastFaultDialogUtc = DateTimeOffset.MinValue;
 
     /// <summary>The OS theme the WPF-UI dictionaries were last brought in line with; see <see cref="ApplyTheme"/>.</summary>
     private SystemTheme _appliedSystemTheme;
 
     /// <summary>
-    /// True once the tray, the window and the poll loop exist. Gates whether a dispatcher
-    /// fault is survivable; see the type doc for the reasoning.
+    /// True once the tray, the window (when the launch shows one) and the poll loop exist.
+    /// Gates whether a dispatcher fault is survivable; see the type doc for the reasoning.
     /// </summary>
     private bool _shellReady;
 
@@ -99,22 +106,27 @@ public partial class App : Application
         _instanceGuard.ActivationRequested += OnActivationRequested;
         _instanceGuard.StartListening();
 
-        _services = AppServices.Initialize();
-        _catalog = new PanelCatalog(_services);
+        // Reading config.yaml (a cold YAML parse) and the token ladder is file I/O the UI thread
+        // would otherwise do before it can start on anything else. Started on a pool thread
+        // here, it overlaps theming, which needs neither; the services below join the read.
+        AppServices.BeginInitialize();
 
         ApplyTheme();
 
+        _services = AppServices.Initialize();
+        _catalog = new PanelCatalog(_services);
+
+        _dashboard = new DashboardHost(CreateDashboard);
+
         _tray = new TrayIconService(_services);
-        _tray.OpenDashboardRequested += (_, _) => _window?.ShowAndActivate();
+        _tray.OpenDashboardRequested += (_, _) => ShowDashboard();
         _tray.ExitRequested += (_, _) => ExitApplication();
 
-        _window = new MainWindow(_services, _catalog, _tray);
-        MainWindow = _window;
-
-        // Autostart launches with --minimized: the tray is the app until the user asks for more.
+        // Autostart launches with --minimized: the tray is the app until the user asks for more,
+        // and the dashboard window is not even built until then.
         if (!e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase))
         {
-            _window.Show();
+            ShowDashboard();
         }
 
         // Started last, on the UI thread, so StateChanged is raised where the bindings live.
@@ -165,9 +177,10 @@ public partial class App : Application
         _appliedSystemTheme = ApplicationThemeManager.GetSystemTheme();
 
         // SystemThemeWatcher (started by MainWindow) keeps the theme in step, but only once that
-        // window has a handle. An autostarted "--minimized" session may go a whole day without
-        // showing it, and the tray flyout — which reads the same DynamicResource theme brushes —
-        // would keep yesterday's light/dark until then. This listens for the OS's own signal too.
+        // window exists and has a handle. An autostarted "--minimized" session may go a whole day
+        // without building it, and the tray flyout — which reads the same DynamicResource theme
+        // brushes — would keep yesterday's light/dark until then. This listens for the OS's own
+        // signal too.
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
@@ -199,7 +212,39 @@ public partial class App : Application
     private void OnActivationRequested(object? sender, EventArgs e)
     {
         // Raised on the guard's listener thread.
-        _ = Dispatcher.BeginInvoke(() => _window?.ShowAndActivate());
+        _ = Dispatcher.BeginInvoke(ShowDashboard);
+    }
+
+    /// <summary>
+    /// Shows the dashboard, building it first if this is the first request — the tray's "Open
+    /// Dashboard", its flyout button, a second launch, or the launch itself when it is not
+    /// <c>--minimized</c>. UI thread only.
+    /// </summary>
+    private void ShowDashboard()
+    {
+        // No host yet: a request that lands while OnStartup is still composing the shell is
+        // dropped, exactly as it was when the window was built inline. Shutting down: WPF refuses
+        // to build a Window once Application.Shutdown has started.
+        if (_dashboard is null || Dispatcher.HasShutdownStarted)
+        {
+            return;
+        }
+
+        _ = _dashboard.Show();
+    }
+
+    /// <summary>
+    /// The factory <see cref="DashboardHost"/> calls the first time the dashboard is wanted.
+    /// </summary>
+    private IDashboardWindow CreateDashboard()
+    {
+        var window = new MainWindow(_services!, _catalog!, _tray!);
+
+        // Application.MainWindow is what the Updates and wizard windows read to find their owner,
+        // and what WPF-UI re-applies the window backdrop to on a theme change. WPF would hand it
+        // to whichever Window is built first, which is no longer this one.
+        MainWindow = window;
+        return window;
     }
 
     private void ExitApplication()
@@ -226,8 +271,7 @@ public partial class App : Application
             }
         }
 
-        _window?.AllowClose();
-        _window?.Close();
+        _dashboard?.CloseForExit();
         Shutdown();
     }
 
@@ -258,10 +302,8 @@ public partial class App : Application
 
             // The callback that faulted may have left the visual tree inconsistent. Hide
             // rather than repaint; reopening from the tray gives a freshly laid-out window.
-            if (_window is { IsVisible: true })
-            {
-                _window.Hide();
-            }
+            // (Nothing to hide if the dashboard was never built.)
+            _dashboard?.HideIfVisible();
 
             ShowFaultDialog(e.Exception);
         }

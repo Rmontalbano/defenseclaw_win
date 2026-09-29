@@ -4,8 +4,10 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              ShutdownMode="OnExplicitShutdown">
     <!--
-        No StartupUri: the shell composes its services first, then creates the window, so
-        App.OnStartup owns window creation.
+        No StartupUri: the shell composes its services first, and the dashboard window is built
+        on demand (DashboardHost) - not at all on a minimized autostart - so App.OnStartup owns
+        window creation. ShutdownMode stays OnExplicitShutdown: with no window at startup, the
+        tray's Exit item is the only way out.
     -->
     <Application.Resources>
         <ResourceDictionary>

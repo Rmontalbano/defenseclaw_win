@@ -204,7 +204,7 @@ public sealed class TrayIconService : IDisposable
 
     private void ToggleFlyout()
     {
-        _flyout ??= new TrayFlyoutWindow { DataContext = _flyoutViewModel };
+        _flyout ??= CreateFlyout();
 
         if (_flyout.IsVisible)
         {
@@ -222,6 +222,23 @@ public sealed class TrayIconService : IDisposable
         }
 
         _flyout.ShowNearCursor();
+    }
+
+    private TrayFlyoutWindow CreateFlyout()
+    {
+        var flyout = new TrayFlyoutWindow { DataContext = _flyoutViewModel };
+
+        // WPF makes the first Window a process builds its Application.MainWindow, and the dashboard
+        // is no longer built at startup — so this flyout can now be that first window. WPF-UI
+        // re-applies the window backdrop to Application.MainWindow on every theme change, which is
+        // right for the dashboard and wrong for this transparent, frameless popup. MainWindow is
+        // meant to be the dashboard or nothing; the dashboard claims it when it is built.
+        if (Application.Current is { } app && ReferenceEquals(app.MainWindow, flyout))
+        {
+            app.MainWindow = null;
+        }
+
+        return flyout;
     }
 
     private void HideFlyout() => _flyout?.Hide();

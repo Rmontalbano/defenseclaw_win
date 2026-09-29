@@ -35,6 +35,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
+      # ReadyToRun (not composite) and single-file compression are switched on by DefenseClaw.App.csproj for exactly this
+      # self-contained single-file publish, so a local run of this command produces the same exe. The app is not trimmed.
       - name: Publish single-file exe
         run: >
           dotnet publish DefenseClaw.App/DefenseClaw.App.csproj -c Release -r win-x64

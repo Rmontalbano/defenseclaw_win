@@ -24,6 +24,12 @@ namespace DefenseClaw.App;
 /// tray, because the tray is the app's real lifecycle.
 /// </para>
 /// <para>
+/// <b>Built on demand.</b> Nothing constructs this window at startup: <see cref="DashboardHost"/>
+/// builds it the first time the operator (or a second launch) asks to see it, so a <c>--minimized</c>
+/// autostart never pays for it. Code that needs the dashboard therefore must not assume it exists —
+/// ask the host, or take the owner as a parameter.
+/// </para>
+/// <para>
 /// <b>Keyboard map</b> (one handler, <see cref="OnWindowPreviewKeyDown"/>; the chords themselves
 /// live in <see cref="ShellShortcuts"/>): Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…3 jump to the panels in
 /// sidebar order, F5 refreshes the current panel (falling back to a gateway poll), Ctrl+K opens the
@@ -33,7 +39,7 @@ namespace DefenseClaw.App;
 /// focus is not in a text-entry control.
 /// </para>
 /// </summary>
-public partial class MainWindow : FluentWindow
+public partial class MainWindow : FluentWindow, IDashboardWindow
 {
     private readonly PanelCatalog _catalog;
     private readonly TrayIconService _tray;

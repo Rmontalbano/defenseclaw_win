@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -27,14 +28,25 @@ public enum ShieldState
 /// <para>
 /// Four colours × several DPI scales is a lot of binary blobs to keep in a repo whose
 /// review story is "read the diff"; a <see cref="DrawingVisual"/> rendered to a
-/// <see cref="RenderTargetBitmap"/> costs a few milliseconds at startup and keeps the
-/// tree text-only.
+/// <see cref="RenderTargetBitmap"/> costs a few milliseconds once WPF's media stack is
+/// running and keeps the tree text-only.
 /// </para>
 /// <para>
 /// The handle dance at the end is the price of the WPF/GDI+ boundary:
 /// <c>Bitmap.GetHicon</c> hands back an unmanaged HICON that <c>Icon.FromHandle</c> does
 /// not own, so the icon is round-tripped through its own ICO bytes and the handle is
 /// destroyed immediately — otherwise every rebuild leaks a GDI object.
+/// </para>
+/// <para>
+/// <b>Why the encoded icons are also kept on disk.</b> The first <see cref="DrawingVisual"/> a
+/// process draws makes WPF bring up its media stack, and that one-off cost is not "a few
+/// milliseconds": measured cold, <c>DrawingVisual.RenderOpen</c> alone took 400-570 ms, about half of
+/// an otherwise tray-only <c>--minimized</c> startup, and the tray shield was the only thing on that
+/// path that needed it. The encoded ICO bytes are therefore persisted (see <see cref="CacheDirectory"/>),
+/// keyed by this assembly's build id, so a launch of a build that has already drawn a state never
+/// touches WPF rendering for it at all: the first launch of each new build pays what every launch
+/// used to, later ones read a few kilobytes. Any failure to read or write the cache falls back to
+/// drawing, so the cache can only ever save work.
 /// </para>
 /// <para>
 /// <b>Ownership contract: this factory never hands out a shared <see cref="Drawing.Icon"/>.</b>
@@ -68,6 +80,29 @@ public static class ShieldIconFactory
     /// </summary>
     private static readonly Dictionary<ShieldState, byte[]> IconBytesCache = new();
     private static readonly object Gate = new();
+
+    /// <summary>A real 32 px ICO is ~4.3 KB; anything past this is not something this factory wrote.</summary>
+    private const int MaxPersistedBytes = 64 * 1024;
+
+    /// <summary>How long another build's persisted icons are left alone; see <see cref="PruneStale"/>.</summary>
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromDays(14);
+
+    /// <summary>Guarded by <see cref="Gate"/>.</summary>
+    private static bool _prunedCache;
+
+    /// <summary>How many times a shield was actually drawn and encoded (not served from a cache). Tests observe it.</summary>
+    internal static int EncodeCount;
+
+    /// <summary>
+    /// Where the encoded icons persist between launches: <c>%LOCALAPPDATA%\DefenseClaw.App\cache\icons</c>,
+    /// next to the <c>logs</c>, <c>updates</c> and <c>upgrades</c> directories this app already owns. Settable
+    /// so tests never touch the real one; null turns persistence off.
+    /// </summary>
+    internal static string? CacheDirectory { get; set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "DefenseClaw.App",
+        "cache",
+        "icons");
 
     /// <summary>Fill colour per state. Also used by the shell for the status dot.</summary>
     public static Color ColorFor(ShieldState state) => state switch
@@ -129,12 +164,160 @@ public static class ShieldIconFactory
                 return FromIcoBytes(bytes);
             }
 
+            // An earlier launch of this build already drew and encoded this state: no WPF rendering.
+            if (TryReadPersisted(state, out bytes, out var persisted))
+            {
+                IconBytesCache[state] = bytes;
+                return persisted;
+            }
+
             // Materialise the first icon before caching the bytes so a malformed encode throws
             // here (as it always did) instead of poisoning the cache for every later call.
             bytes = EncodeIco(state);
             var first = FromIcoBytes(bytes);
             IconBytesCache[state] = bytes;
+            Persist(state, bytes);
             return first;
+        }
+    }
+
+    /// <summary>
+    /// Forgets the in-memory cache and the "already pruned" flag, so the next <see cref="CreateIcon"/>
+    /// behaves like the first one in a fresh process. Tests only.
+    /// </summary>
+    internal static void ResetForTests()
+    {
+        lock (Gate)
+        {
+            IconBytesCache.Clear();
+            _prunedCache = false;
+            EncodeCount = 0;
+        }
+    }
+
+    /// <summary>The build id the persisted icons are keyed by: it changes whenever this assembly is rebuilt.</summary>
+    private static string BuildKey => typeof(ShieldIconFactory).Module.ModuleVersionId.ToString("N");
+
+    private static string? PersistedPath(ShieldState state) =>
+        CacheDirectory is { Length: > 0 } directory
+            ? Path.Combine(directory, $"shield-{BuildKey}-{IconSize}-{state.ToString().ToLowerInvariant()}.ico")
+            : null;
+
+    /// <summary>
+    /// The persisted ICO for <paramref name="state"/> and a fresh icon built from it, or false when
+    /// there is none this build wrote, or it does not load. A bad file is deleted so it is drawn
+    /// again and replaced rather than tried on every launch.
+    /// </summary>
+    private static bool TryReadPersisted(ShieldState state, out byte[] bytes, out Drawing.Icon icon)
+    {
+        bytes = Array.Empty<byte>();
+        icon = null!;
+
+        var path = PersistedPath(state);
+        if (path is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
+            var candidate = File.ReadAllBytes(path);
+            if (candidate.Length is < 22 or > MaxPersistedBytes ||
+                candidate[0] != 0 || candidate[1] != 0 || candidate[2] != 1 || candidate[3] != 0)
+            {
+                DeleteQuietly(path);
+                return false;
+            }
+
+            icon = FromIcoBytes(candidate);
+            bytes = candidate;
+            return true;
+        }
+#pragma warning disable CA1031 // Whatever is wrong with the cache, drawing the icon is the answer.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceWarning($"shield icon cache: ignoring {path}: {ex.Message}");
+            DeleteQuietly(path);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort write of a freshly encoded icon. Written beside the target and moved into place,
+    /// so a launch that reads it never sees half a file and two launches never interleave.
+    /// </summary>
+    private static void Persist(ShieldState state, byte[] bytes)
+    {
+        var path = PersistedPath(state);
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            PruneStale();
+
+            var temporary = $"{path}.{Environment.ProcessId}.tmp";
+            File.WriteAllBytes(temporary, bytes);
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            // A read-only or locked profile just means the next launch draws again.
+            Trace.TraceWarning($"shield icon cache: could not write {path}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Once per process: drops icons other builds wrote more than <see cref="StaleAfter"/> ago, so the
+    /// directory does not gather four files per release forever. Recent ones stay: an installed build and a
+    /// dev build alternating on one machine would otherwise delete each other's icons at every launch.
+    /// </summary>
+    private static void PruneStale()
+    {
+        if (_prunedCache || CacheDirectory is not { Length: > 0 } directory)
+        {
+            return;
+        }
+
+        _prunedCache = true;
+
+        try
+        {
+            var current = $"shield-{BuildKey}-";
+            var cutoff = DateTime.UtcNow - StaleAfter;
+            foreach (var file in Directory.GetFiles(directory, "shield-*"))
+            {
+                if (!Path.GetFileName(file).StartsWith(current, StringComparison.Ordinal) &&
+                    File.GetLastWriteTimeUtc(file) < cutoff)
+                {
+                    DeleteQuietly(file);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Housekeeping only.
+        }
+    }
+
+    private static void DeleteQuietly(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Locked by another launch, or already gone.
         }
     }
 
@@ -160,6 +343,7 @@ public static class ShieldIconFactory
     /// <summary>Renders the shield and encodes it as ICO bytes (the only expensive step; done once per state).</summary>
     private static byte[] EncodeIco(ShieldState state)
     {
+        _ = Interlocked.Increment(ref EncodeCount);
         var bitmap = Render(state, IconSize);
 
         var encoder = new PngBitmapEncoder();

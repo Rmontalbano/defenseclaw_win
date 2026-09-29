@@ -61,16 +61,28 @@ public sealed class AppServices : IDisposable
     private SecretValue? _registeredToken;
     private bool _disposed;
 
-    private AppServices(DefenseClawPaths? paths = null, string? claudeSettingsPath = null)
-    {
-        Paths = paths ?? new DefenseClawPaths();
-        ConfigStore = new ConfigStore(Paths);
-        TokenResolver = new TokenResolver(Paths.EnvFilePath);
+    /// <summary>
+    /// The file reads a fresh composition starts with, possibly still running on a pool thread:
+    /// see <see cref="BeginInitialize"/>.
+    /// </summary>
+    private sealed record StartupLoad(DefenseClawPaths Paths, Task<LoadedStartup> Work);
 
-        // Never throws: startup has no "last good config" to fall back on, and an exception
-        // here happens before the tray exists, so the process would just vanish. Whatever goes
-        // wrong, the app comes up on defaults and the config-error banner says why.
-        var initial = LoadConfigStateGuarded(lastGood: null);
+    /// <summary>What <see cref="StartupLoad"/> produces: the two readers and the first config state.</summary>
+    private sealed record LoadedStartup(ConfigStore ConfigStore, TokenResolver TokenResolver, LoadedConfig Initial);
+
+    private AppServices(StartupLoad startup, string? claudeSettingsPath = null)
+    {
+        Paths = startup.Paths;
+
+        // Joins the config read. A no-op wait when it already finished while the caller was busy
+        // theming; otherwise the same wait the inline read used to be. Only the readers'
+        // construction can throw here (the read itself is guarded — see BeginLoad), and that
+        // propagates exactly as it did when it ran in this constructor.
+        var loaded = startup.Work.GetAwaiter().GetResult();
+        ConfigStore = loaded.ConfigStore;
+        TokenResolver = loaded.TokenResolver;
+
+        var initial = loaded.Initial;
         _config = initial.Document;
         _token = initial.Token;
         ConfigLoadError = initial.Error;
@@ -216,10 +228,60 @@ public sealed class AppServices : IDisposable
     /// </summary>
     public event EventHandler? ConfigReloaded;
 
+    /// <summary>
+    /// Starts the part of <see cref="Initialize"/> that is file I/O — config.yaml, its YAML parse
+    /// and the token ladder (.env) — on a pool thread, so the caller can do UI-thread work while it
+    /// runs. <see cref="Initialize"/> then joins it. Optional: without this call
+    /// <see cref="Initialize"/> does the same reads inline. Idempotent, and a no-op once the
+    /// singleton exists. UI thread only, like <see cref="Initialize"/>.
+    /// </summary>
+    public static void BeginInitialize() => BeginInitialize(new DefenseClawPaths());
+
+    /// <summary>The same, over injected <paramref name="paths"/>; what harnesses use to keep clear of the real data directory.</summary>
+    internal static void BeginInitialize(DefenseClawPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        if (Instance is null)
+        {
+            _pendingStartup ??= BeginLoad(paths, onPoolThread: true);
+        }
+    }
+
     public static AppServices Initialize()
     {
-        Instance ??= new AppServices();
+        if (Instance is null)
+        {
+            var startup = _pendingStartup ?? BeginLoad(new DefenseClawPaths(), onPoolThread: false);
+            _pendingStartup = null;
+            Instance = new AppServices(startup);
+        }
+
         return Instance;
+    }
+
+    private static StartupLoad? _pendingStartup;
+
+    /// <summary>
+    /// Builds the config store and token resolver and reads config.yaml and the token through
+    /// them, inline or on a pool thread.
+    /// <para>
+    /// The read never throws: startup has no "last good config" to fall back on, and an exception
+    /// here happens before the tray exists, so the process would just vanish. Whatever goes wrong,
+    /// the app comes up on defaults and the config-error banner says why — the same outcome
+    /// whichever thread ran it, because the failure is captured into the result, not the task.
+    /// </para>
+    /// </summary>
+    private static StartupLoad BeginLoad(DefenseClawPaths paths, bool onPoolThread)
+    {
+        LoadedStartup Read()
+        {
+            var store = new ConfigStore(paths);
+            var resolver = new TokenResolver(paths.EnvFilePath);
+            return new LoadedStartup(store, resolver, LoadConfigStateGuarded(store, resolver, lastGood: null));
+        }
+
+        return new StartupLoad(paths, onPoolThread ? Task.Run(Read) : Task.FromResult(Read()));
     }
 
     /// <summary>
@@ -228,10 +290,13 @@ public sealed class AppServices : IDisposable
     /// scratch data directory and a runner that resolves no executable. Production code uses
     /// <see cref="Initialize"/>, whose defaults are unchanged.
     /// </summary>
-    internal static AppServices CreateIsolated(DefenseClawPaths paths, string? claudeSettingsPath = null)
+    internal static AppServices CreateIsolated(
+        DefenseClawPaths paths,
+        string? claudeSettingsPath = null,
+        bool readConfigOnPoolThread = false)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        return new AppServices(paths, claudeSettingsPath);
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -273,7 +338,7 @@ public sealed class AppServices : IDisposable
                     lastGood = _config;
                 }
 
-                var state = LoadConfigState(lastGood);
+                var state = LoadConfigState(ConfigStore, TokenResolver, lastGood);
                 var port = state.Document.Config.Gateway.ApiPort;
 
                 // Built before anything is published, so a failure here (it cannot really
@@ -478,10 +543,10 @@ public sealed class AppServices : IDisposable
     /// not handle themselves — callers decide what "failed" means (startup falls back to
     /// defaults, a reload keeps the last good state).
     /// </summary>
-    private LoadedConfig LoadConfigState(ConfigDocument? lastGood)
+    private static LoadedConfig LoadConfigState(ConfigStore store, TokenResolver resolver, ConfigDocument? lastGood)
     {
-        var document = LoadConfigSafely(ConfigStore, lastGood, out var error);
-        var token = TokenResolver.Resolve(document.Config);
+        var document = LoadConfigSafely(store, lastGood, out var error);
+        var token = resolver.Resolve(document.Config);
         return new LoadedConfig(document, token, error);
     }
 
@@ -489,11 +554,11 @@ public sealed class AppServices : IDisposable
     /// <see cref="LoadConfigState"/> for the constructor: on any exception, returns defaults
     /// (an empty document, no token) with the error text, instead of letting startup die.
     /// </summary>
-    private LoadedConfig LoadConfigStateGuarded(ConfigDocument? lastGood)
+    private static LoadedConfig LoadConfigStateGuarded(ConfigStore store, TokenResolver resolver, ConfigDocument? lastGood)
     {
         try
         {
-            return LoadConfigState(lastGood);
+            return LoadConfigState(store, resolver, lastGood);
         }
 #pragma warning disable CA1031 // Startup must survive a config it cannot use; the banner reports it.
         catch (Exception ex)
@@ -502,7 +567,7 @@ public sealed class AppServices : IDisposable
             Trace.TraceError($"config could not be loaded at startup; using defaults: {ex}");
 
             return new LoadedConfig(
-                ConfigStore.Parse(string.Empty, ConfigStore.ConfigFilePath),
+                ConfigStore.Parse(string.Empty, store.ConfigFilePath),
                 new TokenResolution(null, TokenSource.None, GatewaySection.DefaultTokenEnv),
                 $"config.yaml was read but could not be applied ({ex.GetType().Name}: {ex.Message}). " +
                 "Running on defaults until it is fixed.");
