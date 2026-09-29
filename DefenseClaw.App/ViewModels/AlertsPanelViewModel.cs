@@ -780,7 +780,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     /// <c>Unauthorized</c> are informational: the panel says why the stream is quiet and
     /// falls back to the audit database rather than showing an error.
     /// </summary>
-    private void Apply(GatewaySnapshot snapshot)
+    internal void Apply(GatewaySnapshot snapshot)
     {
         if (snapshot.AlertsUnavailable is { Length: > 0 } reason)
         {

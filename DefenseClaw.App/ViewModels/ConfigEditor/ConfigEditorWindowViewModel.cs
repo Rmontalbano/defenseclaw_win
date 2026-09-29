@@ -71,6 +71,13 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     /// <summary>Fallback for CLIs old enough not to know <c>--source</c>: same masking, effective view.</summary>
     internal static readonly string[] EffectiveArgv = { "config", "show", "--effective", "--format", "yaml" };
 
+    /// <summary>
+    /// Test seam. When set, the masked source view is read from this delegate instead of by running
+    /// <c>defenseclaw config show --source</c>, so a test can drive FORM without the CLI. Null in
+    /// production, which leaves <see cref="ReadFormSourceAsync"/> exactly as it was.
+    /// </summary>
+    internal Func<CancellationToken, Task<string>>? FormSourceOverride { get; set; }
+
     private readonly AppServices _services;
     private readonly DefenseClawPaths _paths;
     private readonly CliRunner _cli;
@@ -593,6 +600,11 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     /// </summary>
     private async Task<FormSourceResult> ReadFormSourceAsync(CancellationToken cancellationToken)
     {
+        if (FormSourceOverride is { } supplied)
+        {
+            return new FormSourceResult(await supplied(cancellationToken).ConfigureAwait(true), null);
+        }
+
         try
         {
             var argv = SourceArgv;
@@ -836,7 +848,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject
     /// patched section must yield exactly the value the user entered. Any failure sets
     /// <see cref="FieldErrorMessage"/> and leaves RAW untouched — refusing beats guessing.
     /// </summary>
-    private void PublishPatchedSection(
+    internal void PublishPatchedSection(
         string sectionName,
         string displayName,
         string patchedSectionText,

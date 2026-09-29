@@ -14,6 +14,32 @@ internal static class ShellCommandRegistry
     public const string GatewayCategory = "Gateway";
 
     /// <summary>
+    /// The "Go to" entry for every panel, in sidebar order, so the first screen of an empty search
+    /// matches the sidebar and each row shows the Ctrl+N chord that jumps there. Split out of
+    /// <see cref="Build"/> unchanged so it can be built without the tray-backed <see cref="ShellActions"/>.
+    /// </summary>
+    internal static List<ShellCommand> BuildPanelCommands(PanelCatalog catalog, Action<PanelDescriptor> navigateTo)
+    {
+        var commands = new List<ShellCommand>();
+        for (var i = 0; i < catalog.SidebarOrder.Count; i++)
+        {
+            var panel = catalog.SidebarOrder[i];
+            commands.Add(new ShellCommand(
+                Id: $"nav.{panel.Id}",
+                Title: $"Go to {panel.Title}",
+                Category: PanelCategory,
+                Description: $"{panel.Group} · opens the {panel.Title} panel",
+                Shortcut: ShellShortcuts.PanelChordText(i),
+                Keywords: $"open navigate {panel.Id} {panel.Group}",
+                IsEnabled: true,
+                DisabledReason: null,
+                Run: () => navigateTo(panel)));
+        }
+
+        return commands;
+    }
+
+    /// <summary>
     /// Builds the list for the moment the palette opens. Enabled states and toggle titles are read
     /// now, so the palette is never showing launch-time state.
     /// </summary>
@@ -32,24 +58,7 @@ internal static class ShellCommandRegistry
         ArgumentNullException.ThrowIfNull(navigateTo);
         ArgumentNullException.ThrowIfNull(showShortcuts);
 
-        var commands = new List<ShellCommand>();
-
-        // Panels, in sidebar order, so the first screen of an empty search matches the sidebar and
-        // each row shows the Ctrl+N chord that jumps there.
-        for (var i = 0; i < catalog.SidebarOrder.Count; i++)
-        {
-            var panel = catalog.SidebarOrder[i];
-            commands.Add(new ShellCommand(
-                Id: $"nav.{panel.Id}",
-                Title: $"Go to {panel.Title}",
-                Category: PanelCategory,
-                Description: $"{panel.Group} · opens the {panel.Title} panel",
-                Shortcut: ShellShortcuts.PanelChordText(i),
-                Keywords: $"open navigate {panel.Id} {panel.Group}",
-                IsEnabled: true,
-                DisabledReason: null,
-                Run: () => navigateTo(panel)));
-        }
+        var commands = BuildPanelCommands(catalog, navigateTo);
 
         var canRefresh = actions.CanRefreshCurrentPanel;
         commands.Add(new ShellCommand(

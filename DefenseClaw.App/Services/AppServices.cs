@@ -61,9 +61,9 @@ public sealed class AppServices : IDisposable
     private SecretValue? _registeredToken;
     private bool _disposed;
 
-    private AppServices()
+    private AppServices(DefenseClawPaths? paths = null, string? claudeSettingsPath = null)
     {
-        Paths = new DefenseClawPaths();
+        Paths = paths ?? new DefenseClawPaths();
         ConfigStore = new ConfigStore(Paths);
         TokenResolver = new TokenResolver(Paths.EnvFilePath);
 
@@ -88,7 +88,7 @@ public sealed class AppServices : IDisposable
 
         Audit = new AuditReader(Paths.AuditDatabasePath);
         Inventory = new InventoryReader(Paths.InventoryDatabasePath);
-        ClaudeSettings = new ClaudeSettingsReader();
+        ClaudeSettings = new ClaudeSettingsReader(claudeSettingsPath);
         GatewayLog = new LogTailer(Paths.GatewayLogPath, new LogTailerOptions { StartAtEnd = true });
         WatchdogLog = new LogTailer(Paths.WatchdogLogPath, new LogTailerOptions { StartAtEnd = true });
 
@@ -222,6 +222,18 @@ public sealed class AppServices : IDisposable
         return Instance;
     }
 
+    /// <summary>
+    /// Test seam: a composition over injected <paramref name="paths"/> that is <b>not</b> the
+    /// process singleton (<see cref="Current"/> is untouched), so view-models can be built against a
+    /// scratch data directory and a runner that resolves no executable. Production code uses
+    /// <see cref="Initialize"/>, whose defaults are unchanged.
+    /// </summary>
+    internal static AppServices CreateIsolated(DefenseClawPaths paths, string? claudeSettingsPath = null)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return new AppServices(paths, claudeSettingsPath);
+    }
+
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
     public SecretValue? CurrentToken() => Token.Token;
 
@@ -342,7 +354,13 @@ public sealed class AppServices : IDisposable
         GatewayLog.Dispose();
         WatchdogLog.Dispose();
         Endpoint.Client.Dispose();
-        Instance = null;
+
+        // Only the process singleton clears the slot; an isolated instance (see CreateIsolated)
+        // must not unseat it.
+        if (ReferenceEquals(Instance, this))
+        {
+            Instance = null;
+        }
     }
 
     /// <summary>

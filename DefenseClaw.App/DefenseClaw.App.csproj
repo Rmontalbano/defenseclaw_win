@@ -30,6 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Lets DefenseClaw.App.Tests reach the internal helpers (parsers, classifiers, argv builders). -->
+    <InternalsVisibleTo Include="DefenseClaw.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <!--

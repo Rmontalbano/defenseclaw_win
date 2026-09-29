@@ -356,7 +356,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// install), an unreadable or malformed one is a separate, visible state - the card never
     /// shows stale or partial numbers as if they were results.
     /// </summary>
-    private async Task ReloadDoctorCacheAsync(CancellationToken cancellationToken)
+    internal async Task ReloadDoctorCacheAsync(CancellationToken cancellationToken)
     {
         var path = Services.Paths.DoctorCachePath;
         try
@@ -502,7 +502,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     }
 
     /// <summary>Renders everything derivable from one snapshot plus config.yaml.</summary>
-    private void Apply(GatewaySnapshot snapshot)
+    internal void Apply(GatewaySnapshot snapshot)
     {
         var health = snapshot.Health;
 

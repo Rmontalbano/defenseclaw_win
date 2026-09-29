@@ -19,8 +19,10 @@ jobs:
         run: dotnet restore DefenseClaw.Win.sln
       - name: Build
         run: dotnet build DefenseClaw.Win.sln --no-restore -c Release
+      # The whole solution, so both test projects run: DefenseClaw.Tests (Core) and DefenseClaw.App.Tests (the WPF
+      # app layer, which needs the Windows desktop runtime that windows-latest has).
       - name: Test
-        run: dotnet test DefenseClaw.Tests/DefenseClaw.Tests.csproj --no-build -c Release --logger "trx"
+        run: dotnet test DefenseClaw.Win.sln --no-build -c Release --logger "trx"
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

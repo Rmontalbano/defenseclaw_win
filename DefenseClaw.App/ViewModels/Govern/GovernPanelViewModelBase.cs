@@ -377,24 +377,10 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             .Where(l => l.Stream == CliStream.StandardOutput)
             .Select(l => l.Text + "\n"));
 
-        var rows = new List<GovernRow>();
+        List<GovernRow> rows;
         try
         {
-            if (string.IsNullOrWhiteSpace(stdout))
-            {
-                throw new FormatException("The command printed nothing.");
-            }
-
-            using var document = JsonDocument.Parse(stdout);
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var (item, groupConnector) in GovernJson.Flatten(document.RootElement, ItemsKey))
-            {
-                var row = ParseRow(item, groupConnector);
-                if (row is not null && seen.Add(row.Key))
-                {
-                    rows.Add(row);
-                }
-            }
+            rows = ParseRows(stdout);
         }
         catch (Exception ex) when (ex is JsonException or FormatException)
         {
@@ -440,6 +426,36 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         ErrorMessage = message;
         State = failedState;
         ApplyFilter();
+    }
+
+    /// <summary>
+    /// Turns the stdout of <c>list --json</c> into rows: whichever list shape it is (see
+    /// <see cref="GovernJson.Flatten"/>), one row per item the concrete panel accepts, the first of any
+    /// repeated <see cref="GovernRow.Key"/> kept. Split out of <see cref="LoadOnceAsync"/> unchanged so the
+    /// parsing can be exercised without running the CLI.
+    /// </summary>
+    /// <exception cref="JsonException">The text is not JSON.</exception>
+    /// <exception cref="FormatException">The text is empty, or JSON of a shape no list has.</exception>
+    internal List<GovernRow> ParseRows(string stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+        {
+            throw new FormatException("The command printed nothing.");
+        }
+
+        var rows = new List<GovernRow>();
+        using var document = JsonDocument.Parse(stdout);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (item, groupConnector) in GovernJson.Flatten(document.RootElement, ItemsKey))
+        {
+            var row = ParseRow(item, groupConnector);
+            if (row is not null && seen.Add(row.Key))
+            {
+                rows.Add(row);
+            }
+        }
+
+        return rows;
     }
 
     private string ScopeKey() => ToolbarConnector() ?? "*";
