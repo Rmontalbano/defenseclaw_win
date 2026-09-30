@@ -221,6 +221,25 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         RefreshCredentials();
         SyncPersistState();
         GoTo(0);
+
+        if (services.Paths.TryGetKnownExecutable("defenseclaw", out var known))
+        {
+            ExecutablePath = known ?? ExecutableNotFoundText;
+        }
+
+        _ = ResolveExecutablePathAsync();
+    }
+
+    private const string ExecutableNotFoundText = "defenseclaw (not found on PATH)";
+
+    /// <summary>Asks for the current lookup on the pool and shows it when it lands; the seeded text stands until then.</summary>
+    private async Task ResolveExecutablePathAsync()
+    {
+        var path = await _services.Paths.FindExecutableAsync("defenseclaw").ConfigureAwait(true);
+        if (!_disposed)
+        {
+            ExecutablePath = path ?? ExecutableNotFoundText;
+        }
     }
 
     /// <summary>Raised when the window should close: cancelled, or finished and dismissed.</summary>
@@ -264,8 +283,14 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
     public bool HasBaselineWarning => Definition.BaselineWarning.Length > 0;
 
-    /// <summary>Resolved path of the binary that will run, shown under the argv.</summary>
-    public string ExecutablePath => _services.Paths.CliPath ?? "defenseclaw (not found on PATH)";
+    /// <summary>
+    /// Resolved path of the binary that will run, shown under the argv. Held here rather than looked up on each
+    /// binding read: a PATH lookup can block for tens of seconds on one dead network entry, and this property is
+    /// read on the UI thread. Seeded from the last known answer and completed off-thread by
+    /// <see cref="ResolveExecutablePathAsync"/>.
+    /// </summary>
+    [ObservableProperty]
+    private string _executablePath = "defenseclaw (looking it up…)";
 
     public string SourceNote => Definition.IsCurated
         ? "Fields are a curated layout over this target's live --help output."

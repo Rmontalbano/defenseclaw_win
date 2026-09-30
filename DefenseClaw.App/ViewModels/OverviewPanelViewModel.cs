@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -69,6 +70,13 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     private DateTimeOffset _scannerPathsProbedAt = DateTimeOffset.MinValue;
 
     /// <summary>
+    /// False until the first PATH lookup has answered. The lookup never runs on the UI thread (a dead network
+    /// entry on PATH stalls it for ~40 s), so until it lands the Scanners rows say "checking" rather than
+    /// claiming a scanner is missing.
+    /// </summary>
+    private bool _scannerPathsResolved;
+
+    /// <summary>
     /// Runtime enforcement posture per connector, from <c>/status</c>. Kept here rather
     /// than in <see cref="GatewaySnapshot"/> because the monitor only polls <c>/health</c>
     /// and <c>/alerts</c>; this rides the slow refresh, never its own timer.
@@ -101,6 +109,10 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
     [ObservableProperty]
     private string _dataDirectoryText = string.Empty;
+
+    /// <summary>Where <see cref="DataDirectoryText"/> came from: the default, or the <c>DEFENSECLAW_HOME</c> override the CLI honours.</summary>
+    [ObservableProperty]
+    private string _dataDirectorySourceText = string.Empty;
 
     [ObservableProperty]
     private string _enforcementSummary = "Not read yet.";
@@ -184,6 +196,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // Reading the cached snapshot is not I/O; the poll that produced it already ran. No
         // subscriptions here: OnActivated attaches them, and OnDeactivated lets go.
         DataDirectoryText = Services.Paths.DataDirectory;
+        DataDirectorySourceText = Services.Paths.DataDirectoryOrigin.Description;
         Apply(Services.Monitor.Current);
     }
 
@@ -748,8 +761,10 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     }
 
     /// <summary>
-    /// Probes for the two scanner executables at most once per <see cref="DataRefreshInterval"/>;
-    /// see <see cref="_skillScannerPath"/> for why it is not once per poll.
+    /// Refreshes the two scanner executables' locations at most once per <see cref="DataRefreshInterval"/>;
+    /// see <see cref="_skillScannerPath"/> for why it is not once per poll. Runs on the UI thread, so it only
+    /// <i>reads</i> the last known answer; the lookup itself is started on the pool and applied when it returns
+    /// (<see cref="RefreshScannerPathsAsync"/>).
     /// </summary>
     private void EnsureScannerPathsProbed()
     {
@@ -758,9 +773,52 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             return;
         }
 
-        _skillScannerPath = Services.Paths.SkillScannerPath;
-        _mcpScannerPath = Services.Paths.McpScannerPath;
+        var paths = Services.Paths;
+        var skillKnown = paths.TryGetKnownExecutable("skill-scanner", out var skill);
+        var mcpKnown = paths.TryGetKnownExecutable("mcp-scanner", out var mcp);
+        if (skillKnown && mcpKnown)
+        {
+            _skillScannerPath = skill;
+            _mcpScannerPath = mcp;
+            _scannerPathsResolved = true;
+        }
+
         _scannerPathsProbedAt = DateTimeOffset.UtcNow;
+        _ = RefreshScannerPathsAsync();
+    }
+
+    /// <summary>
+    /// Waits (off the UI thread) for the current answer for both scanners and, if it differs from what the rows
+    /// show, re-renders them. The continuation resumes on the UI thread, so the row collections are touched only there.
+    /// </summary>
+    private async Task RefreshScannerPathsAsync()
+    {
+        try
+        {
+            var skillTask = Services.Paths.FindExecutableAsync("skill-scanner");
+            var mcpTask = Services.Paths.FindExecutableAsync("mcp-scanner");
+            var skill = await skillTask.ConfigureAwait(true);
+            var mcp = await mcpTask.ConfigureAwait(true);
+
+            if (_scannerPathsResolved &&
+                string.Equals(skill, _skillScannerPath, StringComparison.Ordinal) &&
+                string.Equals(mcp, _mcpScannerPath, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _skillScannerPath = skill;
+            _mcpScannerPath = mcp;
+            _scannerPathsResolved = true;
+
+            var snapshot = Services.Monitor.Current;
+            BuildScanners(snapshot, snapshot.Health);
+        }
+        catch (Exception ex)
+        {
+            // Reached only if a filesystem probe threw; the rows keep whatever they show.
+            Trace.TraceWarning($"Looking up the scanner executables failed: {ex.Message}");
+        }
     }
 
     private void BuildScanners(GatewaySnapshot snapshot, GatewayHealth? health)
@@ -769,8 +827,8 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         var rows = new List<ScannerRow>
         {
-            ExecutableRow("skill-scanner", _skillScannerPath),
-            ExecutableRow("mcp-scanner", _mcpScannerPath),
+            ExecutableRow("skill-scanner", _skillScannerPath, _scannerPathsResolved),
+            ExecutableRow("mcp-scanner", _mcpScannerPath, _scannerPathsResolved),
             new()
             {
                 Name = "codeguard",
@@ -1119,13 +1177,21 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         return string.Join(" · ", kinds);
     }
 
-    private static ScannerRow ExecutableRow(string name, string? path) => new()
-    {
-        Name = name,
-        StateText = path is null ? "not found" : "installed",
-        StateKey = path is null ? "Warn" : "Ok",
-        Detail = path ?? "Not on PATH and not in the installer's bin directory.",
-    };
+    private static ScannerRow ExecutableRow(string name, string? path, bool resolved) => !resolved
+        ? new ScannerRow
+        {
+            Name = name,
+            StateText = "checking",
+            StateKey = "Neutral",
+            Detail = "Looking on PATH and in the installer's bin directory…",
+        }
+        : new ScannerRow
+        {
+            Name = name,
+            StateText = path is null ? "not found" : "installed",
+            StateKey = path is null ? "Warn" : "Ok",
+            Detail = path ?? "Not on PATH and not in the installer's bin directory.",
+        };
 
     /// <summary>
     /// Liveness only. <c>disabled</c> is a deliberate configuration on a standalone box,

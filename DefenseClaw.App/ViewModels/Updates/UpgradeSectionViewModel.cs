@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Updates;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
 
 namespace DefenseClaw.App.ViewModels.Updates;
@@ -121,6 +122,11 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     private string _lastProgressText = string.Empty;
 
     private bool _disposed;
+
+    /// <summary>Bumped per cosign probe; only the newest probe's answer is applied (a second click must not be overwritten by the first).</summary>
+    private int _cosignProbeVersion;
+
+    private readonly Func<Task<CosignStatus>> _cosignProbe;
 
     [ObservableProperty]
     private bool _isUpdateAvailable;
@@ -240,10 +246,15 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     private bool _hasVersionConfirmation;
 
-    public UpgradeSectionViewModel(AppServices services, UpgradeRunner runner)
+    /// <param name="cosignProbe">Test seam: the cosign lookup. Defaults to <see cref="UpgradeRunner.DetectCosignAsync"/> (on the pool).</param>
+    public UpgradeSectionViewModel(
+        AppServices services,
+        UpgradeRunner runner,
+        Func<Task<CosignStatus>>? cosignProbe = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _cosignProbe = cosignProbe ?? (() => UpgradeRunner.DetectCosignAsync());
         _dispatcher = Dispatcher.CurrentDispatcher;
 
         _timer = new DispatcherTimer { Interval = OutputTick };
@@ -264,7 +275,9 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         _ranChannel = layout.RecommendedChannel;
         ChannelReasonText = layout.Detail;
 
-        RefreshCosign();
+        // Off the UI thread: the probe walks PATH, and one dead network entry stalls it for ~40 s. The badge reads
+        // "Checking…" (its initial value) until the answer lands.
+        _ = RefreshCosignAsync();
     }
 
     /// <summary>
@@ -557,11 +570,26 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         _cts.Dispose();
     }
 
-    /// <summary>Re-probes for cosign — the button next to the badge, for after a winget install.</summary>
+    /// <summary>
+    /// Re-probes for cosign — the button next to the badge, for after a winget install. The probe runs on the
+    /// thread pool and the badge shows "Checking…" (and the resolver gate stays closed) until it answers; the
+    /// command disables itself meanwhile, and a stale answer never overwrites a newer probe's.
+    /// </summary>
     [RelayCommand]
-    public void RefreshCosign()
+    public async Task RefreshCosignAsync()
     {
-        var status = UpgradeRunner.DetectCosign();
+        var version = ++_cosignProbeVersion;
+
+        IsCosignReady = false;
+        CosignLabel = "Checking…";
+        CosignBadgeKey = "Neutral";
+        RaiseState();
+
+        var status = await _cosignProbe().ConfigureAwait(true);
+        if (_disposed || version != _cosignProbeVersion)
+        {
+            return;
+        }
 
         IsCosignReady = status.IsUsable;
         CosignDetail = status.Detail;
@@ -892,6 +920,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
             ResultMessage = $"The {RanNoun} exited 0. " + StaleAssumptionsWarning;
             ShowRollbackGuidance = false;
+            OnUpgradeLanded();
             UpgradeSucceeded?.Invoke(this, EventArgs.Empty);
             return;
         }
@@ -901,6 +930,22 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         ResultMessage =
             $"The {RanNoun} exited {code}. The output above is kept exactly as it was produced, and the same " +
             "invocation is in the Activity panel.";
+    }
+
+    /// <summary>
+    /// What a successful upgrade obliges the rest of the app to do. The wizard catalog is a cache over the
+    /// installed CLI's <c>--help</c>, so it is re-read (if it was ever opened) instead of showing the old
+    /// version's targets and flags; and the staging folder keeps only the version just run, since each Setup
+    /// installer is ~270 MB. Both are off the UI thread and neither can fail the upgrade.
+    /// </summary>
+    private void OnUpgradeLanded()
+    {
+        _ = WizardCatalog.NotifyCliChangedAsync();
+
+        if (_staged?.Version is { Length: > 0 } version)
+        {
+            _ = Task.Run(() => _runner.PruneStaging(version));
+        }
     }
 
     private void ApplyStaging(UpgradeStagingResult result)

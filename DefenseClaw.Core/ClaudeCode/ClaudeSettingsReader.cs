@@ -69,9 +69,16 @@ public sealed class ClaudeSettingsReader
         AllowTrailingCommas = true,
     };
 
+    /// <summary>
+    /// The variable Claude Code documents for relocating its home-directory files: with it set, "Claude Code
+    /// then stores your settings, session history, and plugins there instead" of <c>~/.claude</c>.
+    /// </summary>
+    public const string ConfigDirVariableName = "CLAUDE_CONFIG_DIR";
+
     /// <param name="settingsFilePath">
-    /// Defaults to <c>%USERPROFILE%\.claude\settings.json</c>. Injectable so tests never
-    /// touch the operator's live Claude Code install.
+    /// Defaults to <c>%CLAUDE_CONFIG_DIR%\settings.json</c> when that variable is set, else
+    /// <c>%USERPROFILE%\.claude\settings.json</c>. Injectable so tests never touch the operator's
+    /// live Claude Code install.
     /// </param>
     public ClaudeSettingsReader(string? settingsFilePath = null)
     {
@@ -80,11 +87,17 @@ public sealed class ClaudeSettingsReader
 
     public string SettingsPath { get; }
 
-    public static string DefaultSettingsPath() =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".claude",
-            "settings.json");
+    public static string DefaultSettingsPath(Func<string, string?>? getEnvironmentVariable = null)
+    {
+        // A blank value is "not set", as it is for every other variable this app reads.
+        var configured = (getEnvironmentVariable ?? Environment.GetEnvironmentVariable)(ConfigDirVariableName)?.Trim();
+        return configured is { Length: > 0 }
+            ? Path.Combine(configured, "settings.json")
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".claude",
+                "settings.json");
+    }
 
     /// <summary>
     /// Reads the file once. Synchronous on purpose: settings.json is a few hundred bytes

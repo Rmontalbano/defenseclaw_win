@@ -80,6 +80,10 @@
                                  Margin="0,8,0,0"
                                  AutomationProperties.Name="DefenseClaw data directory"
                                  Text="{Binding DataDirectoryText, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding DataDirectorySourceText}" />
                     </StackPanel>
                 </Border>
 

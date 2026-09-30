@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Paths;
 
 namespace DefenseClaw.App.Services.Updates;
 
@@ -512,6 +513,17 @@ public sealed class UpgradeRunner
     }
 
     /// <summary>
+    /// <see cref="DetectCosign"/> on the thread pool. The probe walks every PATH entry, and one dead network entry
+    /// makes a single <c>File.Exists</c> take ~40 s, so anything on the UI thread awaits this instead of calling
+    /// the synchronous form.
+    /// </summary>
+    public static Task<CosignStatus> DetectCosignAsync(
+        IEnumerable<string>? processPath = null,
+        IEnumerable<string>? offPathDirectories = null,
+        Func<string, bool>? fileExists = null) =>
+        Task.Run(() => DetectCosign(processPath, offPathDirectories, fileExists));
+
+    /// <summary>
     /// Fetches the target release's upgrade script, sanity-checks its size, verifies its SHA-256
     /// against the same release's checksums.txt, and only then writes it under
     /// <see cref="StagingRoot"/>. Nothing reaches disk unverified.
@@ -638,6 +650,8 @@ public sealed class UpgradeRunner
                 ErrorMessage = $"Verification passed, but writing to {StagingRoot} failed: {ex.Message}",
             };
         }
+
+        PruneStaging(version);
 
         var script = new StagedUpgradeAsset
         {
@@ -880,6 +894,8 @@ public sealed class UpgradeRunner
                 };
             }
 
+            PruneStaging(version);
+
             var asset = new StagedUpgradeAsset
             {
                 Channel = UpgradeChannel.SetupInstaller,
@@ -961,6 +977,70 @@ public sealed class UpgradeRunner
         }
 
         return (totalRead, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+    }
+
+    /// <summary>
+    /// Deletes every other version's directory under <see cref="StagingRoot"/>, keeping <paramref name="keepVersion"/>'s.
+    /// Each Setup installer is ~270 MB and nothing else ever removed one, so the folder grew by that much per
+    /// upgrade. Called once a download has verified and been promoted, and again after a successful run.
+    /// <para>
+    /// Contained: only direct child directories of the staging root whose names are the kind
+    /// <see cref="SanitizeVersionForPath"/> produces are candidates, a directory that is a link (junction or
+    /// symlink) is skipped rather than followed, and a root that is a drive root is refused — nothing outside
+    /// the root can be reached by a crafted name or link. Best effort: a file in use (an installer still
+    /// running) or a permission error leaves that directory for next time, and nothing here throws.
+    /// </para>
+    /// </summary>
+    /// <returns>How many version directories were removed.</returns>
+    public int PruneStaging(string keepVersion)
+    {
+        try
+        {
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(StagingRoot));
+            if (Path.GetPathRoot(root) is { } driveRoot && string.Equals(
+                    Path.TrimEndingDirectorySeparator(driveRoot), root, StringComparison.OrdinalIgnoreCase))
+            {
+                return 0;
+            }
+
+            if (!Directory.Exists(root))
+            {
+                return 0;
+            }
+
+            var keep = SanitizeVersionForPath(keepVersion);
+            var removed = 0;
+
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                var full = Path.GetFullPath(directory);
+                var name = Path.GetFileName(full);
+
+                if (string.Equals(name, keep, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(Path.GetDirectoryName(full), root, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(SanitizeVersionForPath(name), name, StringComparison.Ordinal) ||
+                    new DirectoryInfo(full).Attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    Directory.Delete(full, recursive: true);
+                    removed++;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // In use or not ours to delete: leave it; the next prune tries again.
+                }
+            }
+
+            return removed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return 0;
+        }
     }
 
     private static void TryDelete(string path)
@@ -1252,7 +1332,7 @@ public sealed class UpgradeRunner
                 string candidate;
                 try
                 {
-                    candidate = Path.Combine(directory.Trim(), fileName);
+                    candidate = Path.Combine(directory.Trim().Trim('"'), fileName);
                 }
                 catch (ArgumentException)
                 {
@@ -1311,10 +1391,8 @@ public sealed class UpgradeRunner
         }
     }
 
-    private static IEnumerable<string> SplitPath(string? raw) =>
-        string.IsNullOrEmpty(raw)
-            ? []
-            : raw.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    // The shared splitter also strips the quotes around an entry, which the shell does and a bare Split does not.
+    private static IEnumerable<string> SplitPath(string? raw) => DefenseClawPaths.SplitPathList(raw);
 
     /// <summary>Keeps a tag like <c>v0.8.9</c> or a malformed one from escaping the staging root.</summary>
     private static string SanitizeVersionForPath(string version)

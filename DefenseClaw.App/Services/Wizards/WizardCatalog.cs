@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using DefenseClaw.Core.Paths;
 
 namespace DefenseClaw.App.Services.Wizards;
@@ -42,6 +43,13 @@ public sealed class WizardDefinitionChangedEventArgs : EventArgs
 /// are never owned by the caller that started them (a cancelled first caller must not poison
 /// the shared result); a caller's token only ends that caller's wait.
 /// </para>
+/// <para>
+/// <b>The catalog describes one build of the CLI.</b> When the installed CLI changes under a running app — an
+/// in-app upgrade (<see cref="NotifyCliChangedAsync"/>) or the gateway reporting a different binary version
+/// (<see cref="ObserveBinaryVersionAsync"/>) — everything cached is forgotten and, if the catalog was in use,
+/// re-read and re-warmed (<see cref="RefreshAfterCliChangeAsync"/>): otherwise an upgraded CLI's new targets
+/// and flags would stay invisible until the operator found the Re-read catalog button.
+/// </para>
 /// </summary>
 public sealed class WizardCatalog
 {
@@ -65,9 +73,18 @@ public sealed class WizardCatalog
     // asked us to forget; it must not write its answer into the fresh catalog when it lands.
     private int _generation;
 
+    // The last non-empty gateway BinaryVersion seen; a different one means the CLI was replaced.
+    private string? _observedBinaryVersion;
+
     public WizardCatalog(DefenseClawPaths paths)
+        : this(new SetupHelpProbe(paths))
     {
-        _probe = new SetupHelpProbe(paths);
+    }
+
+    /// <summary>Test seam: a catalog over a probe whose CLI is a fake.</summary>
+    internal WizardCatalog(SetupHelpProbe probe)
+    {
+        _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     }
 
     /// <summary>Raised (off the UI thread) when a definition is replaced by a richer one.</summary>
@@ -89,8 +106,34 @@ public sealed class WizardCatalog
 
         lock (InstanceGate)
         {
-            return _shared ??= new WizardCatalog(services.Paths);
+            if (_shared is null)
+            {
+                var catalog = new WizardCatalog(services.Paths);
+
+                // Seeded with what is running now, so only a later, different version counts as a change.
+                _ = catalog.ObserveBinaryVersionAsync(services.Monitor.Current.BinaryVersion);
+                services.Monitor.StateChanged += (_, e) => _ = catalog.ObserveBinaryVersionAsync(e.Snapshot.BinaryVersion);
+                _shared = catalog;
+            }
+
+            return _shared;
         }
+    }
+
+    /// <summary>
+    /// Tells the shared catalog, if one exists, that the installed CLI was just replaced. Does nothing when no
+    /// wizard or Setup hub was ever opened: there is nothing cached to be stale, and the first load reads the new CLI.
+    /// Never faults.
+    /// </summary>
+    public static Task NotifyCliChangedAsync()
+    {
+        WizardCatalog? catalog;
+        lock (InstanceGate)
+        {
+            catalog = _shared;
+        }
+
+        return catalog?.RefreshAfterCliChangeAsync() ?? Task.CompletedTask;
     }
 
     /// <summary>
@@ -120,6 +163,12 @@ public sealed class WizardCatalog
     /// </summary>
     public Task<IReadOnlyList<WizardDefinition>> ReloadAsync(CancellationToken cancellationToken = default)
     {
+        Forget();
+        return LoadAsync(cancellationToken);
+    }
+
+    private void Forget()
+    {
         lock (InstanceGate)
         {
             _generation++;
@@ -128,8 +177,63 @@ public sealed class WizardCatalog
             _probe.Clear();
             _load = null;
         }
+    }
 
-        return LoadAsync(cancellationToken);
+    /// <summary>
+    /// The installed CLI is a different build than the one this catalog was read from. Forgets everything (as
+    /// <see cref="ReloadAsync"/> does, help screens and the on-disk copy included); and, if the catalog had been
+    /// loaded at all, reads the roster again and warms every target's detail in the background — the shared
+    /// definitions must not be left as phase-one stubs that nothing would ever complete. Never faults: a failed
+    /// re-read is the same "load error, retried by Refresh" the first read would have been.
+    /// </summary>
+    public async Task RefreshAfterCliChangeAsync()
+    {
+        try
+        {
+            bool inUse;
+            lock (InstanceGate)
+            {
+                inUse = _load is not null;
+            }
+
+            if (!inUse)
+            {
+                Forget();
+                return;
+            }
+
+            var definitions = await ReloadAsync().ConfigureAwait(false);
+            await Task.WhenAll(definitions.Select(d => EnsureDetailAsync(d.Target))).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"Refreshing the setup catalog after a CLI change failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Feeds the gateway's reported binary version to the catalog. The first non-empty version is remembered; a
+    /// later, different one means the CLI was replaced (an upgrade run outside this app, or a rollback), and the
+    /// catalog is refreshed as by <see cref="RefreshAfterCliChangeAsync"/>. An empty version (gateway down) says
+    /// nothing and is ignored. The returned task is complete when nothing needed doing.
+    /// </summary>
+    public Task ObserveBinaryVersionAsync(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return Task.CompletedTask;
+        }
+
+        string? previous;
+        lock (InstanceGate)
+        {
+            previous = _observedBinaryVersion;
+            _observedBinaryVersion = version;
+        }
+
+        return previous is null || string.Equals(previous, version, StringComparison.Ordinal)
+            ? Task.CompletedTask
+            : RefreshAfterCliChangeAsync();
     }
 
     public WizardDefinition? Find(string target) =>

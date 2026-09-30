@@ -18,6 +18,26 @@ public class ClaudeSettingsReaderTests : IDisposable
     private readonly TempDirectory _directory = new("dcw-claude-settings");
 
     [Fact]
+    public void CLAUDE_CONFIG_DIR_relocates_the_settings_file_as_Claude_Code_documents()
+    {
+        var relocated = ClaudeSettingsReader.DefaultSettingsPath(
+            name => name == "CLAUDE_CONFIG_DIR" ? @"D:\claude-home" : null);
+
+        Assert.Equal(@"D:\claude-home\settings.json", relocated);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Without_CLAUDE_CONFIG_DIR_the_profile_default_applies(string? value)
+    {
+        var path = ClaudeSettingsReader.DefaultSettingsPath(name => name == "CLAUDE_CONFIG_DIR" ? value : null);
+
+        Assert.EndsWith(@"\.claude\settings.json", path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Missing_file_is_not_an_error()
     {
         var snapshot = ReaderFor("settings.json").Read();
