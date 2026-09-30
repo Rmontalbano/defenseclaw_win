@@ -14,6 +14,9 @@ internal enum AppearanceStyle
 
     /// <summary>A terminal look derived from the DefenseClaw CLI's own TUI theme: monospace, square, flat.</summary>
     Tui,
+
+    /// <summary>The look of DefenseClaw for Mac: Cisco blue, white and slate cards, rounded 12 / 10, a yellow Medium and a cyan Low.</summary>
+    Cisco,
 }
 
 /// <summary>Whether the app is light, dark, or follows the operating system (and keeps following it).</summary>
@@ -73,6 +76,7 @@ internal static class AppearanceCatalog
         AppearanceStyle.Default,
         AppearanceStyle.Linear,
         AppearanceStyle.Tui,
+        AppearanceStyle.Cisco,
     };
 
     public static IReadOnlyList<AppearanceMode> Modes { get; } = new[]
@@ -86,6 +90,7 @@ internal static class AppearanceCatalog
     {
         AppearanceStyle.Linear => "Linear",
         AppearanceStyle.Tui => "TUI",
+        AppearanceStyle.Cisco => "Cisco",
         _ => "Default",
     };
 
@@ -93,6 +98,7 @@ internal static class AppearanceCatalog
     {
         AppearanceStyle.Linear => "Clean product UI: solid, hairline borders, indigo accent.",
         AppearanceStyle.Tui => "Terminal look: monospace, square, matches the CLI.",
+        AppearanceStyle.Cisco => "Matches DefenseClaw for Mac: Cisco blue, rounded cards.",
         _ => "The Windows look: Mica and your accent colour.",
     };
 
@@ -117,6 +123,7 @@ internal static class AppearanceCatalog
         {
             AppearanceStyle.Linear => dark ? "Linear.Dark.xaml" : "Linear.Light.xaml",
             AppearanceStyle.Tui => dark ? "Tui.Dark.xaml" : "Tui.Light.xaml",
+            AppearanceStyle.Cisco => dark ? "Cisco.Dark.xaml" : "Cisco.Light.xaml",
 
             // One file for both modes: Default's tokens alias WPF-UI's brushes, and WPF-UI decides light or dark.
             _ => "Default.xaml",
@@ -139,6 +146,9 @@ internal static class AppearanceTokens
     public const string Dialog = "DcDialogBrush";
     public const string Subtle = "DcSubtleBrush";
     public const string Selected = "DcSelectedBrush";
+
+    /// <summary>The alternate row of a striped table: a very subtle step off the surface the rows sit on (translucent, except in Cisco).</summary>
+    public const string Zebra = "DcZebraBrush";
     public const string Border = "DcBorderBrush";
     public const string ControlBorder = "DcControlBorderBrush";
     public const string TextPrimary = "DcTextPrimaryBrush";
@@ -156,6 +166,10 @@ internal static class AppearanceTokens
     public const string ToneHighSubtle = "DcToneHighSubtleBrush";
     public const string ToneMedium = "DcToneMediumBrush";
     public const string ToneMediumSubtle = "DcToneMediumSubtleBrush";
+
+    /// <summary>The lowest severity: a cyan or teal in every style (Default's grey before this token existed).</summary>
+    public const string ToneLow = "DcToneLowBrush";
+    public const string ToneLowSubtle = "DcToneLowSubtleBrush";
     public const string ToneOk = "DcToneOkBrush";
     public const string ToneOkSubtle = "DcToneOkSubtleBrush";
     public const string ToneNeutral = "DcToneNeutralBrush";
@@ -197,7 +211,7 @@ internal static class AppearanceTokens
     public const string NavIconSetup = "DcNavIconSetupBrush";
     public const string NavIconUpdates = "DcNavIconUpdatesBrush";
 
-    /// <summary>Which shapes the status and severity glyphs draw: "Dot" (Default), "Linear" or "Terminal". A string, not a brush.</summary>
+    /// <summary>Which shapes the status and severity glyphs draw: "Dot" (Default and Cisco), "Linear" or "Terminal". A string, not a brush.</summary>
     public const string GlyphFamily = "DcGlyphFamily";
 
     public const string UiFontFamily = "DcUiFontFamily";
@@ -227,10 +241,10 @@ internal static class AppearanceTokens
     /// <summary>Every colour token, in the order the swatches and the contrast test read them.</summary>
     public static IReadOnlyList<string> Brushes { get; } = new[]
     {
-        WindowBackground, Surface, Raised, Inset, Dialog, Subtle, Selected, Border, ControlBorder,
+        WindowBackground, Surface, Raised, Inset, Dialog, Subtle, Selected, Zebra, Border, ControlBorder,
         TextPrimary, TextSecondary, TextTertiary,
         Accent, AccentHover, OnAccent, FocusRing, FocusRingInner,
-        ToneCritical, ToneCriticalSubtle, ToneHigh, ToneHighSubtle, ToneMedium, ToneMediumSubtle,
+        ToneCritical, ToneCriticalSubtle, ToneHigh, ToneHighSubtle, ToneMedium, ToneMediumSubtle, ToneLow, ToneLowSubtle,
         ToneOk, ToneOkSubtle, ToneNeutral, ToneNeutralSubtle,
         Danger, DangerHover, OnDanger,
         Icon, IconMuted,

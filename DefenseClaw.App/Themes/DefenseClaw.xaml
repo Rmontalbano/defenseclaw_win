@@ -16,14 +16,15 @@
         TOKENS (Themes\Styles\*.xaml define only their values; Default.xaml lists the vocabulary)
           One dictionary per style x mode is merged after this one at run time: Default.xaml (aliases of
           WPF-UI's brushes, so Default is exactly the look the app always had), Linear.Dark / Linear.Light,
-          Tui.Dark / Tui.Light. Default.xaml is also merged here, below, so a host that only loads this
+          Tui.Dark / Tui.Light, Cisco.Dark / Cisco.Light. Default.xaml is also merged here, below, so a host that only loads this
           file still resolves every token. Consume them with {DynamicResource ...}, never StaticResource:
           a static reference is frozen at load and would miss a live switch.
           Brushes    DcWindowBackgroundBrush | DcSurfaceBrush (card) | DcRaisedBrush | DcInsetBrush | DcDialogBrush
-                     DcSubtleBrush | DcSelectedBrush | DcBorderBrush (hairline) | DcControlBorderBrush
+                     DcSubtleBrush | DcSelectedBrush | DcZebraBrush (the alternate row of a striped table)
+                     DcBorderBrush (hairline) | DcControlBorderBrush
                      DcTextPrimaryBrush / DcTextSecondaryBrush / DcTextTertiaryBrush
                      DcAccentBrush | DcAccentHoverBrush | DcOnAccentBrush | DcFocusRingBrush | DcFocusRingInnerBrush
-                     DcTone{Critical,High,Medium,Ok,Neutral}Brush and ...SubtleBrush (foreground / tinted fill)
+                     DcTone{Critical,High,Medium,Low,Ok,Neutral}Brush and ...SubtleBrush (foreground / tinted fill)
                      DcDangerBrush | DcDangerHoverBrush | DcOnDangerBrush (the destructive button: fill, hover fill, label)
           Icons      DcIconBrush (default icon: secondary text) | DcIconMutedBrush (empty-state glyphs)
                      DcTint{Indigo,Blue,Violet,Teal,Green,Amber,Orange,Red,Pink,Gray}Brush (the named palette)
@@ -79,7 +80,7 @@
           DcToolbarLabel         Label inside a DcToolbarPanel.
 
         SURFACES (Border / Grid styles)
-          DcCard                 Card: padding 16, radius 8, 1px card stroke, card fill (Default's numbers; they are tokens).
+          DcCard                 Card: padding 16, radius 8, 1px card stroke, card fill (Default's numbers; they are tokens: Cisco's are 14 / 12).
           DcCardCompact          Same, padding 12.
           DcCardFlush            Same, padding 4 - the host for a ListView / DataGrid / log list.
           DcSubtleRow            Inner row inside a card: inset fill, radius 4, padding 8.
@@ -138,9 +139,10 @@
           Tag value        Meaning                          Token (Default = WPF-UI palette)
           Critical | Bad   critical severity / failed       DcToneCritical (SystemFillColorCritical, red)
           High | Warn     high severity / needs a look     DcToneHigh (SystemFillColorCaution, amber)
-          Medium           medium severity                  DcToneMedium (SystemFillColorAttention, accent blue)
+          Medium           medium severity                  DcToneMedium (SystemFillColorAttention, accent blue; Cisco: yellow)
+          Low              low severity                     DcToneLow (cyan / teal in every style)
           Ok               healthy / passed / success       DcToneOk (SystemFillColorSuccess, green)
-          Low | Info | Neutral | anything else | unset       neutral grey
+          Info | Neutral | anything else | unset            neutral grey
           DcBadge + DcBadgeText   Pill: tinted fill, tone-coloured text. Put the TextBlock inside.
           DcChip                  Neutral metadata tag (mode, connector, "stdin secret"); no tone.
           DcBadgeText             11 semibold text for DcBadge / DcChip.
@@ -341,7 +343,7 @@
         <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
-    <!-- Big number. Tag picks the tone: Critical|Bad, High|Warn, Medium, Ok; otherwise primary. -->
+    <!-- Big number. Tag picks the tone: Critical|Bad, High|Warn, Medium, Low, Ok; otherwise primary. -->
     <Style x:Key="DcValue" TargetType="TextBlock">
         <Setter Property="FontSize" Value="24" />
         <Setter Property="FontWeight" Value="SemiBold" />
@@ -361,6 +363,9 @@
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
                 <Setter Property="Foreground" Value="{DynamicResource DcToneMediumBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="Low">
+                <Setter Property="Foreground" Value="{DynamicResource DcToneLowBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
                 <Setter Property="Foreground" Value="{DynamicResource DcToneOkBrush}" />
@@ -460,6 +465,10 @@
                 <Setter Property="Background" Value="{DynamicResource DcToneMediumSubtleBrush}" />
                 <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
+            <Trigger Property="Tag" Value="Low">
+                <Setter Property="Background" Value="{DynamicResource DcToneLowSubtleBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneLowBrush}" />
+            </Trigger>
             <Trigger Property="Tag" Value="Ok">
                 <Setter Property="Background" Value="{DynamicResource DcToneOkSubtleBrush}" />
                 <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneOkBrush}" />
@@ -500,6 +509,9 @@
             <Trigger Property="Tag" Value="Medium">
                 <Setter Property="Foreground" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
+            <Trigger Property="Tag" Value="Low">
+                <Setter Property="Foreground" Value="{DynamicResource DcToneLowBrush}" />
+            </Trigger>
             <Trigger Property="Tag" Value="Ok">
                 <Setter Property="Foreground" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
@@ -531,6 +543,9 @@
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
                 <Setter Property="Background" Value="{DynamicResource DcToneMediumBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="Low">
+                <Setter Property="Background" Value="{DynamicResource DcToneLowBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
                 <Setter Property="Background" Value="{DynamicResource DcToneOkBrush}" />
@@ -564,6 +579,9 @@
             <Trigger Property="Tag" Value="Medium">
                 <Setter Property="Background" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
+            <Trigger Property="Tag" Value="Low">
+                <Setter Property="Background" Value="{DynamicResource DcToneLowBrush}" />
+            </Trigger>
             <Trigger Property="Tag" Value="Ok">
                 <Setter Property="Background" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
@@ -592,6 +610,9 @@
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
                 <Setter Property="Background" Value="{DynamicResource DcToneMediumSubtleBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="Low">
+                <Setter Property="Background" Value="{DynamicResource DcToneLowSubtleBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
                 <Setter Property="Background" Value="{DynamicResource DcToneOkSubtleBrush}" />

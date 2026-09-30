@@ -14,8 +14,8 @@ namespace DefenseClaw.App.Tests.Appearance;
 /// they sit on before the ratio is taken.
 /// <para>
 /// The bar: primary and secondary text on the window and on the surface at 4.5:1 (WCAG AA for body text); every tone's
-/// foreground on the surface at 3:1 (AA for non-text UI and large text). Linear and TUI, whose values this app owns,
-/// are held to more: the primary button's label on the accent (4.5), the focus ring against the window and surface
+/// foreground on the surface at 3:1 (AA for non-text UI and large text); the same text on a zebra row. Linear, TUI and
+/// Cisco, whose values this app owns, are held to more: the primary button's label on the accent (4.5), the focus ring against the window and surface
 /// (3), each tone on its own tinted fill (3), and the YAML editor's token colours against every surface (4.5).
 /// Tertiary text is deliberately not held to a bar - it is hint text, and the Dc styles do not use it for anything that
 /// carries meaning (see the note on DcCaption).
@@ -36,7 +36,7 @@ public sealed class AppearanceContrastTests
         _output = output;
     }
 
-    private static readonly string[] Tones = { "Critical", "High", "Medium", "Ok", "Neutral" };
+    private static readonly string[] Tones = { "Critical", "High", "Medium", "Low", "Ok", "Neutral" };
 
     // ------------------------------------------------------------------ the contract, per style and mode
 
@@ -47,6 +47,8 @@ public sealed class AppearanceContrastTests
     [InlineData("Linear", "Light")]
     [InlineData("Tui", "Dark")]
     [InlineData("Tui", "Light")]
+    [InlineData("Cisco", "Dark")]
+    [InlineData("Cisco", "Light")]
     public void Text_and_tones_meet_contrast_in_every_style_and_mode(string styleName, string modeName)
     {
         var look = Look.Load(styleName, modeName);
@@ -56,18 +58,24 @@ public sealed class AppearanceContrastTests
         {
             Check(failures, $"primary text on {surfaceName}", look.Composite(look.TextPrimary, surface), surface, 4.5);
             Check(failures, $"secondary text on {surfaceName}", look.Composite(look.TextSecondary, surface), surface, 4.5);
+
+            // The alternate row of a striped table, over whatever the rows sit on: the text in it still reads.
+            var zebra = look.Composite(look.Zebra, surface);
+            Check(failures, $"primary text on a zebra row over the {surfaceName}", look.Composite(look.TextPrimary, zebra), zebra, 4.5);
+            Check(failures, $"secondary text on a zebra row over the {surfaceName}", look.Composite(look.TextSecondary, zebra), zebra, 4.5);
         }
 
         foreach (var tone in Tones)
         {
             // Default's Medium is the Windows accent itself (whatever colour this machine has), so only the tones
-            // that are fixed colours are held to the bar for Default; Linear and TUI own theirs, Medium included.
+            // that are fixed colours are held to the bar for Default; Linear, TUI and Cisco own theirs, Medium included.
             if (styleName == "Default" && tone == "Medium")
             {
                 continue;
             }
 
             Check(failures, $"{tone} tone on surface", look.Composite(look.Tone(tone), look.Surface), look.Surface, 3.0);
+            Check(failures, $"{tone} tone on window", look.Composite(look.Tone(tone), look.Window), look.Window, 3.0);
         }
 
         Assert.True(failures.Count == 0, $"{styleName} {modeName}: " + string.Join("; ", failures));
@@ -80,6 +88,8 @@ public sealed class AppearanceContrastTests
     [InlineData("Linear", "Light")]
     [InlineData("Tui", "Dark")]
     [InlineData("Tui", "Light")]
+    [InlineData("Cisco", "Dark")]
+    [InlineData("Cisco", "Light")]
     public void The_destructive_buttons_label_holds_4_5_to_1_on_its_fill_at_rest_and_on_hover(string styleName, string modeName)
     {
         // WPF-UI's own Danger button is a fixed #F44336 under the theme's text colour: 3.68 (Default dark), 3.65 (Linear light),
@@ -98,7 +108,9 @@ public sealed class AppearanceContrastTests
     [InlineData("Linear", "Light")]
     [InlineData("Tui", "Dark")]
     [InlineData("Tui", "Light")]
-    public void Linear_and_TUI_also_hold_accent_focus_and_tinted_tones(string styleName, string modeName)
+    [InlineData("Cisco", "Dark")]
+    [InlineData("Cisco", "Light")]
+    public void Linear_TUI_and_Cisco_also_hold_accent_focus_and_tinted_tones(string styleName, string modeName)
     {
         var look = Look.Load(styleName, modeName);
         var failures = new List<string>();
@@ -126,6 +138,8 @@ public sealed class AppearanceContrastTests
     [InlineData("Linear", "Light")]
     [InlineData("Tui", "Dark")]
     [InlineData("Tui", "Light")]
+    [InlineData("Cisco", "Dark")]
+    [InlineData("Cisco", "Light")]
     public void The_YAML_editor_palette_reads_on_every_surface_it_can_sit_on(string styleName, string modeName)
     {
         var look = Look.Load(styleName, modeName);
@@ -162,7 +176,7 @@ public sealed class AppearanceContrastTests
     [Fact]
     public void The_full_contrast_table_is_written_to_the_test_output()
     {
-        foreach (var style in new[] { "Default", "Linear", "Tui" })
+        foreach (var style in new[] { "Default", "Linear", "Tui", "Cisco" })
         {
             foreach (var mode in new[] { "Dark", "Light" })
             {
@@ -223,6 +237,8 @@ public sealed class AppearanceContrastTests
         public Color Surface => Composite(_color(AppearanceTokens.Surface), Window);
 
         public Color Inset => Composite(_color(AppearanceTokens.Inset), Window);
+
+        public Color Zebra => _color(AppearanceTokens.Zebra);
 
         public Color TextPrimary => _color(AppearanceTokens.TextPrimary);
 

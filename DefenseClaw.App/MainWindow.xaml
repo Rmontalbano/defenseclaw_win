@@ -46,7 +46,7 @@
                                Click="OnAppearanceButtonClick"
                                ToolTip="Appearance: style and light or dark"
                                AutomationProperties.Name="Appearance"
-                               AutomationProperties.HelpText="Opens a menu to choose the style (Default, Linear, TUI) and the mode (System, Light, Dark).">
+                               AutomationProperties.HelpText="Opens a menu to choose the style (Default, Linear, TUI, Cisco) and the mode (System, Light, Dark).">
                         <ui:Button.Icon>
                             <ctl:DcSymbolIcon Symbol="PaintBrush24" FontSize="14" />
                         </ui:Button.Icon>

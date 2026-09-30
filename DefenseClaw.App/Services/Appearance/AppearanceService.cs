@@ -49,7 +49,7 @@ internal sealed class WindowsSystemThemeSource : ISystemThemeSource
 /// <para>
 /// <b>Layers.</b> A style is a <i>token dictionary</i> (Themes\Styles\*.xaml: colours, fonts, radii, density) merged after
 /// everything else; the <c>Dc*</c> styles read tokens through DynamicResource, so replacing that one dictionary re-skins
-/// every open window. For Linear and TUI the tokens are also <i>bridged</i> onto WPF-UI's own resource keys
+/// every open window. For Linear, TUI and Cisco the tokens are also <i>bridged</i> onto WPF-UI's own resource keys
 /// (<see cref="WpfUiBridge"/>) so its controls follow, and the accent goes in through the same
 /// <c>SystemAccentColor*</c> keys WPF-UI's accent manager writes. Default has no bridge and no accent of its own:
 /// it hands WPF-UI back its own theme and accent, exactly as before.
@@ -298,7 +298,7 @@ internal sealed class AppearanceService : IAppearanceControl
         else
         {
             tokens = LoadTokens(style, dark);
-            WriteAccent(tokens);
+            WriteAccent(tokens, style);
             ApplicationThemeManager.Apply(dark ? ApplicationTheme.Dark : ApplicationTheme.Light, WindowBackdropType.None, updateAccent: false);
         }
 
@@ -306,7 +306,7 @@ internal sealed class AppearanceService : IAppearanceControl
         layer.MergedDictionaries.Add(tokens);
         if (style != AppearanceStyle.Default)
         {
-            WpfUiBridge.AddTo(layer, tokens);
+            WpfUiBridge.AddTo(layer, tokens, style);
         }
 
         InstallLayer(layer);
@@ -361,12 +361,15 @@ internal sealed class AppearanceService : IAppearanceControl
     /// focused text box's underline, the sidebar's selection bar - read exactly these. The hover colour doubles as
     /// the accent-coloured text (a link) because it is the step that clears contrast in its mode.
     /// </summary>
-    private void WriteAccent(ResourceDictionary tokens)
+    private void WriteAccent(ResourceDictionary tokens, AppearanceStyle style)
     {
         var accent = ColorOf(tokens, AppearanceTokens.Accent);
         var hover = ColorOf(tokens, AppearanceTokens.AccentHover);
         var onAccent = ColorOf(tokens, AppearanceTokens.OnAccent);
-        var medium = ColorOf(tokens, AppearanceTokens.ToneMedium);
+
+        // What WPF-UI files under "attention" (informational bars and badges): Medium, the blue one - except in Cisco, where Medium is
+        // yellow (the Mac's severity ramp) and information keeps to the accent (see WpfUiBridge.AddTo).
+        var medium = style == AppearanceStyle.Cisco ? accent : ColorOf(tokens, AppearanceTokens.ToneMedium);
         var text = ColorOf(tokens, AppearanceTokens.TextPrimary);
 
         PutColor("SystemAccentColor", accent);

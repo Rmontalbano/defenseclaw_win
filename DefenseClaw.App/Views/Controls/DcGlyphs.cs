@@ -91,6 +91,7 @@ public abstract class DcGlyph : FrameworkElement
     private static readonly DependencyProperty CriticalBrushProperty = BrushProperty("CriticalBrush");
     private static readonly DependencyProperty HighBrushProperty = BrushProperty("HighBrush");
     private static readonly DependencyProperty MediumBrushProperty = BrushProperty("MediumBrush");
+    private static readonly DependencyProperty LowBrushProperty = BrushProperty("LowBrush");
     private static readonly DependencyProperty OkBrushProperty = BrushProperty("OkBrush");
     private static readonly DependencyProperty NeutralBrushProperty = BrushProperty("NeutralBrush");
 
@@ -111,6 +112,7 @@ public abstract class DcGlyph : FrameworkElement
         SetResourceReference(CriticalBrushProperty, "DcToneCriticalBrush");
         SetResourceReference(HighBrushProperty, "DcToneHighBrush");
         SetResourceReference(MediumBrushProperty, "DcToneMediumBrush");
+        SetResourceReference(LowBrushProperty, "DcToneLowBrush");
         SetResourceReference(OkBrushProperty, "DcToneOkBrush");
         SetResourceReference(NeutralBrushProperty, "DcToneNeutralBrush");
     }
@@ -209,6 +211,7 @@ public abstract class DcGlyph : FrameworkElement
         GlyphTone.Critical => (Brush?)GetValue(CriticalBrushProperty),
         GlyphTone.High => (Brush?)GetValue(HighBrushProperty),
         GlyphTone.Medium => (Brush?)GetValue(MediumBrushProperty),
+        GlyphTone.Low => (Brush?)GetValue(LowBrushProperty),
         GlyphTone.Ok => (Brush?)GetValue(OkBrushProperty),
         _ => (Brush?)GetValue(NeutralBrushProperty),
     };

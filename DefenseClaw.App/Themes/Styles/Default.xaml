@@ -17,9 +17,10 @@
         Token vocabulary, shared by every style (see Themes\DefenseClaw.xaml for what consumes each):
           Brushes  DcWindowBackground, DcSurface (card), DcRaised (keycap, control-like), DcInset (code block,
                    subtle row), DcDialog (dialog / flyout card), DcSubtle (chip, hover), DcSelected,
-                   DcBorder (hairline), DcControlBorder, DcTextPrimary/Secondary/Tertiary, DcAccent,
+                   DcZebra (the alternate row of a striped table), DcBorder (hairline), DcControlBorder,
+                   DcTextPrimary/Secondary/Tertiary, DcAccent,
                    DcAccentHover, DcOnAccent, DcFocusRing (outer), DcFocusRingInner,
-                   DcTone{Critical,High,Medium,Ok,Neutral} and DcTone...Subtle (foreground / tinted fill),
+                   DcTone{Critical,High,Medium,Low,Ok,Neutral} and DcTone...Subtle (foreground / tinted fill),
                    DcDanger, DcDangerHover, DcOnDanger (the destructive button: fill, hover fill, label)
           Icons    DcIconBrush (default icon), DcIconMutedBrush, DcTint{Indigo,Blue,Violet,Teal,Green,Amber,Orange,Red,
                    Pink,Gray}Brush (the palette), DcSection{Overview,Observe,Govern,Discover,Setup,Updates}Brush (a card
@@ -39,6 +40,8 @@
     <SolidColorBrush x:Key="DcDialogBrush" Color="{DynamicResource ApplicationBackgroundColor}" />
     <SolidColorBrush x:Key="DcSubtleBrush" Color="{DynamicResource SubtleFillColorSecondary}" />
     <SolidColorBrush x:Key="DcSelectedBrush" Color="{DynamicResource ControlFillColorSecondary}" />
+    <!-- Translucent, so the same step works on the window and on a card: 4% white in dark, 3.5% black in light. -->
+    <SolidColorBrush x:Key="DcZebraBrush" Color="{DynamicResource SubtleFillColorTertiary}" />
     <SolidColorBrush x:Key="DcBorderBrush" Color="{DynamicResource CardStrokeColorDefault}" />
     <SolidColorBrush x:Key="DcControlBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
 
@@ -60,6 +63,9 @@
     <!-- WPF-UI's "attention" brush is the accent's secondary step, written by its accent manager. -->
     <SolidColorBrush x:Key="DcToneMediumBrush" Color="{DynamicResource SystemAccentColorSecondary}" />
     <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="{DynamicResource SystemFillColorAttentionBackground}" />
+    <!-- WPF-UI has no cyan status colour, and this one file serves both modes: Low is a fixed teal mid-tone that clears 3:1 on the light card and the dark one alike (as the Teal tint below does). -->
+    <SolidColorBrush x:Key="DcToneLowBrush" Color="#0B8FA1" />
+    <SolidColorBrush x:Key="DcToneLowSubtleBrush" Color="#1A0B8FA1" />
     <SolidColorBrush x:Key="DcToneOkBrush" Color="{DynamicResource SystemFillColorSuccess}" />
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="{DynamicResource SystemFillColorSuccessBackground}" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="{DynamicResource SystemFillColorNeutral}" />

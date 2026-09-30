@@ -220,7 +220,7 @@ public sealed class AppearanceWindowsTests
     });
 
     [Fact]
-    public void The_flyout_offers_three_styles_and_three_modes_with_the_current_ones_chosen()
+    public void The_flyout_offers_four_styles_and_three_modes_with_the_current_ones_chosen()
     {
         var appearance = new FakeAppearance { Style = AppearanceStyle.Linear, Mode = AppearanceMode.Dark };
         var flyout = NewFlyout(appearance);
@@ -231,9 +231,9 @@ public sealed class AppearanceWindowsTests
             var styles = radios.Where(r => r.GroupName == "AppearanceStyle").ToList();
             var modes = radios.Where(r => r.GroupName == "AppearanceMode").ToList();
 
-            Assert.Equal(new[] { "Default style", "Linear style", "TUI style" }, styles.Select(r => System.Windows.Automation.AutomationProperties.GetName(r)).ToArray());
+            Assert.Equal(new[] { "Default style", "Linear style", "TUI style", "Cisco style" }, styles.Select(r => System.Windows.Automation.AutomationProperties.GetName(r)).ToArray());
             Assert.Equal(new[] { "System mode", "Light mode", "Dark mode" }, modes.Select(r => System.Windows.Automation.AutomationProperties.GetName(r)).ToArray());
-            Assert.Equal(new[] { false, true, false }, styles.Select(r => r.IsChecked == true).ToArray());
+            Assert.Equal(new[] { false, true, false, false }, styles.Select(r => r.IsChecked == true).ToArray());
             Assert.Equal(new[] { false, false, true }, modes.Select(r => r.IsChecked == true).ToArray());
             Assert.All(radios, r => Assert.False(string.IsNullOrEmpty(System.Windows.Automation.AutomationProperties.GetHelpText(r))));
         });
@@ -299,10 +299,10 @@ public sealed class AppearanceWindowsTests
             flyout.Bind(appearance);
             flyout.Bind(appearance);
 
-            Assert.Equal(6, Logical<RadioButton>(flyout).Count());
+            Assert.Equal(7, Logical<RadioButton>(flyout).Count());
 
             var swatches = Logical<Border>(flyout).Where(b => b.Width == 44).ToList();
-            Assert.Equal(3, swatches.Count);
+            Assert.Equal(4, swatches.Count);
             Assert.All(swatches, s => Assert.Equal(Colors.Black, ((SolidColorBrush)s.Background).Color));
 
             appearance.SetStyle(AppearanceStyle.Tui);   // raises Changed; the refresh is queued on the dispatcher

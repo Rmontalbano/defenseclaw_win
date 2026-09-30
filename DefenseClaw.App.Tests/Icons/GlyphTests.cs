@@ -298,7 +298,7 @@ public sealed class GlyphTests
             return (
                 PixelAt(bitmap, 14, 50),
                 PixelAt(bitmap, 50, 50),
-                AppearanceFixture.ColorOf("DcToneNeutralBrush"),
+                AppearanceFixture.ColorOf("DcToneLowBrush"),
                 AppearanceFixture.ColorOf("DcWindowBackgroundBrush"));
         });
 

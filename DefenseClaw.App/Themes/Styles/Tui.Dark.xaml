@@ -29,6 +29,8 @@
     <SolidColorBrush x:Key="DcDialogBrush" Color="#121A2B" />
     <SolidColorBrush x:Key="DcSubtleBrush" Color="#18233A" />
     <SolidColorBrush x:Key="DcSelectedBrush" Color="#203251" />
+    <!-- The alternate row of a striped table: 3% white. -->
+    <SolidColorBrush x:Key="DcZebraBrush" Color="#08FFFFFF" />
     <SolidColorBrush x:Key="DcBorderBrush" Color="#27324A" />
     <SolidColorBrush x:Key="DcControlBorderBrush" Color="#27324A" />
 
@@ -49,6 +51,9 @@
     <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#26FB923C" />
     <SolidColorBrush x:Key="DcToneMediumBrush" Color="#60A5FA" />
     <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#2660A5FA" />
+    <!-- Low is the CLI's own cyan (accent_cyan, also the accent): the low end of the ramp is the terminal's signature colour. -->
+    <SolidColorBrush x:Key="DcToneLowBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcToneLowSubtleBrush" Color="#2622D3EE" />
     <SolidColorBrush x:Key="DcToneOkBrush" Color="#34D399" />
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#2634D399" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#9FB2CC" />

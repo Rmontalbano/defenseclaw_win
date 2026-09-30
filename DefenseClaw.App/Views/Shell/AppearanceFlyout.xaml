@@ -5,10 +5,10 @@
              IsTabStop="False"
              AutomationProperties.Name="Appearance">
     <!--
-        The title bar's Appearance flyout: pick a style (Default, Linear, TUI - each with a swatch of its own colours) and a
+        The title bar's Appearance flyout: pick a style (Default, Linear, TUI, Cisco - each with a swatch of its own colours) and a
         mode (System, Light, Dark). Choosing applies at once - the whole app changes behind the flyout, which is the
         preview - so there is no Apply button. Two radio groups, so the arrow keys move within one, Tab moves between them,
-        and a screen reader announces "Linear, radio button, 2 of 3" with the style's description. Esc closes it and the
+        and a screen reader announces "Linear, radio button, 2 of 4" with the style's description. Esc closes it and the
         shell puts focus back on the Appearance button.
 
         The radios are built in code (AppearanceFlyout.xaml.cs) from AppearanceCatalog, so a style added there appears

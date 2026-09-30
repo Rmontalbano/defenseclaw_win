@@ -1,0 +1,120 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        Style "Cisco", dark. Same shape, type and density as Cisco.Light.xaml; only the colours differ.
+
+        NOT CALIBRATED AGAINST A CAPTURE: the Mac capture (CUST-199) is Light mode only, so this file stands on the source
+        (DesignSystem\CiscoTheme.swift and the Connectors zebra in OverviewView.swift) and the macOS dark system colours the Mac's
+        severity ramp is made of, unadjusted:
+
+            window  #1C1C1E   card   #111B2C   raised  #16233A   accent #04AEED   zebra  #1C1C1E / #2A2A2C (this token: #2A2A2C)
+            tones   red #FF453A, orange #FF9F0A, yellow #FFD60A, cyan #64D2FF, green #32D74B (macOS dark systemRed ... systemGreen)
+
+        The rest (inset, dialog, subtle, selected, border, text, the dark label on the accent, danger) are this file's own steps in
+        the same navy / slate family, chosen for contrast (AppearanceContrastTests). A dark-mode re-capture of the Overview, Alerts
+        and Skills is what would confirm or move them.
+
+        Every tone here holds far more than 3:1 on the window and on a card. Unlike the light file's accent, #04AEED is a light
+        colour (white on it is 2.5:1), so its label is the near-black navy #04121F (7.5:1), as in TUI dark. Tokens only.
+    -->
+
+    <!-- ===== Brushes ====================================================================== -->
+    <SolidColorBrush x:Key="DcWindowBackgroundBrush" Color="#1C1C1E" />
+    <SolidColorBrush x:Key="DcSurfaceBrush" Color="#111B2C" />
+    <SolidColorBrush x:Key="DcRaisedBrush" Color="#16233A" />
+    <SolidColorBrush x:Key="DcInsetBrush" Color="#0B1422" />
+    <SolidColorBrush x:Key="DcDialogBrush" Color="#16233A" />
+    <SolidColorBrush x:Key="DcSubtleBrush" Color="#1F2F4A" />
+    <SolidColorBrush x:Key="DcSelectedBrush" Color="#1A3556" />
+    <SolidColorBrush x:Key="DcZebraBrush" Color="#2A2A2C" />
+    <SolidColorBrush x:Key="DcBorderBrush" Color="#24374F" />
+    <SolidColorBrush x:Key="DcControlBorderBrush" Color="#34496A" />
+
+    <SolidColorBrush x:Key="DcTextPrimaryBrush" Color="#F5F5F7" />
+    <SolidColorBrush x:Key="DcTextSecondaryBrush" Color="#9CA3B0" />
+    <SolidColorBrush x:Key="DcTextTertiaryBrush" Color="#727A8C" />
+
+    <SolidColorBrush x:Key="DcAccentBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcAccentHoverBrush" Color="#38C2F5" />
+    <SolidColorBrush x:Key="DcOnAccentBrush" Color="#04121F" />
+
+    <SolidColorBrush x:Key="DcFocusRingBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcFocusRingInnerBrush" Color="#1C1C1E" />
+
+    <SolidColorBrush x:Key="DcToneCriticalBrush" Color="#FF453A" />
+    <SolidColorBrush x:Key="DcToneCriticalSubtleBrush" Color="#26FF453A" />
+    <SolidColorBrush x:Key="DcToneHighBrush" Color="#FF9F0A" />
+    <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#26FF9F0A" />
+    <SolidColorBrush x:Key="DcToneMediumBrush" Color="#FFD60A" />
+    <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#26FFD60A" />
+    <SolidColorBrush x:Key="DcToneLowBrush" Color="#64D2FF" />
+    <SolidColorBrush x:Key="DcToneLowSubtleBrush" Color="#2664D2FF" />
+    <SolidColorBrush x:Key="DcToneOkBrush" Color="#32D74B" />
+    <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#2632D74B" />
+    <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#9CA3B0" />
+    <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#269CA3B0" />
+    <!-- The destructive button: the critical red pulled down until white on it holds 4.5:1 (#FF453A itself is 2.9:1 under white). -->
+    <SolidColorBrush x:Key="DcDangerBrush" Color="#D13438" />
+    <SolidColorBrush x:Key="DcDangerHoverBrush" Color="#B92B2F" />
+    <SolidColorBrush x:Key="DcOnDangerBrush" Color="#FFFFFF" />
+
+    <!-- ===== Icons: the light file's mapping - Cisco blue for card headers, the control accent for the sidebar, tone colours for statuses ===== -->
+    <SolidColorBrush x:Key="DcIconBrush" Color="#9CA3B0" />
+    <SolidColorBrush x:Key="DcIconMutedBrush" Color="#727A8C" />
+
+    <SolidColorBrush x:Key="DcTintIndigoBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcTintBlueBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcTintVioletBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcTintTealBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcTintGreenBrush" Color="#32D74B" />
+    <SolidColorBrush x:Key="DcTintAmberBrush" Color="#FFD60A" />
+    <SolidColorBrush x:Key="DcTintOrangeBrush" Color="#FF9F0A" />
+    <SolidColorBrush x:Key="DcTintRedBrush" Color="#FF453A" />
+    <SolidColorBrush x:Key="DcTintPinkBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcTintGrayBrush" Color="#9CA3B0" />
+
+    <SolidColorBrush x:Key="DcSectionOverviewBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcSectionObserveBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcSectionGovernBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcSectionDiscoverBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcSectionSetupBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcSectionUpdatesBrush" Color="#04AEED" />
+
+    <SolidColorBrush x:Key="DcNavIconOverviewBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcNavIconObserveBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcNavIconGovernBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcNavIconDiscoverBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcNavIconSetupBrush" Color="#04AEED" />
+    <SolidColorBrush x:Key="DcNavIconUpdatesBrush" Color="#04AEED" />
+
+    <sys:String x:Key="DcGlyphFamily">Dot</sys:String>
+
+    <!-- ===== Type ========================================================================= -->
+    <FontFamily x:Key="DcUiFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Consolas, Courier New</FontFamily>
+    <sys:Double x:Key="DcFontSize">13</sys:Double>
+
+    <!-- ===== Shape ======================================================================== -->
+    <CornerRadius x:Key="DcRadiusS">6</CornerRadius>
+    <CornerRadius x:Key="DcRadiusM">10</CornerRadius>
+    <CornerRadius x:Key="DcRadiusL">12</CornerRadius>
+    <CornerRadius x:Key="DcControlRadius">6</CornerRadius>
+    <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <!-- A status dot is round (see Default.xaml). -->
+    <CornerRadius x:Key="DcDotRadius">99</CornerRadius>
+    <Thickness x:Key="DcBorderThickness">1</Thickness>
+
+    <sys:Double x:Key="DcFocusRadius">8</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInner">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInset">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInsetInner">5</sys:Double>
+
+    <!-- ===== Density ====================================================================== -->
+    <Thickness x:Key="DcCardPadding">14</Thickness>
+    <Thickness x:Key="DcCardPaddingCompact">10</Thickness>
+    <Thickness x:Key="DcCardPaddingFlush">4</Thickness>
+
+    <!-- ===== Effect ======================================================================= -->
+    <DropShadowEffect x:Key="DcFlyoutShadow" BlurRadius="18" ShadowDepth="2" Opacity="0.4" Color="Black" />
+</ResourceDictionary>

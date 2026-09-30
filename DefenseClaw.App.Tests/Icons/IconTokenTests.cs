@@ -17,11 +17,11 @@ namespace DefenseClaw.App.Tests.Icons;
 [Collection(UiCollection.Name)]
 public sealed class IconTokenTests
 {
-    private static readonly string[] Tones = { "Critical", "High", "Medium", "Ok", "Neutral" };
+    private static readonly string[] Tones = { "Critical", "High", "Medium", "Low", "Ok", "Neutral" };
 
     public static IEnumerable<object[]> Looks()
     {
-        foreach (var style in new[] { "Default", "Linear", "Tui" })
+        foreach (var style in new[] { "Default", "Linear", "Tui", "Cisco" })
         {
             foreach (var mode in new[] { "Dark", "Light" })
             {
@@ -60,6 +60,8 @@ public sealed class IconTokenTests
     [InlineData("Linear", "Light", "Linear")]
     [InlineData("Tui", "Dark", "Terminal")]
     [InlineData("Tui", "Light", "Terminal")]
+    [InlineData("Cisco", "Dark", "Dot")]
+    [InlineData("Cisco", "Light", "Dot")]
     public void Each_style_names_the_glyph_shapes_it_draws(string style, string mode, string family)
     {
         var tokens = IconLook.Dictionary(style, mode);
@@ -130,6 +132,47 @@ public sealed class IconTokenTests
         }
 
         Assert.Equal(look.Of(AppearanceTokens.Icon), look.Of(AppearanceTokens.TintGray));
+    }
+
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public void Cisco_draws_card_headers_in_Cisco_blue_the_sidebar_in_the_accent_and_statuses_in_their_tone(string mode)
+    {
+        var look = IconLook.Load("Cisco", mode);
+
+        // The Mac: every card-header icon one blue, every sidebar icon the control blue (the accent).
+        var brand = look.Of(AppearanceTokens.SectionOverview);
+        foreach (var section in DcSections.All)
+        {
+            Assert.Equal(brand, look.Of($"DcSection{section}Brush"));
+            Assert.Equal(look.Of(AppearanceTokens.Accent), look.Of($"DcNavIcon{section}Brush"));
+        }
+
+        // Cisco blue is a blue (hue 190-215) in both modes.
+        var hue = Hue(brand);
+        Assert.InRange(hue, 190, 215);
+
+        // The tints that mean a status are the tone colours themselves, so an icon and a badge agree; the rest are Cisco blue.
+        Assert.Equal(look.Of(AppearanceTokens.ToneOk), look.Of(AppearanceTokens.TintGreen));
+        Assert.Equal(look.Of(AppearanceTokens.ToneMedium), look.Of(AppearanceTokens.TintAmber));
+        Assert.Equal(look.Of(AppearanceTokens.ToneHigh), look.Of(AppearanceTokens.TintOrange));
+        Assert.Equal(look.Of(AppearanceTokens.ToneCritical), look.Of(AppearanceTokens.TintRed));
+        foreach (var tint in new[] { "Indigo", "Blue", "Violet", "Teal", "Pink" })
+        {
+            Assert.Equal(brand, look.Of($"DcTint{tint}Brush"));
+        }
+
+        Assert.Equal(look.Of(AppearanceTokens.Icon), look.Of(AppearanceTokens.TintGray));
+    }
+
+    private static double Hue(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
+        var max = Math.Max(r, Math.Max(g, b));
+        var delta = max - Math.Min(r, Math.Min(g, b));
+        var hue = max == r ? 60 * (((g - b) / delta) % 6) : max == g ? 60 * (((b - r) / delta) + 2) : 60 * (((r - g) / delta) + 4);
+        return hue < 0 ? hue + 360 : hue;
     }
 
     // ------------------------------------------------------------------ non-text contrast

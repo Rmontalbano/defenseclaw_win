@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using static DefenseClaw.App.Services.Appearance.AppearanceTokens;
 
 namespace DefenseClaw.App.Services.Appearance;
@@ -186,7 +187,7 @@ internal static class WpfUiBridge
     /// Adds the bridge for <paramref name="tokens"/> to <paramref name="target"/>. The values are the token objects
     /// themselves, so a bridged WPF-UI key and its token can never disagree.
     /// </summary>
-    public static void AddTo(ResourceDictionary target, ResourceDictionary tokens)
+    public static void AddTo(ResourceDictionary target, ResourceDictionary tokens, AppearanceStyle style)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(tokens);
@@ -197,6 +198,19 @@ internal static class WpfUiBridge
             {
                 target[wpfUiKey] = value;
             }
+        }
+
+        if (style == AppearanceStyle.Cisco && tokens[Accent] is SolidColorBrush accent)
+        {
+            // WPF-UI's "informational" is this app's Medium, which is blue in the other styles and YELLOW in Cisco (the Mac's
+            // severity ramp), where an information bar or badge in yellow would read as a warning. Information takes the accent.
+            var tint = new SolidColorBrush(Color.FromArgb(0x26, accent.Color.R, accent.Color.G, accent.Color.B));
+            tint.Freeze();
+
+            target["InfoBarInformationalSeverityIconBackground"] = accent;
+            target["InfoBarInformationalSeverityBackgroundBrush"] = tint;
+            target["InfoBadgeAttentionSeverityBackgroundBrush"] = accent;
+            target["SystemFillColorAttentionBackgroundBrush"] = tint;
         }
     }
 }

@@ -65,6 +65,7 @@ internal static class ShellCommandRegistry
                 {
                     AppearanceStyle.Linear => "product indigo clean compact",
                     AppearanceStyle.Tui => "terminal console cli monospace",
+                    AppearanceStyle.Cisco => "mac macos brand blue rounded",
                     _ => "fluent mica windows",
                 },
                 IsEnabled: appearance.Style != style,

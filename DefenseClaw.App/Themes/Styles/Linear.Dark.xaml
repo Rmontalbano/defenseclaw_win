@@ -20,6 +20,8 @@
     <SolidColorBrush x:Key="DcDialogBrush" Color="#1B1C1F" />
     <SolidColorBrush x:Key="DcSubtleBrush" Color="#1B1C1F" />
     <SolidColorBrush x:Key="DcSelectedBrush" Color="#23252A" />
+    <!-- The alternate row of a striped table: 3% white, so it is a whisper on the window and on a card alike. -->
+    <SolidColorBrush x:Key="DcZebraBrush" Color="#08FFFFFF" />
     <SolidColorBrush x:Key="DcBorderBrush" Color="#23252A" />
     <SolidColorBrush x:Key="DcControlBorderBrush" Color="#23252A" />
 
@@ -40,6 +42,9 @@
     <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#26F2994A" />
     <SolidColorBrush x:Key="DcToneMediumBrush" Color="#4EA7FC" />
     <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#264EA7FC" />
+    <!-- Low: Linear's teal, the Teal tint below (it was the neutral grey before this token). -->
+    <SolidColorBrush x:Key="DcToneLowBrush" Color="#26B5CE" />
+    <SolidColorBrush x:Key="DcToneLowSubtleBrush" Color="#2626B5CE" />
     <SolidColorBrush x:Key="DcToneOkBrush" Color="#4CB782" />
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#264CB782" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#8A8F98" />

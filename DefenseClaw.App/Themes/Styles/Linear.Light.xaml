@@ -14,6 +14,8 @@
     <SolidColorBrush x:Key="DcDialogBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="DcSubtleBrush" Color="#F4F5F8" />
     <SolidColorBrush x:Key="DcSelectedBrush" Color="#E4E5E9" />
+    <!-- The alternate row of a striped table: 2.5% black. -->
+    <SolidColorBrush x:Key="DcZebraBrush" Color="#06000000" />
     <SolidColorBrush x:Key="DcBorderBrush" Color="#E4E5E9" />
     <SolidColorBrush x:Key="DcControlBorderBrush" Color="#E4E5E9" />
 
@@ -34,6 +36,9 @@
     <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#1FC7641A" />
     <SolidColorBrush x:Key="DcToneMediumBrush" Color="#2B7FD6" />
     <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#1F2B7FD6" />
+    <!-- Low: the dark file's teal one step deeper, so it holds 3:1 on its own tinted fill (the Teal tint, #1B98B0, is 2.99 there). -->
+    <SolidColorBrush x:Key="DcToneLowBrush" Color="#1A8FA6" />
+    <SolidColorBrush x:Key="DcToneLowSubtleBrush" Color="#1F1A8FA6" />
     <SolidColorBrush x:Key="DcToneOkBrush" Color="#2E8B5F" />
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#1F2E8B5F" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#62666D" />

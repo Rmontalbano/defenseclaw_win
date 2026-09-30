@@ -279,6 +279,7 @@ public sealed class AppearanceServiceTests
         ("DcInsetBrush", "SolidBackgroundFillColorSecondaryBrush"),
         ("DcSubtleBrush", "SubtleFillColorSecondaryBrush"),
         ("DcSelectedBrush", "ControlFillColorSecondaryBrush"),
+        ("DcZebraBrush", "SubtleFillColorTertiaryBrush"),
         ("DcBorderBrush", "CardStrokeColorDefaultBrush"),
         ("DcControlBorderBrush", "ControlStrokeColorDefaultBrush"),
         ("DcTextPrimaryBrush", "TextFillColorPrimaryBrush"),

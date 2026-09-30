@@ -1,0 +1,138 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        Style "Cisco", light: the look of DefenseClaw for Mac (its DesignSystem\CiscoTheme.swift and the running app v1.1.25). Solid
+        fills (Mica is Default's alone), rounded cards (12), stat tiles (10), a padding of 14, Cisco blue. Token values only - the
+        vocabulary is listed in Default.xaml and consumed by Themes\DefenseClaw.xaml.
+
+        This is the one style with a reference to check against: the Mac capture (CUST-199, Light mode only). Where the capture and
+        the source hexes agree the source value is used; where they differ, the running app wins and the value says so:
+
+            window      #FFFFFF  source = capture                   card   #F5F7FA  source = capture
+            raised      #FFFFFF  source = capture (a stat tile)     accent #0070F5  capture (see below); source #049FD9
+            zebra       #EFEFEF  source = the capture's Overview Configuration rows. The capture's tables (Alerts, Skills, Audit,
+                                 Connectors) are #F4F5F5, but that stripe is invisible on a card (#F5F7FA), which is where this app
+                                 hosts its grids, so the source value stays
+            border      #DBEDF6  capture: a stat tile's hairline, the Cisco blue at 11% over white; dividers there are #E6E6E6
+            subtle      #E3E4E7  capture: the grey fill of a button on a card
+            tone fg     the capture's system colours (red #FF383C, orange #FF8D28, yellow #FFCC00, cyan #00C0E8, green #34C759)
+                        darkened until each holds 3:1 on the window and on a card - a yellow at 3:1 on white is a dark gold.
+            sidebar     #EDEDED in the capture; there is no sidebar token, so the window colour stands in for it.
+
+        The accent. The Mac uses two blues: Cisco blue (#049FD9: card-header icons, the big stat digits) and macOS's own control blue
+        (#0070F5: the selected sidebar row, the segmented control, link text, the sidebar icons). White on #049FD9 is 3.0:1, below
+        the 4.5:1 a label needs, so the control accent is the capture's #0070F5 (white on it 4.5:1, hover step as text 5.5:1 on a
+        card) and Cisco blue keeps the card-header icons (Section*) and the blue tints, darkened to #0291CC for 3.3:1 on a card.
+
+        Tones follow the Mac's severity ramp: critical red, high orange, MEDIUM YELLOW, LOW CYAN (the other styles' Medium is blue). The
+        tinted fill behind each is the tone at 12%, and every tone holds 3:1 on its own fill (AppearanceContrastTests).
+    -->
+
+    <!-- ===== Brushes ====================================================================== -->
+    <SolidColorBrush x:Key="DcWindowBackgroundBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DcSurfaceBrush" Color="#F5F7FA" />
+    <SolidColorBrush x:Key="DcRaisedBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DcInsetBrush" Color="#EEF1F5" />
+    <SolidColorBrush x:Key="DcDialogBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DcSubtleBrush" Color="#E3E4E7" />
+    <SolidColorBrush x:Key="DcSelectedBrush" Color="#D6E6FB" />
+    <SolidColorBrush x:Key="DcZebraBrush" Color="#EFEFEF" />
+    <SolidColorBrush x:Key="DcBorderBrush" Color="#DBEDF6" />
+    <SolidColorBrush x:Key="DcControlBorderBrush" Color="#C4CAD2" />
+
+    <SolidColorBrush x:Key="DcTextPrimaryBrush" Color="#1D1D1F" />
+    <SolidColorBrush x:Key="DcTextSecondaryBrush" Color="#5F6368" />
+    <SolidColorBrush x:Key="DcTextTertiaryBrush" Color="#86868B" />
+
+    <SolidColorBrush x:Key="DcAccentBrush" Color="#0070F5" />
+    <SolidColorBrush x:Key="DcAccentHoverBrush" Color="#0062C9" />
+    <SolidColorBrush x:Key="DcOnAccentBrush" Color="#FFFFFF" />
+
+    <SolidColorBrush x:Key="DcFocusRingBrush" Color="#0070F5" />
+    <SolidColorBrush x:Key="DcFocusRingInnerBrush" Color="#FFFFFF" />
+
+    <SolidColorBrush x:Key="DcToneCriticalBrush" Color="#D70015" />
+    <SolidColorBrush x:Key="DcToneCriticalSubtleBrush" Color="#1FD70015" />
+    <SolidColorBrush x:Key="DcToneHighBrush" Color="#C9590A" />
+    <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#1FC9590A" />
+    <SolidColorBrush x:Key="DcToneMediumBrush" Color="#9E7C00" />
+    <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#1F9E7C00" />
+    <SolidColorBrush x:Key="DcToneLowBrush" Color="#0088AD" />
+    <SolidColorBrush x:Key="DcToneLowSubtleBrush" Color="#1F0088AD" />
+    <SolidColorBrush x:Key="DcToneOkBrush" Color="#248A3D" />
+    <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#1F248A3D" />
+    <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#5F6368" />
+    <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#1F5F6368" />
+    <!-- The destructive button: the critical red as the fill, white as the label (5.4:1); hover is the next-darker red (6.9:1). -->
+    <SolidColorBrush x:Key="DcDangerBrush" Color="#D70015" />
+    <SolidColorBrush x:Key="DcDangerHoverBrush" Color="#B8000F" />
+    <SolidColorBrush x:Key="DcOnDangerBrush" Color="#FFFFFF" />
+
+    <!--
+        ===== Icons =====
+        The Mac draws every card-header icon in Cisco blue and every sidebar icon in its control blue, and only a status in a
+        colour of its own. So: the sidebar and page headers wear the control accent (Nav*), the card headers Cisco blue (Section*),
+        and the named tints are Cisco blue except the ones that mean a status (green, amber, orange, red), which are the tone
+        colours themselves so an icon and a badge agree. Every one holds 3:1 on the window and on a card.
+    -->
+    <SolidColorBrush x:Key="DcIconBrush" Color="#5F6368" />
+    <SolidColorBrush x:Key="DcIconMutedBrush" Color="#86868B" />
+
+    <SolidColorBrush x:Key="DcTintIndigoBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcTintBlueBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcTintVioletBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcTintTealBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcTintGreenBrush" Color="#248A3D" />
+    <SolidColorBrush x:Key="DcTintAmberBrush" Color="#9E7C00" />
+    <SolidColorBrush x:Key="DcTintOrangeBrush" Color="#C9590A" />
+    <SolidColorBrush x:Key="DcTintRedBrush" Color="#D70015" />
+    <SolidColorBrush x:Key="DcTintPinkBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcTintGrayBrush" Color="#5F6368" />
+
+    <SolidColorBrush x:Key="DcSectionOverviewBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcSectionObserveBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcSectionGovernBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcSectionDiscoverBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcSectionSetupBrush" Color="#0291CC" />
+    <SolidColorBrush x:Key="DcSectionUpdatesBrush" Color="#0291CC" />
+
+    <SolidColorBrush x:Key="DcNavIconOverviewBrush" Color="#0070F5" />
+    <SolidColorBrush x:Key="DcNavIconObserveBrush" Color="#0070F5" />
+    <SolidColorBrush x:Key="DcNavIconGovernBrush" Color="#0070F5" />
+    <SolidColorBrush x:Key="DcNavIconDiscoverBrush" Color="#0070F5" />
+    <SolidColorBrush x:Key="DcNavIconSetupBrush" Color="#0070F5" />
+    <SolidColorBrush x:Key="DcNavIconUpdatesBrush" Color="#0070F5" />
+
+    <!-- The status glyph is the plain tone dot (the Mac's state dots are round), and the severity glyph draws nothing: its badge says it. -->
+    <sys:String x:Key="DcGlyphFamily">Dot</sys:String>
+
+    <!-- ===== Type ========================================================================= -->
+    <!-- Named, not bundled: the Mac's body is 13 pt SF; Segoe UI Variable Text is the Windows 11 face closest to it. -->
+    <FontFamily x:Key="DcUiFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Consolas, Courier New</FontFamily>
+    <sys:Double x:Key="DcFontSize">13</sys:Double>
+
+    <!-- ===== Shape: the Mac's metrics - a card 12, a stat tile 10, controls and pills 6 ==== -->
+    <CornerRadius x:Key="DcRadiusS">6</CornerRadius>
+    <CornerRadius x:Key="DcRadiusM">10</CornerRadius>
+    <CornerRadius x:Key="DcRadiusL">12</CornerRadius>
+    <CornerRadius x:Key="DcControlRadius">6</CornerRadius>
+    <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <!-- A status dot is round (see Default.xaml). -->
+    <CornerRadius x:Key="DcDotRadius">99</CornerRadius>
+    <Thickness x:Key="DcBorderThickness">1</Thickness>
+
+    <sys:Double x:Key="DcFocusRadius">8</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInner">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInset">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInsetInner">5</sys:Double>
+
+    <!-- ===== Density: the Mac's card padding is 14 (Default's 16 / 12 / 4 become 14 / 10 / 4) ===== -->
+    <Thickness x:Key="DcCardPadding">14</Thickness>
+    <Thickness x:Key="DcCardPaddingCompact">10</Thickness>
+    <Thickness x:Key="DcCardPaddingFlush">4</Thickness>
+
+    <!-- ===== Effect: a soft shadow under a flyout, as a Mac popover has ==================== -->
+    <DropShadowEffect x:Key="DcFlyoutShadow" BlurRadius="18" ShadowDepth="2" Opacity="0.2" Color="Black" />
+</ResourceDictionary>

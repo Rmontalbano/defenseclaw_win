@@ -9,7 +9,7 @@ namespace DefenseClaw.App.Tests.Appearance;
 
 /// <summary>
 /// The token dictionaries themselves: every style defines the whole vocabulary and nothing else, with the right kind of
-/// value for each token, and Linear / TUI hold the values the brief gave them.
+/// value for each token, and Linear / TUI hold the values the brief gave them (Cisco's are held by <see cref="AppearanceCiscoTests"/>).
 /// </summary>
 [Collection(UiCollection.Name)]
 public sealed class AppearanceTokensTests
@@ -21,6 +21,8 @@ public sealed class AppearanceTokensTests
         yield return new object[] { "Linear", "Light" };
         yield return new object[] { "Tui", "Dark" };
         yield return new object[] { "Tui", "Light" };
+        yield return new object[] { "Cisco", "Dark" };
+        yield return new object[] { "Cisco", "Light" };
     }
 
     private static ResourceDictionary Load(string style, string mode) => UiThread.Run(() =>
@@ -181,7 +183,9 @@ public sealed class AppearanceTokensTests
     [InlineData("Default", "Dark")]
     [InlineData("Linear", "Dark")]
     [InlineData("Linear", "Light")]
-    public void Default_and_Linear_draw_round_status_dots(string style, string mode)
+    [InlineData("Cisco", "Dark")]
+    [InlineData("Cisco", "Light")]
+    public void Default_Linear_and_Cisco_draw_round_status_dots(string style, string mode)
     {
         // A status dot is at most 12 DIPs wide, so any radius of 6 or more makes it a circle (a Border clamps the rest).
         var radius = (CornerRadius)Load(style, mode)[AppearanceTokens.DotRadius];
@@ -221,20 +225,66 @@ public sealed class AppearanceTokensTests
     {
         if (style == "Default")
         {
-            // Default's tones are WPF-UI's own; only the Linear and TUI values are ours to check.
+            // Default's tones are WPF-UI's own; only the Linear, TUI and Cisco values are ours to check (Low, below, is ours everywhere).
             return;
         }
 
         var d = Load(style, mode);
         (double Hue, double Saturation) Of(string key) => HueSaturation(((SolidColorBrush)d[key]).Color);
 
-        // Critical is red, High orange/amber, Medium blue, Ok green, Neutral grey - by hue, whatever the shade.
+        // Critical is red, High orange/amber, Medium blue (YELLOW in Cisco: the Mac's ramp), Ok green, Neutral grey - by hue, whatever the shade.
         Assert.True(Of(AppearanceTokens.ToneCritical).Hue is < 12 or > 348, "Critical is red");
         Assert.InRange(Of(AppearanceTokens.ToneHigh).Hue, 18, 45);
-        Assert.InRange(Of(AppearanceTokens.ToneMedium).Hue, 200, 235);
-        Assert.InRange(Of(AppearanceTokens.ToneOk).Hue, 140, 165);
+        if (style == "Cisco")
+        {
+            Assert.InRange(Of(AppearanceTokens.ToneMedium).Hue, 44, 60);
+            Assert.True(Of(AppearanceTokens.ToneMedium).Hue > Of(AppearanceTokens.ToneHigh).Hue + 10, "Medium is yellower than High");
+        }
+        else
+        {
+            Assert.InRange(Of(AppearanceTokens.ToneMedium).Hue, 200, 235);
+        }
+
+        Assert.InRange(Of(AppearanceTokens.ToneOk).Hue, 125, 165);
         Assert.True(Of(AppearanceTokens.ToneNeutral).Saturation < 0.35, "Neutral stays grey");
         Assert.NotEqual(Of(AppearanceTokens.ToneCritical).Hue, Of(AppearanceTokens.ToneHigh).Hue);
+    }
+
+    [Theory]
+    [MemberData(nameof(Dictionaries))]
+    public void Low_is_a_cyan_or_teal_in_every_style_and_its_fill_is_the_same_colour_translucent(string style, string mode)
+    {
+        var d = Load(style, mode);
+        var low = UiThread.Run(() => ((SolidColorBrush)d[AppearanceTokens.ToneLow]).Color);
+        var subtle = UiThread.Run(() => ((SolidColorBrush)d[AppearanceTokens.ToneLowSubtle]).Color);
+
+        Assert.InRange(HueSaturation(low).Hue, 180, 200);
+        Assert.True(HueSaturation(low).Saturation > 0.5, "Low is a saturated cyan, not a grey");
+        Assert.Equal((low.R, low.G, low.B), (subtle.R, subtle.G, subtle.B));
+        Assert.InRange(subtle.A, 0x10, 0x40);
+    }
+
+    [Theory]
+    [MemberData(nameof(Dictionaries))]
+    public void The_zebra_row_is_a_quiet_step_translucent_or_a_solid_next_to_the_window(string style, string mode)
+    {
+        var d = Load(style, mode);
+        var zebra = UiThread.Run(() => ((SolidColorBrush)d[AppearanceTokens.Zebra]).Color);
+
+        if (zebra.A == 0xFF)
+        {
+            // A solid zebra (Cisco's, as on the Mac) differs from the window and the card, but only by a few percent.
+            var window = UiThread.Run(() => ((SolidColorBrush)d[AppearanceTokens.WindowBackground]).Color);
+            Assert.NotEqual(window, zebra);
+            Assert.True(
+                Math.Abs(zebra.R - window.R) <= 0x20 && Math.Abs(zebra.G - window.G) <= 0x20 && Math.Abs(zebra.B - window.B) <= 0x20,
+                $"{style} {mode} zebra {zebra} is far from the window {window}");
+        }
+        else
+        {
+            // Default's is WPF-UI's own subtle fill (about 4%); the others are 2.5-3%.
+            Assert.InRange(zebra.A, 0x04, 0x14);
+        }
     }
 
     private static (double Hue, double Saturation) HueSaturation(Color c)

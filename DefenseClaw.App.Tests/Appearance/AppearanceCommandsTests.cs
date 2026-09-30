@@ -54,6 +54,7 @@ public sealed class AppearanceCommandsTests
         "Appearance: Default",
         "Appearance: Linear",
         "Appearance: TUI",
+        "Appearance: Cisco",
         "Toggle light/dark",
         "Mode: follow system",
     };
@@ -64,13 +65,13 @@ public sealed class AppearanceCommandsTests
     // ------------------------------------------------------------------ the palette
 
     [Fact]
-    public void The_palette_has_the_five_appearance_commands_under_the_names_in_the_brief()
+    public void The_palette_has_the_six_appearance_commands_under_the_names_in_the_brief()
     {
         var commands = Build();
 
         Assert.Equal(ExpectedTitles, commands.Select(c => c.Title).ToArray());
         Assert.Equal(
-            new[] { "appearance.default", "appearance.linear", "appearance.tui", "appearance.toggle", "appearance.system" },
+            new[] { "appearance.default", "appearance.linear", "appearance.tui", "appearance.cisco", "appearance.toggle", "appearance.system" },
             commands.Select(c => c.Id).ToArray());
         Assert.All(commands, c => Assert.Equal(ShellCommandRegistry.AppCategory, c.Category));
     }
@@ -83,10 +84,11 @@ public sealed class AppearanceCommandsTests
 
         commands["Appearance: Default"].Run();
         commands["Appearance: Linear"].Run();
+        commands["Appearance: Cisco"].Run();
         commands["Toggle light/dark"].Run();
         commands["Mode: follow system"].Run();
 
-        Assert.Equal(new[] { "style:Default", "style:Linear", "toggle", "mode:System" }, appearance.Calls);
+        Assert.Equal(new[] { "style:Default", "style:Linear", "style:Cisco", "toggle", "mode:System" }, appearance.Calls);
     }
 
     [Fact]
@@ -121,6 +123,8 @@ public sealed class AppearanceCommandsTests
     [InlineData("linear", "Appearance: Linear")]
     [InlineData("tui", "Appearance: TUI")]
     [InlineData("terminal", "Appearance: TUI")]
+    [InlineData("cisco", "Appearance: Cisco")]
+    [InlineData("mac", "Appearance: Cisco")]
     [InlineData("theme", "Appearance: Default")]
     [InlineData("dark", "Toggle light/dark")]
     [InlineData("light", "Toggle light/dark")]

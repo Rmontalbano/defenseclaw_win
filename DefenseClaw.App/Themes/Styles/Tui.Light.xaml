@@ -18,6 +18,8 @@
     <SolidColorBrush x:Key="DcDialogBrush" Color="#FBFCFE" />
     <SolidColorBrush x:Key="DcSubtleBrush" Color="#E8EDF5" />
     <SolidColorBrush x:Key="DcSelectedBrush" Color="#D5DEEB" />
+    <!-- The alternate row of a striped table: 3% of the ink. -->
+    <SolidColorBrush x:Key="DcZebraBrush" Color="#080B1220" />
     <SolidColorBrush x:Key="DcBorderBrush" Color="#B4C0D3" />
     <SolidColorBrush x:Key="DcControlBorderBrush" Color="#B4C0D3" />
 
@@ -38,6 +40,9 @@
     <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#1FB45309" />
     <SolidColorBrush x:Key="DcToneMediumBrush" Color="#1D4ED8" />
     <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#1F1D4ED8" />
+    <!-- Low is the cyan-700 the accent already is (see the dark file). -->
+    <SolidColorBrush x:Key="DcToneLowBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcToneLowSubtleBrush" Color="#1F0E7490" />
     <SolidColorBrush x:Key="DcToneOkBrush" Color="#047857" />
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#1F047857" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#475569" />

@@ -16,22 +16,24 @@ namespace DefenseClaw.App.Tests.Overview;
 /// </summary>
 public sealed class AttentionToneTests : IDisposable
 {
-    /// <summary>The five looks a tone key can produce. Mirrors the TONES table at the top of Themes\DefenseClaw.xaml.</summary>
+    /// <summary>The looks a tone key can produce. Mirrors the TONES table at the top of Themes\DefenseClaw.xaml.</summary>
     public enum Tone
     {
         Red,
         Amber,
         Blue,
+        Cyan,
         Green,
         Neutral,
     }
 
-    /// <summary>Every key the theme knows a tone for; anything else (Low, Info, Neutral, unset) is grey.</summary>
+    /// <summary>Every key the theme knows a tone for; anything else (Info, Neutral, unset) is grey.</summary>
     private static Tone ToneOf(string key) => key switch
     {
         "Critical" or "Bad" => Tone.Red,
         "High" or "Warn" => Tone.Amber,
         "Medium" => Tone.Blue,
+        "Low" => Tone.Cyan,
         "Ok" => Tone.Green,
         _ => Tone.Neutral,
     };
