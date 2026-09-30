@@ -144,7 +144,7 @@
                 <ui:TextBox Grid.Column="1"
                             AutomationProperties.HelpText="Name of the environment variable that holds the value, not the value itself."
                             AutomationProperties.Name="{Binding DisplayName}"
-                            FontFamily="{StaticResource DcMonoFontFamily}"
+                            FontFamily="{DynamicResource DcMonoFontFamily}"
                             IsEnabled="{Binding IsEditable}"
                             Text="{Binding TextValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
             </Grid>
@@ -210,7 +210,7 @@
                                 </Grid.ColumnDefinitions>
                                 <ui:TextBox Grid.Column="0"
                                             AutomationProperties.Name="{Binding DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ItemsControl}, StringFormat='{}{0} item'}"
-                                            FontFamily="{StaticResource DcMonoFontFamily}"
+                                            FontFamily="{DynamicResource DcMonoFontFamily}"
                                             IsReadOnly="True"
                                             Text="{Binding Mode=OneWay}" />
                                 <ui:Button Grid.Column="1"
@@ -535,11 +535,11 @@
                     <avalonEdit:TextEditor x:Name="RawEditor"
                                            AutomationProperties.Name="config.yaml raw text"
                                            Background="Transparent"
-                                           FontFamily="{StaticResource DcMonoFontFamily}"
+                                           FontFamily="{DynamicResource DcMonoFontFamily}"
                                            FontSize="13"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Foreground="{DynamicResource DcTextPrimaryBrush}"
                                            IsReadOnly="{Binding LoadFailed, Mode=OneWay}"
-                                           LineNumbersForeground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           LineNumbersForeground="{DynamicResource DcTextSecondaryBrush}"
                                            ShowLineNumbers="True"
                                            WordWrap="False" />
                 </Border>

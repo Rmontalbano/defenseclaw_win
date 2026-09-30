@@ -344,8 +344,8 @@ public class ActivityPanelLayoutTests
             scroll.ScrollToHome();
             scene.Host.Relayout();
 
-            var critical = (System.Windows.Media.Brush)list.FindResource("SystemFillColorCriticalBrush");
-            var caution = (System.Windows.Media.Brush)list.FindResource("SystemFillColorCautionBrush");
+            var critical = (System.Windows.Media.Brush)list.FindResource("DcToneCriticalBrush");
+            var caution = (System.Windows.Media.Brush)list.FindResource("DcToneHighBrush");
             var primary = (System.Windows.Media.Brush)list.FindResource("DcTextPrimaryBrush");   // the Dc styles read the appearance token, not WPF-UI's brush
 
             var marker = TextOf(list, line => line.IsNotice);

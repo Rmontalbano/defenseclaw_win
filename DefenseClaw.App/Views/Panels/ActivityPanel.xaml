@@ -31,10 +31,10 @@
         <Style x:Key="OutputLine" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsError}" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsNotice}" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
                     <Setter Property="FontStyle" Value="Italic" />
                 </DataTrigger>
             </Style.Triggers>
@@ -98,7 +98,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="{StaticResource DcRadiusM}">
+                                CornerRadius="{DynamicResource DcRadiusM}">
                             <Grid>
                                 <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
                                 <ui:SymbolIcon x:Name="Chevron"
