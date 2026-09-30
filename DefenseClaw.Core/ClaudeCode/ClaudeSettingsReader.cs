@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DefenseClaw.Core.Config;
@@ -304,20 +303,7 @@ public sealed record FailModeDrift
     /// as quote characters too, so each of those is doubled as well. Otherwise a profile folder
     /// named with an apostrophe would end the string early.
     /// </summary>
-    private static string PowerShellSingleQuoted(string value)
-    {
-        var builder = new StringBuilder(value.Length + 4);
-        foreach (var c in value)
-        {
-            builder.Append(c);
-            if (c is '\'' or '‘' or '’' or '‚' or '‛')
-            {
-                builder.Append(c);
-            }
-        }
-
-        return builder.ToString();
-    }
+    private static string PowerShellSingleQuoted(string value) => Cli.PowerShellQuoting.SingleQuoted(value);
 
     /// <summary>
     /// Compares the env override against whatever the gateway will admit to.

@@ -462,9 +462,13 @@ public sealed partial class ActivityRow : ObservableObject
         SyncOutput();
     }
 
-    /// <summary>Copies the exact command line (executable and argv, quoted where a shell would need it).</summary>
+    /// <summary>
+    /// Copies the exact command line (executable and argv) in the form PowerShell reads as one literal argument per
+    /// name (<see cref="CliInvocation.PowerShellCommandLine"/>), so an argument such as <c>x&amp;calc</c> cannot run
+    /// anything when pasted. What the card shows (<see cref="CommandLine"/>) is for reading and quotes only whitespace.
+    /// </summary>
     [RelayCommand]
-    private void Copy() => CopyText(CommandLine, "Copied the command line.");
+    private void Copy() => CopyText(Invocation.PowerShellCommandLine, "Copied the command line for PowerShell.");
 
     /// <summary>
     /// Copies the retained transcript as plain text, one line per line, exactly as it is shown
@@ -635,11 +639,22 @@ public sealed partial class ActivityRow : ObservableObject
         CopyText(text, count == 1 ? "Copied 1 line." : $"Copied {count.ToString("N0", CultureInfo.CurrentCulture)} lines.");
     }
 
+    /// <summary>Test seam: what the copy actions write with. Null uses the real clipboard.</summary>
+    internal Action<string>? ClipboardWriter { get; set; }
+
     private void CopyText(string text, string success)
     {
         try
         {
-            Clipboard.SetText(text);
+            if (ClipboardWriter is { } write)
+            {
+                write(text);
+            }
+            else
+            {
+                Clipboard.SetText(text);
+            }
+
             _notify?.Invoke(success);
         }
         catch (System.Runtime.InteropServices.ExternalException)

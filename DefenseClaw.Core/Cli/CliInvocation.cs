@@ -319,6 +319,13 @@ public sealed class CliInvocation
         string.Join(' ', new[] { Executable }.Concat(Argv).Select(Quote));
 
     /// <summary>
+    /// The same command as text that is safe to paste into PowerShell: every argument is one literal string
+    /// (<c>&amp; 'C:\...\defenseclaw.exe' skill quarantine -- 'x&amp;calc'</c>), so a name from outside cannot
+    /// run anything when it is pasted. <see cref="CommandLine"/> is for reading; this is for the clipboard.
+    /// </summary>
+    public string PowerShellCommandLine => PowerShellQuoting.CommandLine(Executable, Argv);
+
+    /// <summary>
     /// Appends everything added since <paramref name="fromCursor"/> to
     /// <paramref name="destination"/> and returns the cursor to pass in next time.
     /// <para>

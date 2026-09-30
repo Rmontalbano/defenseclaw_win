@@ -755,6 +755,12 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         var argv = BuildArgv(Noun, InfoVerb, options, row.Name);
         var title = $"defenseclaw {Noun} {InfoVerb} — {row.Name}";
 
+        // Info for a name the CLI would rewrite is info about some other item.
+        if (RefuseExpandingTarget(argv))
+        {
+            return;
+        }
+
         // The tier decides whether this may run without review; a verb that is not read-only never gets here.
         if (TierFor(argv) != CommandTier.ReadOnly)
         {
@@ -765,7 +771,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         IsBusy = true;
         try
         {
-            var invocation = await Services.Cli.RunAsync(argv, options: CliRunOptions.JsonRead).ConfigureAwait(true);
+            var invocation = await Services.Cli.RunAsync(argv, options: ExactTargetsJson).ConfigureAwait(true);
             if (invocation.ExitCode == 0 && invocation.FailureReason is null)
             {
                 var stdout = string.Join('\n', invocation.OutputLines
@@ -785,6 +791,10 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         catch (CliNotFoundException ex)
         {
             ShowResult("Command failed", $"The defenseclaw CLI could not be found. {ex.Message}", InfoBarSeverity.Error);
+        }
+        catch (ArgumentExpansionException ex)
+        {
+            ShowResult("Command refused", ex.Message, InfoBarSeverity.Error);
         }
         finally
         {
@@ -818,9 +828,37 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     protected static CommandTier TierFor(IReadOnlyList<string> argv) =>
         CommandTiers.Classify(argv.TakeWhile(a => !a.StartsWith('-')).Take(2).ToList());
 
+    /// <summary>
+    /// Every Govern command names a target that came from outside - a folder name, a server key - after the
+    /// <c>--</c>. The runner refuses (<see cref="CliRunOptions.RefuseExpandingTargets"/>) to run one the CLI would
+    /// rewrite (a skill folder called <c>a*</c> becoming <c>a1 a2</c>), so the action never runs on something else than
+    /// what was confirmed; this is the same check made early enough to say so instead of opening a review.
+    /// </summary>
+    private static readonly CliRunOptions ExactTargets = new() { RefuseExpandingTargets = true };
+
+    private static readonly CliRunOptions ExactTargetsJson = CliRunOptions.JsonRead with { RefuseExpandingTargets = true };
+
+    /// <summary>Shows the refusal and returns true when the CLI would act on a different target than <paramref name="argv"/> names.</summary>
+    private bool RefuseExpandingTarget(IReadOnlyList<string> argv)
+    {
+        var changes = ArgvHazards.FindChangedTargets(argv, CliWorkingDirectory.DefaultPath);
+        if (changes.Count == 0)
+        {
+            return false;
+        }
+
+        ShowResult("Command refused", ArgumentExpansionException.BuildMessage(changes), InfoBarSeverity.Error);
+        return true;
+    }
+
     /// <summary>Opens the confirm overlay for <paramref name="plan"/>. Nothing runs until the operator confirms.</summary>
     protected void BeginReview(GovernPlan plan)
     {
+        if (RefuseExpandingTarget(plan.Argv))
+        {
+            return;
+        }
+
         // Everything reviewed here is meant to change something, so it is never shown as harmless; the plan can
         // only raise the tier from there. The verb path alone (TierFor) is a floor of its own, so an operator-typed
         // flag value that spells --help cannot lower what the review derives from the whole argv.
@@ -888,7 +926,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         IsBusy = true;
         try
         {
-            var invocation = await Services.Cli.RunAsync(plan.Argv).ConfigureAwait(true);
+            var invocation = await Services.Cli.RunAsync(plan.Argv, options: ExactTargets).ConfigureAwait(true);
             if (invocation.ExitCode == 0 && invocation.FailureReason is null)
             {
                 succeeded = true;
@@ -908,7 +946,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         {
             ShowResult("Command failed", $"The defenseclaw CLI could not be found. {ex.Message}", InfoBarSeverity.Error);
         }
-        catch (SecretInArgumentException ex)
+        catch (Exception ex) when (ex is SecretInArgumentException or ArgumentExpansionException)
         {
             ShowResult("Command refused", ex.Message, InfoBarSeverity.Error);
         }

@@ -403,7 +403,9 @@ public partial class CommandReviewControl : UserControl
 
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
-        var text = Review?.CommandText;
+        // Not what the box shows: that quotes only whitespace, and a name like x&calc would paste as a second
+        // command. The clipboard gets the form PowerShell reads as one literal argument per name.
+        var text = Review?.ClipboardText;
         if (string.IsNullOrEmpty(text))
         {
             return;

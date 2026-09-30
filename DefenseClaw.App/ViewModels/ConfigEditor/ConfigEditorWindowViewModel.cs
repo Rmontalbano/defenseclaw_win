@@ -916,7 +916,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     private bool CanRestore() => LastBackupPath is not null;
 
     /// <summary>What a FORM-source fetch produced: the masked YAML, or the reason there is none.</summary>
-    private sealed record FormSourceResult(string? Yaml, string? Failure);
+    internal sealed record FormSourceResult(string? Yaml, string? Failure);
 
     /// <summary>
     /// Runs a command that must be read-only. The tier comes from <see cref="CommandTiers"/>, the one
@@ -932,7 +932,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
                 $"Refusing to run 'defenseclaw {string.Join(' ', argv)}' without review: it is not a read-only command.");
         }
 
-        return _cli.RunAsync(argv, cancellationToken: cancellationToken);
+        // The output is parsed as a whole (it becomes the FORM tree), so it is read with the full-output ceilings:
+        // with the ordinary cap a config longer than 2,000 lines / 256 KiB loses its head and silently parses as
+        // a shorter config (--effective is already past 1,200 lines).
+        return _cli.RunAsync(argv, cancellationToken: cancellationToken, options: CliRunOptions.JsonRead);
     }
 
     private static string OutputText(CliInvocation invocation, CliStream stream) =>
@@ -964,19 +967,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
                 invocation = await RunReadOnlyAsync(argv, cancellationToken).ConfigureAwait(true);
             }
 
-            if (invocation.FailureReason is { Length: > 0 } failure)
-            {
-                return new FormSourceResult(null, $"Could not run defenseclaw: {failure}");
-            }
-
-            if (invocation.ExitCode is not 0)
-            {
-                return new FormSourceResult(
-                    null,
-                    $"defenseclaw {string.Join(' ', argv)} exited {invocation.ExitCode}: {OutputText(invocation, CliStream.StandardError)}");
-            }
-
-            return new FormSourceResult(OutputText(invocation, CliStream.StandardOutput), null);
+            return FormSourceFrom(invocation, argv);
         }
         catch (CliNotFoundException)
         {
@@ -984,6 +975,34 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
                 null,
                 "The defenseclaw CLI was not found on PATH. FORM view needs it to read config.yaml's masked source view — RAW editing still works.");
         }
+    }
+
+    /// <summary>What one finished <c>config show</c> read means for the FORM tab: the YAML, or why there is none.</summary>
+    internal static FormSourceResult FormSourceFrom(CliInvocation invocation, IReadOnlyList<string> argv)
+    {
+        if (invocation.FailureReason is { Length: > 0 } failure)
+        {
+            return new FormSourceResult(null, $"Could not run defenseclaw: {failure}");
+        }
+
+        if (invocation.ExitCode is not 0)
+        {
+            return new FormSourceResult(
+                null,
+                $"defenseclaw {string.Join(' ', argv)} exited {invocation.ExitCode}: {OutputText(invocation, CliStream.StandardError)}");
+        }
+
+        // Even the full-output ceilings (200,000 lines / 16 MiB) drop the head of a runaway output. A source view
+        // with its top missing must never become the FORM tree, which would then save over what it left out.
+        if (invocation.IsOutputTruncated)
+        {
+            return new FormSourceResult(
+                null,
+                $"defenseclaw {string.Join(' ', argv)} printed more than the app keeps ({invocation.DroppedOutputLineCount:N0} lines dropped), " +
+                "so FORM view would show only part of config.yaml. RAW editing still works.");
+        }
+
+        return new FormSourceResult(OutputText(invocation, CliStream.StandardOutput), null);
     }
 
     private async Task FetchFormSourceAsync(CancellationToken cancellationToken)

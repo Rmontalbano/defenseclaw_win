@@ -22,6 +22,32 @@ public sealed class SecretInArgumentException : InvalidOperationException
     public int ArgumentIndex { get; }
 }
 
+/// <summary>
+/// Raised when the CLI's own Windows argument expansion (<c>%VAR%</c>, <c>$VAR</c>, <c>~</c>, wildcards) would
+/// change an argument, and the caller asked not to run in that case
+/// (<see cref="CliRunOptions.RefuseExpandingTargets"/>). What was reviewed is not what would run.
+/// </summary>
+public sealed class ArgumentExpansionException : InvalidOperationException
+{
+    public ArgumentExpansionException(IReadOnlyList<ArgvHazard> hazards)
+        : base(BuildMessage(hazards))
+    {
+        Hazards = hazards;
+    }
+
+    /// <summary>Every argument that would change, with what it would become.</summary>
+    public IReadOnlyList<ArgvHazard> Hazards { get; }
+
+    /// <summary>The one sentence a panel shows when it refuses: what changes, and what to do about it.</summary>
+    public static string BuildMessage(IReadOnlyList<ArgvHazard> hazards)
+    {
+        ArgumentNullException.ThrowIfNull(hazards);
+        return "Refusing to run: the DefenseClaw CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows, " +
+               $"so it would act on something other than what is shown - {string.Join("; ", hazards.Select(h => h.Describe()))}. " +
+               "Rename it (avoid * ? [ % $ and a leading ~) and try again.";
+    }
+}
+
 /// <summary>Thrown when the requested DefenseClaw executable is not on PATH or in the install dir.</summary>
 public sealed class CliNotFoundException : FileNotFoundException
 {
@@ -184,7 +210,7 @@ public sealed record CliRunOptions
     // variables here keeps a stray log of the options useful without printing a value, redacted or not.
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
-        builder.Append(System.Globalization.CultureInfo.InvariantCulture, $"RetainFullOutput = {RetainFullOutput}, Timeout = {Timeout}, SurvivesShutdown = {SurvivesShutdown}, EnvironmentNames = [{string.Join(", ", EnvironmentOverlay.Keys)}]");
+        builder.Append(System.Globalization.CultureInfo.InvariantCulture, $"RetainFullOutput = {RetainFullOutput}, Timeout = {Timeout}, SurvivesShutdown = {SurvivesShutdown}, RefuseExpandingTargets = {RefuseExpandingTargets}, EnvironmentNames = [{string.Join(", ", EnvironmentOverlay.Keys)}]");
         return true;
     }
 
@@ -230,6 +256,16 @@ public sealed record CliRunOptions
     /// </para>
     /// </summary>
     public bool SurvivesShutdown { get; init; }
+
+    /// <summary>
+    /// Refuse to start (throwing <see cref="ArgumentExpansionException"/>) when the DefenseClaw CLI's own argument
+    /// expansion would change a <b>target</b> - an argument after the <c>--</c> terminator, which names something
+    /// that came from outside (a skill or server name) - see <see cref="ArgvHazards"/>. A run that acts on a different
+    /// target than the one confirmed is worse than no run. Off by default, and it looks at targets only: an
+    /// option value an operator typed (<c>--command %USERPROFILE%\x</c>) is <i>meant</i> to expand, and its review
+    /// already says what it becomes.
+    /// </summary>
+    public bool RefuseExpandingTargets { get; init; }
 }
 
 /// <summary>
@@ -341,6 +377,7 @@ public sealed class CliRunner : IDisposable
     private const int MinimumSubstringGuardLength = 8;
 
     private readonly DefenseClawPaths _paths;
+    private readonly string _neutralWorkingDirectory;
     private readonly object _gate = new();
     private readonly LinkedList<CliInvocation> _activity = new();
     private readonly List<SecretValue> _knownSecrets = new();
@@ -359,10 +396,17 @@ public sealed class CliRunner : IDisposable
     /// <summary>Set once by <see cref="Shutdown"/>. Guarded by <see cref="_gate"/>.</summary>
     private bool _shuttingDown;
 
-    public CliRunner(DefenseClawPaths paths, int activityCapacity = 200)
+    /// <param name="paths">Where the DefenseClaw install lives.</param>
+    /// <param name="activityCapacity">Ring size of <see cref="Activity"/>.</param>
+    /// <param name="neutralWorkingDirectory">
+    /// The empty directory the Python <c>defenseclaw</c> CLI runs in (see <see cref="CliWorkingDirectory"/>);
+    /// <c>null</c> is <see cref="CliWorkingDirectory.DefaultPath"/>. Injectable so a test never touches the real one.
+    /// </param>
+    public CliRunner(DefenseClawPaths paths, int activityCapacity = 200, string? neutralWorkingDirectory = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         ActivityCapacity = activityCapacity > 0 ? activityCapacity : 200;
+        _neutralWorkingDirectory = neutralWorkingDirectory ?? CliWorkingDirectory.DefaultPath;
     }
 
     /// <summary>
@@ -559,18 +603,29 @@ public sealed class CliRunner : IDisposable
         CliRunOptions? options = null) =>
         RunNamedAsync("defenseclaw-gateway", args, stdinSecret, cancellationToken, options);
 
-    /// <summary>Resolves <paramref name="executableName"/> through PATH then the install bin dir.</summary>
-    public Task<CliInvocation> RunNamedAsync(
+    /// <summary>
+    /// Resolves <paramref name="executableName"/> through PATH then the install bin dir.
+    /// <para>
+    /// The resolution happens on a pool thread, inside the returned task: a PATH scan that meets a dead network
+    /// entry can take the better part of a minute, and this method is called from UI handlers that must return
+    /// at once. So <see cref="CliNotFoundException"/> now surfaces when the task is awaited, not from this call.
+    /// </para>
+    /// </summary>
+    public async Task<CliInvocation> RunNamedAsync(
         string executableName,
         IReadOnlyList<string> args,
         SecretValue? stdinSecret = null,
         CancellationToken cancellationToken = default,
         CliRunOptions? options = null)
     {
-        var path = _paths.FindExecutable(executableName)
+        ArgumentException.ThrowIfNullOrEmpty(executableName);
+
+        // Resumes on the caller's context, as it always did: InvocationStarted is raised from the start of
+        // RunExecutableAsync on that thread, and a UI subscriber that adds a row there relies on it.
+        var path = await Task.Run(() => _paths.FindExecutable(executableName), CancellationToken.None).ConfigureAwait(true)
             ?? throw new CliNotFoundException(executableName, _paths.CandidatesFor(executableName));
 
-        return RunExecutableAsync(path, args, stdinSecret, cancellationToken, options);
+        return await RunExecutableAsync(path, args, stdinSecret, cancellationToken, options).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -604,6 +659,7 @@ public sealed class CliRunner : IDisposable
         // leaves no half-recorded invocation behind.
         var environment = ResolveEnvironment(options);
         GuardArguments(args, stdinSecret, environment);
+        GuardExpansion(executablePath, args, options);
 
         var timeout = ResolveTimeout(executablePath, args, options);
         var survivesShutdown = options?.SurvivesShutdown ?? false;
@@ -888,7 +944,7 @@ public sealed class CliRunner : IDisposable
             StandardOutputEncoding = Utf8NoBom,
             StandardErrorEncoding = Utf8NoBom,
             StandardInputEncoding = Utf8NoBom,
-            WorkingDirectory = _paths.DataDirectoryExists ? _paths.DataDirectory : Environment.CurrentDirectory,
+            WorkingDirectory = WorkingDirectoryFor(executablePath),
         };
 
         foreach (var arg in args)
@@ -1155,6 +1211,45 @@ public sealed class CliRunner : IDisposable
                     throw new SecretInArgumentException(i);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Where a child runs. The Python <c>defenseclaw</c> CLI gets <see cref="CliWorkingDirectory"/>: an empty
+    /// directory of the app's own, because Click on Windows glob-expands every argument against the working
+    /// directory (<c>config.y?ml</c> becoming <c>config.yaml</c> is what running in <c>~/.defenseclaw</c> did)
+    /// and a relative path an operator types (<c>plugin install ./x</c>, <c>mcp set --command ./x</c>) would
+    /// otherwise resolve inside the DefenseClaw data directory. Nothing in the CLI needs that directory as its
+    /// cwd: it addresses its files absolutely (<c>~/.defenseclaw/...</c>), and the read-only commands the app
+    /// runs print the same thing from either. Every other child - the Go gateway, the installers - keeps the
+    /// data directory as before: they do not expand arguments, so there is nothing to gain and nothing verified
+    /// about running them elsewhere.
+    /// </summary>
+    private string WorkingDirectoryFor(string executablePath)
+    {
+        if (ArgvHazards.AppliesTo(executablePath) && CliWorkingDirectory.TryEnsure(_neutralWorkingDirectory))
+        {
+            return _neutralWorkingDirectory;
+        }
+
+        return _paths.DataDirectoryExists ? _paths.DataDirectory : Environment.CurrentDirectory;
+    }
+
+    /// <summary>
+    /// Refuses a run whose targets the CLI would rewrite, when the caller asked for that
+    /// (<see cref="CliRunOptions.RefuseExpandingTargets"/>).
+    /// </summary>
+    private void GuardExpansion(string executablePath, IReadOnlyList<string> args, CliRunOptions? options)
+    {
+        if (options is not { RefuseExpandingTargets: true } || !ArgvHazards.AppliesTo(executablePath))
+        {
+            return;
+        }
+
+        var changes = ArgvHazards.FindChangedTargets(args, WorkingDirectoryFor(executablePath));
+        if (changes.Count > 0)
+        {
+            throw new ArgumentExpansionException(changes);
         }
     }
 

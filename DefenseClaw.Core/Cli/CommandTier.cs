@@ -29,11 +29,23 @@ public enum CommandTier
 /// that spells a verb cannot downgrade the tier. Anything unrecognised is
 /// <see cref="CommandTier.StateChanging"/> — the safe default is to ask.
 /// </para>
+/// <para>
+/// Two flag rules sit on top of the path. A read-only flag (<c>--help</c>, <c>--version</c>,
+/// <c>--dry-run</c>) only counts when it stands alone (<see cref="IsStandaloneFlag"/>) — last, or followed by
+/// another flag, and not the value of the option before it — because
+/// <c>upgrade --version 0.9.0 --yes</c> is an upgrade to 0.9.0 (there <c>--version</c> takes a value), not a
+/// version query. And a flag that makes the command print secret values (<see cref="SensitiveFlags"/>:
+/// <c>config show --reveal</c>) is never read-only, since that output lands in Activity, exports and the
+/// clipboard.
+/// </para>
 /// </summary>
 public static class CommandTiers
 {
-    /// <summary>How many leading positional tokens can hold the verb (e.g. <c>agent discovery scan</c>).</summary>
-    public const int MaxPathTokens = 3;
+    /// <summary>
+    /// How many leading positional tokens can hold the verb (e.g. <c>agent discovery scan</c>,
+    /// <c>setup splunk dashboards destroy</c>).
+    /// </summary>
+    public const int MaxPathTokens = 4;
 
     private static readonly HashSet<string> DestructiveVerbs = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -77,6 +89,28 @@ public static class CommandTiers
         "--dry-run",
     };
 
+    /// <summary>
+    /// Flags that make a command print secret values it otherwise masks (<c>config show --reveal</c>,
+    /// <c>keys list --show-values</c>, <c>setup splunk --show-credentials</c>). The verb is a read, but its
+    /// output is copied into the Activity panel, exported logs and the clipboard, so it is reviewed like a
+    /// change - see <see cref="PrintsSecrets"/>.
+    /// </summary>
+    private static readonly HashSet<string> SensitiveFlags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--reveal", "--show-values", "--show-credentials",
+    };
+
+    /// <summary>
+    /// True when <paramref name="argv"/> asks the command to print secret values (any of
+    /// <c>--reveal</c>, <c>--show-values</c>, <c>--show-credentials</c> before a <c>--</c>). A review says so in
+    /// a warning of its own: the tier alone only says "Changes state".
+    /// </summary>
+    public static bool PrintsSecrets(IReadOnlyList<string> argv)
+    {
+        ArgumentNullException.ThrowIfNull(argv);
+        return OptionsOf(argv).Any(SensitiveFlags.Contains);
+    }
+
     /// <summary>Classifies an argv as handed to the CLI (without the executable itself).</summary>
     public static CommandTier Classify(IReadOnlyList<string> argv)
     {
@@ -89,8 +123,8 @@ public static class CommandTiers
 
         // Options end at "--": anything after it is a positional target, so a skill named "--help" or
         // "--dry-run" (skill quarantine -- --help) must not read as a preview flag.
-        var options = argv.TakeWhile(a => a != "--").ToArray();
-        if (options.Any(ReadOnlyFlags.Contains))
+        var options = OptionsOf(argv);
+        if (HasStandaloneReadOnlyFlag(options))
         {
             return CommandTier.ReadOnly;
         }
@@ -105,8 +139,77 @@ public static class CommandTiers
         // The first recognised verb decides; destructive words anywhere in the path already won above
         // (over-warning is the safe direction). Unrecognised paths default to asking.
         var verb = path.FirstOrDefault(t => ReadOnlyVerbs.Contains(t) || StateChangingVerbs.Contains(t));
-        return verb is not null && ReadOnlyVerbs.Contains(verb) && !options.Any(MutatingFlags.Contains)
+        return verb is not null && ReadOnlyVerbs.Contains(verb) &&
+               !options.Any(MutatingFlags.Contains) && !options.Any(SensitiveFlags.Contains)
             ? CommandTier.ReadOnly
             : CommandTier.StateChanging;
     }
+
+    private static string[] OptionsOf(IReadOnlyList<string> argv) => argv.TakeWhile(a => a != "--").ToArray();
+
+    /// <summary>
+    /// A read-only flag counts only as a flag: the last option, or one followed by another flag. Followed by
+    /// a plain word it is the value of a value-taking option - <c>--version 0.9.0</c> on <c>upgrade</c> - and
+    /// says nothing about whether the command changes state.
+    /// </summary>
+    private static bool HasStandaloneReadOnlyFlag(string[] options)
+    {
+        for (var i = 0; i < options.Length; i++)
+        {
+            if (ReadOnlyFlags.Contains(options[i]) && IsStandaloneFlag(options, i))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when <c>tokens[index]</c>, a token that spells a flag, really is one: not the value of the option before
+    /// it (<c>--name --dry-run</c>: a name), and not followed by a plain word (<c>--version 0.9.0</c>: the flag is
+    /// itself an option that takes that word). Only what comes before a <c>--</c> should be passed.
+    /// <para>
+    /// Whether the option before it takes a value is not known here (that is per command), so it is judged by its
+    /// shape: <c>--opt=value</c> is self-contained, a <see cref="IsSwitch"/> takes nothing, and any other option
+    /// is assumed to take the next token. That errs toward "a value": the flag stops counting, and a read-only
+    /// flag that stops counting only ever makes a command look <i>less</i> harmless.
+    /// </para>
+    /// </summary>
+    public static bool IsStandaloneFlag(IReadOnlyList<string> tokens, int index)
+    {
+        ArgumentNullException.ThrowIfNull(tokens);
+
+        if (index + 1 < tokens.Count && !tokens[index + 1].StartsWith('-'))
+        {
+            return false;
+        }
+
+        if (index == 0)
+        {
+            return true;
+        }
+
+        var previous = tokens[index - 1];
+        return !previous.StartsWith('-') || previous.Contains('=', StringComparison.Ordinal) || IsSwitch(previous);
+    }
+
+    /// <summary>
+    /// Options known to take no value, so a flag right after one is a flag and not its argument: the read-only
+    /// flags themselves, the confirm/format switches every wizard and list verb has, and anything spelled
+    /// <c>--no-…</c> or <c>--skip-…</c> (a CLI convention for booleans).
+    /// </summary>
+    public static bool IsSwitch(string option) =>
+        // Not --version: it is a bare flag on the root command but takes a value on `upgrade`.
+        option.Equals("--help", StringComparison.OrdinalIgnoreCase) || option.Equals("--dry-run", StringComparison.OrdinalIgnoreCase) ||
+        option.Equals("--version-json", StringComparison.OrdinalIgnoreCase) ||
+        SensitiveFlags.Contains(option) || MutatingFlags.Contains(option) || CommonSwitches.Contains(option) ||
+        option.StartsWith("--no-", StringComparison.Ordinal) || option.StartsWith("--skip-", StringComparison.Ordinal);
+
+    private static readonly HashSet<string> CommonSwitches = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--yes", "-y", "--json", "--json-output", "--json-summary", "--non-interactive", "--restart", "--verbose", "-v",
+        "--quiet", "--force", "--all", "--refresh", "--scan", "--replace", "--summary", "--effective", "--provenance",
+        "--follow", "--enable", "--disable", "--remove", "--verify", "--clear", "--show-entries", "--show-gone",
+    };
 }

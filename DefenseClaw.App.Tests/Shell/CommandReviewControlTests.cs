@@ -596,9 +596,26 @@ public class CommandReviewControlTests
 
             control.CopyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
 
-            Assert.Equal(review.CommandText, copied);
+            Assert.Equal(review.ClipboardText, copied);
             Assert.Equal("Copied", control.CopyStatus.Text);
             Assert.True(Shown(control.CopyStatus));
+        });
+    }
+
+    [Fact]
+    public void Copy_puts_a_powershell_safe_command_on_the_clipboard_even_when_the_box_shows_the_readable_one()
+    {
+        UiThread.Run(() =>
+        {
+            string? copied = null;
+            var review = ReviewOf(new[] { "skill", "quarantine", "--", "x&calc" });
+            var control = Build(review, c => c.ClipboardWriter = text => { copied = text; return true; });
+
+            control.CopyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            // The box (and CommandText) shows what a reader sees; pasting that would run "calc" as a second command.
+            Assert.Equal("defenseclaw skill quarantine -- x&calc", review.CommandText);
+            Assert.Equal("defenseclaw skill quarantine -- 'x&calc'", copied);
         });
     }
 

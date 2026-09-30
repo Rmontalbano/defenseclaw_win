@@ -420,7 +420,7 @@ public class GalileoKeyTests
             Assert.Null(vm.RunOptionsFor(preview: true));
 
             Assert.True(vm.CanPreview);
-            vm.PreviewCommand.Execute(null);
+            vm.PreviewCommand.ExecuteAsync(null).GetAwaiter().GetResult();
 
             // The preview ran (and, with no CLI on PATH, stopped at "not found"); the key stayed with the box for Execute.
             Assert.True(vm.HasRun);
@@ -444,7 +444,7 @@ public class GalileoKeyTests
             ToReview(vm);
 
             // No defenseclaw on the isolated PATH: the run ends at "not found" before anything starts.
-            vm.ExecuteCommand.Execute(null);
+            vm.ExecuteCommand.ExecuteAsync(null).GetAwaiter().GetResult();
 
             Assert.True(vm.HasRun);
             Assert.False(key.HasEntry);

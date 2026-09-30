@@ -113,6 +113,67 @@ public sealed class GovernPanelArgvTests : IDisposable
         }
     }
 
+    // ------------------------------------------------------------------ a target the CLI would rewrite (D3-01)
+
+    private const string ExpandingVariable = "DCW_GOVERN_TARGET_X1";
+
+    [Fact]
+    public void A_target_the_cli_would_expand_is_refused_with_what_it_would_become_and_nothing_is_reviewed()
+    {
+        Environment.SetEnvironmentVariable(ExpandingVariable, "some-other-skill");
+        try
+        {
+            var vm = new SkillsPanelViewModel(_services);
+            var row = Skill(vm, "[{\"name\": \"%" + ExpandingVariable + "%\"}]");
+
+            Act(vm, row, GovernVerbs.Quarantine);
+
+            Assert.False(vm.IsConfirmOpen);
+            Assert.True(vm.IsResultOpen);
+            Assert.Equal("Command refused", vm.ResultTitle);
+            Assert.Contains("would arrive as “some-other-skill”", vm.ResultMessage, StringComparison.Ordinal);
+            Assert.Contains("Refusing to run", vm.ResultMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ExpandingVariable, null);
+        }
+    }
+
+    [Fact]
+    public void Showing_info_for_a_target_the_cli_would_expand_is_refused_too()
+    {
+        Environment.SetEnvironmentVariable(ExpandingVariable, "some-other-skill");
+        try
+        {
+            var vm = new SkillsPanelViewModel(_services);
+
+            Act(vm, Skill(vm, "[{\"name\": \"$" + ExpandingVariable + "\"}]"), GovernVerbs.Info);
+
+            Assert.Equal("Command refused", vm.ResultTitle);
+            Assert.False(vm.IsOutputOpen);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ExpandingVariable, null);
+        }
+    }
+
+    [Theory]
+    [InlineData("why?")]
+    [InlineData("50%")]
+    [InlineData("no-such-*")]
+    [InlineData("$UNSET_VARIABLE_X1")]
+    public void A_target_that_expands_to_itself_is_reviewed_as_usual(string name)
+    {
+        var vm = new SkillsPanelViewModel(_services);
+
+        Act(vm, Skill(vm, "[{\"name\": \"" + name + "\"}]"), GovernVerbs.Block);
+
+        Assert.True(vm.IsConfirmOpen);
+        Assert.False(vm.IsResultOpen);
+    }
+
     [Fact]
     public void A_blank_reason_sends_no_reason_flag()
     {

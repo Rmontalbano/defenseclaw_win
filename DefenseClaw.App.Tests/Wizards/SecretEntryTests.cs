@@ -374,7 +374,9 @@ public class SecretEntryTests
 
             // The isolated services have no defenseclaw on PATH, so the run ends at "not found" before anything
             // starts — an outcome that is neither success nor a real failure, and the entry must go regardless.
-            vm.ExecuteCommand.Execute(null);
+            // The runner looks the executable up off the calling thread, so "not found" arrives when the command's
+            // task completes, not from Execute itself: wait for it.
+            vm.ExecuteCommand.ExecuteAsync(null).GetAwaiter().GetResult();
 
             Assert.False(vm.IsRunning);
             Assert.True(vm.HasRun);
@@ -402,7 +404,7 @@ public class SecretEntryTests
                 vm.Next();
             }
 
-            vm.ExecuteCommand.Execute(null);
+            vm.ExecuteCommand.ExecuteAsync(null).GetAwaiter().GetResult();
 
             Assert.True(vm.HasRun);
             Assert.DoesNotContain("cleared", vm.ResultMessage, StringComparison.Ordinal);
@@ -428,7 +430,7 @@ public class SecretEntryTests
             }
 
             Assert.True(vm.CanPreview);
-            vm.PreviewCommand.Execute(null);
+            vm.PreviewCommand.ExecuteAsync(null).GetAwaiter().GetResult();
 
             // The preview ran (and, with no CLI on PATH, stopped at "not found"), but the secret is for the real
             // command only: still held, and the result line says a preview leaves it alone.

@@ -19,9 +19,41 @@ public enum CommandReviewPhase
 /// <summary>A consequence worth stating next to the command, drawn as a warning bar (<c>Title</c> is its heading).</summary>
 public sealed record CommandReviewWarning(string Title, string Message)
 {
+    /// <summary>The heading of <see cref="ArgumentExpansion"/>.</summary>
+    public const string ArgumentExpansionTitle = "Arguments change on Windows";
+
+    /// <summary>The heading of <see cref="SecretOutput"/>.</summary>
+    public const string SecretOutputTitle = "Prints secret values";
+
     /// <summary>The bar every command that restarts the live gateway carries.</summary>
     public static CommandReviewWarning GatewayRestart(string? message = null) =>
         new("Gateway restart", message ?? CommandReview.RestartNotice);
+
+    /// <summary>
+    /// The bar a command carries when the DefenseClaw CLI would rewrite one of its arguments before acting on it
+    /// (see <see cref="ArgvHazards"/>): the command shown is then not the command that runs, so the bar says what
+    /// each argument becomes. Not built for an argument that expands to itself.
+    /// </summary>
+    /// <param name="hazards">The arguments that change, paired with the step they belong to (0 when the review has one step).</param>
+    public static CommandReviewWarning ArgumentExpansion(IReadOnlyList<(int Step, ArgvHazard Hazard)> hazards)
+    {
+        ArgumentNullException.ThrowIfNull(hazards);
+
+        var lines = hazards
+            .Select(h => (h.Step > 0 ? $"Step {h.Step}: " : string.Empty) + h.Hazard.Describe() + ".")
+            .ToArray();
+        return new CommandReviewWarning(
+            ArgumentExpansionTitle,
+            "The DefenseClaw CLI expands %VARIABLES%, $VARIABLES, ~ and wildcards in every argument on Windows - even after --. " +
+            "It will not run exactly what is shown above: " + string.Join(' ', lines));
+    }
+
+    /// <summary>The bar a command carries when it asks the CLI to print values it normally masks.</summary>
+    public static CommandReviewWarning SecretOutput() =>
+        new(
+            SecretOutputTitle,
+            "This command prints secret values the CLI normally masks. The output lands in the Activity panel, in any log you " +
+            "export and on the clipboard if you copy it.");
 }
 
 /// <summary>
@@ -57,9 +89,25 @@ public sealed partial class CommandReviewStep : ObservableObject
         Number = number;
         Tier = CommandReview.ResolveTier(Argv, floor);
         CommandText = CommandReview.CommandLine(executable, Argv);
+        ClipboardText = CommandReview.ClipboardLine(executable, Argv);
+
+        // Only the Python CLI re-expands its argv; the Go gateway does not.
+        Hazards = ArgvHazards.AppliesTo(executable)
+            ? ArgvHazards.FindChanges(Argv, CliWorkingDirectory.DefaultPath)
+            : Array.Empty<ArgvHazard>();
+        PrintsSecrets = CommandTiers.PrintsSecrets(Argv);
     }
 
     public IReadOnlyList<string> Argv { get; }
+
+    /// <summary>
+    /// The arguments the CLI would rewrite before running (<c>config.y?ml</c> becoming <c>config.yaml</c>), with what
+    /// they become; empty for nearly every command. The review carries a warning for a step that has any.
+    /// </summary>
+    public IReadOnlyList<ArgvHazard> Hazards { get; }
+
+    /// <summary>True when the command asks for secret values to be printed (<c>--reveal</c>, <c>--show-values</c>, <c>--show-credentials</c>).</summary>
+    public bool PrintsSecrets { get; }
 
     public string Executable { get; }
 
@@ -69,8 +117,15 @@ public sealed partial class CommandReviewStep : ObservableObject
 
     public CommandTier Tier { get; }
 
-    /// <summary>The exact command as it will run, e.g. <c>defenseclaw skill block -- pdf-tools</c>.</summary>
+    /// <summary>The exact command as it will run, e.g. <c>defenseclaw skill block -- pdf-tools</c>. For reading; see <see cref="ClipboardText"/> for pasting.</summary>
     public string CommandText { get; }
+
+    /// <summary>
+    /// The same command as text that is safe to paste into PowerShell - each argument one literal string - which is
+    /// what the Copy button puts on the clipboard. <see cref="CommandText"/> quotes only whitespace, so a name such as
+    /// <c>x&amp;calc</c> would paste as two commands.
+    /// </summary>
+    public string ClipboardText { get; }
 
     public string Heading => Number > 0 ? $"Step {Number}" : string.Empty;
 
@@ -132,6 +187,7 @@ public sealed record CommandReview
     };
 
     private readonly string? _confirmLabel;
+    private readonly IReadOnlyList<CommandReviewWarning> _warnings = Array.Empty<CommandReviewWarning>();
 
     /// <summary>What the dialog asks, as a question or a title: "Remove skill “x”?".</summary>
     public required string Title { get; init; }
@@ -142,8 +198,43 @@ public sealed record CommandReview
     /// <summary>One or two sentences on what running it does to the operator's install; empty hides the line.</summary>
     public string Summary { get; init; } = string.Empty;
 
-    /// <summary>Consequences to read before deciding, each drawn as a warning bar.</summary>
-    public IReadOnlyList<CommandReviewWarning> Warnings { get; init; } = Array.Empty<CommandReviewWarning>();
+    /// <summary>
+    /// Consequences to read before deciding, each drawn as a warning bar: the ones the caller supplied, then the
+    /// ones the commands themselves call for - an argument the CLI would rewrite
+    /// (<see cref="CommandReviewWarning.ArgumentExpansion"/>) and a request for secret values
+    /// (<see cref="CommandReviewWarning.SecretOutput"/>). Derived here, so every surface that builds a review gets them
+    /// without asking, and a caller cannot forget one.
+    /// </summary>
+    public IReadOnlyList<CommandReviewWarning> Warnings
+    {
+        get => WithDerivedWarnings(_warnings);
+        init => _warnings = value ?? Array.Empty<CommandReviewWarning>();
+    }
+
+    private IReadOnlyList<CommandReviewWarning> WithDerivedWarnings(IReadOnlyList<CommandReviewWarning> supplied)
+    {
+        if (Steps is null)
+        {
+            return supplied;
+        }
+
+        List<CommandReviewWarning>? derived = null;
+
+        var changes = Steps
+            .SelectMany(s => s.Hazards.Select(h => (Step: Steps.Count > 1 ? s.Number : 0, Hazard: h)))
+            .ToArray();
+        if (changes.Length > 0 && !supplied.Any(w => w.Title == CommandReviewWarning.ArgumentExpansionTitle))
+        {
+            (derived ??= new()).Add(CommandReviewWarning.ArgumentExpansion(changes));
+        }
+
+        if (Steps.Any(s => s.PrintsSecrets) && !supplied.Any(w => w.Title == CommandReviewWarning.SecretOutputTitle))
+        {
+            (derived ??= new()).Add(CommandReviewWarning.SecretOutput());
+        }
+
+        return derived is null ? supplied : supplied.Concat(derived).ToArray();
+    }
 
     /// <summary>True when running it bounces the live gateway; adds a badge next to the tier. Pair it with <see cref="CommandReviewWarning.GatewayRestart"/>.</summary>
     public bool RestartsGateway { get; init; }
@@ -170,8 +261,14 @@ public sealed record CommandReview
     /// <summary>Neutral / Warn / Bad — the tone key of the tier badge.</summary>
     public string TierKey => ToneFor(Tier);
 
-    /// <summary>Every command, one per line: what the Copy button puts on the clipboard.</summary>
+    /// <summary>Every command as it reads, one per line: what the dialog shows.</summary>
     public string CommandText => string.Join(Environment.NewLine, Steps.Select(s => s.CommandText));
+
+    /// <summary>
+    /// Every command as text that is safe to paste into PowerShell, one per line: what the Copy button puts on
+    /// the clipboard (see <see cref="CommandReviewStep.ClipboardText"/>).
+    /// </summary>
+    public string ClipboardText => string.Join(Environment.NewLine, Steps.Select(s => s.ClipboardText));
 
     /// <summary>The name a screen reader gives the dialog.</summary>
     public string AutomationName => "Review command: " + Title;
@@ -252,6 +349,16 @@ public sealed record CommandReview
         return args.Length == 0 ? executable : executable + " " + args;
     }
 
+    /// <summary>
+    /// The command as text to paste into PowerShell: <see cref="PowerShellQuoting.CommandLine"/>, so every argument
+    /// arrives as one literal string whatever it contains. <see cref="CommandLine"/> is for reading and is not safe to paste.
+    /// </summary>
+    public static string ClipboardLine(string executable, IEnumerable<string> argv)
+    {
+        ArgumentNullException.ThrowIfNull(argv);
+        return string.IsNullOrEmpty(executable) ? string.Join(' ', argv.Select(PowerShellQuoting.Argument)) : PowerShellQuoting.CommandLine(executable, argv);
+    }
+
     /// <summary>Display quoting only (the runner passes an argument list, no shell is involved): empty or spaced values get quotes.</summary>
     public static string Quote(string argument)
     {
@@ -281,12 +388,18 @@ public sealed record CommandReview
             return false;
         }
 
-        if (argv.Any(NonRestartingFlags.Contains))
+        // Only a flag counts: one that is the value of another option (a webhook named "--show") or the option's
+        // own argument does not turn the restart off, and nothing after a "--" is a flag at all.
+        var options = argv.TakeWhile(a => !string.Equals(a, "--", StringComparison.Ordinal)).ToArray();
+        for (var i = 0; i < options.Length; i++)
         {
-            return false;
+            if (NonRestartingFlags.Contains(options[i]) && CommandTiers.IsStandaloneFlag(options, i))
+            {
+                return false;
+            }
         }
 
-        var path = argv.TakeWhile(a => !a.StartsWith('-')).Take(CommandTiers.MaxPathTokens + 1);
+        var path = argv.TakeWhile(a => !a.StartsWith('-')).Take(CommandTiers.MaxPathTokens);
         if (path.Any(NonRestartingVerbs.Contains))
         {
             return false;

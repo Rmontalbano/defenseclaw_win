@@ -864,6 +864,20 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// The lowest tier the review of this wizard's command may show. A wizard writes configuration, so it is
+    /// never shown as harmless: the classifier alone would call <c>setup webhook add --name --dry-run</c> read-only
+    /// when an operator types <c>--dry-run</c> as the name, because the token spells a preview flag. The one
+    /// exception is a preview the operator asked for with the wizard's own <c>--dry-run</c> switch.
+    /// </summary>
+    private CommandTier ReviewFloor() =>
+        Definition.VisibleFields(_values).Any(f =>
+            f.Kind == WizardFieldKind.Switch &&
+            string.Equals(f.Flag, "--dry-run", StringComparison.Ordinal) &&
+            string.Equals(_values[f.Id].Trim(), ToggleValues.On, StringComparison.OrdinalIgnoreCase))
+            ? CommandTier.ReadOnly
+            : CommandTier.StateChanging;
+
+    /// <summary>
     /// Rebuilds everything the review page says: the exact command, how much it changes, the restart
     /// notice, what the operator changed, which credentials it relies on, and any reason it cannot run.
     /// Cheap — it derives from the answers in memory and starts nothing.
@@ -882,7 +896,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         var review = new CommandReview
         {
             Title = "Command",
-            Steps = new[] { new CommandReviewStep(argv) },
+            Steps = new[] { new CommandReviewStep(argv, floor: ReviewFloor()) },
             RestartsGateway = restartWarning.Length > 0,
             Warnings = restartWarning.Length > 0
                 ? new[] { CommandReviewWarning.GatewayRestart(restartWarning) }
