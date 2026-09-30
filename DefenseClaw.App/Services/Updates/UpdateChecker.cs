@@ -236,8 +236,10 @@ public sealed class UpdateChecker : IDisposable
     {
         var installedVersion = await ResolveInstalledVersionAsync(cancellationToken).ConfigureAwait(false);
 
+        // TryReadCache already drops an entry stamped more than CacheClockSkew ahead of this clock (a clock stepped
+        // back, or a forged file), so whatever survives may sit slightly in the future and still counts as fresh.
         var cached = TryReadCache();
-        var cacheIsFresh = cached is not null && DefenseClaw.Core.Time.WallClock.Elapsed(cached.FetchedAt) < CacheLifetime;
+        var cacheIsFresh = cached is not null && DateTimeOffset.UtcNow - cached.FetchedAt < CacheLifetime;
 
         if (!forceRefresh && cacheIsFresh)
         {
