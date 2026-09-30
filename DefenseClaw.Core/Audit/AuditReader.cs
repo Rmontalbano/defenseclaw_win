@@ -368,6 +368,63 @@ public sealed class AuditReader
     }
 
     /// <summary>
+    /// How many ids one <see cref="GetByIdsAsync"/> statement carries; the rest go in further statements on the same
+    /// connection. Far below SQLite's bound-parameter limit (32,766 since 3.32), so an older build is safe too.
+    /// </summary>
+    private const int IdBatchSize = 400;
+
+    /// <summary>
+    /// The rows with these ids (primary-key lookups, in any order; an id with no row is simply absent). What turns the alert
+    /// queue's ids (<see cref="AlertQueueReader"/>, which reads none of the heavy columns) into rows a panel can show in full.
+    /// Read-only, off the caller's thread, stoppable, like every other call here.
+    /// </summary>
+    public Task<IReadOnlyList<AuditEvent>> GetByIdsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        return ReaderOffload.Run(() => GetByIdsCoreAsync(ids, cancellationToken), cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<AuditEvent>> GetByIdsCoreAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken)
+    {
+        var wanted = ids.Where(static id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToArray();
+        var found = new List<AuditEvent>(wanted.Length);
+        if (wanted.Length == 0 || !Exists)
+        {
+            return found;
+        }
+
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
+
+        for (var offset = 0; offset < wanted.Length; offset += IdBatchSize)
+        {
+            var batch = new ArraySegment<string>(wanted, offset, Math.Min(IdBatchSize, wanted.Length - offset));
+
+            await using var command = connection.CreateCommand();
+
+            // Only the parameter names are concatenated; every id goes in as a bound value.
+            var names = new string[batch.Count];
+            for (var i = 0; i < batch.Count; i++)
+            {
+                names[i] = "$p" + i.ToString(CultureInfo.InvariantCulture);
+                command.Parameters.AddWithValue(names[i], batch[i]);
+            }
+
+            command.CommandText =
+                $"SELECT {SelectColumns}, {SortKey} AS sort_nanos FROM audit_events e WHERE e.id IN ({string.Join(',', names)})";
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                found.Add(Map(reader));
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// Counts matching rows per severity — the dashboard tiles. Honours every filter on
     /// <paramref name="query"/> except paging.
     /// <para>

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -16,9 +17,24 @@ using Microsoft.Data.Sqlite;
 namespace DefenseClaw.App.ViewModels;
 
 /// <summary>
-/// Live security findings: the last <see cref="GatewayMonitor.AlertLimit"/> entries from
-/// <c>/alerts</c>, with the audit database as a fallback when the gateway cannot serve
-/// them.
+/// Live security findings: the <b>unacknowledged queue</b> read from <c>audit.db</c> (<see cref="AlertQueueReader"/>, the
+/// Mac's one definition of "unacknowledged findings": up to the newest 500, the same number as the sidebar badge and the
+/// tray), newest first; or, for a database that predates the queue's schema (or none), the last
+/// <see cref="GatewayMonitor.AlertLimit"/> entries from <c>/alerts</c>, with the audit database as a fallback when the
+/// gateway cannot serve those either.
+/// <para>
+/// <b>Which source.</b> The queue is primary because it is what the badge counts and what acknowledging empties, and because
+/// it needs no gateway. The queue read gives ids, severity, action, target and connector; the rows' full details (rule,
+/// title, evidence, attributes) are fetched by id for the rows this panel has not shown yet
+/// (<see cref="AuditReader.GetByIdsAsync"/>), so a refresh that changes three findings reads three rows. It is read when the
+/// panel comes on screen, when <see cref="AlertCountsService"/> reports a change (its 30 s cadence), on Refresh and after an
+/// acknowledge or dismiss. While the queue is the source the gateway's own list is not consulted; if the queue cannot be used
+/// (<see cref="AlertQueueStatus.LegacySchema"/>, no database) everything below about <c>/alerts</c> applies as it always did.
+/// </para>
+/// <para>
+/// <b>Deep links.</b> <see cref="Accept"/> takes an <see cref="AlertsFilter"/>: a notification's click or a status chip opens
+/// this panel already narrowed to a severity and above.
+/// </para>
 /// <para>
 /// <b>Why the filters are not optional.</b> On a development box the alert stream is
 /// dominated by the agent that is operating the box — every <c>$env:</c> reference trips
@@ -74,7 +90,7 @@ namespace DefenseClaw.App.ViewModels;
 /// screen looking untouched.
 /// </para>
 /// </summary>
-public sealed partial class AlertsPanelViewModel : PanelViewModelBase
+public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
     /// <summary>How many findings to pull from audit.db when /alerts cannot answer.</summary>
     private const int FallbackLimit = 100;
@@ -108,11 +124,29 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     private IReadOnlyList<GatewayAlert>? _appliedAlerts;
 
     /// <summary>
-    /// True while <see cref="_all"/> holds audit.db rows. The two sources project the same
-    /// alert to slightly different rows (the audit path has no tags or confidence), so rows
+    /// True while <see cref="_all"/> holds audit.db rows (the queue, or the fallback when the gateway serves no alerts). The
+    /// sources project the same alert to slightly different rows (the audit path has no tags or confidence), so rows
     /// are never reused, and the bound list never merged, across a switch of source.
     /// </summary>
     private bool _allFromAudit;
+
+    /// <summary>
+    /// True while the audit queue is the source of <see cref="_all"/> (see the type documentation): the gateway's own list is then
+    /// not consulted, and <see cref="Apply"/> leaves the rows alone. Set by the first queue read that succeeds, cleared when a read
+    /// finds the queue unusable. UI thread only.
+    /// </summary>
+    private bool _queueActive;
+
+    /// <summary>When the queue was last read, and whether its window was full (more findings waiting than it holds); for the source note.</summary>
+    private DateTimeOffset _queueReadAt = DateTimeOffset.MinValue;
+
+    private bool _queueHasMore;
+
+    /// <summary>Serializes queue reads: one statement and one hydration at a time, however many callers ask.</summary>
+    private readonly SemaphoreSlim _queueGate = new(1, 1);
+
+    /// <summary>True while a block of severity toggles is being set at once (see <see cref="SetSeverityFloor"/>): the list is filtered once afterwards, not once per toggle.</summary>
+    private bool _settingToggles;
 
     [ObservableProperty]
     private string _filterText = string.Empty;
@@ -290,7 +324,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
             // rewrites on every pass, and reacting to that would re-run the pass forever.
             filter.PropertyChanged += (_, e) =>
             {
-                if (string.Equals(e.PropertyName, nameof(SeverityFilter.IsEnabled), StringComparison.Ordinal))
+                if (!_settingToggles && string.Equals(e.PropertyName, nameof(SeverityFilter.IsEnabled), StringComparison.Ordinal))
                 {
                     ApplyFilters();
                 }
@@ -316,7 +350,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     public override string Title => "Alerts";
 
     public override string Description =>
-        "Security findings from the gateway, newest first, with severity and signature filters.";
+        "Unacknowledged security findings, newest first, with severity and signature filters.";
 
     /// <summary>The filtered, optionally collapsed view bound to the list.</summary>
     public ObservableCollection<AlertItem> Alerts { get; } = new();
@@ -337,10 +371,11 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
 
     public bool HasHiddenAcknowledged => HiddenAcknowledgedCount > 0;
 
-    public override Task InitializeAsync(CancellationToken cancellationToken = default)
+    public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        // The gateway's list first, so the panel has something to show at once; the queue replaces it when it has been read.
         Apply(Services.Monitor.Current);
-        return Task.CompletedTask;
+        await RefreshQueueAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -354,13 +389,60 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         RestampTimes();
 
         Services.Monitor.PollCompleted += OnPollCompleted;
+
+        // The counts service runs while anything listens (the tray always does) and says when the queue changed; a finding that
+        // arrives while this panel is open shows up on its next tick.
+        Services.AlertCounts.Changed += OnAlertCountsChanged;
         _clock.Start();
+        _ = RefreshQueueAsync();
     }
 
     protected override void OnDeactivated()
     {
         Services.Monitor.PollCompleted -= OnPollCompleted;
+        Services.AlertCounts.Changed -= OnAlertCountsChanged;
         _clock.Stop();
+    }
+
+    private void OnAlertCountsChanged(object? sender, AlertCountsChangedEventArgs e) => _ = RefreshQueueAsync();
+
+    /// <summary>
+    /// A deep link (<see cref="IAcceptsNavigation"/>): an <see cref="AlertsFilter"/> opens the panel on a severity and above, with
+    /// the text filter cleared (the point of the link is to show those findings). The toggles are state, so a link that lands
+    /// before the first read is honoured when the rows arrive. <see cref="AlertsFilter.Kind"/> is not used here yet: the queue
+    /// holds findings, not enforcement blocks. A payload of another type is ignored.
+    /// </summary>
+    public void Accept(object payload)
+    {
+        if (payload is not AlertsFilter { SeverityFloor: { } floor })
+        {
+            return;
+        }
+
+        SetSeverityFloor(floor);
+        FilterText = string.Empty;
+    }
+
+    /// <summary>
+    /// Turns on every severity toggle at or above <paramref name="floor"/> and off those below it, then filters once.
+    /// The rows are the same either way; only what is showing changes.
+    /// </summary>
+    private void SetSeverityFloor(AuditSeverity floor)
+    {
+        _settingToggles = true;
+        try
+        {
+            foreach (var filter in SeverityFilters)
+            {
+                filter.IsEnabled = AuditSeverityExtensions.Parse(filter.Severity) >= floor;
+            }
+        }
+        finally
+        {
+            _settingToggles = false;
+        }
+
+        ApplyFilters();
     }
 
     partial void OnFilterTextChanged(string value) => ApplyFilters();
@@ -376,6 +458,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        // The queue first: when it serves, the gateway's list is not what is on screen and there is nothing to re-read there.
+        await RefreshQueueAsync();
+        if (_queueActive)
+        {
+            return;
+        }
+
         var snapshot = await Services.Monitor.RefreshAlertsNowAsync();
         _lastFallbackLoad = DateTimeOffset.MinValue;
         Apply(snapshot);
@@ -650,6 +739,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
                 : done;
             ShowActionResult(result + DifferenceNote(output, previewed), isError: false);
 
+            // The sidebar badge and the tray follow the acknowledge at once, not on the next 30 s tick.
+            await RefreshCountsAsync();
             await (AfterApply?.Invoke() ?? ReloadAfterDispositionAsync());
         }
         catch (CliNotFoundException ex)
@@ -662,6 +753,19 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         }
     }
 
+    /// <summary>Re-reads the unacknowledged count now (<see cref="AlertCountsService.RefreshAsync"/>); it records its own failures, so only a cancellation can end it early.</summary>
+    private async Task RefreshCountsAsync()
+    {
+        try
+        {
+            await Services.AlertCounts.RefreshAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutting down: nobody is left to show the count to.
+        }
+    }
+
     /// <summary>
     /// Re-fetches the alert list now (not on the 30 s throttle) and then hides whatever
     /// <c>alert_acknowledgement_projection</c> still marks as acknowledged, in case the gateway
@@ -669,6 +773,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     /// </summary>
     private async Task ReloadAfterDispositionAsync()
     {
+        // The queue excludes what was just acknowledged by definition, so when it is the source that is all there is to do.
+        await RefreshQueueAsync();
+        if (_queueActive)
+        {
+            return;
+        }
+
         var snapshot = await Services.Monitor.RefreshAlertsNowAsync();
         _lastFallbackLoad = DateTimeOffset.MinValue;
         Apply(snapshot);
@@ -906,6 +1017,12 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     /// </summary>
     internal void Apply(GatewaySnapshot snapshot)
     {
+        // The audit queue is the source: the gateway's answer says nothing about it (and the queue does not need the gateway).
+        if (_queueActive)
+        {
+            return;
+        }
+
         if (snapshot.AlertsUnavailable is { Length: > 0 } reason)
         {
             _alertsUnavailableReason = reason;
@@ -1034,6 +1151,12 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
             var page = await Services.Audit.QueryAsync(query, CancellationToken.None);
             _lastFallbackLoad = DateTimeOffset.UtcNow;
 
+            // The queue became the source while this ran: its rows are the list now, and these are not what it holds.
+            if (_queueActive)
+            {
+                return;
+            }
+
             if (!_allFromAudit && Alerts.Count > 0)
             {
                 // Different source, different row shape; see _allFromAudit.
@@ -1074,6 +1197,157 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         {
             Interlocked.Exchange(ref _loadingFallback, 0);
         }
+    }
+
+    // ---- The audit queue (the primary source) ------------------------------------------------------------
+
+    /// <summary>
+    /// Reads the unacknowledged queue and, when it is usable, makes it the list. When it is not (a database from before the
+    /// queue's schema, no database) the gateway's list stays or comes back; a read that fails while the queue is already the
+    /// source keeps the rows and says so in the note. Never throws: it runs fire-and-forget from events and a timer. Reads are
+    /// taken one at a time, and each caller returns after a read that started after its call (so after an acknowledge, the list
+    /// it gets is the one without the acknowledged rows).
+    /// </summary>
+    private async Task RefreshQueueAsync()
+    {
+        await _queueGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            await ReadQueueAsync().ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // A queue that cannot be read this time (locked, timed out) must not fault the panel; the next tick reads again.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceWarning($"alerts: the unacknowledged queue could not be read: {ex.GetType().Name}: {ex.Message}");
+            if (_queueActive)
+            {
+                SourceNote = QueueNote() + $" · the last refresh failed: {ex.Message}".ReplaceLineEndings(" ");
+            }
+        }
+        finally
+        {
+            _ = _queueGate.Release();
+        }
+    }
+
+    private async Task ReadQueueAsync()
+    {
+        var result = await Services.AlertQueue.ReadAsync(AlertQueueReader.DefaultWindowLimit).ConfigureAwait(true);
+        if (result.Status != AlertQueueStatus.Ok)
+        {
+            LeaveQueue();
+            return;
+        }
+
+        var window = result.Counts.Newest;
+
+        // Rows already shown are reused; only the findings this panel has not shown yet are read in full.
+        var shown = new Dictionary<string, AlertItem>(StringComparer.Ordinal);
+        if (_queueActive)
+        {
+            foreach (var item in _all)
+            {
+                _ = shown.TryAdd(item.Key, item);
+            }
+        }
+
+        var missing = window
+            .Where(item => item.Id.Length > 0 && !shown.ContainsKey(item.Id))
+            .Select(item => item.Id)
+            .ToArray();
+        var details = missing.Length == 0
+            ? Array.Empty<AuditEvent>()
+            : await Services.Audit.GetByIdsAsync(missing).ConfigureAwait(true);
+
+        // A row flattens and pretty-prints its attribute bag, and a first load builds hundreds: not on the UI thread.
+        var rows = await Task.Run(() => BuildQueueRows(window, shown, details)).ConfigureAwait(true);
+
+        if (!_queueActive)
+        {
+            // The gateway's rows (or none) give way to the queue's, which have a different shape: the bound list starts over.
+            _queueActive = true;
+            if (Alerts.Count > 0)
+            {
+                Alerts.Clear();
+            }
+        }
+
+        _all.Clear();
+        _all.AddRange(rows);
+        _allFromAudit = true;
+        _appliedAlerts = null;
+        _alertsUnavailableReason = null;
+        _queueReadAt = DateTimeOffset.UtcNow;
+        _queueHasMore = result.Counts.HasMore;
+
+        SourceNote = QueueNote();
+        SetEmpty("Nothing to acknowledge", "No unacknowledged findings are waiting in the audit database.");
+        ApplyFilters();
+    }
+
+    /// <summary>The queue, newest first, as rows: a row already shown as it is, a new one from its full audit row, one whose row has gone (retention) from what the queue knows.</summary>
+    private static List<AlertItem> BuildQueueRows(
+        IReadOnlyList<AlertQueueItem> window,
+        Dictionary<string, AlertItem> shown,
+        IReadOnlyList<AuditEvent> details)
+    {
+        Dictionary<string, AuditEvent>? byId = null;
+        if (details.Count > 0)
+        {
+            byId = new Dictionary<string, AuditEvent>(details.Count, StringComparer.Ordinal);
+            foreach (var detail in details)
+            {
+                _ = byId.TryAdd(detail.Id, detail);
+            }
+        }
+
+        var rows = new List<AlertItem>(window.Count);
+        foreach (var item in window)
+        {
+            if (item.Id.Length > 0 && shown.TryGetValue(item.Id, out var existing))
+            {
+                rows.Add(existing);
+            }
+            else if (item.Id.Length > 0 && byId is not null && byId.TryGetValue(item.Id, out var detail))
+            {
+                rows.Add(AlertItem.FromAudit(detail));
+            }
+            else
+            {
+                rows.Add(AlertItem.FromQueue(item));
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// The queue cannot serve (no database, or one from before the queue's schema): back to the gateway's list, which is read
+    /// from the monitor's current snapshot at once. Does nothing while the gateway's list is already what is showing.
+    /// </summary>
+    private void LeaveQueue()
+    {
+        if (!_queueActive)
+        {
+            return;
+        }
+
+        _queueActive = false;
+        _all.Clear();
+        _allFromAudit = false;
+        _appliedAlerts = null;
+        Alerts.Clear();
+        ApplyFilters();
+        Apply(Services.Monitor.Current);
+    }
+
+    /// <summary>"Unacknowledged findings · 441 · read 12s ago", or, when the queue's window was full, that the newest 500 are shown and more are waiting.</summary>
+    private string QueueNote()
+    {
+        var count = _all.Count.ToString("N0", CultureInfo.CurrentCulture);
+        var what = _queueHasMore ? $"newest {count} (more are waiting)" : count;
+        return $"Unacknowledged findings · {what} · read {Relative(_queueReadAt)}";
     }
 
     /// <summary>
@@ -1237,6 +1511,11 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     /// </summary>
     private void RestampTimes()
     {
+        if (_queueActive)
+        {
+            SourceNote = QueueNote();
+        }
+
         foreach (var item in _all)
         {
             item.Restamp();
@@ -1449,6 +1728,25 @@ public sealed partial class AlertItem : ObservableObject
             ConfidenceText = string.Empty,
             StructuredText = Pretty(structured),
             Fields = ToFields(structured),
+        };
+    }
+
+    /// <summary>
+    /// A row from what the alert queue itself knows (id, severity, action, target, connector), for a finding whose full audit row
+    /// could not be read (it was removed by retention between the two reads). The details it cannot show are empty, not invented.
+    /// </summary>
+    public static AlertItem FromQueue(AlertQueueItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        return new AlertItem(item.Id.Length > 0 ? item.Id : Guid.NewGuid().ToString("n"), item.Timestamp)
+        {
+            Severity = item.Severity.ToStoredValue(),
+            Headline = item.Action.Length > 0 ? item.Action : "(finding)",
+            Action = item.Action,
+            TargetRef = item.Target ?? string.Empty,
+            Source = item.Connector ?? string.Empty,
+            StructuredText = "{}",
         };
     }
 

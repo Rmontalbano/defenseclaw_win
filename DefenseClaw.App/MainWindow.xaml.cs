@@ -68,6 +68,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// <summary>The sidebar entry per panel id, so a keyboard or palette jump can scroll it into view.</summary>
     private readonly Dictionary<string, DcNavigationItem> _navigationItems = new(StringComparer.Ordinal);
 
+    /// <summary>The count on the Alerts entry and the caution mark on the Overview entry; null until <see cref="BuildNavigation"/> has made the entries.</summary>
+    private SidebarBadge? _alertsBadge;
+
+    private SidebarBadge? _overviewBadge;
+
     /// <summary>
     /// One line per panel whose initialization failed, newest fault per panel wins; what
     /// <c>PanelFaultBar</c> shows. Cleared when the operator dismisses the bar. UI thread only.
@@ -465,9 +470,21 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
                     AutomationProperties.SetAcceleratorKey(item, chord);
                 }
 
+                // The count on Alerts and the caution mark on Overview (CUST-201); the view-model feeds them (UpdateNavigationBadges).
+                if (string.Equals(panel.Id, "alerts", StringComparison.Ordinal))
+                {
+                    _alertsBadge = new SidebarBadge(item, panel.Title, item.ToolTip as string ?? panel.Title, InfoBadgeSeverity.Critical);
+                }
+                else if (string.Equals(panel.Id, "overview", StringComparison.Ordinal))
+                {
+                    _overviewBadge = new SidebarBadge(item, panel.Title, item.ToolTip as string ?? panel.Title, InfoBadgeSeverity.Caution);
+                }
+
                 _ = RootNavigation.MenuItems.Add(item);
             }
         }
+
+        UpdateNavigationBadges();
 
         // Collapsed, the sidebar is a 40 px icon strip and a heading's text would be cut off mid-word
         // ("Gove", "Disc"). The heading keeps its height (so the groups stay visibly apart) and its
@@ -905,6 +922,28 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             // bound text changes. No peer exists unless a UI Automation client is attached.
             UIElementAutomationPeer.FromElement(StateText)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }
+        else if (e.PropertyName is nameof(MainWindowViewModel.AlertBadgeText)
+                 or nameof(MainWindowViewModel.AlertBadgeDescription)
+                 or nameof(MainWindowViewModel.OverviewBadgeDescription))
+        {
+            UpdateNavigationBadges();
+        }
+    }
+
+    /// <summary>
+    /// Shows the sidebar badges the view-model describes. The view-model raises on the UI thread, but the counts service may
+    /// raise from a pool thread when nothing is hosting a dispatcher, so this marshals like <see cref="OnPanelFaulted"/>.
+    /// </summary>
+    private void UpdateNavigationBadges()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(() => UpdateNavigationBadges());
+            return;
+        }
+
+        _alertsBadge?.Set(_viewModel.AlertBadgeText, _viewModel.AlertBadgeDescription);
+        _overviewBadge?.Set("!", _viewModel.OverviewBadgeDescription);
     }
 
     /// <summary>

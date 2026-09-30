@@ -21,13 +21,6 @@ namespace DefenseClaw.App.Services;
 /// </summary>
 public sealed class TrayIconService : IDisposable
 {
-    /// <summary>
-    /// Cap on remembered CRITICAL alert ids. The gateway is asked for the newest
-    /// <see cref="GatewayMonitor.AlertLimit"/> (25) alerts, so anything near that size already
-    /// covers a full window turning over; the headroom is for churn between poll cycles.
-    /// </summary>
-    private const int MaxSeenAlerts = 512;
-
     private readonly AppServices _services;
     private readonly TaskbarIcon _icon;
     private readonly TrayFlyoutViewModel _flyoutViewModel;
@@ -48,21 +41,24 @@ public sealed class TrayIconService : IDisposable
     private MenuItem? _autostartItem;
 
     /// <summary>
-    /// Ids of CRITICAL alerts this tray has already accounted for, so a toast fires once per
-    /// finding. Bounded (<see cref="MaxSeenAlerts"/>, oldest evicted first via
-    /// <see cref="_seenAlertOrder"/>) — a long-lived tray process must not grow it forever.
-    /// UI thread only, like everything in <see cref="Apply"/>.
+    /// Decides the gateway offline / recovered toasts: only for a gateway this session has seen
+    /// reachable, and only while the notification setting allows them. UI thread only.
     /// </summary>
-    private readonly HashSet<string> _seenCriticalAlerts = new(StringComparer.Ordinal);
-    private readonly Queue<string> _seenAlertOrder = new();
+    private readonly GatewayToastTracker _gatewayToasts = new();
 
     /// <summary>
-    /// False until the first snapshot carrying a successfully fetched alert list has been
-    /// absorbed. That first list is history — whatever CRITICALs the gateway already held
-    /// when the app launched — and seeds <see cref="_seenCriticalAlerts"/> without a toast.
+    /// Watches the alert queue and raises the finding toasts (CRITICAL / HIGH as the settings allow, findings
+    /// that arrived while the app was closed as one batch, the mark persisted). See <see cref="AlertNotifier"/>.
     /// </summary>
-    private bool _alertsSeeded;
-    private AppGatewayState _lastState = AppGatewayState.Unknown;
+    private readonly AlertNotifier _alertNotifier;
+
+    /// <summary>
+    /// Where a click on the balloon currently showing goes (Alerts, on the severity the toast announced), or nowhere
+    /// for a toast that goes nowhere. Armed by whichever toast was shown last, which is the one on screen; taken by
+    /// <see cref="OnTrayBalloonTipClicked"/> so one click navigates once.
+    /// </summary>
+    private readonly BalloonClickTarget _balloonTarget = new();
+
     private bool _gatewayActionRunning;
     private bool _disposed;
 
@@ -96,10 +92,18 @@ public sealed class TrayIconService : IDisposable
         };
 
         _icon.TrayLeftMouseUp += OnTrayLeftMouseUp;
+        _icon.TrayBalloonTipClicked += OnTrayBalloonTipClicked;
         _services.Monitor.StateChanged += OnStateChanged;
+
+        // The tray is the count's permanent reader (the tooltip), so the counts service runs for the life of the process.
+        _services.AlertCounts.Changed += OnAlertCountsChanged;
+        _alertNotifier = new AlertNotifier(_services, ShowAlertToast);
 
         Apply(_services.Monitor.Current);
         _icon.ForceCreate(enablesEfficiencyMode: false);
+
+        // After the icon exists: the first look at the queue may toast what arrived while the app was closed.
+        _alertNotifier.Start();
     }
 
     /// <summary>Raised when the user picks "Open Dashboard" or clicks the flyout button.</summary>
@@ -108,15 +112,77 @@ public sealed class TrayIconService : IDisposable
     /// <summary>Raised only by the tray's Exit item — the one real way out of the app.</summary>
     public event EventHandler? ExitRequested;
 
-    /// <summary>Shows a tray balloon. Used for the close-to-tray hint and for stubs.</summary>
-    public void Notify(string title, string message, NotificationIcon icon = NotificationIcon.Info)
+    /// <summary>Shows a tray balloon. Used for the close-to-tray hint and for stubs. A click on it goes nowhere.</summary>
+    public void Notify(string title, string message, NotificationIcon icon = NotificationIcon.Info) =>
+        Notify(title, message, icon, onClick: null);
+
+    /// <summary>
+    /// Shows a tray balloon that, when clicked, asks the shell for <paramref name="onClick"/> (null: nothing happens). The
+    /// balloon showing now is the last one shown, so a toast that goes nowhere also takes away the target of the one before it.
+    /// </summary>
+    private void Notify(string title, string message, NotificationIcon icon, NavigationRequest? onClick)
     {
         if (_disposed)
         {
             return;
         }
 
+        _balloonTarget.Arm(onClick);
         _icon.ShowNotification(title, message, icon);
+    }
+
+    /// <summary>A finding toast: severity and target (see <see cref="AlertToast"/>), and a click opens Alerts on the severity it announced.</summary>
+    private void ShowAlertToast(AlertToast toast) =>
+        Notify(toast.Title, toast.Body, IconFor(toast.Level), new NavigationRequest("alerts", toast.Filter));
+
+    private static NotificationIcon IconFor(ToastLevel level) => level switch
+    {
+        ToastLevel.Error => NotificationIcon.Error,
+        ToastLevel.Warning => NotificationIcon.Warning,
+        _ => NotificationIcon.Info,
+    };
+
+    /// <summary>
+    /// "Reset seen-alert history" (the palette's entry, and the Settings page's button): forgets which findings have been
+    /// announced, so what is outstanding now (CRITICAL and HIGH, as the settings allow) is announced once more as one toast.
+    /// When there is nothing to announce (nothing outstanding, or the queue could not be read this time) the operator is told the
+    /// history was cleared, so the command never seems to do nothing.
+    /// </summary>
+    public async Task ResetSeenAlertHistoryAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var announced = await _alertNotifier.ResetSeenHistoryAsync().ConfigureAwait(true);
+        if (!announced)
+        {
+            Notify(
+                "Seen-alert history reset",
+                "Nothing to announce right now. New CRITICAL and HIGH findings will show as they arrive.");
+        }
+    }
+
+    /// <summary>
+    /// A click on the balloon that is showing: open the dashboard where that toast said to (Alerts, narrowed to the severity
+    /// it announced). Raised by the native notification's user-click, which the library reports as
+    /// <c>TrayBalloonTipClicked</c>; taken once, so a click never navigates twice.
+    /// </summary>
+    private void OnTrayBalloonTipClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_disposed)
+        {
+            _ = _balloonTarget.Click(_services.Navigation);
+        }
+    }
+
+    private void OnAlertCountsChanged(object? sender, AlertCountsChangedEventArgs e)
+    {
+        if (!_disposed)
+        {
+            RefreshTooltip(_services.Monitor.Current);
+        }
     }
 
     public void Dispose()
@@ -128,7 +194,10 @@ public sealed class TrayIconService : IDisposable
 
         _disposed = true;
         _services.Monitor.StateChanged -= OnStateChanged;
+        _services.AlertCounts.Changed -= OnAlertCountsChanged;
+        _alertNotifier.Dispose();
         _icon.TrayLeftMouseUp -= OnTrayLeftMouseUp;
+        _icon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
 
         _flyout?.ForceClose();
         _flyoutViewModel.Dispose();
@@ -375,40 +444,17 @@ public sealed class TrayIconService : IDisposable
             _ownedIcon = fresh;
         }
 
-        // Tray tooltips are truncated hard by the shell, so lead with the state.
-        var alerts = snapshot.AlertsUnavailable is { Length: > 0 }
-            ? string.Empty
-            : $"\n{snapshot.AlertCount} recent alert{(snapshot.AlertCount == 1 ? string.Empty : "s")}";
+        RefreshTooltip(snapshot);
 
-        _icon.ToolTipText = $"DefenseClaw — {snapshot.StateLabel}{alerts}";
-
-        // Toast on new CRITICALs and on losing the gateway — not on every poll.
-        var newCritical = CountNewCriticalAlerts(snapshot);
-        if (newCritical > 0)
+        // Findings toast from the alert queue (AlertNotifier), not from here; this is the gateway's own edges. Offline and
+        // recovered are edges, not levels: one toast per transition, and only for a gateway this session has seen reachable.
+        // While the operator's own start / stop / restart is running the state is expected to bounce, and that action has
+        // its own toast, so neither edge is announced then. (The recovery that lands after the command returns — the
+        // gateway finishing its start — still is.)
+        if (_gatewayToasts.Observe(snapshot, _gatewayActionRunning, _services.Settings.Current.Notifications.Gateway) is { } toast)
         {
-            Notify(
-                "Critical finding",
-                $"{newCritical} new CRITICAL alert{(newCritical == 1 ? string.Empty : "s")} — open Alerts for detail.",
-                NotificationIcon.Error);
+            Notify(toast.Title, toast.Body, IconFor(toast.Level));
         }
-
-        // Gateway lost / recovered are edges, not levels: one toast per transition. While the operator's
-        // own start / stop / restart is running the state is expected to bounce, and that action has
-        // its own toast, so neither edge is announced then. (The recovery that lands after the
-        // command returns — the gateway finishing its start — still is.)
-        if (!_gatewayActionRunning)
-        {
-            if (_lastState == AppGatewayState.Running && snapshot.State is AppGatewayState.GatewayStopped or AppGatewayState.Degraded)
-            {
-                Notify("Gateway lost", snapshot.Detail, NotificationIcon.Warning);
-            }
-            else if (snapshot.State == AppGatewayState.Running && _lastState is AppGatewayState.GatewayStopped or AppGatewayState.Degraded)
-            {
-                Notify("Gateway recovered", "The DefenseClaw gateway is answering again.", NotificationIcon.Info);
-            }
-        }
-
-        _lastState = snapshot.State;
 
         // Menu availability shares GatewayControl's rules with the command palette; the reason is
         // the item's tooltip so a greyed-out entry says why.
@@ -430,70 +476,12 @@ public sealed class TrayIconService : IDisposable
     }
 
     /// <summary>
-    /// How many CRITICAL alerts in <paramref name="snapshot"/> this tray has not seen before —
-    /// the number the "new CRITICAL alert(s)" toast reports.
-    /// <para>
-    /// This is identity-based, not count-based. The snapshot carries only the newest
-    /// <see cref="GatewayMonitor.AlertLimit"/> alerts, so comparing this snapshot's CRITICAL
-    /// <i>count</i> with the last one's is wrong both ways: a gateway restart, a sleep/resume
-    /// blip or the app launching sees the count go 0 → N and re-announces old findings as new,
-    /// and a new CRITICAL that pushes an older one out of the window leaves the count unchanged
-    /// and never toasts. Each CRITICAL is instead remembered by id (bounded, see
-    /// <see cref="MaxSeenAlerts"/>) and announced exactly once.
-    /// </para>
-    /// <para>
-    /// The first snapshot with a successfully fetched list only <i>seeds</i> that memory and
-    /// returns 0: opening the app must not toast whatever history the gateway already holds.
-    /// A snapshot whose alert list is missing (<see cref="GatewaySnapshot.AlertsUnavailable"/>
-    /// set, or nothing ever fetched) says nothing about what the gateway holds and is ignored
-    /// entirely — it neither seeds nor forgets.
-    /// </para>
+    /// The tooltip: the unacknowledged-findings count (<see cref="AlertCountsService"/>, the same number as the sidebar badge)
+    /// and then the gateway state; see <see cref="AlertCountPresentation.TrayTooltip"/>. Called when either changes. The tray
+    /// icon artwork is deliberately not touched here: the count is text only.
     /// </summary>
-    private int CountNewCriticalAlerts(GatewaySnapshot snapshot)
-    {
-        if (snapshot.AlertsFetchedAt is null || snapshot.AlertsUnavailable is { Length: > 0 })
-        {
-            return 0;
-        }
-
-        var unseen = 0;
-        foreach (var alert in snapshot.RecentAlerts)
-        {
-            if (string.Equals(alert.Severity, "CRITICAL", StringComparison.OrdinalIgnoreCase) &&
-                RememberAlert(AlertKey(alert)))
-            {
-                unseen++;
-            }
-        }
-
-        var announce = _alertsSeeded ? unseen : 0;
-        _alertsSeeded = true;
-        return announce;
-    }
-
-    /// <summary>
-    /// The alert's id; a composite of its other fields for a finding the gateway sent without
-    /// one, so two id-less alerts are still told apart and the same one is still recognized.
-    /// </summary>
-    private static string AlertKey(GatewayAlert alert) =>
-        alert.Id.Length > 0
-            ? alert.Id
-            : $"{alert.Timestamp.UtcTicks}|{alert.Action}|{alert.Target}|{alert.Title}";
-
-    /// <summary>Records <paramref name="key"/>; true when it had not been recorded yet.</summary>
-    private bool RememberAlert(string key)
-    {
-        if (!_seenCriticalAlerts.Add(key))
-        {
-            return false;
-        }
-
-        _seenAlertOrder.Enqueue(key);
-        while (_seenAlertOrder.Count > MaxSeenAlerts)
-        {
-            _ = _seenCriticalAlerts.Remove(_seenAlertOrder.Dequeue());
-        }
-
-        return true;
-    }
+    private void RefreshTooltip(GatewaySnapshot snapshot) =>
+        _icon.ToolTipText = AlertCountPresentation.TrayTooltip(
+            snapshot,
+            _services.AlertCounts.HasData ? _services.AlertCounts.Current : null);
 }

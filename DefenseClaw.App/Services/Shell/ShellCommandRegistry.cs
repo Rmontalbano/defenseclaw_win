@@ -183,6 +183,17 @@ internal static class ShellCommandRegistry
             Run: actions.ToggleAutostart));
 
         commands.Add(new ShellCommand(
+            Id: "app.reset-seen-alerts",
+            Title: "Reset seen-alert history",
+            Category: AppCategory,
+            Description: "Announce the CRITICAL and HIGH findings that are still unacknowledged once more, as one notification.",
+            Shortcut: null,
+            Keywords: "notifications toast alerts seen announced forget repeat high-water mark findings",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: actions.ResetSeenAlertHistory));
+
+        commands.Add(new ShellCommand(
             Id: "app.shortcuts",
             Title: "Show keyboard shortcuts",
             Category: AppCategory,

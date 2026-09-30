@@ -90,6 +90,7 @@ public static class DcSections
             "app.config-editor" => (SymbolRegular.DocumentEdit24, Setup),
             "app.check-updates" => (SymbolRegular.ArrowCircleUp24, Updates),
             "app.toggle-autostart" => (SymbolRegular.Power24, Setup),
+            "app.reset-seen-alerts" => (SymbolRegular.ArrowReset24, Setup),
             "app.shortcuts" => (SymbolRegular.Keyboard24, Setup),
             "appearance.toggle" => (SymbolRegular.WeatherMoon24, Setup),
             "appearance.system" => (SymbolRegular.Desktop24, Setup),

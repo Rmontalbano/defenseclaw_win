@@ -102,4 +102,7 @@ internal sealed class ShellActions
     public bool IsAutostartEnabled => AutostartManager.IsEnabled;
 
     public void ToggleAutostart() => _ = _tray.ToggleAutostart();
+
+    /// <summary>Forgets which findings have been announced, so what is outstanding is announced once more (see <see cref="TrayIconService.ResetSeenAlertHistoryAsync"/>).</summary>
+    public void ResetSeenAlertHistory() => _ = _tray.ResetSeenAlertHistoryAsync();
 }

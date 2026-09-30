@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Updates;
+using DefenseClaw.Core.Audit;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -111,6 +112,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _configErrorMessage = string.Empty;
 
+    // ---- Sidebar badges (CUST-201): the same count the tray tooltip shows, and the gateway's own state. ----
+
+    /// <summary>
+    /// The red count on the Alerts sidebar entry: the unacknowledged findings ("441", "500+" when the queue window was full),
+    /// empty while there is nothing to show: no badge for zero, or for a count that has not been read yet. A later read that
+    /// fails keeps the last good number (<see cref="AlertCountsService"/> never zeroes a badge, which would read as "all clear").
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAlertBadge))]
+    private string _alertBadgeText = string.Empty;
+
+    /// <summary>"441 unacknowledged findings", appended to "Alerts" for a screen reader and the tooltip; empty with no badge.</summary>
+    [ObservableProperty]
+    private string _alertBadgeDescription = string.Empty;
+
+    /// <summary>Why the Overview entry carries its caution badge ("gateway stopped"); empty while the gateway is not degraded.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOverviewBadge))]
+    private string _overviewBadgeDescription = string.Empty;
+
     /// <param name="services">The composition root.</param>
     /// <param name="reviewUpdate">What the update banner's "Review update…" does; opens the Updates window when null. A test passes a recorder.</param>
     /// <param name="openReleasePage">Opens an already-vetted release page; the shell's default handler when null. A test passes a recorder.</param>
@@ -122,12 +143,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _services.Monitor.StateChanged += OnStateChanged;
         _services.ConfigReloaded += OnConfigReloaded;
 
+        // Subscribing starts the counts service if nothing else has (the tray normally has), and a window built later than the
+        // first read never hears about it: so the current counts are taken now, and the subscription only carries changes.
+        _services.AlertCounts.Changed += OnAlertCountsChanged;
+        ApplyAlertCounts(_services.AlertCounts.HasData ? _services.AlertCounts.Current : null);
+
         Apply(_services.Monitor.Current);
         ApplyConfigError();
 
         _services.UpdateWatcher.Changed += OnUpdateWatcherChanged;
         ApplyUpdateBanner();
     }
+
+    /// <summary>True when the Alerts entry shows a count.</summary>
+    public bool HasAlertBadge => AlertBadgeText.Length > 0;
+
+    /// <summary>True when the Overview entry shows its caution badge (the gateway is stopped, degraded or not installed).</summary>
+    public bool HasOverviewBadge => OverviewBadgeDescription.Length > 0;
 
     /// <summary>The command the not-initialized banner offers. Shown, never executed.</summary>
     public static string InitCommandText => GatewaySnapshot.InitCommand;
@@ -146,6 +178,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _services.Monitor.StateChanged -= OnStateChanged;
         _services.ConfigReloaded -= OnConfigReloaded;
         _services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
+        _services.AlertCounts.Changed -= OnAlertCountsChanged;
     }
 
     /// <summary>
@@ -194,6 +227,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void OnStateChanged(object? sender, GatewaySnapshotEventArgs e) => Apply(e.Snapshot);
 
+    private void OnAlertCountsChanged(object? sender, AlertCountsChangedEventArgs e) => ApplyAlertCounts(e.Counts);
+
+    /// <summary>
+    /// Sets the Alerts badge from <paramref name="counts"/> (null: not read yet). A read that failed keeps the last good counts
+    /// (<see cref="AlertCountsService"/>), so the badge keeps saying what was last known rather than going blank.
+    /// </summary>
+    private void ApplyAlertCounts(AlertCounts? counts)
+    {
+        AlertBadgeText = counts is null ? string.Empty : AlertCountPresentation.Badge(counts);
+        AlertBadgeDescription = counts is null || counts.Total <= 0 ? string.Empty : AlertCountPresentation.Sentence(counts);
+    }
+
     /// <summary>
     /// AppServices marshals <c>ConfigReloaded</c> onto the Dispatcher, so the banner
     /// properties below are set on the UI thread even though the edit was spotted by the
@@ -201,7 +246,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     private void OnConfigReloaded(object? sender, EventArgs e) => ApplyConfigError();
 
-    private void Apply(GatewaySnapshot snapshot)
+    internal void Apply(GatewaySnapshot snapshot)
     {
         Snapshot = snapshot;
         StateLabel = snapshot.StateLabel;
@@ -246,6 +291,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         ShowNotInitializedBanner = snapshot.State == AppGatewayState.NotInitialized;
         NotInitializedMessage = snapshot.Detail;
+
+        OverviewBadgeDescription = AlertCountPresentation.DegradedReason(snapshot) ?? string.Empty;
     }
 
     private void ApplyConfigError()
