@@ -323,6 +323,142 @@ public class ActivityTranscriptTests
         Assert.Equal(transcript.Lines[2].Text, text[1]);
     }
 
+    // ------------------------------------------------------------------ the view state a recycled list is handed back
+
+    [Fact]
+    public void A_reading_position_is_a_place_in_the_append_sequence_that_survives_a_trim()
+    {
+        var invocation = InvocationFactory.Create();
+        InvocationFactory.AppendNumbered(invocation, 1_900);
+        var transcript = new ActivityTranscript();
+        _ = transcript.Pull(invocation);
+
+        // Reading "line 901": no marker yet, so it is the row at index 900.
+        transcript.ReadingSequence = 900;
+        Assert.Equal(900, transcript.ReadingIndex);
+
+        // 200 more lines cross the 2,000-line cap and the oldest 501 go: the same line is now nearer the head, and there is a marker in front.
+        InvocationFactory.AppendNumbered(invocation, 200, first: 1_901);
+        _ = transcript.Pull(invocation);
+        Assert.True(transcript.Lines[0].IsNotice);
+        Assert.Equal("line 901", transcript.Lines[transcript.ReadingIndex].Text);
+    }
+
+    [Fact]
+    public void A_reading_position_that_was_trimmed_away_falls_back_to_the_head()
+    {
+        var invocation = InvocationFactory.Create();
+        InvocationFactory.AppendNumbered(invocation, 1_900);
+        var transcript = new ActivityTranscript();
+        _ = transcript.Pull(invocation);
+        transcript.ReadingSequence = 100;
+
+        InvocationFactory.AppendNumbered(invocation, 200, first: 1_901);
+        _ = transcript.Pull(invocation);
+
+        Assert.False(transcript.TryIndexOf(100, out _));
+        Assert.Equal(0, transcript.ReadingIndex);
+        Assert.Equal(0, new ActivityTranscript().ReadingIndex);
+    }
+
+    [Fact]
+    public void A_selection_is_kept_as_positions_and_read_back_in_transcript_order()
+    {
+        var invocation = InvocationFactory.Create();
+        InvocationFactory.AppendNumbered(invocation, 50);
+        var transcript = new ActivityTranscript();
+        _ = transcript.Pull(invocation);
+
+        // A list reports what it added in the order the operator made it.
+        transcript.NoteSelectionChanged(new[] { transcript.Lines[30], transcript.Lines[4], transcript.Lines[17] }, Array.Empty<ActivityOutputLine>());
+        transcript.NoteSelectionChanged(Array.Empty<ActivityOutputLine>(), new[] { transcript.Lines[17] });
+
+        Assert.Equal(2, transcript.SelectedCount);
+        Assert.Equal(new[] { "line 5", "line 31" }, transcript.LinesToReselect().Select(l => l.Text).ToArray());
+        Assert.False(transcript.IsEverythingSelected);
+    }
+
+    [Fact]
+    public void Selecting_every_row_is_reported_as_everything_and_needs_no_lines_read_back()
+    {
+        var invocation = InvocationFactory.Create();
+        InvocationFactory.AppendNumbered(invocation, 30);
+        var transcript = new ActivityTranscript();
+        _ = transcript.Pull(invocation);
+
+        transcript.ReplaceSelection(transcript.Lines);
+
+        Assert.True(transcript.IsEverythingSelected);
+        Assert.Empty(transcript.LinesToReselect());
+
+        // One more line arrives: that is no longer everything.
+        InvocationFactory.Append(invocation, "late");
+        _ = transcript.Pull(invocation);
+        Assert.False(transcript.IsEverythingSelected);
+        Assert.Equal(30, transcript.LinesToReselect().Count);
+    }
+
+    [Fact]
+    public void Lines_that_are_trimmed_away_leave_the_selection_even_with_no_list_showing_it()
+    {
+        var invocation = InvocationFactory.Create();
+        InvocationFactory.AppendNumbered(invocation, 1_900);
+        var transcript = new ActivityTranscript();
+        _ = transcript.Pull(invocation);
+        transcript.NoteSelectionChanged(new[] { transcript.Lines[10], transcript.Lines[1_800] }, Array.Empty<ActivityOutputLine>());
+
+        // The oldest 501 lines go: line 11 is one of them, line 1,801 is not.
+        InvocationFactory.AppendNumbered(invocation, 200, first: 1_901);
+        _ = transcript.Pull(invocation);
+
+        Assert.Equal(1, transcript.SelectedCount);
+        Assert.Equal(new[] { "line 1801" }, transcript.LinesToReselect().Select(l => l.Text).ToArray());
+    }
+
+    [Fact]
+    public void The_marker_can_be_selected_and_is_put_back_first()
+    {
+        var invocation = InvocationFactory.Create();
+        InvocationFactory.AppendNumbered(invocation, 2_100);
+        var transcript = new ActivityTranscript();
+        _ = transcript.Pull(invocation);
+        Assert.True(transcript.Lines[0].IsNotice);
+
+        transcript.NoteSelectionChanged(new[] { transcript.Lines[5], transcript.Lines[0] }, Array.Empty<ActivityOutputLine>());
+
+        var restored = transcript.LinesToReselect();
+        Assert.Equal(2, restored.Count);
+        Assert.True(restored[0].IsNotice);
+        Assert.Same(transcript.Lines[5], restored[1]);
+    }
+
+    [Fact]
+    public void A_partial_selection_too_big_to_put_back_line_by_line_is_dropped_not_half_restored()
+    {
+        var invocation = InvocationFactory.Create(retainFullOutput: true);
+        InvocationFactory.AppendNumbered(invocation, ActivityTranscript.MaxPartialSelectionRestored + 500);
+        var transcript = new ActivityTranscript();
+        _ = transcript.Pull(invocation);
+        transcript.ReplaceSelection(transcript.Lines.Skip(1).Take(ActivityTranscript.MaxPartialSelectionRestored + 1));
+
+        Assert.Empty(transcript.LinesToReselect());
+        Assert.Equal(0, transcript.SelectedCount);
+    }
+
+    [Fact]
+    public void A_rows_follow_flag_is_its_own_and_starts_on()
+    {
+        var first = new ActivityRow(InvocationFactory.Create());
+        var second = new ActivityRow(InvocationFactory.Create());
+
+        first.IsFollowing = false;
+        first.IsExpanded = true;
+
+        Assert.True(second.IsFollowing);
+        Assert.False(second.IsExpanded);
+        Assert.Null(second.Transcript.ReadingSequence);
+    }
+
     // ------------------------------------------------------------------ header text
 
     [Fact]

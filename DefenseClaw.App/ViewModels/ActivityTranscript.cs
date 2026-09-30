@@ -155,12 +155,30 @@ public sealed class TranscriptCollection : ObservableCollection<ActivityOutputLi
 /// (<see cref="CliStream.Notice"/>), replaced in place as the count grows - the same line Copy output and Export log
 /// begin with. It is not a source line: it has no sequence and is never counted in <see cref="LineCount"/>.
 /// </para>
+/// <para>
+/// <b>View state.</b> The output list showing this transcript is recycled - the Activity panel reuses one set of
+/// elements for whichever entries are in view - so what the operator did to the list cannot live in the list. Where
+/// they were reading (<see cref="ReadingSequence"/>) and which lines they selected are kept here, as positions in the
+/// append sequence, and handed back to whichever list next shows the transcript. A position in the append sequence
+/// stays true while earlier lines are trimmed away, which an index into <see cref="Lines"/> does not.
+/// </para>
 /// <para>UI thread only: <see cref="Lines"/> is bound to a list.</para>
 /// </summary>
 public sealed class ActivityTranscript
 {
+    /// <summary>
+    /// The most selected lines that are put back into a list one at a time. A selection of everything is restored in one
+    /// step however long the transcript is; a partial one goes through the list's own selection collection, which looks
+    /// every line up in the list and so is quadratic. Past this the selection is dropped rather than making a card
+    /// scrolling into view stall.
+    /// </summary>
+    public const int MaxPartialSelectionRestored = 20_000;
+
     private readonly List<CliOutputLine> _fetched = new();
     private readonly List<ActivityOutputLine> _batch = new();
+
+    /// <summary>Append-sequence positions of the selected lines (<see cref="ActivityOutputLine.NoSequence"/> for the marker).</summary>
+    private readonly HashSet<long> _selected = new();
 
     /// <summary>Where the next <see cref="CliInvocation.CopyNewLines"/> resumes: a position in the append sequence, not an index into <see cref="Lines"/>.</summary>
     private int _cursor;
@@ -180,6 +198,105 @@ public sealed class ActivityTranscript
     public long DroppedLineCount { get; private set; }
 
     private int MarkerOffset => _markerDropped > 0 ? 1 : 0;
+
+    /// <summary>
+    /// The first source line in view when the operator scrolled away from the end, as a position in the append sequence;
+    /// null while the list follows the end (or has not been scrolled). Written by the list the operator scrolls, read back
+    /// by whichever list next shows this transcript.
+    /// </summary>
+    public long? ReadingSequence { get; set; }
+
+    /// <summary>
+    /// Index into <see cref="Lines"/> of the row to put back at the top of a list: the reading position, or the head of the
+    /// transcript when that line has since been trimmed away (the reader was at the head, and the head is where they stay).
+    /// </summary>
+    public int ReadingIndex => ReadingSequence is { } sequence && TryIndexOf(sequence, out var index) ? index : 0;
+
+    /// <summary>Where a position in the append sequence sits in <see cref="Lines"/>; false when that line is no longer held.</summary>
+    public bool TryIndexOf(long sequence, out int index)
+    {
+        if (sequence == ActivityOutputLine.NoSequence)
+        {
+            index = 0;
+            return MarkerOffset == 1;
+        }
+
+        var offset = sequence - _headSequence;
+        if (LineCount > 0 && offset >= 0 && offset < LineCount)
+        {
+            index = MarkerOffset + (int)offset;
+            return true;
+        }
+
+        index = -1;
+        return false;
+    }
+
+    /// <summary>How many lines are selected (lines that left the transcript are no longer counted).</summary>
+    public int SelectedCount => _selected.Count;
+
+    /// <summary>True when every row the list holds, the marker included, is selected - the one selection restored in a single step.</summary>
+    public bool IsEverythingSelected => Lines.Count > 0 && _selected.Count == Lines.Count;
+
+    /// <summary>Applies the change a list reported to its selection.</summary>
+    public void NoteSelectionChanged(IEnumerable<ActivityOutputLine> added, IEnumerable<ActivityOutputLine> removed)
+    {
+        ArgumentNullException.ThrowIfNull(added);
+        ArgumentNullException.ThrowIfNull(removed);
+
+        foreach (var line in removed)
+        {
+            _ = _selected.Remove(line.Sequence);
+        }
+
+        foreach (var line in added)
+        {
+            _ = _selected.Add(line.Sequence);
+        }
+    }
+
+    /// <summary>Makes the selection exactly <paramref name="selected"/> (the list was rebuilt, and says what it kept).</summary>
+    public void ReplaceSelection(IEnumerable<ActivityOutputLine> selected)
+    {
+        ArgumentNullException.ThrowIfNull(selected);
+
+        _selected.Clear();
+        foreach (var line in selected)
+        {
+            _ = _selected.Add(line.Sequence);
+        }
+    }
+
+    /// <summary>
+    /// The selected rows, in transcript order, for a list to select one at a time. A selection of everything is left to
+    /// <see cref="IsEverythingSelected"/> (one step, however long); a partial one bigger than
+    /// <see cref="MaxPartialSelectionRestored"/> is dropped here, so the list and the transcript agree that nothing is
+    /// selected rather than the list quietly holding a different selection from the one that was made.
+    /// </summary>
+    public IReadOnlyList<ActivityOutputLine> LinesToReselect()
+    {
+        if (_selected.Count == 0 || IsEverythingSelected)
+        {
+            return Array.Empty<ActivityOutputLine>();
+        }
+
+        if (_selected.Count > MaxPartialSelectionRestored)
+        {
+            _selected.Clear();
+            return Array.Empty<ActivityOutputLine>();
+        }
+
+        var rows = new List<ActivityOutputLine>(_selected.Count);
+        foreach (var sequence in _selected.Order())
+        {
+            if (TryIndexOf(sequence, out var index))
+            {
+                rows.Add(Lines[index]);
+            }
+        }
+
+        return rows;
+    }
 
     /// <summary>
     /// Brings the window up to date with <paramref name="invocation"/>. Safe to call while the process is still
@@ -216,6 +333,7 @@ public sealed class ActivityTranscript
                 // arrived. Every held line is older than the invocation's retained window, so start over from it.
                 Lines.RemoveRange(MarkerOffset, LineCount);
                 LineCount = 0;
+                _selected.RemoveWhere(static sequence => sequence != ActivityOutputLine.NoSequence);
             }
 
             if (LineCount == 0)
@@ -251,6 +369,11 @@ public sealed class ActivityTranscript
             LineCount -= stale;
             _headSequence += stale;
             changed = true;
+
+            // A list drops a selected line from its own selection when the line leaves, but no list may be showing this
+            // transcript right now; the selection kept here must not name lines that are gone.
+            var head = _headSequence;
+            _selected.RemoveWhere(sequence => sequence != ActivityOutputLine.NoSequence && sequence < head);
         }
 
         if (dropped != _markerDropped && ApplyMarker(invocation, dropped))

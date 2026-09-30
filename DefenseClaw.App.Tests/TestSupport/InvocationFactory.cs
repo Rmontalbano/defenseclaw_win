@@ -28,6 +28,8 @@ internal static class InvocationFactory
 
     private static readonly PropertyInfo ExitCode = Property(nameof(CliInvocation.ExitCode));
 
+    private static readonly PropertyInfo EnvironmentNames = Property(nameof(CliInvocation.EnvironmentNames));
+
     /// <param name="retainFullOutput">True for the ceiling a <see cref="CliRunOptions.JsonRead"/> run gets (200,000 lines).</param>
     public static CliInvocation Create(bool retainFullOutput = false, params string[] argv) =>
         (CliInvocation)Constructor.Invoke(new object[]
@@ -55,6 +57,10 @@ internal static class InvocationFactory
         FinishedAt.SetValue(invocation, DateTimeOffset.UtcNow);
         ExitCode.SetValue(invocation, exitCode);
     }
+
+    /// <summary>Marks the run as having carried secrets in its environment (names only, as the runner records them).</summary>
+    public static void UseEnvironmentSecret(CliInvocation invocation, params string[] names) =>
+        EnvironmentNames.SetValue(invocation, names);
 
     private static PropertyInfo Property(string name) =>
         typeof(CliInvocation).GetProperty(name, Internal) ?? throw new MissingMemberException(nameof(CliInvocation), name);

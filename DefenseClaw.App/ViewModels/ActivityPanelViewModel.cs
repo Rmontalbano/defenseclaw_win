@@ -46,6 +46,14 @@ namespace DefenseClaw.App.ViewModels;
 /// row once so nothing is stale when the panel is seen.
 /// </para>
 /// <para>
+/// <b>The list is virtualized.</b> <see cref="Rows"/> holds up to <see cref="CliRunner.ActivityCapacity"/> rows, but the view
+/// builds only the cards in view and reuses their elements for other rows as it scrolls. A row therefore owns everything
+/// about how its card looks and behaves that the operator can change - open or shut, following its output, where it was
+/// scrolled to, what is selected - and the view puts that back whenever a card is built for it (see
+/// <see cref="ActivityRow"/> and <see cref="ActivityTranscript"/>). New runs are inserted at index 0; the view keeps the
+/// operator's place when that happens.
+/// </para>
+/// <para>
 /// <b>Per-entry actions.</b> Each row shows its <see cref="CommandTier"/>, and offers Copy argv,
 /// Copy output, Export log (a user-chosen file) and - while it runs - Cancel, which asks
 /// <see cref="CliRunner.Cancel(CliInvocation, out string)"/> to kill the process tree. The runner
@@ -308,6 +316,11 @@ public sealed partial class ActivityRow : ObservableObject
     [ObservableProperty]
     private string _failureText = string.Empty;
 
+    /// <summary>
+    /// Whether the card shows its output. Kept here, not in the card: the panel's card list is virtualized and recycling, so a
+    /// card's elements are reused for other entries as it scrolls and are gone while this entry is out of view. The same goes for
+    /// <see cref="IsFollowing"/> and, on <see cref="Transcript"/>, where the operator was reading and what they selected.
+    /// </summary>
     [ObservableProperty]
     private bool _isExpanded;
 

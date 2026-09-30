@@ -7,6 +7,7 @@ using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views.Panels;
 using DefenseClaw.Core.Cli;
+using Scene = DefenseClaw.App.Tests.TestSupport.ActivityScene;
 
 namespace DefenseClaw.App.Tests.Activity;
 
@@ -485,61 +486,4 @@ public class ActivityPanelLayoutTests
             .Where(item => which((ActivityOutputLine)item.DataContext))
             .Select(item => VisualTree.Find<TextBlock>(item)!)
             .First();
-
-    /// <summary>The shell stand-in with an Activity panel in it, built over a scratch data directory.</summary>
-    private sealed class Scene : IDisposable
-    {
-        private readonly TempDirectory _temp = new();
-        private readonly AppServices _services;
-
-        private Scene(int width, int height)
-        {
-            _services = TestServices.Create(_temp);
-            Name = $"{width}x{height}";
-            Shell = UiThread.Run(() =>
-            {
-                var shell = new PanelShell(_services, width, height);
-                _ = shell.Show<ActivityPanel>();
-                return shell;
-            });
-            ViewModel = UiThread.Run(() => (ActivityPanelViewModel)Shell.ViewModel);
-        }
-
-        public string Name { get; }
-
-        public PanelShell Shell { get; }
-
-        public ActivityPanelViewModel ViewModel { get; }
-
-        public OffscreenHost Host => Shell.Host;
-
-        public static Scene Open(int width, int height) => new(width, height);
-
-        /// <summary>Adds an entry for <paramref name="invocation"/> at the top of the list and, by default, opens its output. UI thread only.</summary>
-        public ActivityRow AddRow(CliInvocation invocation, bool expand = true)
-        {
-            var row = new ActivityRow(invocation, _services.Cli, notify: null);
-            ViewModel.Rows.Insert(0, row);
-            ViewModel.IsEmpty = false;
-            row.IsExpanded = expand;
-            Host.Relayout();
-            return row;
-        }
-
-        public ListBox ListFor(ActivityRow row) =>
-            VisualTree.Find<ListBox>(Shell.Page!, list => ReferenceEquals(list.DataContext, row))
-            ?? throw new InvalidOperationException("The entry's output list was not built.");
-
-        /// <summary>How far the page itself is scrolled (the panel's outer scroll viewer).</summary>
-        public double PageOffset() => VisualTree.Find<ScrollViewer>(Shell.Page!)!.VerticalOffset;
-
-        public void Render(string name) => RenderTo.Png(Host, $"{name}");
-
-        public void Dispose()
-        {
-            UiThread.Run(Shell.Dispose);
-            _services.Dispose();
-            _temp.Dispose();
-        }
-    }
 }

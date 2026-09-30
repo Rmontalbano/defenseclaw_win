@@ -13,13 +13,18 @@
         Everything is on the shared Dc* design system; the local styles are the output line
         (stderr and notice tones) and its list row.
 
+        The cards. The list itself (CardList, below) is virtualized: up to 200 entries, only the ones in view are built,
+        and their elements are reused for other entries as it scrolls. So a card's elements hold nothing of their own -
+        whether it is open, whether its output follows, where that was scrolled to and what is selected in it all live
+        on the row (ActivityRow / ActivityTranscript) and are put back when a card is built for that row.
+
         Output. A transcript can run to 200,000 lines (a JSON read keeps them all), so each entry's output is a
         virtualizing, recycling ListBox with a bounded height - the pattern of the Logs panel and the Updates console -
-        and only the lines in view become elements. The bound height is what makes virtualization possible: a list
-        given unlimited room (as it is inside this page's ScrollViewer) realizes every line. The list scrolls on its own,
-        hands the mouse wheel to the page at its ends (panels:NestedScroll), follows the newest line while the run is going
-        unless the operator has scrolled up (panels:TranscriptList), and its lines are selectable (Ctrl+A, Ctrl+C or
-        the context menu copy them; Copy output copies all of it).
+        and only the lines in view become elements. The bound height is what makes virtualization possible: the card
+        list measures a card with unlimited height, and a list given unlimited room realizes every line. The list scrolls
+        on its own, hands the mouse wheel to the card list at its ends (panels:NestedScroll), follows the newest line
+        while the run is going unless the operator has scrolled up (panels:TranscriptList), and its lines are
+        selectable (Ctrl+A, Ctrl+C or the context menu copy them; Copy output copies all of it).
     -->
     <UserControl.Resources>
         <!-- One line of captured output; a stderr line reads in the critical tone, this app's own notice (the truncation marker) in the caution tone. -->
@@ -33,6 +38,117 @@
                     <Setter Property="FontStyle" Value="Italic" />
                 </DataTrigger>
             </Style.Triggers>
+        </Style>
+
+        <!--
+            The card list. Up to 200 cards, each collapsed (~165 DIPs) or open on a transcript (up to ~570), so it
+            scrolls by the pixel and only the cards in view (and one either side, so Tab has a next card to land on)
+            become elements. The scroll viewer is part of this list's own template - a ScrollViewer around a plain
+            ItemsControl hands it unlimited height and every card gets built. Recycling reuses a card's elements for
+            another invocation, so nothing about a card (open or shut, following, where it was scrolled to, what is
+            selected) is kept in those elements: it is all on the row (ActivityRow / ActivityTranscript).
+        -->
+        <Style x:Key="CardList" TargetType="ItemsControl">
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+            <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
+            <Setter Property="VirtualizingPanel.CacheLengthUnit" Value="Item" />
+            <Setter Property="VirtualizingPanel.CacheLength" Value="1,1" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer x:Name="CardScroll"
+                                      Style="{StaticResource DcPageScroll}"
+                                      CanContentScroll="True"
+                                      Focusable="False">
+                            <ItemsPresenter />
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            The Output expander of a card, WPF-UI's look without its animation. WPF-UI's Expander slides its content in over
+            a third of a second and holds it on screen for another 200 ms after a collapse, which is right for one control
+            the operator clicks and wrong here: a recycled card whose new entry is open (or shut) where the old one was the
+            other way would replay that animation, at the wrong height, while the list scrolls. This one changes at once.
+        -->
+        <Style x:Key="OutputExpanderHeader" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource ExpanderHeaderForeground}" />
+            <Setter Property="Background" Value="{DynamicResource ExpanderHeaderBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ExpanderHeaderBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="{DynamicResource ExpanderPadding}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource DefaultControlFocusVisualStyle}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Frame"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource DcRadiusM}">
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                <ui:SymbolIcon x:Name="Chevron"
+                                               Symbol="ChevronDown24"
+                                               FontSize="{DynamicResource ExpanderChevronSize}"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               RenderTransformOrigin="0.5,0.5">
+                                    <ui:SymbolIcon.RenderTransform>
+                                        <RotateTransform Angle="0" />
+                                    </ui:SymbolIcon.RenderTransform>
+                                </ui:SymbolIcon>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Frame" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chevron" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <RotateTransform Angle="180" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="OutputExpander" TargetType="Expander">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <StackPanel>
+                            <ToggleButton Style="{StaticResource OutputExpanderHeader}"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <ContentPresenter x:Name="ExpandSite" Visibility="Collapsed" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- WPF-UI pads a list item 12 px on every side; a transcript is read by the screenful, so rows are as tight as the text. -->
@@ -93,189 +209,190 @@
 
         <!-- List -->
         <Grid Grid.Row="2">
-            <ScrollViewer Style="{StaticResource DcPageScroll}">
-                <ItemsControl ItemsSource="{Binding Rows}"
-                              AutomationProperties.Name="Commands run in this session, newest first">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Style="{StaticResource DcCardCompact}" Margin="0,0,0,10">
-                                <StackPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+            <ItemsControl x:Name="Cards"
+                          Style="{StaticResource CardList}"
+                          ItemsSource="{Binding Rows}"
+                          AutomationProperties.Name="Commands run in this session, newest first">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource DcCardCompact}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-                                        <!-- Selectable, so a path or id in the argv can be copied piecemeal. -->
-                                        <TextBox Grid.Column="0"
-                                                 Style="{StaticResource DcMonoTextBox}"
-                                                 VerticalAlignment="Center"
-                                                 AutomationProperties.Name="Command line"
-                                                 Text="{Binding CommandLine, Mode=OneWay}" />
+                                    <!-- Selectable, so a path or id in the argv can be copied piecemeal. -->
+                                    <TextBox Grid.Column="0"
+                                             Style="{StaticResource DcMonoTextBox}"
+                                             VerticalAlignment="Center"
+                                             AutomationProperties.Name="Command line"
+                                             Text="{Binding CommandLine, Mode=OneWay}" />
 
-                                        <WrapPanel Grid.Column="1"
-                                                   Margin="10,0,0,0"
-                                                   VerticalAlignment="Top"
-                                                   HorizontalAlignment="Right">
-                                            <Border Style="{StaticResource DcBadge}"
-                                                    Tag="{Binding TierKey}"
-                                                    Margin="0,0,8,0"
-                                                    ToolTip="{Binding TierHelp}"
-                                                    AutomationProperties.Name="{Binding TierText, StringFormat='Review tier: {0}'}">
-                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding TierText}" />
-                                            </Border>
-
-                                            <Border Style="{StaticResource DcChip}"
-                                                    Margin="0,0,8,0"
-                                                    ToolTip="A secret was piped in on stdin. Its value is never recorded."
-                                                    Visibility="{Binding UsedStdinSecret, Converter={StaticResource BoolToVisibility}}">
-                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="stdin secret" />
-                                            </Border>
-
-                                            <Border Style="{StaticResource DcChip}"
-                                                    Margin="0,0,8,0"
-                                                    ToolTip="{Binding EnvironmentText, StringFormat='{}{0} (set in this run’s environment only; values are never recorded)'}"
-                                                    AutomationProperties.Name="{Binding EnvironmentText, StringFormat='Secret supplied by environment: {0}'}"
-                                                    Visibility="{Binding UsedEnvironmentSecret, Converter={StaticResource BoolToVisibility}}">
-                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="env secret" />
-                                            </Border>
-
-                                            <Border Style="{StaticResource DcBadge}"
-                                                    Tag="{Binding ExitBadgeKey}"
-                                                    MinWidth="76"
-                                                    AutomationProperties.Name="{Binding ExitBadgeText, StringFormat='Result: {0}'}">
-                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ExitBadgeText}" />
-                                            </Border>
-                                        </WrapPanel>
-                                    </Grid>
-
-                                    <WrapPanel Margin="0,6,0,0">
-                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,10,0" Text="{Binding StartedText}" />
-                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,10,0" Text="{Binding RelativeStartText}" />
-                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding DurationText, StringFormat='duration {0}'}" />
-                                    </WrapPanel>
-
-                                    <TextBlock Style="{StaticResource DcToneText}"
-                                               Tag="Warn"
-                                               Margin="0,4,0,0"
-                                               FontSize="12"
-                                               TextWrapping="Wrap"
-                                               Visibility="{Binding HasFailure, Converter={StaticResource BoolToVisibility}}"
-                                               Text="{Binding FailureText}" />
-
-                                    <!-- Row actions. Cancel exists only while the run does; for the upgrade
-                                         installer it stays visible but disabled, with the reason as its tooltip. -->
-                                    <WrapPanel Margin="0,8,0,0">
-                                        <ui:Button Content="Cancel"
-                                                   Appearance="Danger"
-                                                   Margin="0,0,8,4"
-                                                   IsEnabled="{Binding CanCancel}"
-                                                   Command="{Binding CancelCommand}"
-                                                   ToolTip="{Binding CancelHint}"
-                                                   ToolTipService.ShowOnDisabled="True"
-                                                   AutomationProperties.Name="Cancel this command"
-                                                   AutomationProperties.HelpText="{Binding CancelHint}"
-                                                   Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
-                                        <ui:Button Content="Copy argv"
-                                                   Appearance="Secondary"
-                                                   Margin="0,0,8,4"
-                                                   Command="{Binding CopyCommand}"
-                                                   ToolTip="Copy the exact command line"
-                                                   AutomationProperties.Name="Copy argv"
-                                                   AutomationProperties.HelpText="Copies the exact command line that was run.">
-                                            <ui:Button.Icon>
-                                                <ui:SymbolIcon Symbol="Copy24" />
-                                            </ui:Button.Icon>
-                                        </ui:Button>
-                                        <ui:Button Content="Copy output"
-                                                   Appearance="Secondary"
-                                                   Margin="0,0,8,4"
-                                                   Command="{Binding CopyOutputCommand}"
-                                                   ToolTip="Copy everything this command has printed so far"
-                                                   AutomationProperties.Name="Copy output"
-                                                   AutomationProperties.HelpText="Copies the captured output of this command as plain text.">
-                                            <ui:Button.Icon>
-                                                <ui:SymbolIcon Symbol="Copy24" />
-                                            </ui:Button.Icon>
-                                        </ui:Button>
-                                        <ui:Button Content="Export log"
-                                                   Appearance="Secondary"
-                                                   Margin="0,0,8,4"
-                                                   Command="{Binding ExportLogCommand}"
-                                                   ToolTip="Save the command, its result and its output to a file you choose"
-                                                   AutomationProperties.Name="Export log"
-                                                   AutomationProperties.HelpText="Opens a save dialog and writes the command, its result and its output to the file you choose.">
-                                            <ui:Button.Icon>
-                                                <ui:SymbolIcon Symbol="Save24" />
-                                            </ui:Button.Icon>
-                                        </ui:Button>
-                                    </WrapPanel>
-
-                                    <Expander Margin="0,4,0,0"
-                                              Header="{Binding OutputHeader}"
-                                              IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
-                                              AutomationProperties.Name="Output">
-                                        <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0" Padding="6,6,6,6">
-                                            <StackPanel>
-                                                <!-- Only while the run is going: a finished transcript has nothing to follow. Turning it off is what
-                                                     scrolling up does; this is the same setting, reachable without a mouse. -->
-                                                <CheckBox HorizontalAlignment="Right"
-                                                          Margin="0,0,6,4"
-                                                          Content="Follow output"
-                                                          IsChecked="{Binding IsFollowing, Mode=TwoWay}"
-                                                          Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}"
-                                                          AutomationProperties.Name="Follow output"
-                                                          AutomationProperties.HelpText="On: the list stays on the newest line as output arrives. Scrolling up turns it off; scrolling back to the end turns it on again." />
-
-                                                <Grid>
-                                                    <ListBox ItemsSource="{Binding Output}"
-                                                             MaxHeight="360"
-                                                             Padding="0"
-                                                             BorderThickness="0"
-                                                             Background="Transparent"
-                                                             SelectionMode="Extended"
-                                                             HorizontalContentAlignment="Stretch"
-                                                             ItemContainerStyle="{StaticResource OutputRow}"
-                                                             ScrollViewer.CanContentScroll="True"
-                                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                                             VirtualizingPanel.IsVirtualizing="True"
-                                                             VirtualizingPanel.VirtualizationMode="Recycling"
-                                                             panels:TranscriptList.Enable="True"
-                                                             panels:TranscriptList.Follow="{Binding IsFollowing, Mode=TwoWay}"
-                                                             AutomationProperties.Name="Command output"
-                                                             AutomationProperties.HelpText="Output lines. Arrow keys move, Ctrl+A selects every line, Ctrl+C copies the selected lines.">
-                                                        <ListBox.ContextMenu>
-                                                            <ContextMenu>
-                                                                <MenuItem Header="Copy selected lines"
-                                                                          Command="ApplicationCommands.Copy"
-                                                                          CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                                                <MenuItem Header="Select all lines"
-                                                                          Command="ApplicationCommands.SelectAll"
-                                                                          CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                                            </ContextMenu>
-                                                        </ListBox.ContextMenu>
-                                                        <ListBox.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <TextBlock Style="{StaticResource OutputLine}" Text="{Binding DisplayText}" />
-                                                            </DataTemplate>
-                                                        </ListBox.ItemTemplate>
-                                                    </ListBox>
-
-                                                    <TextBlock Style="{StaticResource DcEmptyDetail}"
-                                                               Margin="0,4,0,4"
-                                                               Text="No output captured yet."
-                                                               Visibility="{Binding IsOutputEmpty, Converter={StaticResource BoolToVisibility}}" />
-                                                </Grid>
-                                            </StackPanel>
+                                    <WrapPanel Grid.Column="1"
+                                               Margin="10,0,0,0"
+                                               VerticalAlignment="Top"
+                                               HorizontalAlignment="Right">
+                                        <Border Style="{StaticResource DcBadge}"
+                                                Tag="{Binding TierKey}"
+                                                Margin="0,0,8,0"
+                                                ToolTip="{Binding TierHelp}"
+                                                AutomationProperties.Name="{Binding TierText, StringFormat='Review tier: {0}'}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding TierText}" />
                                         </Border>
-                                    </Expander>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+
+                                        <Border Style="{StaticResource DcChip}"
+                                                Margin="0,0,8,0"
+                                                ToolTip="A secret was piped in on stdin. Its value is never recorded."
+                                                Visibility="{Binding UsedStdinSecret, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="stdin secret" />
+                                        </Border>
+
+                                        <Border Style="{StaticResource DcChip}"
+                                                Margin="0,0,8,0"
+                                                ToolTip="{Binding EnvironmentText, StringFormat='{}{0} (set in this run’s environment only; values are never recorded)'}"
+                                                AutomationProperties.Name="{Binding EnvironmentText, StringFormat='Secret supplied by environment: {0}'}"
+                                                Visibility="{Binding UsedEnvironmentSecret, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="env secret" />
+                                        </Border>
+
+                                        <Border Style="{StaticResource DcBadge}"
+                                                Tag="{Binding ExitBadgeKey}"
+                                                MinWidth="76"
+                                                AutomationProperties.Name="{Binding ExitBadgeText, StringFormat='Result: {0}'}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ExitBadgeText}" />
+                                        </Border>
+                                    </WrapPanel>
+                                </Grid>
+
+                                <WrapPanel Margin="0,6,0,0">
+                                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,10,0" Text="{Binding StartedText}" />
+                                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,10,0" Text="{Binding RelativeStartText}" />
+                                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding DurationText, StringFormat='duration {0}'}" />
+                                </WrapPanel>
+
+                                <TextBlock Style="{StaticResource DcToneText}"
+                                           Tag="Warn"
+                                           Margin="0,4,0,0"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding HasFailure, Converter={StaticResource BoolToVisibility}}"
+                                           Text="{Binding FailureText}" />
+
+                                <!-- Row actions. Cancel exists only while the run does; for the upgrade
+                                     installer it stays visible but disabled, with the reason as its tooltip. -->
+                                <WrapPanel Margin="0,8,0,0">
+                                    <ui:Button Content="Cancel"
+                                               Appearance="Danger"
+                                               Margin="0,0,8,4"
+                                               IsEnabled="{Binding CanCancel}"
+                                               Command="{Binding CancelCommand}"
+                                               ToolTip="{Binding CancelHint}"
+                                               ToolTipService.ShowOnDisabled="True"
+                                               AutomationProperties.Name="Cancel this command"
+                                               AutomationProperties.HelpText="{Binding CancelHint}"
+                                               Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                                    <ui:Button Content="Copy argv"
+                                               Appearance="Secondary"
+                                               Margin="0,0,8,4"
+                                               Command="{Binding CopyCommand}"
+                                               ToolTip="Copy the exact command line"
+                                               AutomationProperties.Name="Copy argv"
+                                               AutomationProperties.HelpText="Copies the exact command line that was run.">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="Copy24" />
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                    <ui:Button Content="Copy output"
+                                               Appearance="Secondary"
+                                               Margin="0,0,8,4"
+                                               Command="{Binding CopyOutputCommand}"
+                                               ToolTip="Copy everything this command has printed so far"
+                                               AutomationProperties.Name="Copy output"
+                                               AutomationProperties.HelpText="Copies the captured output of this command as plain text.">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="Copy24" />
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                    <ui:Button Content="Export log"
+                                               Appearance="Secondary"
+                                               Margin="0,0,8,4"
+                                               Command="{Binding ExportLogCommand}"
+                                               ToolTip="Save the command, its result and its output to a file you choose"
+                                               AutomationProperties.Name="Export log"
+                                               AutomationProperties.HelpText="Opens a save dialog and writes the command, its result and its output to the file you choose.">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="Save24" />
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                </WrapPanel>
+
+                                <Expander Margin="0,4,0,0"
+                                          Style="{StaticResource OutputExpander}"
+                                          Header="{Binding OutputHeader}"
+                                          IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                          AutomationProperties.Name="Output">
+                                    <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0" Padding="6,6,6,6">
+                                        <StackPanel>
+                                            <!-- Only while the run is going: a finished transcript has nothing to follow. Turning it off is what
+                                                 scrolling up does; this is the same setting, reachable without a mouse. -->
+                                            <CheckBox HorizontalAlignment="Right"
+                                                      Margin="0,0,6,4"
+                                                      Content="Follow output"
+                                                      IsChecked="{Binding IsFollowing, Mode=TwoWay}"
+                                                      Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}"
+                                                      AutomationProperties.Name="Follow output"
+                                                      AutomationProperties.HelpText="On: the list stays on the newest line as output arrives. Scrolling up turns it off; scrolling back to the end turns it on again." />
+
+                                            <Grid>
+                                                <ListBox ItemsSource="{Binding Output}"
+                                                         MaxHeight="360"
+                                                         Padding="0"
+                                                         BorderThickness="0"
+                                                         Background="Transparent"
+                                                         SelectionMode="Extended"
+                                                         HorizontalContentAlignment="Stretch"
+                                                         ItemContainerStyle="{StaticResource OutputRow}"
+                                                         ScrollViewer.CanContentScroll="True"
+                                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                         VirtualizingPanel.IsVirtualizing="True"
+                                                         VirtualizingPanel.VirtualizationMode="Recycling"
+                                                         panels:TranscriptList.Enable="True"
+                                                         panels:TranscriptList.Follow="{Binding IsFollowing, Mode=TwoWay}"
+                                                         AutomationProperties.Name="Command output"
+                                                         AutomationProperties.HelpText="Output lines. Arrow keys move, Ctrl+A selects every line, Ctrl+C copies the selected lines.">
+                                                    <ListBox.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="Copy selected lines"
+                                                                      Command="ApplicationCommands.Copy"
+                                                                      CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                            <MenuItem Header="Select all lines"
+                                                                      Command="ApplicationCommands.SelectAll"
+                                                                      CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                        </ContextMenu>
+                                                    </ListBox.ContextMenu>
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Style="{StaticResource OutputLine}" Text="{Binding DisplayText}" />
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
+
+                                                <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                                           Margin="0,4,0,4"
+                                                           Text="No output captured yet."
+                                                           Visibility="{Binding IsOutputEmpty, Converter={StaticResource BoolToVisibility}}" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <!-- Empty is the expected state today, not a failure: say exactly why. -->
             <StackPanel Style="{StaticResource DcEmptyState}"
