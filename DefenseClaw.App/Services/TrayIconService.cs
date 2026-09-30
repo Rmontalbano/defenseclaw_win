@@ -249,15 +249,23 @@ public sealed class TrayIconService : IDisposable
         _autostartItem.Click += (_, _) => _ = ToggleAutostart();
         _ = menu.Items.Add(_autostartItem);
 
+        // App-local: pausing stops this app's polling and audit reads; the gateway keeps running.
+        var pauseItem = new MenuItem { Header = PauseHeader() };
+        pauseItem.Click += (_, _) => _services.Monitor.SetPaused(!_services.Monitor.IsPaused);
+        _ = menu.Items.Add(pauseItem);
+
         // The checkmark is re-read every time the menu opens: Task Manager's Startup tab and
         // Settings can disable (or re-enable) the entry while the app runs, and a menu built
-        // once at launch would keep claiming whatever was true then.
+        // once at launch would keep claiming whatever was true then. The pause label likewise
+        // follows the flyout's own Pause/Resume button.
         menu.Opened += (_, _) =>
         {
             if (_autostartItem is not null)
             {
                 _autostartItem.IsChecked = AutostartManager.IsEnabled;
             }
+
+            pauseItem.Header = PauseHeader();
         };
 
         _ = menu.Items.Add(new Separator());
@@ -268,6 +276,8 @@ public sealed class TrayIconService : IDisposable
 
         return menu;
     }
+
+    private string PauseHeader() => _services.Monitor.IsPaused ? "Resume monitoring" : "Pause monitoring";
 
     private void OnTrayLeftMouseUp(object sender, RoutedEventArgs e) => ToggleFlyout();
 
