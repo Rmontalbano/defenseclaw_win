@@ -137,6 +137,11 @@ public partial class App : Application
         // Started last, on the UI thread, so StateChanged is raised where the bindings live.
         _services.Monitor.Start();
 
+        // One tray toast per release ("DefenseClaw X is available"; the banner in the dashboard carries the rest). Then the background
+        // update check: Start returns at once and the work runs on the pool, after the monitor's first poll, so nothing is added to the launch.
+        _services.UpdateWatcher.NewVersionAvailable += (_, e) => _tray?.Notify("DefenseClaw update", e.Text + ". Open the dashboard to review it.", NotificationIcon.Info);
+        _services.UpdateWatcher.Start();
+
         // Last statement, deliberately: from here on a dispatcher fault costs a panel
         // interaction rather than the session, because the tray can still drive everything.
         _shellReady = true;

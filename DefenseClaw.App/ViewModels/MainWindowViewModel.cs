@@ -2,6 +2,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Updates;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -110,14 +111,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _configErrorMessage = string.Empty;
 
-    public MainWindowViewModel(AppServices services)
+    /// <param name="services">The composition root.</param>
+    /// <param name="reviewUpdate">What the update banner's "Review update…" does; opens the Updates window when null. A test passes a recorder.</param>
+    /// <param name="openReleasePage">Opens an already-vetted release page; the shell's default handler when null. A test passes a recorder.</param>
+    public MainWindowViewModel(AppServices services, Action? reviewUpdate = null, Action<string>? openReleasePage = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
+        _reviewUpdate = reviewUpdate ?? (() => _ = Views.Updates.UpdatesWindow.Show(_services));
+        _openReleasePage = openReleasePage;
         _services.Monitor.StateChanged += OnStateChanged;
         _services.ConfigReloaded += OnConfigReloaded;
 
         Apply(_services.Monitor.Current);
         ApplyConfigError();
+
+        _services.UpdateWatcher.Changed += OnUpdateWatcherChanged;
+        ApplyUpdateBanner();
     }
 
     /// <summary>The command the not-initialized banner offers. Shown, never executed.</summary>
@@ -136,6 +145,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _disposed = true;
         _services.Monitor.StateChanged -= OnStateChanged;
         _services.ConfigReloaded -= OnConfigReloaded;
+        _services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
     }
 
     /// <summary>
@@ -242,5 +252,62 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         ConfigErrorMessage = _services.ConfigLoadError ?? string.Empty;
         ShowConfigErrorBanner = ConfigErrorMessage.Length > 0;
+    }
+
+    // ---- Update banner (CUST-206) -------------------------------------------------------------------------------
+    // The state of the "DefenseClaw X is available" banner, all of it derived from UpdateWatcher. The banner offers to review the
+    // update (the existing Updates window: nothing is installed from here), to read the release notes and to stop being told about
+    // this release; it never runs anything itself.
+
+    private readonly Action _reviewUpdate;
+    private readonly Action<string>? _openReleasePage;
+
+    /// <summary>A newer release is out and the operator has not dismissed it: the banner shows.</summary>
+    [ObservableProperty]
+    private bool _showUpdateBanner;
+
+    /// <summary>"DefenseClaw 0.8.11 is available".</summary>
+    [ObservableProperty]
+    private string _updateBannerTitle = string.Empty;
+
+    /// <summary>The line under the title: what is installed, and that the upgrade is reviewed and confirmed in the Updates window, not here.</summary>
+    [ObservableProperty]
+    private string _updateBannerMessage = string.Empty;
+
+    /// <summary>The release has a page that passed the link check, so "Release notes" can open it.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenReleaseNotesCommand))]
+    private bool _hasUpdateReleaseNotes;
+
+    /// <summary>Opens the Updates window, where the upgrade is reviewed, verified and confirmed.</summary>
+    [RelayCommand]
+    private void ReviewUpdate() => _reviewUpdate();
+
+    /// <summary>Opens the release page, and only if it is an https link into the DefenseClaw repository (<see cref="UpdateChecker.TrustedRepoUrl"/>).</summary>
+    [RelayCommand(CanExecute = nameof(HasUpdateReleaseNotes))]
+    private void OpenReleaseNotes() => _ = UpdateWatcher.TryOpenReleasePage(_services.UpdateWatcher.ReleaseUrl, _openReleasePage);
+
+    /// <summary>Hides the banner for this release, for good; the next release shows it again.</summary>
+    [RelayCommand]
+    private void DismissUpdate() => _services.UpdateWatcher.Dismiss();
+
+    /// <summary>UpdateWatcher raises <c>Changed</c> on the UI thread, so the properties below are set where the bindings live.</summary>
+    private void OnUpdateWatcherChanged(object? sender, EventArgs e) => ApplyUpdateBanner();
+
+    private void ApplyUpdateBanner()
+    {
+        var watcher = _services.UpdateWatcher;
+        if (!watcher.ShowBanner || watcher.AvailableVersion is not { } version)
+        {
+            ShowUpdateBanner = false;
+            HasUpdateReleaseNotes = false;
+            return;
+        }
+
+        UpdateBannerTitle = UpdateWatcher.Announcement(version);
+        UpdateBannerMessage = (watcher.InstalledVersion is { Length: > 0 } installed ? $"Installed: {installed}. " : string.Empty) +
+                              "You review and confirm the upgrade in the Updates window.";
+        HasUpdateReleaseNotes = watcher.ReleaseUrl is not null;
+        ShowUpdateBanner = true;
     }
 }

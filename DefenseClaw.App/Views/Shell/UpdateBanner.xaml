@@ -1,0 +1,92 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.UpdateBanner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             IsTabStop="False">
+    <!--
+        "DefenseClaw X is available" (CUST-206): the Mac's update banner, leading the dashboard's banner region. Its DataContext is
+        the shell view-model (inherited from the window), which follows UpdateWatcher; closed it is collapsed and takes no height.
+
+        It only points at the upgrade. "Review update..." opens the Updates window, where the release is verified and the operator
+        confirms the exact command; "Release notes" opens the release page (only a link into this repository); the X hides the
+        banner for this release for good, and a newer release shows it again.
+
+        Not a Wpf.Ui InfoBar: that control has no place for actions (its content is not hosted), and the other banners' pattern of a
+        row of buttons under the bar is not slim. A card-coloured bar with an accent hairline and edge, built from tokens only (the
+        surface, the accent, the Updates section's icon colour), so it follows a live style or light/dark switch like the InfoBars
+        beside it. It does not borrow a severity tone: the Medium tint is amber under the Cisco style, and this is an offer, not a fault.
+    -->
+    <Border x:Name="Bar"
+            Margin="0,12,0,0"
+            Padding="10,8,8,8"
+            Background="{DynamicResource DcSurfaceBrush}"
+            BorderBrush="{DynamicResource DcAccentBrush}"
+            BorderThickness="{DynamicResource DcBorderThickness}"
+            CornerRadius="{DynamicResource DcControlRadius}"
+            Visibility="{Binding ShowUpdateBanner, Converter={StaticResource BoolToVisibility}}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- The accent edge. -->
+            <Border Grid.Column="0"
+                    Width="3"
+                    Margin="0,0,10,0"
+                    CornerRadius="{DynamicResource DcDotRadius}"
+                    Background="{DynamicResource DcAccentBrush}" />
+
+            <ctl:DcSymbolIcon Grid.Column="1"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Center"
+                              Symbol="ArrowCircleUp24"
+                              FontSize="22"
+                              Foreground="{DynamicResource DcSectionUpdatesBrush}" />
+
+            <!-- The title is a polite live region: a screen reader hears it when the release turns up while the dashboard is open. -->
+            <StackPanel Grid.Column="2"
+                        VerticalAlignment="Center"
+                        ToolTip="{Binding UpdateBannerMessage}">
+                <TextBlock Style="{StaticResource DcBody}"
+                           FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"
+                           AutomationProperties.LiveSetting="Polite"
+                           Text="{Binding UpdateBannerTitle}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Text="{Binding UpdateBannerMessage}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3"
+                        Margin="12,0,0,0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <ui:Button Appearance="Primary"
+                           Content="Review update…"
+                           Command="{Binding ReviewUpdateCommand}"
+                           ToolTip="Open the Updates window to check the release and upgrade"
+                           AutomationProperties.Name="Review update"
+                           AutomationProperties.HelpText="Opens the Updates window. Nothing is installed until you confirm the command there." />
+                <ui:Button Margin="8,0,0,0"
+                           Content="Release notes"
+                           Command="{Binding OpenReleaseNotesCommand}"
+                           ToolTip="Open the release page on GitHub"
+                           AutomationProperties.Name="Release notes"
+                           AutomationProperties.HelpText="Opens this release's page on GitHub in your browser." />
+                <ui:Button Margin="4,0,0,0"
+                           Appearance="Transparent"
+                           Command="{Binding DismissUpdateCommand}"
+                           ToolTip="Dismiss this notice. It comes back for the next release."
+                           AutomationProperties.Name="Dismiss update notice"
+                           AutomationProperties.HelpText="Hides this banner for this release. A newer release shows it again.">
+                    <ui:Button.Icon>
+                        <ctl:DcSymbolIcon Symbol="Dismiss24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

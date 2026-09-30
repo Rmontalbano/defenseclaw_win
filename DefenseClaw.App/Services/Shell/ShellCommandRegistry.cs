@@ -161,9 +161,9 @@ internal static class ShellCommandRegistry
             Id: "app.check-updates",
             Title: "Check for updates",
             Category: AppCategory,
-            Description: "Open the Updates window, which checks for a newer DefenseClaw release.",
+            Description: "Look for a newer DefenseClaw release now and open the Updates window to review it.",
             Shortcut: null,
-            Keywords: "update upgrade version release new",
+            Keywords: "update upgrade version release new banner available",
             IsEnabled: true,
             DisabledReason: null,
             Run: actions.CheckForUpdates));

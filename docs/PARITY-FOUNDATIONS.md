@@ -16,7 +16,7 @@ nothing here starts work until something asks.
 **For:** every persisted app setting, in one file, `%LOCALAPPDATA%\DefenseClaw.App\settings.json`. Typed sections: `Appearance` (style, mode;
 still owned by `AppearanceService`), `Monitoring` (`HealthIntervalSeconds` 2-60, default 5; `Paused`), `Notifications` (`Critical`, `High`,
 `Gateway`, `HighWaterUnixNano`), `Startup` (`GatewayAutoStart`, `CloseToTray`, `RememberLastPanel`, `LastPanelId`), `Connection`
-(`CliPathOverride`), `Updates` (`LastCheckUnix`, `DismissedVersion`).
+(`CliPathOverride`), `Updates` (`LastCheckUnix`, `DismissedVersion`, `NotifiedVersion`; written by `UpdateWatcher`).
 
 ```csharp
 var interval = Services.Settings.Current.Monitoring.HealthInterval;                  // read: cached, any thread

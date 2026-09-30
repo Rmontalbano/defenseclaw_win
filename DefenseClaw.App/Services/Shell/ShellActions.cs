@@ -86,8 +86,15 @@ internal sealed class ShellActions
 
     public void OpenConfigEditor() => Views.ConfigEditor.ConfigEditorWindow.Show(_services);
 
-    /// <summary>Opens the Updates window, which runs the release check as it opens.</summary>
-    public void CheckForUpdates() => _ = Views.Updates.UpdatesWindow.Show(_services);
+    /// <summary>
+    /// Opens the Updates window, which runs the release check as it opens, and has the background watcher look again (through the same
+    /// 24 h cache) so the dashboard's banner and the window agree. The upgrade itself stays in the window.
+    /// </summary>
+    public void CheckForUpdates()
+    {
+        _ = _services.UpdateWatcher.CheckNowAsync();
+        _ = Views.Updates.UpdatesWindow.Show(_services);
+    }
 
     /// <summary>Start / stop / restart through the tray's path: review, run via the CLI runner, toast.</summary>
     public Task RunGatewayActionAsync(GatewayAction action) => _tray.RunGatewayActionAsync(action, _owner());

@@ -13,6 +13,7 @@ using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Security;
 using DefenseClaw.App.Services.Settings;
+using DefenseClaw.App.Services.Updates;
 
 namespace DefenseClaw.App.Services;
 
@@ -72,7 +73,11 @@ public sealed class AppServices : IDisposable
     /// <summary>What <see cref="StartupLoad"/> produces: the two readers and the first config state.</summary>
     private sealed record LoadedStartup(ConfigStore ConfigStore, TokenResolver TokenResolver, LoadedConfig Initial);
 
-    private AppServices(StartupLoad startup, string? claudeSettingsPath = null, string? settingsPath = null)
+    private AppServices(
+        StartupLoad startup,
+        string? claudeSettingsPath = null,
+        string? settingsPath = null,
+        Func<AppServices, UpdateWatcher>? updateWatcherFactory = null)
     {
         Paths = startup.Paths;
 
@@ -127,6 +132,9 @@ public sealed class AppServices : IDisposable
         AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath);
         ConnectorScope = new ConnectorScope(Monitor);
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
+
+        // Knows whether a newer runtime is out (the banner and the one toast). Nothing runs until the app calls Start on it.
+        UpdateWatcher = updateWatcherFactory?.Invoke(this) ?? UpdateWatcher.Create(this);
     }
 
     /// <summary>The single instance, created by <see cref="Initialize"/> at startup.</summary>
@@ -192,6 +200,12 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The one connector filter every screen shares (All, or one connector). See <see cref="Services.ConnectorScope"/>.</summary>
     internal ConnectorScope ConnectorScope { get; }
+
+    /// <summary>
+    /// Whether a newer DefenseClaw release is out, checked in the background at launch and every 6 h (<c>ShowBanner</c> / <c>Changed</c> for the
+    /// banner, <c>NewVersionAvailable</c> for the tray toast). It only asks; the upgrade stays the Updates window's. See <see cref="Updates.UpdateWatcher"/>.
+    /// </summary>
+    internal UpdateWatcher UpdateWatcher { get; }
 
     /// <summary>
     /// REST port the <see cref="Gateway"/> client is currently built against. Tracks
@@ -326,14 +340,19 @@ public sealed class AppServices : IDisposable
         DefenseClawPaths paths,
         string? claudeSettingsPath = null,
         bool readConfigOnPoolThread = false,
-        string? settingsPath = null)
+        string? settingsPath = null,
+        Func<AppServices, UpdateWatcher>? updateWatcherFactory = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
         // The app's own settings file lives under %LOCALAPPDATA%, not in the data directory, so an isolated composition that said
         // nothing about it would read and write the real one. It gets a file inside the scratch directory instead.
         settingsPath ??= Path.Combine(paths.DataDirectory, "DefenseClaw.App", "settings.json");
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath);
+
+        // Likewise the release check would go to GitHub and use the real cache file: an isolated composition's watcher answers "not checked".
+        updateWatcherFactory ??= services => new UpdateWatcher(
+            services.Settings, services.Monitor, (_, _) => Task.FromResult(UpdateCheckResult.NotCheckedYet));
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -468,6 +487,7 @@ public sealed class AppServices : IDisposable
 
         ConfigWatcher.Changed -= OnConfigChanged;
         AlertCounts.Dispose();
+        UpdateWatcher.Dispose();
         ConnectorScope.Dispose();
         Monitor.Dispose();
         ConfigWatcher.Dispose();

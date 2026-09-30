@@ -130,6 +130,12 @@ internal sealed record UpdateSettings
 
     /// <summary>The release version the operator chose to stop being told about; null when none.</summary>
     public string? DismissedVersion { get; init; }
+
+    /// <summary>
+    /// The newest release version already announced with a tray toast; null when none has been. Kept so a restart does not
+    /// repeat the toast for a release the operator has not acted on yet (the banner still shows it).
+    /// </summary>
+    public string? NotifiedVersion { get; init; }
 }
 
 /// <summary>What <see cref="AppSettingsStore.Changed"/> reports.</summary>

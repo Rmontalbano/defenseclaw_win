@@ -91,6 +91,7 @@ internal static class AppSettingsCodec
             var target = SectionForWrite(root, UpdatesKey);
             Put(target, "lastCheckUnix", settings.Updates.LastCheckUnix);
             Put(target, "dismissedVersion", settings.Updates.DismissedVersion);
+            Put(target, "notifiedVersion", settings.Updates.NotifiedVersion);
         }
     }
 
@@ -152,6 +153,7 @@ internal static class AppSettingsCodec
             {
                 LastCheckUnix = Math.Max(0, ReadLong(section["lastCheckUnix"], 0)),
                 DismissedVersion = ReadString(section["dismissedVersion"]),
+                NotifiedVersion = ReadString(section["notifiedVersion"]),
             };
 
     // ------------------------------------------------------------------ JSON plumbing

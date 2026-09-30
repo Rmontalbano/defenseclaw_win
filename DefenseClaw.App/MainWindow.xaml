@@ -193,6 +193,9 @@
             height at all instead of 12 px above the sidebar.
         -->
         <StackPanel Grid.Row="2" Margin="24,0,24,0">
+            <!-- "DefenseClaw X is available" (UpdateWatcher): informational, so it leads the region and the warnings stay visible below it. -->
+            <shell:UpdateBanner />
+
             <ui:InfoBar Margin="0,12,0,0"
                         IsClosable="False"
                         Severity="Warning"
