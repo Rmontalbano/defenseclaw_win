@@ -41,17 +41,18 @@
     self-contained publish is a composite image that recompiles the framework too (+25 MB, and a
     ~99 MB image the single-file host has to extract on first run) for no measurable wall-clock gain.
 
-    EnableCompressionInSingleFile: 186 MB -> 81 MB (the download). Unlike a self-extracted native
-    library, a compressed managed assembly is inflated in memory on every launch, not once, so this
-    is a real per-start cost (+15-80 ms in the harness). It was more than paid back there by
-    starting a file less than half the size (hundreds of ms before Main on the dev machine), but
-    that part depends on the machine's disk and antivirus: if a cold-start measurement of the
-    real exe says otherwise, deleting the one line turns it off.
+    EnableCompressionInSingleFile is deliberately OFF. It shrinks the exe 187 MB -> 81 MB, but every
+    compressed managed assembly is inflated into private memory on every launch and stays there for
+    the life of the process. Measured on the real exe, tray-only (minimized), 15 s after launch,
+    3 alternating rounds (2026-09-29):
+      v0.3.1  JIT, uncompressed        ~1.23 s to idle, ~1.8 s CPU, 55 MB private / 134 MB working set
+      R2R + compressed                 ~1.00 s to idle, ~0.9 s CPU, 130 MB private / 250 MB working set
+      R2R, uncompressed (this)         ~1.15 s to idle, ~0.7 s CPU, 49 MB private / 114 MB working set
+    Compression bought ~0.1 s at login for +80 MB private memory held all day by a tray app.
   -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and '$(SelfContained)' == 'true' and '$(PublishSingleFile)' == 'true'">
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishReadyToRunComposite>false</PublishReadyToRunComposite>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
