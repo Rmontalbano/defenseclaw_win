@@ -114,7 +114,8 @@
                            Margin="8,0,0,0"
                            VerticalAlignment="Center"
                            Visibility="Collapsed"
-                           AutomationProperties.LiveSetting="Polite" />
+                           AutomationProperties.LiveSetting="Polite"
+                           shell:LiveRegion.RaisedByCode="True" />
                 <ContentPresenter x:Name="FooterPresenter"
                                   Margin="8,0,0,0"
                                   VerticalAlignment="Center"
@@ -148,7 +149,7 @@
                       PreviewMouseWheel="OnBodyPreviewMouseWheel">
             <StackPanel>
                 <!-- Tier first: it is the thing to read before anything else. Announced whenever it changes. -->
-                <Grid x:Name="Header" AutomationProperties.LiveSetting="Assertive">
+                <Grid x:Name="Header" AutomationProperties.LiveSetting="Assertive" shell:LiveRegion.RaisedByCode="True">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />

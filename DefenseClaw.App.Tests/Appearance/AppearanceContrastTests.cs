@@ -74,6 +74,26 @@ public sealed class AppearanceContrastTests
     }
 
     [Theory]
+    [InlineData("Default", "Dark")]
+    [InlineData("Default", "Light")]
+    [InlineData("Linear", "Dark")]
+    [InlineData("Linear", "Light")]
+    [InlineData("Tui", "Dark")]
+    [InlineData("Tui", "Light")]
+    public void The_destructive_buttons_label_holds_4_5_to_1_on_its_fill_at_rest_and_on_hover(string styleName, string modeName)
+    {
+        // WPF-UI's own Danger button is a fixed #F44336 under the theme's text colour: 3.68 (Default dark), 3.65 (Linear light),
+        // 3.22 (TUI dark). The tokens are chosen per style; the button reads them (Shell\DangerButtonTests holds that half).
+        var look = Look.Load(styleName, modeName);
+        var failures = new List<string>();
+
+        Check(failures, "on-danger label on the danger fill", look.OnDanger, look.Danger, 4.5);
+        Check(failures, "on-danger label on the hover fill", look.OnDanger, look.DangerHover, 4.5);
+
+        Assert.True(failures.Count == 0, $"{styleName} {modeName}: " + string.Join("; ", failures));
+    }
+
+    [Theory]
     [InlineData("Linear", "Dark")]
     [InlineData("Linear", "Light")]
     [InlineData("Tui", "Dark")]
@@ -215,6 +235,12 @@ public sealed class AppearanceContrastTests
         public Color OnAccent => _color(AppearanceTokens.OnAccent);
 
         public Color FocusRing => _color(AppearanceTokens.FocusRing);
+
+        public Color Danger => _color(AppearanceTokens.Danger);
+
+        public Color DangerHover => _color(AppearanceTokens.DangerHover);
+
+        public Color OnDanger => _color(AppearanceTokens.OnDanger);
 
         public Color Tone(string tone) => _color($"DcTone{tone}Brush");
 

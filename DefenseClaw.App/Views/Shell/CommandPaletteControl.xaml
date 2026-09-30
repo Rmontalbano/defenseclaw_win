@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
              IsTabStop="False">
     <!--
         Command palette overlay (Ctrl+K). A scrim + dialog card like every other overlay in the app.
@@ -175,6 +176,7 @@
                                TextTrimming="CharacterEllipsis"
                                TextWrapping="NoWrap"
                                AutomationProperties.LiveSetting="Polite"
+                               shell:LiveRegion.RaisedByCode="True"
                                Text="{Binding StatusLine}" />
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

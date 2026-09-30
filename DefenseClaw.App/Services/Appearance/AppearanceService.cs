@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using DefenseClaw.App.Views.Shell;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -133,6 +134,11 @@ internal sealed class AppearanceService : IAppearanceControl
     {
         Settings = _store.Load();
         RegisterClassHandler();
+
+        // Live regions (AutomationProperties.LiveSetting) only speak once this hook is in, and it can only be added before an
+        // element has used the property: the same "before any window exists" this method is called at. Not about appearance,
+        // but this is the one startup call with that guarantee.
+        LiveRegion.Install();
         _current = this;
 
         // The first use of WPF-UI's ApplicationAccentColorManager - whichever call makes it, including the first

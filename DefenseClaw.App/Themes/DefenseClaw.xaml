@@ -24,6 +24,7 @@
                      DcTextPrimaryBrush / DcTextSecondaryBrush / DcTextTertiaryBrush
                      DcAccentBrush | DcAccentHoverBrush | DcOnAccentBrush | DcFocusRingBrush | DcFocusRingInnerBrush
                      DcTone{Critical,High,Medium,Ok,Neutral}Brush and ...SubtleBrush (foreground / tinted fill)
+                     DcDangerBrush | DcDangerHoverBrush | DcOnDangerBrush (the destructive button: fill, hover fill, label)
           Icons      DcIconBrush (default icon: secondary text) | DcIconMutedBrush (empty-state glyphs)
                      DcTint{Indigo,Blue,Violet,Teal,Green,Amber,Orange,Red,Pink,Gray}Brush (the named palette)
                      DcSection{Overview,Observe,Govern,Discover,Setup,Updates}Brush (a card header's tint, per section)
@@ -31,7 +32,8 @@
                      DcGlyphFamily (string: Dot | Linear | Terminal - the shape set of the status/severity glyphs)
           Type       DcUiFontFamily | DcMonoFontFamily | DcFontSize (body size)
           Shape      DcRadiusS 4 | DcRadiusM 6 | DcRadiusL 8 (badges + inner rows | code blocks | cards, in Default),
-                     DcControlRadius, DcBarRadius, DcFocusRadius* (doubles), DcBorderThickness
+                     DcControlRadius, DcBarRadius, DcDotRadius (a status dot: round, or 0 in TUI), DcFocusRadius* (doubles),
+                     DcBorderThickness
           Density    DcCardPadding 16 | DcCardPaddingCompact 12 | DcCardPaddingFlush 4 (Default; Linear / TUI are tighter)
           Effect     DcFlyoutShadow (the tray flyout's drop shadow; none in Linear / TUI)
 
@@ -119,6 +121,11 @@
           ctl:DcSeverityGlyph    A severity as a mark: Linear's priority glyphs, TUI's flat shapes; Default draws nothing.
                                  Both follow the DcGlyphFamily token live, and always sit beside the words they repeat.
 
+        IMPLICIT STYLES (nothing to opt in to)
+          ui:ProgressRing        Hosts ctl:DcSpinner: a ring (a segmented one under TUI) that holds an animation clock only while
+                                 it is visible. WPF-UI's own kept one alive for the life of the process once it had been shown.
+          ui:Button Danger       Appearance="Danger" wears DcDanger / DcDangerHover / DcOnDanger: a label at 4.5:1 in every look.
+
         EMPTY STATE
           DcEmptyState           StackPanel, centred, max 480 wide.
           DcEmptyIcon            ui:SymbolIcon, 48px, muted.
@@ -138,7 +145,7 @@
           DcChip                  Neutral metadata tag (mode, connector, "stdin secret"); no tone.
           DcBadgeText             11 semibold text for DcBadge / DcChip.
           DcToneText              Semibold text coloured by tone (bare severity column).
-          DcToneDot / DcToneDotLarge  10px / 12px status dot.
+          DcToneDot / DcToneDotLarge  10px / 12px status dot: a Border whose corner radius is DcDotRadius (round; square in TUI).
           DcToneBar               4px left accent bar on a row (transparent when neutral).
           DcToneTile              Stat tile: tinted fill, card stroke, min width 104.
 
@@ -181,6 +188,31 @@
     <sys:Double x:Key="DcFieldKeyMinWidth">130</sys:Double>
     <!-- The one non-theme colour: a black veil dims the page in light and dark alike. -->
     <SolidColorBrush x:Key="DcScrimBrush" Color="#99000000" />
+
+    <!-- ===== Buttons ===================================================================== -->
+    <!--
+        The destructive button. WPF-UI paints Appearance="Danger" with a fixed #F44336 (a template trigger on the palette colour)
+        and sets no label colour of its own, so the label was whatever the button's text colour is: 3.2-3.7:1 in most looks. This
+        is the token version (DcDanger / DcDangerHover / DcOnDanger, chosen per style so the label holds 4.5:1), applied as a STYLE
+        trigger, which outranks WPF-UI's template trigger; every existing Appearance="Danger" button picks it up with no edit. Not
+        while disabled: WPF-UI's own disabled look (its template sets it on the border and the label) is left alone.
+        Defined before DcActionBar and DcToolbarPanel below, whose button styles are based on this one.
+    -->
+    <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource DefaultUiButtonStyle}">
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="Appearance" Value="Danger" />
+                    <Condition Property="IsEnabled" Value="True" />
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource DcDangerBrush}" />
+                <Setter Property="MouseOverBackground" Value="{DynamicResource DcDangerHoverBrush}" />
+                <Setter Property="PressedBackground" Value="{DynamicResource DcDangerHoverBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcOnDangerBrush}" />
+                <Setter Property="PressedForeground" Value="{DynamicResource DcOnDangerBrush}" />
+            </MultiTrigger>
+        </Style.Triggers>
+    </Style>
 
     <!-- ===== Typography ================================================================== -->
     <Style x:Key="DcPageTitle" TargetType="TextBlock">
@@ -474,34 +506,39 @@
         </Style.Triggers>
     </Style>
 
-    <Style x:Key="DcToneDot" TargetType="Ellipse">
+    <!--
+        A status dot: a Border, not an Ellipse, so its corner radius is a token (DcDotRadius: round in Default and Linear, 0 in TUI,
+        where everything is square). The radius is larger than the dot is wide and Border clamps it to a circle.
+    -->
+    <Style x:Key="DcToneDot" TargetType="Border">
         <Setter Property="Width" Value="10" />
         <Setter Property="Height" Value="10" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Fill" Value="{DynamicResource DcToneNeutralBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcDotRadius}" />
+        <Setter Property="Background" Value="{DynamicResource DcToneNeutralBrush}" />
         <Style.Triggers>
             <Trigger Property="Tag" Value="Critical">
-                <Setter Property="Fill" Value="{DynamicResource DcToneCriticalBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Bad">
-                <Setter Property="Fill" Value="{DynamicResource DcToneCriticalBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="High">
-                <Setter Property="Fill" Value="{DynamicResource DcToneHighBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Warn">
-                <Setter Property="Fill" Value="{DynamicResource DcToneHighBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
-                <Setter Property="Fill" Value="{DynamicResource DcToneMediumBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
-                <Setter Property="Fill" Value="{DynamicResource DcToneOkBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
 
-    <Style x:Key="DcToneDotLarge" TargetType="Ellipse" BasedOn="{StaticResource DcToneDot}">
+    <Style x:Key="DcToneDotLarge" TargetType="Border" BasedOn="{StaticResource DcToneDot}">
         <Setter Property="Width" Value="12" />
         <Setter Property="Height" Value="12" />
     </Style>
@@ -918,6 +955,34 @@
         <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- ===== Busy ring =================================================================== -->
+    <!--
+        Every ui:ProgressRing in the app, with no per-site edit: WPF-UI's template starts its rotation from a Loaded trigger and
+        only ever pauses it, so a ring shown once kept a 60 fps animation clock alive for the life of the process (hidden, removed,
+        even with the dashboard closed to the tray). This re-templates the ring to host a DcSpinner, which owns one clock while
+        it is visible and removes it the moment it is not. It is an implicit style with no BasedOn on purpose: WPF-UI's own
+        triggers are what start the leaking storyboard. Size, Visibility and AutomationProperties.Name stay the site's;
+        60 x 60 is WPF-UI's own default for a ring that sets none.
+    -->
+    <Style TargetType="{x:Type ui:ProgressRing}">
+        <Setter Property="Width" Value="60" />
+        <Setter Property="Height" Value="60" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ui:ProgressRing}">
+                    <ctl:DcSpinner Width="{TemplateBinding Width}"
+                                   Height="{TemplateBinding Height}"
+                                   IsSpinning="{TemplateBinding IsIndeterminate}"
+                                   Progress="{TemplateBinding Progress}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ===== Keyboard focus ============================================================== -->

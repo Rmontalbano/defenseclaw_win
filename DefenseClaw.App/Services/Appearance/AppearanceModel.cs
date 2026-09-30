@@ -161,6 +161,12 @@ internal static class AppearanceTokens
     public const string ToneNeutral = "DcToneNeutralBrush";
     public const string ToneNeutralSubtle = "DcToneNeutralSubtleBrush";
 
+    // The destructive button (Appearance="Danger"): its fill, its hover / pressed fill and the label on both. WPF-UI paints
+    // a fixed #F44336 under white or black text at 3.2-5.1:1; these are chosen per style so the label holds 4.5:1.
+    public const string Danger = "DcDangerBrush";
+    public const string DangerHover = "DcDangerHoverBrush";
+    public const string OnDanger = "DcOnDangerBrush";
+
     // Icons. The default and the muted icon colour, the named tint palette, and the section -> tint mapping twice: the
     // sidebar and page headers (NavIcon*) and the card headers (Section*), so a style can tint one and not the other.
     public const string Icon = "DcIconBrush";
@@ -203,6 +209,9 @@ internal static class AppearanceTokens
     public const string RadiusL = "DcRadiusL";
     public const string ControlRadius = "DcControlRadius";
     public const string BarRadius = "DcBarRadius";
+
+    /// <summary>The corner radius of a status dot: larger than any dot is wide (a <c>Border</c> clamps it to a circle), or 0 for a square one.</summary>
+    public const string DotRadius = "DcDotRadius";
     public const string BorderThickness = "DcBorderThickness";
     public const string FocusRadius = "DcFocusRadius";
     public const string FocusRadiusInner = "DcFocusRadiusInner";
@@ -223,6 +232,7 @@ internal static class AppearanceTokens
         Accent, AccentHover, OnAccent, FocusRing, FocusRingInner,
         ToneCritical, ToneCriticalSubtle, ToneHigh, ToneHighSubtle, ToneMedium, ToneMediumSubtle,
         ToneOk, ToneOkSubtle, ToneNeutral, ToneNeutralSubtle,
+        Danger, DangerHover, OnDanger,
         Icon, IconMuted,
         TintIndigo, TintBlue, TintViolet, TintTeal, TintGreen, TintAmber, TintOrange, TintRed, TintPink, TintGray,
         SectionOverview, SectionObserve, SectionGovern, SectionDiscover, SectionSetup, SectionUpdates,
@@ -247,7 +257,7 @@ internal static class AppearanceTokens
     {
         GlyphFamily,
         UiFontFamily, MonoFontFamily, FontSize,
-        RadiusS, RadiusM, RadiusL, ControlRadius, BarRadius, BorderThickness,
+        RadiusS, RadiusM, RadiusL, ControlRadius, BarRadius, DotRadius, BorderThickness,
         FocusRadius, FocusRadiusInner, FocusRadiusInset, FocusRadiusInsetInner,
         CardPadding, CardPaddingCompact, CardPaddingFlush,
         FlyoutShadow,

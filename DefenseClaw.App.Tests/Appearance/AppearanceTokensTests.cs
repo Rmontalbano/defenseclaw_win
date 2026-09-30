@@ -65,7 +65,7 @@ public sealed class AppearanceTokensTests
                 Assert.IsType<FontFamily>(dictionary[key]);
             }
 
-            foreach (var key in new[] { AppearanceTokens.RadiusS, AppearanceTokens.RadiusM, AppearanceTokens.RadiusL, AppearanceTokens.ControlRadius, AppearanceTokens.BarRadius })
+            foreach (var key in new[] { AppearanceTokens.RadiusS, AppearanceTokens.RadiusM, AppearanceTokens.RadiusL, AppearanceTokens.ControlRadius, AppearanceTokens.BarRadius, AppearanceTokens.DotRadius })
             {
                 Assert.IsType<CornerRadius>(dictionary[key]);
             }
@@ -165,7 +165,7 @@ public sealed class AppearanceTokensTests
             Assert.Equal(mono, ((FontFamily)d[AppearanceTokens.MonoFontFamily]).Source);
             Assert.Equal(13.0, (double)d[AppearanceTokens.FontSize]);
 
-            foreach (var key in new[] { AppearanceTokens.RadiusS, AppearanceTokens.RadiusM, AppearanceTokens.RadiusL, AppearanceTokens.ControlRadius, AppearanceTokens.BarRadius })
+            foreach (var key in new[] { AppearanceTokens.RadiusS, AppearanceTokens.RadiusM, AppearanceTokens.RadiusL, AppearanceTokens.ControlRadius, AppearanceTokens.BarRadius, AppearanceTokens.DotRadius })
             {
                 Assert.Equal(new CornerRadius(0), (CornerRadius)d[key]);
             }
@@ -175,6 +175,19 @@ public sealed class AppearanceTokensTests
                 Assert.Equal(0.0, (double)d[key]);
             }
         }
+    }
+
+    [Theory]
+    [InlineData("Default", "Dark")]
+    [InlineData("Linear", "Dark")]
+    [InlineData("Linear", "Light")]
+    public void Default_and_Linear_draw_round_status_dots(string style, string mode)
+    {
+        // A status dot is at most 12 DIPs wide, so any radius of 6 or more makes it a circle (a Border clamps the rest).
+        var radius = (CornerRadius)Load(style, mode)[AppearanceTokens.DotRadius];
+
+        Assert.True(radius.TopLeft >= 6, $"{style} {mode} dot radius {radius.TopLeft}");
+        Assert.Equal(radius.TopLeft, radius.BottomRight);
     }
 
     [Fact]

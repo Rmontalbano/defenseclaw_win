@@ -44,6 +44,10 @@
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#264CB782" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#8A8F98" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#268A8F98" />
+    <!-- The destructive button: the critical red pulled down until white text on it holds 4.5:1 (critical itself is 3.5:1 under white). -->
+    <SolidColorBrush x:Key="DcDangerBrush" Color="#C93B3B" />
+    <SolidColorBrush x:Key="DcDangerHoverBrush" Color="#B33232" />
+    <SolidColorBrush x:Key="DcOnDangerBrush" Color="#FFFFFF" />
 
     <!--
         ===== Icons =====
@@ -96,6 +100,8 @@
     <CornerRadius x:Key="DcRadiusL">8</CornerRadius>
     <CornerRadius x:Key="DcControlRadius">6</CornerRadius>
     <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <!-- A status dot is round (see Default.xaml). -->
+    <CornerRadius x:Key="DcDotRadius">99</CornerRadius>
     <Thickness x:Key="DcBorderThickness">1</Thickness>
 
     <sys:Double x:Key="DcFocusRadius">8</sys:Double>

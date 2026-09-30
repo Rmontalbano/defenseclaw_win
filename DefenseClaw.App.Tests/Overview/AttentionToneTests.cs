@@ -254,7 +254,7 @@ public sealed class AttentionToneTests : IDisposable
     [Theory]
     [InlineData("DcBadge", "Background", "DcTone{0}SubtleBrush")]
     [InlineData("DcToneText", "Foreground", "DcTone{0}Brush")]
-    [InlineData("DcToneDot", "Fill", "DcTone{0}Brush")]
+    [InlineData("DcToneDot", "Background", "DcTone{0}Brush")]
     [InlineData("DcToneBar", "Background", "DcTone{0}Brush")]
     [InlineData("DcToneTile", "Background", "DcTone{0}SubtleBrush")]
     [InlineData("DcValue", "Foreground", "DcTone{0}Brush")]

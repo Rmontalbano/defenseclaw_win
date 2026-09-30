@@ -49,6 +49,25 @@
             </Style.Triggers>
         </Style>
 
+        <!--
+            The gutter beside a console line: an "!" on a line that came from stderr, so the difference is not the colour alone (a
+            colour-blind reader, a monochrome print, a screenshot). It keeps its width on every other line so the text stays in one
+            column. The row's own automation name is what a screen reader says for a line.
+        -->
+        <Style x:Key="OutputMarker" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
+            <Setter Property="Text" Value="!" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Visibility" Value="Hidden" />
+            <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsError}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="ToolTip" Value="Error output (stderr)" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Console list rows: bare content, no selection/hover chrome, and a real name for UI Automation. -->
         <Style x:Key="ConsoleRow" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0" />
@@ -567,7 +586,14 @@
                                              VirtualizingPanel.VirtualizationMode="Recycling">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
-                                                <TextBlock Style="{StaticResource ConsoleLine}" Text="{Binding Text}" />
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource ConsoleLine}" Text="{Binding Text}" />
+                                                    <TextBlock Grid.Column="0" Style="{StaticResource OutputMarker}" />
+                                                </Grid>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>

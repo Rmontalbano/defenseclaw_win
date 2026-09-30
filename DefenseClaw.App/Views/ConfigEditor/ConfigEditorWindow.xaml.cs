@@ -92,6 +92,7 @@ public partial class ConfigEditorWindow : FluentWindow
 
         RawEditor.ShowLineNumbers = true;
         RawEditor.Options.EnableHyperlinks = false;
+        RawEditor.Options.EnableEmailHyperlinks = false;
         RawEditor.Options.ShowTabs = false;
         SearchPanel.Install(RawEditor);
         RawEditor.TextChanged += OnEditorTextChanged;

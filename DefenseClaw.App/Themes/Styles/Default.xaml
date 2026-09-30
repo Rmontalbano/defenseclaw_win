@@ -19,13 +19,14 @@
                    subtle row), DcDialog (dialog / flyout card), DcSubtle (chip, hover), DcSelected,
                    DcBorder (hairline), DcControlBorder, DcTextPrimary/Secondary/Tertiary, DcAccent,
                    DcAccentHover, DcOnAccent, DcFocusRing (outer), DcFocusRingInner,
-                   DcTone{Critical,High,Medium,Ok,Neutral} and DcTone...Subtle (foreground / tinted fill)
+                   DcTone{Critical,High,Medium,Ok,Neutral} and DcTone...Subtle (foreground / tinted fill),
+                   DcDanger, DcDangerHover, DcOnDanger (the destructive button: fill, hover fill, label)
           Icons    DcIconBrush (default icon), DcIconMutedBrush, DcTint{Indigo,Blue,Violet,Teal,Green,Amber,Orange,Red,
                    Pink,Gray}Brush (the palette), DcSection{Overview,Observe,Govern,Discover,Setup,Updates}Brush (a card
                    header's tint) and DcNavIcon{...}Brush (the sidebar's and a page header's); DcGlyphFamily, a string:
                    Dot | Linear | Terminal, the shape set of the status and severity glyphs
           Fonts    DcUiFontFamily, DcMonoFontFamily      Size DcFontSize
-          Shape    DcRadiusS/M/L, DcControlRadius, DcBarRadius, DcFocusRadius* (doubles), DcBorderThickness
+          Shape    DcRadiusS/M/L, DcControlRadius, DcBarRadius, DcDotRadius (a status dot), DcFocusRadius* (doubles), DcBorderThickness
           Density  DcCardPadding, DcCardPaddingCompact, DcCardPaddingFlush
           Effect   DcFlyoutShadow
     -->
@@ -63,6 +64,13 @@
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="{DynamicResource SystemFillColorSuccessBackground}" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="{DynamicResource SystemFillColorNeutral}" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="{DynamicResource SystemFillColorNeutralBackground}" />
+    <!--
+        The destructive button (Appearance="Danger"): a fill, a hover / pressed fill and the label on both. WPF-UI's own is a fixed
+        #F44336 under this theme's text colour at 3.2-3.7:1 in dark; these clear 4.5:1 in either mode (AppearanceContrastTests).
+    -->
+    <SolidColorBrush x:Key="DcDangerBrush" Color="#C62828" />
+    <SolidColorBrush x:Key="DcDangerHoverBrush" Color="#B71C1C" />
+    <SolidColorBrush x:Key="DcOnDangerBrush" Color="#FFFFFF" />
 
     <!--
         ===== Icons: restrained =====
@@ -118,6 +126,8 @@
     <CornerRadius x:Key="DcRadiusL">8</CornerRadius>
     <CornerRadius x:Key="DcControlRadius">4</CornerRadius>
     <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <!-- A status dot is round: a radius larger than the dot is wide, which Border clamps to a circle. -->
+    <CornerRadius x:Key="DcDotRadius">99</CornerRadius>
     <Thickness x:Key="DcBorderThickness">1</Thickness>
 
     <!-- The two-tone focus ring: outer and inner stroke radii, for the ring outside an element and the inset one. -->

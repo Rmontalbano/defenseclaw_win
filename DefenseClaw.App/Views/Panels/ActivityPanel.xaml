@@ -42,6 +42,25 @@
         </Style>
 
         <!--
+            The gutter beside a console line: an "!" on a line that came from stderr, so the difference is not the colour alone (a
+            colour-blind reader, a monochrome print, a screenshot). It keeps its width on every other line so the text stays in one
+            column. The row's own automation name is what a screen reader says for a line.
+        -->
+        <Style x:Key="OutputMarker" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
+            <Setter Property="Text" Value="!" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Visibility" Value="Hidden" />
+            <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsError}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="ToolTip" Value="Error output (stderr)" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--
             The card list. Up to 200 cards, each collapsed (~165 DIPs) or open on a transcript (up to ~570), so it
             scrolls by the pixel and only the cards in view (and one either side, so Tab has a next card to land on)
             become elements. The scroll viewer is part of this list's own template - a ScrollViewer around a plain
@@ -379,7 +398,14 @@
                                                     </ListBox.ContextMenu>
                                                     <ListBox.ItemTemplate>
                                                         <DataTemplate>
-                                                            <TextBlock Style="{StaticResource OutputLine}" Text="{Binding DisplayText}" />
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="1" Style="{StaticResource OutputLine}" Text="{Binding DisplayText}" />
+                                                                <TextBlock Grid.Column="0" Style="{StaticResource OutputMarker}" />
+                                                            </Grid>
                                                         </DataTemplate>
                                                     </ListBox.ItemTemplate>
                                                 </ListBox>

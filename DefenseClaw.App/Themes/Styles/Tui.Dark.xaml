@@ -53,6 +53,10 @@
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#2634D399" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#9FB2CC" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#269FB2CC" />
+    <!-- The destructive button: the critical red as the fill, the window's near-black as the label (7:1); hover is the next-lighter red. -->
+    <SolidColorBrush x:Key="DcDangerBrush" Color="#F87171" />
+    <SolidColorBrush x:Key="DcDangerHoverBrush" Color="#FCA5A5" />
+    <SolidColorBrush x:Key="DcOnDangerBrush" Color="#070A12" />
 
     <!--
         ===== Icons: a terminal draws in one or two colours =====
@@ -98,11 +102,19 @@
     <sys:Double x:Key="DcFontSize">13</sys:Double>
 
     <!-- ===== Shape: square everywhere ===================================================== -->
+    <!--
+        Not square, and not by this file: WPF-UI's ToggleSwitch and RadioButton draw their round parts from shapes hard-coded in their
+        templates (Rectangle RadiusX="10", Ellipse), not from a radius resource, so no token reaches them; making them square is a
+        re-template of each control with its 30-odd state triggers and storyboards (the scroll and slider thumbs were not looked at).
+        Everything a token can reach is square.
+    -->
     <CornerRadius x:Key="DcRadiusS">0</CornerRadius>
     <CornerRadius x:Key="DcRadiusM">0</CornerRadius>
     <CornerRadius x:Key="DcRadiusL">0</CornerRadius>
     <CornerRadius x:Key="DcControlRadius">0</CornerRadius>
     <CornerRadius x:Key="DcBarRadius">0</CornerRadius>
+    <!-- A status dot is a square, like everything else in a terminal. -->
+    <CornerRadius x:Key="DcDotRadius">0</CornerRadius>
     <Thickness x:Key="DcBorderThickness">1</Thickness>
 
     <sys:Double x:Key="DcFocusRadius">0</sys:Double>

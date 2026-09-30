@@ -38,6 +38,10 @@
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#1F2E8B5F" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#62666D" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#1F62666D" />
+    <!-- The destructive button: the critical red pulled down until white text on it holds 4.5:1 (critical itself is 4.4:1 under white). -->
+    <SolidColorBrush x:Key="DcDangerBrush" Color="#C93B3B" />
+    <SolidColorBrush x:Key="DcDangerHoverBrush" Color="#B02F2F" />
+    <SolidColorBrush x:Key="DcOnDangerBrush" Color="#FFFFFF" />
 
     <!-- ===== Icons: the dark file's palette, one step deeper so every tint holds 3:1 on white ===== -->
     <SolidColorBrush x:Key="DcIconBrush" Color="#62666D" />
@@ -81,6 +85,8 @@
     <CornerRadius x:Key="DcRadiusL">8</CornerRadius>
     <CornerRadius x:Key="DcControlRadius">6</CornerRadius>
     <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <!-- A status dot is round (see Default.xaml). -->
+    <CornerRadius x:Key="DcDotRadius">99</CornerRadius>
     <Thickness x:Key="DcBorderThickness">1</Thickness>
 
     <sys:Double x:Key="DcFocusRadius">8</sys:Double>

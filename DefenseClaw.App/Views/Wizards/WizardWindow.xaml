@@ -47,6 +47,25 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!--
+            The gutter beside a console line: an "!" on a line that came from stderr, so the difference is not the colour alone (a
+            colour-blind reader, a monochrome print, a screenshot). It keeps its width on every other line so the text stays in one
+            column. The row's own automation name is what a screen reader says for a line.
+        -->
+        <Style x:Key="OutputMarker" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
+            <Setter Property="Text" Value="!" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Visibility" Value="Hidden" />
+            <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsError}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="ToolTip" Value="Error output (stderr)" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </ui:FluentWindow.Resources>
 
     <Grid>
@@ -224,9 +243,9 @@
                                                        Text="{Binding CredentialPurpose}" />
 
                                             <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
-                                                <Ellipse Margin="0,0,8,0"
-                                                         Style="{StaticResource DcToneDot}"
-                                                         Tag="{Binding CredentialStatusKey}" />
+                                                <Border Margin="0,0,8,0"
+                                                        Style="{StaticResource DcToneDot}"
+                                                        Tag="{Binding CredentialStatusKey}" />
                                                 <TextBlock Style="{StaticResource DcBody}"
                                                            AutomationProperties.LiveSetting="Polite"
                                                            Text="{Binding CredentialStatus}" />
@@ -436,9 +455,9 @@
                                     <Border Margin="0,0,0,8" Style="{StaticResource DcSubtleRow}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
-                                                <Ellipse Margin="0,0,8,0"
-                                                         Style="{StaticResource DcToneDot}"
-                                                         Tag="{Binding CredentialStatusKey}" />
+                                                <Border Margin="0,0,8,0"
+                                                        Style="{StaticResource DcToneDot}"
+                                                        Tag="{Binding CredentialStatusKey}" />
                                                 <TextBlock Style="{StaticResource DcBody}"
                                                            Text="{Binding CredentialPurpose}" />
                                             </StackPanel>
@@ -477,9 +496,17 @@
                                 <ItemsControl ItemsSource="{Binding Output}" IsTabStop="False">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock Style="{StaticResource OutputLine}"
-                                                       AutomationProperties.Name="{Binding Text}"
-                                                       Text="{Binding Text}" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource OutputLine}"
+                                                           AutomationProperties.Name="{Binding Text}"
+                                                           Text="{Binding Text}" />
+                                                <TextBlock Grid.Column="0" Style="{StaticResource OutputMarker}" />
+                                            </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

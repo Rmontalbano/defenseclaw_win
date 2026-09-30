@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Documents;
+using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views.Panels;
 using Wpf.Ui.Abstractions;
@@ -67,6 +69,9 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// regardless of this flag.
     /// </summary>
     private bool _windowInteractive = true;
+
+    /// <summary>The appearance service whose <see cref="AppearanceService.Changed"/> this catalog listens to (see <see cref="GetPage"/>).</summary>
+    private AppearanceService? _appearance;
 
     public PanelCatalog(AppServices services)
     {
@@ -244,6 +249,7 @@ public sealed class PanelCatalog : INavigationViewPageProvider
         view.DataContext = viewModel;
         _views[pageType] = view;
         _viewModels[pageType] = viewModel;
+        FollowAppearance(view);
 
         // IsVisible flips when the frame attaches or detaches the view AND when the window
         // that hosts it is shown or hidden, so this one handler covers navigation and the
@@ -257,6 +263,53 @@ public sealed class PanelCatalog : INavigationViewPageProvider
 
         _ = InitializeAsync(descriptor, viewModel);
         return view;
+    }
+
+    /// <summary>
+    /// Gives a panel the style's UI font, now and after every later change of style. A window's font is what everything in it
+    /// inherits (AppearanceService puts it there), but the navigation frame hosts a page in a content presenter that does not
+    /// pass the inherited font on, so without this Linear's and TUI's fonts reached the chrome and every separate window and
+    /// never a panel's content. The reference is a live one (<c>DcUiFontFamily</c>), and Default clears it: its panels keep
+    /// what they inherit with nothing set, the system message font, exactly as before there were styles.
+    /// </summary>
+    private void FollowAppearance(FrameworkElement view)
+    {
+        var current = AppearanceService.Current;
+        if (!ReferenceEquals(current, _appearance))
+        {
+            if (_appearance is not null)
+            {
+                _appearance.Changed -= OnAppearanceChanged;
+            }
+
+            _appearance = current;
+            if (current is not null)
+            {
+                current.Changed += OnAppearanceChanged;
+            }
+        }
+
+        ApplyFont(view);
+    }
+
+    private void OnAppearanceChanged(object? sender, EventArgs e)
+    {
+        foreach (var view in _views.Values)
+        {
+            ApplyFont(view);
+        }
+    }
+
+    private void ApplyFont(FrameworkElement view)
+    {
+        if (_appearance is { EffectiveStyle: not AppearanceStyle.Default })
+        {
+            view.SetResourceReference(TextElement.FontFamilyProperty, AppearanceTokens.UiFontFamily);
+        }
+        else
+        {
+            view.ClearValue(TextElement.FontFamilyProperty);
+        }
     }
 
     private async Task InitializeAsync(PanelDescriptor descriptor, PanelViewModelBase viewModel)

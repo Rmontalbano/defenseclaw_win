@@ -153,6 +153,14 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}"
                                                                      Gap="8" />
+                                                <!-- The severity as a word: the bar, the glyph and the badge's colour are not enough on their own (and
+                                                     Default draws no glyph). -->
+                                                <Border Style="{StaticResource DcBadge}"
+                                                        Margin="0,0,8,0"
+                                                        VerticalAlignment="Center"
+                                                        Tag="{Binding SeverityKey}">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SeverityKey}" />
+                                                </Border>
                                                 <TextBlock Style="{StaticResource DcBody}"
                                                            FontWeight="SemiBold"
                                                            Text="{Binding Title}" />

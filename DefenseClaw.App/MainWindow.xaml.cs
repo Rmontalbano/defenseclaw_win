@@ -283,7 +283,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// Window width (DIPs) below which the version chip steps aside in the status strip. Measured, not
     /// guessed: the chip (with its 8 px gap) costs ~120 DIPs, and the detail sentence next to the state pill
     /// needs ~220 to show in full ("Gateway responding on 127.0.0.1:18970."), so it fits from about 1000 up;
-    /// 1040 leaves the sentence a little air.
+    /// 1040 leaves the sentence a little air. Those numbers are for the system font: see <see cref="DetailSentenceExtra"/>.
     /// </summary>
     private const double VersionChipMinWidth = 1040;
 
@@ -294,12 +294,17 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// </summary>
     private const double ConnectorChipMinWidth = 900;
 
+    /// <summary>The healthy detail sentence: the line the strip shows most of the time, and the one the thresholds above were measured for.</summary>
+    private const string DetailReferenceSentence = "Gateway responding on 127.0.0.1:18970.";
+
     /// <summary>
     /// Drops the supporting chips from the status strip as the window narrows — version first, then
     /// connector — so the state pill, the alert chip and the actions never clip at the 940 DIP minimum.
     /// Both facts stay available elsewhere (tray flyout, Overview), so hiding them loses nothing. The width
     /// is in DIPs: a 940 DIP window is 2115 px on a 225 % display, which is what a screenshot of the minimum
-    /// size shows.
+    /// size shows. The thresholds were measured in Segoe UI; a style with a wider UI font (TUI's monospace)
+    /// raises them by what the sentence gains in width, so the sentence is not the thing that gives way.
+    /// It runs on every resize and on every appearance change (a new font is a new width).
     /// </summary>
     private void UpdateStripDensity()
     {
@@ -309,8 +314,39 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             return;
         }
 
-        VersionSlot.Visibility = width >= VersionChipMinWidth ? Visibility.Visible : Visibility.Collapsed;
-        ConnectorSlot.Visibility = width >= ConnectorChipMinWidth ? Visibility.Visible : Visibility.Collapsed;
+        var extra = DetailSentenceExtra(FontFamily);
+        VersionSlot.Visibility = ShowsVersionChip(width, extra) ? Visibility.Visible : Visibility.Collapsed;
+        ConnectorSlot.Visibility = ShowsConnectorChip(width, extra) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Whether the version chip fits at <paramref name="width"/> DIPs, given the extra room the sentence needs (<see cref="DetailSentenceExtra"/>).</summary>
+    internal static bool ShowsVersionChip(double width, double detailExtra) => width >= VersionChipMinWidth + detailExtra;
+
+    /// <summary>Whether the connector chip fits at <paramref name="width"/> DIPs, given the extra room the sentence needs.</summary>
+    internal static bool ShowsConnectorChip(double width, double detailExtra) => width >= ConnectorChipMinWidth + detailExtra;
+
+    /// <summary>
+    /// How much wider the strip's detail sentence is in <paramref name="uiFont"/> than in the system font the thresholds were
+    /// measured in, in DIPs (never negative). Measured with a text block in the caption style, which is what the strip draws it in,
+    /// so it is the real width for whatever font and size the style gives it, and zero under Default, which keeps the system font.
+    /// </summary>
+    internal static double DetailSentenceExtra(FontFamily uiFont)
+    {
+        double WidthIn(FontFamily family)
+        {
+            var probe = new System.Windows.Controls.TextBlock { Text = DetailReferenceSentence };
+            if (Application.Current?.TryFindResource("DcCaption") is Style caption)
+            {
+                probe.Style = caption;
+            }
+
+            probe.TextWrapping = TextWrapping.NoWrap;
+            probe.FontFamily = family;
+            probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return probe.DesiredSize.Width;
+        }
+
+        return Math.Max(0, WidthIn(uiFont) - WidthIn(SystemFonts.MessageFontFamily));
     }
 
     /// <summary>Brings the window back from the tray. Used by the tray and by a second launch.</summary>
@@ -773,7 +809,13 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         UpdateThemeToggle();
     }
 
-    private void OnAppearanceChangedUpdateThemeToggle(object? sender, EventArgs e) => UpdateThemeToggle();
+    // Named (not a lambda) so a half-built window can unsubscribe it; the strip's density thresholds depend on the
+    // active UI font, so a style switch re-measures them too.
+    private void OnAppearanceChangedUpdateThemeToggle(object? sender, EventArgs e)
+    {
+        UpdateThemeToggle();
+        UpdateStripDensity();
+    }
 
     /// <summary>The toggle shows where a click goes: a sun while dark (to light), a moon while light (to dark).</summary>
     private void UpdateThemeToggle()
