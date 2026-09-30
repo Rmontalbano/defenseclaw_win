@@ -115,6 +115,76 @@ public sealed class UpdateChecker : IDisposable
 
     public static readonly TimeSpan CacheLifetime = TimeSpan.FromHours(24);
 
+    /// <summary>
+    /// How far ahead of this machine's clock a cache entry's <c>FetchedAt</c> may be before the entry is not trusted.
+    /// A <c>FetchedAt</c> in the future makes "now minus fetched" negative, which is always inside
+    /// <see cref="CacheLifetime"/>: such an entry would be served as fresh forever.
+    /// </summary>
+    public static readonly TimeSpan CacheClockSkew = TimeSpan.FromMinutes(5);
+
+    /// <summary>The only place a release link may point: this repository, on github.com, over https.</summary>
+    public static string RepoUrlPrefix => $"https://github.com/{RepoOwner}/{RepoName}/";
+
+    /// <summary>
+    /// The normalised form of <paramref name="url"/> when it is an https link into this repository
+    /// (<see cref="RepoUrlPrefix"/>), otherwise <c>null</c>. Release links come from GitHub's JSON or from the
+    /// cache file on disk, and are then opened with the shell, pasted into copyable commands and, for the sidecar
+    /// files, fetched: none of that should follow a link that names another scheme (<c>file:</c>, <c>ms-…:</c>),
+    /// another host or another repository. Checked on the parsed address rather than the text, so dot segments,
+    /// user-info tricks (<c>https://github.com@evil.example/…</c>) and a non-default port cannot pass a prefix test.
+    /// </summary>
+    public static string? TrustedRepoUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url.Length > 2048 ||
+            !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttps ||
+            !uri.IsDefaultPort ||
+            uri.UserInfo.Length > 0 ||
+            !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase) ||
+            !uri.AbsolutePath.StartsWith($"/{RepoOwner}/{RepoName}/", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        // A dot segment, spelled out or percent-encoded (%2e%2e), would be resolved by whatever opens the link — a
+        // browser reads %2e as a dot — to a path outside the repository that the prefix test above never saw.
+        foreach (var segment in uri.AbsolutePath.Split('/'))
+        {
+            if (Uri.UnescapeDataString(segment) is "." or "..")
+            {
+                return null;
+            }
+        }
+
+        return uri.AbsoluteUri;
+    }
+
+    /// <summary>
+    /// <paramref name="value"/> as a PowerShell single-quoted string, quotes included: nothing inside single quotes is
+    /// expanded, so a <c>$(…)</c>, a backtick or a <c>"</c> in a URL is text, not code. The single quote itself is
+    /// doubled — and so are the four typographic single quotes, which PowerShell also treats as quote characters.
+    /// </summary>
+    internal static string PowerShellSingleQuoted(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var builder = new System.Text.StringBuilder(value.Length + 4).Append('\'');
+        foreach (var c in value)
+        {
+            builder.Append(c);
+            if (c is '\'' or '‘' or '’' or '‚' or '‛')
+            {
+                builder.Append(c);
+            }
+        }
+
+        return builder.Append('\'').ToString();
+    }
+
     private static readonly Regex VersionPattern =
         new(@"\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.]+)?", RegexOptions.Compiled);
 
@@ -228,6 +298,28 @@ public sealed class UpdateChecker : IDisposable
     {
         var (state, detail) = Compare(installedVersion, release.TagName);
 
+        // Every link is re-checked on its way out, whether the release came from GitHub just now or from the cache file:
+        // one that is not in this repository is dropped (the page cannot be opened, the asset cannot be downloaded)
+        // and the detail line says so, rather than the window quietly working from an address nobody vetted.
+        var htmlUrl = TrustedRepoUrl(release.HtmlUrl);
+        var dropped = release.HtmlUrl is { Length: > 0 } && htmlUrl is null ? 1 : 0;
+        var assets = new List<ReleaseAsset>();
+        foreach (var asset in release.Assets ?? Array.Empty<ReleaseAsset>())
+        {
+            var downloadUrl = TrustedRepoUrl(asset.DownloadUrl);
+            if (asset.DownloadUrl is { Length: > 0 } && downloadUrl is null)
+            {
+                dropped++;
+            }
+
+            assets.Add(asset with { DownloadUrl = downloadUrl });
+        }
+
+        if (dropped > 0)
+        {
+            detail += $" {dropped} release link{(dropped == 1 ? " was" : "s were")} not on {RepoUrlPrefix} and {(dropped == 1 ? "was" : "were")} ignored.";
+        }
+
         return new UpdateCheckResult
         {
             State = state,
@@ -235,8 +327,8 @@ public sealed class UpdateChecker : IDisposable
             LatestVersion = release.TagName,
             ReleaseName = release.Name,
             PublishedAt = release.PublishedAt,
-            HtmlUrl = release.HtmlUrl,
-            Assets = release.Assets,
+            HtmlUrl = htmlUrl,
+            Assets = assets,
             IsRateLimited = isRateLimited,
             ErrorMessage = state == UpdateCheckState.CheckFailed ? (fetchError ?? detail) : fetchError,
             Detail = detail,
@@ -565,7 +657,10 @@ public sealed class UpdateChecker : IDisposable
             }
 
             var json = File.ReadAllText(_cacheFilePath);
-            return JsonSerializer.Deserialize<CachedRelease>(json, JsonOptions);
+            var cached = JsonSerializer.Deserialize<CachedRelease>(json, JsonOptions);
+
+            // Not "fresh forever": see CacheClockSkew. Ignored altogether, so it is not even a stale fallback.
+            return cached is not null && cached.FetchedAt > DateTimeOffset.UtcNow + CacheClockSkew ? null : cached;
         }
         catch (IOException)
         {

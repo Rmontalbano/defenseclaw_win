@@ -888,6 +888,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 ? new[] { CommandReviewWarning.GatewayRestart(restartWarning) }
                 : Array.Empty<CommandReviewWarning>(),
         };
+        review = SecretFieldWarnings.AppendTo(review, new[] { WizardReview.SecretValueWarning(argv) });
         CommandReview = review;
         IsDestructive = review.IsDestructive;
 

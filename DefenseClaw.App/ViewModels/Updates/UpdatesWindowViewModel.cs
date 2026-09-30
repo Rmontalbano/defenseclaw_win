@@ -156,7 +156,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         "(config, audit, inventory, token) — verified live on a 0.8.7 -> 0.8.10 upgrade. Backing that directory " +
         "up first is still cheap insurance; the installer keeps no journal and rolls nothing back.";
 
-    private bool CanOpenReleasePage => !string.IsNullOrEmpty(HtmlUrl);
+    private bool CanOpenReleasePage => UpdateChecker.TrustedRepoUrl(HtmlUrl) is not null;
 
     /// <summary>Runs the first check. Called by the window right after construction.</summary>
     public Task InitializeAsync() => RunCheckAsync(forceRefresh: false);
@@ -167,14 +167,16 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     [RelayCommand(CanExecute = nameof(CanOpenReleasePage))]
     private void OpenReleasePage()
     {
-        if (string.IsNullOrEmpty(HtmlUrl))
+        // The link came from GitHub's JSON or the cache file, and UseShellExecute hands whatever it is to the shell:
+        // only an https link into this repository is ever opened, and it is the parsed, normalised form that is.
+        if (UpdateChecker.TrustedRepoUrl(HtmlUrl) is not { } url)
         {
             return;
         }
 
         try
         {
-            Process.Start(new ProcessStartInfo(HtmlUrl) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -306,26 +308,39 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         var setupAsset = result.Assets.FirstOrDefault(a =>
             string.Equals(a.Name, UpgradeRunner.InstallerAssetName, StringComparison.OrdinalIgnoreCase));
         HasSetupAsset = setupAsset is not null;
-        SetupCommandText = setupAsset is { DownloadUrl.Length: > 0 }
-            ? $"curl.exe -LO \"{setupAsset.DownloadUrl}\"\n" +
-              $".\\{UpgradeRunner.InstallerAssetName} {string.Join(' ', UpgradeRunner.BuildInstallerArgv())}"
-            : "No Setup exe asset was found on this release.";
+        SetupCommandText = BuildSetupCommand(setupAsset);
 
         // Demoted, and labelled: the resolver is still the documented channel upstream, so it stays
         // copyable — but it is not the one to reach for on this layout.
         var scriptAsset = result.Assets.FirstOrDefault(a =>
             string.Equals(a.Name, UpgradeRunner.ScriptAssetName, StringComparison.OrdinalIgnoreCase));
         HasUpgradeScriptAsset = scriptAsset is not null;
-        UpgradeScriptCommandText = scriptAsset is { DownloadUrl.Length: > 0 }
-            ? $"Invoke-WebRequest -Uri \"{scriptAsset.DownloadUrl}\" -OutFile {UpgradeRunner.ScriptAssetName}; " +
-              $".\\{UpgradeRunner.ScriptAssetName}\n" +
-              "# (known broken on Setup-based installs — see the upgrade section)"
-            : "No defenseclaw-upgrade.ps1 asset was found on this release.";
+        UpgradeScriptCommandText = BuildUpgradeScriptCommand(scriptAsset);
 
         Upgrade.ApplyCheck(result);
 
         OpenReleasePageCommand.NotifyCanExecuteChanged();
     }
+
+    /// <summary>
+    /// The copyable two-line Setup upgrade: download the exe, run it with the flags that were live-verified.
+    /// The URL is single-quoted, because inside double quotes PowerShell expands <c>$(…)</c> and backticks, so a link
+    /// that was anything but plain text would run when the operator pasted the command; and only a link into this
+    /// repository is offered at all (<see cref="UpdateChecker.TrustedRepoUrl"/>).
+    /// </summary>
+    internal static string BuildSetupCommand(ReleaseAsset? setupAsset) =>
+        UpdateChecker.TrustedRepoUrl(setupAsset?.DownloadUrl) is { } url
+            ? $"curl.exe -LO {UpdateChecker.PowerShellSingleQuoted(url)}\n" +
+              $".\\{UpgradeRunner.InstallerAssetName} {string.Join(' ', UpgradeRunner.BuildInstallerArgv())}"
+            : "No Setup exe asset was found on this release.";
+
+    /// <summary>The copyable resolver-script command, quoted and restricted like <see cref="BuildSetupCommand"/>.</summary>
+    internal static string BuildUpgradeScriptCommand(ReleaseAsset? scriptAsset) =>
+        UpdateChecker.TrustedRepoUrl(scriptAsset?.DownloadUrl) is { } url
+            ? $"Invoke-WebRequest -Uri {UpdateChecker.PowerShellSingleQuoted(url)} -OutFile {UpgradeRunner.ScriptAssetName}; " +
+              $".\\{UpgradeRunner.ScriptAssetName}\n" +
+              "# (known broken on Setup-based installs — see the upgrade section)"
+            : "No defenseclaw-upgrade.ps1 asset was found on this release.";
 
     private void ApplyProvenance(ProvenanceReport report)
     {

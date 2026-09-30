@@ -29,4 +29,17 @@ public static class WizardReview
         return CommandReview.RestartNotice +
                (offersToggle ? " Choose \"Disable (--no-restart)\" for Restart on the last page to skip the restart." : string.Empty);
     }
+
+    /// <summary>
+    /// The bar shown when a value typed into an ordinary field — a URL that is itself the credential, such as a Slack
+    /// webhook, or one that embeds <c>user:password@</c> — is about to go on the command line; null when none does.
+    /// Fields that <i>are</i> secrets (<see cref="WizardFieldKind.Secret"/>) never reach argv and are not judged here.
+    /// The wizard's commands have no option that reads such a value from the environment, hence the advice.
+    /// </summary>
+    public static CommandReviewWarning? SecretValueWarning(IReadOnlyList<string> argv) =>
+        SecretFieldWarnings.ForArgv(
+            argv,
+            "This command has no option to read it from an environment variable, so it has to go on the command line. If that " +
+            "matters, enter a placeholder here and set the real value in config.yaml afterwards (Config editor), where it " +
+            "stays off the command line.");
 }

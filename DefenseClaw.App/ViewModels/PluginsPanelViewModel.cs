@@ -1,4 +1,6 @@
+using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
@@ -29,6 +31,14 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
     {
         "marketplaces", "cache", "known_marketplaces.json.lock",
     };
+
+    /// <summary>
+    /// What the CLI treats as a registry package: an optional <c>@scope/</c>, a name and an optional <c>@version</c> or
+    /// tag. <c>detect_source</c> in 0.8.10 falls through to the npm registry for anything that is not a URL or a folder.
+    /// </summary>
+    private static readonly Regex RegistryNamePattern = new(
+        @"^(?:@[A-Za-z0-9][A-Za-z0-9._~-]*/)?[A-Za-z0-9][A-Za-z0-9._~-]*(?:@[^\s@/\\]+)?$",
+        RegexOptions.CultureInvariant);
 
     [ObservableProperty] private bool _isInstallFormOpen;
     [ObservableProperty] private string _installNameOrPath = string.Empty;
@@ -200,6 +210,12 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
             return;
         }
 
+        if (InstallTargetProblem(target) is { } problem)
+        {
+            InstallFormError = problem;
+            return;
+        }
+
         InstallFormError = string.Empty;
 
         var options = new List<string>();
@@ -242,5 +258,48 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
             MinimumTier = InstallForce ? CommandTier.Destructive : null,
             OnSuccess = () => IsInstallFormOpen = false,
         });
+
+        // 'plugin install <url>' fetches the address itself and offers no option to take a credential from anywhere else
+        // (0.8.10 registry.fetch_from_url); the CLI also records the source in its own log.
+        if (ConfirmReview is { } review)
+        {
+            ConfirmReview = SecretFieldWarnings.AppendTo(review, new[]
+            {
+                SecretFieldWarnings.For(
+                    "The install source",
+                    target,
+                    "'plugin install' has no option to read it from elsewhere, and the CLI also records the install source in its own " +
+                    "log. Download and extract the archive yourself, then install from the folder (an absolute path) instead."),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Why <paramref name="target"/> cannot be handed to <c>plugin install</c> as typed, or null when it can. The CLI
+    /// sorts a target by its spelling: <c>clawhub://…</c> and <c>http(s)://…</c> are fetched, a folder is copied, and
+    /// anything else is looked up in the npm registry. A folder given as a relative path is resolved against the
+    /// directory the CLI runs in — DefenseClaw's own data directory, not anywhere the operator is thinking of — so only
+    /// a fully qualified path (<c>C:\…</c>, <c>\\server\share\…</c>) is accepted for a local install.
+    /// </summary>
+    internal static string? InstallTargetProblem(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        // The CLI's own tests, in its own order and case: a scheme spelled HTTPS:// is not a URL to it.
+        if (target.StartsWith("clawhub://", StringComparison.Ordinal) ||
+            target.StartsWith("http://", StringComparison.Ordinal) ||
+            target.StartsWith("https://", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (Path.IsPathFullyQualified(target) || RegistryNamePattern.IsMatch(target))
+        {
+            return null;
+        }
+
+        return "That is not an absolute folder path, a registry package name, a clawhub:// URI or an http(s):// URL. " +
+               "A relative folder would be resolved against DefenseClaw's own working directory, not the one you are " +
+               "thinking of: enter the full path, for example C:\\plugins\\my-plugin.";
     }
 }

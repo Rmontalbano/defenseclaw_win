@@ -438,11 +438,13 @@ public sealed class GovernPanelArgvTests : IDisposable
     public void Installing_a_plugin_without_force_is_a_state_change_and_without_a_toolbar_scope_targets_every_connector()
     {
         var vm = new PluginsPanelViewModel(_services);
-        vm.InstallNameOrPath = "./local-plugin";
+
+        // A local folder must be absolute: the CLI would resolve a relative one against its own working directory.
+        vm.InstallNameOrPath = "C:\\plugins\\local-plugin";
 
         vm.SubmitInstallFormCommand.Execute(null);
 
-        Assert.Equal("defenseclaw plugin install -- ./local-plugin", vm.ConfirmCommandText);
+        Assert.Equal(new[] { "plugin", "install", "--", "C:\\plugins\\local-plugin" }, vm.ConfirmReview!.Steps.Single().Argv);
         Assert.False(vm.IsConfirmDestructive);
         Assert.Contains("ALL configured connectors", vm.ConfirmHeading, StringComparison.Ordinal);
     }

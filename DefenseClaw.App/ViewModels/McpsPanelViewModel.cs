@@ -206,7 +206,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
             return;
         }
 
-        if (!TryBuildArgs(out var argsJson, out var argsError))
+        if (!TryBuildArgs(out var argsJson, out var argParts, out var argsError))
         {
             SetFormError = argsError;
             return;
@@ -286,15 +286,42 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
             SuccessMessage = $"Saved “{name}”.",
             OnSuccess = () => IsSetFormOpen = false,
         });
+
+        // 'mcp set' (0.8.10) takes --env, --url and --args only on its command line and writes them, as typed, into the
+        // connector's MCP config: there is no option to read a value from somewhere else, so the only advice is to keep
+        // the secret out of the command.
+        if (ConfirmReview is { } review)
+        {
+            ConfirmReview = SecretFieldWarnings.AppendTo(review, new[]
+            {
+                SecretFieldWarnings.ForParts("An environment value", "Environment values", envPairs, EnvSecretAdvice),
+                SecretFieldWarnings.For("The URL", url, UrlSecretAdvice),
+                SecretFieldWarnings.ForParts("An argument", "Arguments", argParts, ArgsSecretAdvice),
+            });
+        }
     }
+
+    private const string EnvSecretAdvice =
+        "'mcp set' has no other way to take it and stores it as plain text in the connector's MCP config. Leave the value out " +
+        "and set the variable in the environment the connector starts the server from (for example a Windows user " +
+        "environment variable), or enter a reference to a variable instead of the value.";
+
+    private const string UrlSecretAdvice =
+        "'mcp set' has no other way to take it and stores the URL as typed in the connector's MCP config. Prefer an address " +
+        "without the credential in it, or a server that reads its token from its own environment.";
+
+    private const string ArgsSecretAdvice =
+        "'mcp set' has no other way to take it and stores the arguments as typed in the connector's MCP config. Prefer a server " +
+        "that reads the value from an environment variable it already has.";
 
     /// <summary>
     /// One argument per line becomes a JSON array (<c>--args</c> accepts a JSON array or a comma list; the array
     /// keeps commas inside an argument intact). A single line that is already a JSON array is validated and passed as is.
     /// </summary>
-    private bool TryBuildArgs(out string? argsJson, out string error)
+    private bool TryBuildArgs(out string? argsJson, out IReadOnlyList<string> parts, out string error)
     {
         argsJson = null;
+        parts = Array.Empty<string>();
         error = string.Empty;
 
         var lines = SetArgs.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -315,6 +342,12 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
                 }
 
                 argsJson = lines[0];
+
+                // The elements, so a secret is judged as the CLI will see it and not through the JSON quoting.
+                parts = document.RootElement.EnumerateArray()
+                    .Where(e => e.ValueKind == JsonValueKind.String)
+                    .Select(e => e.GetString() ?? string.Empty)
+                    .ToArray();
                 return true;
             }
             catch (JsonException)
@@ -325,6 +358,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         }
 
         argsJson = JsonSerializer.Serialize(lines, ArgsJson);
+        parts = lines;
         return true;
     }
 

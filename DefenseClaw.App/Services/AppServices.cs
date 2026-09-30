@@ -11,6 +11,7 @@ using DefenseClaw.Core.Inventory;
 using DefenseClaw.Core.Logs;
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Core.Security;
 
 namespace DefenseClaw.App.Services;
 
@@ -110,6 +111,7 @@ public sealed class AppServices : IDisposable
         // The token must be registered before anything can shell out: CliRunner then
         // refuses to place it in argv and scrubs it out of any captured output.
         RegisterTokenWithCli();
+        RegisterConfiguredSecretsWithCli();
 
         ConfigWatcher = new ConfigChangeToken(Paths);
         ConfigWatcher.Changed += OnConfigChanged;
@@ -408,6 +410,9 @@ public sealed class AppServices : IDisposable
             Trace.TraceError($"could not register the reloaded token with the CLI runner: {ex}");
         }
 
+        // .env or a *_env key may have changed along with the config.
+        RegisterConfiguredSecretsWithCli();
+
         RaiseConfigReloaded();
     }
 
@@ -547,6 +552,53 @@ public sealed class AppServices : IDisposable
         }
 
         Cli.RegisterSecret(token);
+    }
+
+    // ---- Other configured secrets (CUST-197 / D3-04) ---------------------------------------------------------
+
+    /// <summary>The secrets from <see cref="RegisterConfiguredSecretsWithCli"/> the runner already knows, so a reload adds only what is new.</summary>
+    private readonly List<SecretValue> _registeredConfiguredSecrets = new();
+
+    /// <summary>
+    /// Hands the runner every other secret DefenseClaw is configured with — the secret-shaped values in
+    /// <c>~/.defenseclaw/.env</c> and the variables named by config <c>*_env</c> keys (see
+    /// <see cref="ConfiguredSecrets"/>) — so it refuses them on a command line and masks them in captured
+    /// output, as it already does for the gateway token. Read-only: the file is read, never written, and no value is
+    /// traced. Additive and idempotent per distinct value, like <see cref="RegisterTokenWithCli"/>; a value that was
+    /// rotated away stays registered for the life of the process, which only ever costs an extra refusal.
+    /// <para>Never throws: it runs at startup and on the watcher thread, and a secret it could not register is no
+    /// worse than one it was never asked about.</para>
+    /// </summary>
+    private void RegisterConfiguredSecretsWithCli()
+    {
+        try
+        {
+            var secrets = ConfiguredSecrets.Collect(
+                Config.RawText,
+                DotEnvFile.Load(Paths.EnvFilePath),
+                ProcessEnvironmentReader.Instance);
+
+            foreach (var secret in secrets)
+            {
+                lock (_gate)
+                {
+                    if (_registeredConfiguredSecrets.Contains(secret))
+                    {
+                        continue;
+                    }
+
+                    _registeredConfiguredSecrets.Add(secret);
+                }
+
+                Cli.RegisterSecret(secret);
+            }
+        }
+#pragma warning disable CA1031 // Startup and the watcher thread have nothing above this to catch; see the method doc.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceError($"could not register the configured secrets with the CLI runner: {ex.GetType().Name}");
+        }
     }
 
     /// <summary>A parsed config, the token resolved from it, and the load error to surface (if any).</summary>

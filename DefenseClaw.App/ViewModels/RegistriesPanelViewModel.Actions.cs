@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Security;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -17,6 +18,10 @@ public sealed partial class RegistriesPanelViewModel
 {
     private static readonly Regex EnvNamePattern = new("^[A-Z_][A-Z0-9_]{0,63}$", RegexOptions.Compiled);
 
+    /// <summary>
+    /// A credential in an address, however short: kept alongside <see cref="SecretHeuristics"/>, which needs a value of
+    /// some length to call a named parameter a secret and knows the token shapes and webhook URLs this does not.
+    /// </summary>
     private static readonly Regex SecretInUrlPattern = new(
         @"://[^/\s:@]+:[^/\s@]+@|[?&](token|key|secret|password|pwd|apikey|api_key|access_token|auth)=",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -190,9 +195,13 @@ public sealed partial class RegistriesPanelViewModel
 
         if (url.Length > 0)
         {
-            if (SecretInUrlPattern.IsMatch(url))
+            // Refused outright rather than warned about: `registry add` has a route that keeps the credential off the
+            // command line (--auth-env, the variable's NAME), so there is no reason to go on with it here.
+            var kind = SecretHeuristics.Explain(url);
+            if (kind is not null || SecretInUrlPattern.IsMatch(url))
             {
-                return "That address looks like it carries a credential (user:password@ or a token in the query string). " +
+                return "That address looks like it carries a credential" +
+                    (kind is null ? " (user:password@ or a token in the query string). " : $" ({kind}). ") +
                     "Put the token in an environment variable and enter that variable's name below instead.";
             }
 
