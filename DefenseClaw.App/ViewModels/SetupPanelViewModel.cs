@@ -9,6 +9,22 @@ using DefenseClaw.Core.Cli;
 
 namespace DefenseClaw.App.ViewModels;
 
+/// <summary>Why the Setup hub's card grid shows nothing (see <see cref="SetupPanelViewModel.EmptyState"/>).</summary>
+public enum SetupEmptyState
+{
+    /// <summary>Cards are shown, or the catalog is still being read.</summary>
+    None,
+
+    /// <summary>The CLI's setup help could not be read.</summary>
+    LoadFailed,
+
+    /// <summary>The CLI answered and listed no setup targets.</summary>
+    NoTargets,
+
+    /// <summary>There are targets and the search or the certification filter hides all of them.</summary>
+    NoMatch,
+}
+
 /// <summary>
 /// The Setup hub: every <c>defenseclaw setup</c> flow the installed CLI exposes, as a
 /// searchable card grid, the connector roster the wizards act on, and the guardrail quick controls.
@@ -68,8 +84,25 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _hasLoadError;
 
+    /// <summary>
+    /// Why the card grid is empty, when it is: three different situations that used to share one "No wizards match"
+    /// message. Exactly one of <see cref="ShowLoadFailed"/>, <see cref="ShowNoTargets"/> and <see cref="ShowNoMatch"/>
+    /// holds while it is not <see cref="SetupEmptyState.None"/>.
+    /// </summary>
     [ObservableProperty]
-    private bool _isEmpty;
+    [NotifyPropertyChangedFor(nameof(ShowLoadFailed))]
+    [NotifyPropertyChangedFor(nameof(ShowNoTargets))]
+    [NotifyPropertyChangedFor(nameof(ShowNoMatch))]
+    private SetupEmptyState _emptyState;
+
+    /// <summary>The CLI did not answer the setup help: there is no catalog, and the search has nothing to do with it.</summary>
+    public bool ShowLoadFailed => EmptyState == SetupEmptyState.LoadFailed;
+
+    /// <summary>The CLI answered and listed no setup targets.</summary>
+    public bool ShowNoTargets => EmptyState == SetupEmptyState.NoTargets;
+
+    /// <summary>The catalog has targets and the search or the certification filter hides every one.</summary>
+    public bool ShowNoMatch => EmptyState == SetupEmptyState.NoMatch;
 
     [ObservableProperty]
     private string _connectorNote = string.Empty;
@@ -246,6 +279,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
         IsLoading = true;
         StatusNote = "Re-reading the setup catalog from the CLI…";
+        EmptyState = SetupEmptyState.None;
         Groups.Clear();
         _all.Clear();
 
@@ -386,14 +420,42 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
             Groups.Add(new WizardGroupViewModel(group.Key, group.OrderBy(c => c.Title, StringComparer.CurrentCultureIgnoreCase)));
         }
 
-        IsEmpty = matching.Count == 0 && !IsLoading;
+        EmptyState = ClassifyEmpty(IsLoading, HasLoadError, _all.Count, matching.Count);
         UpdateStatusNote();
+    }
+
+    /// <summary>
+    /// Which empty state the grid is in. The order is the point: a failed read leaves no cards, and "the search hides
+    /// everything" is only true when there is something to hide.
+    /// </summary>
+    internal static SetupEmptyState ClassifyEmpty(bool isLoading, bool hasLoadError, int knownTargets, int shownTargets)
+    {
+        if (isLoading || shownTargets > 0)
+        {
+            return SetupEmptyState.None;
+        }
+
+        if (knownTargets > 0)
+        {
+            return SetupEmptyState.NoMatch;
+        }
+
+        return hasLoadError ? SetupEmptyState.LoadFailed : SetupEmptyState.NoTargets;
     }
 
     private void UpdateStatusNote()
     {
         if (IsLoading)
         {
+            return;
+        }
+
+        // Nothing to count: "0 of 0 setup targets shown" reads as a filter result, and it is not one.
+        if (_all.Count == 0)
+        {
+            StatusNote = HasLoadError
+                ? "The setup catalog could not be read."
+                : "The CLI listed no setup targets.";
             return;
         }
 

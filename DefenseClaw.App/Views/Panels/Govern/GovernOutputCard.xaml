@@ -5,11 +5,13 @@
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              IsTabStop="False">
     <!--
-        Result of a read-only row command (skill info, plugin info, tool status), shown inline so the
-        operator keeps their place in the list. DataContext = a GovernPanelViewModelBase. Esc closes it.
+        Result of a read-only row command (skill info, plugin info, tool status). It sits under the list, as the last
+        thing on the page, and scrolls itself into view when it opens (see the code-behind): above the list it took up to
+        ~370 DIPs of a page that has ~400, and left the list nothing. DataContext = a GovernPanelViewModelBase. Esc closes it.
     -->
-    <Border Style="{StaticResource DcCard}"
-            Margin="{StaticResource DcCardGap}"
+    <Border x:Name="Card"
+            Style="{StaticResource DcCard}"
+            Margin="0,12,0,12"
             AutomationProperties.Name="Command result"
             Visibility="{Binding IsOutputOpen, Converter={StaticResource BoolToVisibility}}">
         <Grid>

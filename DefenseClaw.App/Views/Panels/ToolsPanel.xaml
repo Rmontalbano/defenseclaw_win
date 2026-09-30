@@ -4,6 +4,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -15,13 +16,18 @@
         Each row is one rule; its scope (connector, every connector, or audit-only source) decides which
         flag its actions use. "Manage a tool by name" covers a tool that has no rule yet.
         Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the dialog / result card / clears the filter.
+
+        Layout. Everything under the header is one scrolling page (PageScroll): the toolbar, the "Manage a tool by name"
+        card, the banners and the list together are taller than the page is at the window's 940 x 620 DIP minimum (and far
+        taller with the shell's gateway banner open), and they used to share it, so the list kept whatever the fixed rows
+        above it left over - as little as 11 DIPs. Now the list is the last thing on the page with a height of its own: the
+        rest of the viewport under the chrome, and never less than 250 DIPs (FillHeightConverter). A ScrollViewer measures
+        its content with unlimited height, and a virtualizing list measured that way realizes every row, so the list keeps
+        a definite height and its own scroller. The manage card is an expander (closed, unless there are no rules yet); the
+        result card of a read-only command sits under the list and is scrolled into view when it opens.
     -->
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -54,209 +60,216 @@
             </StackPanel>
         </HeaderedContentControl>
 
-        <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
-            <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                <ui:TextBox x:Name="FilterBox"
-                            Width="240"
-                            PlaceholderText="Filter tool rules (Ctrl+F)"
-                            Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                            AutomationProperties.Name="Filter tool rules"
-                            AutomationProperties.HelpText="Matches tool name, connector, reason and state. Escape clears it." />
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
-                    <ComboBox Width="140"
-                              ItemsSource="{Binding StatusFilters}"
-                              SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
-                              AutomationProperties.Name="Show tool rules in state" />
+        <ScrollViewer x:Name="PageScroll"
+                      Grid.Row="1"
+                      Style="{StaticResource DcPageScroll}"
+                      Focusable="False"
+                      AutomationProperties.Name="Tool rules page">
+            <StackPanel x:Name="PageContent">
+                <!-- Toolbar, the manage card, banners and the caption: what the list's height is worked out from. -->
+                <StackPanel x:Name="Chrome">
+                    <!-- Toolbar -->
+                    <Border Style="{StaticResource DcToolbar}">
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                            <ui:TextBox x:Name="FilterBox"
+                                        Width="240"
+                                        PlaceholderText="Filter tool rules (Ctrl+F)"
+                                        Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                                        AutomationProperties.Name="Filter tool rules"
+                                        AutomationProperties.HelpText="Matches tool name, connector, reason and state. Escape clears it." />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
+                                <ComboBox Width="140"
+                                          ItemsSource="{Binding StatusFilters}"
+                                          SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
+                                          AutomationProperties.Name="Show tool rules in state" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
+                                <ComboBox MinWidth="200"
+                                          ItemsSource="{Binding Connectors}"
+                                          SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                                          AutomationProperties.Name="Connector scope"
+                                          AutomationProperties.HelpText="Which connector's rules to list (plus the rules that apply to every connector), and the scope of Manage a tool by name. All configured connectors means the fallback rule." />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
+                                <ui:TextBox MinWidth="180"
+                                            Width="220"
+                                            PlaceholderText="Recorded with the action"
+                                            Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            AutomationProperties.Name="Reason"
+                                            AutomationProperties.HelpText="Sent as --reason with block and allow." />
+                            </StackPanel>
+                        </WrapPanel>
+                    </Border>
+
+                    <!--
+                        Manage a tool by name. Closed to one line, so the list keeps the page; it opens by itself when there
+                        are no rules yet (the one moment it is the way forward), and stays as the operator leaves it after that.
+                    -->
+                    <ui:CardExpander Margin="{StaticResource DcCardGap}"
+                                     IsExpanded="{Binding ShowEmpty, Mode=OneWay}"
+                                     AutomationProperties.Name="Manage a tool by name">
+                        <ui:CardExpander.Header>
+                            <ctl:DcCardHeader Margin="0" Symbol="WrenchScrewdriver24" Section="Govern" Content="Manage a tool by name" />
+                        </ui:CardExpander.Header>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Text="A tool with no rule yet is not listed below. Enter its bare name to block or allow it, remove its rule, or read which rule applies (Status is read-only). The scope is the connector chosen in the toolbar: 'All configured connectors' sets the fallback rule for every connector; one connector sets a rule for that connector only." />
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
+                                <ui:TextBox Width="260"
+                                            PlaceholderText="Tool name, for example delete_file"
+                                            Text="{Binding ManageToolName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            AutomationProperties.Name="Tool name" />
+                                <ui:Button Content="Status"
+                                           Icon="{ctl:DcSymbolIcon Info24}"
+                                           Command="{Binding ManageStatusCommand}"
+                                           IsEnabled="{Binding IsIdle}"
+                                           ToolTip="Read-only: shows the effective block/allow status of this tool"
+                                           AutomationProperties.Name="Show the effective status of the named tool" />
+                                <ui:Button Content="Block"
+                                           Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
+                                           Command="{Binding ManageBlockCommand}"
+                                           IsEnabled="{Binding IsIdle}"
+                                           ToolTip="Opens a review of the exact command first"
+                                           AutomationProperties.Name="Block the named tool" />
+                                <ui:Button Content="Allow"
+                                           Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                           Command="{Binding ManageAllowCommand}"
+                                           IsEnabled="{Binding IsIdle}"
+                                           ToolTip="Opens a review of the exact command first"
+                                           AutomationProperties.Name="Allow the named tool" />
+                                <ui:Button Content="Unblock"
+                                           Icon="{ctl:DcSymbolIcon LockOpen24}"
+                                           Command="{Binding ManageUnblockCommand}"
+                                           IsEnabled="{Binding IsIdle}"
+                                           ToolTip="Removes the rule for this tool. Opens a review first."
+                                           AutomationProperties.Name="Remove the rule of the named tool" />
+                            </WrapPanel>
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Bad"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ManageError}"
+                                       Visibility="{Binding HasManageError, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.LiveSetting="Assertive" />
+                        </StackPanel>
+                    </ui:CardExpander>
+
+                    <!-- Result of the last action and a stale-data warning -->
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                Title="{Binding ResultTitle}"
+                                Message="{Binding ResultMessage}"
+                                Severity="{Binding ResultSeverity}"
+                                IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
+                                IsClosable="True"
+                                AutomationProperties.LiveSetting="Polite" />
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                Title="Showing an older read"
+                                Message="{Binding RefreshWarning}"
+                                Severity="Warning"
+                                IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                                IsClosable="False"
+                                AutomationProperties.LiveSetting="Polite" />
+
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Margin="{StaticResource DcCardGap}"
+                               Text="{Binding CaptionText}" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
-                    <ComboBox MinWidth="200"
-                              ItemsSource="{Binding Connectors}"
-                              SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
-                              AutomationProperties.Name="Connector scope"
-                              AutomationProperties.HelpText="Which connector's rules to list (plus the rules that apply to every connector), and the scope of Manage a tool by name. All configured connectors means the fallback rule." />
+
+                <!-- Content: exactly one of these is visible -->
+                <StackPanel Style="{StaticResource DcEmptyState}"
+                            Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
+                    <ui:ProgressRing Width="32"
+                                     Height="32"
+                                     IsIndeterminate="True"
+                                     AutomationProperties.Name="Reading tool rules" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading tool rules from the CLI…" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
-                    <ui:TextBox MinWidth="180"
-                                Width="220"
-                                PlaceholderText="Recorded with the action"
-                                Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                AutomationProperties.Name="Reason"
-                                AutomationProperties.HelpText="Sent as --reason with block and allow." />
-                </StackPanel>
-            </WrapPanel>
-        </Border>
 
-        <!-- Manage a tool by name -->
-        <Border Grid.Row="2"
-                Style="{StaticResource DcCard}"
-                Margin="{StaticResource DcCardGap}">
-            <StackPanel>
-                <ctl:DcCardHeader Symbol="WrenchScrewdriver24" Section="Govern" Content="Manage a tool by name" />
-                <TextBlock Style="{StaticResource DcCaption}"
-                           Text="A tool with no rule yet is not listed above. Enter its bare name to block or allow it, remove its rule, or read which rule applies (Status is read-only). The scope is the connector chosen in the toolbar: 'All configured connectors' sets the fallback rule for every connector; one connector sets a rule for that connector only." />
-                <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
-                    <ui:TextBox Width="260"
-                                PlaceholderText="Tool name, for example delete_file"
-                                Text="{Binding ManageToolName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                AutomationProperties.Name="Tool name" />
-                    <ui:Button Content="Status"
-                               Icon="{ctl:DcSymbolIcon Info24}"
-                               Command="{Binding ManageStatusCommand}"
-                               IsEnabled="{Binding IsIdle}"
-                               ToolTip="Read-only: shows the effective block/allow status of this tool"
-                               AutomationProperties.Name="Show the effective status of the named tool" />
-                    <ui:Button Content="Block"
-                               Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
-                               Command="{Binding ManageBlockCommand}"
-                               IsEnabled="{Binding IsIdle}"
-                               ToolTip="Opens a review of the exact command first"
-                               AutomationProperties.Name="Block the named tool" />
-                    <ui:Button Content="Allow"
-                               Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                               Command="{Binding ManageAllowCommand}"
-                               IsEnabled="{Binding IsIdle}"
-                               ToolTip="Opens a review of the exact command first"
-                               AutomationProperties.Name="Allow the named tool" />
-                    <ui:Button Content="Unblock"
-                               Icon="{ctl:DcSymbolIcon LockOpen24}"
-                               Command="{Binding ManageUnblockCommand}"
-                               IsEnabled="{Binding IsIdle}"
-                               ToolTip="Removes the rule for this tool. Opens a review first."
-                               AutomationProperties.Name="Remove the rule of the named tool" />
-                </WrapPanel>
-                <TextBlock Style="{StaticResource DcToneText}"
-                           Tag="Bad"
-                           TextWrapping="Wrap"
-                           Text="{Binding ManageError}"
-                           Visibility="{Binding HasManageError, Converter={StaticResource BoolToVisibility}}"
-                           AutomationProperties.LiveSetting="Assertive" />
-            </StackPanel>
-        </Border>
-
-        <!-- Result of the last action, result of a read-only command, and a stale-data warning -->
-        <StackPanel Grid.Row="3">
-            <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                        Title="{Binding ResultTitle}"
-                        Message="{Binding ResultMessage}"
-                        Severity="{Binding ResultSeverity}"
-                        IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
-                        IsClosable="True"
-                        AutomationProperties.LiveSetting="Polite" />
-            <govern:GovernOutputCard />
-            <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                        Title="Showing an older read"
-                        Message="{Binding RefreshWarning}"
-                        Severity="Warning"
-                        IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
-                        IsClosable="False"
-                        AutomationProperties.LiveSetting="Polite" />
-        </StackPanel>
-
-        <TextBlock Grid.Row="4"
-                   Style="{StaticResource DcCaption}"
-                   Margin="{StaticResource DcCardGap}"
-                   Text="{Binding CaptionText}" />
-
-        <!-- Content: exactly one of these is visible -->
-        <Grid Grid.Row="5">
-            <!--
-                Everything but the list scrolls as one block: the empty and error cards carry a paragraph of
-                explanation, and in a short window the row they sit in is smaller than the card, which used to
-                clip it (an empty card, or a sentence cut mid-line). MinHeight = the viewport keeps the loading
-                spinner centred when there is room. The list below has its own scroller and sits on top.
-            -->
-            <ScrollViewer Style="{StaticResource DcPageScroll}" Focusable="False">
-                <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
-                    <StackPanel Style="{StaticResource DcEmptyState}"
-                                Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
-                        <ui:ProgressRing Width="32"
-                                         Height="32"
-                                         IsIndeterminate="True"
-                                         AutomationProperties.Name="Reading tool rules" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading tool rules from the CLI…" />
+                <Border Style="{StaticResource DcCard}"
+                        Visibility="{Binding ShowCliMissing, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
                     </StackPanel>
+                </Border>
 
-                    <Border Style="{StaticResource DcCard}"
-                            VerticalAlignment="Top"
-                            Visibility="{Binding ShowCliMissing, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
-                        </StackPanel>
-                    </Border>
+                <Border Style="{StaticResource DcCard}"
+                        Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
+                    </StackPanel>
+                </Border>
 
-                    <Border Style="{StaticResource DcCard}"
-                            VerticalAlignment="Top"
-                            Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
-                        </StackPanel>
-                    </Border>
+                <Border Style="{StaticResource DcCard}"
+                        Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="WrenchScrewdriver24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                    </StackPanel>
+                </Border>
 
-                    <Border Style="{StaticResource DcCard}"
-                            VerticalAlignment="Top"
-                            Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="WrenchScrewdriver24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
-                        </StackPanel>
-                    </Border>
+                <Border Style="{StaticResource DcCard}"
+                        Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No tool rules match the filter" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every rule the CLI listed. Clear it to see them all." />
+                        <ui:Button Margin="0,12,0,0"
+                                   HorizontalAlignment="Center"
+                                   Content="Clear filter"
+                                   Icon="{ctl:DcSymbolIcon FilterDismiss24}"
+                                   Command="{Binding ClearFilterCommand}" />
+                    </StackPanel>
+                </Border>
 
-                    <Border Style="{StaticResource DcCard}"
-                            VerticalAlignment="Top"
-                            Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No tool rules match the filter" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every rule the CLI listed. Clear it to see them all." />
-                            <ui:Button Margin="0,12,0,0"
-                                       HorizontalAlignment="Center"
-                                       Content="Clear filter"
-                                       Icon="{ctl:DcSymbolIcon FilterDismiss24}"
-                                       Command="{Binding ClearFilterCommand}" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </ScrollViewer>
+                <!-- The list: a height of its own (the rest of the viewport, at least 250), its own virtualizing scroller. -->
+                <ItemsControl AutomationProperties.Name="Tool rules"
+                              ItemsSource="{Binding Rows}"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Standard"
+                              VirtualizingPanel.ScrollUnit="Pixel"
+                              panels:NestedScroll.ForwardWheel="True"
+                              Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.Height>
+                        <MultiBinding Converter="{x:Static govern:FillHeightConverter.Instance}" ConverterParameter="250">
+                            <Binding ElementName="PageScroll" Path="ViewportHeight" />
+                            <Binding ElementName="Chrome" Path="ActualHeight" />
+                        </MultiBinding>
+                    </ItemsControl.Height>
+                    <ItemsControl.Template>
+                        <ControlTemplate TargetType="ItemsControl">
+                            <ScrollViewer Style="{StaticResource DcPageScroll}"
+                                          CanContentScroll="True"
+                                          Focusable="False">
+                                <ItemsPresenter />
+                            </ScrollViewer>
+                        </ControlTemplate>
+                    </ItemsControl.Template>
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <govern:GovernRowView />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-            <ItemsControl AutomationProperties.Name="Tool rules"
-                          ItemsSource="{Binding Rows}"
-                          VirtualizingPanel.IsVirtualizing="True"
-                          VirtualizingPanel.VirtualizationMode="Standard"
-                          VirtualizingPanel.ScrollUnit="Pixel"
-                          Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
-                <ItemsControl.Template>
-                    <ControlTemplate TargetType="ItemsControl">
-                        <ScrollViewer Style="{StaticResource DcPageScroll}"
-                                      CanContentScroll="True"
-                                      Focusable="False">
-                            <ItemsPresenter />
-                        </ScrollViewer>
-                    </ControlTemplate>
-                </ItemsControl.Template>
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <VirtualizingStackPanel />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <govern:GovernRowView />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </Grid>
+                <!-- Result of a read-only command (Status): under the list, scrolled into view when it opens. -->
+                <govern:GovernOutputCard />
+            </StackPanel>
+        </ScrollViewer>
 
         <!-- Review dialog for every state-changing command -->
-        <govern:GovernConfirmOverlay Grid.Row="0" Grid.RowSpan="6" />
+        <govern:GovernConfirmOverlay Grid.Row="0" Grid.RowSpan="2" />
     </Grid>
 </UserControl>

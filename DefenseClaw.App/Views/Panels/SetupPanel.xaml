@@ -468,8 +468,38 @@
                                Text="Asking the CLI which setup targets it has." />
                 </StackPanel>
 
+                <!--
+                    Three different reasons for an empty grid, each with its own words: the read failed (the reason is in
+                    the banner under the filters), the CLI answered with no setup targets, or a filter hides all of them.
+                -->
                 <StackPanel Style="{StaticResource DcEmptyState}"
-                            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding ShowLoadFailed, Converter={StaticResource BoolToVisibility}}">
+                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                    <TextBlock Style="{StaticResource DcEmptyTitle}" Text="The setup catalog is unavailable" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}"
+                               Text="The DefenseClaw command did not answer, so there is no list of setup wizards to show. The reason is in the banner above." />
+                    <ui:Button Margin="0,16,0,0"
+                               HorizontalAlignment="Center"
+                               Content="Re-read catalog"
+                               Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                               Command="{Binding ReloadCatalogCommand}" />
+                </StackPanel>
+
+                <StackPanel Style="{StaticResource DcEmptyState}"
+                            Visibility="{Binding ShowNoTargets, Converter={StaticResource BoolToVisibility}}">
+                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
+                    <TextBlock Style="{StaticResource DcEmptyTitle}" Text="The CLI reported no setup targets" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}"
+                               Text="The installed DefenseClaw answered, and its setup help lists nothing to configure. If it was just upgraded, read the catalog again." />
+                    <ui:Button Margin="0,16,0,0"
+                               HorizontalAlignment="Center"
+                               Content="Re-read catalog"
+                               Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                               Command="{Binding ReloadCatalogCommand}" />
+                </StackPanel>
+
+                <StackPanel Style="{StaticResource DcEmptyState}"
+                            Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
                     <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No wizards match" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}"

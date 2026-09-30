@@ -15,13 +15,15 @@
         scan.max_severity. Entries the CLI lists that are not plugins (Claude Code's own store) are kept in a
         collapsed, dimmed section at the bottom with an explanation and no actions except Info.
         Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the dialog / form / result card / clears the filter.
+
+        Layout. Plugin lists are short, so everything under the header is one scrolling page (PageScroll) and the rows are
+        plain content of it - no scroller of their own. It used to be a fixed stack of toolbar, form and banners above a
+        scroller for the list, which left the list whatever the rows above it did not take: 146 DIPs with the shell's
+        gateway banner open. The result card of a read-only command sits at the end of the page and is scrolled into view
+        when it opens.
     -->
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -54,214 +56,213 @@
             </StackPanel>
         </HeaderedContentControl>
 
-        <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
-            <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                <ui:TextBox x:Name="FilterBox"
-                            Width="240"
-                            PlaceholderText="Filter plugins (Ctrl+F)"
-                            Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                            AutomationProperties.Name="Filter plugins"
-                            AutomationProperties.HelpText="Matches name, description, version, origin, connector and state. Escape clears it." />
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
-                    <ComboBox Width="160"
-                              ItemsSource="{Binding StatusFilters}"
-                              SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
-                              AutomationProperties.Name="Show plugins in state" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
-                    <ComboBox MinWidth="200"
-                              ItemsSource="{Binding Connectors}"
-                              SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
-                              AutomationProperties.Name="Connector scope"
-                              AutomationProperties.HelpText="Which connector's plugins to list, and which connector Install plugin targets. All configured connectors means every one." />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
-                    <ui:TextBox MinWidth="180"
-                                Width="220"
-                                PlaceholderText="Recorded with the action"
-                                Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                AutomationProperties.Name="Reason"
-                                AutomationProperties.HelpText="Sent as --reason with block, allow, disable and quarantine." />
-                </StackPanel>
-                <ui:Button Content="Install plugin…"
-                           Command="{Binding ToggleInstallFormCommand}"
-                           IsEnabled="{Binding IsIdle}"
-                           ToolTip="Install from a path, npm, clawhub:// or a URL with 'defenseclaw plugin install'. You review the command first.">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="PuzzleCube24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </WrapPanel>
-        </Border>
+        <ScrollViewer x:Name="PageScroll"
+                      Grid.Row="1"
+                      Style="{StaticResource DcPageScroll}"
+                      Focusable="False"
+                      AutomationProperties.Name="Plugins page">
+            <StackPanel x:Name="PageContent">
+                <!-- Toolbar -->
+                <Border Style="{StaticResource DcToolbar}">
+                    <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                        <ui:TextBox x:Name="FilterBox"
+                                    Width="240"
+                                    PlaceholderText="Filter plugins (Ctrl+F)"
+                                    Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="Filter plugins"
+                                    AutomationProperties.HelpText="Matches name, description, version, origin, connector and state. Escape clears it." />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
+                            <ComboBox Width="160"
+                                      ItemsSource="{Binding StatusFilters}"
+                                      SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
+                                      AutomationProperties.Name="Show plugins in state" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
+                            <ComboBox MinWidth="200"
+                                      ItemsSource="{Binding Connectors}"
+                                      SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                                      AutomationProperties.Name="Connector scope"
+                                      AutomationProperties.HelpText="Which connector's plugins to list, and which connector Install plugin targets. All configured connectors means every one." />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
+                            <ui:TextBox MinWidth="180"
+                                        Width="220"
+                                        PlaceholderText="Recorded with the action"
+                                        Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        AutomationProperties.Name="Reason"
+                                        AutomationProperties.HelpText="Sent as --reason with block, allow, disable and quarantine." />
+                        </StackPanel>
+                        <ui:Button Content="Install plugin…"
+                                   Command="{Binding ToggleInstallFormCommand}"
+                                   IsEnabled="{Binding IsIdle}"
+                                   ToolTip="Install from a path, npm, clawhub:// or a URL with 'defenseclaw plugin install'. You review the command first.">
+                            <ui:Button.Icon>
+                                <ctl:DcSymbolIcon Symbol="PuzzleCube24" />
+                            </ui:Button.Icon>
+                        </ui:Button>
+                    </WrapPanel>
+                </Border>
 
-        <!-- Install a plugin (plugin install) -->
-        <Border Grid.Row="2"
-                Style="{StaticResource DcCard}"
-                Margin="{StaticResource DcCardGap}"
-                Visibility="{Binding IsInstallFormOpen, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel>
-                <ctl:DcCardHeader Symbol="ArrowDownload24" Section="Govern" Content="Install a plugin" />
+                <!-- Install a plugin (plugin install) -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding IsInstallFormOpen, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="ArrowDownload24" Section="Govern" Content="Install a plugin" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Text="Runs 'defenseclaw plugin install'. The plugin is fetched or copied, placed in the connector's plugin folder and scanned. The scope is the connector chosen in the toolbar; 'All configured connectors' installs into every one that has a plugin folder. You review the exact command before anything runs." />
+
+                        <StackPanel Margin="0,12,0,8">
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Local path, npm package, clawhub:// URI or https URL" />
+                            <ui:TextBox Text="{Binding InstallNameOrPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        AutomationProperties.Name="Plugin to install" />
+                        </StackPanel>
+
+                        <CheckBox Content="Force: overwrite an existing plugin of the same name"
+                                  IsChecked="{Binding InstallForce, Mode=TwoWay}" />
+                        <CheckBox Margin="0,6,0,0"
+                                  Content="Apply the configured plugin_actions policy based on scan severity"
+                                  IsChecked="{Binding InstallApplyActionPolicy, Mode=TwoWay}" />
+
+                        <TextBlock Style="{StaticResource DcToneText}"
+                                   Tag="Bad"
+                                   Margin="0,10,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding InstallFormError}"
+                                   Visibility="{Binding HasInstallFormError, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.LiveSetting="Assertive" />
+
+                        <StackPanel Margin="0,12,0,0"
+                                    HorizontalAlignment="Right"
+                                    Orientation="Horizontal">
+                            <ui:Button Margin="0,0,8,0"
+                                       Content="Cancel"
+                                       Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                       Command="{Binding ToggleInstallFormCommand}" />
+                            <ui:Button Appearance="Primary"
+                                       Content="Review command"
+                                       Icon="{ctl:DcSymbolIcon ClipboardCheckmark24}"
+                                       Command="{Binding SubmitInstallFormCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Result of the last action and a stale-data warning -->
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            Title="{Binding ResultTitle}"
+                            Message="{Binding ResultMessage}"
+                            Severity="{Binding ResultSeverity}"
+                            IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
+                            IsClosable="True"
+                            AutomationProperties.LiveSetting="Polite" />
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            Title="Showing an older read"
+                            Message="{Binding RefreshWarning}"
+                            Severity="Warning"
+                            IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                            IsClosable="False"
+                            AutomationProperties.LiveSetting="Polite" />
+
                 <TextBlock Style="{StaticResource DcCaption}"
-                           Text="Runs 'defenseclaw plugin install'. The plugin is fetched or copied, placed in the connector's plugin folder and scanned. The scope is the connector chosen in the toolbar; 'All configured connectors' installs into every one that has a plugin folder. You review the exact command before anything runs." />
+                           Margin="{StaticResource DcCardGap}"
+                           Text="{Binding CaptionText}" />
 
-                <StackPanel Margin="0,12,0,8">
-                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Local path, npm package, clawhub:// URI or https URL" />
-                    <ui:TextBox Text="{Binding InstallNameOrPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                AutomationProperties.Name="Plugin to install" />
+                <!-- Content -->
+                <StackPanel Style="{StaticResource DcEmptyState}"
+                            Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
+                    <ui:ProgressRing Width="32"
+                                     Height="32"
+                                     IsIndeterminate="True"
+                                     AutomationProperties.Name="Reading plugins" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading plugins from the CLI…" />
                 </StackPanel>
 
-                <CheckBox Content="Force: overwrite an existing plugin of the same name"
-                          IsChecked="{Binding InstallForce, Mode=TwoWay}" />
-                <CheckBox Margin="0,6,0,0"
-                          Content="Apply the configured plugin_actions policy based on scan severity"
-                          IsChecked="{Binding InstallApplyActionPolicy, Mode=TwoWay}" />
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowCliMissing, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                    </StackPanel>
+                </Border>
 
-                <TextBlock Style="{StaticResource DcToneText}"
-                           Tag="Bad"
-                           Margin="0,10,0,0"
-                           TextWrapping="Wrap"
-                           Text="{Binding InstallFormError}"
-                           Visibility="{Binding HasInstallFormError, Converter={StaticResource BoolToVisibility}}"
-                           AutomationProperties.LiveSetting="Assertive" />
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
+                    </StackPanel>
+                </Border>
 
-                <StackPanel Margin="0,12,0,0"
-                            HorizontalAlignment="Right"
-                            Orientation="Horizontal">
-                    <ui:Button Margin="0,0,8,0"
-                               Content="Cancel"
-                               Icon="{ctl:DcSymbolIcon Dismiss24}"
-                               Command="{Binding ToggleInstallFormCommand}" />
-                    <ui:Button Appearance="Primary"
-                               Content="Review command"
-                               Icon="{ctl:DcSymbolIcon ClipboardCheckmark24}"
-                               Command="{Binding SubmitInstallFormCommand}" />
-                </StackPanel>
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="PuzzleCube24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No plugins match the filter" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every plugin the CLI listed. Clear it to see them all." />
+                        <ui:Button Margin="0,12,0,0"
+                                   HorizontalAlignment="Center"
+                                   Content="Clear filter"
+                                   Icon="{ctl:DcSymbolIcon FilterDismiss24}"
+                                   Command="{Binding ClearFilterCommand}" />
+                    </StackPanel>
+                </Border>
+
+                <ItemsControl AutomationProperties.Name="Plugins"
+                              ItemsSource="{Binding Rows}"
+                              IsTabStop="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <govern:GovernRowView />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Entries the CLI lists that are not plugins -->
+                <Expander Margin="0,4,0,0"
+                          Header="{Binding ArtifactHeader}"
+                          AutomationProperties.Name="Entries the CLI lists that are not plugins"
+                          Visibility="{Binding HasArtifacts, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Margin="0,8,0,0">
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,0,0,8"
+                                   Text="DefenseClaw 0.8.10 treats every folder in Claude Code's plugin store as a plugin. These are shown so nothing the CLI reported is hidden, but they are not plugins: the only action offered is Info." />
+                        <ItemsControl AutomationProperties.Name="Listing artifacts"
+                                      ItemsSource="{Binding ArtifactRows}"
+                                      IsTabStop="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <govern:GovernRowView />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Expander>
+
+                <!-- Result of a read-only command (info): at the end of the page, scrolled into view when it opens. -->
+                <govern:GovernOutputCard />
             </StackPanel>
-        </Border>
-
-        <!-- Result of the last action, result of a read-only command, and a stale-data warning -->
-        <StackPanel Grid.Row="3">
-            <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                        Title="{Binding ResultTitle}"
-                        Message="{Binding ResultMessage}"
-                        Severity="{Binding ResultSeverity}"
-                        IsOpen="{Binding IsResultOpen, Mode=TwoWay}"
-                        IsClosable="True"
-                        AutomationProperties.LiveSetting="Polite" />
-            <govern:GovernOutputCard />
-            <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                        Title="Showing an older read"
-                        Message="{Binding RefreshWarning}"
-                        Severity="Warning"
-                        IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
-                        IsClosable="False"
-                        AutomationProperties.LiveSetting="Polite" />
-        </StackPanel>
-
-        <TextBlock Grid.Row="4"
-                   Style="{StaticResource DcCaption}"
-                   Margin="{StaticResource DcCardGap}"
-                   Text="{Binding CaptionText}" />
-
-        <!-- Content. Plugin lists are short, so this page scrolls as a whole. -->
-        <Grid Grid.Row="5">
-            <StackPanel Style="{StaticResource DcEmptyState}"
-                        Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
-                <ui:ProgressRing Width="32"
-                                 Height="32"
-                                 IsIndeterminate="True"
-                                 AutomationProperties.Name="Reading plugins" />
-                <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading plugins from the CLI…" />
-            </StackPanel>
-
-            <ScrollViewer Style="{StaticResource DcPageScroll}"
-                          Focusable="False">
-                <StackPanel>
-                    <Border Style="{StaticResource DcCard}"
-                            Margin="{StaticResource DcCardGap}"
-                            Visibility="{Binding ShowCliMissing, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Style="{StaticResource DcCard}"
-                            Margin="{StaticResource DcCardGap}"
-                            Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Style="{StaticResource DcCard}"
-                            Margin="{StaticResource DcCardGap}"
-                            Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="PuzzleCube24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Style="{StaticResource DcCard}"
-                            Margin="{StaticResource DcCardGap}"
-                            Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Style="{StaticResource DcEmptyState}">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No plugins match the filter" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every plugin the CLI listed. Clear it to see them all." />
-                            <ui:Button Margin="0,12,0,0"
-                                       HorizontalAlignment="Center"
-                                       Content="Clear filter"
-                                       Icon="{ctl:DcSymbolIcon FilterDismiss24}"
-                                       Command="{Binding ClearFilterCommand}" />
-                        </StackPanel>
-                    </Border>
-
-                    <ItemsControl AutomationProperties.Name="Plugins"
-                                  ItemsSource="{Binding Rows}"
-                                  IsTabStop="False">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <govern:GovernRowView />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <!-- Entries the CLI lists that are not plugins -->
-                    <Expander Margin="0,4,0,0"
-                              Header="{Binding ArtifactHeader}"
-                              AutomationProperties.Name="Entries the CLI lists that are not plugins"
-                              Visibility="{Binding HasArtifacts, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Margin="0,8,0,0">
-                            <TextBlock Style="{StaticResource DcCaption}"
-                                       Margin="0,0,0,8"
-                                       Text="DefenseClaw 0.8.10 treats every folder in Claude Code's plugin store as a plugin. These are shown so nothing the CLI reported is hidden, but they are not plugins: the only action offered is Info." />
-                            <ItemsControl AutomationProperties.Name="Listing artifacts"
-                                          ItemsSource="{Binding ArtifactRows}"
-                                          IsTabStop="False">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <govern:GovernRowView />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Expander>
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
+        </ScrollViewer>
 
         <!-- Review dialog for every state-changing command -->
-        <govern:GovernConfirmOverlay Grid.Row="0" Grid.RowSpan="6" />
+        <govern:GovernConfirmOverlay Grid.Row="0" Grid.RowSpan="2" />
     </Grid>
 </UserControl>
