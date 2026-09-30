@@ -61,6 +61,7 @@ public partial class ConfigEditorWindow : FluentWindow
         ArgumentNullException.ThrowIfNull(services);
 
         InitializeComponent();
+        Icon = ShieldIconFactory.CreateWindowIcon();
         _appearance?.Attach(this);
 
         _viewModel = new ConfigEditorWindowViewModel(services);

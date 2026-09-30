@@ -24,18 +24,20 @@ public enum ShieldState
 }
 
 /// <summary>
-/// Draws the tray shield at runtime instead of shipping <c>.ico</c> files.
+/// Turns the DefenseClaw mark (<see cref="ShieldArtwork"/>, the one source of every icon the app shows) into
+/// the tray icon and the window icons, at runtime, instead of shipping an <c>.ico</c> per state.
 /// <para>
-/// Four colours × several DPI scales is a lot of binary blobs to keep in a repo whose
-/// review story is "read the diff"; a <see cref="DrawingVisual"/> rendered to a
-/// <see cref="RenderTargetBitmap"/> costs a few milliseconds once WPF's media stack is
-/// running and keeps the tree text-only.
+/// Four states × every DPI scale is a lot of binary blobs to keep in a repo whose review story is "read the
+/// diff"; drawing them costs a few milliseconds once WPF's media stack is running and keeps the tree
+/// text-only. (The one binary, the exe's <c>Assets\DefenseClaw.ico</c>, is generated from the same artwork
+/// and a test keeps it in step.)
 /// </para>
 /// <para>
-/// The handle dance at the end is the price of the WPF/GDI+ boundary:
-/// <c>Bitmap.GetHicon</c> hands back an unmanaged HICON that <c>Icon.FromHandle</c> does
-/// not own, so the icon is round-tripped through its own ICO bytes and the handle is
-/// destroyed immediately — otherwise every rebuild leaks a GDI object.
+/// <b>Every icon is a multi-size <c>.ico</c></b> with a frame drawn for each size Windows may ask for, so the
+/// 16 px tray icon is the hand-tuned 16 px drawing rather than a bigger one squeezed down. The tray icon is
+/// materialised at the notification area's small-icon size (<see cref="TrayIconSize"/>); a window icon is a
+/// <see cref="BitmapFrame"/> whose decoder carries every frame, which is how WPF picks the exact frame for the
+/// title bar, the taskbar and alt-tab.
 /// </para>
 /// <para>
 /// <b>Why the encoded icons are also kept on disk.</b> The first <see cref="DrawingVisual"/> a
@@ -67,7 +69,8 @@ public enum ShieldState
 /// </summary>
 public static class ShieldIconFactory
 {
-    private const int IconSize = 32;
+    /// <summary>The size <see cref="CreateImage"/> draws when none is asked for.</summary>
+    private const int DefaultImageSize = 32;
 
     /// <summary>
     /// Per-state encoded ICO bytes — the render/encode cost is paid once, the per-assignment cost
@@ -81,7 +84,14 @@ public static class ShieldIconFactory
     private static readonly Dictionary<ShieldState, byte[]> IconBytesCache = new();
     private static readonly object Gate = new();
 
-    /// <summary>A real 32 px ICO is ~4.3 KB; anything past this is not something this factory wrote.</summary>
+    /// <summary>
+    /// Per-state encoded window icons (<see cref="ShieldArtwork.WindowIconSizes"/>). Bytes for the same reason as
+    /// <see cref="IconBytesCache"/>, and because a <see cref="BitmapFrame"/> keeps its decoder, which belongs to the
+    /// thread that made it. Guarded by <see cref="Gate"/>.
+    /// </summary>
+    private static readonly Dictionary<ShieldState, byte[]> WindowIconBytesCache = new();
+
+    /// <summary>A real tray ICO (eight sizes, 16-48 px) is ~35 KB; anything past this is not something this factory wrote.</summary>
     private const int MaxPersistedBytes = 64 * 1024;
 
     /// <summary>How long another build's persisted icons are left alone; see <see cref="PruneStale"/>.</summary>
@@ -104,13 +114,16 @@ public static class ShieldIconFactory
         "cache",
         "icons");
 
-    /// <summary>Fill colour per state. Also used by the shell for the status dot.</summary>
+    /// <summary>
+    /// The colour that marks <paramref name="state"/> on the shield: Cisco blue when healthy, otherwise the
+    /// colour of the state's badge (grey for stopped, whose badge is a neutral slate on a greyed shield).
+    /// </summary>
     public static Color ColorFor(ShieldState state) => state switch
     {
-        ShieldState.Running => Color.FromRgb(0x2E, 0xA0, 0x43),   // green
-        ShieldState.Warning => Color.FromRgb(0xE8, 0xA3, 0x17),   // amber
-        ShieldState.Critical => Color.FromRgb(0xD1, 0x34, 0x38),  // red
-        _ => Color.FromRgb(0x8A, 0x8A, 0x8A),                     // gray
+        ShieldState.Running => ShieldArtwork.CiscoBlue,
+        ShieldState.Warning => ShieldArtwork.WarningAmber,
+        ShieldState.Critical => ShieldArtwork.CriticalRed,
+        _ => Color.FromRgb(0x8A, 0x8A, 0x8A),
     };
 
     /// <summary>Maps the gateway state machine onto a tray colour.</summary>
@@ -149,10 +162,10 @@ public static class ShieldIconFactory
     /// <para>
     /// Why re-create from bytes rather than <c>master.Clone()</c>: a <c>Clone</c> would still need
     /// a live master <see cref="Drawing.Icon"/> held for the process lifetime (a long-lived GDI
-    /// handle and one more object that a careless caller could dispose). <c>new Icon(Stream)</c>
+    /// handle and one more object that a careless caller could dispose). <c>new Icon(Stream, w, h)</c>
     /// on the cached bytes is the same construction the factory has always used to build its
-    /// icons — a valid, self-owned HICON sized to the system icon metric — just repeated, and it
-    /// leaves nothing shared.
+    /// icons — a valid, self-owned HICON, here the frame drawn for the tray's small-icon size
+    /// (<see cref="TrayIconSize"/>) — just repeated, and it leaves nothing shared.
     /// </para>
     /// </summary>
     public static Drawing.Icon CreateIcon(ShieldState state)
@@ -190,17 +203,21 @@ public static class ShieldIconFactory
         lock (Gate)
         {
             IconBytesCache.Clear();
+            WindowIconBytesCache.Clear();
             _prunedCache = false;
             EncodeCount = 0;
         }
     }
 
-    /// <summary>The build id the persisted icons are keyed by: it changes whenever this assembly is rebuilt.</summary>
+    /// <summary>
+    /// The build id the persisted icons are keyed by: it changes whenever this assembly is rebuilt, and the
+    /// artwork (<see cref="ShieldArtwork"/>) is compiled into this assembly, so new artwork never reads an old icon.
+    /// </summary>
     private static string BuildKey => typeof(ShieldIconFactory).Module.ModuleVersionId.ToString("N");
 
     private static string? PersistedPath(ShieldState state) =>
         CacheDirectory is { Length: > 0 } directory
-            ? Path.Combine(directory, $"shield-{BuildKey}-{IconSize}-{state.ToString().ToLowerInvariant()}.ico")
+            ? Path.Combine(directory, $"shield-{BuildKey}-tray-{state.ToString().ToLowerInvariant()}.ico")
             : null;
 
     /// <summary>
@@ -321,126 +338,65 @@ public static class ShieldIconFactory
         }
     }
 
-    /// <summary>The same shield as an <see cref="ImageSource"/>, for in-window status chips.</summary>
-    public static ImageSource CreateImage(ShieldState state, int size = IconSize)
+    /// <summary>The same shield as a single frozen bitmap of <paramref name="size"/> pixels, for in-window status chips.</summary>
+    public static ImageSource CreateImage(ShieldState state, int size = DefaultImageSize) =>
+        ShieldArtwork.Render(state, size);
+
+    /// <summary>
+    /// A window icon for <paramref name="state"/> (the brand mark, <see cref="ShieldState.Running"/>, by default):
+    /// a <see cref="BitmapFrame"/> decoded from a multi-size ICO (<see cref="ShieldArtwork.WindowIconSizes"/>).
+    /// Assign it to <see cref="Window.Icon"/>: WPF sees the frame's icon decoder and, for each icon handle it
+    /// makes (small for the title bar, large for the taskbar and alt-tab), takes the frame drawn for that size
+    /// instead of scaling one bitmap. Returns a new frame on every call; the frame's decoder belongs to the
+    /// calling thread, so create it on the thread that owns the window. Drawing happens once per state.
+    /// </summary>
+    public static BitmapFrame CreateWindowIcon(ShieldState state = ShieldState.Running)
     {
-        var bitmap = Render(state, size);
-        bitmap.Freeze();
-        return bitmap;
+        byte[]? bytes;
+        lock (Gate)
+        {
+            if (!WindowIconBytesCache.TryGetValue(state, out bytes))
+            {
+                bytes = ShieldArtwork.EncodeIco(state, ShieldArtwork.WindowIconSizes);
+                WindowIconBytesCache[state] = bytes;
+            }
+        }
+
+        using var stream = new MemoryStream(bytes, writable: false);
+        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+
+        // The largest frame, for anything that draws Window.Icon directly; the icon handles use all of them.
+        // (WIC does not keep the file's order, so it is looked for rather than assumed to be last.)
+        return decoder.Frames.MaxBy(frame => frame.PixelWidth)!;
     }
 
     /// <summary>
-    /// Builds a fresh, self-owned <see cref="Drawing.Icon"/> from encoded ICO bytes.
-    /// <c>Icon(Stream)</c> copies the stream into the icon, so the stream is disposed here and the
-    /// result has no dependency on <paramref name="icoBytes"/> or on any other icon.
+    /// The notification area's small-icon size in pixels at the system DPI: 16 at 100 %, 24 at 150 %, 36 at 225 %.
+    /// The tray icon is materialised at this size, so the frame drawn for it is used as is.
+    /// </summary>
+    internal static int TrayIconSize => Math.Clamp(GetSystemMetrics(SmCxSmIcon), 16, 256);
+
+    /// <summary>
+    /// Builds a fresh, self-owned <see cref="Drawing.Icon"/> from encoded ICO bytes, picking the frame drawn for
+    /// <see cref="TrayIconSize"/>. <c>Icon(Stream, int, int)</c> copies the stream into the icon, so the stream is
+    /// disposed here and the result has no dependency on <paramref name="icoBytes"/> or on any other icon.
     /// </summary>
     private static Drawing.Icon FromIcoBytes(byte[] icoBytes)
     {
         using var stream = new MemoryStream(icoBytes, writable: false);
-        return new Drawing.Icon(stream);
+        var size = TrayIconSize;
+        return new Drawing.Icon(stream, size, size);
     }
 
-    /// <summary>Renders the shield and encodes it as ICO bytes (the only expensive step; done once per state).</summary>
+    /// <summary>Draws the shield at every tray size and encodes it as ICO bytes (the only expensive step; done once per state).</summary>
     private static byte[] EncodeIco(ShieldState state)
     {
         _ = Interlocked.Increment(ref EncodeCount);
-        var bitmap = Render(state, IconSize);
-
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-
-        using var pngStream = new MemoryStream();
-        encoder.Save(pngStream);
-        pngStream.Position = 0;
-
-        using var gdiBitmap = new Drawing.Bitmap(pngStream);
-        var handle = gdiBitmap.GetHicon();
-        try
-        {
-            using var borrowed = Drawing.Icon.FromHandle(handle);
-            using var iconStream = new MemoryStream();
-            borrowed.Save(iconStream);
-            return iconStream.ToArray();
-        }
-        finally
-        {
-            _ = DestroyIcon(handle);
-        }
+        return ShieldArtwork.EncodeIco(state, ShieldArtwork.TrayIconSizes);
     }
 
-    private static RenderTargetBitmap Render(ShieldState state, int size)
-    {
-        var fill = new SolidColorBrush(ColorFor(state));
-        fill.Freeze();
+    private const int SmCxSmIcon = 49;
 
-        var stroke = new SolidColorBrush(Color.FromArgb(0x66, 0x00, 0x00, 0x00));
-        stroke.Freeze();
-
-        var glyph = new SolidColorBrush(Colors.White);
-        glyph.Freeze();
-
-        var visual = new DrawingVisual();
-        using (var context = visual.RenderOpen())
-        {
-            context.DrawGeometry(fill, new Pen(stroke, 1), ShieldGeometry(size));
-            context.DrawGeometry(glyph, null, ClawGeometry(size));
-        }
-
-        var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(visual);
-        return bitmap;
-    }
-
-    /// <summary>Classic heater shield: square shoulders, curved flanks, pointed base.</summary>
-    private static Geometry ShieldGeometry(int size)
-    {
-        var s = size / 32.0;
-        var figure = new PathFigure { StartPoint = new Point(16 * s, 2 * s), IsClosed = true, IsFilled = true };
-
-        figure.Segments.Add(new LineSegment(new Point(28 * s, 7 * s), true));
-        figure.Segments.Add(new LineSegment(new Point(28 * s, 16 * s), true));
-        figure.Segments.Add(new BezierSegment(
-            new Point(28 * s, 24 * s),
-            new Point(22 * s, 28 * s),
-            new Point(16 * s, 30 * s),
-            true));
-        figure.Segments.Add(new BezierSegment(
-            new Point(10 * s, 28 * s),
-            new Point(4 * s, 24 * s),
-            new Point(4 * s, 16 * s),
-            true));
-        figure.Segments.Add(new LineSegment(new Point(4 * s, 7 * s), true));
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
-        geometry.Freeze();
-        return geometry;
-    }
-
-    /// <summary>Three claw marks across the boss — the "claw" half of the name.</summary>
-    private static Geometry ClawGeometry(int size)
-    {
-        var s = size / 32.0;
-        var group = new GeometryGroup();
-
-        for (var i = 0; i < 3; i++)
-        {
-            var x = (11 + (i * 5)) * s;
-            var figure = new PathFigure { StartPoint = new Point(x, 9 * s), IsClosed = true, IsFilled = true };
-            figure.Segments.Add(new LineSegment(new Point(x + (2.2 * s), 9 * s), true));
-            figure.Segments.Add(new LineSegment(new Point(x + (1.1 * s), 21 * s), true));
-            figure.Segments.Add(new LineSegment(new Point(x - (1.1 * s), 21 * s), true));
-
-            var path = new PathGeometry();
-            path.Figures.Add(figure);
-            group.Children.Add(path);
-        }
-
-        group.Freeze();
-        return group;
-    }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-    private static extern bool DestroyIcon(IntPtr handle);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 }

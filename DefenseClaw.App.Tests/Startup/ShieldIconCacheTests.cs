@@ -66,7 +66,7 @@ public sealed class ShieldIconCacheTests : IDisposable
             var file = Assert.Single(CachedFiles());
             var name = System.IO.Path.GetFileName(file);
             Assert.StartsWith("shield-", name, StringComparison.Ordinal);
-            Assert.EndsWith("-32-running.ico", name, StringComparison.Ordinal);
+            Assert.EndsWith("-tray-running.ico", name, StringComparison.Ordinal);
 
             var bytes = File.ReadAllBytes(file);
             Assert.Equal(new byte[] { 0, 0, 1, 0 }, bytes[..4]);

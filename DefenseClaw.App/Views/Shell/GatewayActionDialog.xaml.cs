@@ -19,6 +19,7 @@ public sealed partial class GatewayActionDialog : FluentWindow
     private GatewayActionDialog(CommandReview review)
     {
         InitializeComponent();
+        Icon = ShieldIconFactory.CreateWindowIcon();
 
         ReviewControl.Review = review;
         ReviewControl.ConfirmCommand = new RelayCommand(() => DialogResult = true);

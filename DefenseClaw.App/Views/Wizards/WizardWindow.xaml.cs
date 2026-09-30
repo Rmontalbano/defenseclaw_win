@@ -29,6 +29,7 @@ public sealed partial class WizardWindow : FluentWindow
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
 
         InitializeComponent();
+        Icon = Services.ShieldIconFactory.CreateWindowIcon();
         DataContext = viewModel;
 
         _viewModel.CloseRequested += OnCloseRequested;

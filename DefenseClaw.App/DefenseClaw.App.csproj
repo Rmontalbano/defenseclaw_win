@@ -17,10 +17,12 @@
     -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <!--
-      The one binary asset in the repo. Generated from ShieldIconFactory (Running state)
-      by a throwaway harness, so the compiled file icon — Explorer, Start menu, alt-tab
-      fallback — is the same shield the tray and taskbar draw at runtime. Regenerate by
-      rendering CreateImage at 16/24/32/48/64/128/256 and repacking; do not hand-edit.
+      The one binary asset in the repo. Generated from Services/ShieldArtwork.cs (the brand
+      mark, Running state), the same source the tray and window icons are drawn from at
+      runtime, so the compiled file icon (Explorer, Start menu, pinned taskbar buttons) is
+      the same mark. Do not hand-edit: set DC_WRITE_APP_ICON=1 and run DefenseClaw.App.Tests
+      filtered to FullyQualifiedName~AppIconTests (see that class). AppIconTests fails while
+      the committed file and the artwork disagree.
     -->
     <ApplicationIcon>Assets\DefenseClaw.ico</ApplicationIcon>
   </PropertyGroup>

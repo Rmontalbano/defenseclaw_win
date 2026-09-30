@@ -60,6 +60,7 @@ public sealed partial class UpdatesWindow : FluentWindow
         _viewModel = viewModel;
 
         InitializeComponent();
+        Icon = ShieldIconFactory.CreateWindowIcon();
         AppearanceService.Current?.Attach(this);
         DataContext = viewModel;
 

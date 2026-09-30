@@ -114,10 +114,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _appearance?.Attach(this);
         BindAppearanceControls();
 
-        // Taskbar icon mirrors the tray shield, colour and all, so alt-tab tells the same
-        // story as the notification area. Rendered at 256px so alt-tab and taskbar scaling
-        // stay crisp; cached per state because StateChanged also fires for changes that leave
-        // the shield colour alone (a new detail line, a connector appearing).
+        // Taskbar icon mirrors the tray shield, state badge and all, so alt-tab tells the same
+        // story as the notification area. A multi-size icon, so the title bar, the taskbar and
+        // alt-tab each get the frame drawn for their size; cached per state because StateChanged
+        // also fires for changes that leave the shield alone (a new detail line, a connector appearing).
         ApplyShieldIcon(ShieldIconFactory.StateFor(services.Monitor.Current));
         services.Monitor.StateChanged += (_, e) => ApplyShieldIcon(ShieldIconFactory.StateFor(e.Snapshot));
 
@@ -206,7 +206,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _currentIconState = state;
         if (!ShieldImageCache.TryGetValue(state, out var image))
         {
-            image = ShieldIconFactory.CreateImage(state, 256);
+            image = ShieldIconFactory.CreateWindowIcon(state);
             ShieldImageCache[state] = image;
         }
 
