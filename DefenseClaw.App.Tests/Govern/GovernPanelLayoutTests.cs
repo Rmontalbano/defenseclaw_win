@@ -194,6 +194,18 @@ public class GovernPanelLayoutTests
                 ViewModel.State = GovernState.Loaded;
                 Host.Relayout();
             });
+
+            // On a slow machine the stand-in pane is still opening, or the list's height binding has not run yet, when the
+            // first layout pass returns: measuring then read a 0-DIP list on CI. Wait until the page has settled.
+            UiThread.WaitFor(
+                () =>
+                {
+                    Host.Relayout();
+                    var list = TryList;
+                    return Shell.PageSize.Width <= width - 225 && list is not null && (panel == "Plugins" || list.ActualHeight > 0);
+                },
+                "page and list laid out",
+                timeoutMilliseconds: 10_000);
         }
 
         public string Panel { get; }
@@ -206,16 +218,16 @@ public class GovernPanelLayoutTests
 
         public static Scene Open(string panel, int width, int height, int copies = 1) => new(panel, width, height, copies);
 
+        private string ListName => Panel switch { "Tools" => "Tool rules", "Mcps" => "MCP servers", "Plugins" => "Plugins", _ => "Skills" };
+
+        /// <summary>The list of rows, or null while it has not been built yet.</summary>
+        private ItemsControl? TryList =>
+            Shell.Page is null
+                ? null
+                : VisualTree.Find<ItemsControl>(Shell.Page, c => System.Windows.Automation.AutomationProperties.GetName(c) == ListName);
+
         /// <summary>The list of rows: the ItemsControl named after the panel's contents.</summary>
-        public ItemsControl List
-        {
-            get
-            {
-                var name = Panel switch { "Tools" => "Tool rules", "Mcps" => "MCP servers", "Plugins" => "Plugins", _ => "Skills" };
-                return VisualTree.Find<ItemsControl>(Shell.Page!, c => System.Windows.Automation.AutomationProperties.GetName(c) == name)
-                    ?? throw new InvalidOperationException($"The {name} list was not built.");
-            }
-        }
+        public ItemsControl List => TryList ?? throw new InvalidOperationException($"The {ListName} list was not built.");
 
         /// <summary>The page scroller (named "... page"), or null in a layout that has none.</summary>
         public ScrollViewer? PageScroll =>

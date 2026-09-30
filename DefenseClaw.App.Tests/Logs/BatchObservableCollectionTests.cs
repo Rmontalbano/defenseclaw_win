@@ -17,6 +17,7 @@ namespace DefenseClaw.App.Tests.Logs;
 /// exactly where the old one-<c>RemoveAt(0)</c>-per-row form left them, which is what the panel's
 /// coalesced scroll and paused-tail behaviour depend on.
 /// </summary>
+[Collection(UiCollection.Name)]
 public sealed class BatchObservableCollectionTests
 {
     private readonly ITestOutputHelper _output;
@@ -280,7 +281,7 @@ public sealed class BatchObservableCollectionTests
     [Fact]
     public void Dropping_the_front_in_one_reset_scrolls_and_selects_exactly_like_dropping_row_by_row()
     {
-        var (perRow, batched) = StaThread.Run(() =>
+        var (perRow, batched) = UiThread.Run(() =>
         {
             var perRowState = Scenario(rows =>
             {
@@ -316,7 +317,7 @@ public sealed class BatchObservableCollectionTests
         // row index (2,000). Neither pins the lines being read - WPF's virtualizing panel does not
         // anchor on an item - so a paused reader on a full buffer drifts toward newer lines in both
         // forms, and this asserts what does carry over rather than that the two drift identically.
-        var (legacy, batched) = StaThread.Run(() =>
+        var (legacy, batched) = UiThread.Run(() =>
         {
             var legacyState = Scenario(rows =>
             {
