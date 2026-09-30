@@ -177,7 +177,17 @@ public class AuditPanelLayoutTests
             ViewModel = UiThread.Run(() => (AuditPanelViewModel)Shell.ViewModel);
 
             UiThread.WaitFor(() => ViewModel.Rows.Count == 60 && !ViewModel.IsLoading, "audit rows loaded");
-            UiThread.Run(() => Host.Relayout());
+
+            // The stand-in NavigationView opens its 220-DIP pane with an animation; measuring before it lands reads a
+            // page ~37 DIPs too wide (seen as an order-dependent failure when this class runs with others).
+            UiThread.WaitFor(
+                () =>
+                {
+                    Host.Relayout();
+                    return Shell.PageSize.Width <= width - 225;
+                },
+                "navigation pane fully open",
+                timeoutMilliseconds: 5_000);
         }
 
         public static Scene Open(int width, int height) => new(width, height);
