@@ -256,9 +256,9 @@ public class AuditReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task CountBySeverity_folds_case_in_sql_and_still_sums_equivalent_spellings()
+    public async Task CountBySeverity_counts_every_stored_spelling_and_still_sums_equivalent_ones()
     {
-        // The GROUP BY is on UPPER(severity) so the retention index can serve the window;
+        // Each stored spelling (high, High, HIGH, warning, ...) is counted on its own now, from the index;
         // AuditSeverityExtensions.Parse is case-insensitive, so nothing may be lost or split.
         _database.InsertEvent("case-1", Base.AddMinutes(20), "scan", "high", "asset.scan");
         _database.InsertEvent("case-2", Base.AddMinutes(21), "scan", "High", "asset.scan");
@@ -408,16 +408,19 @@ public class AuditReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Severity_tiles_use_the_retention_index_for_the_window()
+    public async Task Severity_tiles_for_a_window_are_counted_from_the_severity_index_and_the_window_total_from_the_retention_index()
     {
         var plan = await _reader.ExplainAsync(
             new AuditQuery { From = Base.AddMinutes(3) },
             AuditQueryShape.CountBySeverity);
 
-        // A temp B-tree for the GROUP BY is expected (UPPER(severity) has no index); the point is
-        // that the window is not a full scan or a walk of idx_audit_severity_timestamp.
-        AssertUsesRetentionIndex(plan);
-        Assert.DoesNotContain(plan, line => line.Contains("idx_audit_severity_timestamp", StringComparison.Ordinal));
+        // This used to assert the opposite: GROUP BY UPPER(severity) could not use idx_audit_severity_timestamp, so the
+        // plan was the retention range plus a temp B-tree and a fetch of every row in the window (614 MB per Overview
+        // refresh on the live table). The tiles are now one covering count per spelling; AuditSeverityTests holds the
+        // detailed plan and equivalence checks.
+        Assert.Contains(plan, line => line.Contains("COVERING INDEX idx_audit_severity_timestamp", StringComparison.Ordinal));
+        Assert.Contains(plan, line => line.Contains("idx_retention_audit_events_timestamp", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan, line => line.Contains("TEMP B-TREE", StringComparison.Ordinal));
     }
 
     // ---- Connector filter: seek for a rare connector, walk for a common one (live audit.db: 3.5-5.9 s -> 1 ms). ----

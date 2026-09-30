@@ -63,7 +63,12 @@ namespace DefenseClaw.App.ViewModels;
 /// same command with <c>--dry-run</c> (which the CLI documents as changing nothing) and shows what
 /// would match, and only a preview that exited 0 with matches enables the real run, which is
 /// gated on the preview's exit code and passes <c>--yes</c> (the CLI's own broad-selector
-/// confirmation) instead of piping a <c>y</c> to a prompt. Afterwards the alert list is re-read and
+/// confirmation) instead of piping a <c>y</c> to a prompt. <b>What is confirmed is what was previewed.</b>
+/// A severity selector matches whatever is active <i>when it runs</i>, and the confirm can come minutes
+/// after the preview, so both commands carry <c>--before</c> with the moment the preview started (an alert
+/// that arrives later is not selected), and a preview that lists twenty ids or fewer (all the CLI prints)
+/// is applied as those exact ids, repeated <c>--id</c>. When the apply reports a different count from the
+/// preview, the result says so. Afterwards the alert list is re-read and
 /// then filtered against the read-only <c>alert_acknowledgement_projection</c> table in audit.db, so
 /// an alert the gateway still serves after it was acknowledged is hidden rather than left on
 /// screen looking untouched.
@@ -160,6 +165,40 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
     private CancellationTokenSource? _previewCts;
     private int _previewVersion;
     private bool _openingReview;
+
+    /// <summary>
+    /// The command the confirm button runs, fixed by the preview that enabled it (and not rebuilt from the dialog at
+    /// confirm time): the same selector plus <c>--before</c>, or - when the preview listed every match - the exact ids.
+    /// </summary>
+    private string[]? _applyArgv;
+
+    /// <summary>How many ids a dry run prints before it says "... and N more" (the CLI's own cap).</summary>
+    private const int PreviewedIdLimit = 20;
+
+    /// <summary>One line the dry run prints per matched alert: <c>  &lt;id&gt; version=0</c>.</summary>
+    private static readonly Regex PreviewedIdPattern = new(
+        @"^\s+(?<id>\S+)\s+version=\S+\s*$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
+
+    /// <summary>What the mutation prints when it is done: <c>Acknowledged 24 alert(s).</c> / <c>Dismissed 24 alert(s) from the active list.</c></summary>
+    private static readonly Regex AppliedPattern = new(
+        @"(?:Acknowledged|Dismissed)\s+(?<n>\d+)\s+alert\(s\)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
+
+    /// <summary>
+    /// How the two review commands reach the CLI. Null in the running app (<see cref="AppServices.Cli"/>); a test answers
+    /// with canned invocations so what the dialog asks for, and what it says about the answer, can be checked without a
+    /// process.
+    /// </summary>
+    internal Func<IReadOnlyList<string>, CancellationToken, Task<CliInvocation>>? RunCli { get; set; }
+
+    /// <summary>What replaces the gateway re-read that follows a successful apply, when a test does not want a network call.</summary>
+    internal Func<Task>? AfterApply { get; set; }
+
+    private Task<CliInvocation> RunCliAsync(IReadOnlyList<string> argv, CancellationToken cancellationToken) =>
+        RunCli is { } run ? run(argv, cancellationToken) : Services.Cli.RunAsync(argv, cancellationToken: cancellationToken);
 
     /// <summary>Alerts in the loaded list that are not acknowledged - what the toggles and text filter act on.</summary>
     private int _poolCount;
@@ -455,8 +494,15 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         var version = Volatile.Read(ref _previewVersion);
 
         var verb = _reviewVerb;
-        var previewArgv = new[] { "alerts", verb, "--severity", choice.Value, "--dry-run" };
-        var applyArgv = new[] { "alerts", verb, "--severity", choice.Value, "--yes" };
+
+        // The moment this preview is taken. A severity selector matches whatever is active when it runs, so a bare
+        // "--severity HIGH" applied minutes later also takes the alerts that arrived after the operator read the count.
+        // "--before" pins both commands to the alerts that existed now (millisecond precision: a whole second would drop
+        // the ones from the last instant).
+        var before = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+        var previewArgv = new[] { "alerts", verb, "--severity", choice.Value, "--before", before, "--dry-run" };
+        var applyArgv = new[] { "alerts", verb, "--severity", choice.Value, "--before", before, "--yes" };
+        _applyArgv = null;
 
         ConfirmCommandText = "defenseclaw " + string.Join(' ', applyArgv);
         var tier = CommandTiers.Classify(applyArgv);
@@ -479,7 +525,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
 
         try
         {
-            var invocation = await Services.Cli.RunAsync(previewArgv, cancellationToken: cts.Token).ConfigureAwait(true);
+            var invocation = await RunCliAsync(previewArgv, cts.Token).ConfigureAwait(true);
             if (version != Volatile.Read(ref _previewVersion))
             {
                 return;
@@ -513,9 +559,23 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
                 return;
             }
 
+            // Twenty ids or fewer, all of them printed: apply exactly those (the CLI takes --id alone, not with a selector).
+            // More than that, only the selector plus the preview's moment can name the set.
+            var ids = PreviewedIds(invocation);
+            var exact = matched is > 0 and <= PreviewedIdLimit && ids.Count == matched;
+            if (exact)
+            {
+                applyArgv = new[] { "alerts", verb }
+                    .Concat(ids.SelectMany(id => new[] { "--id", id }))
+                    .Append("--yes")
+                    .ToArray();
+                ConfirmCommandText = "defenseclaw " + string.Join(' ', applyArgv);
+            }
+
+            _applyArgv = applyArgv;
             PreviewMatched = matched;
             PreviewSucceeded = true;
-            PreviewSummary = DescribePreview(matched, choice, verb);
+            PreviewSummary = DescribePreview(matched, choice, verb, exact);
         }
         catch (CliNotFoundException ex)
         {
@@ -552,14 +612,21 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         }
 
         var verb = _reviewVerb;
-        var argv = new[] { "alerts", verb, "--severity", choice.Value, "--yes" };
+
+        // The command the preview fixed - never one rebuilt now, which would select whatever is active now.
+        if (_applyArgv is not { } argv)
+        {
+            return;
+        }
+
+        var previewed = PreviewMatched;
 
         IsApplying = true;
         SetReviewError(string.Empty);
 
         try
         {
-            var invocation = await Services.Cli.RunAsync(argv).ConfigureAwait(true);
+            var invocation = await RunCliAsync(argv, CancellationToken.None).ConfigureAwait(true);
 
             if (invocation.FailureReason is { Length: > 0 } reason)
             {
@@ -574,16 +641,16 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
             }
 
             IsReviewOpen = false;
-            var done = StreamText(invocation, CliStream.StandardOutput, maxLines: 30)
+            var output = StreamText(invocation, CliStream.StandardOutput, maxLines: 30);
+            var done = output
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .LastOrDefault();
-            ShowActionResult(
-                string.IsNullOrWhiteSpace(done)
-                    ? $"Ran 'defenseclaw alerts {verb} --severity {choice.Value}'."
-                    : done,
-                isError: false);
+            var result = string.IsNullOrWhiteSpace(done)
+                ? $"Ran 'defenseclaw alerts {verb} --severity {choice.Value}'."
+                : done;
+            ShowActionResult(result + DifferenceNote(output, previewed), isError: false);
 
-            await ReloadAfterDispositionAsync();
+            await (AfterApply?.Invoke() ?? ReloadAfterDispositionAsync());
         }
         catch (CliNotFoundException ex)
         {
@@ -636,7 +703,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         ShowActionError = isError;
     }
 
-    private string DescribePreview(int matched, SeverityChoice choice, string verb)
+    private string DescribePreview(int matched, SeverityChoice choice, string verb, bool exactIds)
     {
         var scope = choice.IsAll ? "active alert" : $"active {choice.Value} alert";
         if (matched == 0)
@@ -645,11 +712,67 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
         }
 
         var doing = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissing" : "Acknowledging";
-        var everything = choice.IsAll ? "every active alert of every severity" : $"the whole {choice.Value} severity class";
         var plural = matched == 1 ? string.Empty : "s";
+        var count = matched.ToString("N0", CultureInfo.CurrentCulture);
+        if (exactIds)
+        {
+            // Every match is listed below, and the command names each of them.
+            return $"{count} {scope}{plural} match. {doing} applies to exactly the {(matched == 1 ? "alert" : "alerts")} listed below, and to nothing that arrives after this preview.";
+        }
+
+        var everything = choice.IsAll ? "every active alert of every severity" : $"the whole {choice.Value} severity class";
         return
-            $"{matched.ToString("N0", CultureInfo.CurrentCulture)} {scope}{plural} match. {doing} applies to {everything} " +
-            $"in DefenseClaw, not only the {_all.Count.ToString("N0", CultureInfo.CurrentCulture)} loaded in this list.";
+            $"{count} {scope}{plural} match. {doing} applies to {everything} " +
+            $"in DefenseClaw as of this preview, not only the {_all.Count.ToString("N0", CultureInfo.CurrentCulture)} loaded in this list; " +
+            "an alert that arrives after it is left alone.";
+    }
+
+    /// <summary>The ids a dry run printed, in the order it printed them (at most <see cref="PreviewedIdLimit"/>).</summary>
+    private static List<string> PreviewedIds(CliInvocation invocation)
+    {
+        var ids = new List<string>();
+        foreach (var line in invocation.OutputLines)
+        {
+            if (line.Stream == CliStream.StandardOutput && PreviewedIdPattern.Match(line.Text) is { Success: true } match)
+            {
+                ids.Add(match.Groups["id"].Value);
+            }
+        }
+
+        return ids;
+    }
+
+    /// <summary>
+    /// A sentence for the result banner when the mutation did not act on the number of alerts the preview showed, else
+    /// nothing. The command prints its own <c>Preview: N alert(s) matched</c> just before it applies and
+    /// <c>Acknowledged N alert(s).</c> after, so what it matched and what it applied are both known; neither is what
+    /// the operator confirmed unless it equals the preview.
+    /// </summary>
+    private static string DifferenceNote(string output, int previewed)
+    {
+        int? applied = null;
+        if (AppliedPattern.Match(output) is { Success: true } a
+            && int.TryParse(a.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var appliedCount))
+        {
+            applied = appliedCount;
+        }
+
+        int? matchedNow = null;
+        if (PreviewMatchedPattern.Match(output) is { Success: true } m
+            && int.TryParse(m.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var matchedCount))
+        {
+            matchedNow = matchedCount;
+        }
+
+        var actual = applied ?? matchedNow;
+        if (actual is null || (actual == previewed && (matchedNow is null || matchedNow == previewed)))
+        {
+            return string.Empty;
+        }
+
+        var shown = previewed.ToString("N0", CultureInfo.CurrentCulture);
+        var ran = actual.Value.ToString("N0", CultureInfo.CurrentCulture);
+        return $" The preview showed {shown} alert(s) but {ran} were {(applied is null ? "matched" : "applied")}: the list changed between the preview and the apply.";
     }
 
     /// <summary>One stream of an invocation's transcript as text, capped so a chatty run cannot flood a dialog.</summary>

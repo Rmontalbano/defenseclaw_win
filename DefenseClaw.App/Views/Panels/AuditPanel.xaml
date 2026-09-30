@@ -2,7 +2,9 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             panels:CompactLayout.Below="960">
     <!--
         Filter bar, virtualized row list with a fixed-width header, keyset "Load more", and a
         detail pane that pretty-prints structured_json. Column widths are repeated between the
@@ -13,7 +15,50 @@
         virtualization design is untouched) with the severity bar, severity text and cells restyled.
         Keyboard: Ctrl+F focuses the search box (ApplicationCommands.Find, handled in the
         code-behind), Esc closes the detail pane.
+
+        The detail pane exists only while a row is selected. Beside an empty list it was a 258 px
+        card that said "Select a row" while the list's columns truncated to eight characters at the
+        940 px window minimum. With no selection the list takes the whole width; with one, the two
+        split - and on a narrow panel (CompactLayout, under 960 px) the detail takes the whole width
+        instead and the list steps aside until it is closed (Esc, or its own button).
     -->
+    <UserControl.Resources>
+        <Style x:Key="AuditListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="3" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                    <Setter Property="Grid.ColumnSpan" Value="1" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasSelection}" Value="True" />
+                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="AuditDetailCard" TargetType="Border" BasedOn="{StaticResource DcCardCompact}">
+            <Setter Property="Grid.Column" Value="2" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasSelection}" Value="True" />
+                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Grid.Column" Value="0" />
+                    <Setter Property="Grid.ColumnSpan" Value="3" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -118,6 +163,18 @@
                                FontSize="12"
                                TextWrapping="Wrap"
                                Text="{Binding StatusNote}" />
+                    <!-- Where the empty detail pane's "Select a row ..." used to be. -->
+                    <TextBlock Margin="0,0,12,0" Text="Select a row for every column and its pretty-printed structured_json.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </WrapPanel>
             </StackPanel>
         </Border>
@@ -130,7 +187,7 @@
                 <ColumnDefinition Width="2*" MinWidth="260" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource DcCardFlush}">
+            <Border x:Name="ListCard" Style="{StaticResource AuditListCard}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -138,15 +195,17 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Column header. Widths mirror the row template below. -->
+                    <!-- Column header. Widths mirror the row template below: the short columns are fixed and the
+                         summary takes whatever is left (the old star ratios gave a 661 px list about 8 characters each
+                         for bucket, action and connector, and the summary no more than the rest). -->
                     <Grid Grid.Row="0" Margin="19,4,4,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="68" />
                             <ColumnDefinition Width="56" />
-                            <ColumnDefinition Width="1.1*" />
-                            <ColumnDefinition Width="1.2*" />
-                            <ColumnDefinition Width="0.9*" />
-                            <ColumnDefinition Width="1.4*" />
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="104" />
+                            <ColumnDefinition Width="72" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Style="{StaticResource DcColumnHeader}" Text="TIME" />
                         <TextBlock Grid.Column="1" Style="{StaticResource DcColumnHeader}" Text="SEVERITY" />
@@ -156,7 +215,8 @@
                         <TextBlock Grid.Column="5" Style="{StaticResource DcColumnHeader}" Text="SUMMARY" />
                     </Grid>
 
-                    <ListView Grid.Row="1"
+                    <ListView x:Name="RowList"
+                              Grid.Row="1"
                               ItemsSource="{Binding Rows}"
                               SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                               BorderThickness="0"
@@ -177,18 +237,16 @@
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <!-- Star widths, not fixed: the panel has to stay readable when
-                                     the window is narrow or the display scale is high. Ratios
-                                     mirror the header grid above. -->
+                                <!-- Widths mirror the header grid above; the summary is the one star column. -->
                                 <Grid Margin="0,3,0,3">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="68" />
                                         <ColumnDefinition Width="56" />
-                                        <ColumnDefinition Width="1.1*" />
-                                        <ColumnDefinition Width="1.2*" />
-                                        <ColumnDefinition Width="0.9*" />
-                                        <ColumnDefinition Width="1.4*" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="104" />
+                                        <ColumnDefinition Width="72" />
+                                        <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
 
                                     <Border Grid.Column="0"
@@ -217,6 +275,7 @@
                                                VerticalAlignment="Center"
                                                TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Bucket}"
                                                Text="{Binding Bucket}" />
 
                                     <TextBlock Grid.Column="4"
@@ -224,6 +283,7 @@
                                                VerticalAlignment="Center"
                                                TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Action}"
                                                Text="{Binding Action}" />
 
                                     <TextBlock Grid.Column="5"
@@ -231,6 +291,7 @@
                                                VerticalAlignment="Center"
                                                TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Connector}"
                                                Text="{Binding Connector}" />
 
                                     <TextBlock Grid.Column="6"
@@ -287,13 +348,13 @@
                 </Grid>
             </Border>
 
-            <!-- Detail pane -->
-            <Border Grid.Column="2" Style="{StaticResource DcCardCompact}">
+            <!-- Detail pane: present only while a row is selected (AuditDetailCard). -->
+            <Border x:Name="DetailCard" Style="{StaticResource AuditDetailCard}">
                 <Grid>
                     <!--
                         A ContentControl still applies its ContentTemplate when Content is null,
-                        so the template's static labels would show over the placeholder. Hiding
-                        the whole ScrollViewer on HasSelection is the fix - and HasSelection is a
+                        so the template's static labels would show over an empty pane. The card is
+                        hidden without a selection, and the ScrollViewer with it - HasSelection is a
                         plain bool, so the app-level BoolToVisibility converter covers it.
                     -->
                     <ScrollViewer Style="{StaticResource DcPageScroll}"
@@ -309,7 +370,8 @@
                                            Symbol="DocumentText24"
                                            Section="Observe"
                                            Content="Event details" />
-                                <ui:Button Grid.Column="1"
+                                <ui:Button x:Name="DetailClose"
+                                           Grid.Column="1"
                                            Appearance="Transparent"
                                            Command="{Binding ClearSelectionCommand}"
                                            ToolTip="Close details (Esc)"
@@ -384,20 +446,6 @@
                             </ContentControl>
                         </StackPanel>
                     </ScrollViewer>
-
-                    <TextBlock MaxWidth="240"
-                               VerticalAlignment="Center"
-                               Text="Select a row to see every column and its pretty-printed structured_json.">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcEmptyDetail}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
                 </Grid>
             </Border>
         </Grid>

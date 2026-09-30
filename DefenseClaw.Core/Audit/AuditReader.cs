@@ -98,14 +98,52 @@ public enum AuditQueryShape
 /// the index, 0.35-0.39 s walking).
 /// </para>
 /// <para>
-/// <b>Threading: every query runs on the thread pool.</b> Microsoft.Data.Sqlite's <c>async</c>
-/// methods complete synchronously (SQLite has no asynchronous I/O), so an <c>async</c> method that
-/// awaits them never yields and runs entirely on its caller's thread. This reader's callers are
-/// view-models awaiting from the dispatcher, so that froze the window for the length of every
+/// <b>Severity: never <c>UPPER(severity)</c>.</b> The severity of a row is compared and grouped on the
+/// raw column, so <c>idx_audit_severity_timestamp (severity, timestamp)</c> stays usable. Wrapping the
+/// column in <c>UPPER()</c> — as the reader used to, to fold case — hid it from that index: the 24 h
+/// severity tiles the Overview refreshes every 60 s fetched every one of the window's ~145 k rows from
+/// the 5.6 GB table just to read one column (0.7-0.9 s, 614 MB), and the Audit panel's "minimum
+/// severity" filter cost the same. The case folding still happens, but on the handful of distinct
+/// spellings instead of on every row: <see cref="DetectHintsAsync"/> reads them with a loose index scan
+/// (a recursive <c>MIN(severity) WHERE severity &gt; ?</c>, 0.1-2 ms however large the table is), and
+/// <c>UPPER</c> is applied to that list in code exactly as SQLite would (ASCII only), so the predicate
+/// selects the same rows as before.
+/// </para>
+/// <para>
+/// <b>Severity filter: seek or walk, decided per query — again.</b> A plain
+/// <c>severity IN (…)</c> for a <em>common</em> set is a disaster on this table: with no
+/// <c>sqlite_stat1</c> the planner seeks <c>idx_audit_severity_timestamp</c> and sorts every match for
+/// the ORDER BY (measured live: 28 s and 4.1 GB for the newest page of "INFO and above"). It is the
+/// bucket/connector story once more, so it gets the same answer: <see cref="IsCommonAsync"/> counts the
+/// qualifying spellings up to the threshold, and a common set is written <c>+e.severity IN (…)</c> so the
+/// retention index is walked (0.1-30 ms) where <see cref="WalkPays"/>, while a rare one (CRITICAL: 1.5 k
+/// of 490 k rows) is sought and sorted (20 ms).
+/// </para>
+/// <para>
+/// <b>Severity counts come from the index alone.</b> The tiles (and the count under a severity filter
+/// with nothing but a time window beside it) are answered by <see cref="BuildSpellingCountSql"/>: one
+/// <c>COUNT(*)</c> per stored spelling, each a covering range on <c>(severity, timestamp)</c> with no
+/// table row read (32-37 ms and 15 MB against 700-880 ms and 614 MB, identical counts). The index is on
+/// the <em>text</em> timestamp while the window is defined on the retention nanos, so the range uses the
+/// text of the window's first whole second as a bound and the one second it straddles is counted exactly
+/// against the nanos column. Every result is reconciled against the plain window count taken in the same
+/// statement (one snapshot): if the per-spelling counts do not add up — a legacy timestamp format that
+/// does not sort as text, a NULL retention key — the answer is thrown away and the original
+/// <c>GROUP BY UPPER(severity)</c> runs instead, so the fast path can only ever be faster, never different.
+/// </para>
+/// <para>
+/// <b>Threading: every query runs on the thread pool, and can be stopped.</b> Microsoft.Data.Sqlite's
+/// <c>async</c> methods complete synchronously (SQLite has no asynchronous I/O), so an <c>async</c>
+/// method that awaits them never yields and runs entirely on its caller's thread. This reader's callers
+/// are view-models awaiting from the dispatcher, so that froze the window for the length of every
 /// query (0.3-5 s on the live database). Each public method therefore starts its body with
 /// <see cref="ReaderOffload"/> (<c>Task.Run</c>) and returns a task that is really pending;
-/// callers need no <c>Task.Run</c> of their own. The token is honoured between statements and rows,
-/// not inside one statement.
+/// callers need no <c>Task.Run</c> of their own. The token is honoured between statements and rows
+/// <em>and</em> inside one: every connection registers <see cref="ReaderOffload.InterruptOnCancel"/>, so
+/// cancelling ends a running scan with <c>sqlite3_interrupt</c> and the call throws
+/// <see cref="OperationCanceledException"/>. That matters for a text search — <c>LIKE '%x%'</c> has no
+/// index and reads the whole window (1.4 s for 24 h, 17 s cold for 7 days on the live database) — which
+/// the Audit panel abandons and restarts on every keystroke.
 /// </para>
 /// </summary>
 public sealed class AuditReader
@@ -124,6 +162,14 @@ public sealed class AuditReader
     /// measurements behind 10,000.
     /// </summary>
     public const int DefaultCommonRowThreshold = 10_000;
+
+    /// <summary>
+    /// The most distinct severity spellings the reader will enumerate. The real table has five (INFO, LOW,
+    /// MEDIUM, HIGH, CRITICAL); a database with more than this many is not one the gateway wrote, and the
+    /// loose index scan that lists them is not worth trusting, so such a database is read with the original
+    /// <c>UPPER(severity)</c> shapes.
+    /// </summary>
+    private const int MaxSeveritySpellings = 64;
 
     /// <summary>
     /// The raw, trigger-maintained, indexed sort/range column. Compare and order on this
@@ -146,6 +192,9 @@ public sealed class AuditReader
     /// </summary>
     private const string SortKey = "COALESCE(" + RetentionColumn + ", " + TextDerivedNanos + ")";
 
+    /// <summary>The id as the keyset cursor compares it: a NULL id (see <see cref="Map"/>) is the empty string.</summary>
+    private const string IdKey = "COALESCE(e.id, '')";
+
     private const string SelectColumns = """
         e.id, e.timestamp, e.action, e.target, e.actor, e.details, e.severity,
         e.structured_json, e.bucket, e.connector, e.event_name, e.agent_name,
@@ -155,6 +204,9 @@ public sealed class AuditReader
 
     private readonly string _connectionString;
     private readonly int _commonRowThreshold;
+    private long _pageQueries;
+    private long _countQueries;
+    private long _spellingFallbacks;
 
     /// <param name="databasePath">Path to <c>audit.db</c>.</param>
     /// <param name="commonRowThreshold">
@@ -174,6 +226,25 @@ public sealed class AuditReader
     public string DatabasePath { get; }
 
     public bool Exists => File.Exists(DatabasePath);
+
+    /// <summary>
+    /// How many times <see cref="QueryAsync"/> (and so <see cref="ListAsync"/>) has been called on this
+    /// reader, counted when the call is made, whether or not it finished or was cancelled. A diagnostic
+    /// seam: a panel that is meant to coalesce a burst of filter changes into one page query can be held
+    /// to it, which latency alone never shows.
+    /// </summary>
+    public long PageQueryCount => Interlocked.Read(ref _pageQueries);
+
+    /// <summary>The same count for <see cref="CountAsync"/> and <see cref="CountBySeverityAsync"/>.</summary>
+    public long CountQueryCount => Interlocked.Read(ref _countQueries);
+
+    /// <summary>
+    /// How many times the index-only severity counts were thrown away because they did not add up to the window
+    /// total (see <see cref="BuildSpellingCountSql"/>) and the exact <c>UPPER</c> statement ran instead. The answer is
+    /// right either way, so a reconcile that fails quietly on every call would go unnoticed except as the old
+    /// 600 MB refresh; the test suite holds this at zero for a database whose timestamps are all RFC3339 UTC.
+    /// </summary>
+    internal long SpellingCountFallbacks => Interlocked.Read(ref _spellingFallbacks);
 
     /// <summary>
     /// How a query expresses its time window, ordering and keyset cursor. Chosen per call by
@@ -232,8 +303,11 @@ public sealed class AuditReader
     /// timestamp still have one total order and a cursor never skips or repeats them.
     /// </para>
     /// </summary>
-    public Task<AuditPage> QueryAsync(AuditQuery query, CancellationToken cancellationToken = default) =>
-        ReaderOffload.Run(() => QueryCoreAsync(query, cancellationToken), cancellationToken);
+    public Task<AuditPage> QueryAsync(AuditQuery query, CancellationToken cancellationToken = default)
+    {
+        _ = Interlocked.Increment(ref _pageQueries);
+        return ReaderOffload.Run(() => QueryCoreAsync(query, cancellationToken), cancellationToken);
+    }
 
     private async Task<AuditPage> QueryCoreAsync(AuditQuery query, CancellationToken cancellationToken)
     {
@@ -243,7 +317,8 @@ public sealed class AuditReader
 
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var hints = await DetectHintsAsync(connection, query, cancellationToken).ConfigureAwait(false);
+        using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
+        var hints = await DetectHintsAsync(connection, query, AuditQueryShape.Page, cancellationToken).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
         command.CommandText = BuildPageSql(command, query, hints);
@@ -282,6 +357,7 @@ public sealed class AuditReader
 
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText = $"SELECT {SelectColumns}, {SortKey} AS sort_nanos FROM audit_events e WHERE e.id = $id LIMIT 1";
@@ -295,20 +371,25 @@ public sealed class AuditReader
     /// Counts matching rows per severity — the dashboard tiles. Honours every filter on
     /// <paramref name="query"/> except paging.
     /// <para>
-    /// Groups on <c>UPPER(severity)</c> rather than the raw column. Grouping on the raw column
-    /// made SQLite pick <c>idx_audit_severity_timestamp</c> as a full-index scan (to avoid a
-    /// sort) and ignore the window (1.7 s for 24 h); grouping on the expression cannot use that
-    /// index, so the planner takes the retention-index range and a temp B-tree for the group
-    /// (0.15–0.5 s for 24 h, ~47k rows, dominated by fetching each row's severity).
-    /// <see cref="AuditSeverityExtensions.Parse"/> upper-cases and trims before matching, so
-    /// folding case in SQL cannot change the result — the loop below still sums any groups that
-    /// parse to the same level (<c>WARN</c>/<c>WARNING</c>, <c>INFO</c>/<c>NOTICE</c>, …).
+    /// A window-only query (no bucket, connector, text or upper bound — what the Overview asks for) is
+    /// answered from <c>idx_audit_severity_timestamp</c> alone, one covering count per stored spelling; see
+    /// <see cref="BuildSpellingCountSql"/>. Anything else, and any database where that answer does not
+    /// reconcile with the window total, groups on <c>UPPER(severity)</c>: grouping on the raw column made
+    /// SQLite pick <c>idx_audit_severity_timestamp</c> as a full-index scan (to avoid a sort) and ignore the
+    /// window (1.7 s for 24 h), while the expression takes the retention-index range and a temp B-tree for
+    /// the group (0.15–0.5 s for 24 h at ~47k rows — 0.7-0.9 s and 614 MB at today's ~145k, all of it
+    /// fetching each row's severity). <see cref="AuditSeverityExtensions.Parse"/> upper-cases and trims before
+    /// matching, so folding case in SQL cannot change the result — the loops still sum any groups that parse
+    /// to the same level (<c>WARN</c>/<c>WARNING</c>, <c>INFO</c>/<c>NOTICE</c>, …).
     /// </para>
     /// </summary>
     public Task<IReadOnlyDictionary<AuditSeverity, int>> CountBySeverityAsync(
         AuditQuery query,
-        CancellationToken cancellationToken = default) =>
-        ReaderOffload.Run(() => CountBySeverityCoreAsync(query, cancellationToken), cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        _ = Interlocked.Increment(ref _countQueries);
+        return ReaderOffload.Run(() => CountBySeverityCoreAsync(query, cancellationToken), cancellationToken);
+    }
 
     private async Task<IReadOnlyDictionary<AuditSeverity, int>> CountBySeverityCoreAsync(
         AuditQuery query,
@@ -318,26 +399,43 @@ public sealed class AuditReader
 
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var hints = await DetectHintsAsync(connection, query, cancellationToken).ConfigureAwait(false);
+        using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
+        var hints = await DetectHintsAsync(connection, query, AuditQueryShape.CountBySeverity, cancellationToken).ConfigureAwait(false);
+
+        var counts = new Dictionary<AuditSeverity, int>();
+        if (UsesSpellingCounts(query, hints, AuditQueryShape.CountBySeverity)
+            && await CountBySpellingAsync(connection, query, hints, cancellationToken).ConfigureAwait(false) is { } spellings)
+        {
+            // A spelling with no row in the window is no group, as it never was in the GROUP BY.
+            foreach (var (spelling, count) in spellings.Where(s => s.Count > 0))
+            {
+                Add(counts, AuditSeverityExtensions.Parse(spelling), count);
+            }
+
+            return counts;
+        }
 
         await using var command = connection.CreateCommand();
         command.CommandText = BuildSeverityCountSql(command, query, hints);
 
-        var counts = new Dictionary<AuditSeverity, int>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var severity = AuditSeverityExtensions.Parse(reader.IsDBNull(0) ? null : reader.GetString(0));
-            var count = reader.GetInt32(1);
-            counts[severity] = counts.TryGetValue(severity, out var existing) ? existing + count : count;
+            Add(counts, AuditSeverityExtensions.Parse(reader.IsDBNull(0) ? null : reader.GetString(0)), reader.GetInt32(1));
         }
 
         return counts;
+
+        static void Add(Dictionary<AuditSeverity, int> tiles, AuditSeverity severity, int count) =>
+            tiles[severity] = tiles.TryGetValue(severity, out var existing) ? existing + count : count;
     }
 
     /// <summary>Total matching rows. Separate from paging so tiles stay accurate.</summary>
-    public Task<int> CountAsync(AuditQuery query, CancellationToken cancellationToken = default) =>
-        ReaderOffload.Run(() => CountCoreAsync(query, cancellationToken), cancellationToken);
+    public Task<int> CountAsync(AuditQuery query, CancellationToken cancellationToken = default)
+    {
+        _ = Interlocked.Increment(ref _countQueries);
+        return ReaderOffload.Run(() => CountCoreAsync(query, cancellationToken), cancellationToken);
+    }
 
     private async Task<int> CountCoreAsync(AuditQuery query, CancellationToken cancellationToken)
     {
@@ -345,13 +443,63 @@ public sealed class AuditReader
 
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var hints = await DetectHintsAsync(connection, query, cancellationToken).ConfigureAwait(false);
+        using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
+        var hints = await DetectHintsAsync(connection, query, AuditQueryShape.Count, cancellationToken).ConfigureAwait(false);
+
+        // "HIGH and above, last 24 hours" and nothing else: the same per-spelling covering counts as the tiles,
+        // added up for the spellings that qualify. See UsesSpellingCounts for the shapes this covers.
+        if (UsesSpellingCounts(query, hints, AuditQueryShape.Count)
+            && query.MinimumSeverity is { } minimum
+            && await CountBySpellingAsync(connection, query, hints, cancellationToken).ConfigureAwait(false) is { } spellings)
+        {
+            var qualifying = QualifyingSpellings(hints.PresentSeverities!, minimum).ToHashSet(StringComparer.Ordinal);
+            return (int)spellings.Where(s => s.Spelling is not null && qualifying.Contains(s.Spelling)).Sum(s => (long)s.Count);
+        }
 
         await using var command = connection.CreateCommand();
         command.CommandText = BuildCountSql(command, query, hints);
 
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is null or DBNull ? 0 : Convert.ToInt32(result, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Runs <see cref="BuildSpellingCountSql"/> and returns each stored spelling's count (NULL severity
+    /// included, as a null spelling) — or <c>null</c> when they do not add up to the window total the same
+    /// statement read, in which case the caller falls back to the exact <c>UPPER</c> shapes.
+    /// </summary>
+    private async Task<List<(string? Spelling, int Count)>?> CountBySpellingAsync(
+        SqliteConnection connection,
+        AuditQuery query,
+        PlanHints hints,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = BuildSpellingCountSql(command, query, hints);
+
+        var counts = new List<(string? Spelling, int Count)>();
+        long total = -1;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var count = reader.GetInt64(2);
+            if (reader.GetInt64(0) == 1)
+            {
+                total = count;
+            }
+            else
+            {
+                counts.Add((reader.IsDBNull(1) ? null : reader.GetString(1), checked((int)count)));
+            }
+        }
+
+        if (total >= 0 && counts.Sum(c => (long)c.Count) == total)
+        {
+            return counts;
+        }
+
+        _ = Interlocked.Increment(ref _spellingFallbacks);
+        return null;
     }
 
     /// <summary>
@@ -380,13 +528,19 @@ public sealed class AuditReader
 
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var hints = await DetectHintsAsync(connection, query, cancellationToken).ConfigureAwait(false);
+        using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
+        var hints = await DetectHintsAsync(connection, query, shape, cancellationToken).ConfigureAwait(false);
 
+        // Mirrors QueryCoreAsync / CountCoreAsync / CountBySeverityCoreAsync: the statement a shape would run first.
+        // (The exact UPPER fallback that follows a failed reconcile is the statement of a different data set, so it is
+        // not described here.)
         await using var command = connection.CreateCommand();
         var sql = shape switch
         {
             AuditQueryShape.Page => BuildPageSql(command, query, hints),
+            AuditQueryShape.Count when UsesSpellingCounts(query, hints, shape) => BuildSpellingCountSql(command, query, hints),
             AuditQueryShape.Count => BuildCountSql(command, query, hints),
+            AuditQueryShape.CountBySeverity when UsesSpellingCounts(query, hints, shape) => BuildSpellingCountSql(command, query, hints),
             AuditQueryShape.CountBySeverity => BuildSeverityCountSql(command, query, hints),
             _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "Unknown query shape."),
         };
@@ -424,10 +578,40 @@ public sealed class AuditReader
         // Column names are compile-time constants from this class only — never user input.
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
 
+        return (await LoadDistinctAsync(connection, column, skipEmpty: true, limit: null, cancellationToken).ConfigureAwait(false))!;
+    }
+
+    /// <summary>
+    /// The distinct non-NULL values of <paramref name="column"/> in ascending (binary) order, by a
+    /// <em>loose index scan</em>: each step is <c>MIN(column) WHERE column &gt; previous</c>, one index seek,
+    /// so the cost is the number of distinct values (0.1-0.8 ms for the live table's 12 buckets, 1 connector
+    /// and 31 actions) and not the number of rows. <c>SELECT DISTINCT column</c> walks the whole covering index
+    /// instead — 763 + 263 + 398 ms and 55 MB for the three lists at 490 k rows, growing with the table, before
+    /// the Audit panel showed a single row. Same rows as that statement: NULL is omitted, and
+    /// <paramref name="skipEmpty"/> omits <c>''</c> too.
+    /// <para>
+    /// <paramref name="limit"/> stops the scan after that many values and returns <c>null</c> if the column has
+    /// more, so a caller that needs the <em>complete</em> list can tell it does not have one.
+    /// <paramref name="column"/> is a compile-time constant from this class, never user input.
+    /// </para>
+    /// </summary>
+    private static async Task<List<string>?> LoadDistinctAsync(
+        SqliteConnection connection,
+        string column,
+        bool skipEmpty,
+        int? limit,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            $"SELECT DISTINCT {column} FROM audit_events WHERE {column} IS NOT NULL AND {column} <> '' ORDER BY {column}";
+        command.CommandText = BuildDistinctSql(column, skipEmpty, limited: limit is not null);
+
+        if (limit is { } max)
+        {
+            // One past the limit, so "more than max" is distinguishable from "exactly max".
+            command.Parameters.AddWithValue("$limit", max + 1);
+        }
 
         var values = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -436,7 +620,25 @@ public sealed class AuditReader
             values.Add(reader.GetString(0));
         }
 
-        return values;
+        return limit is { } cap && values.Count > cap ? null : values;
+    }
+
+    /// <summary>The loose-index-scan statement behind <see cref="LoadDistinctAsync"/> (internal so a test can EXPLAIN it).</summary>
+    internal static string BuildDistinctSql(string column, bool skipEmpty, bool limited)
+    {
+        var first = skipEmpty
+            ? $"SELECT MIN({column}) FROM audit_events WHERE {column} <> ''"
+            : $"SELECT MIN({column}) FROM audit_events";
+
+        return
+            $"""
+            WITH RECURSIVE t(v) AS (
+                {first}
+                UNION ALL
+                SELECT (SELECT MIN({column}) FROM audit_events WHERE {column} > t.v) FROM t WHERE v IS NOT NULL{(limited ? " LIMIT $limit" : string.Empty)}
+            )
+            SELECT v FROM t WHERE v IS NOT NULL ORDER BY v
+            """;
     }
 
     /// <summary>
@@ -459,21 +661,92 @@ public sealed class AuditReader
     }
 
     /// <summary>
-    /// How one query will be written: the <see cref="KeyMode"/>, and whether its connector filter and
-    /// its bucket filter (if any) select a <em>common</em> set of rows. A common set is written
-    /// <c>+e.connector</c> / <c>+e.bucket</c> so the planner walks the retention index instead of
-    /// seeking <c>idx_audit_connector</c> / <c>idx_audit_bucket_timestamp</c> — but only in the
-    /// shapes where a walk pays; see <see cref="WalkPays"/>.
+    /// How one query will be written: the <see cref="KeyMode"/>, and whether its connector filter, its
+    /// bucket filter and its minimum-severity filter (if any) select a <em>common</em> set of rows. A common
+    /// set is written <c>+e.connector</c> / <c>+e.bucket</c> / <c>+e.severity</c> so the planner walks the
+    /// retention index instead of seeking <c>idx_audit_connector</c> / <c>idx_audit_bucket_timestamp</c> /
+    /// <c>idx_audit_severity_timestamp</c> — but only in the shapes where a walk pays; see
+    /// <see cref="WalkPays"/>.
+    /// <para>
+    /// <paramref name="PresentSeverities"/> is every distinct non-NULL severity spelling stored in the table
+    /// (null when the query does not need them, or when there are more than
+    /// <see cref="MaxSeveritySpellings"/>, in which case severity is handled with <c>UPPER</c> as it used to
+    /// be). It is what turns "at or above HIGH" into a list of raw column values.
+    /// </para>
     /// </summary>
-    private readonly record struct PlanHints(KeyMode Mode, bool CommonConnector, bool CommonBucket);
+    private readonly record struct PlanHints(
+        KeyMode Mode,
+        bool CommonConnector,
+        bool CommonBucket,
+        IReadOnlyList<string>? PresentSeverities = null,
+        bool CommonSeverity = false);
 
-    private async Task<PlanHints> DetectHintsAsync(SqliteConnection connection, AuditQuery query, CancellationToken cancellationToken)
+    private async Task<PlanHints> DetectHintsAsync(
+        SqliteConnection connection,
+        AuditQuery query,
+        AuditQueryShape shape,
+        CancellationToken cancellationToken)
     {
         var mode = await DetectKeyModeAsync(connection, cancellationToken).ConfigureAwait(false);
         var connectors = string.IsNullOrWhiteSpace(query.Connector) ? Array.Empty<string>() : new[] { query.Connector };
         var commonConnector = await IsCommonAsync(connection, "connector", connectors, cancellationToken).ConfigureAwait(false);
         var commonBucket = await IsCommonAsync(connection, "bucket", BucketsOf(query), cancellationToken).ConfigureAwait(false);
-        return new PlanHints(mode, commonConnector, commonBucket);
+
+        // The distinct spellings are a loose index scan (sub-millisecond), read per query rather than cached so a
+        // spelling the gateway starts writing tomorrow is never missing from today's predicate.
+        IReadOnlyList<string>? present = null;
+        var commonSeverity = false;
+        var filtersSeverity = query.MinimumSeverity is { } minimum && minimum != AuditSeverity.Unknown;
+        if (filtersSeverity || shape == AuditQueryShape.CountBySeverity)
+        {
+            present = await LoadDistinctAsync(connection, "severity", skipEmpty: false, MaxSeveritySpellings, cancellationToken).ConfigureAwait(false);
+            if (present is not null && filtersSeverity)
+            {
+                var qualifying = QualifyingSpellings(present, query.MinimumSeverity!.Value);
+                commonSeverity = await IsCommonAsync(connection, "severity", qualifying, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return new PlanHints(mode, commonConnector, commonBucket, present, commonSeverity);
+    }
+
+    /// <summary>
+    /// The stored spellings among <paramref name="present"/> whose upper-cased form is at or above
+    /// <paramref name="minimum"/> — the rows <c>UPPER(severity) IN (…)</c> selected, as raw column values.
+    /// </summary>
+    private static List<string> QualifyingSpellings(IReadOnlyList<string> present, AuditSeverity minimum)
+    {
+        var allowed = new HashSet<string>(AuditSeverityExtensions.AtOrAbove(minimum), StringComparer.Ordinal);
+        return present.Where(spelling => allowed.Contains(AsciiUpper(spelling))).ToList();
+    }
+
+    /// <summary>
+    /// <c>UPPER()</c> as SQLite implements it without ICU: ASCII letters only, everything else untouched. Not
+    /// <see cref="string.ToUpperInvariant"/>, which would also fold letters SQLite leaves alone and so select rows
+    /// the SQL never did.
+    /// </summary>
+    private static string AsciiUpper(string value)
+    {
+        var needsFolding = false;
+        foreach (var c in value)
+        {
+            if (c is >= 'a' and <= 'z')
+            {
+                needsFolding = true;
+                break;
+            }
+        }
+
+        return !needsFolding
+            ? value
+            : string.Create(value.Length, value, static (span, source) =>
+            {
+                for (var i = 0; i < source.Length; i++)
+                {
+                    var c = source[i];
+                    span[i] = c is >= 'a' and <= 'z' ? (char)(c - 32) : c;
+                }
+            });
     }
 
     /// <summary>
@@ -504,7 +777,7 @@ public sealed class AuditReader
             return false;
         }
 
-        // "column" is one of two compile-time constants from DetectHintsAsync — never user input.
+        // "column" is one of three compile-time constants from DetectHintsAsync — never user input.
         var names = new List<string>(values.Count);
         await using var probe = connection.CreateCommand();
         for (var i = 0; i < values.Count; i++)
@@ -541,7 +814,7 @@ public sealed class AuditReader
     }
 
     /// <summary>
-    /// Whether writing a common connector/bucket filter as a retention-index walk beats the index
+    /// Whether writing a common connector/bucket/severity filter as a retention-index walk beats the index
     /// seek for this shape. A walk reads every row of the table — or, with a <c>From</c> bound, of the
     /// window — testing the filter as it goes, and stops early only where the answer is "the newest N"
     /// (<see cref="AuditQueryShape.Page"/>). A COUNT or GROUP BY with no lower bound must read every
@@ -589,12 +862,124 @@ public sealed class AuditReader
         return sql.ToString();
     }
 
+    /// <summary>
+    /// The exact tiles statement: <c>GROUP BY UPPER(severity)</c>. Correct for every filter and every database, and
+    /// the price is a row fetch per row in the window (see the type documentation); the reader runs it only when
+    /// <see cref="UsesSpellingCounts"/> says no, or the fast answer did not reconcile.
+    /// </summary>
     private static string BuildSeverityCountSql(SqliteCommand command, AuditQuery query, PlanHints hints)
     {
         var sql = new StringBuilder().AppendLine("SELECT UPPER(e.severity), COUNT(*) FROM audit_events e");
         AppendWhere(sql, command, query, hints, AuditQueryShape.CountBySeverity);
         sql.AppendLine("GROUP BY UPPER(e.severity)");
         return sql.ToString();
+    }
+
+    /// <summary>
+    /// Whether <paramref name="shape"/> for <paramref name="query"/> can be answered by
+    /// <see cref="BuildSpellingCountSql"/>: the tiles with no minimum, or a count <em>with</em> a minimum severity,
+    /// when the only other filter is a lower time bound — the columns the covering index does not hold (bucket,
+    /// connector, action, details, …) would each need a row fetch per counted row, which is the cost being
+    /// avoided — and the spellings are known.
+    /// </summary>
+    private static bool UsesSpellingCounts(AuditQuery query, PlanHints hints, AuditQueryShape shape)
+    {
+        if (hints.PresentSeverities is null
+            || query.To is not null
+            || !string.IsNullOrWhiteSpace(query.Connector)
+            || !string.IsNullOrWhiteSpace(query.ActionContains)
+            || !string.IsNullOrWhiteSpace(query.SearchText)
+            || BucketsOf(query).Count > 0)
+        {
+            return false;
+        }
+
+        var filtersSeverity = query.MinimumSeverity is { } minimum && minimum != AuditSeverity.Unknown;
+        return shape switch
+        {
+            AuditQueryShape.CountBySeverity => !filtersSeverity,
+            AuditQueryShape.Count => filtersSeverity,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// One row per stored severity spelling (plus NULL) and a last row with the window total:
+    /// <c>(kind, spelling, n)</c>, kind 0 for a spelling and 1 for the total.
+    /// <para>
+    /// Each spelling's count is <c>COUNT(*) WHERE severity = ? AND timestamp &gt;= ?</c>, which SQLite answers from
+    /// <c>idx_audit_severity_timestamp</c> without reading a table row: <c>SEARCH … USING COVERING INDEX
+    /// (severity=? AND timestamp&gt;?)</c>. The window, however, is defined on the retention nanos, and the index
+    /// holds the <em>text</em> timestamp. The bound is therefore the text of the first whole second at or after
+    /// the window start (<c>$textFrom1</c>): every row at or after it is in the window, and every row whose text
+    /// is before the second the window starts in (<c>$textFrom0</c>) is out, whatever the fraction. Only the rows
+    /// of that one second are in doubt, and a second of events is a handful of rows: they are counted exactly
+    /// against the window predicate in a second, non-covering subquery. (Fractions are never compared as text —
+    /// Go trims trailing zeros, so <c>…:23.1Z</c> sorts after <c>…:23.15Z</c> — only whole-second prefixes are.)
+    /// </para>
+    /// <para>
+    /// The total is the ordinary window <c>COUNT(*)</c> on the retention index, in the same statement and so the
+    /// same snapshot; <see cref="CountBySpellingAsync"/> rejects the answer if the spellings do not sum to it.
+    /// That is the guard for what a text bound cannot see: a timestamp in a format that does not sort as
+    /// <c>yyyy-MM-ddTHH:mm:ss…</c>, an offset instead of <c>Z</c>, a row with no retention key.
+    /// </para>
+    /// </summary>
+    private static string BuildSpellingCountSql(SqliteCommand command, AuditQuery query, PlanHints hints)
+    {
+        var spellings = new List<string?>(hints.PresentSeverities!) { null };
+
+        // The window predicate, once, so its parameter is bound once and the total and the boundary second cannot
+        // disagree about it. Empty when there is no lower bound.
+        var windowClauses = new List<string>();
+        AppendWindow(windowClauses, command, query with { MinimumSeverity = null }, hints.Mode);
+        var window = string.Join(" AND ", windowClauses);
+
+        var boundarySecond = false;
+        if (query.From is { } from)
+        {
+            var utc = from.UtcDateTime;
+            var sinceSecond = utc.Ticks % TimeSpan.TicksPerSecond;
+            boundarySecond = sinceSecond != 0;
+            var firstWhole = boundarySecond ? utc.AddTicks(TimeSpan.TicksPerSecond - sinceSecond) : utc;
+            command.Parameters.AddWithValue("$textFrom0", TextSecond(utc));
+            command.Parameters.AddWithValue("$textFrom1", TextSecond(firstWhole));
+        }
+
+        var sql = new StringBuilder();
+        for (var i = 0; i < spellings.Count; i++)
+        {
+            var name = $"$spelling{i.ToString(CultureInfo.InvariantCulture)}";
+            var spelling = spellings[i];
+            if (spelling is not null)
+            {
+                command.Parameters.AddWithValue(name, spelling);
+            }
+
+            var matches = spelling is null ? "severity IS NULL" : $"severity = {name}";
+            _ = sql.Append("SELECT 0 AS kind, ").Append(spelling is null ? "NULL" : name).Append(" AS spelling, ");
+            if (window.Length == 0)
+            {
+                _ = sql.Append($"(SELECT COUNT(*) FROM audit_events WHERE {matches})");
+            }
+            else
+            {
+                _ = sql.Append($"(SELECT COUNT(*) FROM audit_events WHERE {matches} AND timestamp >= $textFrom1)");
+                if (boundarySecond)
+                {
+                    _ = sql.Append(" + (SELECT COUNT(*) FROM audit_events e")
+                        .Append($" WHERE e.{matches} AND e.timestamp >= $textFrom0 AND e.timestamp < $textFrom1 AND {window})");
+                }
+            }
+
+            _ = sql.AppendLine(" AS n").AppendLine("UNION ALL");
+        }
+
+        _ = sql.Append("SELECT 1, NULL, (SELECT COUNT(*) FROM audit_events e")
+            .Append(window.Length == 0 ? string.Empty : " WHERE " + window)
+            .AppendLine(")");
+        return sql.ToString();
+
+        static string TextSecond(DateTime utc) => utc.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
     }
 
     private static void AppendWhere(StringBuilder sql, SqliteCommand command, AuditQuery query, PlanHints hints, AuditQueryShape shape)
@@ -625,16 +1010,45 @@ public sealed class AuditReader
 
         if (query.MinimumSeverity is { } minimum && minimum != AuditSeverity.Unknown)
         {
-            var allowed = AuditSeverityExtensions.AtOrAbove(minimum);
-            var names = new List<string>();
-            for (var i = 0; i < allowed.Count; i++)
+            if (hints.PresentSeverities is { } present)
             {
-                var name = $"$sev{i.ToString(CultureInfo.InvariantCulture)}";
-                names.Add(name);
-                command.Parameters.AddWithValue(name, allowed[i]);
-            }
+                // The raw column against the spellings that really are stored: the same rows as
+                // UPPER(severity) IN (...) selected, but sargable. A common set is walked on the retention
+                // index ("+"), a rare one sought on idx_audit_severity_timestamp — see PlanHints.
+                var stored = QualifyingSpellings(present, minimum);
+                if (stored.Count == 0)
+                {
+                    // Nothing stored is at or above the minimum.
+                    clauses.Add("0");
+                }
+                else
+                {
+                    var names = new List<string>();
+                    for (var i = 0; i < stored.Count; i++)
+                    {
+                        var name = $"$sev{i.ToString(CultureInfo.InvariantCulture)}";
+                        names.Add(name);
+                        command.Parameters.AddWithValue(name, stored[i]);
+                    }
 
-            clauses.Add($"UPPER(e.severity) IN ({string.Join(", ", names)})");
+                    var severity = hints.CommonSeverity && walk ? "+e.severity" : "e.severity";
+                    clauses.Add($"{severity} IN ({string.Join(", ", names)})");
+                }
+            }
+            else
+            {
+                // More spellings than any real database has (see MaxSeveritySpellings): fold case per row.
+                var allowed = AuditSeverityExtensions.AtOrAbove(minimum);
+                var names = new List<string>();
+                for (var i = 0; i < allowed.Count; i++)
+                {
+                    var name = $"$sev{i.ToString(CultureInfo.InvariantCulture)}";
+                    names.Add(name);
+                    command.Parameters.AddWithValue(name, allowed[i]);
+                }
+
+                clauses.Add($"UPPER(e.severity) IN ({string.Join(", ", names)})");
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(query.Connector))
@@ -685,9 +1099,14 @@ public sealed class AuditReader
             // "(nanos < $c OR (nanos = $c AND id < $id))" the OR invites MULTI-INDEX OR plus a
             // sort, which is the very thing this rewrite removes. NullSafe keeps the original
             // COALESCE form so a NULL-column row has a well-defined position.
+            //
+            // The id is compared as COALESCE(id, ''): "id TEXT PRIMARY KEY" admits NULL, and "NULL < 'x'" is not
+            // true, so a null-id row tied on timestamp with the row a page ended on would be skipped. Empty is where
+            // NULL sorts (below every string), and Map hands such a row exactly that id. It is only ever the residual
+            // of the tie-break, never the range the planner seeks, so the plan is unchanged.
             clauses.Add(mode == KeyMode.Indexed
-                ? $"({RetentionColumn} {comparison}= $cursorNanos AND ({RetentionColumn} {comparison} $cursorNanos OR e.id {comparison} $cursorId))"
-                : $"({SortKey} {comparison} $cursorNanos OR ({SortKey} = $cursorNanos AND e.id {comparison} $cursorId))");
+                ? $"({RetentionColumn} {comparison}= $cursorNanos AND ({RetentionColumn} {comparison} $cursorNanos OR {IdKey} {comparison} $cursorId))"
+                : $"({SortKey} {comparison} $cursorNanos OR ({SortKey} = $cursorNanos AND {IdKey} {comparison} $cursorId))");
         }
 
         if (clauses.Count > 0)
@@ -757,7 +1176,11 @@ public sealed class AuditReader
 
         return new AuditEvent
         {
-            Id = reader.GetString(0),
+            // "id TEXT PRIMARY KEY" is not NOT NULL: SQLite lets a text primary key hold NULL, and one such row used to
+            // make this method throw and the whole page with it. The row is still an audit event, so it is shown, with
+            // an empty id. Empty is also exactly where NULL sorts (below every string), so the keyset cursor built from
+            // it ("id < ''" descending, "id > ''" ascending) still lands on the right side of its ties.
+            Id = reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
             RawTimestamp = rawTimestamp,
             Timestamp = ParseTimestamp(rawTimestamp, nanos),
             TimestampNanos = nanos,

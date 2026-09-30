@@ -2,7 +2,9 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             panels:CompactLayout.Below="960">
     <!--
         Filters above, virtualized list left, detail pane right. The list is a ListView so
         WPF's own VirtualizingStackPanel does the recycling - the alert stream on a busy box
@@ -11,8 +13,47 @@
         On the shared Dc* design system. The one local visual is the severity chip (a toggle that
         carries its severity's tone). Keyboard: Ctrl+F focuses the filter box, Esc closes the review
         dialog and then the detail pane (both handled in the code-behind).
+
+        The detail pane exists only while an alert is selected (see AuditPanel for why): with no selection the
+        list takes the whole width, with one the two split, and on a narrow panel (CompactLayout, under 960 px)
+        the detail replaces the list until it is closed.
     -->
     <UserControl.Resources>
+        <Style x:Key="AlertListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="3" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                    <Setter Property="Grid.ColumnSpan" Value="1" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasSelection}" Value="True" />
+                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="AlertDetailCard" TargetType="Border" BasedOn="{StaticResource DcCardCompact}">
+            <Setter Property="Grid.Column" Value="2" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasSelection}" Value="True" />
+                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Grid.Column" Value="0" />
+                    <Setter Property="Grid.ColumnSpan" Value="3" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!--
             Severity chip. ON: the severity's own tone (tinted fill + tone text via DcBadge) and a
             check mark. OFF: outline only, dim text, no tone. State is never colour alone - the
@@ -195,7 +236,19 @@
 
                 <WrapPanel Margin="0,0,12,8">
                     <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,12,0" Text="{Binding SourceNote}" />
-                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding CountSummary}" />
+                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,12,0" Text="{Binding CountSummary}" />
+                    <!-- Where the empty detail pane's "Select an alert ..." used to be. -->
+                    <TextBlock Text="Select an alert to see its evidence and full attribute bag.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </WrapPanel>
             </StackPanel>
         </Border>
@@ -208,9 +261,10 @@
                 <ColumnDefinition Width="2*" MinWidth="240" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource DcCardFlush}">
+            <Border x:Name="ListCard" Style="{StaticResource AlertListCard}">
                 <Grid>
-                    <ListView ItemsSource="{Binding Alerts}"
+                    <ListView x:Name="AlertList"
+                              ItemsSource="{Binding Alerts}"
                               SelectedItem="{Binding SelectedAlert, Mode=TwoWay}"
                               BorderThickness="0"
                               Background="Transparent"
@@ -312,12 +366,12 @@
                 </Grid>
             </Border>
 
-            <!-- Detail pane -->
-            <Border Grid.Column="2" Style="{StaticResource DcCardCompact}">
+            <!-- Detail pane: present only while an alert is selected (AlertDetailCard). -->
+            <Border x:Name="DetailCard" Style="{StaticResource AlertDetailCard}">
                 <Grid>
                     <!--
                         A ContentControl still applies its ContentTemplate when Content is null, so the
-                        template's static labels would sit on top of the placeholder. HasSelection is a
+                        template's static labels would sit on top of an empty pane. HasSelection is a
                         plain bool, so the app-level converter hides the whole pane instead.
                     -->
                     <ScrollViewer Style="{StaticResource DcPageScroll}"
@@ -333,7 +387,8 @@
                                            Symbol="Alert24"
                                            Section="Observe"
                                            Content="Alert details" />
-                                <ui:Button Grid.Column="1"
+                                <ui:Button x:Name="DetailClose"
+                                           Grid.Column="1"
                                            Appearance="Transparent"
                                            Command="{Binding ClearSelectionCommand}"
                                            ToolTip="Close details (Esc)"
@@ -381,13 +436,16 @@
                                             </Border>
 
                                             <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TagMultiple24" Section="Observe" Content="Attributes" />
-                                            <ItemsControl ItemsSource="{Binding Fields}"
+                                            <!-- One shared key column: each attribute used to size its own, so the values started at a
+                                                 different x on every line. (Same as GovernRowView.) -->
+                                            <ItemsControl Grid.IsSharedSizeScope="True"
+                                                          ItemsSource="{Binding Fields}"
                                                           AutomationProperties.Name="Alert attributes">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <Grid Margin="0,0,0,4">
                                                             <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" />
+                                                                <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="AlertFieldKey" />
                                                                 <ColumnDefinition Width="*" />
                                                             </Grid.ColumnDefinitions>
                                                             <TextBlock Grid.Column="0"
@@ -407,20 +465,6 @@
                             </ContentControl>
                         </StackPanel>
                     </ScrollViewer>
-
-                    <TextBlock MaxWidth="240"
-                               VerticalAlignment="Center"
-                               Text="Select an alert to see its evidence and full attribute bag.">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcEmptyDetail}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
                 </Grid>
             </Border>
         </Grid>
@@ -455,7 +499,7 @@
                     </WrapPanel>
 
                     <TextBlock Style="{StaticResource DcTextSecondary}"
-                               Text="This applies to every active alert of the chosen severity in DefenseClaw - the whole class - not only the alerts listed here. The preview below is the CLI's own dry run and changes nothing." />
+                               Text="This applies to the active alerts of the chosen severity in DefenseClaw - the whole class as of the preview - not only the alerts listed here. The preview below is the CLI's own dry run and changes nothing, and the command that runs is limited to what it found." />
 
                     <StackPanel Style="{StaticResource DcField}" Margin="0,12,0,8">
                         <TextBlock Style="{StaticResource DcFieldLabel}" Text="Severity" />
@@ -500,7 +544,7 @@
 
                     <TextBlock Style="{StaticResource DcCaption}"
                                Margin="0,12,0,0"
-                               Text="This is the exact command that will run. Nothing happens until you confirm. --yes is the CLI's own confirmation for a broad selector." />
+                               Text="This is the exact command that will run. Nothing happens until you confirm. --before is the moment of the preview, so an alert that arrives later is left alone (or, for a short list, --id names each alert). --yes is the CLI's own confirmation for a broad selector." />
                     <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0">
                         <TextBox Style="{StaticResource DcMonoTextBox}"
                                  AutomationProperties.Name="Command that will run"

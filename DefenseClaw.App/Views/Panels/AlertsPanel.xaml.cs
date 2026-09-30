@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -31,7 +32,11 @@ public sealed partial class AlertsPanel : UserControl
         _ = CommandBindings.Add(new CommandBinding(ApplicationCommands.Find, OnFind, OnCanFind));
         KeyDown += OnKeyDown;
         ReviewScrim.IsVisibleChanged += OnReviewVisibleChanged;
+        DataContextChanged += OnDataContextChanged;
     }
+
+    /// <summary>True while the panel is narrow enough that a selected alert's detail replaces the list instead of sitting beside it.</summary>
+    public bool IsCompact => CompactLayout.GetIsCompact(this);
 
     /// <summary>Moves keyboard focus to the filter box and selects its text, ready to type over.</summary>
     public void FocusFilter()
@@ -66,6 +71,41 @@ public sealed partial class AlertsPanel : UserControl
             viewModel.ClearSelectionCommand.Execute(null);
             e.Handled = true;
         }
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.OldValue is INotifyPropertyChanged old)
+        {
+            old.PropertyChanged -= OnViewModelPropertyChanged;
+        }
+
+        if (e.NewValue is INotifyPropertyChanged current)
+        {
+            current.PropertyChanged += OnViewModelPropertyChanged;
+        }
+    }
+
+    /// <summary>
+    /// In the compact layout selecting an alert swaps the list for the detail, so the row that had focus is gone and Esc
+    /// (handled here) would never arrive: focus follows the pane - to its close button when it opens, back to the list
+    /// when it closes. Beside the list (a wide panel) nothing moves.
+    /// </summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AlertsPanelViewModel.HasSelection) || !IsCompact || sender is not AlertsPanelViewModel viewModel)
+        {
+            return;
+        }
+
+        var opened = viewModel.HasSelection;
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                UIElement target = opened ? DetailClose : AlertList;
+                _ = target.Focus();
+            }));
     }
 
     /// <summary>

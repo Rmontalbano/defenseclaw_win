@@ -46,6 +46,29 @@ internal static class UiThread
     }
 
     /// <summary>
+    /// Gives the application a Fluent <see cref="ThemeMode"/> (Dark) until the returned scope is disposed, then takes it away
+    /// again. The running app always has one (<c>AppearanceService</c> sets it from the operator's choice), and some views are
+    /// styled on top of the framework's own Fluent styles: <c>AuditPanel</c>'s row style is <c>BasedOn</c>
+    /// <c>{x:Type ListViewItem}</c>, which exists only under one, so without a mode that view cannot be built here at all.
+    /// <para>
+    /// A scope rather than a mode for the whole process, because a Fluent mode changes what a plain <see cref="Window"/> is:
+    /// its style sets <c>AllowsTransparency</c> while the handle is being created, which WPF refuses
+    /// (<c>WindowIconTests</c> builds exactly such a window). Tests run one at a time on this thread, so a scope cannot leak
+    /// into another test's view.
+    /// </para>
+    /// </summary>
+    public static IDisposable FluentTheme()
+    {
+        Run(() => Application.Current.ThemeMode = ThemeMode.Dark);
+        return new FluentThemeScope();
+    }
+
+    private sealed class FluentThemeScope : IDisposable
+    {
+        public void Dispose() => Run(() => Application.Current.ThemeMode = ThemeMode.None);
+    }
+
+    /// <summary>
     /// Polls <paramref name="condition"/> (evaluated on the UI thread) from the calling thread until it holds. The
     /// UI thread stays free between polls, so async view-model work that resumes on its dispatcher can finish.
     /// </summary>

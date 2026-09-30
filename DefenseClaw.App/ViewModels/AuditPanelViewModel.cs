@@ -26,6 +26,15 @@ namespace DefenseClaw.App.ViewModels;
 /// so it is applied as a refinement over the keyset stream (the cursor still comes from
 /// the last raw row, which keeps paging correct).
 /// </para>
+/// <para>
+/// <b>Latest wins.</b> A filter change starts a new <em>generation</em> of loads: everything still
+/// running or waiting for an older generation is cancelled, and a scan that is already inside SQLite is
+/// interrupted (the reader hands its token to <c>sqlite3_interrupt</c>). A text search is an unindexed scan
+/// of the whole window, 1.4 s for 24 h and 17 s for 7 days on a real database, and it used to run to the
+/// end for every debounced keystroke, one behind the other; now only the last value's search finishes, and
+/// a burst of changes made together (<see cref="ResetFiltersCommand"/> changes up to seven properties)
+/// is one load, not seven.
+/// </para>
 /// </summary>
 public sealed partial class AuditPanelViewModel : PanelViewModelBase
 {
@@ -47,7 +56,15 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     private const string AnyAction = "Any action";
 
     private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private readonly object _generationLock = new();
+    private CancellationTokenSource _generationSource = new();
+    private CancellationToken _generationToken;
     private AuditCursor? _cursor;
+
+    /// <summary>While above zero, filter changes only note that a reload is due (see <see cref="ResetFilters"/>).</summary>
+    private int _reloadDeferrals;
+
+    private bool _reloadPending;
 
     /// <summary>
     /// True once the bucket / connector / action lists have been read from audit.db. They are
@@ -115,6 +132,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     public AuditPanelViewModel(AppServices services)
         : base(services)
     {
+        _generationToken = _generationSource.Token;
         Buckets.Add(AnyBucket);
         Actions.Add(AnyAction);
         Connectors.Add(ConnectorOption.All);
@@ -149,6 +167,15 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 
     /// <summary>Drives the detail pane's placeholder without an inverse-boolean converter.</summary>
     public bool HasSelection => SelectedRow is not null;
+
+    /// <summary>
+    /// The most recent load a filter change started (a finished one once it has settled). Tests await it: a filter change
+    /// starts its load without being awaited, and the reader's call counters are what show how many queries it cost.
+    /// </summary>
+    internal Task LastLoad { get; private set; } = Task.CompletedTask;
+
+    /// <summary>The gate loads queue behind; a test holds it to line a burst of changes up before any of them can query.</summary>
+    internal SemaphoreSlim LoadGate => _loadGate;
 
     /// <summary>What the list footer says while <see cref="IsRowCapReached"/>.</summary>
     public string RowCapNotice =>
@@ -198,27 +225,103 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private void ClearSelection() => SelectedRow = null;
 
+    /// <summary>
+    /// Puts every filter back and reloads <em>once</em>. Each of the seven properties reloads when it changes, so from a
+    /// fully filtered state this used to start up to seven page queries and seven counts on a multi-gigabyte database, the
+    /// first six of them for a filter set that never existed on screen.
+    /// </summary>
     [RelayCommand]
     private void ResetFilters()
     {
-        SelectedBucket = AnyBucket;
-        SelectedSeverity = SeverityOption.Any;
-        SelectedConnector = Connectors[0];
-        SelectedRange = TimeRangeOption.Day;
-        SelectedActionOption = AnyAction;
-        ActionFilter = string.Empty;
-        SearchText = string.Empty;
+        _reloadDeferrals++;
+        try
+        {
+            SelectedBucket = AnyBucket;
+            SelectedSeverity = SeverityOption.Any;
+            SelectedConnector = Connectors[0];
+            SelectedRange = TimeRangeOption.Day;
+            SelectedActionOption = AnyAction;
+            ActionFilter = string.Empty;
+            SearchText = string.Empty;
+        }
+        finally
+        {
+            _reloadDeferrals--;
+        }
+
+        if (_reloadDeferrals == 0 && _reloadPending)
+        {
+            _reloadPending = false;
+            Reload();
+        }
     }
 
-    private void Reload() => _ = LoadAsync(append: false, CancellationToken.None);
+    private void Reload()
+    {
+        if (_reloadDeferrals > 0)
+        {
+            _reloadPending = true;
+            return;
+        }
+
+        LastLoad = LoadAsync(append: false, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Starts a new generation of loads: cancels the previous one (whatever it was doing, including a scan already inside
+    /// SQLite) and returns the token of the new one.
+    /// </summary>
+    private CancellationToken StartGeneration()
+    {
+        CancellationTokenSource previous;
+        var next = new CancellationTokenSource();
+        lock (_generationLock)
+        {
+            previous = _generationSource;
+            _generationSource = next;
+            _generationToken = next.Token;
+        }
+
+        try
+        {
+            previous.Cancel();
+        }
+        finally
+        {
+            previous.Dispose();
+        }
+
+        return next.Token;
+    }
+
+    private CancellationToken CurrentGeneration()
+    {
+        lock (_generationLock)
+        {
+            return _generationToken;
+        }
+    }
+
+    private bool IsCurrentGeneration(CancellationToken generation)
+    {
+        lock (_generationLock)
+        {
+            return generation == _generationToken;
+        }
+    }
 
     private async Task LoadFilterOptionsAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var buckets = await Services.Audit.ListBucketsAsync(cancellationToken);
-            var connectors = await Services.Audit.ListConnectorsAsync(cancellationToken);
-            var actions = await Services.Audit.ListActionsAsync(cancellationToken);
+            // Three loose index scans (a millisecond each), started together rather than one after the other.
+            var bucketsRead = Services.Audit.ListBucketsAsync(cancellationToken);
+            var connectorsRead = Services.Audit.ListConnectorsAsync(cancellationToken);
+            var actionsRead = Services.Audit.ListActionsAsync(cancellationToken);
+            await Task.WhenAll(bucketsRead, connectorsRead, actionsRead);
+            var buckets = await bucketsRead;
+            var connectors = await connectorsRead;
+            var actions = await actionsRead;
 
             foreach (var bucket in buckets)
             {
@@ -265,23 +368,52 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             return;
         }
 
-        // Filter changes arrive in bursts (a combo box can fire twice); the gate serializes
-        // them so the reader never has two overlapping connections open on the same page.
-        await _loadGate.WaitAsync(cancellationToken);
+        // A fresh load starts a new generation and so cancels whatever the previous one is doing; "Load more" belongs to
+        // the generation whose rows it extends, so a newer fresh load cancels it too.
+        var generation = append ? CurrentGeneration() : StartGeneration();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(generation, cancellationToken);
+        var token = linked.Token;
+
+        // Filter changes arrive in bursts (a combo box can fire twice, a search box types five letters); the gate
+        // serializes them so the reader never has two overlapping connections open on the same page. Only the newest
+        // generation gets through it to a query: an older one is cancelled while it waits.
         try
         {
+            await _loadGate.WaitAsync(token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            token.ThrowIfCancellationRequested();
             IsLoading = true;
 
             // Inside the gate, so a burst of filter changes cannot load the lists twice. The
-            // note a failed read sets is cleared by a successful query below, as before.
-            if (!_filterOptionsLoaded)
-            {
-                await LoadFilterOptionsAsync(cancellationToken);
-            }
+            // note a failed read sets is cleared by a successful query below, as before. They are read beside
+            // the page and its count, not ahead of them: the first Audit visit used to sit through three
+            // serial DISTINCT scans before the first row was requested.
+            Task filterOptions = _filterOptionsLoaded ? Task.CompletedTask : LoadFilterOptionsAsync(token);
 
             var query = BuildQuery(append ? _cursor : null);
-            var page = await Services.Audit.QueryAsync(query, cancellationToken);
+            var platformOnly = SelectedConnector.PlatformOnly;
+            var pageRead = Services.Audit.QueryAsync(query, token);
 
+            // A SQL COUNT cannot express the platform-only refinement, so that view reports what is actually on screen
+            // rather than a number that would not match it. Every other view counts beside the page, not after it.
+            var totalRead = platformOnly
+                ? null
+                : Services.Audit.CountAsync(query with { After = null, Limit = PageSize }, token);
+
+            await Task.WhenAll(filterOptions, pageRead, totalRead ?? Task.CompletedTask);
+
+            // A result that arrives for a generation that has since been replaced is dropped whole: it must not clear
+            // the rows of the load that replaced it.
+            token.ThrowIfCancellationRequested();
+
+            var page = await pageRead;
             if (!append)
             {
                 Rows.Clear();
@@ -290,7 +422,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             var truncated = false;
             foreach (var row in page.Events)
             {
-                if (SelectedConnector.PlatformOnly && row.Connector is not null)
+                if (platformOnly && row.Connector is not null)
                 {
                     continue;
                 }
@@ -312,7 +444,10 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             _cursor = page.NextCursor;
             HasMore = page.HasMore && !capReached;
 
-            await UpdateSummaryAsync(query, cancellationToken);
+            ResultSummary = totalRead is null
+                ? $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} platform row(s) loaded · {SelectedRange.Label}"
+                : $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} of " +
+                  $"{(await totalRead).ToString("N0", CultureInfo.CurrentCulture)} matching events · {SelectedRange.Label}";
 
             IsEmpty = Rows.Count == 0;
             if (IsEmpty)
@@ -325,6 +460,11 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 
             StatusNote = string.Empty;
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Superseded: a newer load owns the list, the flag and the summary. The scan it was in the middle of was
+            // interrupted rather than left to run to the end.
+        }
 #pragma warning disable CA1031 // The DB is owned by the gateway; a busy file must degrade, not crash.
         catch (Exception ex) when (ex is SqliteException or IOException or InvalidOperationException)
         {
@@ -336,25 +476,14 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 #pragma warning restore CA1031
         finally
         {
-            IsLoading = false;
+            // The flag is the newest load's to clear: an older one finishing must not hide the ring while it still runs.
+            if (IsCurrentGeneration(generation))
+            {
+                IsLoading = false;
+            }
+
             _loadGate.Release();
         }
-    }
-
-    private async Task UpdateSummaryAsync(AuditQuery query, CancellationToken cancellationToken)
-    {
-        if (SelectedConnector.PlatformOnly)
-        {
-            // A SQL COUNT cannot express the platform-only refinement, so report what is
-            // actually on screen rather than a number that would not match it.
-            ResultSummary = $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} platform row(s) loaded · {SelectedRange.Label}";
-            return;
-        }
-
-        var total = await Services.Audit.CountAsync(query with { After = null, Limit = PageSize }, cancellationToken);
-        ResultSummary =
-            $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} of " +
-            $"{total.ToString("N0", CultureInfo.CurrentCulture)} matching events · {SelectedRange.Label}";
     }
 
     private AuditQuery BuildQuery(AuditCursor? after) => new()
@@ -603,7 +732,8 @@ public sealed class AuditRow
     {
         var fields = new List<AuditDetailField>();
 
-        Add("id", source.Id);
+        // "id TEXT PRIMARY KEY" admits NULL, and the reader hands such a row an empty id: say so rather than omit the field.
+        Add("id", string.IsNullOrEmpty(source.Id) ? "(none - this row's id is NULL)" : source.Id);
         Add("timestamp", source.RawTimestamp);
         Add("bucket", source.Bucket);
         Add("action", source.Action);
