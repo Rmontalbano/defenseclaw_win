@@ -602,7 +602,8 @@ public sealed class AuditSeverityTests : IClassFixture<AuditSeverityFixture>
         // Every row exactly once, in one total order: the null-id rows sort below every id, so they come first among
         // their ties ascending (real-1, 12:03, 12:04 null, real-2 ...) and last descending.
         var ascendingOrder = new[] { "real-1", string.Empty, string.Empty, "real-2", "real-3", "real-4" };
-        Assert.Equal(ascending ? ascendingOrder : ascendingOrder.Reverse(), seen);
+        // Enumerable.Reverse spelled out: on newer compilers an array's .Reverse() binds to the in-place span overload.
+        Assert.Equal(ascending ? ascendingOrder : Enumerable.Reverse(ascendingOrder), seen);
     }
 
     [Fact]
