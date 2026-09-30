@@ -138,7 +138,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     }
 
     /// <param name="services">The composition the flyout reads.</param>
-    /// <param name="openDashboard">Shows the dashboard (Open Dashboard, and the gear until the Settings page exists).</param>
+    /// <param name="openDashboard">Shows the dashboard (Open Dashboard).</param>
     /// <param name="exit">Quits the app for real.</param>
     /// <param name="metricsReader">The audit-count reader; one over <c>audit.db</c> when null. A test hands in one over a scratch database.</param>
     /// <param name="timeProvider">The clock for the refresh gate and "Updated …"; the system one when null.</param>
@@ -256,16 +256,9 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenDashboard() => _openDashboard();
 
-    /// <summary>
-    /// The gear. The Settings page does not exist yet, so it opens the dashboard; when it does, this is the one line that becomes
-    /// <c>Navigate("settings", null)</c>.
-    /// </summary>
+    /// <summary>The gear: the dashboard, on its Settings page.</summary>
     [RelayCommand]
-    private void OpenSettings()
-    {
-        CloseRequested?.Invoke(this, EventArgs.Empty);
-        _openDashboard();
-    }
+    private void OpenSettings() => Navigate("settings", null);
 
     [RelayCommand]
     private void Exit() => _exit();

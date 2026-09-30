@@ -45,6 +45,7 @@ internal static class ShortcutCatalog
                 {
                     new ShortcutRow(ShellShortcuts.PaletteText, "Command palette: search every panel and action"),
                     new ShortcutRow(ShellShortcuts.RefreshText, "Refresh the current panel (or the gateway status)"),
+                    new ShortcutRow(ShellShortcuts.SettingsText, "Open Settings: monitoring, notifications, startup, connection, updates"),
                     new ShortcutRow(ShellShortcuts.ToggleThemeText, "Switch between light and dark (the title bar's Appearance button picks a style)"),
                     new ShortcutRow(ShellShortcuts.HelpText, "Show this list (also ? outside a text box)"),
                     new ShortcutRow(ShellShortcuts.CloseText, "Close the open overlay, detail pane or dialog"),

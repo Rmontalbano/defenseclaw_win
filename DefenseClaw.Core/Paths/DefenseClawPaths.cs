@@ -82,6 +82,9 @@ public sealed class DefenseClawPaths
     /// <summary>The gateway daemon's variable. The CLI does not read it; see the type documentation.</summary>
     public const string DataDirVariableName = "DEFENSECLAW_DATA_DIR";
 
+    /// <summary>The CLI's name as every lookup spells it; the one executable <see cref="SetCliPathOverride"/> can pin.</summary>
+    public const string CliExecutableName = "defenseclaw";
+
     /// <summary>
     /// How long a successful executable lookup is trusted without re-walking PATH. Only the
     /// <i>which copy wins</i> question is cached this long: existence of the cached path is
@@ -135,6 +138,12 @@ public sealed class DefenseClawPaths
     // Bumped by InvalidateExecutableCache. An answer from an older generation is stale by definition and a
     // scan that started before the bump does not get to publish.
     private int _generation;
+
+    /// <summary>
+    /// The operator's "use this defenseclaw.exe" choice (the app's <c>connection.cliPathOverride</c>), or null. Volatile: scans read
+    /// it on the pool while the settings page writes it on the UI thread. See <see cref="SetCliPathOverride"/>.
+    /// </summary>
+    private volatile string? _cliPathOverride;
 
     /// <summary>One remembered <see cref="FindExecutable"/> answer, when it was taken, and under which generation.</summary>
     private readonly record struct ExecutableLookup(string? Path, long Timestamp, int Generation);
@@ -225,9 +234,84 @@ public sealed class DefenseClawPaths
 
     public bool DataDirectoryExists => Directory.Exists(DataDirectory);
 
-    public string? CliPath => FindExecutable("defenseclaw");
+    public string? CliPath => FindExecutable(CliExecutableName);
 
     public string? GatewayCliPath => FindExecutable("defenseclaw-gateway");
+
+    /// <summary>
+    /// The full path the operator chose for <c>defenseclaw.exe</c> (Settings → Connection), or null when the CLI is looked up as usual.
+    /// What is set is not necessarily usable: while the file is missing the lookup ignores it (see <see cref="SetCliPathOverride"/>).
+    /// </summary>
+    public string? CliPathOverride => _cliPathOverride;
+
+    /// <summary>
+    /// Pins (or, with null or blank, releases) the <c>defenseclaw</c> executable. While the file exists it is the answer to every
+    /// lookup of <c>defenseclaw</c> — <see cref="CliPath"/>, <see cref="FindExecutable"/>, <see cref="FindExecutableAsync"/>,
+    /// <see cref="TryGetKnownExecutable"/> and so what <c>CliRunner</c> starts and what every review shows — ahead of PATH and the
+    /// install directory. While it does not (deleted, drive gone), the lookup carries on as if nothing were set: a stale
+    /// choice must never leave the app with no CLI at all. Only <c>defenseclaw</c> is affected: the gateway binary and the scanners
+    /// are still found by name. The remembered answers are dropped, so the next lookup sees the change at once.
+    /// <para>The caller validates (<see cref="CheckCliPathOverride"/>); this holds whatever it is given.</para>
+    /// </summary>
+    public void SetCliPathOverride(string? path)
+    {
+        var chosen = string.IsNullOrWhiteSpace(path) ? null : path.Trim();
+        if (string.Equals(_cliPathOverride, chosen, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _cliPathOverride = chosen;
+
+        // A scan already running answers for the old choice and must not publish: the bump sees to that. And what is remembered for the CLI is
+        // forgotten outright, not left to be served stale while a refresh runs behind it (which is what a remembered answer that is merely
+        // out of date gets): the choice is the operator's, and the very next lookup has to honour it.
+        _ = Interlocked.Increment(ref _generation);
+        _flights.Clear();
+        _ = _lookups.TryRemove(CliExecutableName, out _);
+        _ = _lookups.TryRemove(CliExecutableName + ".exe", out _);
+    }
+
+    /// <summary>
+    /// Why <paramref name="path"/> cannot be the CLI override, in a sentence for the operator, or null when it can (and null for a
+    /// blank one, which clears the override): an absolute path to an existing file named <c>defenseclaw.exe</c> (or
+    /// <c>defenseclaw</c>). The name is what makes it the CLI and not any program at all.
+    /// </summary>
+    /// <param name="path">What the operator chose.</param>
+    /// <param name="fileExists">Filesystem probe; <see cref="File.Exists(string)"/> when null.</param>
+    public static string? CheckCliPathOverride(string? path, Func<string, bool>? fileExists = null)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var candidate = path.Trim();
+        string name;
+        try
+        {
+            if (!Path.IsPathRooted(candidate) || Path.GetPathRoot(candidate) is not { Length: > 0 } root || root is "\\" or "/")
+            {
+                return "Use the full path to defenseclaw.exe, starting with a drive letter or a network share.";
+            }
+
+            name = Path.GetFileName(candidate);
+        }
+        catch (ArgumentException)
+        {
+            return "That is not a valid file path.";
+        }
+
+        if (!string.Equals(name, CliExecutableName + ".exe", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(name, CliExecutableName, StringComparison.OrdinalIgnoreCase))
+        {
+            return name.Length == 0
+                ? "Choose the defenseclaw.exe file itself, not a folder."
+                : $"The file must be named defenseclaw.exe (this one is \"{name}\").";
+        }
+
+        return (fileExists ?? File.Exists)(candidate) ? null : "That file does not exist.";
+    }
 
     public string? SkillScannerPath => FindExecutable("skill-scanner");
 
@@ -398,6 +482,12 @@ public sealed class DefenseClawPaths
 
     private string? ScanForExecutable(string name)
     {
+        // The operator's choice comes first, while it is there (see SetCliPathOverride).
+        if (IsCliName(name) && _cliPathOverride is { } pinned && _fileExists(pinned))
+        {
+            return pinned;
+        }
+
         var fileNames = FileNamesFor(name);
 
         foreach (var (directory, isBinDirectory) in SearchDirectories())
@@ -434,6 +524,11 @@ public sealed class DefenseClawPaths
     /// <summary>Ordered probe list for <paramref name="name"/>; useful for diagnostics UI.</summary>
     public IEnumerable<string> CandidatesFor(string name)
     {
+        if (IsCliName(name) && _cliPathOverride is { } pinned)
+        {
+            yield return pinned;
+        }
+
         var fileNames = FileNamesFor(name);
 
         foreach (var (directory, _) in SearchDirectories())
@@ -444,6 +539,11 @@ public sealed class DefenseClawPaths
             }
         }
     }
+
+    /// <summary>True when <paramref name="name"/> asks for the CLI itself (<c>defenseclaw</c>, with or without <c>.exe</c>), which is what an override replaces.</summary>
+    private static bool IsCliName(string name) =>
+        string.Equals(name, CliExecutableName, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, CliExecutableName + ".exe", StringComparison.OrdinalIgnoreCase);
 
     private static string[] FileNamesFor(string name) =>
         OperatingSystem.IsWindows() && !HasExecutableExtension(name)

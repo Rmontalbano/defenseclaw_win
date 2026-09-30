@@ -12,7 +12,7 @@ namespace DefenseClaw.App.Services;
 /// <summary>One navigable panel: its label, its group, its icon, and how to build it.</summary>
 /// <param name="Id">Stable key, used for deep links and for restoring the last panel.</param>
 /// <param name="Title">Sidebar label and panel header. Keep in sync with the view's header.</param>
-/// <param name="Group">One of <see cref="PanelCatalog.Groups"/>.</param>
+/// <param name="Group">One of <see cref="PanelCatalog.Groups"/>, or <see cref="PanelCatalog.FooterGroup"/> for a panel pinned below them.</param>
 /// <param name="Icon">Sidebar glyph.</param>
 /// <param name="ViewType">The <see cref="FrameworkElement"/> the navigation frame hosts.</param>
 /// <param name="ViewModelFactory">Builds the view-model bound to <paramref name="ViewType"/>.</param>
@@ -126,16 +126,36 @@ public sealed class PanelCatalog : INavigationViewPageProvider
             // Configure
             new("setup", "Setup", "Configure", SymbolRegular.ShieldSettings24,
                 typeof(SetupPanel), s => new SetupPanelViewModel(s)),
+
+            // Footer: the app's own settings, below the groups (Ctrl+,).
+            new("settings", "Settings", FooterGroup, SymbolRegular.Settings24,
+                typeof(SettingsPanel), s => new SettingsPanelViewModel(s, Hooks)),
         };
     }
 
+    /// <summary>
+    /// The group of the panels the sidebar pins below the others, under a separator (Settings). Not one of <see cref="Groups"/>, so
+    /// they are not in <see cref="SidebarOrder"/> and take no number chord: Settings has Ctrl+, instead.
+    /// </summary>
+    public const string FooterGroup = "App";
+
+    /// <summary>
+    /// What a panel can ask of the shell that is neither the services nor another panel: the tray's "reset seen-alert history".
+    /// The dashboard window wires it when it is built (<c>MainWindow</c>), so a panel can only ever reach it while one is on screen.
+    /// </summary>
+    internal ShellHooks Hooks { get; } = new();
+
     /// <summary>Every panel, in sidebar order.</summary>
     public IReadOnlyList<PanelDescriptor> Panels { get; }
+
+    /// <summary>The panels pinned at the foot of the sidebar (<see cref="FooterGroup"/>), in order: Settings.</summary>
+    public IEnumerable<PanelDescriptor> FooterPanels => InGroup(FooterGroup);
 
     /// <summary>
     /// Every panel in the order the sidebar shows them: group by group (<see cref="Groups"/>),
     /// catalog order within a group. This — not <see cref="Panels"/>, which only happens to be
     /// grouped already — is the order the Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…3 chords count in.
+    /// The footer panels (<see cref="FooterPanels"/>) are not in it.
     /// </summary>
     public IReadOnlyList<PanelDescriptor> SidebarOrder =>
         _sidebarOrder ??= Groups.SelectMany(InGroup).ToArray();
@@ -239,16 +259,47 @@ public sealed class PanelCatalog : INavigationViewPageProvider
 
         if (!wasActive && viewModel.IsActive && ByViewType(view.GetType()) is { } descriptor)
         {
+            RememberPanel(descriptor);
             DeliverPending(descriptor, viewModel);
         }
     }
 
     /// <summary>
-    /// The panel the window should open on: the one a navigation request is waiting for (a request raised while no window
-    /// existed, which built it), else <see cref="Default"/>.
+    /// "Reopen on the last panel" (<c>startup.rememberLastPanel</c>): a panel that comes on screen is written down as the one to open on,
+    /// when the operator asked for that. Once per panel visit, and only when it is not already the one remembered: the settings file is
+    /// written synchronously, so nothing here runs per scroll or per poll.
     /// </summary>
-    public PanelDescriptor InitialPanel =>
-        _services.Navigation.Pending is { } request && ById(request.PanelId) is { } requested ? requested : Default;
+    private void RememberPanel(PanelDescriptor descriptor)
+    {
+        var startup = _services.Settings.Current.Startup;
+        if (!startup.RememberLastPanel || string.Equals(startup.LastPanelId, descriptor.Id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _ = _services.Settings.Update(settings => settings with { Startup = settings.Startup with { LastPanelId = descriptor.Id } });
+    }
+
+    /// <summary>
+    /// The panel the window should open on: the one a navigation request is waiting for (a request raised while no window
+    /// existed, which built it), else the last one shown when the operator asked to reopen on it (<c>startup.rememberLastPanel</c>;
+    /// a panel that no longer exists is ignored), else <see cref="Default"/>.
+    /// </summary>
+    public PanelDescriptor InitialPanel
+    {
+        get
+        {
+            if (_services.Navigation.Pending is { } request && ById(request.PanelId) is { } requested)
+            {
+                return requested;
+            }
+
+            var startup = _services.Settings.Current.Startup;
+            return startup.RememberLastPanel && startup.LastPanelId is { Length: > 0 } last && ById(last) is { } remembered
+                ? remembered
+                : Default;
+        }
+    }
 
     /// <summary>
     /// Hands <paramref name="descriptor"/>'s panel the request waiting for it, once: the request is taken (so no later

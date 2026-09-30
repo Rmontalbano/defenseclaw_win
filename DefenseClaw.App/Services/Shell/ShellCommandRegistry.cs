@@ -17,7 +17,7 @@ internal static class ShellCommandRegistry
 
     /// <summary>
     /// The "Go to" entry for every panel, in sidebar order, so the first screen of an empty search
-    /// matches the sidebar and each row shows the Ctrl+N chord that jumps there. Split out of
+    /// matches the sidebar and each row shows the Ctrl+N chord that jumps there (Settings, last, shows Ctrl+,). Split out of
     /// <see cref="Build"/> unchanged so it can be built without the tray-backed <see cref="ShellActions"/>.
     /// </summary>
     internal static List<ShellCommand> BuildPanelCommands(PanelCatalog catalog, Action<PanelDescriptor> navigateTo)
@@ -25,21 +25,29 @@ internal static class ShellCommandRegistry
         var commands = new List<ShellCommand>();
         for (var i = 0; i < catalog.SidebarOrder.Count; i++)
         {
-            var panel = catalog.SidebarOrder[i];
-            commands.Add(new ShellCommand(
-                Id: $"nav.{panel.Id}",
-                Title: $"Go to {panel.Title}",
-                Category: PanelCategory,
-                Description: $"{panel.Group} · opens the {panel.Title} panel",
-                Shortcut: ShellShortcuts.PanelChordText(i),
-                Keywords: $"open navigate {panel.Id} {panel.Group}",
-                IsEnabled: true,
-                DisabledReason: null,
-                Run: () => navigateTo(panel)));
+            commands.Add(GoTo(catalog.SidebarOrder[i], ShellShortcuts.PanelChordText(i), navigateTo));
+        }
+
+        // The footer panel (Settings) is reached by Ctrl+, rather than a number.
+        foreach (var panel in catalog.FooterPanels)
+        {
+            commands.Add(GoTo(panel, string.Equals(panel.Id, "settings", StringComparison.Ordinal) ? ShellShortcuts.SettingsText : null, navigateTo));
         }
 
         return commands;
     }
+
+    private static ShellCommand GoTo(PanelDescriptor panel, string? chord, Action<PanelDescriptor> navigateTo) =>
+        new(
+            Id: $"nav.{panel.Id}",
+            Title: $"Go to {panel.Title}",
+            Category: PanelCategory,
+            Description: $"{panel.Group} · opens the {panel.Title} panel",
+            Shortcut: chord,
+            Keywords: $"open navigate {panel.Id} {panel.Group}" + (string.Equals(panel.Id, "settings", StringComparison.Ordinal) ? " preferences options" : string.Empty),
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: () => navigateTo(panel));
 
     /// <summary>
     /// The appearance commands: one per style, the light/dark toggle, and "follow system". Built from the service's state

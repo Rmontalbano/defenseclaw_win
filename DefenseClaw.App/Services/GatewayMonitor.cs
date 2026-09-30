@@ -306,7 +306,8 @@ public sealed class GatewaySnapshotEventArgs : EventArgs
 /// one poller keeps the audit trail (and DefenseClaw's own request counters) honest.
 /// </para>
 /// <para>
-/// Cadence: <see cref="FastInterval"/> normally, dropping to <see cref="SlowInterval"/>
+/// Cadence: <see cref="HealthInterval"/> normally (the Settings page's "Health pulse", 5 s unless the operator changed it, and followed
+/// live), dropping to <see cref="SlowInterval"/>
 /// after <see cref="FailuresBeforeBackoff"/> consecutive unreachable polls — a stopped
 /// gateway should not cost a connection attempt every five seconds all day. Alerts are on
 /// their own <see cref="AlertInterval"/> because <c>/alerts</c> is far more expensive
@@ -377,7 +378,8 @@ public sealed class GatewaySnapshotEventArgs : EventArgs
 /// </summary>
 public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
 {
-    public static readonly TimeSpan FastInterval = TimeSpan.FromSeconds(5);
+    /// <summary>The default health interval (<see cref="MonitoringSettings.DefaultHealthIntervalSeconds"/>); what a fresh install polls at. The live value is <see cref="HealthInterval"/>.</summary>
+    public static readonly TimeSpan FastInterval = TimeSpan.FromSeconds(MonitoringSettings.DefaultHealthIntervalSeconds);
     public static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan AlertInterval = TimeSpan.FromSeconds(30);
 
@@ -598,11 +600,38 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
 
     private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e)
     {
-        if (e.Affects(AppSettingsSections.Monitoring) &&
-            e.Previous.Monitoring.Paused != e.Current.Monitoring.Paused)
+        if (!e.Affects(AppSettingsSections.Monitoring))
+        {
+            return;
+        }
+
+        if (e.Previous.Monitoring.Paused != e.Current.Monitoring.Paused)
         {
             OnPausedChanged();
         }
+        else if (e.Previous.Monitoring.HealthIntervalSeconds != e.Current.Monitoring.HealthIntervalSeconds)
+        {
+            // The wait the loop is in was sized for the old interval: end it, so the next poll and every wait after it follow the new one
+            // (a change made while a poll runs needs nothing: the wait after it reads the setting afresh).
+            Wake();
+        }
+    }
+
+    /// <summary>
+    /// Seconds between health polls, as the operator set them (<c>monitoring.healthIntervalSeconds</c>, 2 to 60, default 5: the Settings page's
+    /// "Health pulse"). Read before every wait, so a change applies to the wait that follows it, not at the next restart.
+    /// </summary>
+    internal TimeSpan HealthInterval => _services.Settings.Current.Monitoring.HealthInterval;
+
+    /// <summary>
+    /// How long the background loop waits after a poll: <see cref="HealthInterval"/> while the gateway answers, and after
+    /// <see cref="FailuresBeforeBackoff"/> unreachable polls in a row <see cref="SlowInterval"/> (or the health interval when that is longer:
+    /// a 60 s pulse must not speed up because the gateway went away).
+    /// </summary>
+    internal TimeSpan NextWait(int consecutiveFailures)
+    {
+        var healthy = HealthInterval;
+        return consecutiveFailures >= FailuresBeforeBackoff && SlowInterval > healthy ? SlowInterval : healthy;
     }
 
     /// <summary>
@@ -802,7 +831,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             }
 #pragma warning restore CA1031
 
-            var interval = _consecutiveFailures >= FailuresBeforeBackoff ? SlowInterval : FastInterval;
+            var interval = NextWait(_consecutiveFailures);
             try
             {
                 // Cut short by a resume: the loop, not the interval, is what a pause and a resume address.

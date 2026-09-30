@@ -553,12 +553,11 @@ public class TrayFlyoutViewModelTests
     }
 
     [Fact]
-    public void A_finding_and_the_review_link_open_alerts_and_the_gear_opens_the_dashboard()
+    public void A_finding_and_the_review_link_open_alerts_and_the_gear_opens_settings()
     {
         using var scene = new FlyoutScene();
         scene.Populate(hookCalls: 1, blocks: 0, other: 1, findings: 3);
-        var opened = 0;
-        var viewModel = UiThread.Run(() => Create(scene, openDashboard: () => opened++));
+        var viewModel = UiThread.Run(() => Create(scene));
 
         try
         {
@@ -577,8 +576,9 @@ public class TrayFlyoutViewModelTests
                 viewModel.ReviewAcknowledgeCommand.Execute(null);
                 Assert.Equal(new NavigationRequest("alerts", new AlertsFilter()), scene.Services.Navigation.Pending);
 
+                // The gear is the dashboard on its Settings page: a navigation request (the app shows the window for it), no payload.
                 viewModel.OpenSettingsCommand.Execute(null);
-                Assert.Equal(1, opened);
+                Assert.Equal(new NavigationRequest("settings", null), scene.Services.Navigation.Pending);
 
                 Assert.Equal(3, closed);
             });

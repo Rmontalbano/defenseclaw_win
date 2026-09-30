@@ -196,8 +196,13 @@ public sealed class ShellShortcutsTests : IDisposable
         Assert.Equal(
             new[] { "Monitor", "Monitor", "Monitor", "Monitor", "Monitor", "Govern", "Govern", "Govern", "Govern", "Discover", "Discover", "Discover", "Configure" },
             catalog.SidebarOrder.Select(p => p.Group).ToArray());
-        Assert.Equal(13, catalog.Panels.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(14, catalog.Panels.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("overview", catalog.Default.Id);
+
+        // Settings is the fourteenth: pinned below the groups, in no group, and outside the numbered order (Ctrl+, reaches it).
+        Assert.Equal(new[] { "settings" }, catalog.FooterPanels.Select(p => p.Id).ToArray());
+        Assert.DoesNotContain(catalog.SidebarOrder, p => p.Id == "settings");
+        Assert.Equal(PanelCatalog.FooterGroup, catalog.ById("settings")!.Group);
     }
 
     [Fact]
@@ -231,9 +236,12 @@ public sealed class ShellShortcutsTests : IDisposable
 
         var commands = ShellCommandRegistry.BuildPanelCommands(catalog, panel => navigated.Add(panel.Id));
 
-        Assert.Equal(13, commands.Count);
-        Assert.Equal(catalog.SidebarOrder.Select(p => "nav." + p.Id).ToArray(), commands.Select(c => c.Id).ToArray());
-        Assert.Equal(ChordTexts, commands.Select(c => c.Shortcut).ToArray());
+        // The thirteen numbered panels in sidebar order, then Settings with its own chord.
+        Assert.Equal(14, commands.Count);
+        Assert.Equal(
+            catalog.SidebarOrder.Select(p => "nav." + p.Id).Append("nav.settings").ToArray(),
+            commands.Select(c => c.Id).ToArray());
+        Assert.Equal(ChordTexts.Append(ShellShortcuts.SettingsText).ToArray(), commands.Select(c => c.Shortcut).ToArray());
         Assert.All(commands, c =>
         {
             Assert.StartsWith("Go to ", c.Title, StringComparison.Ordinal);
@@ -242,6 +250,43 @@ public sealed class ShellShortcutsTests : IDisposable
         });
 
         commands[11].Run();
-        Assert.Equal(new[] { "registries" }, navigated);
+        commands[13].Run();
+        Assert.Equal(new[] { "registries", "settings" }, navigated);
+    }
+
+    // ------------------------------------------------------------------ Ctrl+, opens Settings
+
+    [Fact]
+    public void Ctrl_comma_is_the_settings_chord_and_nothing_else_is()
+    {
+        Assert.Equal("Ctrl+,", ShellShortcuts.SettingsText);
+        Assert.True(ShellShortcuts.IsSettingsChord(Key.OemComma, ModifierKeys.Control));
+
+        Assert.False(ShellShortcuts.IsSettingsChord(Key.OemComma, ModifierKeys.None));
+        Assert.False(ShellShortcuts.IsSettingsChord(Key.OemComma, ModifierKeys.Control | ModifierKeys.Shift));
+        Assert.False(ShellShortcuts.IsSettingsChord(Key.OemComma, ModifierKeys.Alt));
+        Assert.False(ShellShortcuts.IsSettingsChord(Key.OemPeriod, ModifierKeys.Control));
+        Assert.False(ShellShortcuts.IsSettingsChord(Key.K, ModifierKeys.Control));
+    }
+
+    [Fact]
+    public void Ctrl_comma_collides_with_no_other_chord_in_the_shell()
+    {
+        var catalog = new PanelCatalog(_services);
+        var model = ShortcutCatalog.Build(catalog);
+
+        var all = model.Panels.Rows.Concat(model.Others.SelectMany(s => s.Rows)).Select(r => r.Keys).ToList();
+
+        Assert.Single(all, ShellShortcuts.SettingsText);
+        Assert.Equal(all.Count, all.Distinct(StringComparer.Ordinal).Count());
+
+        // Not a panel number either: no digit is a comma.
+        Assert.Null(ShellShortcuts.PanelIndexFor(Key.OemComma, ModifierKeys.Control));
+        Assert.False(ShellShortcuts.IsToggleThemeChord(Key.OemComma, ModifierKeys.Control));
+
+        // The overlay lists it, worded for what it opens, in the "anywhere" section.
+        var row = Assert.Single(model.Others[0].Rows, r => r.Keys == ShellShortcuts.SettingsText);
+        Assert.StartsWith("Open Settings", row.Description, StringComparison.Ordinal);
+        Assert.Equal(new[] { "Ctrl", "," }, row.Parts);
     }
 }

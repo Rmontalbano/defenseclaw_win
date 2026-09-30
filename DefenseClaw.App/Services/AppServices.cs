@@ -128,6 +128,12 @@ public sealed class AppServices : IDisposable
         // the settings file is read on first use, the counts service runs only while something listens to it, and the scope
         // follows the monitor it is handed.
         Settings = AppSettingsStore.ForPath(settingsPath);
+
+        // "Use this defenseclaw.exe" (Settings → Connection) reaches every CLI lookup through the paths, before anything has looked one
+        // up (the monitor and the tray start later) and again whenever the setting changes.
+        Paths.SetCliPathOverride(Settings.Current.Connection.CliPathOverride);
+        Settings.Changed += OnSettingsChanged;
+
         Navigation = new ShellNavigation();
         AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath);
         ConnectorScope = new ConnectorScope(Monitor);
@@ -486,6 +492,7 @@ public sealed class AppServices : IDisposable
         Cli.Dispose();
 
         ConfigWatcher.Changed -= OnConfigChanged;
+        Settings.Changed -= OnSettingsChanged;
         AlertCounts.Dispose();
         UpdateWatcher.Dispose();
         ConnectorScope.Dispose();
@@ -509,6 +516,16 @@ public sealed class AppServices : IDisposable
     /// that event's contract requires of its handlers.
     /// </summary>
     private void OnConfigChanged(object? sender, ConfigChangedEventArgs e) => ReloadConfig();
+
+    /// <summary>A change to the CLI override reaches the paths at once (see the constructor); nothing else in the settings is this class's.</summary>
+    private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e)
+    {
+        if (e.Affects(AppSettingsSections.Connection) &&
+            !string.Equals(e.Previous.Connection.CliPathOverride, e.Current.Connection.CliPathOverride, StringComparison.Ordinal))
+        {
+            Paths.SetCliPathOverride(e.Current.Connection.CliPathOverride);
+        }
+    }
 
     /// <summary>
     /// Disposes a replaced client once nothing can still be using it. A poll that started

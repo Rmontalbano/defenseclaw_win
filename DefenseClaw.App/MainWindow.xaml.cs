@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Appearance;
+using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views.Shell;
 using Wpf.Ui.Controls;
@@ -32,7 +33,7 @@ namespace DefenseClaw.App;
 /// <para>
 /// <b>Keyboard map</b> (one handler, <see cref="OnWindowPreviewKeyDown"/>; the chords themselves
 /// live in <see cref="ShellShortcuts"/>): Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…3 jump to the panels in
-/// sidebar order, F5 refreshes the current panel (falling back to a gateway poll), Ctrl+K opens the
+/// sidebar order, Ctrl+, opens Settings (the pinned footer entry), F5 refreshes the current panel (falling back to a gateway poll), Ctrl+K opens the
 /// command palette, F1 — or <c>?</c> outside a text box — the shortcuts list, Esc closes whichever
 /// overlay is open. Handled at the window's <i>preview</i> stage so a panel's own controls cannot
 /// swallow them, but never while the operator is typing: a plain <c>?</c> is only a shortcut when
@@ -45,6 +46,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     private readonly TrayIconService _tray;
     private readonly MainWindowViewModel _viewModel;
     private readonly ShellActions _actions;
+
+    /// <summary>The app's own settings; what <see cref="OnClosing"/> reads to decide between "hide to the tray" and "exit".</summary>
+    private readonly AppSettingsStore _settings;
 
     /// <summary>The inbox for deep links; set by <see cref="Wire"/>, which subscribes this window to it.</summary>
     private ShellNavigation _navigation = null!;
@@ -87,6 +91,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _tray = tray ?? throw new ArgumentNullException(nameof(tray));
+        _settings = services.Settings;
 
         InitializeComponent();
 
@@ -174,6 +179,12 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         services.Navigation.Requested += OnNavigationRequested;
         _navigation = services.Navigation;
 
+        // What Settings asks of the tray (its "Reset seen-alert history" button): the same call the command palette's entry makes.
+        _catalog.Hooks.ResetSeenAlertHistory = _tray.ResetSeenAlertHistoryAsync;
+
+        // The close button's name says what it does, and what it does is a setting (startup.closeToTray).
+        _settings.Changed += OnSettingsChanged;
+
         Loaded += OnLoaded;
 
         ConstructionProbe?.Invoke();
@@ -192,6 +203,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         {
             services.Monitor.StateChanged -= OnMonitorStateChanged;
             services.Navigation.Requested -= OnNavigationRequested;
+            _settings.Changed -= OnSettingsChanged;
             _catalog.PanelFaulted -= OnPanelFaulted;
             if (_appearance is not null)
             {
@@ -382,15 +394,32 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _allowClose = true;
     }
 
+    /// <summary>
+    /// Raised when the close button is pressed while <c>startup.closeToTray</c> is off: the operator wants the app to end, and ending
+    /// goes through the one Exit path (the tray's), with its upgrade-running and unsaved-config-editor questions. The window has
+    /// already refused the close by then; it really closes only if that path says yes (<see cref="AllowClose"/>).
+    /// </summary>
+    internal event EventHandler? ExitRequested;
+
     protected override void OnClosing(CancelEventArgs e)
     {
         if (!_allowClose)
         {
-            // Closing the dashboard is not quitting: the tray icon is the app.
+            // The window never closes by itself: either it hides (closing the dashboard is not quitting: the tray icon is the app),
+            // or, when the operator turned "Closing the window keeps DefenseClaw in the tray" off, the exit is asked for. A window that
+            // WPF is closing because the session ends (shutdown has begun) just hides: there is nobody to ask.
             e.Cancel = true;
+
+            var closeToTray = _settings.Current.Startup.CloseToTray;
+            if (!closeToTray && !Dispatcher.HasShutdownStarted)
+            {
+                ExitRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
             Hide();
 
-            if (!_minimizeHintShown)
+            if (closeToTray && !_minimizeHintShown)
             {
                 _minimizeHintShown = true;
                 _tray.Notify(
@@ -404,9 +433,42 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
         _catalog.PanelFaulted -= OnPanelFaulted;
         _navigation.Requested -= OnNavigationRequested;
+        _settings.Changed -= OnSettingsChanged;
         _viewModel.Dispose();
         base.OnClosing(e);
     }
+
+    /// <summary>The close button follows <c>startup.closeToTray</c>; see <see cref="UpdateCloseButtonName"/>. May arrive on any thread.</summary>
+    private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e)
+    {
+        if (!e.Affects(AppSettingsSections.Startup))
+        {
+            return;
+        }
+
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(new Action(UpdateCloseButtonName));
+            return;
+        }
+
+        UpdateCloseButtonName();
+    }
+
+    /// <summary>
+    /// Names the title bar's close button for what it does now: "Close to tray" (the window hides and the app keeps watching) or
+    /// "Exit DefenseClaw" (it asks to quit), so a screen reader never announces one and does the other.
+    /// </summary>
+    private void UpdateCloseButtonName()
+    {
+        if (FindByAutomationId(this, "TitleBarCloseButton") is { } button)
+        {
+            AutomationProperties.SetName(button, CloseButtonName(_settings.Current.Startup.CloseToTray));
+        }
+    }
+
+    /// <summary>What the close button is called, for the two settings of <c>startup.closeToTray</c>.</summary>
+    internal static string CloseButtonName(bool closeToTray) => closeToTray ? "Close to tray" : "Exit DefenseClaw";
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -450,25 +512,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             foreach (var panel in _catalog.InGroup(group))
             {
                 var chord = ShellShortcuts.PanelChordText(index++);
-
-                var item = new DcNavigationItem
-                {
-                    Content = panel.Title,
-                    Icon = new SymbolIcon { Symbol = panel.Icon },
-                    TargetPageType = panel.ViewType,
-                    ToolTip = chord is null ? panel.Title : $"{panel.Title} ({chord})",
-                    Height = 34,
-                    MinHeight = 34,
-                    Margin = new Thickness(0, 0, 0, 1),
-                };
-                _navigationItems[panel.Id] = item;
-
-                AutomationProperties.SetName(item, panel.Title);
-                AutomationProperties.SetHelpText(item, $"Opens the {panel.Title} panel in the {group} group.");
-                if (chord is not null)
-                {
-                    AutomationProperties.SetAcceleratorKey(item, chord);
-                }
+                var item = CreateNavigationItem(panel, chord, $"Opens the {panel.Title} panel in the {group} group.");
 
                 // The count on Alerts and the caution mark on Overview (CUST-201); the view-model feeds them (UpdateNavigationBadges).
                 if (string.Equals(panel.Id, "alerts", StringComparison.Ordinal))
@@ -484,6 +528,16 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             }
         }
 
+        // Settings, pinned below the groups (WPF-UI's footer: it stays put while the groups scroll in a short window). Ctrl+, reaches it.
+        foreach (var panel in _catalog.FooterPanels)
+        {
+            var chord = string.Equals(panel.Id, "settings", StringComparison.Ordinal) ? ShellShortcuts.SettingsText : null;
+            _ = RootNavigation.FooterMenuItems.Add(CreateNavigationItem(
+                panel,
+                chord,
+                $"Opens {panel.Title}: monitoring, notifications, startup, connection and updates."));
+        }
+
         UpdateNavigationBadges();
 
         // Collapsed, the sidebar is a 40 px icon strip and a heading's text would be cut off mid-word
@@ -496,6 +550,31 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         // The panel a navigation request raised before this window existed is waiting for, else the default one.
         RootNavigation.SetPageProviderService(_catalog);
         _ = RootNavigation.Navigate(_catalog.InitialPanel.ViewType);
+    }
+
+    /// <summary>One sidebar entry: the panel's title and glyph, its accessible name, help text and accelerator, and its place in <see cref="_navigationItems"/>.</summary>
+    private DcNavigationItem CreateNavigationItem(PanelDescriptor panel, string? chord, string helpText)
+    {
+        var item = new DcNavigationItem
+        {
+            Content = panel.Title,
+            Icon = new SymbolIcon { Symbol = panel.Icon },
+            TargetPageType = panel.ViewType,
+            ToolTip = chord is null ? panel.Title : $"{panel.Title} ({chord})",
+            Height = 34,
+            MinHeight = 34,
+            Margin = new Thickness(0, 0, 0, 1),
+        };
+        _navigationItems[panel.Id] = item;
+
+        AutomationProperties.SetName(item, panel.Title);
+        AutomationProperties.SetHelpText(item, helpText);
+        if (chord is not null)
+        {
+            AutomationProperties.SetAcceleratorKey(item, chord);
+        }
+
+        return item;
     }
 
     /// <summary>
@@ -636,6 +715,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         else if (ShellShortcuts.IsToggleThemeChord(e.Key, modifiers) && _appearance is not null)
         {
             _appearance.ToggleLightDark();
+            e.Handled = true;
+        }
+        else if (ShellShortcuts.IsSettingsChord(e.Key, modifiers) && _catalog.ById("settings") is { } settings)
+        {
+            NavigateTo(settings);
             e.Handled = true;
         }
         else if (ShellShortcuts.PanelIndexFor(e.Key, modifiers) is { } index &&
@@ -955,7 +1039,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     {
         NameByAutomationId("TitleBarMinimizeButton", "Minimize");
         NameByAutomationId("TitleBarMaximizeButton", "Maximize or restore");
-        NameByAutomationId("TitleBarCloseButton", "Close to tray");
+        NameByAutomationId("TitleBarCloseButton", CloseButtonName(_settings.Current.Startup.CloseToTray));
         NameByAutomationId("NavigationToggleButton", "Toggle sidebar");
     }
 

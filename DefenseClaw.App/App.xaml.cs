@@ -246,6 +246,10 @@ public partial class App : Application
     {
         var window = new MainWindow(_services!, _catalog!, _tray!);
 
+        // The close button with "Closing the window keeps DefenseClaw in the tray" turned off (Settings → Startup): the same Exit the
+        // tray's menu runs, prompts included. If it declines, the window is still there.
+        window.ExitRequested += (_, _) => ExitApplication();
+
         // Application.MainWindow is what the Updates and wizard windows read to find their owner,
         // and what WPF-UI re-applies the window backdrop to on a theme change. WPF would hand it
         // to whichever Window is built first, which is no longer this one.

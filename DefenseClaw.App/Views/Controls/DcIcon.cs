@@ -41,6 +41,7 @@ public static class DcSections
         ("ai-discovery", typeof(AiDiscoveryPanel), Discover, SymbolRegular.Bot24),
         ("registries", typeof(RegistriesPanel), Discover, SymbolRegular.Library24),
         ("setup", typeof(SetupPanel), Setup, SymbolRegular.ShieldSettings24),
+        ("settings", typeof(SettingsPanel), Setup, SymbolRegular.Settings24),
     };
 
     /// <summary>The panel ids this table covers, in sidebar order.</summary>

@@ -36,6 +36,12 @@ internal static class ShellShortcuts
     public const string ToggleThemeText = "Ctrl+Shift+L";
 
     /// <summary>
+    /// Opens Settings, the footer panel that is not one of the numbered ones. <c>Ctrl+,</c> is the convention Windows apps (and the Mac's
+    /// Cmd+,) use for preferences; it types no character and nothing else in the shell or the panels binds it.
+    /// </summary>
+    public const string SettingsText = "Ctrl+,";
+
+    /// <summary>
     /// The chord for the panel at <paramref name="index"/> (0-based, sidebar order) as display
     /// text, e.g. <c>Ctrl+3</c>; null when that panel has none.
     /// </summary>
@@ -83,6 +89,10 @@ internal static class ShellShortcuts
     /// <summary>True for exactly Ctrl+Shift+L (see <see cref="ToggleThemeText"/>).</summary>
     public static bool IsToggleThemeChord(Key key, ModifierKeys modifiers) =>
         key == Key.L && modifiers == (ModifierKeys.Control | ModifierKeys.Shift);
+
+    /// <summary>True for exactly Ctrl+, (see <see cref="SettingsText"/>); the comma key of the main block on any layout.</summary>
+    public static bool IsSettingsChord(Key key, ModifierKeys modifiers) =>
+        key == Key.OemComma && modifiers == ModifierKeys.Control;
 
     private static int? DigitOf(Key key) => key switch
     {
