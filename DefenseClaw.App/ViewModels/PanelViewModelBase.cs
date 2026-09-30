@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using DefenseClaw.App.Services;
 
@@ -44,6 +45,12 @@ namespace DefenseClaw.App.ViewModels;
 /// panel runs from the moment it was first visited to the day the process exits. Surfaces
 /// that are not panels — the tray icon, its toasts, the shell status strip — are not part of
 /// this contract and stay live while the window is hidden.
+/// </para>
+/// <para>
+/// <b>Navigation.</b> A panel that can be deep-linked to ("open Alerts on the critical ones") implements
+/// <see cref="IAcceptsNavigation"/>; the catalog calls <c>Accept</c> once, right after <see cref="OnActivated"/>, when a
+/// <see cref="NavigationRequest"/> for it is waiting. A panel asks for another with <see cref="RequestNavigation"/>.
+/// See <c>docs/PARITY-FOUNDATIONS.md</c>.
 /// </para>
 /// </summary>
 public abstract class PanelViewModelBase : ObservableObject
@@ -96,6 +103,41 @@ public abstract class PanelViewModelBase : ObservableObject
     /// </summary>
     protected virtual void OnDeactivated()
     {
+    }
+
+    /// <summary>
+    /// Asks the shell to show another panel, optionally telling it something (an <see cref="AlertsFilter"/>, an
+    /// <see cref="AuditPreset"/>, a <see cref="LogsPreset"/>, or any payload the target panel understands). The window is
+    /// brought up if it is in the tray, the panel selected, and the payload handed to it once it is on screen — see
+    /// <see cref="ShellNavigation"/> and <see cref="IAcceptsNavigation"/>. UI thread only.
+    /// </summary>
+    /// <param name="panelId">The target's <see cref="PanelDescriptor.Id"/>.</param>
+    /// <param name="payload">What to tell it, or null to only show it.</param>
+    protected void RequestNavigation(string panelId, object? payload = null) => Services.Navigation.Request(panelId, payload);
+
+    /// <summary>
+    /// Gives a navigation payload to this panel if it takes one (<see cref="IAcceptsNavigation"/>); a panel that does not simply
+    /// has nothing to apply. An exception from <c>Accept</c> is traced, not propagated: it runs inside the catalog's activation
+    /// handler, and a panel that cannot use a payload must not stop the operator getting to it. <see cref="PanelCatalog"/> calls
+    /// this, right after <see cref="OnActivated"/>.
+    /// </summary>
+    internal void AcceptNavigation(object payload)
+    {
+        if (this is not IAcceptsNavigation target)
+        {
+            return;
+        }
+
+        try
+        {
+            target.Accept(payload);
+        }
+#pragma warning disable CA1031 // A payload the panel cannot apply must not break navigating to it.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceError($"panel '{Title}' could not accept its navigation payload ({payload.GetType().Name}): {ex}");
+        }
     }
 
     /// <summary>Idempotent wrapper the shell calls; runs <see cref="InitializeAsync"/> once.</summary>

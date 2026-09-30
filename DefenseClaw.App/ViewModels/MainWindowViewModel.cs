@@ -160,6 +160,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Shows a panel, telling it <paramref name="payload"/> if there is one: what a status-strip chip or a banner does when
+    /// clicked (<c>RequestNavigation("alerts", new AlertsFilter(AuditSeverity.Critical))</c>). See <see cref="ShellNavigation"/>.
+    /// </summary>
+    public void RequestNavigation(string panelId, object? payload = null) => _services.Navigation.Request(panelId, payload);
+
+    /// <summary>The same without a payload, for a XAML binding: <c>Command="{Binding OpenPanelCommand}" CommandParameter="alerts"</c>.</summary>
+    [RelayCommand]
+    private void OpenPanel(string? panelId)
+    {
+        if (!string.IsNullOrWhiteSpace(panelId))
+        {
+            RequestNavigation(panelId);
+        }
+    }
+
     [RelayCommand]
     private async Task RefreshAsync()
     {

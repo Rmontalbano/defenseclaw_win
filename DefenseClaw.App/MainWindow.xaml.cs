@@ -45,6 +45,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     private readonly TrayIconService _tray;
     private readonly MainWindowViewModel _viewModel;
     private readonly ShellActions _actions;
+
+    /// <summary>The inbox for deep links; set by <see cref="Wire"/>, which subscribes this window to it.</summary>
+    private ShellNavigation _navigation = null!;
     private readonly CommandPaletteViewModel _paletteViewModel = new();
 
     /// <summary>The look controls, or null when the app was built without them (only a test host is).</summary>
@@ -162,6 +165,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             .FromProperty(InfoBar.IsOpenProperty, typeof(InfoBar))
             ?.AddValueChanged(PanelFaultBar, OnPanelFaultBarOpenChanged);
 
+        // A deep link (ShellNavigation): select the panel it names. The catalog hands it its payload when it comes up.
+        services.Navigation.Requested += OnNavigationRequested;
+        _navigation = services.Navigation;
+
         Loaded += OnLoaded;
 
         ConstructionProbe?.Invoke();
@@ -179,6 +186,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         try
         {
             services.Monitor.StateChanged -= OnMonitorStateChanged;
+            services.Navigation.Requested -= OnNavigationRequested;
             _catalog.PanelFaulted -= OnPanelFaulted;
             if (_appearance is not null)
             {
@@ -390,6 +398,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         }
 
         _catalog.PanelFaulted -= OnPanelFaulted;
+        _navigation.Requested -= OnNavigationRequested;
         _viewModel.Dispose();
         base.OnClosing(e);
     }
@@ -467,8 +476,22 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         RootNavigation.PaneClosed += (_, _) => ShowGroupHeadings(false);
         ShowGroupHeadings(RootNavigation.IsPaneOpen);
 
+        // The panel a navigation request raised before this window existed is waiting for, else the default one.
         RootNavigation.SetPageProviderService(_catalog);
-        _ = RootNavigation.Navigate(_catalog.Default.ViewType);
+        _ = RootNavigation.Navigate(_catalog.InitialPanel.ViewType);
+    }
+
+    /// <summary>
+    /// A navigation request (see <see cref="ShellNavigation"/>) names a panel: select it, exactly as clicking its sidebar entry
+    /// does. Before the sidebar exists (<see cref="OnLoaded"/> has not run) there is nothing to select; the request stays
+    /// pending and <see cref="BuildNavigation"/> opens on its panel.
+    /// </summary>
+    private void OnNavigationRequested(object? sender, NavigationRequestedEventArgs e)
+    {
+        if (IsLoaded && _catalog.ById(e.Request.PanelId) is { } panel)
+        {
+            NavigateTo(panel);
+        }
     }
 
     private void ShowGroupHeadings(bool paneOpen)

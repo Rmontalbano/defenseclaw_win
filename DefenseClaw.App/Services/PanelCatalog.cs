@@ -74,10 +74,24 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     private AppearanceService? _appearance;
 
     public PanelCatalog(AppServices services)
+        : this(services, panels: null)
+    {
+    }
+
+    /// <summary>
+    /// <paramref name="panels"/> replaces the real panel list; a test seam, so the activation and navigation plumbing can be
+    /// exercised with panels that are three lines long instead of the real ones.
+    /// </summary>
+    internal PanelCatalog(AppServices services, IReadOnlyList<PanelDescriptor>? panels)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
 
-        Panels = new PanelDescriptor[]
+        // A navigation request for a panel that is already on screen has nothing left to activate it: deliver it here.
+        // (One for a panel that is not is delivered by UpdateActivation when it comes up.) The catalog lives as long as the
+        // app, like the inbox it listens to.
+        _services.Navigation.Requested += OnNavigationRequested;
+
+        Panels = panels ?? new PanelDescriptor[]
         {
             // Monitor
             new("overview", "Overview", "Monitor", SymbolRegular.AppsListDetail24,
@@ -214,10 +228,57 @@ public sealed class PanelCatalog : INavigationViewPageProvider
 
     /// <summary>
     /// A panel is active exactly when its view is on screen in an interactive window. The
-    /// view-model, not the view, gets told: the view has nothing to pause.
+    /// view-model, not the view, gets told: the view has nothing to pause. A panel that has just
+    /// become active is then given the navigation request waiting for it, if any (see
+    /// <see cref="ShellNavigation"/>) — after <c>OnActivated</c>, so it is live when it hears.
     /// </summary>
-    private void UpdateActivation(FrameworkElement view, PanelViewModelBase viewModel) =>
+    private void UpdateActivation(FrameworkElement view, PanelViewModelBase viewModel)
+    {
+        var wasActive = viewModel.IsActive;
         viewModel.SetActive(_windowInteractive && view.IsVisible);
+
+        if (!wasActive && viewModel.IsActive && ByViewType(view.GetType()) is { } descriptor)
+        {
+            DeliverPending(descriptor, viewModel);
+        }
+    }
+
+    /// <summary>
+    /// The panel the window should open on: the one a navigation request is waiting for (a request raised while no window
+    /// existed, which built it), else <see cref="Default"/>.
+    /// </summary>
+    public PanelDescriptor InitialPanel =>
+        _services.Navigation.Pending is { } request && ById(request.PanelId) is { } requested ? requested : Default;
+
+    /// <summary>
+    /// Hands <paramref name="descriptor"/>'s panel the request waiting for it, once: the request is taken (so no later
+    /// activation sees it again) whether or not the panel takes a payload, and a payload goes to it only if it implements
+    /// <see cref="IAcceptsNavigation"/>. A request raised without a payload only needed the panel shown, which it now is.
+    /// </summary>
+    private void DeliverPending(PanelDescriptor descriptor, PanelViewModelBase viewModel)
+    {
+        if (_services.Navigation.TryTake(descriptor.Id) is { Payload: { } payload })
+        {
+            viewModel.AcceptNavigation(payload);
+        }
+    }
+
+    private void OnNavigationRequested(object? sender, NavigationRequestedEventArgs e)
+    {
+        if (ById(e.Request.PanelId) is not { } descriptor)
+        {
+            Trace.TraceWarning($"navigation: there is no panel '{e.Request.PanelId}'; the request is dropped.");
+            _services.Navigation.Discard(e.Request);
+            return;
+        }
+
+        // Already on screen: nothing will activate it, so it is told now. Not built, or built and off screen (another
+        // panel is showing, or the window is in the tray): the request waits in the inbox for its activation.
+        if (_viewModels.TryGetValue(descriptor.ViewType, out var viewModel) && viewModel.IsActive)
+        {
+            DeliverPending(descriptor, viewModel);
+        }
+    }
 
     /// <summary>
     /// Called by WPF-UI's navigation frame. Builds the view, binds a freshly created

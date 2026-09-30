@@ -1,7 +1,4 @@
-using System.Diagnostics;
-using System.IO;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using DefenseClaw.App.Services.Settings;
 
 namespace DefenseClaw.App.Services.Appearance;
 
@@ -16,173 +13,38 @@ internal interface IAppearanceSettingsStore
 }
 
 /// <summary>
-/// The app's own settings file, <c>%LOCALAPPDATA%\DefenseClaw.App\settings.json</c> - the same folder as its update
-/// cache and crash log, and never anything under <c>~\.defenseclaw</c>, which belongs to the CLI.
+/// The appearance choice, kept in the <c>appearance</c> section of the app's settings file,
+/// <c>%LOCALAPPDATA%\DefenseClaw.App\settings.json</c>. A thin client of <see cref="AppSettingsStore"/>, which owns the file:
+/// its shape (<c>{ "schemaVersion": 1, "appearance": { "style": "linear", "mode": "dark" }, … }</c>), its tolerance for a missing,
+/// truncated or wrongly shaped file and for values this build does not know, its atomic temp-file-and-move writes, and the
+/// guarantee that saving the appearance keeps every other section and a newer <c>schemaVersion</c> exactly as found.
 /// <para>
-/// <b>Shape.</b> <c>{ "schemaVersion": 1, "appearance": { "style": "linear", "mode": "dark" } }</c>. The file is the app's
-/// general settings home, so the appearance is one section of it: saving re-reads the file and rewrites only that
-/// section, keeping every other member (and a higher <c>schemaVersion</c>) exactly as found.
-/// </para>
-/// <para>
-/// <b>Tolerance.</b> A missing, empty, truncated or non-JSON file yields the defaults; a style or mode this build does
-/// not know (a typo, or a value from a newer build) falls back to the default for that one field and keeps the other.
-/// Nothing is ever thrown at the caller. <b>Atomicity.</b> Saves write a temp file beside the target and move it over,
-/// so a crash mid-write leaves the previous file intact, never half of a new one.
+/// There is one store per file in the process (<see cref="AppSettingsStore.ForPath"/>), so this and the rest of the app's
+/// settings share one lock and one writer; two of these over the same path are the same store.
 /// </para>
 /// </summary>
 internal sealed class FileAppearanceSettingsStore : IAppearanceSettingsStore
 {
     /// <summary>The version this build writes. A file that already says more keeps its number.</summary>
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = AppSettingsStore.SchemaVersion;
 
-    private const string AppearanceKey = "appearance";
-    private const string VersionKey = "schemaVersion";
-
-    private readonly string _path;
+    private readonly AppSettingsStore _store;
 
     public FileAppearanceSettingsStore(string? path = null)
     {
-        _path = path ?? DefaultPath;
+        _store = AppSettingsStore.ForPath(path);
     }
 
-    public static string DefaultPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "DefenseClaw.App",
-        "settings.json");
+    public static string DefaultPath => AppSettingsStore.DefaultPath;
 
-    public AppearanceSettings Load()
-    {
-        try
-        {
-            if (!File.Exists(_path))
-            {
-                return AppearanceSettings.Defaults;
-            }
+    /// <inheritdoc />
+    public AppearanceSettings Load() => _store.Load().Appearance;
 
-            return Parse(File.ReadAllText(_path));
-        }
-#pragma warning disable CA1031 // Unreadable settings mean the defaults, whatever the reason.
-        catch (Exception ex)
-        {
-            Trace.TraceWarning($"Appearance settings could not be read from {_path}: {ex.Message}");
-            return AppearanceSettings.Defaults;
-        }
-#pragma warning restore CA1031
-    }
-
+    /// <inheritdoc />
     public void Save(AppearanceSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        string? temp = null;
-        try
-        {
-            var root = ReadRootOrEmpty();
-            var existingVersion = root[VersionKey] is JsonValue version && version.TryGetValue<int>(out var number) ? number : 0;
-            root[VersionKey] = Math.Max(existingVersion, SchemaVersion);
-            root[AppearanceKey] = new JsonObject
-            {
-                ["style"] = ToWire(settings.Style),
-                ["mode"] = ToWire(settings.Mode),
-            };
-
-            var directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                _ = Directory.CreateDirectory(directory);
-            }
-
-            temp = _path + ".tmp-" + Guid.NewGuid().ToString("N");
-            File.WriteAllText(temp, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(temp, _path, overwrite: true);
-            temp = null;
-        }
-#pragma warning disable CA1031 // A setting that cannot be saved must not take the app down.
-        catch (Exception ex)
-        {
-            Trace.TraceWarning($"Appearance settings could not be saved to {_path}: {ex.Message}");
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            if (temp is not null)
-            {
-                try
-                {
-                    File.Delete(temp);
-                }
-#pragma warning disable CA1031 // Best-effort cleanup of a temp file.
-                catch (Exception)
-                {
-                }
-#pragma warning restore CA1031
-            }
-        }
+        _ = _store.Update(all => all with { Appearance = settings });
     }
-
-    /// <summary>Parses the file's text; internal so the tests can feed it every kind of damaged input.</summary>
-    internal static AppearanceSettings Parse(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return AppearanceSettings.Defaults;
-        }
-
-        JsonNode? root;
-        try
-        {
-            root = JsonNode.Parse(text);
-        }
-        catch (JsonException)
-        {
-            return AppearanceSettings.Defaults;
-        }
-
-        if (root is not JsonObject obj || obj[AppearanceKey] is not JsonObject appearance)
-        {
-            return AppearanceSettings.Defaults;
-        }
-
-        return new AppearanceSettings(
-            ReadEnum(appearance["style"], AppearanceSettings.Defaults.Style),
-            ReadEnum(appearance["mode"], AppearanceSettings.Defaults.Mode));
-    }
-
-    /// <summary>The existing file's object, so unrelated sections survive; an empty one when there is none or it is damaged.</summary>
-    private JsonObject ReadRootOrEmpty()
-    {
-        try
-        {
-            if (File.Exists(_path) && JsonNode.Parse(File.ReadAllText(_path)) is JsonObject existing)
-            {
-                return existing;
-            }
-        }
-        catch (JsonException)
-        {
-            // A damaged file is replaced, not repaired: there is nothing in it worth keeping.
-        }
-
-        return new JsonObject();
-    }
-
-    private static T ReadEnum<T>(JsonNode? node, T fallback)
-        where T : struct, Enum
-    {
-        // A name, not a number: Enum.TryParse would happily take "1" as the second style.
-        if (node is JsonValue value &&
-            value.TryGetValue<string>(out var text) &&
-            text.Length > 0 &&
-            char.IsLetter(text[0]) &&
-            Enum.TryParse<T>(text, ignoreCase: true, out var parsed) &&
-            Enum.IsDefined(parsed))
-        {
-            return parsed;
-        }
-
-        return fallback;
-    }
-
-    private static string ToWire<T>(T value)
-        where T : struct, Enum => value.ToString().ToLowerInvariant();
 }

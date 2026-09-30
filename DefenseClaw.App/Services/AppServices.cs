@@ -12,6 +12,7 @@ using DefenseClaw.Core.Logs;
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Security;
+using DefenseClaw.App.Services.Settings;
 
 namespace DefenseClaw.App.Services;
 
@@ -71,7 +72,7 @@ public sealed class AppServices : IDisposable
     /// <summary>What <see cref="StartupLoad"/> produces: the two readers and the first config state.</summary>
     private sealed record LoadedStartup(ConfigStore ConfigStore, TokenResolver TokenResolver, LoadedConfig Initial);
 
-    private AppServices(StartupLoad startup, string? claudeSettingsPath = null)
+    private AppServices(StartupLoad startup, string? claudeSettingsPath = null, string? settingsPath = null)
     {
         Paths = startup.Paths;
 
@@ -117,6 +118,15 @@ public sealed class AppServices : IDisposable
         ConfigWatcher.Changed += OnConfigChanged;
 
         Monitor = new GatewayMonitor(this);
+
+        // The shared building blocks the panels and the shell build on (docs/PARITY-FOUNDATIONS.md). Nothing here starts work:
+        // the settings file is read on first use, the counts service runs only while something listens to it, and the scope
+        // follows the monitor it is handed.
+        Settings = AppSettingsStore.ForPath(settingsPath);
+        Navigation = new ShellNavigation();
+        AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath);
+        ConnectorScope = new ConnectorScope(Monitor);
+        AlertCounts = new AlertCountsService(AlertQueue, Monitor);
     }
 
     /// <summary>The single instance, created by <see cref="Initialize"/> at startup.</summary>
@@ -163,6 +173,25 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The one place UI state comes from. See <see cref="GatewayMonitor"/>.</summary>
     public GatewayMonitor Monitor { get; }
+
+    /// <summary>
+    /// The app's own settings, <c>%LOCALAPPDATA%\DefenseClaw.App\settings.json</c>: appearance, monitoring, notifications, startup,
+    /// connection and updates. <c>Settings.Current</c> reads, <c>Settings.Update(s =&gt; s with { … })</c> changes,
+    /// <c>Settings.Changed</c> announces. See <see cref="Settings.AppSettingsStore"/>.
+    /// </summary>
+    internal AppSettingsStore Settings { get; }
+
+    /// <summary>The inbox for "show this panel, and tell it this" requests (deep links). See <see cref="ShellNavigation"/>.</summary>
+    public ShellNavigation Navigation { get; }
+
+    /// <summary>The alert queue read straight from <c>audit.db</c> (the Mac's "unacknowledged findings"). See <see cref="AlertQueueReader"/>; most callers want <see cref="AlertCounts"/>.</summary>
+    public AlertQueueReader AlertQueue { get; }
+
+    /// <summary>The kept-fresh counts over <see cref="AlertQueue"/>: subscribe to <c>Changed</c> for a badge, call <c>RefreshAsync</c> after an acknowledge. Idle while nothing subscribes.</summary>
+    internal AlertCountsService AlertCounts { get; }
+
+    /// <summary>The one connector filter every screen shares (All, or one connector). See <see cref="Services.ConnectorScope"/>.</summary>
+    internal ConnectorScope ConnectorScope { get; }
 
     /// <summary>
     /// REST port the <see cref="Gateway"/> client is currently built against. Tracks
@@ -296,10 +325,15 @@ public sealed class AppServices : IDisposable
     internal static AppServices CreateIsolated(
         DefenseClawPaths paths,
         string? claudeSettingsPath = null,
-        bool readConfigOnPoolThread = false)
+        bool readConfigOnPoolThread = false,
+        string? settingsPath = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath);
+
+        // The app's own settings file lives under %LOCALAPPDATA%, not in the data directory, so an isolated composition that said
+        // nothing about it would read and write the real one. It gets a file inside the scratch directory instead.
+        settingsPath ??= Path.Combine(paths.DataDirectory, "DefenseClaw.App", "settings.json");
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -433,6 +467,8 @@ public sealed class AppServices : IDisposable
         Cli.Dispose();
 
         ConfigWatcher.Changed -= OnConfigChanged;
+        AlertCounts.Dispose();
+        ConnectorScope.Dispose();
         Monitor.Dispose();
         ConfigWatcher.Dispose();
         GatewayLog.Dispose();

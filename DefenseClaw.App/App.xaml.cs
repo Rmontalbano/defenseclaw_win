@@ -119,6 +119,10 @@ public partial class App : Application
 
         _dashboard = new DashboardHost(CreateDashboard);
 
+        // A deep link (ShellNavigation) means the operator wants to see that panel: bring the dashboard up, building it if this
+        // is a tray-only session. A window that already exists selects the panel itself; a new one opens on it.
+        _services.Navigation.Requested += (_, _) => ShowDashboard();
+
         _tray = new TrayIconService(_services);
         _tray.OpenDashboardRequested += (_, _) => ShowDashboard();
         _tray.ExitRequested += (_, _) => ExitApplication();

@@ -351,7 +351,7 @@ public sealed class GatewaySnapshotEventArgs : EventArgs
 /// is for display only.
 /// </para>
 /// </summary>
-public sealed class GatewayMonitor : IDisposable
+public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
 {
     public static readonly TimeSpan FastInterval = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(30);
@@ -407,6 +407,10 @@ public sealed class GatewayMonitor : IDisposable
     /// <summary>When <c>/alerts</c> and <c>/status</c> were last requested; the gates behind their 30 s cadence. Monotonic.</summary>
     private MonotonicStamp _lastAlertPoll = MonotonicStamp.Never;
     private MonotonicStamp _lastStatusPoll = MonotonicStamp.Never;
+
+    /// <summary>When <see cref="AlertCadenceElapsed"/> last became due (its own gate, on the same 30 s), and whether it is due now, to be raised once the poll is published. Only touched while holding <c>_pollGate</c>.</summary>
+    private MonotonicStamp _lastAlertCadence = MonotonicStamp.Never;
+    private bool _alertCadenceDue;
 
     /// <summary>Polls in a row that threw before producing a snapshot. Only touched while holding <c>_pollGate</c>.</summary>
     private int _consecutivePollFaults;
@@ -481,6 +485,22 @@ public sealed class GatewayMonitor : IDisposable
     /// </para>
     /// </summary>
     public event EventHandler<GatewaySnapshotEventArgs>? PollCompleted;
+
+    /// <summary>
+    /// Raised once per <see cref="AlertInterval"/> — and right after a <see cref="RefreshAlertsNowAsync"/> — <i>after</i> the poll's
+    /// snapshot is published, so <see cref="Current"/> already holds what that poll saw. The tick for things that refresh with the
+    /// alert list: <see cref="AlertCountsService"/> reads the audit database on it, and falls back to <see cref="Current"/>'s list.
+    /// Unlike the <c>/alerts</c> fetch it does not wait for a healthy gateway: the database is readable with the gateway down.
+    /// <para>
+    /// Raised on the poll's thread, inside the poll gate: a subscriber starts its work and returns. While nothing is subscribed
+    /// the tick is not even scheduled, so it costs nothing; a subscriber that attaches is ticked on the next poll. A subscriber
+    /// that throws is traced and skipped.
+    /// </para>
+    /// </summary>
+    public event EventHandler<GatewaySnapshotEventArgs>? AlertCadenceElapsed;
+
+    /// <summary>How many handlers are attached to <see cref="AlertCadenceElapsed"/> right now; what the idle-cost tests read.</summary>
+    internal int AlertCadenceSubscriberCount => AlertCadenceElapsed?.GetInvocationList().Length ?? 0;
 
     /// <summary>The most recent snapshot. Never null.</summary>
     public GatewaySnapshot Current
@@ -655,6 +675,14 @@ public sealed class GatewayMonitor : IDisposable
                 TraceFault("publish", ex);
             }
 
+            // After Publish, so a subscriber reading Current sees this poll. Only when due (see PollAsync), and cleared
+            // first: a subscriber cannot make it fire twice.
+            if (_alertCadenceDue)
+            {
+                _alertCadenceDue = false;
+                InvokeEach(AlertCadenceElapsed, new GatewaySnapshotEventArgs(snapshot), nameof(AlertCadenceElapsed));
+            }
+
             return snapshot;
         }
         finally
@@ -741,6 +769,13 @@ public sealed class GatewayMonitor : IDisposable
         var config = _services.Config.Config;
 
         ResetForNewEndpoint(endpoint.Port);
+
+        // The alert cadence tick (AlertCadenceElapsed): scheduled only while someone is subscribed, raised after this poll publishes.
+        if (AlertCadenceElapsed is not null && (forceAlerts || _lastAlertCadence.HasElapsed(AlertInterval, _time)))
+        {
+            _lastAlertCadence = MonotonicStamp.Now(_time);
+            _alertCadenceDue = true;
+        }
 
         var status = await (_detector ?? _services.InstallDetector)
             .DetectAsync(endpoint.Port, endpoint.Client, cancellationToken)

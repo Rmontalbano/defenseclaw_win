@@ -60,6 +60,13 @@ internal sealed class ShellActions
         return true;
     }
 
+    /// <summary>
+    /// Shows <paramref name="panelId"/>, telling it <paramref name="payload"/> if there is one: the deep link behind the
+    /// status strip's chips and the palette's "open Alerts on the critical ones". The window is brought up if it is in the
+    /// tray. See <see cref="ShellNavigation"/>.
+    /// </summary>
+    public void OpenPanel(string panelId, object? payload = null) => _services.Navigation.Request(panelId, payload);
+
     /// <summary>One gateway poll now, the same as the status strip's Refresh button.</summary>
     public void RefreshGatewayStatus() => _ = RefreshGatewayStatusAsync();
 
