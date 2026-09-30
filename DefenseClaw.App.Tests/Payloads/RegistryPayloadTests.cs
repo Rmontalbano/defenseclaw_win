@@ -177,6 +177,142 @@ public sealed class RegistryPayloadTests : IDisposable
         Assert.Equal("—", vm.Entries[4].ReviewDisplay);
     }
 
+    // ------------------------------------------------------------------ error and findings on an entry row
+
+    // Emitter: registries/cache.py:47-61 (EntryVerdict: `findings: int`, `error: str`, `severity: str`), 84-85 (to_dict writes
+    // findings only when non-zero, error only when non-empty) and registries/sync.py:292 (error = str(exc)[:240], status
+    // "error"), 301-304 (findings = len(scan_result.findings), severity = scan_result.max_severity(), error cleared).
+    [Fact]
+    public async Task An_entry_that_failed_shows_its_error_and_an_entry_with_findings_shows_a_count_toned_by_its_severity()
+    {
+        var (vm, rows) = ReadSources(PayloadFixtures.Read("registry-list.sources.json"));
+        WriteIndex("corp-skills", PayloadFixtures.Read("registry-index.synced.json"));
+        await vm.LoadEntriesAsync(rows[0]);
+
+        var pdf = vm.Entries[0];
+        var docs = vm.Entries[1];
+        var remote = vm.Entries[2];
+        var broken = vm.Entries[3];
+
+        // Two findings, worst severity MEDIUM: a Medium badge, and what the cache knows in the tooltip.
+        Assert.True(docs.HasFindings);
+        Assert.Equal(2, docs.Findings);
+        Assert.Equal("2 findings", docs.FindingsBadgeText);
+        Assert.Equal("MEDIUM", docs.WorstSeverity);
+        Assert.Equal("Medium", docs.FindingsKey);
+        Assert.Equal("2 findings, worst severity MEDIUM", docs.FindingsAutomationName);
+        Assert.Contains("2 findings — worst severity MEDIUM", docs.FindingsToolTip, StringComparison.Ordinal);
+        Assert.Contains("not the individual findings", docs.FindingsToolTip, StringComparison.Ordinal); // the cache has a count only
+        Assert.Contains("Scan scan-0002", docs.FindingsToolTip, StringComparison.Ordinal);
+        Assert.Matches(@"scanned \d{4}-\d{2}-\d{2} \d{2}:\d{2}", docs.FindingsToolTip); // local time of last_scanned_at
+        Assert.False(docs.HasError);
+
+        Assert.Equal("4 findings", remote.FindingsBadgeText);
+        Assert.Equal("High", remote.FindingsKey);
+
+        // The error line, and nothing else for that entry.
+        Assert.True(broken.HasError);
+        Assert.Equal("fetch failed: HTTP 404", broken.Error);
+        Assert.Equal("Error: fetch failed: HTTP 404", broken.ErrorText);
+        Assert.Equal("error: fetch failed: HTTP 404", broken.ErrorAutomationName);
+        Assert.False(broken.HasFindings);
+        Assert.True(broken.HasDetail);
+
+        // An entry with neither draws nothing extra.
+        Assert.False(pdf.HasDetail);
+        Assert.False(pdf.HasError);
+        Assert.False(pdf.HasFindings);
+        Assert.Equal(string.Empty, pdf.ErrorText);
+        Assert.False(vm.Entries[4].HasDetail);
+    }
+
+    [Fact]
+    public async Task The_row_name_a_screen_reader_announces_carries_the_error_and_the_findings_only_when_there_are_some()
+    {
+        var (vm, rows) = ReadSources(PayloadFixtures.Read("registry-list.sources.json"));
+        WriteIndex("corp-skills", PayloadFixtures.Read("registry-index.synced.json"));
+        await vm.LoadEntriesAsync(rows[0]);
+
+        Assert.Equal("skill entry pdf-tools, status clean, review Approved", vm.Entries[0].ToString());
+        Assert.Equal("mcp entry docs-mcp, status warning, review —, 2 findings, worst severity MEDIUM", vm.Entries[1].ToString());
+        Assert.Equal("mcp entry remote-mcp, status blocked, review Rejected, 4 findings, worst severity HIGH", vm.Entries[2].ToString());
+        Assert.Equal("skill entry broken-skill, status error, review —, error: fetch failed: HTTP 404", vm.Entries[3].ToString());
+    }
+
+    [Fact]
+    public void Findings_read_as_a_count_a_list_or_text_and_the_tone_follows_the_worst_severity_or_is_high()
+    {
+        var rows = new List<RegistryEntryRow>();
+
+        Assert.Null(RegistriesPanelViewModel.ParseIndex(PayloadFixtures.Read("registry-index.findings-shapes.json"), rows));
+        var byName = rows.ToDictionary(r => r.Name, StringComparer.Ordinal);
+
+        // A list: its length is the count, each item a line, and an item's severity can be worse than the entry's.
+        var listed = byName["listed-findings"];
+        Assert.Equal(5, listed.Findings);
+        Assert.Equal(
+            new[] { "CRITICAL: Prompt injection in a tool description", "LOW: Unpinned dependency", "a finding that is only a sentence", "HIGH" },
+            listed.FindingLines.ToArray());
+        Assert.Equal("MEDIUM", listed.Severity);
+        Assert.Equal("CRITICAL", listed.WorstSeverity);
+        Assert.Equal("Critical", listed.FindingsKey);
+        Assert.Contains("• CRITICAL: Prompt injection in a tool description", listed.FindingsToolTip, StringComparison.Ordinal);
+        Assert.Contains("… and 1 more", listed.FindingsToolTip, StringComparison.Ordinal); // 5 findings, 4 lines
+        Assert.DoesNotContain("not the individual findings", listed.FindingsToolTip, StringComparison.Ordinal);
+
+        // No severity given (an empty string counts as none): findings are High, never calmer.
+        Assert.Equal(3, byName["count-as-text"].Findings);
+        Assert.Equal("High", byName["count-as-text"].FindingsKey);
+        Assert.Equal(5, byName["no-severity"].Findings);
+        Assert.Equal("High", byName["no-severity"].FindingsKey);
+        Assert.Equal("5 findings", byName["no-severity"].FindingsAutomationName);
+
+        // A severity this app does not know is shown, and toned High.
+        Assert.Equal("High", byName["unknown-severity"].FindingsKey);
+        Assert.Equal("1 finding, worst severity SEVERE", byName["unknown-severity"].FindingsAutomationName);
+
+        // A known low one is a neutral badge.
+        Assert.Equal("Info", byName["info-only"].FindingsKey);
+        Assert.Equal("1 finding", byName["info-only"].FindingsBadgeText);
+
+        // Nonsense is no findings and no row detail.
+        Assert.Equal(0, byName["negative-count"].Findings);
+        Assert.Equal(0, byName["odd-types"].Findings);
+        Assert.False(byName["negative-count"].HasDetail);
+        Assert.False(byName["odd-types"].HasDetail);
+    }
+
+    [Fact]
+    public void An_error_is_one_printable_line_and_a_blank_or_non_text_error_is_no_error()
+    {
+        var rows = new List<RegistryEntryRow>();
+
+        _ = RegistriesPanelViewModel.ParseIndex(PayloadFixtures.Read("registry-index.findings-shapes.json"), rows);
+        var byName = rows.ToDictionary(r => r.Name, StringComparer.Ordinal);
+
+        // A scan can fail with a multi-line exception text (sync.py:292 keeps str(exc)[:240]); the row shows one line.
+        Assert.Equal("scan failed: Traceback (most recent call last): File \"scan.py\", line 1", byName["multiline-error"].Error);
+        Assert.DoesNotContain('\n', byName["multiline-error"].ErrorText);
+        Assert.DoesNotContain('\t', byName["multiline-error"].ErrorText);
+
+        Assert.False(byName["blank-error"].HasError);
+        Assert.False(byName["blank-error"].HasDetail);
+        Assert.False(byName["odd-types"].HasError); // "error": 42 is not text
+    }
+
+    [Fact]
+    public void A_very_long_error_is_cut_and_the_entry_list_still_reads()
+    {
+        var rows = new List<RegistryEntryRow>();
+        var json = "{\"verdicts\":[{\"name\":\"x\",\"type\":\"skill\",\"status\":\"error\",\"error\":\"" + new string('e', 1000) + "\"}]}";
+
+        Assert.Null(RegistriesPanelViewModel.ParseIndex(json, rows));
+
+        var error = Assert.Single(rows).Error!;
+        Assert.Equal(401, error.Length);
+        Assert.EndsWith("…", error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_source_id_with_a_dot_is_a_valid_cli_id_and_its_cache_is_read()
     {

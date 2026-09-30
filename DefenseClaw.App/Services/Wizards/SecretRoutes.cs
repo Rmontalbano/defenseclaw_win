@@ -32,6 +32,12 @@ namespace DefenseClaw.App.Services.Wizards;
 /// (<c>gateway --token</c>, <c>llm --api-key</c>) have no environment fallback — their value is read from the
 /// flag or not at all — so they keep Route 1 only.
 /// </para>
+/// <para>
+/// A fourth secret has a route without ever having been a flag: <c>setup galileo</c> reads <c>GALILEO_API_KEY</c>
+/// from the environment and offers no flag for it, so <see cref="WizardSyntheticSecrets"/> adds a field that stands
+/// for the variable. Unlike the others the CLI keeps such a key only when <c>--persist-api-key</c> is on — see
+/// <see cref="PersistFlag"/> and <see cref="SecretRoutes"/>.
+/// </para>
 /// </summary>
 public sealed class SecretRoute
 {
@@ -57,6 +63,27 @@ public sealed class SecretRoute
     public Func<WizardValues, string?>? InAppEnvName { get; init; }
 
     /// <summary>
+    /// The flag that makes the CLI <i>keep</i> a value it was handed in the environment. Null (the default) means
+    /// the CLI stores an environment-supplied value on its own (splunk, observability). <c>setup galileo</c> does
+    /// not: without <c>--persist-api-key</c> it uses <c>GALILEO_API_KEY</c> for that run and writes nothing
+    /// (<c>token_value=resolved_key if api_key or persist_api_key else None</c>), so the value is gone when the
+    /// child exits. The wizard turns the flag on when a value is typed and says what it decided.
+    /// </summary>
+    public string? PersistFlag { get; init; }
+
+    /// <summary>
+    /// Replaces the card's default sentence about what the CLI does with an environment-supplied value ("the CLI
+    /// stores it in ~/.defenseclaw/.env"), for a route whose CLI does not always store it. Null keeps the default.
+    /// </summary>
+    public string? InAppStorage { get; init; }
+
+    /// <summary>
+    /// A sentence for the result line of a <c>--dry-run</c> preview, which is never given the typed value: what
+    /// the preview will therefore do. Null when the preview is unaffected.
+    /// </summary>
+    public string? PreviewNote { get; init; }
+
+    /// <summary>
     /// The valid variable name the in-app route would use for the current answers, or null when this flag has
     /// no such route (or, for an observability preset, no token at all). A name that is not a legal environment
     /// variable name is treated as no route rather than passed on.
@@ -79,6 +106,12 @@ public static class SecretRoutes
     /// (<c>[env var: …]</c>), which is what <see cref="RouteFor"/> checks before offering the in-app route.
     /// </summary>
     public const string ObservabilityTokenEnvVar = "DEFENSECLAW_SETUP_OBSERVABILITY_TOKEN";
+
+    /// <summary>
+    /// The variable <c>setup galileo</c> reads its API key from (<c>_KEY_ENV</c>, <c>cmd_setup_galileo.py:42</c>):
+    /// the process environment first, then <c>~/.defenseclaw/.env</c> (<c>_resolve_secret</c>, lines 412-413).
+    /// </summary>
+    public const string GalileoKeyEnvVar = "GALILEO_API_KEY";
 
     /// <summary>
     /// <c>setup observability add &lt;preset&gt;</c> → the preset's <c>token_env</c>, from
@@ -140,8 +173,40 @@ public static class SecretRoutes
         return result;
     }
 
+    /// <summary>
+    /// <c>setup galileo</c>: typed in the app, like the Splunk tokens — <c>_resolve_secret</c> reads
+    /// <c>GALILEO_API_KEY</c> from the environment before <c>.env</c> (<c>cmd_setup_galileo.py:412-413</c>) — but
+    /// with two differences that come from the source and are said to the operator on the card:
+    /// <list type="bullet">
+    ///   <item>An environment-supplied key is <b>not stored</b> unless <c>--persist-api-key</c> is on
+    ///     (<c>cmd_setup_galileo.py:137</c>: <c>token_value=resolved_key if api_key or persist_api_key else None</c>).
+    ///     The key would otherwise live only in that one child's environment.</item>
+    ///   <item>The key is needed in <b>every</b> mode, a <c>--dry-run</c> and a <c>--disabled</c> setup included:
+    ///     the "not set" refusal (<c>:122-124</c>) comes before the writer is called with <c>dry_run</c>.</item>
+    /// </list>
+    /// </summary>
+    private static SecretRoute GalileoRoute() => new()
+    {
+        Purpose = "Galileo API key for trace export",
+        EnvName = _ => GalileoKeyEnvVar,
+        InAppEnvName = _ => GalileoKeyEnvVar,
+        PersistFlag = WizardSyntheticSecrets.PersistFlag,
+        InAppStorage = "the CLI writes it to ~/.defenseclaw/.env only when \"" + WizardSyntheticSecrets.PersistLabel +
+                       "\" is on; otherwise it uses the key for this run and keeps nothing.",
+        PreviewNote = "The CLI looks for the key even in a preview, and a preview is not given the value typed here, " +
+                      "so a preview passes only if the key is already stored.",
+        IfMissing = "The CLI stops with \"GALILEO_API_KEY is not set; export it or omit --non-interactive for a hidden prompt\" " +
+                    "and changes nothing. It checks before it previews, so a --dry-run preview stops the same way.",
+    };
+
     private static SecretRoute RouteFor(string target, WizardField field, IReadOnlyList<WizardField> everyField)
     {
+        // The one secret with no flag at all: added by WizardSyntheticSecrets, so it is recognised by its id.
+        if (target == "galileo" && field.Id == WizardSyntheticSecrets.GalileoKeyFieldId)
+        {
+            return GalileoRoute();
+        }
+
         var flag = field.Flag ?? string.Empty;
 
         switch (target, flag)

@@ -1,0 +1,31 @@
+{
+  "fetched_at": "2026-09-21T09:00:00+00:00",
+  "publisher": "Example Corp",
+  "schema_version": 2,
+  "source_id": "corp-skills",
+  "verdicts": [
+    {
+      "approved": false,
+      "findings": [
+        { "severity": "critical", "title": "Prompt injection in a tool description" },
+        { "severity": "LOW", "message": "Unpinned dependency" },
+        "a finding that is only a sentence",
+        {},
+        { "severity": "HIGH" }
+      ],
+      "name": "listed-findings",
+      "rejected": false,
+      "severity": "MEDIUM",
+      "status": "blocked",
+      "type": "mcp"
+    },
+    { "name": "count-as-text", "type": "skill", "status": "warning", "findings": "3", "severity": "", "approved": false, "rejected": false },
+    { "name": "negative-count", "type": "skill", "status": "clean", "findings": -2, "approved": false, "rejected": false },
+    { "name": "unknown-severity", "type": "skill", "status": "warning", "findings": 1, "severity": "SEVERE", "approved": false, "rejected": false },
+    { "name": "info-only", "type": "skill", "status": "clean", "findings": 1, "severity": "INFO", "approved": false, "rejected": false },
+    { "name": "no-severity", "type": "skill", "status": "warning", "findings": 5, "approved": false, "rejected": false },
+    { "name": "multiline-error", "type": "skill", "status": "error", "error": "scan failed:\r\n  Traceback (most recent call last):\n\tFile \"scan.py\", line 1\n", "approved": false, "rejected": false },
+    { "name": "blank-error", "type": "skill", "status": "clean", "error": "   ", "approved": false, "rejected": false },
+    { "name": "odd-types", "type": "skill", "status": "clean", "findings": true, "error": 42, "approved": false, "rejected": false }
+  ]
+}

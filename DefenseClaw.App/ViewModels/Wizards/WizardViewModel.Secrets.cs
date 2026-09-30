@@ -49,7 +49,8 @@ public sealed partial class WizardViewModel
         {
             EnvironmentNotes.Add(
                 $"{field.InAppEnvName}=••• — {field.CredentialPurpose}, supplied to the command as an environment variable " +
-                "(value masked; this run only, not on the command line).");
+                "(value masked; this run only, not on the command line)." +
+                (field.PersistSentence.Length > 0 ? " " + field.PersistSentence : string.Empty));
         }
 
         HasEnvironmentNotes = EnvironmentNotes.Count > 0;
@@ -60,8 +61,92 @@ public sealed partial class WizardViewModel
         if (e.PropertyName is nameof(WizardFieldViewModel.HasEntry) or nameof(WizardFieldViewModel.InAppEnvName)
             or nameof(WizardFieldViewModel.IsVisible))
         {
+            // A secret whose CLI keeps a supplied value only when told to (galileo): typing one is the moment the
+            // operator's intent is clear, so the choice is switched on for them — unless they have made it themselves.
+            if (e.PropertyName == nameof(WizardFieldViewModel.HasEntry) && sender is WizardFieldViewModel { HasEntry: true } typed)
+            {
+                SwitchOnPersistChoiceFor(typed);
+            }
+
+            SyncPersistState();
             RefreshEnvironmentNotes();
         }
+        else if (e.PropertyName == nameof(WizardFieldViewModel.Value) && sender is WizardFieldViewModel changed && IsPersistChoice(changed))
+        {
+            // Any change that did not come from SwitchOnPersistChoiceFor is the operator's own decision.
+            _persistChosenByOperator |= !_settingPersistFromEntry;
+            SyncPersistState();
+            RefreshEnvironmentNotes();
+        }
+    }
+
+    // ------------------------------------------------------------------ "keep the value" choice (galileo)
+
+    /// <summary>
+    /// True once the operator has set the "keep the value" switch themselves (a route's
+    /// <see cref="SecretRoute.PersistFlag"/>). From then on typing a value no longer changes it.
+    /// </summary>
+    private bool _persistChosenByOperator;
+
+    /// <summary>True only while <see cref="SwitchOnPersistChoiceFor"/> is writing the switch, to tell it from the operator.</summary>
+    private bool _settingPersistFromEntry;
+
+    /// <summary>The switch a secret's route names as "keep the value", or null when its CLI needs no such choice.</summary>
+    private WizardFieldViewModel? PersistChoiceOf(WizardFieldViewModel secret) =>
+        secret.Field.Credential?.PersistFlag is { Length: > 0 } flag
+            ? _fields.FirstOrDefault(f => string.Equals(f.Field.Flag, flag, StringComparison.Ordinal))
+            : null;
+
+    private bool IsPersistChoice(WizardFieldViewModel field) =>
+        field.Field.Flag is { Length: > 0 } flag &&
+        _fields.Any(s => s.IsSecret && string.Equals(s.Field.Credential?.PersistFlag, flag, StringComparison.Ordinal));
+
+    private void SwitchOnPersistChoiceFor(WizardFieldViewModel secret)
+    {
+        if (_persistChosenByOperator || PersistChoiceOf(secret) is not { IsOn: false } choice)
+        {
+            return;
+        }
+
+        _settingPersistFromEntry = true;
+        try
+        {
+            choice.IsOn = true;
+        }
+        finally
+        {
+            _settingPersistFromEntry = false;
+        }
+    }
+
+    /// <summary>Tells each secret whether the switch that keeps its value is on, so its status line can say what will happen.</summary>
+    private void SyncPersistState()
+    {
+        foreach (var secret in _fields)
+        {
+            if (secret.IsSecret && PersistChoiceOf(secret) is { } choice)
+            {
+                secret.SetPersistState(choice.IsOn);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The options for one run. A <c>--dry-run</c> preview never gets the typed value — it is for the real command
+    /// alone, so it goes to exactly one child — which is the single place that is decided.
+    /// </summary>
+    internal CliRunOptions? RunOptionsFor(bool preview) => preview ? null : BuildRunOptions();
+
+    /// <summary>What the supplied secrets' routes say a preview will do without them; leading space, or empty.</summary>
+    private string PreviewSecretNotes()
+    {
+        var notes = SuppliedSecretFields()
+            .Select(f => f.Field.Credential?.PreviewNote)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return notes.Length == 0 ? string.Empty : " " + string.Join(' ', notes);
     }
 
     /// <summary>

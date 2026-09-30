@@ -83,6 +83,15 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     [ObservableProperty]
     private string _entryNotice = string.Empty;
 
+    /// <summary>Whether the variable had a value the last time <see cref="RefreshCredential"/> looked. Never the value.</summary>
+    private CredentialPresence _presence = CredentialPresence.Unknown;
+
+    /// <summary>
+    /// For a route whose CLI keeps an environment-supplied value only on request (<see cref="SecretRoute.PersistFlag"/>):
+    /// whether that choice is on right now. Set by the wizard, which owns the other field; null when nothing has said.
+    /// </summary>
+    private bool? _persistsEntry;
+
     public WizardFieldViewModel(WizardField field, WizardValues values, WizardCredentials? credentials = null)
     {
         Field = field ?? throw new ArgumentNullException(nameof(field));
@@ -203,9 +212,11 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     {
         get
         {
-            var stored = CredentialEnvName.Length > 0 && !string.Equals(CredentialEnvName, InAppEnvName, StringComparison.Ordinal)
-                ? $" the CLI stores it as {CredentialEnvName} in ~/.defenseclaw/.env."
-                : " the CLI stores it in ~/.defenseclaw/.env.";
+            var stored = Field.Credential?.InAppStorage is { Length: > 0 } custom
+                ? " " + custom
+                : CredentialEnvName.Length > 0 && !string.Equals(CredentialEnvName, InAppEnvName, StringComparison.Ordinal)
+                    ? $" the CLI stores it as {CredentialEnvName} in ~/.defenseclaw/.env."
+                    : " the CLI stores it in ~/.defenseclaw/.env.";
 
             return $"Type it here and this app supplies it to the command as the environment variable {InAppEnvName} — for that one " +
                    $"run only, never on the command line — and{stored} The box is cleared as soon as the run ends.";
@@ -216,10 +227,50 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     public string EntryStatus => EntryProblem.Length > 0
         ? EntryProblem
         : HasEntry
-            ? $"A value is entered (hidden). It goes to the command as {InAppEnvName}, then is cleared."
+            ? $"A value is entered (hidden). It goes to the command as {InAppEnvName}, then is cleared." +
+              (PersistSentence.Length > 0 ? " " + PersistSentence : string.Empty)
             : EntryNotice.Length > 0
                 ? EntryNotice
-                : "Nothing entered. The command uses the stored variable, if any.";
+                : IsStored
+                    ? $"Nothing entered. {CredentialEnvName} is already stored and the command uses it: leave this blank to keep it, or type a value to replace it."
+                    : "Nothing entered. The command uses the stored variable, if any.";
+
+    /// <summary>True when the variable the command reads already has a value (in <c>.env</c> or this app's environment).</summary>
+    private bool IsStored => _presence is CredentialPresence.InDotEnv or CredentialPresence.InEnvironment;
+
+    /// <summary>
+    /// What happens to a typed value once the command has it, for a route whose CLI keeps it only on request:
+    /// saved to <c>.env</c>, or used once and gone. Empty when nothing is held or the route has no such choice.
+    /// </summary>
+    public string PersistSentence
+    {
+        get
+        {
+            if (!HasEntry || _persistsEntry is not { } persists || Field.Credential?.PersistFlag is not { Length: > 0 } flag)
+            {
+                return string.Empty;
+            }
+
+            return persists
+                ? $"The CLI will save it to ~/.defenseclaw/.env ({flag} is on)."
+                : $"It will not be saved ({flag} is off): nothing keeps it after this run, so it cannot authenticate afterwards unless it is stored some other way.";
+        }
+    }
+
+    /// <summary>
+    /// Tells the field whether the choice named by <see cref="SecretRoute.PersistFlag"/> is on. Called by the wizard,
+    /// which owns that field; a route with no such choice never calls it.
+    /// </summary>
+    internal void SetPersistState(bool persists)
+    {
+        if (_persistsEntry == persists)
+        {
+            return;
+        }
+
+        _persistsEntry = persists;
+        NotifyEntryChanged();
+    }
 
     /// <summary>
     /// What the review page says about this credential: how the command will get it. For an in-app secret with
@@ -235,7 +286,8 @@ public sealed partial class WizardFieldViewModel : ObservableObject
             }
 
             return HasEntry
-                ? $"Supplied to the command as the environment variable {InAppEnvName}=••• (value masked; this run only, not on the command line)."
+                ? $"Supplied to the command as the environment variable {InAppEnvName}=••• (value masked; this run only, not on the command line)." +
+                  (PersistSentence.Length > 0 ? " " + PersistSentence : string.Empty)
                 : $"Nothing entered here; the command reads {(CredentialEnvName.Length > 0 ? CredentialEnvName : InAppEnvName)} from ~/.defenseclaw/.env if it is stored. Go back to type a value.";
         }
     }
@@ -323,6 +375,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(EntryStatus));
         OnPropertyChanged(nameof(CredentialReviewNote));
+        OnPropertyChanged(nameof(PersistSentence));
     }
 
     /// <summary>
@@ -354,12 +407,14 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
         if (name.Length == 0)
         {
+            _presence = CredentialPresence.Unknown;
             CredentialStatus = "No stored variable applies to the current choices. The CLI reports any missing secret when it runs.";
             CredentialStatusKey = "Neutral";
         }
         else
         {
             var presence = _credentials?.Check(name, fresh) ?? CredentialPresence.Unknown;
+            _presence = presence;
             (CredentialStatus, CredentialStatusKey) = presence switch
             {
                 CredentialPresence.InDotEnv => (name + " has a value in ~/.defenseclaw/.env.", "Ok"),

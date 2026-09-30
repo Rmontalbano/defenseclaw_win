@@ -91,9 +91,23 @@ public sealed class RegistrySourceRow
     }
 }
 
-/// <summary>One cached entry of a source, read from that source's <c>index.json</c> (an <c>EntryVerdict</c>).</summary>
+/// <summary>
+/// One cached entry of a source, read from that source's <c>index.json</c> (an <c>EntryVerdict</c>).
+/// <para>
+/// <b>What the cache says about a scan.</b> An entry can carry an <see cref="Error"/> — <c>str(exc)[:240]</c> of the
+/// failure that stopped its scan or fetch (<c>registries/sync.py:292</c>), cleared by the next good scan (<c>:304</c>) —
+/// and a <c>findings</c> <i>count</i> (<c>len(scan_result.findings)</c>, <c>sync.py:301</c>; <c>cache.py:56</c> types it
+/// <c>int</c> and <c>to_dict</c> omits it when zero) next to a <c>severity</c> that is the worst of those findings
+/// (<c>max_severity()</c>, <c>sync.py:303</c>). The cache does <b>not</b> keep the findings themselves — they belong to the
+/// scan (<see cref="ScanId"/>) — so the row shows the count and the worst severity, and lists findings only if a later
+/// index writes them as an array (see <see cref="FindingLines"/>).
+/// </para>
+/// </summary>
 public sealed class RegistryEntryRow
 {
+    /// <summary>The tooltip lists at most this many findings; the rest are counted.</summary>
+    internal const int MaxFindingLines = 12;
+
     public required string Name { get; init; }
 
     public string? Type { get; init; }
@@ -107,6 +121,25 @@ public sealed class RegistryEntryRow
     public string? Severity { get; init; }
 
     public string? Location { get; init; }
+
+    /// <summary>Why the entry's fetch or scan failed (<c>error</c>), as one line. Null when the index has none.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>How many findings the last scan raised (<c>findings</c>: a count, or the length of a list). Zero when absent.</summary>
+    public int Findings { get; init; }
+
+    /// <summary>
+    /// One line per finding, when the index carries them as a list rather than a count (the 0.8.10 writer does not:
+    /// <c>cache.py:56</c>). Capped at <see cref="MaxFindingLines"/>; empty for a count.
+    /// </summary>
+    public IReadOnlyList<string> FindingLines { get; init; } = Array.Empty<string>();
+
+    /// <summary>The worst severity among findings that were listed with one; null for a count.</summary>
+    public string? FindingSeverity { get; init; }
+
+    public string? ScanId { get; init; }
+
+    public string? LastScanned { get; init; }
 
     public string TypeDisplay => string.IsNullOrWhiteSpace(Type) ? "—" : Type;
 
@@ -128,8 +161,126 @@ public sealed class RegistryEntryRow
     public bool CanReview => string.Equals(Type, "skill", StringComparison.OrdinalIgnoreCase)
         || string.Equals(Type, "mcp", StringComparison.OrdinalIgnoreCase);
 
-    public override string ToString() =>
-        $"{TypeDisplay} entry {Name}, status {StatusDisplay}, review {ReviewDisplay}";
+    // ------------------------------------------------------------------ error and findings
+
+    public bool HasError => !string.IsNullOrWhiteSpace(Error);
+
+    public bool HasFindings => Findings > 0;
+
+    /// <summary>True when the row has a second line to show — an error, findings, or both. Otherwise nothing extra is drawn.</summary>
+    public bool HasDetail => HasError || HasFindings;
+
+    /// <summary>The visible error line, shown in the Bad tone: <c>Error: fetch failed: HTTP 404</c>.</summary>
+    public string ErrorText => HasError ? "Error: " + Error : string.Empty;
+
+    /// <summary>What a screen reader announces for the error line (and part of the row's own name).</summary>
+    public string ErrorAutomationName => HasError ? "error: " + Error : string.Empty;
+
+    public string FindingsBadgeText => Findings == 1
+        ? "1 finding"
+        : Findings.ToString("N0", CultureInfo.CurrentCulture) + " findings";
+
+    /// <summary>The worst severity known for the findings (the entry's own <c>severity</c> or the listed ones), upper-cased; null when none is given.</summary>
+    public string? WorstSeverity
+    {
+        get
+        {
+            var entry = NormalizeSeverity(Severity);
+            var listed = NormalizeSeverity(FindingSeverity);
+            return SeverityRank(entry) >= SeverityRank(listed) ? entry ?? listed : listed;
+        }
+    }
+
+    /// <summary>
+    /// The tone of the findings badge: the worst severity when it is a known one (Critical / High / Medium are the
+    /// coloured tones; Low and Info read neutral), and <c>High</c> when no severity is given — findings are never
+    /// drawn calmer than the cache lets us prove.
+    /// </summary>
+    public string FindingsKey => SeverityRank(WorstSeverity) switch
+    {
+        4 => "Critical",
+        3 => "High",
+        2 => "Medium",
+        1 => "Low",
+        0 => "Info",
+        _ => "High",
+    };
+
+    /// <summary>What a screen reader announces for the badge: <c>2 findings, worst severity MEDIUM</c>.</summary>
+    public string FindingsAutomationName => WorstSeverity is { } worst
+        ? $"{FindingsBadgeText}, worst severity {worst}"
+        : FindingsBadgeText;
+
+    /// <summary>
+    /// The badge's tooltip: the count and worst severity, the findings themselves when the index lists them (and
+    /// otherwise a plain statement that the cache keeps only the count), then which scan they came from.
+    /// </summary>
+    public string FindingsToolTip
+    {
+        get
+        {
+            var lines = new List<string> { WorstSeverity is { } worst ? $"{FindingsBadgeText} — worst severity {worst}" : FindingsBadgeText };
+
+            foreach (var finding in FindingLines)
+            {
+                lines.Add("• " + finding);
+            }
+
+            if (FindingLines.Count == 0)
+            {
+                lines.Add("The cached index keeps the count and the worst severity, not the individual findings.");
+            }
+            else if (Findings > FindingLines.Count)
+            {
+                lines.Add($"… and {(Findings - FindingLines.Count).ToString("N0", CultureInfo.CurrentCulture)} more");
+            }
+
+            var scan = string.Join(
+                " · ",
+                new[] { string.IsNullOrWhiteSpace(ScanId) ? null : "Scan " + ScanId, RegistrySourceRow.FormatTimestamp(LastScanned) is { } at ? "scanned " + at : null }
+                    .Where(part => part is not null));
+            if (scan.Length > 0)
+            {
+                lines.Add(scan);
+            }
+
+            return string.Join('\n', lines);
+        }
+    }
+
+    /// <summary>Critical 4 … Info 0; -1 for anything else, including nothing.</summary>
+    internal static int SeverityRank(string? severity) => severity switch
+    {
+        "CRITICAL" => 4,
+        "HIGH" => 3,
+        "MEDIUM" => 2,
+        "LOW" => 1,
+        "INFO" => 0,
+        _ => -1,
+    };
+
+    internal static string? NormalizeSeverity(string? severity) =>
+        string.IsNullOrWhiteSpace(severity) ? null : severity.Trim().ToUpperInvariant();
+
+    /// <summary>
+    /// The row's name for a screen reader (a <c>DataGridRow</c> announces its item's text): the entry, its status and
+    /// review state, then — only when present — <c>error: …</c> and <c>N findings, worst severity …</c>.
+    /// </summary>
+    public override string ToString()
+    {
+        var text = $"{TypeDisplay} entry {Name}, status {StatusDisplay}, review {ReviewDisplay}";
+        if (HasError)
+        {
+            text += ", " + ErrorAutomationName;
+        }
+
+        if (HasFindings)
+        {
+            text += ", " + FindingsAutomationName;
+        }
+
+        return text;
+    }
 }
 
 /// <summary>
@@ -614,6 +765,8 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
                 continue;
             }
 
+            var (findings, findingLines, findingSeverity) = ReadFindings(element);
+
             rows.Add(new RegistryEntryRow
             {
                 Name = name,
@@ -623,10 +776,122 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
                 Rejected = JsonBool(element, "rejected"),
                 Severity = JsonString(element, "severity"),
                 Location = JsonString(element, "source_url") ?? JsonString(element, "url") ?? JsonString(element, "target"),
+                Error = OneLine(JsonString(element, "error")),
+                Findings = findings,
+                FindingLines = findingLines,
+                FindingSeverity = findingSeverity,
+                ScanId = JsonString(element, "scan_id"),
+                LastScanned = JsonString(element, "last_scanned_at"),
             });
         }
 
         return rows.Count == 0 ? "The last sync cached no entries." : null;
+    }
+
+    /// <summary>
+    /// <c>findings</c> of one verdict. 0.8.10 writes an integer (<c>cache.py:56, 84-85</c>: only when non-zero); a later
+    /// index might list them, so an array is read too — its length is the count, and each item becomes a line (its
+    /// <c>severity</c>, then a title, message, description or rule id). Anything else, and a negative number, is no findings.
+    /// </summary>
+    private static (int Count, IReadOnlyList<string> Lines, string? Severity) ReadFindings(JsonElement element)
+    {
+        if (!element.TryGetProperty("findings", out var value))
+        {
+            return (0, Array.Empty<string>(), null);
+        }
+
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.Number:
+                return (value.TryGetInt64(out var number) ? (int)Math.Clamp(number, 0, int.MaxValue) : 0, Array.Empty<string>(), null);
+
+            case JsonValueKind.String:
+                return (int.TryParse(value.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var text) ? text : 0, Array.Empty<string>(), null);
+
+            case JsonValueKind.Array:
+                var lines = new List<string>();
+                string? worst = null;
+                var count = 0;
+                foreach (var item in value.EnumerateArray())
+                {
+                    count++;
+                    var severity = item.ValueKind == JsonValueKind.Object ? RegistryEntryRow.NormalizeSeverity(JsonString(item, "severity")) : null;
+                    if (RegistryEntryRow.SeverityRank(severity) > RegistryEntryRow.SeverityRank(worst))
+                    {
+                        worst = severity;
+                    }
+
+                    if (lines.Count < RegistryEntryRow.MaxFindingLines && FindingLine(item, severity) is { } line)
+                    {
+                        lines.Add(line);
+                    }
+                }
+
+                return (count, lines, worst);
+
+            default:
+                return (0, Array.Empty<string>(), null);
+        }
+    }
+
+    private static string? FindingLine(JsonElement item, string? severity)
+    {
+        if (item.ValueKind == JsonValueKind.String)
+        {
+            return OneLine(item.GetString());
+        }
+
+        if (item.ValueKind != JsonValueKind.Object)
+        {
+            return OneLine(item.GetRawText());
+        }
+
+        var what = new[] { "title", "message", "description", "rule_id", "id", "name", "rule" }
+            .Select(key => OneLine(JsonString(item, key)))
+            .FirstOrDefault(text => text is not null);
+
+        // An object with nothing recognisable in it is shown as its JSON; an empty one says nothing at all.
+        var described = what ?? (item.EnumerateObject().Any() ? OneLine(item.GetRawText()) : null);
+
+        return severity is null ? described : what is null ? severity : $"{severity}: {what}";
+    }
+
+    /// <summary>
+    /// Collapses a value from the cache to one printable line: every run of whitespace or control characters becomes a
+    /// single space, and anything past 400 characters is cut. A scan error can carry a multi-line exception text.
+    /// </summary>
+    internal static string? OneLine(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var builder = new System.Text.StringBuilder(raw.Length);
+        var pendingSpace = false;
+        foreach (var c in raw)
+        {
+            if (char.IsWhiteSpace(c) || char.IsControl(c))
+            {
+                pendingSpace = builder.Length > 0;
+                continue;
+            }
+
+            if (pendingSpace)
+            {
+                _ = builder.Append(' ');
+                pendingSpace = false;
+            }
+
+            _ = builder.Append(c);
+            if (builder.Length >= 400)
+            {
+                _ = builder.Append('…');
+                break;
+            }
+        }
+
+        return builder.Length == 0 ? null : builder.ToString();
     }
 
     private static string? JsonString(JsonElement element, string property) =>

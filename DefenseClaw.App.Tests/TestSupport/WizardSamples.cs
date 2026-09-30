@@ -90,6 +90,66 @@ internal static class WizardSamples
           --help         Show this message and exit.
         """);
 
+    /// <summary>The 0.8.10 <c>setup galileo --help</c> screen, verbatim (only the line endings are normalised).</summary>
+    public static readonly string GalileoHelp = LineEndings.Normalize("""
+        Usage: defenseclaw setup galileo [OPTIONS] [COMMAND] [ARGS]...
+
+          Configure Galileo OTLP trace export.
+
+          With no subcommand this runs the guided cloud/self-hosted setup. Galileo
+          receives traces only; local-observability can remain enabled alongside it.
+
+        Options:
+          --deployment [cloud|self-hosted]
+                                          [default: cloud]
+          --project TEXT                  Galileo project name or ID
+          --logstream TEXT                Galileo Log stream name or ID
+          --console-url TEXT              Self-hosted Galileo console URL; the API
+                                          trace endpoint is derived from it.
+          --trace-endpoint TEXT           Exact Galileo OTLP HTTP traces endpoint
+                                          (overrides URL derivation).
+          --persist-api-key               Copy GALILEO_API_KEY from the environment
+                                          into ~/.defenseclaw/.env.
+          --disabled                      Write the destination disabled.
+          --dry-run                       Preview config changes without writing.
+          --non-interactive               Require all values through
+                                          flags/environment.
+          --help                          Show this message and exit.
+
+        Commands:
+          disable  Disable Galileo without deleting its configuration.
+          enable   Enable the Galileo destination.
+          remove   Remove the Galileo destination; the shared API key is preserved.
+          status   Show the configured Galileo destination without secret values.
+          test     Emit and acknowledge a content-free trace through Galileo.
+        """);
+
+    /// <summary>
+    /// The definition the catalog would build for <c>galileo</c>: the group pages, the Windows policy, the synthetic
+    /// secrets, then the secret routes — the same order <c>WizardCatalog.LoadDetailAsync</c> runs them in.
+    /// </summary>
+    public static WizardDefinition Galileo(string? help = null)
+    {
+        var parsed = SetupHelpParser.Parse(help ?? GalileoHelp);
+        var subcommands = parsed.Commands.ToDictionary(c => c.Name, c => new ParsedHelp { Summary = c.Summary });
+
+        var steps = WizardStepFactory.BuildGroup(parsed, subcommands);
+        steps = WizardWindowsPolicy.Filter("galileo", steps);
+        steps = WizardSyntheticSecrets.Add("galileo", steps);
+        steps = SecretRoutes.Annotate("galileo", steps);
+
+        return new WizardDefinition
+        {
+            Target = "galileo",
+            Title = "Galileo",
+            Group = WizardGroups.Observability,
+            Description = parsed.Summary,
+            Steps = steps,
+            PlatformStatus = parsed.PlatformStatus,
+            IsDetailLoaded = true,
+        };
+    }
+
     /// <summary>The curated + filtered + annotated definition the catalog would build for claude-code.</summary>
     public static WizardDefinition ClaudeCode()
     {

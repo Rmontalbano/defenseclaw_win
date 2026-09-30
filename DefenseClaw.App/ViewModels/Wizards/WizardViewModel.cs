@@ -219,6 +219,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         ApplyGates();
         RefreshCredentials();
+        SyncPersistState();
         GoTo(0);
     }
 
@@ -535,7 +536,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         {
             // Null unless a typed secret is being supplied, in which case it carries the variable and nothing
             // else is different from a plain run. A preview never gets one: the value goes to a single child.
-            var options = preview ? null : BuildRunOptions();
+            var options = RunOptionsFor(preview);
             var invocation = await _services.Cli.RunAsync(argv, null, token, options).ConfigureAwait(true);
             _invocation = invocation;
             PullOutput();
@@ -582,7 +583,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             }
             else if (previewSkipsSecrets)
             {
-                ResultMessage = (ResultMessage + " The value you entered is not used by a preview; it is supplied only when you press Execute.").Trim();
+                ResultMessage = (ResultMessage + " The value you entered is not used by a preview; it is supplied only when you press Execute." +
+                                 PreviewSecretNotes()).Trim();
             }
 
             RaiseNavigationState();

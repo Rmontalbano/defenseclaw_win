@@ -335,13 +335,55 @@
                                                  Visibility="{Binding IsEntriesLoading, Converter={StaticResource BoolToVisibility}}" />
                                 <ui:DataGrid AutoGenerateColumns="False"
                                              IsReadOnly="True"
-                                             MaxHeight="260"
+                                             MaxHeight="340"
                                              GridLinesVisibility="Horizontal"
                                              HeadersVisibility="Column"
                                              SelectionMode="Single"
+                                             RowDetailsVisibilityMode="Visible"
+                                             AreRowDetailsFrozen="True"
                                              AutomationProperties.Name="Cached entries of the selected source"
                                              ItemsSource="{Binding Entries}"
                                              SelectedItem="{Binding SelectedEntry}">
+                                    <!--
+                                        A second line under an entry, only for one that has something to say: the scan's
+                                        error (Bad tone) and a findings count badge (tone by the worst severity, High when
+                                        none is given), with what the cache knows about the findings in its tooltip. An
+                                        entry with neither collapses this to nothing. Each part has its own automation name;
+                                        the row's own name (its ToString) carries the same words.
+                                    -->
+                                    <ui:DataGrid.RowDetailsTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="10,0,10,8"
+                                                  Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0"
+                                                        Margin="0,0,8,0"
+                                                        VerticalAlignment="Top"
+                                                        Style="{StaticResource DcBadge}"
+                                                        Tag="{Binding FindingsKey}"
+                                                        AutomationProperties.Name="{Binding FindingsAutomationName}"
+                                                        AutomationProperties.HelpText="{Binding FindingsToolTip}"
+                                                        Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibility}}">
+                                                    <Border.ToolTip>
+                                                        <TextBlock MaxWidth="420"
+                                                                   TextWrapping="Wrap"
+                                                                   Text="{Binding FindingsToolTip}" />
+                                                    </Border.ToolTip>
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FindingsBadgeText}" />
+                                                </Border>
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource DcToneText}"
+                                                           Tag="Bad"
+                                                           TextWrapping="Wrap"
+                                                           AutomationProperties.Name="{Binding ErrorAutomationName}"
+                                                           Text="{Binding ErrorText}"
+                                                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ui:DataGrid.RowDetailsTemplate>
                                     <ui:DataGrid.Columns>
                                         <DataGridTextColumn Width="*" Header="Name" Binding="{Binding Name}" />
                                         <DataGridTextColumn Width="60" Header="Type" Binding="{Binding TypeDisplay}" />

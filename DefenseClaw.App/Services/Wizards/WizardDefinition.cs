@@ -65,7 +65,8 @@ public enum WizardFieldKind
     Toggle,
 
     /// <summary>
-    /// A flag that takes a real secret. Never reaches argv (<see cref="Core.Cli.CliRunner"/> would refuse
+    /// A flag that takes a real secret (or, for <c>setup galileo</c>, the variable a secret with no flag is read from —
+    /// see <see cref="WizardSyntheticSecrets"/>). Never reaches argv (<see cref="Core.Cli.CliRunner"/> would refuse
     /// it) and — verified on 0.8.10 — is never read from stdin by the CLI either. The field renders as a
     /// credential card that names the environment variable and points the operator at
     /// <c>defenseclaw keys set</c> in a real terminal; where the CLI also reads the secret from an environment
@@ -169,6 +170,13 @@ public sealed class WizardField
     /// </summary>
     public SecretRoute? Credential { get; init; }
 
+    /// <summary>
+    /// The environment variable a <b>synthetic</b> secret field stands for (a secret the CLI reads from its
+    /// environment but has no flag for — <c>setup galileo</c>'s <c>GALILEO_API_KEY</c>). Empty for every field
+    /// that maps to a flag or a positional. Only shown, in place of the flag chip.
+    /// </summary>
+    public string ViaEnvironment { get; init; } = string.Empty;
+
     public bool IsPositional { get; init; }
 
     /// <summary>Ordering among positionals; positionals always precede flags in argv.</summary>
@@ -191,7 +199,7 @@ public sealed class WizardField
 
     public string FlagDisplay => Kind == WizardFieldKind.Toggle && NegativeFlag is { Length: > 0 }
         ? $"{Flag} / {NegativeFlag}"
-        : Flag ?? "(positional)";
+        : Flag ?? (ViaEnvironment.Length > 0 ? "env " + ViaEnvironment : "(positional)");
 
     /// <summary>
     /// A copy that starts from <paramref name="defaultValue"/> (the current configuration) and treats
@@ -206,20 +214,31 @@ public sealed class WizardField
     public WizardField WithCredential(SecretRoute route) =>
         Clone(DefaultValue, BaselineValue, BaselineSource, route);
 
-    private WizardField Clone(string defaultValue, string baselineValue, string source, SecretRoute? credential) => new()
+    /// <summary>A copy the operator reads differently — the flag, kind and every answer are unchanged.</summary>
+    public WizardField WithWording(string label, string help) =>
+        Clone(DefaultValue, BaselineValue, BaselineSource, Credential, label, help);
+
+    private WizardField Clone(
+        string defaultValue,
+        string baselineValue,
+        string source,
+        SecretRoute? credential,
+        string? label = null,
+        string? help = null) => new()
     {
         Id = Id,
-        Label = Label,
+        Label = label ?? Label,
         Kind = Kind,
         Flag = Flag,
         NegativeFlag = NegativeFlag,
-        Help = Help,
+        Help = help ?? Help,
         Choices = Choices,
         DefaultValue = defaultValue,
         BaselineValue = baselineValue,
         BaselineSource = source,
         AllowEmptyWhenChanged = AllowEmptyWhenChanged,
         Credential = credential,
+        ViaEnvironment = ViaEnvironment,
         IsPositional = IsPositional,
         PositionalOrder = PositionalOrder,
         IsRequired = IsRequired,
