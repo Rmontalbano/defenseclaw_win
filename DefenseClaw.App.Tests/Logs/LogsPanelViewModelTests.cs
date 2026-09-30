@@ -190,4 +190,62 @@ public sealed class LogsPanelViewModelTests : IDisposable
         Assert.Equal(3, panel.BufferedCount);
         Assert.Equal(3, panel.DisplayedLines.Count);
     }
+
+    // ---- a faulted tail says so (D1-07 / D3-13) ----
+
+    private static LogTailFaultedEventArgs Fault(string message = "subscriber bug", int consecutive = 1, int retrySeconds = 2) =>
+        new(new InvalidOperationException(message), consecutive, TimeSpan.FromSeconds(retrySeconds));
+
+    [Fact]
+    public void A_tail_fault_shows_a_paused_state_naming_the_error_and_the_retry()
+    {
+        var panel = ActivePanel();
+        Assert.False(panel.ShowTailFault);
+
+        panel.AcceptTailFault("Gateway", Fault("boom"));
+
+        Assert.True(panel.ShowTailFault);
+        Assert.Contains("gateway.log", panel.TailFaultText, StringComparison.Ordinal);
+        Assert.Contains("InvalidOperationException: boom", panel.TailFaultText, StringComparison.Ordinal);
+        Assert.Contains("retries in 2 s", panel.TailFaultText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_recovered_tail_clears_the_paused_state()
+    {
+        var panel = ActivePanel();
+        panel.AcceptTailFault("Gateway", Fault());
+
+        panel.AcceptTailRecovered("Gateway");
+
+        Assert.False(panel.ShowTailFault);
+        Assert.Equal(string.Empty, panel.TailFaultText);
+    }
+
+    [Fact]
+    public void A_fault_on_the_other_source_shows_only_when_that_source_is_switched_to()
+    {
+        var panel = ActivePanel();
+
+        panel.AcceptTailFault("Watchdog", Fault("watchdog trouble"));
+        Assert.False(panel.ShowTailFault);
+
+        panel.SelectSourceCommand.Execute("Watchdog");
+        Assert.True(panel.ShowTailFault);
+        Assert.Contains("watchdog.log", panel.TailFaultText, StringComparison.Ordinal);
+
+        panel.SelectSourceCommand.Execute("Gateway");
+        Assert.False(panel.ShowTailFault);
+    }
+
+    [Fact]
+    public void A_fault_message_is_kept_on_one_line()
+    {
+        var panel = ActivePanel();
+
+        panel.AcceptTailFault("Gateway", Fault("first\r\nsecond"));
+
+        Assert.DoesNotContain('\n', panel.TailFaultText);
+        Assert.Contains("first second", panel.TailFaultText, StringComparison.Ordinal);
+    }
 }

@@ -256,17 +256,25 @@ public sealed class TrayIconService : IDisposable
     /// <returns>The new state: true when the app will now start at sign-in.</returns>
     public bool ToggleAutostart()
     {
-        var on = AutostartManager.Toggle();
+        var result = AutostartManager.Toggle();
 
+        // On a refusal (a policy-locked Run key) Enabled is the state as it was, so the checkmark the click just
+        // flipped goes back to what is true.
         if (_autostartItem is not null)
         {
-            _autostartItem.IsChecked = on;
+            _autostartItem.IsChecked = result.Enabled;
         }
 
-        Notify("Start with Windows", on
+        if (result.FailureMessage is { } failure)
+        {
+            Notify("Start with Windows", failure, NotificationIcon.Warning);
+            return result.Enabled;
+        }
+
+        Notify("Start with Windows", result.Enabled
             ? "DefenseClaw will start minimized to the tray when you sign in."
             : "Autostart removed.", NotificationIcon.Info);
-        return on;
+        return result.Enabled;
     }
 
     /// <summary>

@@ -37,37 +37,70 @@ internal static class AutostartManager
 
     /// <summary>
     /// True when Windows will start the app at sign-in: a Run value is present and the user
-    /// has not disabled it in Task Manager / Settings.
+    /// has not disabled it in Task Manager / Settings. False when the key cannot be read
+    /// (policy-locked): a check that fails must not throw into the tray menu that asks.
     /// </summary>
-    public static bool IsEnabled
-    {
-        get
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-            return key?.GetValue(ValueName) is string { Length: > 0 } && !IsDisabledByUser();
-        }
-    }
+    public static bool IsEnabled => IsEnabledIn(Registry.CurrentUser);
 
-    /// <summary>Flips the setting; returns the new state.</summary>
-    public static bool Toggle()
+    /// <summary>
+    /// <see cref="IsEnabled"/> against <paramref name="root"/> instead of the current user's hive. The seam
+    /// the tests use with a scratch key, so nothing here ever writes the real Run key.
+    /// </summary>
+    internal static bool IsEnabledIn(RegistryKey root)
     {
-        if (IsEnabled)
+        try
         {
-            using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            key.DeleteValue(ValueName, throwOnMissingValue: false);
+            using var key = root.OpenSubKey(RunKey);
+            return key?.GetValue(ValueName) is string { Length: > 0 } && !IsDisabledByUser(root);
+        }
+        catch (Exception ex) when (IsRegistryFailure(ex))
+        {
+            Trace.TraceWarning($"autostart: could not read the Run entry: {ex.Message}");
             return false;
         }
-
-        // Also the path taken when a Run value exists but Task Manager disabled it: turning it
-        // on here must actually turn it on, so the disable flag is cleared along with the write.
-        using (var key = Registry.CurrentUser.CreateSubKey(RunKey))
-        {
-            key.SetValue(ValueName, Command);
-        }
-
-        ClearUserDisable();
-        return true;
     }
+
+    /// <summary>
+    /// Flips the setting. Never throws for a registry that refuses (a policy-locked Run key,
+    /// a hive that cannot be written): the result then carries the state as it was and the
+    /// reason, for the caller to show. Before, that exception went straight up a tray-menu
+    /// click into the dispatcher fault handler, which hides the dashboard behind a dialog.
+    /// </summary>
+    public static AutostartToggleResult Toggle() => Toggle(Registry.CurrentUser);
+
+    /// <summary><see cref="Toggle()"/> against <paramref name="root"/>; see <see cref="IsEnabledIn"/>.</summary>
+    internal static AutostartToggleResult Toggle(RegistryKey root)
+    {
+        var was = IsEnabledIn(root);
+        try
+        {
+            if (was)
+            {
+                using var key = root.CreateSubKey(RunKey);
+                key.DeleteValue(ValueName, throwOnMissingValue: false);
+                return new AutostartToggleResult(false, null);
+            }
+
+            // Also the path taken when a Run value exists but Task Manager disabled it: turning it
+            // on here must actually turn it on, so the disable flag is cleared along with the write.
+            using (var key = root.CreateSubKey(RunKey))
+            {
+                key.SetValue(ValueName, Command);
+            }
+
+            ClearUserDisable(root);
+            return new AutostartToggleResult(true, null);
+        }
+        catch (Exception ex) when (IsRegistryFailure(ex))
+        {
+            Trace.TraceWarning($"autostart: could not change the Run entry: {ex.Message}");
+            return new AutostartToggleResult(was, ex.Message);
+        }
+    }
+
+    /// <summary>What a registry call can throw when the key is locked down or the hive is unavailable.</summary>
+    private static bool IsRegistryFailure(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or SecurityException;
 
     /// <summary>
     /// Rewrites the Run value to launch this exe when it is enabled but stale — it points at an
@@ -131,11 +164,11 @@ internal static class AutostartManager
     }
 
     /// <summary>True when Task Manager / Settings has flagged this Run value as disabled.</summary>
-    private static bool IsDisabledByUser()
+    private static bool IsDisabledByUser(RegistryKey root)
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(ApprovedKey);
+            using var key = root.OpenSubKey(ApprovedKey);
             return key?.GetValue(ValueName) is byte[] { Length: > 0 } flags && (flags[0] & 1) == 1;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
@@ -150,11 +183,11 @@ internal static class AutostartManager
     /// than writing an "enabled" blob — is deliberate; see the type documentation. Best effort:
     /// the Run value is already written by the time this runs.
     /// </summary>
-    private static void ClearUserDisable()
+    private static void ClearUserDisable(RegistryKey root)
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(ApprovedKey, writable: true);
+            using var key = root.OpenSubKey(ApprovedKey, writable: true);
             if (key?.GetValue(ValueName) is byte[] { Length: > 0 } flags && (flags[0] & 1) == 1)
             {
                 key.DeleteValue(ValueName, throwOnMissingValue: false);
@@ -165,4 +198,16 @@ internal static class AutostartManager
             Trace.TraceWarning($"autostart: could not clear the Task Manager disable flag: {ex.Message}");
         }
     }
+}
+
+/// <summary>
+/// What <see cref="AutostartManager.Toggle()"/> did: the state now in force and, when the registry refused the change,
+/// the reason. On a refusal <see cref="Enabled"/> is the state as it was, so a checkmark can simply mirror it.
+/// </summary>
+internal readonly record struct AutostartToggleResult(bool Enabled, string? Error)
+{
+    public bool Succeeded => Error is null;
+
+    /// <summary>The tray toast for a refused change; null when the change was made.</summary>
+    public string? FailureMessage => Error is null ? null : $"Could not change Start with Windows: {Error}";
 }

@@ -48,6 +48,17 @@ public readonly record struct FileSignature(bool Exists, long Length, DateTime L
         return new FileSignature(true, info.Length, info.LastWriteTimeUtc, HashContents(path, info.Length));
     }
 
+    /// <summary>
+    /// True when <paramref name="bytes"/> are the file this signature was captured from: the same length and, where the
+    /// capture hashed the content, the same hash. The check a save makes on the exact bytes it is about to back up, so a
+    /// write that landed after the signature was taken (the CLI's) cannot be overwritten unseen.
+    /// </summary>
+    public bool DescribesContent(ReadOnlySpan<byte> bytes) =>
+        Exists && Length == bytes.Length && (ContentHash == 0 || ContentHash == Hash(bytes));
+
+    private static ulong Hash(ReadOnlySpan<byte> bytes) =>
+        BitConverter.ToUInt64(System.Security.Cryptography.SHA256.HashData(bytes), 0);
+
     private static ulong HashContents(string path, long length)
     {
         if (length > MaxHashedBytes)
@@ -57,9 +68,7 @@ public readonly record struct FileSignature(bool Exists, long Length, DateTime L
 
         try
         {
-            var bytes = File.ReadAllBytes(path);
-            var hash = System.Security.Cryptography.SHA256.HashData(bytes);
-            return BitConverter.ToUInt64(hash, 0);
+            return Hash(File.ReadAllBytes(path));
         }
         catch (IOException)
         {
@@ -95,6 +104,10 @@ public sealed class ConfigChangeToken : IDisposable
     private readonly List<Action<ConfigChangedEventArgs>> _callbacks = new();
     private readonly FileSystemWatcher? _watcher;
     private readonly Timer _poll;
+
+    /// <summary>The file names (config.yaml, .env) a watcher event has to name to be worth a signature check.</summary>
+    private readonly HashSet<string> _watchedNames = new(StringComparer.OrdinalIgnoreCase);
+    private int _checkCount;
     private bool _disposed;
 
     public ConfigChangeToken(DefenseClawPaths paths, TimeSpan? pollInterval = null)
@@ -116,6 +129,7 @@ public sealed class ConfigChangeToken : IDisposable
         foreach (var (kind, path) in _paths)
         {
             _signatures[kind] = FileSignature.Capture(path);
+            _ = _watchedNames.Add(Path.GetFileName(path));
         }
 
         var directory = Path.GetDirectoryName(Path.GetFullPath(configPath));
@@ -142,6 +156,13 @@ public sealed class ConfigChangeToken : IDisposable
 
     /// <summary>True once any watched file has changed since construction or the last reset.</summary>
     public bool HasChanged { get; private set; }
+
+    /// <summary>
+    /// How many signature comparisons (each two file reads and hashes) this token has run, from the poll timer,
+    /// <see cref="Poll"/> or a watcher event about a watched file. Diagnostics: a token whose data directory is busy
+    /// with other files must not see this climb with the writes.
+    /// </summary>
+    public int CheckCount => Volatile.Read(ref _checkCount);
 
     /// <summary>
     /// Raised once per watched file that actually changed.
@@ -199,7 +220,25 @@ public sealed class ConfigChangeToken : IDisposable
         }
     }
 
-    private void OnFileSystemEvent(object sender, FileSystemEventArgs e) => CheckAll();
+    /// <summary>
+    /// The watcher sees the whole data directory, and most of what moves there is not config: audit.db and its -wal
+    /// (a few writes a second on a busy gateway), gateway.log, the state files. Each of those used to run a full
+    /// <see cref="CheckAll"/> - two reads and two SHA-256s under the lock, contending with the editor's
+    /// <c>File.Replace</c> - so anything that does not name <c>config.yaml</c> or <c>.env</c> is dropped here. The poll
+    /// timer stays as the backstop for editors and volumes whose events do not carry the name.
+    /// </summary>
+    private void OnFileSystemEvent(object sender, FileSystemEventArgs e)
+    {
+        if (Concerns(e))
+        {
+            CheckAll();
+        }
+    }
+
+    private bool Concerns(FileSystemEventArgs e) =>
+        e.Name is not { } name ||
+        _watchedNames.Contains(name) ||
+        (e is RenamedEventArgs { OldName: { } oldName } && _watchedNames.Contains(oldName));
 
     private void CheckAll()
     {
@@ -207,6 +246,8 @@ public sealed class ConfigChangeToken : IDisposable
         {
             return;
         }
+
+        _ = Interlocked.Increment(ref _checkCount);
 
         foreach (var (kind, path) in _paths)
         {

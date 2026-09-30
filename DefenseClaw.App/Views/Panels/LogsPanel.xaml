@@ -137,6 +137,13 @@
                             Title="Log file rotated"
                             IsOpen="{Binding ShowRotationNotice, Mode=TwoWay}"
                             Message="{Binding RotationNoticeText}" />
+
+                <!-- The tail's loop survives a fault and says so here, instead of the list just going quiet. -->
+                <ui:InfoBar Margin="0,0,12,8"
+                            Severity="Warning"
+                            Title="Log tail paused"
+                            IsOpen="{Binding ShowTailFault, Mode=TwoWay}"
+                            Message="{Binding TailFaultText}" />
             </StackPanel>
         </Border>
 

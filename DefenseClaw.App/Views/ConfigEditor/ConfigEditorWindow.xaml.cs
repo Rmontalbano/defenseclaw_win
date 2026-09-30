@@ -13,6 +13,19 @@ using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.Views.ConfigEditor;
 
+/// <summary>The answer <see cref="ConfigEditorWindow.CloseForExitAsync"/> gives the tray Exit.</summary>
+public enum ConfigEditorExitResult
+{
+    /// <summary>No editor is left open: there was none, it was clean, or the operator discarded or saved.</summary>
+    Closed,
+
+    /// <summary>The operator cancelled the close or the save failed; the editor stays open and says why.</summary>
+    Declined,
+
+    /// <summary>The editor is already closing or saving, so this request was not a new question and nothing was asked.</summary>
+    Busy,
+}
+
 /// <summary>
 /// The config.yaml editor window: RAW (AvalonEdit) and FORM (generated sections) tabs
 /// over the same <see cref="ConfigEditorWindowViewModel"/>.
@@ -126,22 +139,33 @@ public partial class ConfigEditorWindow : FluentWindow
 
     /// <summary>
     /// The tray Exit's question, asked before the app shuts down: closes the editor if it can be closed without
-    /// losing edits and says so. <see langword="true"/> means no editor is left open (there was none, it was clean,
-    /// the operator discarded, or the edits were saved and validated) and the exit may go ahead;
-    /// <see langword="false"/> means the operator cancelled or the save failed and the exit must be abandoned.
+    /// losing edits and says so. <see cref="ConfigEditorExitResult.Closed"/> means no editor is left open (there was
+    /// none, it was clean, the operator discarded, or the edits were saved and validated) and the exit may go ahead;
+    /// <see cref="ConfigEditorExitResult.Declined"/> means the operator cancelled or the save failed, and
+    /// <see cref="ConfigEditorExitResult.Busy"/> that a close question or save is already in flight - either way the
+    /// exit must be abandoned, and only the last is one the operator has not just been shown.
     /// <para>
     /// It closes the window itself, rather than approving a later close, so an approval can never outlive an exit
     /// that something else then calls off. Call it as the last check before <c>Shutdown</c>.
     /// </para>
     /// </summary>
-    public static async Task<bool> CloseForExitAsync()
+    public static async Task<ConfigEditorExitResult> CloseForExitAsync()
     {
         if (_current is not { } window)
         {
-            return true;
+            return ConfigEditorExitResult.Closed;
         }
 
-        return await window.CloseAfterConfirmationAsync(bringToFront: true).ConfigureAwait(true);
+        if (window._closeFlowRunning)
+        {
+            // A question is already open (its dialog is modal, so on screen) or a save is finishing: a second request
+            // is not a second answer, and CloseAfterConfirmationAsync would only say "no" without a word.
+            return ConfigEditorExitResult.Busy;
+        }
+
+        return await window.CloseAfterConfirmationAsync(bringToFront: true).ConfigureAwait(true)
+            ? ConfigEditorExitResult.Closed
+            : ConfigEditorExitResult.Declined;
     }
 
     /// <summary>

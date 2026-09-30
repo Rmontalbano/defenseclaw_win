@@ -94,6 +94,30 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             _tray,
             () => IsVisible && WindowState != WindowState.Minimized ? this : null);
 
+        try
+        {
+            Wire(services);
+        }
+        catch
+        {
+            AbandonPartiallyBuilt(services);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Test seam: runs at the very end of construction, after every subscription is in place. A test throws from it to
+    /// prove that a construction that fails part-way hands them all back (see <see cref="AbandonPartiallyBuilt"/>).
+    /// </summary>
+    internal static Action? ConstructionProbe { get; set; }
+
+    /// <summary>
+    /// The rest of construction: hooks the window, its overlays and the view-model up to each other and to the app-lifetime
+    /// objects (the monitor, the catalog, the appearance service). A separate method so the constructor can undo the
+    /// subscriptions if any step throws.
+    /// </summary>
+    private void Wire(AppServices services)
+    {
         _paletteViewModel.CommandChosen += OnPaletteCommandChosen;
         _paletteViewModel.CloseRequested += (_, _) => ClosePalette();
         Palette.DataContext = _paletteViewModel;
@@ -108,18 +132,20 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         // A screen reader should hear the gateway state change, not only find it when it looks.
         _viewModel.PropertyChanged += OnShellPropertyChanged;
 
+        // Taskbar icon mirrors the tray shield, state badge and all, so alt-tab tells the same
+        // story as the notification area. A multi-size icon, so the title bar, the taskbar and
+        // alt-tab each get the frame drawn for their size; cached per state because StateChanged
+        // also fires for changes that leave the shield alone (a new detail line, a connector appearing).
+        // Ahead of the appearance hookup below: rendering the icon is the step here most likely to throw, and the
+        // flyout that hookup binds cannot be unbound again if it has to be abandoned.
+        ApplyShieldIcon(ShieldIconFactory.StateFor(services.Monitor.Current));
+        services.Monitor.StateChanged += OnMonitorStateChanged;
+
         // The look (style, light/dark, Mica or solid, dark title bar) is AppearanceService's: it re-skins this window
         // whenever it changes and follows Windows in mode System. WPF-UI's SystemThemeWatcher is deliberately not used
         // here any more - on every OS theme message it forces the system theme, over an explicit choice.
         _appearance?.Attach(this);
         BindAppearanceControls();
-
-        // Taskbar icon mirrors the tray shield, state badge and all, so alt-tab tells the same
-        // story as the notification area. A multi-size icon, so the title bar, the taskbar and
-        // alt-tab each get the frame drawn for their size; cached per state because StateChanged
-        // also fires for changes that leave the shield alone (a new detail line, a connector appearing).
-        ApplyShieldIcon(ShieldIconFactory.StateFor(services.Monitor.Current));
-        services.Monitor.StateChanged += (_, e) => ApplyShieldIcon(ShieldIconFactory.StateFor(e.Snapshot));
 
         // Panels only run while someone can see them. Hiding to the tray is caught by
         // IsVisibleChanged; a minimized window still reports itself visible, so the window
@@ -137,7 +163,47 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             ?.AddValueChanged(PanelFaultBar, OnPanelFaultBarOpenChanged);
 
         Loaded += OnLoaded;
+
+        ConstructionProbe?.Invoke();
     }
+
+    /// <summary>
+    /// A constructor that throws after it has subscribed to app-lifetime objects leaves those subscriptions behind, and with
+    /// them the half-built window and its view-model: the monitor's <c>StateChanged</c> keeps calling into both.
+    /// <see cref="DashboardHost"/> retries on the next request, so every retry would leak another pair. This hands back
+    /// what <see cref="Wire"/> and the view-model took, best effort and never masking the exception on its way up, and closes the window so
+    /// it leaves <c>Application.Windows</c> (nobody saw it, so no "still running in the tray" hint).
+    /// </summary>
+    private void AbandonPartiallyBuilt(AppServices services)
+    {
+        try
+        {
+            services.Monitor.StateChanged -= OnMonitorStateChanged;
+            _catalog.PanelFaulted -= OnPanelFaulted;
+            if (_appearance is not null)
+            {
+                _appearance.Changed -= OnAppearanceChangedUpdateThemeToggle;
+            }
+
+            DependencyPropertyDescriptor
+                .FromProperty(InfoBar.IsOpenProperty, typeof(InfoBar))
+                ?.RemoveValueChanged(PanelFaultBar, OnPanelFaultBarOpenChanged);
+
+            _viewModel.Dispose();
+
+            _allowClose = true;
+            Close();
+        }
+#pragma warning disable CA1031 // Cleanup after a failed construction must not replace the failure it is cleaning up after.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceWarning($"MainWindow: cleanup after a failed construction also failed: {ex.Message}");
+        }
+    }
+
+    private void OnMonitorStateChanged(object? sender, GatewaySnapshotEventArgs e) =>
+        ApplyShieldIcon(ShieldIconFactory.StateFor(e.Snapshot));
 
     /// <summary>
     /// Adds the faulted panel to the banner. Normally already on the UI thread (see
@@ -703,9 +769,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         AppearanceFlyoutControl.CloseRequested += (_, _) => CloseAppearanceFlyout();
         AppearancePopup.CustomPopupPlacementCallback = PlaceAppearanceFlyout;
 
-        _appearance.Changed += (_, _) => UpdateThemeToggle();
+        _appearance.Changed += OnAppearanceChangedUpdateThemeToggle;
         UpdateThemeToggle();
     }
+
+    private void OnAppearanceChangedUpdateThemeToggle(object? sender, EventArgs e) => UpdateThemeToggle();
 
     /// <summary>The toggle shows where a click goes: a sun while dark (to light), a moon while light (to dark).</summary>
     private void UpdateThemeToggle()

@@ -67,6 +67,9 @@ public sealed class ConfigSaveService
     private readonly DefenseClawPaths _paths;
     private readonly CliRunner? _cli;
 
+    /// <summary>Test seam: runs between the drift check and the backup read, the window in which a CLI write can land.</summary>
+    internal Action? AfterDriftCheck { get; set; }
+
     public ConfigSaveService(DefenseClawPaths paths, CliRunner? cli)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
@@ -116,6 +119,8 @@ public sealed class ConfigSaveService
                 null);
         }
 
+        AfterDriftCheck?.Invoke();
+
         // 2. Hash-checked backup, before the real file is touched.
         string? backupPath = null;
         string? backupSha = null;
@@ -124,6 +129,21 @@ public sealed class ConfigSaveService
             try
             {
                 var originalBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+
+                // The drift check above compared signatures a moment ago; the bytes read here are the ones that are
+                // about to be backed up and then replaced. If they are not the ones the editor loaded, something (the
+                // CLI, a second editor) wrote in between, and going on would back that write up as if it were the
+                // original and overwrite it.
+                if (!signatureAtLoad.DescribesContent(originalBytes))
+                {
+                    return new SaveOutcome(
+                        false,
+                        SaveStage.DriftDetected,
+                        "config.yaml changed on disk while the save was starting, so nothing was written. Reload to pick up the new content, or view the on-disk version to compare before deciding.",
+                        null,
+                        null);
+                }
+
                 backupSha = Convert.ToHexString(SHA256.HashData(originalBytes)).ToLowerInvariant();
                 backupPath = await WriteBackupAsync(path, originalBytes, cancellationToken).ConfigureAwait(false);
             }

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Appearance;
+using H.NotifyIcon.Core;
 using Microsoft.Win32;
 
 namespace DefenseClaw.App;
@@ -243,39 +244,103 @@ public partial class App : Application
         return window;
     }
 
+    /// <summary>
+    /// The tray's Exit. <c>async void</c> because it is an event handler, which means nothing awaits it: an exception
+    /// that escaped here would surface as a dispatcher fault - the dashboard hidden behind a dialog - with the exit
+    /// silently abandoned. So nothing escapes: a fault is logged and said in a tray toast, and so is an exit that
+    /// cannot go ahead because the config editor is busy (see <see cref="ClearEditorForExitAsync"/>).
+    /// </summary>
     private async void ExitApplication()
     {
-        // An in-app upgrade survives CliRunner.Shutdown by design, so quitting would not kill it —
-        // but it would leave it running with nobody watching, and the resolver-script channel
-        // writes to stdout pipes that close with this process. Ask; default to staying.
-        if (_services?.Cli.HasShutdownSurvivingRun == true)
+        try
         {
-            var answer = MessageBox.Show(
-                "A DefenseClaw upgrade is still running.\n\n" +
-                "Exiting now leaves the installer running in the background with no progress shown, " +
-                "and an upgrade run through the resolver script may be interrupted when its output " +
-                "pipe closes. Waiting for the Updates window to report the result is safer.\n\n" +
-                "Exit anyway?",
-                "DefenseClaw — upgrade in progress",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
+            // An in-app upgrade survives CliRunner.Shutdown by design, so quitting would not kill it —
+            // but it would leave it running with nobody watching, and the resolver-script channel
+            // writes to stdout pipes that close with this process. Ask; default to staying.
+            if (_services?.Cli.HasShutdownSurvivingRun == true)
+            {
+                var answer = MessageBox.Show(
+                    "A DefenseClaw upgrade is still running.\n\n" +
+                    "Exiting now leaves the installer running in the background with no progress shown, " +
+                    "and an upgrade run through the resolver script may be interrupted when its output " +
+                    "pipe closes. Waiting for the Updates window to report the result is safer.\n\n" +
+                    "Exit anyway?",
+                    "DefenseClaw — upgrade in progress",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
 
-            if (answer != MessageBoxResult.Yes)
+                if (answer != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+            }
+
+            // Unsaved config-editor edits: not clear means the operator cancelled, the save failed or the editor is
+            // busy, so stay running. Last check, because it closes the editor itself once the answer allows the exit.
+            var clearance = await ClearEditorForExitAsync(Views.ConfigEditor.ConfigEditorWindow.CloseForExitAsync);
+            if (clearance.Notice is { } notice)
+            {
+                _tray?.Notify("DefenseClaw", notice, NotificationIcon.Warning);
+            }
+
+            if (!clearance.MayExit)
             {
                 return;
             }
-        }
 
-        // Unsaved config-editor edits: false means the operator cancelled or the save failed, so stay running.
-        // Last check, because it closes the editor itself once the answer allows the exit.
-        if (!await Views.ConfigEditor.ConfigEditorWindow.CloseForExitAsync())
+            _dashboard?.CloseForExit();
+            Shutdown();
+        }
+        catch (Exception ex)
         {
-            return;
+            CrashLog.Write("ExitApplication", ex);
+            try
+            {
+                _tray?.Notify("DefenseClaw", ExitFailedText(ex), NotificationIcon.Error);
+            }
+            catch (Exception)
+            {
+                // The toast is a courtesy; the crash log above has the fault.
+            }
         }
+    }
 
-        _dashboard?.CloseForExit();
-        Shutdown();
+    /// <summary>What the config editor said about the exit: whether it may go ahead, and a toast when the operator has not already been told why not.</summary>
+    internal readonly record struct ExitClearance(bool MayExit, string? Notice);
+
+    private static string ExitFailedText(Exception ex) => $"Could not exit: {ex.Message}";
+
+    /// <summary>
+    /// The config-editor half of the tray Exit, separate from the window so it can be tested. <paramref name="closeEditor"/> is
+    /// <c>ConfigEditorWindow.CloseForExitAsync</c>.
+    /// <para>
+    /// <see cref="Views.ConfigEditor.ConfigEditorExitResult.Declined"/> needs no toast: the operator just answered the
+    /// question, or the editor is showing why the save failed. <see cref="Views.ConfigEditor.ConfigEditorExitResult.Busy"/>
+    /// does - the click asked nothing and changed nothing, and looked like it did nothing at all. A close that throws (a
+    /// faulted save the editor is still holding) abandons the exit with the reason, and is logged.
+    /// </para>
+    /// </summary>
+    internal static async Task<ExitClearance> ClearEditorForExitAsync(Func<Task<Views.ConfigEditor.ConfigEditorExitResult>> closeEditor)
+    {
+        ArgumentNullException.ThrowIfNull(closeEditor);
+
+        try
+        {
+            return await closeEditor().ConfigureAwait(true) switch
+            {
+                Views.ConfigEditor.ConfigEditorExitResult.Closed => new ExitClearance(true, null),
+                Views.ConfigEditor.ConfigEditorExitResult.Busy => new ExitClearance(
+                    false,
+                    "Could not exit: the config editor is still saving or asking about unsaved changes. Finish there, then choose Exit again."),
+                _ => new ExitClearance(false, null),
+            };
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("ExitApplication (config editor close)", ex);
+            return new ExitClearance(false, ExitFailedText(ex));
+        }
     }
 
     /// <summary>
@@ -401,12 +466,20 @@ public partial class App : Application
     /// <c>%LOCALAPPDATA%\DefenseClaw.App\logs</c> — alongside the existing
     /// <c>updates</c> and <c>upgrades</c> directories this app already owns there.
     /// <para>
-    /// <b>Bounds.</b> One file per process, named for its start time and pid. The newest
-    /// <see cref="MaxFiles"/> files are kept and the rest are deleted on first write, so a
-    /// machine that crash-loops cannot accumulate logs forever. Within a session, appends
-    /// stop after <see cref="MaxFileBytes"/>: a fault that repeats on every dispatcher pass
-    /// would otherwise fill the disk faster than anyone could notice. Both limits are
-    /// deliberately generous enough that a real crash is never truncated below usefulness.
+    /// <b>Bounds.</b> One file per process, named for its start time and pid. Files older than
+    /// <see cref="MaxAge"/> are deleted on first write, so a machine that crash-loops cannot
+    /// accumulate logs forever - and a burst of new ones (a test or probe harness that faults on
+    /// every run) cannot push out the real history, which a plain newest-N cap did: ten harness
+    /// crashes in five minutes evicted every genuine one. <see cref="MaxFiles"/> remains only as a
+    /// disk-safety ceiling for a genuine crash loop. Within a session, appends stop after
+    /// <see cref="MaxFileBytes"/>: a fault that repeats on every dispatcher pass would otherwise
+    /// fill the disk faster than anyone could notice. The limits are deliberately generous enough
+    /// that a real crash is never truncated below usefulness.
+    /// </para>
+    /// <para>
+    /// <b>Where.</b> <see cref="DirectoryEnvironmentVariable"/> redirects the directory (a harness that has to drive
+    /// the app sets it so its faults never land among the real ones); <see cref="UseDirectory"/> does the same for a
+    /// test, and restores the state afterwards.
     /// </para>
     /// <para>
     /// <b>Never throws.</b> Every entry point is wrapped: this is called from handlers that
@@ -415,10 +488,16 @@ public partial class App : Application
     /// handler for the first one.
     /// </para>
     /// </summary>
-    private static class CrashLog
+    internal static class CrashLog
     {
-        /// <summary>Newest files kept, including the one this process is writing.</summary>
-        private const int MaxFiles = 10;
+        /// <summary>Environment variable that names the directory the logs go to instead of the default.</summary>
+        internal const string DirectoryEnvironmentVariable = "DEFENSECLAW_APP_LOG_DIR";
+
+        /// <summary>How long a crash file is kept.</summary>
+        internal static readonly TimeSpan MaxAge = TimeSpan.FromDays(30);
+
+        /// <summary>Disk-safety ceiling on files kept, including the one this process is writing; age normally prunes long before it.</summary>
+        internal const int MaxFiles = 100;
 
         /// <summary>Per-session append budget; entries past it are suppressed with a marker.</summary>
         private const long MaxFileBytes = 1024 * 1024;
@@ -426,12 +505,62 @@ public partial class App : Application
         private static readonly object Gate = new();
         private static string? _filePath;
         private static bool _capped;
+        private static string? _directoryOverride;
 
-        /// <summary>The directory holding the logs. Created lazily on the first fault.</summary>
-        public static string DirectoryPath { get; } = Path.Combine(
+        private static string DefaultDirectory => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "DefenseClaw.App",
             "logs");
+
+        /// <summary>The directory holding the logs. Created lazily on the first fault.</summary>
+        public static string DirectoryPath =>
+            _directoryOverride
+            ?? (Environment.GetEnvironmentVariable(DirectoryEnvironmentVariable) is { Length: > 0 } fromEnvironment
+                ? fromEnvironment
+                : DefaultDirectory);
+
+        /// <summary>
+        /// Test seam: points the log at <paramref name="directory"/> with a fresh session (no file yet, not capped)
+        /// until the returned scope is disposed, which puts back what was there. The state is process-wide, so tests
+        /// that use it must not run in parallel with each other.
+        /// </summary>
+        internal static IDisposable UseDirectory(string directory)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(directory);
+
+            lock (Gate)
+            {
+                var scope = new Scope(_directoryOverride, _filePath, _capped);
+                _directoryOverride = directory;
+                _filePath = null;
+                _capped = false;
+                return scope;
+            }
+        }
+
+        private sealed class Scope : IDisposable
+        {
+            private readonly string? _previousDirectory;
+            private readonly string? _previousFile;
+            private readonly bool _previousCapped;
+
+            public Scope(string? directory, string? file, bool capped)
+            {
+                _previousDirectory = directory;
+                _previousFile = file;
+                _previousCapped = capped;
+            }
+
+            public void Dispose()
+            {
+                lock (Gate)
+                {
+                    _directoryOverride = _previousDirectory;
+                    _filePath = _previousFile;
+                    _capped = _previousCapped;
+                }
+            }
+        }
 
         /// <summary>This session's file, or null if nothing has faulted (or the write failed).</summary>
         public static string? CurrentFilePath
@@ -526,39 +655,59 @@ public partial class App : Application
         }
 
         /// <summary>
-        /// Deletes all but the newest <c>MaxFiles - 1</c> files, leaving room for this
-        /// session's. Best effort in every respect: a file another process (or a viewer)
-        /// holds open simply survives one more round.
+        /// Deletes crash files older than <see cref="MaxAge"/>, then, if more than <c>MaxFiles - 1</c> remain, all but the
+        /// newest of those - leaving room for this session's. Best effort in every respect: a file another process (or a
+        /// viewer) holds open simply survives one more round.
         /// </summary>
         private static void Prune()
         {
             try
             {
-                var existing = Directory.GetFiles(DirectoryPath, "crash-*.log");
-                if (existing.Length < MaxFiles)
-                {
-                    return;
-                }
+                var cutoff = DateTime.UtcNow - MaxAge;
+                var kept = new List<(string Path, DateTime WrittenUtc)>();
 
-                var stale = existing
-                    .OrderByDescending(path => new FileInfo(path).LastWriteTimeUtc)
-                    .Skip(MaxFiles - 1);
-
-                foreach (var path in stale)
+                foreach (var path in Directory.GetFiles(DirectoryPath, "crash-*.log"))
                 {
+                    DateTime writtenUtc;
                     try
                     {
-                        File.Delete(path);
+                        writtenUtc = new FileInfo(path).LastWriteTimeUtc;
                     }
                     catch (Exception)
                     {
-                        // Locked or already gone; the next fault tries again.
+                        continue;
                     }
+
+                    if (writtenUtc < cutoff)
+                    {
+                        TryDelete(path);
+                    }
+                    else
+                    {
+                        kept.Add((path, writtenUtc));
+                    }
+                }
+
+                foreach (var stale in kept.OrderByDescending(file => file.WrittenUtc).Skip(MaxFiles - 1))
+                {
+                    TryDelete(stale.Path);
                 }
             }
             catch (Exception)
             {
                 // Pruning is housekeeping. Never let it stop the entry from being written.
+            }
+        }
+
+        private static void TryDelete(string path)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception)
+            {
+                // Locked or already gone; the next fault tries again.
             }
         }
     }

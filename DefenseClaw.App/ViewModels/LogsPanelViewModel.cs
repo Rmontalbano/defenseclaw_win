@@ -25,7 +25,9 @@ namespace DefenseClaw.App.ViewModels;
 /// seed history, then starts live watching on both so switching the source toggle is
 /// instant. Both <see cref="LogTailer.LinesReceived"/> and <see cref="LogTailer.Truncated"/>
 /// fire on a background thread, so every handler marshals through
-/// <see cref="Application.Current"/>'s dispatcher.
+/// <see cref="Application.Current"/>'s dispatcher. So do <see cref="LogTailer.TailFaulted"/> and
+/// <see cref="LogTailer.TailRecovered"/>: a tail that hit an error keeps retrying by itself, and while it does the
+/// panel says so in a "Log tail paused" banner rather than looking like a quiet gateway.
 /// </para>
 /// <para>
 /// <b>Buffering never stops; projecting does.</b> The tailers run for the life of the process
@@ -98,6 +100,12 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private string _rotationNoticeText = string.Empty;
 
+    [ObservableProperty]
+    private bool _showTailFault;
+
+    [ObservableProperty]
+    private string _tailFaultText = string.Empty;
+
     public LogsPanelViewModel(AppServices services)
         : base(services)
     {
@@ -164,6 +172,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
     partial void OnActiveSourceChanged(string value)
     {
         ShowRotationNotice = false;
+        ShowFaultOf(ActiveState);
         RebuildComponentFilters();
         ApplyFilters();
     }
@@ -267,7 +276,65 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
     {
         state.Tailer.LinesReceived += (_, e) => OnLinesReceived(state, e.Lines);
         state.Tailer.Truncated += (_, _) => OnTruncated(state);
+        state.Tailer.TailFaulted += (_, e) => OnTailFaulted(state, e);
+        state.Tailer.TailRecovered += (_, _) => OnTailRecovered(state);
     }
+
+    /// <summary><see cref="LogTailer.TailFaulted"/> fires on the tailer's background loop.</summary>
+    private void OnTailFaulted(SourceState state, LogTailFaultedEventArgs e)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        dispatcher?.BeginInvoke(() => ApplyTailFault(state, e));
+    }
+
+    /// <summary><see cref="LogTailer.TailRecovered"/> fires on the tailer's background loop.</summary>
+    private void OnTailRecovered(SourceState state)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        dispatcher?.BeginInvoke(() => ApplyTailRecovered(state));
+    }
+
+    /// <summary>
+    /// The UI-thread half of <see cref="OnTailFaulted"/>: remembers what went wrong for that source and, when it is the
+    /// one on screen, says so. Before this the tail simply stopped and the list looked like a quiet gateway.
+    /// </summary>
+    private void ApplyTailFault(SourceState state, LogTailFaultedEventArgs e)
+    {
+        var reason = e.Exception.Message.ReplaceLineEndings(" ").Trim();
+        state.FaultText =
+            $"The tail of {Path.GetFileName(state.FilePath)} hit an error ({e.Exception.GetType().Name}: {reason}). " +
+            $"New lines are paused; it retries in {Math.Max(1, (int)Math.Ceiling(e.RetryIn.TotalSeconds))} s and resumes by itself.";
+        ShowFaultOf(state);
+    }
+
+    private void ApplyTailRecovered(SourceState state)
+    {
+        state.FaultText = null;
+        ShowFaultOf(state);
+    }
+
+    /// <summary>Shows the fault banner for <paramref name="state"/> when it is the source on screen; another source's fault is shown when it is switched to.</summary>
+    private void ShowFaultOf(SourceState state)
+    {
+        if (!ReferenceEquals(state, ActiveState))
+        {
+            return;
+        }
+
+        TailFaultText = state.FaultText ?? string.Empty;
+        ShowTailFault = state.FaultText is not null;
+    }
+
+    /// <summary>
+    /// Test seam: reports a tailer fault for <paramref name="source"/> ("Gateway" or "Watchdog") as if its loop had just
+    /// raised <see cref="LogTailer.TailFaulted"/>, on the calling thread.
+    /// </summary>
+    internal void AcceptTailFault(string source, LogTailFaultedEventArgs e) =>
+        ApplyTailFault(string.Equals(source, "Watchdog", StringComparison.Ordinal) ? _watchdog : _gateway, e);
+
+    /// <summary>Test seam: the matching <see cref="LogTailer.TailRecovered"/>.</summary>
+    internal void AcceptTailRecovered(string source) =>
+        ApplyTailRecovered(string.Equals(source, "Watchdog", StringComparison.Ordinal) ? _watchdog : _gateway);
 
     /// <summary><see cref="LogTailer.LinesReceived"/> fires on a background poll thread.</summary>
     private void OnLinesReceived(SourceState state, IReadOnlyList<LogLine> lines)
@@ -546,6 +613,9 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
         public HashSet<string> Components { get; } = new(StringComparer.Ordinal);
 
         public bool HasComponentless { get; set; }
+
+        /// <summary>What the banner says while this source's tail is faulted; null when it is healthy.</summary>
+        public string? FaultText { get; set; }
     }
 }
 

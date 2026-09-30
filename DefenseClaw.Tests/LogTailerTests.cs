@@ -194,6 +194,310 @@ public class LogTailerTests
         Assert.Equal("second", batches[1][0].Raw);
     }
 
+    // ---- rotation, BOM, faults (D1-07 / D3-13) ----
+
+    [Fact]
+    public void Rotation_to_a_file_larger_than_the_offset_is_detected_and_read_from_the_top()
+    {
+        // Length alone cannot see this: the replacement is already longer than the old offset, so it looks like growth
+        // and the first bytes of the new file were skipped (the "spliced first line"). Recreating within seconds also
+        // keeps the old creation time on NTFS (tunneling), so the content anchors have to catch it.
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "old line 1\nold line 2\n");
+        using var tailer = new LogTailer(path);
+        var truncations = 0;
+        tailer.Truncated += (_, _) => truncations++;
+
+        Assert.Equal(2, tailer.ReadNewLines().Count);
+        var offsetBefore = tailer.Offset;
+
+        File.Delete(path);
+        File.WriteAllText(path, "NEW FILE first line is much longer than the whole old file so it is past the offset\nNEW second\n", new UTF8Encoding(false));
+        Assert.True(new FileInfo(path).Length > offsetBefore);
+
+        var lines = tailer.ReadNewLines();
+
+        Assert.Equal(1, truncations);
+        Assert.Equal(
+            new[] { "NEW FILE first line is much longer than the whole old file so it is past the offset", "NEW second" },
+            lines.Select(l => l.Raw));
+        Assert.Equal(new FileInfo(path).Length, tailer.Offset);
+    }
+
+    [Fact]
+    public void A_replacement_with_the_same_banner_is_still_told_apart_by_the_bytes_before_the_offset()
+    {
+        // gateway.log opens with the same banner every run, so the head of a rotated file matches the old one; the last
+        // bytes consumed do not.
+        using var temp = new TempDirectory();
+        var banner = string.Concat(Enumerable.Repeat("╔══════════════════╗\n", 6));
+        var path = temp.Write("gateway.log", banner + "[api] old run\n");
+        using var tailer = new LogTailer(path);
+        var truncations = 0;
+        tailer.Truncated += (_, _) => truncations++;
+        Assert.Equal(7, tailer.ReadNewLines().Count);
+
+        File.Delete(path);
+        File.WriteAllText(path, banner + "[api] a newer run that wrote a lot more than the old one did\n[api] second\n", new UTF8Encoding(false));
+
+        var lines = tailer.ReadNewLines();
+
+        Assert.Equal(1, truncations);
+        Assert.Equal(8, lines.Count);
+        Assert.Equal("╔══════════════════╗", lines[0].Raw);
+    }
+
+    [Fact]
+    public void An_ordinary_append_is_not_mistaken_for_a_rotation()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "[api] one\n");
+        using var tailer = new LogTailer(path);
+        var truncations = 0;
+        tailer.Truncated += (_, _) => truncations++;
+
+        Assert.Single(tailer.ReadNewLines());
+        for (var i = 0; i < 20; i++)
+        {
+            Append(path, $"[api] line {i} with a little padding so the anchors move on\n");
+            Assert.Single(tailer.ReadNewLines());
+        }
+
+        Assert.Equal(0, truncations);
+    }
+
+    [Fact]
+    public void A_tail_that_starts_at_the_end_still_notices_a_larger_replacement()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "history one\nhistory two\n");
+        using var tailer = new LogTailer(path, new LogTailerOptions { StartAtEnd = true });
+        var truncations = 0;
+        tailer.Truncated += (_, _) => truncations++;
+        Assert.Empty(tailer.ReadNewLines());
+
+        File.Delete(path);
+        File.WriteAllText(path, "replacement that is longer than the two history lines put together\nsecond\n", new UTF8Encoding(false));
+
+        Assert.Equal(2, tailer.ReadNewLines().Count);
+        Assert.Equal(1, truncations);
+    }
+
+    [Fact]
+    public void A_utf8_byte_order_mark_is_not_part_of_the_first_line()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.File("gateway.log");
+        File.WriteAllBytes(path, new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes("[gateway] café\r\n[x] two\r\n")).ToArray());
+        using var tailer = new LogTailer(path);
+
+        var lines = tailer.ReadNewLines();
+
+        Assert.Equal(new[] { "[gateway] café", "[x] two" }, lines.Select(l => l.Raw));
+        Assert.Equal("gateway", lines[0].Component);
+        Assert.Equal(new FileInfo(path).Length, tailer.Offset);
+    }
+
+    [Fact]
+    public void A_bom_only_matters_at_the_start_of_the_file()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.File("gateway.log");
+        File.WriteAllBytes(path, new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes("first\n")).ToArray());
+        using var tailer = new LogTailer(path);
+        Assert.Single(tailer.ReadNewLines());
+
+        Append(path, "﻿mid-file mark stays\n");
+
+        Assert.Equal("﻿mid-file mark stays", tailer.ReadNewLines().Single().Raw);
+    }
+
+    private static LogTailerOptions Fast(bool startAtEnd = false) => new()
+    {
+        PollInterval = TimeSpan.FromMilliseconds(40),
+        FaultBackoff = TimeSpan.FromMilliseconds(20),
+        MaxFaultBackoff = TimeSpan.FromMilliseconds(80),
+        StartAtEnd = startAtEnd,
+    };
+
+    private static void WaitFor(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for: " + what);
+            Thread.Sleep(15);
+        }
+    }
+
+    [Fact]
+    public void A_subscriber_that_throws_does_not_end_the_tail()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "one\n");
+        using var tailer = new LogTailer(path, Fast());
+        var received = new List<string>();
+        var faults = new List<LogTailFaultedEventArgs>();
+        var recovered = 0;
+        var first = true;
+
+        tailer.LinesReceived += (_, e) =>
+        {
+            lock (received)
+            {
+                received.AddRange(e.Lines.Select(l => l.Raw));
+            }
+
+            if (first)
+            {
+                first = false;
+                throw new InvalidOperationException("subscriber bug");
+            }
+        };
+        tailer.TailFaulted += (_, e) =>
+        {
+            lock (faults)
+            {
+                faults.Add(e);
+            }
+        };
+        tailer.TailRecovered += (_, _) => Interlocked.Increment(ref recovered);
+
+        tailer.StartWatching();
+        WaitFor(() => { lock (faults) { return faults.Count == 1; } }, "the fault");
+        Append(path, "two\n");
+        WaitFor(() => { lock (received) { return received.Count == 2; } }, "the line after the fault");
+        WaitFor(() => Volatile.Read(ref recovered) == 1, "the recovery");
+
+        lock (faults)
+        {
+            Assert.Single(faults);
+            Assert.IsType<InvalidOperationException>(faults[0].Exception);
+            Assert.Equal(1, faults[0].ConsecutiveFaults);
+            Assert.Equal(TimeSpan.FromMilliseconds(20), faults[0].RetryIn);
+        }
+
+        lock (received)
+        {
+            Assert.Equal(new[] { "one", "two" }, received);
+        }
+    }
+
+    [Fact]
+    public void A_subscriber_that_keeps_throwing_backs_off_and_the_fault_count_climbs()
+    {
+        // One line per batch, so every iteration delivers something to the throwing subscriber: five faults in a row.
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", string.Concat(Enumerable.Range(0, 5).Select(i => $"line {i}\n")));
+        using var tailer = new LogTailer(path, new LogTailerOptions
+        {
+            PollInterval = TimeSpan.FromMilliseconds(40),
+            FaultBackoff = TimeSpan.FromMilliseconds(20),
+            MaxFaultBackoff = TimeSpan.FromMilliseconds(80),
+            MaxLinesPerBatch = 1,
+        });
+        var faults = new List<LogTailFaultedEventArgs>();
+        tailer.LinesReceived += (_, _) => throw new InvalidOperationException("always");
+        tailer.TailFaulted += (_, e) =>
+        {
+            lock (faults)
+            {
+                faults.Add(e);
+            }
+        };
+
+        tailer.StartWatching();
+        WaitFor(() => { lock (faults) { return faults.Count >= 5; } }, "five faults");
+
+        lock (faults)
+        {
+            Assert.Equal(new[] { 1, 2, 3, 4, 5 }, faults.Take(5).Select(f => f.ConsecutiveFaults));
+            Assert.Equal(
+                new[] { 20, 40, 80, 80, 80 },
+                faults.Take(5).Select(f => (int)f.RetryIn.TotalMilliseconds));
+        }
+    }
+
+    [Fact]
+    public void A_handler_of_TailFaulted_that_throws_does_not_end_the_tail()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "one\n");
+        using var tailer = new LogTailer(path, Fast());
+        var received = new List<string>();
+        var throwOnce = true;
+
+        tailer.LinesReceived += (_, e) =>
+        {
+            lock (received)
+            {
+                received.AddRange(e.Lines.Select(l => l.Raw));
+            }
+
+            if (throwOnce)
+            {
+                throwOnce = false;
+                throw new InvalidOperationException("subscriber bug");
+            }
+        };
+        tailer.TailFaulted += (_, _) => throw new InvalidOperationException("reporting bug");
+
+        tailer.StartWatching();
+        WaitFor(() => !throwOnce, "the first batch");
+        Append(path, "two\n");
+
+        WaitFor(() => { lock (received) { return received.Count == 2; } }, "the line after both faults");
+    }
+
+    [Fact]
+    public void StartWatching_is_idempotent()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", string.Empty);
+        using var tailer = new LogTailer(path, Fast());
+        var received = new List<string>();
+        tailer.LinesReceived += (_, e) =>
+        {
+            lock (received)
+            {
+                received.AddRange(e.Lines.Select(l => l.Raw));
+            }
+        };
+
+        tailer.StartWatching();
+        tailer.StartWatching();
+        tailer.StartWatching();
+        Thread.Sleep(100);
+        Append(path, "x1\nx2\nx3\n");
+
+        WaitFor(() => { lock (received) { return received.Count >= 3; } }, "the lines");
+        Thread.Sleep(300);
+
+        lock (received)
+        {
+            Assert.Equal(new[] { "x1", "x2", "x3" }, received);
+        }
+    }
+
+    [Fact]
+    public void Disposing_stops_the_loop_and_a_later_StartWatching_does_nothing()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "one\n");
+        var tailer = new LogTailer(path, Fast());
+        var received = 0;
+        tailer.LinesReceived += (_, e) => Interlocked.Add(ref received, e.Lines.Count);
+
+        tailer.StartWatching();
+        WaitFor(() => Volatile.Read(ref received) == 1, "the first line");
+        tailer.Dispose();
+        Append(path, "two\n");
+        tailer.StartWatching();
+        Thread.Sleep(300);
+
+        Assert.Equal(1, Volatile.Read(ref received));
+    }
+
     [Theory]
     [InlineData("[sidecar] starting subsystems", null, "sidecar", "starting subsystems")]
     [InlineData("[watchdog] gateway recovered", null, "watchdog", "gateway recovered")]

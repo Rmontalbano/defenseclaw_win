@@ -162,4 +162,114 @@ public class ConfigChangeTokenTests
 
         Assert.False(token.HasChanged);
     }
+
+    [Fact]
+    public void Writes_to_other_files_in_the_data_directory_do_not_run_a_signature_check()
+    {
+        // audit.db, its -wal and gateway.log are written all day; the watcher used to hash config.yaml and .env for each.
+        // The poll is an hour so only watcher events can run a check here.
+        using var temp = new TempDirectory();
+        temp.Write("config.yaml", "config_version: 8\n");
+        temp.Write(".env", "UNRELATED=1\n");
+
+        using var token = new ConfigChangeToken(new DefenseClawPaths(dataDirectory: temp.Path), TimeSpan.FromHours(1));
+        var notifications = 0;
+        using var signalled = new ManualResetEventSlim(false);
+        token.Changed += (_, _) =>
+        {
+            Interlocked.Increment(ref notifications);
+            signalled.Set();
+        };
+
+        var noise = temp.File("other.log");
+        for (var i = 0; i < 200; i++)
+        {
+            File.AppendAllText(noise, "x");
+            if (i % 20 == 0)
+            {
+                Thread.Sleep(1);
+            }
+        }
+
+        File.WriteAllText(temp.File("audit.db-wal"), new string('w', 4096));
+        File.WriteAllText(temp.File("gateway.log"), "[sidecar] busy\n");
+        Thread.Sleep(600);
+
+        Assert.Equal(0, token.CheckCount);
+        Assert.False(token.HasChanged);
+        Assert.Equal(0, Volatile.Read(ref notifications));
+
+        // The watcher is live, though: an edit of config.yaml is noticed. (A swap can be seen half done - a read that
+        // lands mid-rename hashes to zero and the settled file is a second, different signature - so this is one
+        // notification or two, never one per event and never for another file.)
+        var replacement = temp.Write(".config.yaml.tmp-test", "config_version: 8\nclaw:\n  mode: codex\n");
+        File.Move(replacement, temp.File("config.yaml"), overwrite: true);
+
+        Assert.True(signalled.Wait(Timeout), "config.yaml change was not observed");
+        Thread.Sleep(400);
+
+        Assert.True(token.CheckCount >= 1);
+        Assert.InRange(Volatile.Read(ref notifications), 1, 3);
+    }
+
+    [Fact]
+    public void A_write_to_dot_env_is_noticed_through_the_watcher_alone()
+    {
+        using var temp = new TempDirectory();
+        temp.Write("config.yaml", "config_version: 8\n");
+        temp.Write(".env", "DEFENSECLAW_GATEWAY_TOKEN=old\n");
+
+        using var token = new ConfigChangeToken(new DefenseClawPaths(dataDirectory: temp.Path), TimeSpan.FromHours(1));
+        using var signalled = new ManualResetEventSlim(false);
+        ConfigChangedEventArgs? observed = null;
+        token.Changed += (_, e) =>
+        {
+            observed = e;
+            signalled.Set();
+        };
+
+        File.WriteAllText(temp.File(".env"), "DEFENSECLAW_GATEWAY_TOKEN=rotated-value\n");
+
+        Assert.True(signalled.Wait(Timeout), ".env change was not observed");
+        Assert.Equal(ConfigFileKind.DotEnv, observed!.Kind);
+    }
+
+    [Fact]
+    public void A_rename_away_from_config_yaml_is_noticed_through_the_watcher_alone()
+    {
+        // The rename event names the new file; the old name is what says config.yaml moved.
+        using var temp = new TempDirectory();
+        temp.Write("config.yaml", "config_version: 8\n");
+
+        using var token = new ConfigChangeToken(new DefenseClawPaths(dataDirectory: temp.Path), TimeSpan.FromHours(1));
+        using var signalled = new ManualResetEventSlim(false);
+        token.Changed += (_, _) => signalled.Set();
+
+        File.Move(temp.File("config.yaml"), temp.File("config.yaml.moved"));
+
+        Assert.True(signalled.Wait(Timeout), "the rename was not observed");
+    }
+
+    [Fact]
+    public void A_signature_describes_the_bytes_it_was_captured_from_and_no_others()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("config.yaml", "mode: observe\n");
+        var signature = FileSignature.Capture(path);
+
+        Assert.True(signature.DescribesContent(System.Text.Encoding.UTF8.GetBytes("mode: observe\n")));
+        Assert.False(signature.DescribesContent(System.Text.Encoding.UTF8.GetBytes("mode: enforce\n")));
+        Assert.False(signature.DescribesContent(System.Text.Encoding.UTF8.GetBytes("mode: observe\n\n")));
+        Assert.False(FileSignature.Capture(temp.File("missing.yaml")).DescribesContent(Array.Empty<byte>()));
+    }
+
+    [Fact]
+    public void A_signature_without_a_content_hash_is_compared_on_length()
+    {
+        // Files past the hashing cap (and one that was mid-write at capture) carry a zero hash.
+        var unhashed = new FileSignature(true, 5, DateTime.UtcNow, 0);
+
+        Assert.True(unhashed.DescribesContent(new byte[5]));
+        Assert.False(unhashed.DescribesContent(new byte[6]));
+    }
 }
