@@ -21,6 +21,12 @@ internal static class GatewayPresentation
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
+        // Paused: the state is last known, not current, and the label says "Monitoring paused"; a green dot beside it would contradict it.
+        if (snapshot.IsPaused)
+        {
+            return "Neutral";
+        }
+
         return snapshot.State switch
         {
             AppGatewayState.Running => "Ok",

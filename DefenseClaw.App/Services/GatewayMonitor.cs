@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using DefenseClaw.App.Services.Settings;
 using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Gateway.Models;
@@ -55,6 +56,9 @@ public sealed record GatewaySnapshot
 
     /// <summary>The command the gateway-stopped banner offers. The app never runs it.</summary>
     public const string StartGatewayCommand = "defenseclaw-gateway start";
+
+    /// <summary>What <see cref="StateLabel"/> (the strip, the tray tooltip, the flyout) says while monitoring is paused.</summary>
+    public const string PausedLabel = "Monitoring paused";
 
     public static readonly GatewaySnapshot Initial = new()
     {
@@ -139,6 +143,13 @@ public sealed record GatewaySnapshot
     public int ConsecutiveFailures { get; init; }
 
     /// <summary>
+    /// True while the operator has paused monitoring (<see cref="GatewayMonitor.IsPaused"/>): nothing is polling, so everything else
+    /// here is as of <see cref="PolledAt"/> and <see cref="StateLabel"/> says so. The last known <see cref="State"/> is kept, and comes
+    /// back untouched when monitoring resumes. Part of <see cref="RendersSameAs"/>: the tray tooltip and the status strip must follow it.
+    /// </summary>
+    public bool IsPaused { get; init; }
+
+    /// <summary>
     /// Set when the <c>env</c> block of Claude Code's settings.json overrides the hook fail
     /// mode the gateway believes it is running. Null when the two agree, or when there was
     /// nothing to compare. The hook obeys the env var, so a non-null value here is the
@@ -158,7 +169,8 @@ public sealed record GatewaySnapshot
     public string ConnectorSummary =>
         ActiveConnectors.Count == 0 ? "none" : string.Join(", ", ActiveConnectors);
 
-    public string StateLabel => State switch
+    /// <summary>"Monitoring paused" when the operator paused it (see <see cref="IsPaused"/>), else the gateway's state in words.</summary>
+    public string StateLabel => IsPaused ? PausedLabel : State switch
     {
         AppGatewayState.Running => "Running",
         AppGatewayState.GatewayStopped => "Gateway stopped",
@@ -175,7 +187,7 @@ public sealed record GatewaySnapshot
     /// it already shows.
     /// <para>
     /// <b>Compared</b> — everything the tray, the shell, the flyout, the Alerts panel and the
-    /// Setup panel read: <see cref="State"/>, <see cref="Detail"/>, <see cref="Install"/>,
+    /// Setup panel read: <see cref="State"/>, <see cref="IsPaused"/>, <see cref="Detail"/>, <see cref="Install"/>,
     /// <see cref="HealthStatus"/>, <see cref="WslGatewayDetected"/>, <see cref="PortOwner"/>,
     /// <see cref="ApiPort"/>, <see cref="CliPath"/>, <see cref="BinaryVersion"/>,
     /// <see cref="AlertCount"/>, <see cref="CriticalAlertCount"/>,
@@ -213,6 +225,7 @@ public sealed record GatewaySnapshot
         }
 
         return State == other.State &&
+               IsPaused == other.IsPaused &&
                Install == other.Install &&
                HealthStatus == other.HealthStatus &&
                WslGatewayDetected == other.WslGatewayDetected &&
@@ -345,6 +358,17 @@ public sealed class GatewaySnapshotEventArgs : EventArgs
 /// subscriber that throws costs only its own delivery.
 /// </para>
 /// <para>
+/// <b>Pause is the operator's, and app-local.</b> <see cref="SetPaused"/> (the tray flyout's Pause / Resume) persists
+/// <c>monitoring.paused</c> in the app's settings; <see cref="IsPaused"/> reads it back, so a restart stays paused and the Settings
+/// page and the flyout cannot disagree. While it is set the background loop makes no poll at all — no <c>/health</c>, no <c>/alerts</c>,
+/// no <c>/status</c>, no <see cref="AlertCadenceElapsed"/>, so the audit-database reads that ride the alert tick stop with it — and waits
+/// for the flag to clear; resuming wakes it and the next poll starts at once, not after the current interval. The gateway itself is not
+/// touched. One snapshot is published at each switch (the last known state with <see cref="GatewaySnapshot.IsPaused"/> flipped), so
+/// the tray tooltip, the status strip and the flyout say "Monitoring paused" / go back to the live state through <see cref="StateChanged"/>
+/// like any other change. An explicit <see cref="RefreshAsync"/> / <see cref="RefreshAlertsNowAsync"/> still polls while paused: it is the
+/// operator asking, and it does not restart the loop.
+/// </para>
+/// <para>
 /// <b>Gates run on the monotonic clock</b> (<see cref="MonotonicStamp"/>): a wall-clock step
 /// must not stop <c>/alerts</c> — and with it the tray's CRITICAL toasts — for the size of the
 /// step. Wall time (<see cref="GatewaySnapshot.PolledAt"/>, <see cref="GatewaySnapshot.AlertsFetchedAt"/>)
@@ -403,6 +427,14 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     private SynchronizationContext? _uiContext;
     private Task? _loop;
     private int _consecutiveFailures;
+
+    /// <summary>
+    /// Completed (and replaced) whenever the loop should stop waiting and look again: monitoring was paused or resumed. The loop waits on
+    /// the current one, with its poll interval as a timeout, or without one while paused. See <see cref="WaitAsync"/>.
+    /// </summary>
+    private readonly object _wakeGate = new();
+    private TaskCompletionSource _wake = NewWake();
+    private bool _listeningToSettings;
 
     /// <summary>When <c>/alerts</c> and <c>/status</c> were last requested; the gates behind their 30 s cadence. Monotonic.</summary>
     private MonotonicStamp _lastAlertPoll = MonotonicStamp.Never;
@@ -514,6 +546,30 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
         }
     }
 
+    /// <summary>
+    /// True while the operator has paused monitoring: <c>monitoring.paused</c> in the app's settings, read through the store's cache (cheap, any
+    /// thread). The background loop makes no poll while this holds; see the type documentation.
+    /// </summary>
+    public bool IsPaused => _services.Settings.Current.Monitoring.Paused;
+
+    /// <summary>
+    /// Pauses or resumes monitoring: persists the flag (the settings file is the one source of truth), publishes one snapshot so every surface says
+    /// so, and on resume wakes the loop to poll at once. Idempotent. Runs on the caller's thread for the write (a few milliseconds) and returns
+    /// before the snapshot is published; the gateway is not touched. Returns false when the flag could not be saved (it is then held in memory
+    /// only and the next settings write retries it).
+    /// </summary>
+    public bool SetPaused(bool paused)
+    {
+        var saved = _services.Settings.Update(settings =>
+            settings.Monitoring.Paused == paused
+                ? settings
+                : settings with { Monitoring = settings.Monitoring with { Paused = paused } });
+
+        // The settings listener (Start) does the same for a change made elsewhere; both paths are idempotent.
+        OnPausedChanged();
+        return saved;
+    }
+
     /// <summary>Starts the poll loop, capturing the calling thread as the event thread.</summary>
     public void Start()
     {
@@ -523,7 +579,119 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
         }
 
         _uiContext = SynchronizationContext.Current;
+
+        // A pause changed by anything other than SetPaused (the Settings page, a hand edit that Load picked up) takes effect the same way.
+        if (!_listeningToSettings)
+        {
+            _listeningToSettings = true;
+            _services.Settings.Changed += OnSettingsChanged;
+        }
+
+        // Paused since the last run: say so before the first poll would have, and make none.
+        if (IsPaused)
+        {
+            OnPausedChanged();
+        }
+
         _loop = Task.Run(() => RunAsync(_stop.Token));
+    }
+
+    private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e)
+    {
+        if (e.Affects(AppSettingsSections.Monitoring) &&
+            e.Previous.Monitoring.Paused != e.Current.Monitoring.Paused)
+        {
+            OnPausedChanged();
+        }
+    }
+
+    /// <summary>
+    /// The flag changed: wake the loop (it polls at once on resume, and re-checks on pause) and publish the paused / live snapshot, in order
+    /// with the polls. Fire and forget: the publication waits for a poll in flight.
+    /// </summary>
+    private void OnPausedChanged()
+    {
+        Wake();
+        _ = PublishPauseStateAsync();
+    }
+
+    /// <summary>
+    /// Publishes <see cref="Current"/> with <see cref="GatewaySnapshot.IsPaused"/> brought in line with <see cref="IsPaused"/> — nothing when it
+    /// already is. Takes the poll gate, so it lands after a poll that was already running (whose snapshot carries the flag it saw) and never
+    /// under one.
+    /// </summary>
+    private async Task PublishPauseStateAsync()
+    {
+        try
+        {
+            await _pollGate.WaitAsync(_stop.Token).ConfigureAwait(false);
+            try
+            {
+                var current = Current;
+                var paused = IsPaused;
+                if (current.IsPaused != paused)
+                {
+                    Publish(current with { IsPaused = paused });
+                }
+            }
+            finally
+            {
+                _ = _pollGate.Release();
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            // Disposed while it waited: there is nobody left to tell.
+        }
+#pragma warning disable CA1031 // Fire and forget: a failed publication must not become an unobserved task exception.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            TraceFault("pause publication", ex);
+        }
+    }
+
+    private static TaskCompletionSource NewWake() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Ends the wait the loop is in (if any) and arms the next one.</summary>
+    private void Wake()
+    {
+        TaskCompletionSource fired;
+        lock (_wakeGate)
+        {
+            fired = _wake;
+            _wake = NewWake();
+        }
+
+        _ = fired.TrySetResult();
+    }
+
+    /// <summary>
+    /// The loop's wait: <paramref name="delay"/> (forever when <see cref="Timeout.InfiniteTimeSpan"/>, which is what a paused loop passes), or
+    /// until <see cref="Wake"/>, whichever comes first. Throws <see cref="OperationCanceledException"/> when <paramref name="cancellationToken"/> does.
+    /// </summary>
+    private async Task WaitAsync(TimeSpan delay, CancellationToken cancellationToken)
+    {
+        Task wake;
+        lock (_wakeGate)
+        {
+            wake = _wake.Task;
+        }
+
+        // The wait for a resume is armed first and the flag read second: a resume that landed between the caller's check and here has
+        // already cleared the flag (it is written before Wake is called), and one that lands after completes the task taken above.
+        if (delay == Timeout.InfiniteTimeSpan && !IsPaused)
+        {
+            return;
+        }
+
+        using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var sleep = Task.Delay(delay, timer.Token);
+        _ = await Task.WhenAny(sleep, wake).ConfigureAwait(false);
+
+        // Whichever finished, the other must not keep running: a timer per round would otherwise outlive its round.
+        timer.Cancel();
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>
@@ -562,7 +730,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     /// them ran in a row. Internal so a test can drive the loop's cadence without sleeping.
     /// </summary>
     internal Task<GatewaySnapshot> PollOnceAsync(CancellationToken cancellationToken = default) =>
-        PollAndPublishAsync(forceAlerts: false, surfaceFaultNow: false, cancellationToken);
+        PollAndPublishAsync(forceAlerts: false, surfaceFaultNow: false, honourPause: true, cancellationToken);
 
     /// <summary>How many times <c>/alerts</c> was requested; the tests' view of the 30 s cadence gate.</summary>
     internal int AlertsFetchCount => Volatile.Read(ref _alertsFetchCount);
@@ -576,7 +744,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     private Task<GatewaySnapshot> ManualPollAsync(bool forceAlerts, CancellationToken cancellationToken)
     {
         _services.Paths.InvalidateExecutableCache();
-        return PollAndPublishAsync(forceAlerts, surfaceFaultNow: true, cancellationToken);
+        return PollAndPublishAsync(forceAlerts, surfaceFaultNow: true, honourPause: false, cancellationToken);
     }
 
     public void Dispose()
@@ -587,6 +755,12 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
         }
 
         _disposed = true;
+        if (_listeningToSettings)
+        {
+            _listeningToSettings = false;
+            _services.Settings.Changed -= OnSettingsChanged;
+        }
+
         _stop.Cancel();
         _stop.Dispose();
     }
@@ -595,6 +769,21 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     {
         while (!cancellationToken.IsCancellationRequested)
         {
+            // Paused: no poll, no cadence, no timer - just wait for the flag to clear (Wake).
+            if (IsPaused)
+            {
+                try
+                {
+                    await WaitAsync(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                continue;
+            }
+
             try
             {
                 _ = await PollOnceAsync(cancellationToken).ConfigureAwait(false);
@@ -616,7 +805,8 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             var interval = _consecutiveFailures >= FailuresBeforeBackoff ? SlowInterval : FastInterval;
             try
             {
-                await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
+                // Cut short by a resume: the loop, not the interval, is what a pause and a resume address.
+                await WaitAsync(interval, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -637,11 +827,17 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     /// the previous snapshot stands and is what this returns.
     /// </para>
     /// </summary>
-    private async Task<GatewaySnapshot> PollAndPublishAsync(bool forceAlerts, bool surfaceFaultNow, CancellationToken cancellationToken)
+    private async Task<GatewaySnapshot> PollAndPublishAsync(bool forceAlerts, bool surfaceFaultNow, bool honourPause, CancellationToken cancellationToken)
     {
         await _pollGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // The background loop's poll, paused while it queued behind another: no poll. (An explicit refresh is the operator asking, and goes ahead.)
+            if (honourPause && IsPaused)
+            {
+                return Current;
+            }
+
             GatewaySnapshot? snapshot;
             try
             {
@@ -863,6 +1059,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             FailModeDrift = drift,
             PolledAt = _time.GetUtcNow(),
             ConsecutiveFailures = Volatile.Read(ref _consecutiveFailures),
+            IsPaused = IsPaused,
         };
     }
 

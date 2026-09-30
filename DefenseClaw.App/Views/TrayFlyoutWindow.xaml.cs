@@ -60,7 +60,23 @@ public partial class TrayFlyoutWindow : Window
         // construction, and every way the window goes away (Hide, Escape, focus loss, close)
         // ends here.
         IsVisibleChanged += (_, e) => (DataContext as TrayFlyoutViewModel)?.SetVisible((bool)e.NewValue);
+
+        // A row that opens the dashboard (a metric, a finding, the gear) asks the flyout to get out of the way first.
+        DataContextChanged += (_, e) =>
+        {
+            if (e.OldValue is TrayFlyoutViewModel old)
+            {
+                old.CloseRequested -= OnCloseRequested;
+            }
+
+            if (e.NewValue is TrayFlyoutViewModel current)
+            {
+                current.CloseRequested += OnCloseRequested;
+            }
+        };
     }
+
+    private void OnCloseRequested(object? sender, EventArgs e) => Hide();
 
     /// <summary>
     /// True when the flyout hid itself because it lost focus within the last few hundred
