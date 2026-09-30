@@ -187,38 +187,30 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="History32"
-                                ctl:DcIcon.Section="Observe">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
-                    <TextBlock Style="{StaticResource DcCaption}"
-                               Margin="0,4,0,0"
-                               Text="{Binding CapacityNote}" />
+        <!-- Toolbar. The capacity note (what the list keeps, for how long) is the caption: trimmed on a narrow panel, whole in its tooltip. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="History32"
+                           ctl:DcIcon.Section="Observe"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding CapacityNote}">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Re-sync the list with the commands this session has run. Runs nothing. Shortcut F5." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon Delete24}"
+                               Command="{Binding ClearActivityCommand}"
+                               ToolTip="Clear the list"
+                               AutomationProperties.Name="Clear"
+                               AutomationProperties.HelpText="Forget every entry in this list. Commands that are still running keep running." />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <ui:Button Content="Refresh"
-                           Appearance="Secondary"
-                           Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Re-sync the list with the commands this session has run. Runs nothing. Shortcut F5.">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-                <ui:Button Content="Clear"
-                           Appearance="Secondary"
-                           Command="{Binding ClearActivityCommand}"
-                           AutomationProperties.HelpText="Forget every entry in this list. Commands that are still running keep running.">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="Delete24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <!-- Result of the last row action: copied, exported, cancel refused... -->
         <ui:InfoBar Grid.Row="1"

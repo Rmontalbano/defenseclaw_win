@@ -13,6 +13,6 @@ public partial class McpsPanel : UserControl
     public McpsPanel()
     {
         InitializeComponent();
-        GovernPanelKeys.Attach(this, () => FilterBox);
+        GovernPanelKeys.Attach(this, () => PageToolbar.SearchBox);
     }
 }

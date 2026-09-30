@@ -13,6 +13,6 @@ public partial class PluginsPanel : UserControl
     public PluginsPanel()
     {
         InitializeComponent();
-        GovernPanelKeys.Attach(this, () => FilterBox);
+        GovernPanelKeys.Attach(this, () => PageToolbar.SearchBox);
     }
 }

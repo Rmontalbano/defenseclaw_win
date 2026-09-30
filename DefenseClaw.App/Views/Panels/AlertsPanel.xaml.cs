@@ -38,13 +38,8 @@ public sealed partial class AlertsPanel : UserControl
     /// <summary>True while the panel is narrow enough that a selected alert's detail replaces the list instead of sitting beside it.</summary>
     public bool IsCompact => CompactLayout.GetIsCompact(this);
 
-    /// <summary>Moves keyboard focus to the filter box and selects its text, ready to type over.</summary>
-    public void FocusFilter()
-    {
-        _ = FilterBox.Focus();
-        Keyboard.Focus(FilterBox);
-        FilterBox.SelectAll();
-    }
+    /// <summary>Moves keyboard focus to the filter box (the toolbar's search) and selects its text, ready to type over.</summary>
+    public void FocusFilter() => PageToolbar.FocusSearch();
 
     private void OnCanFind(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = true;
 

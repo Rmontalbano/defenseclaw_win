@@ -56,9 +56,10 @@ public class SetupEmptyStateTests
                 Assert.DoesNotContain("0 of 0", vm.StatusNote, StringComparison.Ordinal);
                 Assert.Equal("The setup catalog could not be read.", vm.StatusNote);
 
-                // The way out is right there: a Re-read button in the empty state (the header has one too).
+                // The way out is right there: a Re-read button in the empty state (the toolbar has one too, an icon whose
+                // automation name is its only label).
                 var reread = VisualTree.Descendants<Wpf.Ui.Controls.Button>(shell.Page!)
-                    .Where(b => b.IsVisible && b.Content as string == "Re-read catalog")
+                    .Where(b => b.IsVisible && (b.Content as string ?? System.Windows.Automation.AutomationProperties.GetName(b)) == "Re-read catalog")
                     .ToArray();
                 Assert.Equal(2, reread.Length);
                 Assert.All(reread, b => Assert.Same(vm.ReloadCatalogCommand, b.Command));

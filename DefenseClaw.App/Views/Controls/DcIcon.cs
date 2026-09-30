@@ -111,7 +111,7 @@ public static class DcSections
 /// </summary>
 public static class DcIcon
 {
-    /// <summary>The glyph a page header shows (see the <c>DcPageHeader</c> style). Empty: no icon.</summary>
+    /// <summary>The glyph a page header shows (the <c>DcPageHeader</c> style, or a <see cref="DcPageToolbar"/>). Empty: no icon.</summary>
     public static readonly DependencyProperty SymbolProperty = DependencyProperty.RegisterAttached(
         "Symbol",
         typeof(SymbolRegular),

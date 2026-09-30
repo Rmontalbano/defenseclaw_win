@@ -64,7 +64,8 @@ public sealed class IconViewTests : IDisposable
     public void Each_page_header_shows_its_panels_glyph_in_its_panels_section()
     {
         // Read from the panel's XAML: the header is declared there, and building all thirteen views only to look at one
-        // attribute of each would tie this test to whatever a view needs at construction.
+        // attribute of each would tie this test to whatever a view needs at construction. Overview keeps the DcPageHeader
+        // block until it is recomposed; every other panel opens with the compact DcPageToolbar (CUST-208).
         using var services = TestServices.Create(_temp);
         var catalog = new PanelCatalog(services);
         var panels = Path.Combine(AppDirectory(), "Views", "Panels");
@@ -72,9 +73,9 @@ public sealed class IconViewTests : IDisposable
         foreach (var panel in catalog.Panels)
         {
             var text = File.ReadAllText(Path.Combine(panels, panel.ViewType.Name + ".xaml"));
-            var header = Regex.Match(text, @"<HeaderedContentControl\b[^>]*DcPageHeader[^>]*>");
+            var header = Regex.Match(text, @"<(?:HeaderedContentControl\b[^>]*DcPageHeader|ctl:DcPageToolbar\b)[^>]*>");
 
-            Assert.True(header.Success, $"{panel.Title} has no DcPageHeader");
+            Assert.True(header.Success, $"{panel.Title} has neither a DcPageHeader nor a DcPageToolbar");
             Assert.Equal(panel.Icon.ToString(), Regex.Match(header.Value, @"DcIcon\.Symbol=""([^""]+)""").Groups[1].Value);
             Assert.Equal(DcSections.OfPanelId(panel.Id), Regex.Match(header.Value, @"DcIcon\.Section=""([^""]+)""").Groups[1].Value);
         }

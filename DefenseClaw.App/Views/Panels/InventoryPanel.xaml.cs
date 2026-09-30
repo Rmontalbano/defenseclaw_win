@@ -98,8 +98,7 @@ public partial class InventoryPanel : UserControl
                 return;
             }
 
-            _ = SearchBox.Focus();
-            SearchBox.SelectAll();
+            _ = PageToolbar.FocusSearch();
             e.Handled = true;
         }
         else if (e.Key == Key.Escape && DataContext is InventoryPanelViewModel viewModel && viewModel.HandleEscape())

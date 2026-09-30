@@ -92,7 +92,10 @@
         LAYOUT
           DcPage                 Grid style: root of a panel; applies DcPageMargin.
           DcPageScroll           ScrollViewer style: vertical auto, horizontal off, room for the bar.
-          DcPageHeader           HeaderedContentControl: Header = title+subtitle block, Content =
+          ctl:DcPageToolbar      The compact page toolbar every panel but Overview opens with (Themes\Controls.xaml, with
+                                 DcToolbarActions / DcToolbarIconButton for its icon buttons, ctl:DcSegmented for a filter of
+                                 six options or fewer and DcResultCaption for the mono count of a filter strip).
+          DcPageHeader           HeaderedContentControl (Overview only): Header = title+subtitle block, Content =
                                  right-aligned actions. Applies DcHeaderMargin. ctl:DcIcon.Symbol and
                                  ctl:DcIcon.Section add the panel's glyph in a tinted tile before the title.
           DcActionBar            StackPanel for the header's Content: horizontal, buttons spaced 8.
@@ -170,6 +173,8 @@
             merges the chosen style's tokens after this one, which win: later dictionaries take precedence.
         -->
         <ResourceDictionary Source="Styles/Default.xaml" />
+        <!-- The page toolbar, its icon buttons and the segmented control (see the file's own header). -->
+        <ResourceDictionary Source="Controls.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
     <!-- ===== Spacing ===================================================================== -->

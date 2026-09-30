@@ -66,27 +66,36 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="BookDatabase24"
-                                ctl:DcIcon.Section="Discover">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+        <!-- Toolbar: the scan status, the page actions as icons (Generate AI BOM uses the connector picked in the strip below), the search. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="BookDatabase24"
+                           ctl:DcIcon.Section="Discover"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding StatusMessage}"
+                           HasSearch="True"
+                           SearchText="{Binding SearchText}"
+                           SearchWidth="280"
+                           SearchPlaceholder="Search name, vendor, framework…"
+                           SearchAutomationName="Search components"
+                           SearchHelpText="Matches name, vendor, framework and ecosystem. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ClipboardTaskListLtr24}"
+                               Command="{Binding GenerateAiBomCommand}"
+                               ToolTip="Generate AI BOM… defenseclaw aibom scan --json: inventories the connectors' skills, plugins, MCP servers, agents, tools, models and memory for the connector chosen under AI BOM. Records a scan event in audit.db, so it asks first."
+                               AutomationProperties.Name="Generate AI BOM…"
+                               AutomationProperties.HelpText="Builds an AI bill of materials for the connector chosen under AI BOM. Records a scan event, so it shows the exact command first." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Re-read inventory.db (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Re-read inventory.db (F5)." />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding StatusMessage}" />
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Re-read inventory.db (F5).">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <ScrollViewer x:Name="PageScroll"
                       Grid.Row="1"
@@ -95,37 +104,24 @@
             <StackPanel x:Name="PageContent">
                 <!-- Toolbar, banners and the generated AI BOM: measured by the code-behind to size the grid under them. -->
                 <StackPanel x:Name="Chrome">
-                    <!-- Toolbar: search, group-by, AI BOM -->
-                    <Border Style="{StaticResource DcToolbar}">
-                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                            <ui:TextBox x:Name="SearchBox"
-                                        Width="340"
-                                        PlaceholderText="Search name, vendor, framework…  (Ctrl+F)"
-                                        AutomationProperties.Name="Search components"
-                                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    <!-- Filter strip: how the rollup is grouped, and which connector the AI BOM is generated for. -->
+                    <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Group by" />
+                            <ComboBox Width="110"
+                                      AutomationProperties.Name="Group by"
+                                      ItemsSource="{Binding GroupByOptions}"
+                                      SelectedItem="{Binding GroupBy}" />
+                        </StackPanel>
 
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Group by" />
-                                <ComboBox Width="110"
-                                          AutomationProperties.Name="Group by"
-                                          ItemsSource="{Binding GroupByOptions}"
-                                          SelectedItem="{Binding GroupBy}" />
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="AI BOM" />
-                                <ComboBox Width="220"
-                                          AutomationProperties.Name="Connector for the AI BOM"
-                                          ItemsSource="{Binding BomConnectors}"
-                                          SelectedItem="{Binding SelectedBomConnector}" />
-                            </StackPanel>
-                            <ui:Button Content="Generate AI BOM…"
-                                       Icon="{ctl:DcSymbolIcon ClipboardTaskListLtr24}"
-                                       Command="{Binding GenerateAiBomCommand}"
-                                       ToolTip="defenseclaw aibom scan --json: inventories the connectors' skills, plugins, MCP servers, agents, tools, models and memory. Records a scan event in audit.db, so it asks first."
-                                       AutomationProperties.HelpText="Builds an AI bill of materials. Records a scan event, so it shows the exact command first." />
-                        </WrapPanel>
-                    </Border>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="AI BOM" />
+                            <ComboBox Width="220"
+                                      AutomationProperties.Name="Connector for the AI BOM"
+                                      ItemsSource="{Binding BomConnectors}"
+                                      SelectedItem="{Binding SelectedBomConnector}" />
+                        </StackPanel>
+                    </WrapPanel>
 
                     <!-- Banners and the generated AI BOM -->
                     <StackPanel>

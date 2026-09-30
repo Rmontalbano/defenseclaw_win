@@ -8,20 +8,9 @@
         timestamp and almost never a level - just "[component] message" - so the component
         checklist is the filter axis that matters here, not severity.
 
-        On the shared Dc* design system; the one local style is the source toggle's active-state
-        trigger (a visual that exists only here). Keyboard: Ctrl+F focuses the filter box (the
-        code-behind handles ApplicationCommands.Find), Esc clears the filter text.
+        On the shared Dc* design system (the page toolbar, the segmented source control). Keyboard: Ctrl+F
+        focuses the filter box (the code-behind handles ApplicationCommands.Find), Esc clears the filter text.
     -->
-    <UserControl.Resources>
-        <!-- Source toggle: the two buttons share this base and each adds its own "am I active" trigger.
-             An explicit Style bypasses the toolbar's implicit button style, so the gaps are set here. -->
-        <Style x:Key="SourceButton" TargetType="{x:Type ui:Button}" BasedOn="{StaticResource {x:Type ui:Button}}">
-            <Setter Property="Appearance" Value="Secondary" />
-            <Setter Property="Margin" Value="0,0,6,8" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-    </UserControl.Resources>
-
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -30,122 +19,87 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="DocumentBulletList24"
-                                ctl:DcIcon.Section="Observe">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
-                </StackPanel>
-            </HeaderedContentControl.Header>
-        </HeaderedContentControl>
-
-        <!-- Filters -->
-        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
-            <StackPanel>
-                <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                    <ui:Button Content="gateway.log"
-                               Command="{Binding SelectSourceCommand}"
-                               CommandParameter="Gateway"
-                               ToolTip="Show gateway.log">
-                        <ui:Button.Style>
-                            <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource SourceButton}">
-                                <Setter Property="AutomationProperties.Name" Value="gateway.log" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ActiveSource}" Value="Gateway">
-                                        <Setter Property="Appearance" Value="Primary" />
-                                        <Setter Property="AutomationProperties.Name" Value="gateway.log, currently shown" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ui:Button.Style>
-                    </ui:Button>
-
-                    <ui:Button Content="watchdog.log"
-                               Margin="0,0,16,8"
-                               Command="{Binding SelectSourceCommand}"
-                               CommandParameter="Watchdog"
-                               ToolTip="Show watchdog.log">
-                        <ui:Button.Style>
-                            <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource SourceButton}">
-                                <Setter Property="AutomationProperties.Name" Value="watchdog.log" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ActiveSource}" Value="Watchdog">
-                                        <Setter Property="Appearance" Value="Primary" />
-                                        <Setter Property="AutomationProperties.Name" Value="watchdog.log, currently shown" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ui:Button.Style>
-                    </ui:Button>
-
-                    <ItemsControl VerticalAlignment="Center"
-                                  ItemsSource="{Binding ComponentFilters}"
-                                  AutomationProperties.Name="Component filters">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <CheckBox MinWidth="0"
-                                          Content="{Binding Name}"
-                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                          AutomationProperties.HelpText="Shows or hides log lines from this component." />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </WrapPanel>
-
-                <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                    <ui:TextBox x:Name="FilterBox"
-                                Width="280"
-                                PlaceholderText="Filter by raw line text…"
-                                AutomationProperties.Name="Filter log lines"
-                                AutomationProperties.HelpText="Shows only lines that contain this text. Shortcut Ctrl+F; Esc clears it."
-                                Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-
-                    <ui:ToggleSwitch Content="{Binding LiveStateText}"
-                                     IsChecked="{Binding AutoScroll, Mode=TwoWay}"
-                                     AutomationProperties.Name="Follow the newest line"
-                                     AutomationProperties.HelpText="On: the list scrolls to each new line as it arrives (live). Off: the list stays where you are (paused)." />
-
-                    <ui:Button Content="Clear"
-                               Appearance="Secondary"
+        <!-- Toolbar. The filter is debounced (400 ms) before it re-projects the buffer; Esc clears it at once. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="DocumentBulletList24"
+                           ctl:DcIcon.Section="Observe"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           HasSearch="True"
+                           SearchText="{Binding FilterText}"
+                           SearchDelay="400"
+                           SearchPlaceholder="Filter log lines…"
+                           SearchAutomationName="Filter log lines"
+                           SearchHelpText="Shows only lines that contain this text. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon Broom24}"
                                Command="{Binding ClearCommand}"
-                               AutomationProperties.HelpText="Empty the buffered lines for the source on screen. The log file itself is untouched.">
-                        <ui:Button.Icon>
-                            <ctl:DcSymbolIcon Symbol="Broom24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
-
-                    <ui:Button Content="Copy selection"
-                               Appearance="Secondary"
+                               ToolTip="Clear the buffered lines"
+                               AutomationProperties.Name="Clear"
+                               AutomationProperties.HelpText="Empty the buffered lines for the source on screen. The log file itself is untouched." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon Copy24}"
                                Command="{Binding CopySelectionCommand}"
-                               AutomationProperties.HelpText="Copy the selected log lines to the clipboard.">
-                        <ui:Button.Icon>
-                            <ctl:DcSymbolIcon Symbol="Copy24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
-                </WrapPanel>
+                               ToolTip="Copy selection"
+                               AutomationProperties.Name="Copy selection"
+                               AutomationProperties.HelpText="Copy the selected log lines to the clipboard." />
+                </StackPanel>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
-                <ui:InfoBar Margin="0,0,12,8"
-                            Severity="Informational"
-                            Title="Log file rotated"
-                            IsOpen="{Binding ShowRotationNotice, Mode=TwoWay}"
-                            Message="{Binding RotationNoticeText}" />
+        <!-- Filter strip: which log, which components, follow the newest line. -->
+        <StackPanel Grid.Row="1">
+            <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                <!-- Two logs: a segmented control (the value is the view-model's ActiveSource; SelectSourceCommand stays for callers). -->
+                <ctl:DcSegmented SelectedValue="{Binding ActiveSource, Mode=TwoWay}"
+                                 AutomationProperties.Name="Log source">
+                    <ctl:DcSegment Value="Gateway"
+                                   Content="gateway.log"
+                                   ToolTip="Show gateway.log" />
+                    <ctl:DcSegment Value="Watchdog"
+                                   Content="watchdog.log"
+                                   ToolTip="Show watchdog.log" />
+                </ctl:DcSegmented>
 
-                <!-- The tail's loop survives a fault and says so here, instead of the list just going quiet. -->
-                <ui:InfoBar Margin="0,0,12,8"
-                            Severity="Warning"
-                            Title="Log tail paused"
-                            IsOpen="{Binding ShowTailFault, Mode=TwoWay}"
-                            Message="{Binding TailFaultText}" />
-            </StackPanel>
-        </Border>
+                <ItemsControl Margin="0,0,12,8"
+                              VerticalAlignment="Center"
+                              ItemsSource="{Binding ComponentFilters}"
+                              AutomationProperties.Name="Component filters">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox MinWidth="0"
+                                      Content="{Binding Name}"
+                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                      AutomationProperties.HelpText="Shows or hides log lines from this component." />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ui:ToggleSwitch Content="{Binding LiveStateText}"
+                                 IsChecked="{Binding AutoScroll, Mode=TwoWay}"
+                                 AutomationProperties.Name="Follow the newest line"
+                                 AutomationProperties.HelpText="On: the list scrolls to each new line as it arrives (live). Off: the list stays where you are (paused)." />
+            </WrapPanel>
+
+            <ui:InfoBar Margin="0,0,0,8"
+                        Severity="Informational"
+                        Title="Log file rotated"
+                        IsOpen="{Binding ShowRotationNotice, Mode=TwoWay}"
+                        Message="{Binding RotationNoticeText}" />
+
+            <!-- The tail's loop survives a fault and says so here, instead of the list just going quiet. -->
+            <ui:InfoBar Margin="0,0,0,8"
+                        Severity="Warning"
+                        Title="Log tail paused"
+                        IsOpen="{Binding ShowTailFault, Mode=TwoWay}"
+                        Message="{Binding TailFaultText}" />
+        </StackPanel>
 
         <!-- List -->
         <Border Grid.Row="2" Style="{StaticResource DcCardFlush}">

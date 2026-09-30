@@ -61,13 +61,8 @@ public sealed partial class LogsPanel : UserControl
         KeyDown += OnKeyDown;
     }
 
-    /// <summary>Moves keyboard focus to the filter box and selects its text, ready to type over.</summary>
-    public void FocusFilter()
-    {
-        _ = FilterBox.Focus();
-        Keyboard.Focus(FilterBox);
-        FilterBox.SelectAll();
-    }
+    /// <summary>Moves keyboard focus to the filter box (the toolbar's search) and selects its text, ready to type over.</summary>
+    public void FocusFilter() => PageToolbar.FocusSearch();
 
     private void OnCanFind(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = true;
 

@@ -38,13 +38,8 @@ public sealed partial class AuditPanel : UserControl
     /// <summary>True while the panel is narrow enough that a selected row's detail replaces the list instead of sitting beside it.</summary>
     public bool IsCompact => CompactLayout.GetIsCompact(this);
 
-    /// <summary>Moves keyboard focus to the search box and selects its text, ready to type over.</summary>
-    public void FocusFilter()
-    {
-        _ = SearchBox.Focus();
-        Keyboard.Focus(SearchBox);
-        SearchBox.SelectAll();
-    }
+    /// <summary>Moves keyboard focus to the search box (the toolbar's) and selects its text, ready to type over.</summary>
+    public void FocusFilter() => PageToolbar.FocusSearch();
 
     private void OnCanFind(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = true;
 

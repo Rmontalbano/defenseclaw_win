@@ -36,36 +36,38 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="ShieldSettings24"
-                                ctl:DcIcon.Section="Setup">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}"
-                               AutomationProperties.HeadingLevel="Level1"
-                               Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+        <!-- Toolbar. No search box up here: the wizard search filters the cards further down this scrolling page, so it stays over them. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="ShieldSettings24"
+                           ctl:DcIcon.Section="Setup"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon DocumentEdit24}"
+                               Command="{Binding OpenConfigEditorCommand}"
+                               ToolTip="Config editor - edit config.yaml with backup, validation and restore"
+                               AutomationProperties.Name="Config editor"
+                               AutomationProperties.HelpText="Edit config.yaml with backup, validation and restore." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
+                               Command="{Binding OpenUpdatesCommand}"
+                               ToolTip="Updates &amp; trust - installed vs latest release, signing and provenance status"
+                               AutomationProperties.Name="Updates &amp; trust"
+                               AutomationProperties.HelpText="Installed vs latest release, signing and provenance status." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                               Command="{Binding ReloadCatalogCommand}"
+                               ToolTip="Re-read catalog - ask the CLI again which setup targets it has and re-read every help screen (slow: about thirty CLI calls)"
+                               AutomationProperties.Name="Re-read catalog"
+                               AutomationProperties.HelpText="Ask the CLI again which setup targets it has and re-read every help screen (slow: about thirty CLI calls)." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Re-read the guardrail posture and the connector roster (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5" />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <ui:Button Content="Refresh"
-                           ToolTip="Re-read the guardrail posture and the connector roster (F5)"
-                           Command="{Binding RefreshCommand}">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-                <ui:Button Content="Re-read catalog"
-                           ToolTip="Ask the CLI again which setup targets it has and re-read every help screen (slow: about thirty CLI calls)"
-                           Command="{Binding ReloadCatalogCommand}">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowSync24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
             <StackPanel>
@@ -305,50 +307,36 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Filters -->
-                <Border Style="{StaticResource DcToolbar}">
-                    <StackPanel>
-                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                            <ui:TextBox x:Name="SearchBox"
-                                        Width="320"
-                                        AutomationProperties.Name="Search setup wizards"
-                                        PlaceholderText="Search wizards by name, target or description…  (Ctrl+F)"
-                                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                <!-- Filter strip (no card of its own) -->
+                <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                    <ui:TextBox x:Name="SearchBox"
+                                Width="320"
+                                AutomationProperties.Name="Search setup wizards"
+                                PlaceholderText="Search wizards by name, target or description…  (Ctrl+F)"
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
-                            <CheckBox Content="Hide uncertified connectors"
-                                      IsChecked="{Binding CertifiedOnly, Mode=TwoWay}"
-                                      ToolTip="Hides connectors the CLI reports as not_certified or unsupported on Windows. Flows that are not connectors (rotate-token, webhook, llm, scanners…) have nothing to certify and stay visible." />
+                    <CheckBox Content="Hide uncertified connectors"
+                              IsChecked="{Binding CertifiedOnly, Mode=TwoWay}"
+                              ToolTip="Hides connectors the CLI reports as not_certified or unsupported on Windows. Flows that are not connectors (rotate-token, webhook, llm, scanners…) have nothing to certify and stay visible." />
 
-                            <ui:Button Appearance="Secondary"
-                                       Content="Clear"
-                                       Icon="{ctl:DcSymbolIcon FilterDismiss24}"
-                                       Command="{Binding ClearFiltersCommand}" />
+                    <ui:Button Style="{StaticResource DcToolbarIconButton}"
+                               Margin="0,0,12,8"
+                               Icon="{ctl:DcSymbolIcon FilterDismiss24}"
+                               Command="{Binding ClearFiltersCommand}"
+                               ToolTip="Clear filters"
+                               AutomationProperties.Name="Clear filters" />
+                </WrapPanel>
 
-                            <ui:Button Appearance="Secondary"
-                                       Icon="{ctl:DcSymbolIcon DocumentEdit24}"
-                                       Content="Config editor"
-                                       ToolTip="Edit config.yaml with backup, validation and restore"
-                                       Command="{Binding OpenConfigEditorCommand}" />
+                <TextBlock Margin="0,0,12,8"
+                           Style="{StaticResource DcResultCaption}"
+                           Text="{Binding StatusNote}" />
 
-                            <ui:Button Appearance="Secondary"
-                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                                       Content="Updates &amp; trust"
-                                       ToolTip="Installed vs latest release, signing and provenance status"
-                                       Command="{Binding OpenUpdatesCommand}" />
-                        </WrapPanel>
-
-                        <TextBlock Margin="0,0,12,8"
-                                   Style="{StaticResource DcCaption}"
-                                   Text="{Binding StatusNote}" />
-
-                        <ui:InfoBar Margin="0,0,12,8"
-                                    IsClosable="False"
-                                    Severity="Error"
-                                    Title="The setup catalog could not be read"
-                                    IsOpen="{Binding HasLoadError, Mode=OneWay}"
-                                    Message="{Binding LoadError}" />
-                    </StackPanel>
-                </Border>
+                <ui:InfoBar Margin="0,0,0,8"
+                            IsClosable="False"
+                            Severity="Error"
+                            Title="The setup catalog could not be read"
+                            IsOpen="{Binding HasLoadError, Mode=OneWay}"
+                            Message="{Binding LoadError}" />
 
                 <!-- Card grid, grouped -->
                 <ItemsControl ItemsSource="{Binding Groups}" IsTabStop="False">

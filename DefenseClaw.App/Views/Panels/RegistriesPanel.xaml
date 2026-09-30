@@ -67,27 +67,55 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="Library24"
-                                ctl:DcIcon.Section="Discover">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+        <!-- Toolbar: the read status, and the actions on the list / the selected source as icons. Each one that changes
+             something opens the shared review dialog first. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="Library24"
+                           ctl:DcIcon.Section="Discover"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding StatusMessage}">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon Add24}"
+                               Command="{Binding OpenAddFormCommand}"
+                               ToolTip="Add source…"
+                               AutomationProperties.Name="Add source…"
+                               AutomationProperties.HelpText="Register a new registry source. Nothing is fetched until you sync it." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                               Command="{Binding SyncSelectedCommand}"
+                               IsEnabled="{Binding HasSelectedSource}"
+                               ToolTip="Sync selected…"
+                               AutomationProperties.Name="Sync selected…"
+                               AutomationProperties.HelpText="Fetch, scan and promote the selected source's entries." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowSyncCircle24}"
+                               Command="{Binding SyncAllCommand}"
+                               IsEnabled="{Binding HasSources}"
+                               ToolTip="Sync all…"
+                               AutomationProperties.Name="Sync all…"
+                               AutomationProperties.HelpText="Fetch, scan and promote entries from every enabled source." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon Power24}"
+                               Command="{Binding ToggleSelectedEnabledCommand}"
+                               IsEnabled="{Binding HasSelectedSource}"
+                               ToolTip="{Binding ToggleEnabledText}"
+                               AutomationProperties.Name="{Binding ToggleEnabledText}"
+                               AutomationProperties.HelpText="Turn the selected source on or off." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon Delete24}"
+                               Command="{Binding RemoveSelectedCommand}"
+                               IsEnabled="{Binding HasSelectedSource}"
+                               ToolTip="Remove…"
+                               AutomationProperties.Name="Remove…"
+                               AutomationProperties.HelpText="Delete the selected source, the rules it promoted and its cache." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Re-read the registry sources (F5)." />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding StatusMessage}" />
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Re-read the registry sources (F5).">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <ScrollViewer x:Name="PageScroll"
                       Grid.Row="1"
@@ -96,37 +124,6 @@
             <StackPanel x:Name="PageContent">
                 <!-- Toolbar, banners, policy switches, add form, progress: measured by the code-behind to size the block under them. -->
                 <StackPanel x:Name="Chrome">
-                    <!-- Toolbar: actions on the list / the selected source -->
-                    <Border Style="{StaticResource DcToolbar}">
-                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                            <ui:Button Appearance="Primary"
-                                       Content="Add source…"
-                                       Icon="{ctl:DcSymbolIcon Add24}"
-                                       Command="{Binding OpenAddFormCommand}"
-                                       AutomationProperties.HelpText="Register a new registry source. Nothing is fetched until you sync it." />
-                            <ui:Button Content="Sync selected…"
-                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                                       Command="{Binding SyncSelectedCommand}"
-                                       IsEnabled="{Binding HasSelectedSource}"
-                                       AutomationProperties.HelpText="Fetch, scan and promote the selected source's entries." />
-                            <ui:Button Content="Sync all…"
-                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                                       Command="{Binding SyncAllCommand}"
-                                       IsEnabled="{Binding HasSources}"
-                                       AutomationProperties.HelpText="Fetch, scan and promote entries from every enabled source." />
-                            <ui:Button Content="{Binding ToggleEnabledText}"
-                                       Icon="{ctl:DcSymbolIcon Power24}"
-                                       Command="{Binding ToggleSelectedEnabledCommand}"
-                                       IsEnabled="{Binding HasSelectedSource}"
-                                       AutomationProperties.HelpText="Turn the selected source on or off." />
-                            <ui:Button Content="Remove…"
-                                       Icon="{ctl:DcSymbolIcon Delete24}"
-                                       Command="{Binding RemoveSelectedCommand}"
-                                       IsEnabled="{Binding HasSelectedSource}"
-                                       AutomationProperties.HelpText="Delete the selected source, the rules it promoted and its cache." />
-                        </WrapPanel>
-                    </Border>
-
                     <!-- Banners, policy switches, add form, progress -->
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"
                                 IsClosable="False"

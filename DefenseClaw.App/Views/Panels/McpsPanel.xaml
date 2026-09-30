@@ -30,33 +30,44 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="PlugConnected24"
-                                ctl:DcIcon.Section="Govern">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
-                </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
+        <!-- Toolbar: the busy ring and "as of 12:04", the page actions as icons, the filter box. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="PlugConnected24"
+                           ctl:DcIcon.Section="Govern"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding HeaderStatusText}"
+                           HasSearch="True"
+                           SearchText="{Binding FilterText}"
+                           SearchPlaceholder="Filter MCP servers…"
+                           SearchAutomationName="Filter MCP servers"
+                           SearchHelpText="Matches name, transport, command, URL, connector and state. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="16"
                                  Height="16"
+                                 Margin="12,0,0,0"
                                  IsIndeterminate="True"
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
                                  AutomationProperties.Name="Working" />
-                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding HeaderStatusText}" />
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           IsEnabled="{Binding IsIdle}"
-                           ToolTip="Read the MCP server list again (F5)">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Leading>
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon PlugConnected24}"
+                               Command="{Binding ToggleSetFormCommand}"
+                               IsEnabled="{Binding IsIdle}"
+                               ToolTip="Add MCP server…"
+                               AutomationProperties.Name="Add MCP server…"
+                               AutomationProperties.HelpText="Register or update a server with 'defenseclaw mcp set'. You review the command first." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               IsEnabled="{Binding IsIdle}"
+                               ToolTip="Read the MCP server list again (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5" />
+                </StackPanel>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <ScrollViewer x:Name="PageScroll"
                       Grid.Row="1"
@@ -66,49 +77,33 @@
             <StackPanel x:Name="PageContent">
                 <!-- Toolbar, the add form, banners and the caption: what the list's height is worked out from. -->
                 <StackPanel x:Name="Chrome">
-                    <!-- Toolbar -->
-                    <Border Style="{StaticResource DcToolbar}">
-                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                            <ui:TextBox x:Name="FilterBox"
-                                        Width="240"
-                                        PlaceholderText="Filter MCP servers (Ctrl+F)"
-                                        Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                                        AutomationProperties.Name="Filter MCP servers"
-                                        AutomationProperties.HelpText="Matches name, transport, command, URL, connector and state. Escape clears it." />
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
-                                <ComboBox Width="160"
-                                          ItemsSource="{Binding StatusFilters}"
-                                          SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
-                                          AutomationProperties.Name="Show MCP servers in state" />
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
-                                <ComboBox MinWidth="200"
-                                          ItemsSource="{Binding Connectors}"
-                                          SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
-                                          AutomationProperties.Name="Connector scope"
-                                          AutomationProperties.HelpText="Which connector's MCP servers to list, and which connector Add MCP server writes to. All configured connectors means every one." />
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
-                                <ui:TextBox MinWidth="180"
-                                            Width="220"
-                                            PlaceholderText="Recorded with the action"
-                                            Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                            AutomationProperties.Name="Reason"
-                                            AutomationProperties.HelpText="Sent as --reason with block and allow." />
-                            </StackPanel>
-                            <ui:Button Content="Add MCP server…"
-                                       Command="{Binding ToggleSetFormCommand}"
-                                       IsEnabled="{Binding IsIdle}"
-                                       ToolTip="Register or update a server with 'defenseclaw mcp set'. You review the command first.">
-                                <ui:Button.Icon>
-                                    <ctl:DcSymbolIcon Symbol="PlugConnected24" />
-                                </ui:Button.Icon>
-                            </ui:Button>
-                        </WrapPanel>
-                    </Border>
+                    <!-- Filter strip: which state, which connector, and the reason the next action records. -->
+                    <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
+                            <ComboBox Width="160"
+                                      ItemsSource="{Binding StatusFilters}"
+                                      SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
+                                      AutomationProperties.Name="Show MCP servers in state" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
+                            <ComboBox MinWidth="200"
+                                      ItemsSource="{Binding Connectors}"
+                                      SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                                      AutomationProperties.Name="Connector scope"
+                                      AutomationProperties.HelpText="Which connector's MCP servers to list, and which connector Add MCP server writes to. All configured connectors means every one." />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
+                            <ui:TextBox MinWidth="180"
+                                        Width="220"
+                                        PlaceholderText="Recorded with the action"
+                                        Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        AutomationProperties.Name="Reason"
+                                        AutomationProperties.HelpText="Sent as --reason with block and allow." />
+                        </StackPanel>
+                    </WrapPanel>
 
                     <!-- Add / update an MCP server (mcp set) -->
                     <Border Style="{StaticResource DcCard}"
@@ -215,7 +210,7 @@
                                 IsClosable="False"
                                 AutomationProperties.LiveSetting="Polite" />
 
-                    <TextBlock Style="{StaticResource DcCaption}"
+                    <TextBlock Style="{StaticResource DcResultCaption}"
                                Margin="{StaticResource DcCardGap}"
                                Text="{Binding CaptionText}" />
                 </StackPanel>

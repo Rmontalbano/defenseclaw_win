@@ -141,39 +141,40 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="AlertUrgent24"
-                                ctl:DcIcon.Section="Observe">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+        <!-- Toolbar: the panel's name and count, the page actions as icons, the filter box. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="AlertUrgent24"
+                           ctl:DcIcon.Section="Observe"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding CountSummary}"
+                           HasSearch="True"
+                           SearchText="{Binding FilterText}"
+                           SearchPlaceholder="Filter alerts…"
+                           SearchAutomationName="Filter alerts"
+                           SearchHelpText="Shows only alerts whose rule, title, action, target, evidence, scanner or tags contain this text. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                               Command="{Binding OpenAcknowledgeCommand}"
+                               ToolTip="Acknowledge…"
+                               AutomationProperties.Name="Acknowledge…"
+                               AutomationProperties.HelpText="Acknowledge every active alert of one severity. Shows a preview of what would match before anything is changed." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon AlertOff24}"
+                               Command="{Binding OpenDismissCommand}"
+                               ToolTip="Dismiss…"
+                               AutomationProperties.Name="Dismiss…"
+                               AutomationProperties.HelpText="Dismiss every active alert of one severity from the active list. Shows a preview of what would match before anything is changed." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Re-read the alert list from the gateway now. Shortcut F5." />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <ui:Button Content="Acknowledge…"
-                           Appearance="Secondary"
-                           Command="{Binding OpenAcknowledgeCommand}"
-                           AutomationProperties.HelpText="Acknowledge every active alert of one severity. Shows a preview of what would match before anything is changed.">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ShieldCheckmark24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-                <ui:Button Content="Dismiss…"
-                           Icon="{ctl:DcSymbolIcon AlertOff24}"
-                           Appearance="Secondary"
-                           Command="{Binding OpenDismissCommand}"
-                           AutomationProperties.HelpText="Dismiss every active alert of one severity from the active list. Shows a preview of what would match before anything is changed." />
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Re-read the alert list from the gateway now. Shortcut F5.">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <!-- Result of the last acknowledge / dismiss -->
         <StackPanel Grid.Row="1">
@@ -191,67 +192,59 @@
                         AutomationProperties.LiveSetting="Polite" />
         </StackPanel>
 
-        <!-- Filters -->
-        <Border Grid.Row="2" Style="{StaticResource DcToolbar}">
-            <StackPanel>
-                <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                    <ItemsControl Margin="0,0,4,8"
-                                  VerticalAlignment="Center"
-                                  ItemsSource="{Binding SeverityFilters}"
-                                  AutomationProperties.Name="Severity filters">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <ToggleButton Style="{StaticResource SeverityToggle}"
-                                              Tag="{Binding SeverityKey}"
-                                              IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                              ToolTip="{Binding AutomationName}"
-                                              AutomationProperties.Name="{Binding AutomationName}"
-                                              AutomationProperties.HelpText="Shows or hides alerts of this severity in the list." />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+        <!--
+            Filter strip (no card of its own): the severity chips - a multi-select, each one independently on or off, so they
+            stay chips and are not a DcSegmented - the repeat fold, the reset, and the quiet mono lines about the source.
+        -->
+        <WrapPanel Grid.Row="2" Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+            <ItemsControl Margin="0,0,4,8"
+                          VerticalAlignment="Center"
+                          ItemsSource="{Binding SeverityFilters}"
+                          AutomationProperties.Name="Severity filters">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ToggleButton Style="{StaticResource SeverityToggle}"
+                                      Tag="{Binding SeverityKey}"
+                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                      ToolTip="{Binding AutomationName}"
+                                      AutomationProperties.Name="{Binding AutomationName}"
+                                      AutomationProperties.HelpText="Shows or hides alerts of this severity in the list." />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
-                    <ui:TextBox x:Name="FilterBox"
-                                Width="280"
-                                PlaceholderText="Filter by signature, title, action, evidence…"
-                                AutomationProperties.Name="Filter alerts"
-                                AutomationProperties.HelpText="Shows only alerts whose rule, title, action, target, evidence, scanner or tags contain this text. Shortcut Ctrl+F."
-                                Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <ui:ToggleSwitch Content="Collapse repeats"
+                             IsChecked="{Binding CollapseRepeats, Mode=TwoWay}"
+                             AutomationProperties.HelpText="Folds alerts with the same rule and action into one row with a count." />
 
-                    <ui:ToggleSwitch Content="Collapse repeats"
-                                     IsChecked="{Binding CollapseRepeats, Mode=TwoWay}"
-                                     AutomationProperties.HelpText="Folds alerts with the same rule and action into one row with a count." />
+            <ui:Button Style="{StaticResource DcToolbarIconButton}"
+                       Margin="0,0,12,8"
+                       Icon="{ctl:DcSymbolIcon FilterDismiss24}"
+                       Command="{Binding ClearFiltersCommand}"
+                       ToolTip="Clear filters"
+                       AutomationProperties.Name="Clear filters"
+                       AutomationProperties.HelpText="Turn every severity back on and clear the text filter." />
 
-                    <ui:Button Content="Clear"
-                               Icon="{ctl:DcSymbolIcon FilterDismiss24}"
-                               Appearance="Secondary"
-                               Command="{Binding ClearFiltersCommand}"
-                               AutomationProperties.HelpText="Turn every severity back on and clear the text filter." />
-                </WrapPanel>
-
-                <WrapPanel Margin="0,0,12,8">
-                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,12,0" Text="{Binding SourceNote}" />
-                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,12,0" Text="{Binding CountSummary}" />
-                    <!-- Where the empty detail pane's "Select an alert ..." used to be. -->
-                    <TextBlock Text="Select an alert to see its evidence and full attribute bag.">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </WrapPanel>
-            </StackPanel>
-        </Border>
+            <TextBlock Style="{StaticResource DcResultCaption}" Margin="0,0,12,8" Text="{Binding SourceNote}" />
+            <!-- Where the empty detail pane's "Select an alert ..." used to be. -->
+            <TextBlock Margin="0,0,12,8" Text="Select an alert to see its evidence and full attribute bag.">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </WrapPanel>
 
         <!-- List + detail -->
         <Grid Grid.Row="3">

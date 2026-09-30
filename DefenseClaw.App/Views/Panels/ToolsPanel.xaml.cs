@@ -13,6 +13,6 @@ public partial class ToolsPanel : UserControl
     public ToolsPanel()
     {
         InitializeComponent();
-        GovernPanelKeys.Attach(this, () => FilterBox);
+        GovernPanelKeys.Attach(this, () => PageToolbar.SearchBox);
     }
 }

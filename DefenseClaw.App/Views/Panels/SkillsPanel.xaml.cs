@@ -13,6 +13,6 @@ public partial class SkillsPanel : UserControl
     public SkillsPanel()
     {
         InitializeComponent();
-        GovernPanelKeys.Attach(this, () => FilterBox);
+        GovernPanelKeys.Attach(this, () => PageToolbar.SearchBox);
     }
 }

@@ -20,27 +20,26 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="Bot24"
-                                ctl:DcIcon.Section="Discover">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+        <!-- Toolbar. No search box up here: this page is a stack of cards with the component list in the middle of it, so the filter stays
+             over the list it filters (a filter box in the toolbar would change rows far below the fold). -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="Bot24"
+                           ctl:DcIcon.Section="Discover"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding StatusMessage}">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Re-read the discovery files and ask the gateway for its live status (F5)." />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding StatusMessage}" />
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Re-read the discovery files and ask the gateway for its live status (F5).">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
             <StackPanel>
@@ -135,15 +134,13 @@
                 <!-- Components -->
                 <TextBlock Style="{StaticResource DcSectionHeader}" Text="Detected components" />
 
-                <Border Style="{StaticResource DcToolbar}">
-                    <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                        <ui:TextBox x:Name="SearchBox"
-                                    Width="300"
-                                    PlaceholderText="Search vendor, product, category…  (Ctrl+F)"
-                                    AutomationProperties.Name="Search components"
-                                    Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                    </WrapPanel>
-                </Border>
+                <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                    <ui:TextBox x:Name="SearchBox"
+                                Width="300"
+                                PlaceholderText="Search vendor, product, category…  (Ctrl+F)"
+                                AutomationProperties.Name="Search components"
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                </WrapPanel>
 
                 <ItemsControl ItemsSource="{Binding CardsView}"
                               Focusable="False"

@@ -28,33 +28,44 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="PuzzleCube24"
-                                ctl:DcIcon.Section="Govern">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
-                </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
+        <!-- Toolbar: the busy ring and "as of 12:04", the page actions as icons, the filter box. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="PuzzleCube24"
+                           ctl:DcIcon.Section="Govern"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding HeaderStatusText}"
+                           HasSearch="True"
+                           SearchText="{Binding FilterText}"
+                           SearchPlaceholder="Filter plugins…"
+                           SearchAutomationName="Filter plugins"
+                           SearchHelpText="Matches name, description, version, origin, connector and state. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="16"
                                  Height="16"
+                                 Margin="12,0,0,0"
                                  IsIndeterminate="True"
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
                                  AutomationProperties.Name="Working" />
-                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding HeaderStatusText}" />
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           IsEnabled="{Binding IsIdle}"
-                           ToolTip="Read the plugin list again (F5)">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Leading>
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon PuzzleCube24}"
+                               Command="{Binding ToggleInstallFormCommand}"
+                               IsEnabled="{Binding IsIdle}"
+                               ToolTip="Install plugin…"
+                               AutomationProperties.Name="Install plugin…"
+                               AutomationProperties.HelpText="Install from a path, npm, clawhub:// or a URL with 'defenseclaw plugin install'. You review the command first." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               IsEnabled="{Binding IsIdle}"
+                               ToolTip="Read the plugin list again (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5" />
+                </StackPanel>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <ScrollViewer x:Name="PageScroll"
                       Grid.Row="1"
@@ -62,49 +73,33 @@
                       Focusable="False"
                       AutomationProperties.Name="Plugins page">
             <StackPanel x:Name="PageContent">
-                <!-- Toolbar -->
-                <Border Style="{StaticResource DcToolbar}">
-                    <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                        <ui:TextBox x:Name="FilterBox"
-                                    Width="240"
-                                    PlaceholderText="Filter plugins (Ctrl+F)"
-                                    Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                                    AutomationProperties.Name="Filter plugins"
-                                    AutomationProperties.HelpText="Matches name, description, version, origin, connector and state. Escape clears it." />
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
-                            <ComboBox Width="160"
-                                      ItemsSource="{Binding StatusFilters}"
-                                      SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
-                                      AutomationProperties.Name="Show plugins in state" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
-                            <ComboBox MinWidth="200"
-                                      ItemsSource="{Binding Connectors}"
-                                      SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
-                                      AutomationProperties.Name="Connector scope"
-                                      AutomationProperties.HelpText="Which connector's plugins to list, and which connector Install plugin targets. All configured connectors means every one." />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
-                            <ui:TextBox MinWidth="180"
-                                        Width="220"
-                                        PlaceholderText="Recorded with the action"
-                                        Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                        AutomationProperties.Name="Reason"
-                                        AutomationProperties.HelpText="Sent as --reason with block, allow, disable and quarantine." />
-                        </StackPanel>
-                        <ui:Button Content="Install plugin…"
-                                   Command="{Binding ToggleInstallFormCommand}"
-                                   IsEnabled="{Binding IsIdle}"
-                                   ToolTip="Install from a path, npm, clawhub:// or a URL with 'defenseclaw plugin install'. You review the command first.">
-                            <ui:Button.Icon>
-                                <ctl:DcSymbolIcon Symbol="PuzzleCube24" />
-                            </ui:Button.Icon>
-                        </ui:Button>
-                    </WrapPanel>
-                </Border>
+                <!-- Filter strip: which state, which connector, and the reason the next action records. -->
+                <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Show" />
+                        <ComboBox Width="160"
+                                  ItemsSource="{Binding StatusFilters}"
+                                  SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
+                                  AutomationProperties.Name="Show plugins in state" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
+                        <ComboBox MinWidth="200"
+                                  ItemsSource="{Binding Connectors}"
+                                  SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                                  AutomationProperties.Name="Connector scope"
+                                  AutomationProperties.HelpText="Which connector's plugins to list, and which connector Install plugin targets. All configured connectors means every one." />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
+                        <ui:TextBox MinWidth="180"
+                                    Width="220"
+                                    PlaceholderText="Recorded with the action"
+                                    Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="Reason"
+                                    AutomationProperties.HelpText="Sent as --reason with block, allow, disable and quarantine." />
+                    </StackPanel>
+                </WrapPanel>
 
                 <!-- Install a plugin (plugin install) -->
                 <Border Style="{StaticResource DcCard}"
@@ -166,7 +161,7 @@
                             IsClosable="False"
                             AutomationProperties.LiveSetting="Polite" />
 
-                <TextBlock Style="{StaticResource DcCaption}"
+                <TextBlock Style="{StaticResource DcResultCaption}"
                            Margin="{StaticResource DcCardGap}"
                            Text="{Binding CaptionText}" />
 

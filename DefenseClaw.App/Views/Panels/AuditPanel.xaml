@@ -66,118 +66,113 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="DatabaseSearch24"
-                                ctl:DcIcon.Section="Observe">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+        <!-- Toolbar: the panel's name and result count, the page actions as icons, the free-text search (debounced 400 ms; Esc clears it). -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="DatabaseSearch24"
+                           ctl:DcIcon.Section="Observe"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding ResultSummary}"
+                           HasSearch="True"
+                           SearchText="{Binding SearchText}"
+                           SearchDelay="400"
+                           SearchWidth="260"
+                           SearchPlaceholder="Search details, event, tool, target…"
+                           SearchAutomationName="Search details, event, tool and target"
+                           SearchHelpText="Free text over the details, event name, tool and target. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowReset24}"
+                               Command="{Binding ResetFiltersCommand}"
+                               ToolTip="Reset filters"
+                               AutomationProperties.Name="Reset filters"
+                               AutomationProperties.HelpText="Set every filter back to its default: all buckets, any severity, all connectors, the last 24 hours, no text." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Run the current query again from the newest event. Shortcut F5." />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <ui:Button Content="Reset filters"
-                           Icon="{ctl:DcSymbolIcon ArrowReset24}"
-                           Appearance="Secondary"
-                           Command="{Binding ResetFiltersCommand}"
-                           AutomationProperties.HelpText="Set every filter back to its default: all buckets, any severity, all connectors, the last 24 hours, no text." />
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Run the current query again from the newest event. Shortcut F5.">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
-        <!-- Filter bar. Each field is a label over its control; the toolbar's implicit styles space
-             the controls, the labels carry no margin of their own beyond the gap under them. -->
-        <Border Grid.Row="1" Style="{StaticResource DcToolbar}">
-            <StackPanel>
-                <WrapPanel Style="{StaticResource DcToolbarPanel}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Bucket" />
-                        <ComboBox Width="150"
-                                  ItemsSource="{Binding Buckets}"
-                                  SelectedItem="{Binding SelectedBucket, Mode=TwoWay}"
-                                  AutomationProperties.Name="Bucket" />
-                    </StackPanel>
+        <!-- Filter strip (no card of its own). Bucket is read from the database, so it can be long: a combo box, not a segmented
+             control. The caption under it is the result count (in the toolbar) and what cannot be read. -->
+        <StackPanel Grid.Row="1">
+            <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Bucket" />
+                    <ComboBox Width="140"
+                              ItemsSource="{Binding Buckets}"
+                              SelectedItem="{Binding SelectedBucket, Mode=TwoWay}"
+                              AutomationProperties.Name="Bucket" />
+                </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Minimum severity" />
-                        <ComboBox Width="140"
-                                  ItemsSource="{Binding Severities}"
-                                  SelectedItem="{Binding SelectedSeverity, Mode=TwoWay}"
-                                  AutomationProperties.Name="Minimum severity" />
-                    </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Min severity" />
+                    <ComboBox Width="120"
+                              ItemsSource="{Binding Severities}"
+                              SelectedItem="{Binding SelectedSeverity, Mode=TwoWay}"
+                              AutomationProperties.Name="Minimum severity" />
+                </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Connector" />
-                        <ComboBox Width="150"
-                                  ItemsSource="{Binding Connectors}"
-                                  SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
-                                  AutomationProperties.Name="Connector" />
-                    </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector" />
+                    <ComboBox Width="150"
+                              ItemsSource="{Binding Connectors}"
+                              SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                              AutomationProperties.Name="Connector" />
+                </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Time range" />
-                        <ComboBox Width="150"
-                                  ItemsSource="{Binding Ranges}"
-                                  SelectedItem="{Binding SelectedRange, Mode=TwoWay}"
-                                  AutomationProperties.Name="Time range" />
-                    </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Time" />
+                    <ComboBox Width="130"
+                              ItemsSource="{Binding Ranges}"
+                              SelectedItem="{Binding SelectedRange, Mode=TwoWay}"
+                              AutomationProperties.Name="Time range" />
+                </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Action (pick to fill)" />
-                        <ComboBox Width="180"
-                                  ItemsSource="{Binding Actions}"
-                                  SelectedItem="{Binding SelectedActionOption, Mode=TwoWay}"
-                                  AutomationProperties.Name="Action, pick to fill the action filter" />
-                    </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Action" />
+                    <ComboBox Width="140"
+                              ItemsSource="{Binding Actions}"
+                              SelectedItem="{Binding SelectedActionOption, Mode=TwoWay}"
+                              ToolTip="Pick an action to fill the action filter"
+                              AutomationProperties.Name="Action, pick to fill the action filter" />
+                </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Action contains" />
-                        <ui:TextBox Width="140"
-                                    PlaceholderText="substring"
-                                    AutomationProperties.Name="Action contains"
-                                    Text="{Binding ActionFilter, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                    </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Action contains" />
+                    <ui:TextBox Width="110"
+                                PlaceholderText="substring"
+                                AutomationProperties.Name="Action contains"
+                                Text="{Binding ActionFilter, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
+                </StackPanel>
 
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Search details / event / tool / target" />
-                        <ui:TextBox x:Name="SearchBox"
-                                    Width="220"
-                                    PlaceholderText="free text"
-                                    AutomationProperties.Name="Search details, event, tool and target"
-                                    AutomationProperties.HelpText="Shortcut Ctrl+F."
-                                    Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                    </StackPanel>
-                </WrapPanel>
-
-                <WrapPanel Margin="0,0,12,8">
-                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,12,0" Text="{Binding ResultSummary}" />
-                    <TextBlock Style="{StaticResource DcToneText}"
-                               Tag="Warn"
-                               FontSize="12"
-                               TextWrapping="Wrap"
-                               Text="{Binding StatusNote}" />
-                    <!-- Where the empty detail pane's "Select a row ..." used to be. -->
-                    <TextBlock Margin="0,0,12,0" Text="Select a row for every column and its pretty-printed structured_json.">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </WrapPanel>
-            </StackPanel>
-        </Border>
+                <TextBlock Style="{StaticResource DcToneText}"
+                           Tag="Warn"
+                           Margin="0,0,12,8"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Text="{Binding StatusNote}" />
+                <!-- Where the empty detail pane's "Select a row ..." used to be. -->
+                <TextBlock Margin="0,0,12,8" Text="Select a row for every column and its pretty-printed structured_json.">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                            <Setter Property="VerticalAlignment" Value="Center" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </WrapPanel>
+        </StackPanel>
 
         <!-- Rows + detail -->
         <Grid Grid.Row="2">
