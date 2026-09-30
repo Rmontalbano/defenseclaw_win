@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.ViewModels.Updates;
 using Wpf.Ui.Controls;
 
@@ -59,6 +60,7 @@ public sealed partial class UpdatesWindow : FluentWindow
         _viewModel = viewModel;
 
         InitializeComponent();
+        AppearanceService.Current?.Attach(this);
         DataContext = viewModel;
 
         ((INotifyCollectionChanged)_viewModel.Upgrade.Output).CollectionChanged += OnUpgradeOutputChanged;

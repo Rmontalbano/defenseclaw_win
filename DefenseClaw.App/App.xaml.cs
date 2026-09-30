@@ -4,8 +4,8 @@ using System.Text;
 using System.Windows;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Appearance;
 using Microsoft.Win32;
-using Wpf.Ui.Appearance;
 
 namespace DefenseClaw.App;
 
@@ -72,8 +72,8 @@ public partial class App : Application
     private DashboardHost? _dashboard;
     private DateTimeOffset _lastFaultDialogUtc = DateTimeOffset.MinValue;
 
-    /// <summary>The OS theme the WPF-UI dictionaries were last brought in line with; see <see cref="ApplyTheme"/>.</summary>
-    private SystemTheme _appliedSystemTheme;
+    /// <summary>Owns the look (style and light/dark); created before anything can paint. See <see cref="ApplyTheme"/>.</summary>
+    private AppearanceService? _appearance;
 
     /// <summary>
     /// True once the tray, the window (when the launch shows one) and the poll loop exist.
@@ -166,47 +166,43 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// .NET 9's <see cref="System.Windows.ThemeMode"/> drives the framework's own Fluent
-    /// styles; WPF-UI's theme manager drives its control library. Both follow the OS, and
-    /// both have to be told to.
+    /// Applies the saved look (style and light/dark) before the tray flyout or any window exists.
+    /// <para>
+    /// .NET 9's <see cref="System.Windows.ThemeMode"/> drives the framework's own Fluent styles and
+    /// WPF-UI's theme manager its control library; <see cref="AppearanceService"/> sets both from
+    /// one decision, and swaps the token dictionary the <c>Dc*</c> styles read, so the operator's
+    /// choice (Appearance button, palette, Ctrl+Shift+L) takes effect live. With nothing saved
+    /// the answer is Default + follow the system, which is what this method did before there was
+    /// a choice.
+    /// </para>
     /// </summary>
     private void ApplyTheme()
     {
-        ThemeMode = ThemeMode.System;
-        ApplicationThemeManager.ApplySystemTheme();
-        _appliedSystemTheme = ApplicationThemeManager.GetSystemTheme();
+        _appearance = new AppearanceService(this, new FileAppearanceSettingsStore(), new WindowsSystemThemeSource());
+        _appearance.Initialize();
 
-        // SystemThemeWatcher (started by MainWindow) keeps the theme in step, but only once that
-        // window exists and has a handle. An autostarted "--minimized" session may go a whole day
-        // without building it, and the tray flyout — which reads the same DynamicResource theme
-        // brushes — would keep yesterday's light/dark until then. This listens for the OS's own
-        // signal too.
+        // The service follows the OS itself (in mode System), but only if told when it changes.
+        // MainWindow no longer runs WPF-UI's SystemThemeWatcher - it would force the system theme
+        // over an explicit choice - and an autostarted "--minimized" session may go a whole day
+        // without building that window anyway, while the tray flyout, which reads the same
+        // DynamicResource brushes, would keep yesterday's light/dark. This is the OS's own signal.
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
     /// <summary>
-    /// Re-applies the OS theme when it actually changed. Raised on a system thread for every
-    /// "General" preference change (there are many, most irrelevant), so it hops to the dispatcher
-    /// and compares first: an unchanged theme costs one property read, not a dictionary swap.
+    /// Lets the appearance service compare against the OS. Raised on a system thread for every
+    /// "General" preference change (there are many, most irrelevant), so it hops to the dispatcher;
+    /// the service compares first, so an irrelevant change costs a few property reads, not a
+    /// dictionary swap.
     /// </summary>
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
-        if (e.Category != UserPreferenceCategory.General)
+        if (e.Category is not (UserPreferenceCategory.General or UserPreferenceCategory.Color))
         {
             return;
         }
 
-        _ = Dispatcher.BeginInvoke(() =>
-        {
-            var current = ApplicationThemeManager.GetSystemTheme();
-            if (current == _appliedSystemTheme)
-            {
-                return;
-            }
-
-            _appliedSystemTheme = current;
-            ApplicationThemeManager.ApplySystemTheme();
-        });
+        _ = Dispatcher.BeginInvoke(() => _appearance?.OnSystemPreferenceChanged());
     }
 
     private void OnActivationRequested(object? sender, EventArgs e)

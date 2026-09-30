@@ -1,12 +1,13 @@
 using System.IO;
 using System.Xml;
+using DefenseClaw.App.Services.Appearance;
 using ICSharpCode.AvalonEdit.Highlighting;
 using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 
 namespace DefenseClaw.App.Views.ConfigEditor;
 
 /// <summary>
-/// YAML syntax highlighting for the RAW tab's AvalonEdit editor, in a dark and a light palette.
+/// YAML syntax highlighting for the RAW tab's AvalonEdit editor, in a palette per appearance style and mode.
 /// <para>
 /// AvalonEdit 6.3.1 ships XSHD definitions for C#, JSON, XML, PowerShell, etc. as embedded
 /// resources, but none for YAML — see the shipped resource list under
@@ -16,48 +17,71 @@ namespace DefenseClaw.App.Views.ConfigEditor;
 /// string parsed at first use.
 /// </para>
 /// <para>
-/// <b>Two palettes, one rule set.</b> The dark palette is the original one (VS Code "Dark+" hues);
-/// on the light theme those pale colours vanish (the punctuation grey is 1.5:1 on a near-white
-/// card), so <see cref="ForTheme"/> hands back a second definition built from the same rules with
-/// the Visual Studio "Light+" hues, each at 4.5:1 or better on white. The editor picks one at
-/// start-up and again whenever the app theme changes.
+/// <b>Six palettes, one rule set.</b> Default dark is the original one (VS Code "Dark+" hues); on the light theme those pale
+/// colours vanish (the punctuation grey is 1.5:1 on a near-white card), so Default light is the Visual Studio "Light+"
+/// hues, each at 4.5:1 or better on white. Linear and TUI have their own pair each, drawn from that style's palette
+/// (Linear's indigo, blue, green and orange tones; TUI's cyan / green / orange / violet from the CLI's own theme) and held
+/// to the same 4.5:1 against the style's window and card colours by a test. The editor asks <see cref="ForCurrent"/> when
+/// it opens and again whenever the appearance changes.
 /// </para>
 /// </summary>
 public static class YamlHighlighting
 {
     private const string Name = "DefenseClaw-YAML";
 
-    private static IHighlightingDefinition? _dark;
-    private static IHighlightingDefinition? _light;
+    private static readonly Dictionary<(AppearanceStyle, bool), IHighlightingDefinition> Cache = new();
 
-    /// <summary>The dark-theme definition (kept as the default entry point).</summary>
+    /// <summary>The Default dark definition (kept as the default entry point).</summary>
     public static IHighlightingDefinition Instance => ForTheme(dark: true);
 
-    /// <summary>Lazily builds the definition for the given theme, returning the cached instance after the first call.</summary>
-    public static IHighlightingDefinition ForTheme(bool dark)
+    /// <summary>The definition for the look on screen now: the running style and mode, or Default in the mode WPF-UI is in when there is no service.</summary>
+    public static IHighlightingDefinition ForCurrent()
     {
-        if (dark)
+        if (AppearanceService.Current is { } appearance)
         {
-            if (_dark is not null)
+            return For(appearance.EffectiveStyle, appearance.IsDark);
+        }
+
+        return ForTheme(Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme() != Wpf.Ui.Appearance.ApplicationTheme.Light);
+    }
+
+    /// <summary>Lazily builds the Default definition for the given theme, returning the cached instance after the first call.</summary>
+    public static IHighlightingDefinition ForTheme(bool dark) => For(AppearanceStyle.Default, dark);
+
+    internal static IHighlightingDefinition For(AppearanceStyle style, bool dark)
+    {
+        lock (Cache)
+        {
+            if (Cache.TryGetValue((style, dark), out var cached))
             {
-                return _dark;
+                return cached;
             }
 
-            var definition = Load(Name, DarkPalette);
+            var isOriginal = style == AppearanceStyle.Default && dark;
+            var definition = Load(isOriginal ? Name : $"{Name}-{style}-{(dark ? "Dark" : "Light")}", PaletteFor(style, dark));
 
             // Registering makes the definition discoverable by name (e.g. from a
             // FoldingStrategy or another editor instance) and idempotent to call twice.
-            if (HighlightingManager.Instance.GetDefinition(Name) is null)
+            if (isOriginal && HighlightingManager.Instance.GetDefinition(Name) is null)
             {
                 HighlightingManager.Instance.RegisterHighlighting(Name, new[] { ".yaml", ".yml" }, definition);
             }
 
-            _dark = definition;
+            Cache[(style, dark)] = definition;
             return definition;
         }
-
-        return _light ??= Load(Name + "-Light", LightPalette);
     }
+
+    /// <summary>The eight token colours for a look; internal so the contrast test reads exactly what the editor is given.</summary>
+    internal static IReadOnlyDictionary<string, string> PaletteFor(AppearanceStyle style, bool dark) => (style, dark) switch
+    {
+        (AppearanceStyle.Linear, true) => LinearDarkPalette,
+        (AppearanceStyle.Linear, false) => LinearLightPalette,
+        (AppearanceStyle.Tui, true) => TuiDarkPalette,
+        (AppearanceStyle.Tui, false) => TuiLightPalette,
+        (_, true) => DarkPalette,
+        _ => LightPalette,
+    };
 
     private static IHighlightingDefinition Load(string name, IReadOnlyDictionary<string, string> palette)
     {
@@ -94,6 +118,60 @@ public static class YamlHighlighting
         ["@ANCHOR@"] = "#795E26",
         ["@PUNCT@"] = "#444444",
         ["@DOC@"] = "#AF00DB",
+    };
+
+    // Linear: the style's own tones. Comments are the secondary grey nudged to 4.5:1, keys the accent-hover step (the
+    // one that clears contrast in each mode), strings green, numbers orange, keywords blue.
+    private static readonly Dictionary<string, string> LinearDarkPalette = new()
+    {
+        ["@COMMENT@"] = "#7A8088",
+        ["@KEY@"] = "#9AA5F0",
+        ["@STRING@"] = "#4CB782",
+        ["@NUMBER@"] = "#F2994A",
+        ["@KEYWORD@"] = "#4EA7FC",
+        ["@ANCHOR@"] = "#E6C07B",
+        ["@PUNCT@"] = "#8A8F98",
+        ["@DOC@"] = "#C084FC",
+    };
+
+    private static readonly Dictionary<string, string> LinearLightPalette = new()
+    {
+        ["@COMMENT@"] = "#62666D",
+        ["@KEY@"] = "#4C57C4",
+        ["@STRING@"] = "#1F7A4F",
+        ["@NUMBER@"] = "#B45309",
+        ["@KEYWORD@"] = "#1D63B8",
+        ["@ANCHOR@"] = "#8A5A00",
+        ["@PUNCT@"] = "#4B4F55",
+        ["@DOC@"] = "#7C3AED",
+    };
+
+    // TUI dark: the accent hues of the CLI's own theme (defenseclaw/tui/theme.py): cyan keys, green strings, orange
+    // numbers, violet keywords, amber anchors, pink document markers; punctuation is its secondary text. The comment
+    // colour is its muted text lightened a step, because the muted value itself is 4.2:1 on its base.
+    private static readonly Dictionary<string, string> TuiDarkPalette = new()
+    {
+        ["@COMMENT@"] = "#7A8BA5",
+        ["@KEY@"] = "#22D3EE",
+        ["@STRING@"] = "#34D399",
+        ["@NUMBER@"] = "#FB923C",
+        ["@KEYWORD@"] = "#A78BFA",
+        ["@ANCHOR@"] = "#FBBF24",
+        ["@PUNCT@"] = "#9FB2CC",
+        ["@DOC@"] = "#F472B6",
+    };
+
+    // TUI light ("paper terminal"): the same hues at their 700 steps.
+    private static readonly Dictionary<string, string> TuiLightPalette = new()
+    {
+        ["@COMMENT@"] = "#5B6B82",
+        ["@KEY@"] = "#0E7490",
+        ["@STRING@"] = "#047857",
+        ["@NUMBER@"] = "#B23A06",
+        ["@KEYWORD@"] = "#6D28D9",
+        ["@ANCHOR@"] = "#92400E",
+        ["@PUNCT@"] = "#3B4A63",
+        ["@DOC@"] = "#BE185D",
     };
 
     // Rule order matters: spans (comments/strings) are matched before the looser

@@ -29,6 +29,13 @@ internal static class ShellShortcuts
     public const string CloseText = "Esc";
 
     /// <summary>
+    /// Light/dark toggle. <c>Ctrl+Shift+L</c>: Ctrl+K, F1, F5 and Ctrl+F are taken, Ctrl+digit and Ctrl+Shift+1..3 are
+    /// the panels, and Alt chords belong to the system menu and to screen readers - so this is the free, mnemonic
+    /// one (L for light). No panel or text box binds it, and it types no character, so it works from anywhere.
+    /// </summary>
+    public const string ToggleThemeText = "Ctrl+Shift+L";
+
+    /// <summary>
     /// The chord for the panel at <paramref name="index"/> (0-based, sidebar order) as display
     /// text, e.g. <c>Ctrl+3</c>; null when that panel has none.
     /// </summary>
@@ -72,6 +79,10 @@ internal static class ShellShortcuts
 
         return null;
     }
+
+    /// <summary>True for exactly Ctrl+Shift+L (see <see cref="ToggleThemeText"/>).</summary>
+    public static bool IsToggleThemeChord(Key key, ModifierKeys modifiers) =>
+        key == Key.L && modifiers == (ModifierKeys.Control | ModifierKeys.Shift);
 
     private static int? DigitOf(Key key) => key switch
     {

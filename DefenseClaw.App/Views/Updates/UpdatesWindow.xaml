@@ -43,7 +43,7 @@
         <Style x:Key="ConsoleLine" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsError}" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -317,7 +317,7 @@
                             <TextBlock Grid.Column="0" Style="{StaticResource DcCardTitle}" Text="Upgrade this machine" />
                             <TextBlock Grid.Column="1"
                                        Margin="0,0,0,8"
-                                       FontFamily="{StaticResource DcMonoFontFamily}"
+                                       FontFamily="{DynamicResource DcMonoFontFamily}"
                                        Style="{StaticResource DcCaption}"
                                        Text="{Binding TargetVersion, StringFormat='target {0}'}" />
                         </Grid>
@@ -403,7 +403,7 @@
                                 <TextBlock Style="{StaticResource DcCaption}" Text="{Binding StagingSummary}" />
                                 <!-- Installer channel only: a ~270 MB download deserves a number. -->
                                 <TextBlock Margin="0,2,0,0"
-                                           FontFamily="{StaticResource DcMonoFontFamily}"
+                                           FontFamily="{DynamicResource DcMonoFontFamily}"
                                            Style="{StaticResource DcCaption}"
                                            Text="{Binding DownloadProgressText}"
                                            Visibility="{Binding HasDownloadProgress, Converter={StaticResource BoolToVisibility}}" />
@@ -578,7 +578,7 @@
                                     Style="{StaticResource DcBadge}"
                                     Tag="Ok"
                                     Visibility="{Binding HasVersionConfirmation, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock FontFamily="{StaticResource DcMonoFontFamily}"
+                                <TextBlock FontFamily="{DynamicResource DcMonoFontFamily}"
                                            FontSize="12"
                                            Text="{Binding VersionConfirmation}"
                                            TextWrapping="Wrap" />

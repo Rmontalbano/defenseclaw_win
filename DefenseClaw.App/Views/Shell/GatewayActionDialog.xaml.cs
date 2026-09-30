@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
-using Wpf.Ui.Appearance;
+using DefenseClaw.App.Services.Appearance;
 using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.Views.Shell;
@@ -24,8 +24,8 @@ public sealed partial class GatewayActionDialog : FluentWindow
         ReviewControl.ConfirmCommand = new RelayCommand(() => DialogResult = true);
         ReviewControl.CancelCommand = new RelayCommand(() => DialogResult = false);
 
-        // Mica chrome follows the OS theme like the dashboard's does.
-        SystemThemeWatcher.Watch(this);
+        // Backdrop, title bar and colours follow the app's look like the dashboard's do.
+        AppearanceService.Current?.Attach(this);
 
         // Esc backs out from anywhere in the window, not only from inside the control.
         PreviewKeyDown += (_, e) =>

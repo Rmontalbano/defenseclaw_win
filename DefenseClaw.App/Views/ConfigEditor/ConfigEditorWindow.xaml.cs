@@ -6,9 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.ViewModels.ConfigEditor;
 using ICSharpCode.AvalonEdit.Search;
-using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.Views.ConfigEditor;
@@ -42,6 +42,10 @@ public partial class ConfigEditorWindow : FluentWindow
     private static ConfigEditorWindow? _current;
 
     private readonly ConfigEditorWindowViewModel _viewModel;
+
+    /// <summary>The look controls, whose changes re-colour the YAML; null when the app was built without them (a test host).</summary>
+    private readonly AppearanceService? _appearance = AppearanceService.Current;
+
     private bool _syncingEditorText;
 
     /// <summary>Set once the view-model has said the close may go ahead, so the <c>Close()</c> that follows is not asked about again.</summary>
@@ -57,7 +61,7 @@ public partial class ConfigEditorWindow : FluentWindow
         ArgumentNullException.ThrowIfNull(services);
 
         InitializeComponent();
-        SystemThemeWatcher.Watch(this);
+        _appearance?.Attach(this);
 
         _viewModel = new ConfigEditorWindowViewModel(services);
         DataContext = _viewModel;
@@ -67,7 +71,11 @@ public partial class ConfigEditorWindow : FluentWindow
         _viewModel.WatchDiskChanges();
 
         ApplyHighlighting();
-        ApplicationThemeManager.Changed += OnAppThemeChanged;
+        if (_appearance is not null)
+        {
+            _appearance.Changed += OnAppearanceChanged;
+        }
+
         RawEditor.ShowLineNumbers = true;
         RawEditor.Options.EnableHyperlinks = false;
         RawEditor.Options.ShowTabs = false;
@@ -81,7 +89,11 @@ public partial class ConfigEditorWindow : FluentWindow
         Closed += (_, _) =>
         {
             _closed = true;
-            ApplicationThemeManager.Changed -= OnAppThemeChanged;
+            if (_appearance is not null)
+            {
+                _appearance.Changed -= OnAppearanceChanged;
+            }
+
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.Dispose();
             if (ReferenceEquals(_current, this))
@@ -91,11 +103,11 @@ public partial class ConfigEditorWindow : FluentWindow
         };
     }
 
-    /// <summary>The YAML palette that reads on the current theme (see <see cref="YamlHighlighting"/>): light hues on the light theme, the original dark ones otherwise.</summary>
+    /// <summary>The YAML palette that reads on the look on screen (see <see cref="YamlHighlighting"/>): the style's own hues, light or dark.</summary>
     private void ApplyHighlighting() =>
-        RawEditor.SyntaxHighlighting = YamlHighlighting.ForTheme(ApplicationThemeManager.GetAppTheme() != ApplicationTheme.Light);
+        RawEditor.SyntaxHighlighting = YamlHighlighting.ForCurrent();
 
-    private void OnAppThemeChanged(ApplicationTheme theme, Color systemAccent) =>
+    private void OnAppearanceChanged(object? sender, EventArgs e) =>
         _ = Dispatcher.BeginInvoke(new Action(ApplyHighlighting));
 
     /// <summary>Opens the config editor, or brings the already-open one to the front.</summary>

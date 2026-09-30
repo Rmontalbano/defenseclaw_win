@@ -18,7 +18,7 @@
         <Style x:Key="AlertValue" TargetType="TextBlock" BasedOn="{StaticResource DcFieldValueInline}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding AlertTone}" Value="Critical">
-                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
                     <Setter Property="FontWeight" Value="SemiBold" />
                 </DataTrigger>
             </Style.Triggers>
@@ -34,10 +34,9 @@
             Margin="10"
             Padding="16"
             HorizontalAlignment="Stretch"
-            VerticalAlignment="Top">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.35" Color="Black" />
-        </Border.Effect>
+            VerticalAlignment="Top"
+            Effect="{DynamicResource DcFlyoutShadow}">
+        <!-- The shadow is a token: Default keeps today's drop shadow, Linear and TUI use the hairline border alone. -->
 
         <StackPanel>
             <Border Style="{StaticResource DcBadge}"

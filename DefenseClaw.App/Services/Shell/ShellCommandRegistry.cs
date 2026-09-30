@@ -1,3 +1,5 @@
+using DefenseClaw.App.Services.Appearance;
+
 namespace DefenseClaw.App.Services;
 
 /// <summary>
@@ -40,6 +42,64 @@ internal static class ShellCommandRegistry
     }
 
     /// <summary>
+    /// The appearance commands: one per style, the light/dark toggle, and "follow system". Built from the service's state
+    /// at that moment, so the toggle says which way it goes and the row for what is already chosen says so instead of
+    /// pretending to do something. Separate from <see cref="Build"/> so it needs no tray-backed <see cref="ShellActions"/>.
+    /// </summary>
+    internal static List<ShellCommand> BuildAppearanceCommands(IAppearanceControl appearance)
+    {
+        ArgumentNullException.ThrowIfNull(appearance);
+
+        var commands = new List<ShellCommand>();
+        foreach (var style in AppearanceCatalog.Styles)
+        {
+            var captured = style;
+            var name = AppearanceCatalog.Name(style);
+            commands.Add(new ShellCommand(
+                Id: $"appearance.{name.ToLowerInvariant()}",
+                Title: $"Appearance: {name}",
+                Category: AppCategory,
+                Description: AppearanceCatalog.Description(style) + " Keeps light or dark as it is.",
+                Shortcut: null,
+                Keywords: "theme style look skin appearance colors " + style switch
+                {
+                    AppearanceStyle.Linear => "product indigo clean compact",
+                    AppearanceStyle.Tui => "terminal console cli monospace",
+                    _ => "fluent mica windows",
+                },
+                IsEnabled: appearance.Style != style,
+                DisabledReason: $"The {name} style is already in use.",
+                Run: () => appearance.SetStyle(captured)));
+        }
+
+        commands.Add(new ShellCommand(
+            Id: "appearance.toggle",
+            Title: "Toggle light/dark",
+            Category: AppCategory,
+            Description: appearance.IsDark
+                ? "Switch to the light look (fixed, no longer following Windows)."
+                : "Switch to the dark look (fixed, no longer following Windows).",
+            Shortcut: ShellShortcuts.ToggleThemeText,
+            Keywords: "theme dark light night day mode switch flip",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: appearance.ToggleLightDark));
+
+        commands.Add(new ShellCommand(
+            Id: "appearance.system",
+            Title: "Mode: follow system",
+            Category: AppCategory,
+            Description: "Follow Windows' light or dark setting, and switch when it does.",
+            Shortcut: null,
+            Keywords: "theme dark light auto automatic windows os mode",
+            IsEnabled: appearance.Mode != AppearanceMode.System,
+            DisabledReason: "Already following the system.",
+            Run: () => appearance.SetMode(AppearanceMode.System)));
+
+        return commands;
+    }
+
+    /// <summary>
     /// Builds the list for the moment the palette opens. Enabled states and toggle titles are read
     /// now, so the palette is never showing launch-time state.
     /// </summary>
@@ -47,11 +107,13 @@ internal static class ShellCommandRegistry
     /// <param name="actions">The app actions and the availability rules.</param>
     /// <param name="navigateTo">Selects a panel in the sidebar.</param>
     /// <param name="showShortcuts">Opens the keyboard-shortcuts overlay.</param>
+    /// <param name="appearance">The look controls; null (a test without a service) leaves the appearance commands out.</param>
     public static IReadOnlyList<ShellCommand> Build(
         PanelCatalog catalog,
         ShellActions actions,
         Action<PanelDescriptor> navigateTo,
-        Action showShortcuts)
+        Action showShortcuts,
+        IAppearanceControl? appearance = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(actions);
@@ -129,6 +191,11 @@ internal static class ShellCommandRegistry
             IsEnabled: true,
             DisabledReason: null,
             Run: showShortcuts));
+
+        if (appearance is not null)
+        {
+            commands.AddRange(BuildAppearanceCommands(appearance));
+        }
 
         // Gateway controls. Each one opens the review dialog (exact argv, then confirm) before
         // anything runs, exactly like the tray menu's.

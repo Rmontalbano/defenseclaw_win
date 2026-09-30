@@ -8,9 +8,9 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views.Shell;
-using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App;
@@ -46,6 +46,12 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     private readonly MainWindowViewModel _viewModel;
     private readonly ShellActions _actions;
     private readonly CommandPaletteViewModel _paletteViewModel = new();
+
+    /// <summary>The look controls, or null when the app was built without them (only a test host is).</summary>
+    private readonly AppearanceService? _appearance = AppearanceService.Current;
+
+    /// <summary><see cref="Environment.TickCount64"/> when the Appearance flyout last closed; see <see cref="OnAppearanceButtonClick"/>.</summary>
+    private long _appearancePopupClosedAt;
 
     /// <summary>
     /// What had keyboard focus before an overlay opened, so closing it puts the operator back where
@@ -102,9 +108,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         // A screen reader should hear the gateway state change, not only find it when it looks.
         _viewModel.PropertyChanged += OnShellPropertyChanged;
 
-        // WPF-UI needs its own hook to repaint the window chrome when the OS theme flips;
-        // Application.ThemeMode alone only covers the framework's Fluent dictionaries.
-        SystemThemeWatcher.Watch(this);
+        // The look (style, light/dark, Mica or solid, dark title bar) is AppearanceService's: it re-skins this window
+        // whenever it changes and follows Windows in mode System. WPF-UI's SystemThemeWatcher is deliberately not used
+        // here any more - on every OS theme message it forces the system theme, over an explicit choice.
+        _appearance?.Attach(this);
+        BindAppearanceControls();
 
         // Taskbar icon mirrors the tray shield, colour and all, so alt-tab tells the same
         // story as the notification area. Rendered at 256px so alt-tab and taskbar scaling
@@ -483,6 +491,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             RefreshFromKeyboard();
             e.Handled = true;
         }
+        else if (ShellShortcuts.IsToggleThemeChord(e.Key, modifiers) && _appearance is not null)
+        {
+            _appearance.ToggleLightDark();
+            e.Handled = true;
+        }
         else if (ShellShortcuts.PanelIndexFor(e.Key, modifiers) is { } index &&
                  index < _catalog.SidebarOrder.Count)
         {
@@ -580,7 +593,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         RememberFocus();
 
         // Built fresh on every open: toggle titles and the gateway controls' availability are read now.
-        _paletteViewModel.Load(ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts));
+        _paletteViewModel.Load(ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance));
         _viewModel.IsPaletteOpen = true;
         Palette.FocusSearch();
     }
@@ -670,6 +683,84 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 #pragma warning restore CA1031
         }));
     }
+
+    // ------------------------------------------------------------------ appearance
+
+    /// <summary>
+    /// Wires the title-bar toggle and the flyout to the appearance service, or hides both when there is none. The toggle's
+    /// icon, tooltip and accessible name follow the service, so they always say where the next click goes.
+    /// </summary>
+    private void BindAppearanceControls()
+    {
+        if (_appearance is null)
+        {
+            AppearanceButton.Visibility = Visibility.Collapsed;
+            ThemeToggleButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        AppearanceFlyoutControl.Bind(_appearance);
+        AppearanceFlyoutControl.CloseRequested += (_, _) => CloseAppearanceFlyout();
+        AppearancePopup.CustomPopupPlacementCallback = PlaceAppearanceFlyout;
+
+        _appearance.Changed += (_, _) => UpdateThemeToggle();
+        UpdateThemeToggle();
+    }
+
+    /// <summary>The toggle shows where a click goes: a sun while dark (to light), a moon while light (to dark).</summary>
+    private void UpdateThemeToggle()
+    {
+        if (_appearance is null)
+        {
+            return;
+        }
+
+        var toLight = _appearance.IsDark;
+        ThemeToggleIcon.Symbol = toLight ? SymbolRegular.WeatherSunny24 : SymbolRegular.WeatherMoon24;
+
+        var verb = toLight ? "Switch to light mode" : "Switch to dark mode";
+        ThemeToggleButton.ToolTip = $"{verb} ({ShellShortcuts.ToggleThemeText})";
+        AutomationProperties.SetName(ThemeToggleButton, verb);
+        AutomationProperties.SetHelpText(
+            ThemeToggleButton,
+            "Changes between light and dark. If the app was following Windows, it stops following until you choose System again in Appearance.");
+    }
+
+    private void OnThemeToggleClick(object sender, RoutedEventArgs e) => _appearance?.ToggleLightDark();
+
+    private void OnAppearanceButtonClick(object sender, RoutedEventArgs e)
+    {
+        // A light-dismiss popup closes on the press that lands on its own button, so by the time the click arrives it
+        // is already shut - and would open again, making the button impossible to close with. A click that closely
+        // follows a close is that press.
+        if (Environment.TickCount64 - _appearancePopupClosedAt < 300)
+        {
+            return;
+        }
+
+        if (AppearancePopup.IsOpen)
+        {
+            CloseAppearanceFlyout();
+            return;
+        }
+
+        AppearanceFlyoutControl.Refresh();
+        AppearancePopup.IsOpen = true;
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(AppearanceFlyoutControl.FocusSelected));
+    }
+
+    /// <summary>Closes the flyout and gives focus back to the button that opened it.</summary>
+    private void CloseAppearanceFlyout()
+    {
+        AppearancePopup.IsOpen = false;
+        _ = AppearanceButton.Focus();
+    }
+
+    private void OnAppearancePopupClosed(object? sender, EventArgs e) => _appearancePopupClosedAt = Environment.TickCount64;
+
+    /// <summary>Right edges of the flyout and its button line up, and it opens just under the title bar.</summary>
+    private static CustomPopupPlacement[] PlaceAppearanceFlyout(Size popupSize, Size targetSize, Point offset) =>
+        new[] { new CustomPopupPlacement(new Point(targetSize.Width - popupSize.Width, targetSize.Height), PopupPrimaryAxis.None) };
 
     // ------------------------------------------------------------------ accessibility
 

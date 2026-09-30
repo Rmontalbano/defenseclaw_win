@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using DefenseClaw.App.Services.Appearance;
 
 namespace DefenseClaw.App.Views;
 
@@ -39,6 +40,7 @@ public partial class TrayFlyoutWindow : Window
     public TrayFlyoutWindow()
     {
         InitializeComponent();
+        AppearanceService.Current?.Attach(this);
 
         // Click-away dismiss, the behaviour every other tray flyout on the OS has.
         Deactivated += (_, _) =>

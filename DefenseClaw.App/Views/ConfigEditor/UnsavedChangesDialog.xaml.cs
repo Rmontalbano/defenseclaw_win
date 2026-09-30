@@ -1,7 +1,7 @@
 using System;
 using System.Windows;
+using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.ViewModels.ConfigEditor;
-using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.Views.ConfigEditor;
@@ -22,7 +22,7 @@ public sealed partial class UnsavedChangesDialog : FluentWindow
         ArgumentNullException.ThrowIfNull(request);
 
         InitializeComponent();
-        SystemThemeWatcher.Watch(this);
+        AppearanceService.Current?.Attach(this);
 
         HeadingText.Text = request.Heading;
         MessageText.Text = request.Message;

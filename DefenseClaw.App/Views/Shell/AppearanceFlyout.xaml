@@ -1,0 +1,39 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.AppearanceFlyout"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsTabStop="False"
+             AutomationProperties.Name="Appearance">
+    <!--
+        The title bar's Appearance flyout: pick a style (Default, Linear, TUI - each with a swatch of its own colours) and a
+        mode (System, Light, Dark). Choosing applies at once - the whole app changes behind the flyout, which is the
+        preview - so there is no Apply button. Two radio groups, so the arrow keys move within one, Tab moves between them,
+        and a screen reader announces "Linear, radio button, 2 of 3" with the style's description. Esc closes it and the
+        shell puts focus back on the Appearance button.
+
+        The radios are built in code (AppearanceFlyout.xaml.cs) from AppearanceCatalog, so a style added there appears
+        here without touching this file. Everything visible is a Dc token, so the flyout wears the style it is offering.
+    -->
+    <Border Margin="8"
+            Padding="14"
+            Width="300"
+            Style="{StaticResource DcDialogCard}"
+            Effect="{DynamicResource DcFlyoutShadow}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource DcCardTitle}"
+                       Margin="0,0,0,6"
+                       AutomationProperties.HeadingLevel="Level2"
+                       Text="Style" />
+            <StackPanel x:Name="StyleGroup" />
+
+            <TextBlock Style="{StaticResource DcCardTitle}"
+                       Margin="0,12,0,6"
+                       AutomationProperties.HeadingLevel="Level2"
+                       Text="Mode" />
+            <StackPanel x:Name="ModeGroup" />
+
+            <TextBlock x:Name="HintText"
+                       Style="{StaticResource DcCaption}"
+                       Margin="0,12,0,0" />
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,71 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        Style "TUI", light: a "paper terminal". The CLI's theme (defenseclaw/tui/theme.py, see Tui.Dark.xaml) is
+        dark-only, so this is its inversion in the same cool slate / Tailwind hue family: paper for the window and
+        cards, the CLI's own near-black navy (#0B1220, close to surface_base) as ink, and the 700 steps of its accent
+        hues (cyan, red, blue, emerald; amber for High, because orange-700 sits too close to red-700 to read as its own
+        tone) where the dark file uses the 400 steps, so every tone clears contrast on paper. Shape, type and density are
+        identical to Tui.Dark.xaml. Token values only.
+    -->
+
+    <!-- ===== Brushes ====================================================================== -->
+    <SolidColorBrush x:Key="DcWindowBackgroundBrush" Color="#F3F6FB" />
+    <SolidColorBrush x:Key="DcSurfaceBrush" Color="#FBFCFE" />
+    <SolidColorBrush x:Key="DcRaisedBrush" Color="#E8EDF5" />
+    <SolidColorBrush x:Key="DcInsetBrush" Color="#E8EDF5" />
+    <SolidColorBrush x:Key="DcDialogBrush" Color="#FBFCFE" />
+    <SolidColorBrush x:Key="DcSubtleBrush" Color="#E8EDF5" />
+    <SolidColorBrush x:Key="DcSelectedBrush" Color="#D5DEEB" />
+    <SolidColorBrush x:Key="DcBorderBrush" Color="#B4C0D3" />
+    <SolidColorBrush x:Key="DcControlBorderBrush" Color="#B4C0D3" />
+
+    <SolidColorBrush x:Key="DcTextPrimaryBrush" Color="#0B1220" />
+    <SolidColorBrush x:Key="DcTextSecondaryBrush" Color="#3B4A63" />
+    <SolidColorBrush x:Key="DcTextTertiaryBrush" Color="#64748B" />
+
+    <SolidColorBrush x:Key="DcAccentBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcAccentHoverBrush" Color="#155E75" />
+    <SolidColorBrush x:Key="DcOnAccentBrush" Color="#FFFFFF" />
+
+    <SolidColorBrush x:Key="DcFocusRingBrush" Color="#0369A1" />
+    <SolidColorBrush x:Key="DcFocusRingInnerBrush" Color="#FBFCFE" />
+
+    <SolidColorBrush x:Key="DcToneCriticalBrush" Color="#B91C1C" />
+    <SolidColorBrush x:Key="DcToneCriticalSubtleBrush" Color="#1FB91C1C" />
+    <SolidColorBrush x:Key="DcToneHighBrush" Color="#B45309" />
+    <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#1FB45309" />
+    <SolidColorBrush x:Key="DcToneMediumBrush" Color="#1D4ED8" />
+    <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#1F1D4ED8" />
+    <SolidColorBrush x:Key="DcToneOkBrush" Color="#047857" />
+    <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#1F047857" />
+    <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#475569" />
+    <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#1F475569" />
+
+    <!-- ===== Type: one monospace family for everything ==================================== -->
+    <FontFamily x:Key="DcUiFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>
+    <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>
+    <sys:Double x:Key="DcFontSize">13</sys:Double>
+
+    <!-- ===== Shape: square everywhere ===================================================== -->
+    <CornerRadius x:Key="DcRadiusS">0</CornerRadius>
+    <CornerRadius x:Key="DcRadiusM">0</CornerRadius>
+    <CornerRadius x:Key="DcRadiusL">0</CornerRadius>
+    <CornerRadius x:Key="DcControlRadius">0</CornerRadius>
+    <CornerRadius x:Key="DcBarRadius">0</CornerRadius>
+    <Thickness x:Key="DcBorderThickness">1</Thickness>
+
+    <sys:Double x:Key="DcFocusRadius">0</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInner">0</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInset">0</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInsetInner">0</sys:Double>
+
+    <!-- ===== Density ====================================================================== -->
+    <Thickness x:Key="DcCardPadding">12</Thickness>
+    <Thickness x:Key="DcCardPaddingCompact">9</Thickness>
+    <Thickness x:Key="DcCardPaddingFlush">3</Thickness>
+
+    <!-- ===== Effect: none ================================================================= -->
+    <DropShadowEffect x:Key="DcFlyoutShadow" BlurRadius="0" ShadowDepth="0" Opacity="0" Color="Black" />
+</ResourceDictionary>

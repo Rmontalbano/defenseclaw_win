@@ -14,9 +14,9 @@
             <ResourceDictionary.MergedDictionaries>
                 <!--
                     WPF-UI's dictionaries style the Fluent controls. The theme here is the
-                    seed value only - ApplicationThemeManager.ApplySystemTheme() in
-                    App.OnStartup swaps it to match the OS, and SystemThemeWatcher keeps it
-                    in step afterwards.
+                    seed value only: AppearanceService (created first thing in App.OnStartup,
+                    before any window) applies the saved style and light/dark, or the OS's when
+                    the mode is System, and keeps it in step afterwards.
                 -->
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
@@ -25,7 +25,9 @@
                     The shared design system (Dc* keys): spacing, type, cards, tone badges,
                     page header, toolbar, empty state, focus ring. Must stay AFTER the two WPF-UI
                     dictionaries above - it is built on their brushes and re-points WPF-UI's
-                    focus-visual keys. See Themes\DefenseClaw.xaml for the key index.
+                    focus-visual keys. See Themes\DefenseClaw.xaml for the key index. It merges the
+                    Default style's tokens itself; AppearanceService merges the chosen style's
+                    after everything here, so it is the last dictionary and wins.
                 -->
                 <ResourceDictionary Source="Themes/DefenseClaw.xaml" />
             </ResourceDictionary.MergedDictionaries>

@@ -6,16 +6,34 @@
         DefenseClaw shared design system.
 
         Merged into App.xaml AFTER the WPF-UI theme dictionaries, so every key below can be used from
-        any panel, window or flyout with {StaticResource Dc...}. Nothing here hardcodes a text colour:
-        every brush is a {DynamicResource} onto a WPF-UI / Fluent theme brush, so light and dark (and a
-        live OS theme switch) are handled by ThemesDictionary, not by this file. The one deliberate
-        exception is DcScrimBrush (a black veil is right in both themes).
+        any panel, window or flyout with {StaticResource Dc...} (a style) or {DynamicResource Dc...}
+        (a token). Nothing here hardcodes a colour, a font or a radius: every one of them is a TOKEN,
+        and the styles below consume tokens through {DynamicResource}, so the operator can change the
+        look while the app runs (Services\Appearance\AppearanceService).
+
+        =============================================================================================
+        TOKENS (Themes\Styles\*.xaml define only their values; Default.xaml lists the vocabulary)
+          One dictionary per style x mode is merged after this one at run time: Default.xaml (aliases of
+          WPF-UI's brushes, so Default is exactly the look the app always had), Linear.Dark / Linear.Light,
+          Tui.Dark / Tui.Light. Default.xaml is also merged here, below, so a host that only loads this
+          file still resolves every token. Consume them with {DynamicResource ...}, never StaticResource:
+          a static reference is frozen at load and would miss a live switch.
+          Brushes    DcWindowBackgroundBrush | DcSurfaceBrush (card) | DcRaisedBrush | DcInsetBrush | DcDialogBrush
+                     DcSubtleBrush | DcSelectedBrush | DcBorderBrush (hairline) | DcControlBorderBrush
+                     DcTextPrimaryBrush / DcTextSecondaryBrush / DcTextTertiaryBrush
+                     DcAccentBrush | DcAccentHoverBrush | DcOnAccentBrush | DcFocusRingBrush | DcFocusRingInnerBrush
+                     DcTone{Critical,High,Medium,Ok,Neutral}Brush and ...SubtleBrush (foreground / tinted fill)
+          Type       DcUiFontFamily | DcMonoFontFamily | DcFontSize (body size)
+          Shape      DcRadiusS 4 | DcRadiusM 6 | DcRadiusL 8 (badges + inner rows | code blocks | cards, in Default),
+                     DcControlRadius, DcBarRadius, DcFocusRadius* (doubles), DcBorderThickness
+          Density    DcCardPadding 16 | DcCardPaddingCompact 12 | DcCardPaddingFlush 4 (Default; Linear / TUI are tighter)
+          Effect     DcFlyoutShadow (the tray flyout's drop shadow; none in Linear / TUI)
 
         Voice: the prefix is Dc, then a role, never a value ("DcCard", not "DcBorder8"). Panels keep a
         local style only for a visual that exists in exactly one panel.
 
         =============================================================================================
-        SPACING (Double / Thickness / GridLength / CornerRadius)
+        SPACING (Double / Thickness / GridLength) - not themed
           DcSpaceXS 4 | DcSpaceS 8 | DcSpaceM 12 | DcSpaceL 16 | DcSpaceXL 24 | DcSpaceXXL 32
                                  The scale. Use for one-off gaps; prefer the semantic keys below.
           DcPageMargin           24,20,24,20  Margin of a panel's root Grid (also style DcPage).
@@ -26,12 +44,6 @@
           DcInlineGap            0,0,8,0      Right margin between neighbouring inline items.
           DcFieldGap             0,0,0,8      Bottom margin under a label/value field (baked into DcField).
           DcFieldKeyMinWidth     130          MinWidth of the key column in a side-by-side key/value Grid.
-          DcCardPadding          16           Inside a DcCard.
-          DcCardPaddingCompact   12           Inside a DcCardCompact (dense card / detail pane).
-          DcCardPaddingFlush     4            Inside a DcCardFlush (card that hosts a list or grid).
-          DcRadiusS 4 | DcRadiusM 6 | DcRadiusL 8
-                                 Corner radii: badges, chips and inner rows | code blocks | cards.
-          DcMonoFontFamily       Cascadia Mono, Consolas, Courier New.
 
         TYPOGRAPHY (TextBlock styles; sizes in px)
           DcPageTitle            26 semibold, primary. One per page: the panel name.
@@ -59,7 +71,7 @@
           DcToolbarLabel         Label inside a DcToolbarPanel.
 
         SURFACES (Border / Grid styles)
-          DcCard                 Card: padding 16, radius 8, 1px card stroke, card fill.
+          DcCard                 Card: padding 16, radius 8, 1px card stroke, card fill (Default's numbers; they are tokens).
           DcCardCompact          Same, padding 12.
           DcCardFlush            Same, padding 4 - the host for a ListView / DataGrid / log list.
           DcSubtleRow            Inner row inside a card: inset fill, radius 4, padding 8.
@@ -88,11 +100,11 @@
         TONES (status colour) - one vocabulary for badges, dots, bars, tiles, values and text
           The tone is chosen by the element's Tag, so the key can come from any view-model property
           ("{Binding SeverityKey}", "{Binding ExitBadgeKey}") or be a literal (Tag="Ok").
-          Tag value        Meaning                          WPF-UI palette
-          Critical | Bad   critical severity / failed       SystemFillColorCritical (red)
-          High | Warn     high severity / needs a look     SystemFillColorCaution (amber)
-          Medium           medium severity                  SystemFillColorAttention (accent blue)
-          Ok               healthy / passed / success       SystemFillColorSuccess (green)
+          Tag value        Meaning                          Token (Default = WPF-UI palette)
+          Critical | Bad   critical severity / failed       DcToneCritical (SystemFillColorCritical, red)
+          High | Warn     high severity / needs a look     DcToneHigh (SystemFillColorCaution, amber)
+          Medium           medium severity                  DcToneMedium (SystemFillColorAttention, accent blue)
+          Ok               healthy / passed / success       DcToneOk (SystemFillColorSuccess, green)
           Low | Info | Neutral | anything else | unset       neutral grey
           DcBadge + DcBadgeText   Pill: tinted fill, tone-coloured text. Put the TextBlock inside.
           DcChip                  Neutral metadata tag (mode, connector, "stdin secret"); no tone.
@@ -115,6 +127,14 @@
           they are re-pointed at the two styles above so every WPF-UI control shows the ring.
     -->
 
+    <ResourceDictionary.MergedDictionaries>
+        <!--
+            The fallback token set (Default), so this dictionary works on its own. At run time AppearanceService
+            merges the chosen style's tokens after this one, which win: later dictionaries take precedence.
+        -->
+        <ResourceDictionary Source="Styles/Default.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
     <!-- ===== Spacing ===================================================================== -->
     <sys:Double x:Key="DcSpaceXS">4</sys:Double>
     <sys:Double x:Key="DcSpaceS">8</sys:Double>
@@ -131,16 +151,6 @@
     <Thickness x:Key="DcInlineGap">0,0,8,0</Thickness>
     <Thickness x:Key="DcFieldGap">0,0,0,8</Thickness>
     <sys:Double x:Key="DcFieldKeyMinWidth">130</sys:Double>
-    <Thickness x:Key="DcCardPadding">16</Thickness>
-    <Thickness x:Key="DcCardPaddingCompact">12</Thickness>
-    <Thickness x:Key="DcCardPaddingFlush">4</Thickness>
-
-    <CornerRadius x:Key="DcRadiusS">4</CornerRadius>
-    <CornerRadius x:Key="DcRadiusM">6</CornerRadius>
-    <CornerRadius x:Key="DcRadiusL">8</CornerRadius>
-
-    <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Consolas, Courier New</FontFamily>
-
     <!-- The one non-theme colour: a black veil dims the page in light and dark alike. -->
     <SolidColorBrush x:Key="DcScrimBrush" Color="#99000000" />
 
@@ -148,7 +158,7 @@
     <Style x:Key="DcPageTitle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="26" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
@@ -156,7 +166,7 @@
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Margin" Value="0,4,0,0" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="DcSectionHeader" TargetType="TextBlock">
@@ -164,45 +174,45 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Margin" Value="0,0,0,8" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
     </Style>
 
     <Style x:Key="DcCardTitle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="{DynamicResource DcFontSize}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Margin" Value="0,0,0,8" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
     </Style>
 
     <Style x:Key="DcBody" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="{DynamicResource DcFontSize}" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
     </Style>
 
     <Style x:Key="DcTextSecondary" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="{DynamicResource DcFontSize}" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="DcCaption" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="DcMono" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource DcMonoFontFamily}" />
+        <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
     </Style>
 
     <!-- Read-only mono text the operator can select and copy. Keeps WPF-UI's TextBox template. -->
     <Style x:Key="DcMonoTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-        <Setter Property="FontFamily" Value="{StaticResource DcMonoFontFamily}" />
+        <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="IsReadOnly" Value="True" />
         <Setter Property="TextWrapping" Value="Wrap" />
@@ -216,7 +226,7 @@
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
         <!-- Bare template: WPF-UI's draws a bottom underline that reads as a stray rule in a code block. -->
         <Setter Property="Template">
             <Setter.Value>
@@ -227,13 +237,13 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="Transparent"
                             BorderThickness="1"
-                            CornerRadius="{StaticResource DcRadiusS}"
+                            CornerRadius="{DynamicResource DcRadiusS}"
                             SnapsToDevicePixels="True">
                         <ScrollViewer x:Name="PART_ContentHost" Focusable="False" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcFocusRingBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -244,13 +254,13 @@
     <Style x:Key="DcFieldLabel" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="DcFieldValue" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="{DynamicResource DcFontSize}" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
     </Style>
 
     <Style x:Key="DcFieldValueMono" TargetType="TextBlock" BasedOn="{StaticResource DcMono}" />
@@ -268,32 +278,32 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Margin" Value="0,0,8,0" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <!-- Big number. Tag picks the tone: Critical|Bad, High|Warn, Medium, Ok; otherwise primary. -->
     <Style x:Key="DcValue" TargetType="TextBlock">
         <Setter Property="FontSize" Value="24" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
         <Style.Triggers>
             <Trigger Property="Tag" Value="Critical">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Bad">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="High">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Warn">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -301,7 +311,7 @@
     <Style x:Key="DcTileLabel" TargetType="TextBlock">
         <Setter Property="FontSize" Value="11" />
         <Setter Property="Margin" Value="0,2,0,0" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="DcStatusText" TargetType="TextBlock">
@@ -309,43 +319,43 @@
         <Setter Property="Margin" Value="0,0,8,0" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <Style x:Key="DcToolbarLabel" TargetType="TextBlock">
         <Setter Property="Margin" Value="0,0,6,8" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <!-- ===== Surfaces ==================================================================== -->
     <Style x:Key="DcCard" TargetType="Border">
-        <Setter Property="Padding" Value="{StaticResource DcCardPadding}" />
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusL}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="Padding" Value="{DynamicResource DcCardPadding}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusL}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource DcBorderThickness}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource DcSurfaceBrush}" />
     </Style>
 
     <Style x:Key="DcCardCompact" TargetType="Border" BasedOn="{StaticResource DcCard}">
-        <Setter Property="Padding" Value="{StaticResource DcCardPaddingCompact}" />
+        <Setter Property="Padding" Value="{DynamicResource DcCardPaddingCompact}" />
     </Style>
 
     <Style x:Key="DcCardFlush" TargetType="Border" BasedOn="{StaticResource DcCard}">
-        <Setter Property="Padding" Value="{StaticResource DcCardPaddingFlush}" />
+        <Setter Property="Padding" Value="{DynamicResource DcCardPaddingFlush}" />
     </Style>
 
-    <!-- Inset well: SolidBackgroundFillColorSecondary is darker than the card fill in both themes. -->
+    <!-- Inset well: DcInset (in Default, SolidBackgroundFillColorSecondary) is darker than the card fill in both themes. -->
     <Style x:Key="DcSubtleRow" TargetType="Border">
         <Setter Property="Padding" Value="8" />
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusS}" />
-        <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusS}" />
+        <Setter Property="Background" Value="{DynamicResource DcInsetBrush}" />
     </Style>
 
     <Style x:Key="DcCodeBlock" TargetType="Border">
         <Setter Property="Padding" Value="12,8,12,8" />
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusM}" />
-        <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusM}" />
+        <Setter Property="Background" Value="{DynamicResource DcInsetBrush}" />
     </Style>
 
     <Style x:Key="DcDialogCard" TargetType="Border">
@@ -353,10 +363,10 @@
         <Setter Property="MaxWidth" Value="560" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusL}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-        <Setter Property="Background" Value="{DynamicResource ApplicationBackgroundBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusL}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource DcBorderThickness}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource DcDialogBrush}" />
     </Style>
 
     <Style x:Key="DcScrim" TargetType="Grid">
@@ -366,42 +376,42 @@
     <!-- ===== Tones (chosen by Tag) ======================================================= -->
     <Style x:Key="DcBadge" TargetType="Border">
         <Setter Property="Padding" Value="8,2,8,2" />
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusS}" />
-        <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
-        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusS}" />
+        <Setter Property="Background" Value="{DynamicResource DcToneNeutralSubtleBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
         <Style.Triggers>
             <Trigger Property="Tag" Value="Critical">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalSubtleBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Bad">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalSubtleBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="High">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighSubtleBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Warn">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighSubtleBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBackgroundBrush}" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneMediumSubtleBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneOkSubtleBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
 
     <Style x:Key="DcChip" TargetType="Border">
         <Setter Property="Padding" Value="8,2,8,2" />
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusS}" />
-        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusS}" />
+        <Setter Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <!-- No Foreground here: the text inherits its tone from the DcBadge / DcChip around it. -->
@@ -413,25 +423,25 @@
 
     <Style x:Key="DcToneText" TargetType="TextBlock">
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
         <Style.Triggers>
             <Trigger Property="Tag" Value="Critical">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Bad">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="High">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Warn">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
-                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -440,25 +450,25 @@
         <Setter Property="Width" Value="10" />
         <Setter Property="Height" Value="10" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Fill" Value="{DynamicResource SystemFillColorNeutralBrush}" />
+        <Setter Property="Fill" Value="{DynamicResource DcToneNeutralBrush}" />
         <Style.Triggers>
             <Trigger Property="Tag" Value="Critical">
-                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Fill" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Bad">
-                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Fill" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="High">
-                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Fill" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Warn">
-                <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Fill" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
-                <Setter Property="Fill" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                <Setter Property="Fill" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
-                <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                <Setter Property="Fill" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -470,27 +480,27 @@
 
     <Style x:Key="DcToneBar" TargetType="Border">
         <Setter Property="Width" Value="4" />
-        <Setter Property="CornerRadius" Value="2" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcBarRadius}" />
         <Setter Property="Margin" Value="0,0,12,0" />
         <Setter Property="Background" Value="Transparent" />
         <Style.Triggers>
             <Trigger Property="Tag" Value="Critical">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Bad">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="High">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Warn">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneMediumBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneOkBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -498,28 +508,28 @@
     <Style x:Key="DcToneTile" TargetType="Border">
         <Setter Property="Padding" Value="14,10,14,10" />
         <Setter Property="MinWidth" Value="104" />
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusL}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-        <Setter Property="Background" Value="{DynamicResource SystemFillColorNeutralBackgroundBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusL}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource DcBorderThickness}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource DcToneNeutralSubtleBrush}" />
         <Style.Triggers>
             <Trigger Property="Tag" Value="Critical">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalSubtleBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Bad">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneCriticalSubtleBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="High">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighSubtleBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Warn">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneHighSubtleBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Medium">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBackgroundBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneMediumSubtleBrush}" />
             </Trigger>
             <Trigger Property="Tag" Value="Ok">
-                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                <Setter Property="Background" Value="{DynamicResource DcToneOkSubtleBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -641,7 +651,7 @@
         <Setter Property="FontSize" Value="40" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="Margin" Value="0,0,0,12" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextTertiaryBrush}" />
     </Style>
 
     <Style x:Key="DcEmptyTitle" TargetType="TextBlock">
@@ -650,7 +660,7 @@
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
     </Style>
 
     <Style x:Key="DcEmptyDetail" TargetType="TextBlock">
@@ -659,29 +669,29 @@
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
     </Style>
 
     <!-- ===== Shell ======================================================================= -->
     <Style x:Key="DcStatusStrip" TargetType="Border">
         <Setter Property="Padding" Value="24,8,24,8" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
     </Style>
 
     <!-- A shortcut key. Secondary text on a control-fill chip with a hairline: legible in both themes. -->
     <Style x:Key="DcKeyCap" TargetType="Border">
         <Setter Property="Padding" Value="6,1,6,1"/>
-        <Setter Property="CornerRadius" Value="{StaticResource DcRadiusS}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
-        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
-        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusS}" />
+        <Setter Property="BorderThickness" Value="{DynamicResource DcBorderThickness}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DcControlBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource DcRaisedBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="DcKeyCapText" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource DcMonoFontFamily}" />
+        <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
@@ -698,15 +708,15 @@
                 <ControlTemplate>
                     <Grid SnapsToDevicePixels="True" IsHitTestVisible="False">
                         <Rectangle Margin="-2"
-                                   RadiusX="6"
-                                   RadiusY="6"
+                                   RadiusX="{DynamicResource DcFocusRadius}"
+                                   RadiusY="{DynamicResource DcFocusRadius}"
                                    StrokeThickness="2"
-                                   Stroke="{DynamicResource FocusStrokeColorOuterBrush}" />
+                                   Stroke="{DynamicResource DcFocusRingBrush}" />
                         <Rectangle Margin="-0.5"
-                                   RadiusX="4"
-                                   RadiusY="4"
+                                   RadiusX="{DynamicResource DcFocusRadiusInner}"
+                                   RadiusY="{DynamicResource DcFocusRadiusInner}"
                                    StrokeThickness="1"
-                                   Stroke="{DynamicResource FocusStrokeColorInnerBrush}" />
+                                   Stroke="{DynamicResource DcFocusRingInnerBrush}" />
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
@@ -719,15 +729,15 @@
                 <ControlTemplate>
                     <Grid SnapsToDevicePixels="True" IsHitTestVisible="False">
                         <Rectangle Margin="1"
-                                   RadiusX="4"
-                                   RadiusY="4"
+                                   RadiusX="{DynamicResource DcFocusRadiusInset}"
+                                   RadiusY="{DynamicResource DcFocusRadiusInset}"
                                    StrokeThickness="2"
-                                   Stroke="{DynamicResource FocusStrokeColorOuterBrush}" />
+                                   Stroke="{DynamicResource DcFocusRingBrush}" />
                         <Rectangle Margin="2.5"
-                                   RadiusX="3"
-                                   RadiusY="3"
+                                   RadiusX="{DynamicResource DcFocusRadiusInsetInner}"
+                                   RadiusY="{DynamicResource DcFocusRadiusInsetInner}"
                                    StrokeThickness="1"
-                                   Stroke="{DynamicResource FocusStrokeColorInnerBrush}" />
+                                   Stroke="{DynamicResource DcFocusRingInnerBrush}" />
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>

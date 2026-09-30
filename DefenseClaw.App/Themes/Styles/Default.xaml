@@ -1,0 +1,94 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        Style "Default": the Fluent look the app has always had. Unlike Linear and TUI this file holds no
+        colour of its own - every brush token takes its colour from the WPF-UI colour the Dc styles used before the
+        token layer existed (Themes\DefenseClaw.xaml lists which), so Default is the same colours it was, in both
+        modes: WPF-UI's own Light/Dark dictionary decides which, and the OS accent flows through
+        AccentFillColorDefault / SystemAccentColorSecondary exactly as it did.
+
+        A brush here copies a colour that exists at the moment the file is loaded, so it has to be loaded AFTER WPF-UI's
+        theme dictionary has been swapped (and after its accent keys were written); AppearanceService does that on
+        every change, which is why there is one Default file for both modes: the mode lives in WPF-UI.
+        (Themes\DefenseClaw.xaml also merges a copy, so a host that only has the Dc dictionaries still resolves every
+        token - with whatever WPF-UI colours exist at that moment.)
+
+        Token vocabulary, shared by every style (see Themes\DefenseClaw.xaml for what consumes each):
+          Brushes  DcWindowBackground, DcSurface (card), DcRaised (keycap, control-like), DcInset (code block,
+                   subtle row), DcDialog (dialog / flyout card), DcSubtle (chip, hover), DcSelected,
+                   DcBorder (hairline), DcControlBorder, DcTextPrimary/Secondary/Tertiary, DcAccent,
+                   DcAccentHover, DcOnAccent, DcFocusRing (outer), DcFocusRingInner,
+                   DcTone{Critical,High,Medium,Ok,Neutral} and DcTone...Subtle (foreground / tinted fill)
+          Fonts    DcUiFontFamily, DcMonoFontFamily      Size DcFontSize
+          Shape    DcRadiusS/M/L, DcControlRadius, DcBarRadius, DcFocusRadius* (doubles), DcBorderThickness
+          Density  DcCardPadding, DcCardPaddingCompact, DcCardPaddingFlush
+          Effect   DcFlyoutShadow
+    -->
+
+    <!-- ===== Brushes (colours of WPF-UI's) ================================================ -->
+    <SolidColorBrush x:Key="DcWindowBackgroundBrush" Color="{DynamicResource ApplicationBackgroundColor}" />
+    <SolidColorBrush x:Key="DcSurfaceBrush" Color="{DynamicResource CardBackgroundFillColorDefault}" />
+    <SolidColorBrush x:Key="DcRaisedBrush" Color="{DynamicResource ControlFillColorDefault}" />
+    <SolidColorBrush x:Key="DcInsetBrush" Color="{DynamicResource SolidBackgroundFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcDialogBrush" Color="{DynamicResource ApplicationBackgroundColor}" />
+    <SolidColorBrush x:Key="DcSubtleBrush" Color="{DynamicResource SubtleFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcSelectedBrush" Color="{DynamicResource ControlFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcBorderBrush" Color="{DynamicResource CardStrokeColorDefault}" />
+    <SolidColorBrush x:Key="DcControlBorderBrush" Color="{DynamicResource ControlStrokeColorDefault}" />
+
+    <SolidColorBrush x:Key="DcTextPrimaryBrush" Color="{DynamicResource TextFillColorPrimary}" />
+    <SolidColorBrush x:Key="DcTextSecondaryBrush" Color="{DynamicResource TextFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcTextTertiaryBrush" Color="{DynamicResource TextFillColorTertiary}" />
+
+    <SolidColorBrush x:Key="DcAccentBrush" Color="{DynamicResource AccentFillColorDefault}" />
+    <SolidColorBrush x:Key="DcAccentHoverBrush" Color="{DynamicResource AccentFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcOnAccentBrush" Color="{DynamicResource TextOnAccentFillColorPrimary}" />
+
+    <SolidColorBrush x:Key="DcFocusRingBrush" Color="{DynamicResource FocusStrokeColorOuter}" />
+    <SolidColorBrush x:Key="DcFocusRingInnerBrush" Color="{DynamicResource FocusStrokeColorInner}" />
+
+    <SolidColorBrush x:Key="DcToneCriticalBrush" Color="{DynamicResource SystemFillColorCritical}" />
+    <SolidColorBrush x:Key="DcToneCriticalSubtleBrush" Color="{DynamicResource SystemFillColorCriticalBackground}" />
+    <SolidColorBrush x:Key="DcToneHighBrush" Color="{DynamicResource SystemFillColorCaution}" />
+    <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="{DynamicResource SystemFillColorCautionBackground}" />
+    <!-- WPF-UI's "attention" brush is the accent's secondary step, written by its accent manager. -->
+    <SolidColorBrush x:Key="DcToneMediumBrush" Color="{DynamicResource SystemAccentColorSecondary}" />
+    <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="{DynamicResource SystemFillColorAttentionBackground}" />
+    <SolidColorBrush x:Key="DcToneOkBrush" Color="{DynamicResource SystemFillColorSuccess}" />
+    <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="{DynamicResource SystemFillColorSuccessBackground}" />
+    <SolidColorBrush x:Key="DcToneNeutralBrush" Color="{DynamicResource SystemFillColorNeutral}" />
+    <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="{DynamicResource SystemFillColorNeutralBackground}" />
+
+    <!-- ===== Type ========================================================================= -->
+    <!--
+        Windows keep the system message font (what they inherit when nothing sets one) under Default: the service
+        clears its window-font override rather than apply this, so a machine whose message font is not Segoe UI
+        (a CJK locale) is unchanged. The value is what the other styles' UI font is measured against.
+    -->
+    <FontFamily x:Key="DcUiFontFamily">Segoe UI</FontFamily>
+    <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Consolas, Courier New</FontFamily>
+    <sys:Double x:Key="DcFontSize">14</sys:Double>
+
+    <!-- ===== Shape ======================================================================== -->
+    <CornerRadius x:Key="DcRadiusS">4</CornerRadius>
+    <CornerRadius x:Key="DcRadiusM">6</CornerRadius>
+    <CornerRadius x:Key="DcRadiusL">8</CornerRadius>
+    <CornerRadius x:Key="DcControlRadius">4</CornerRadius>
+    <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <Thickness x:Key="DcBorderThickness">1</Thickness>
+
+    <!-- The two-tone focus ring: outer and inner stroke radii, for the ring outside an element and the inset one. -->
+    <sys:Double x:Key="DcFocusRadius">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInner">4</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInset">4</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInsetInner">3</sys:Double>
+
+    <!-- ===== Density ====================================================================== -->
+    <Thickness x:Key="DcCardPadding">16</Thickness>
+    <Thickness x:Key="DcCardPaddingCompact">12</Thickness>
+    <Thickness x:Key="DcCardPaddingFlush">4</Thickness>
+
+    <!-- ===== Effect ======================================================================= -->
+    <DropShadowEffect x:Key="DcFlyoutShadow" BlurRadius="18" ShadowDepth="2" Opacity="0.35" Color="Black" />
+</ResourceDictionary>

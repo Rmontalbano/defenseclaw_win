@@ -63,15 +63,15 @@
                                             <Border x:Name="Row"
                                                     Padding="{TemplateBinding Padding}"
                                                     Background="Transparent"
-                                                    CornerRadius="{StaticResource DcRadiusS}"
+                                                    CornerRadius="{DynamicResource DcRadiusS}"
                                                     SnapsToDevicePixels="True">
                                                 <Grid>
                                                     <Border x:Name="Bar"
                                                             Width="3"
                                                             Margin="-8,2,0,2"
                                                             HorizontalAlignment="Left"
-                                                            CornerRadius="1.5"
-                                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                            CornerRadius="{DynamicResource DcBarRadius}"
+                                                            Background="{DynamicResource DcAccentBrush}"
                                                             Visibility="Collapsed" />
                                                     <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                                       VerticalAlignment="Center" />
@@ -79,10 +79,10 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource DcSubtleBrush}" />
                                                 </Trigger>
                                                 <Trigger Property="IsSelected" Value="True">
-                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
                                                     <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
                                                 </Trigger>
                                             </ControlTemplate.Triggers>

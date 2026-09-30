@@ -1,0 +1,82 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        Style "TUI", dark: the look of the DefenseClaw command-line TUI. The palette is DERIVED FROM THE CLI'S OWN
+        THEME, not invented: the installed CLI ships defenseclaw/tui/theme.py (its Textual theme tokens and
+        stylesheet) under runtime\python\Lib\site-packages, and this file maps those tokens one for one:
+
+            surface_base   #070A12  -> window / inset          text_primary    #E6F1FF -> text
+            surface_panel  #0D1220  -> surface (card)          text_secondary  #9FB2CC -> secondary text
+            surface_raised #121A2B  -> raised / dialog         text_muted      #64748B -> tertiary text
+            surface_hover  #18233A  -> subtle (hover, chip)    accent_cyan     #22D3EE -> accent
+            surface_selected #203251 -> selected               border_active   #38BDF8 -> focus ring
+            border_muted   #27324A  -> borders
+            accent_red / orange / blue / green -> critical / high / medium / ok,  text_secondary -> neutral
+            (theme.py's SEVERITY_STYLES puts MEDIUM on amber and LOW on blue; this app's tones are
+             Critical / High / Medium / Ok / Neutral with Medium = blue everywhere, so blue stays Medium.)
+        Hover accent #67E8F9 is not in theme.py: it is the next-lighter step of the same (Tailwind) cyan.
+
+        Shape and type follow the brief, not theme.py (whose Textual border is "round"): everything square, one
+        monospace family for UI and code, base size 13, 1 px solid borders, no shadows. Token values only.
+    -->
+
+    <!-- ===== Brushes ====================================================================== -->
+    <SolidColorBrush x:Key="DcWindowBackgroundBrush" Color="#070A12" />
+    <SolidColorBrush x:Key="DcSurfaceBrush" Color="#0D1220" />
+    <SolidColorBrush x:Key="DcRaisedBrush" Color="#121A2B" />
+    <SolidColorBrush x:Key="DcInsetBrush" Color="#070A12" />
+    <SolidColorBrush x:Key="DcDialogBrush" Color="#121A2B" />
+    <SolidColorBrush x:Key="DcSubtleBrush" Color="#18233A" />
+    <SolidColorBrush x:Key="DcSelectedBrush" Color="#203251" />
+    <SolidColorBrush x:Key="DcBorderBrush" Color="#27324A" />
+    <SolidColorBrush x:Key="DcControlBorderBrush" Color="#27324A" />
+
+    <SolidColorBrush x:Key="DcTextPrimaryBrush" Color="#E6F1FF" />
+    <SolidColorBrush x:Key="DcTextSecondaryBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcTextTertiaryBrush" Color="#64748B" />
+
+    <SolidColorBrush x:Key="DcAccentBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcAccentHoverBrush" Color="#67E8F9" />
+    <SolidColorBrush x:Key="DcOnAccentBrush" Color="#070A12" />
+
+    <SolidColorBrush x:Key="DcFocusRingBrush" Color="#38BDF8" />
+    <SolidColorBrush x:Key="DcFocusRingInnerBrush" Color="#070A12" />
+
+    <SolidColorBrush x:Key="DcToneCriticalBrush" Color="#F87171" />
+    <SolidColorBrush x:Key="DcToneCriticalSubtleBrush" Color="#26F87171" />
+    <SolidColorBrush x:Key="DcToneHighBrush" Color="#FB923C" />
+    <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#26FB923C" />
+    <SolidColorBrush x:Key="DcToneMediumBrush" Color="#60A5FA" />
+    <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#2660A5FA" />
+    <SolidColorBrush x:Key="DcToneOkBrush" Color="#34D399" />
+    <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#2634D399" />
+    <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#269FB2CC" />
+
+    <!-- ===== Type: one monospace family for everything ==================================== -->
+    <FontFamily x:Key="DcUiFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>
+    <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>
+    <sys:Double x:Key="DcFontSize">13</sys:Double>
+
+    <!-- ===== Shape: square everywhere ===================================================== -->
+    <CornerRadius x:Key="DcRadiusS">0</CornerRadius>
+    <CornerRadius x:Key="DcRadiusM">0</CornerRadius>
+    <CornerRadius x:Key="DcRadiusL">0</CornerRadius>
+    <CornerRadius x:Key="DcControlRadius">0</CornerRadius>
+    <CornerRadius x:Key="DcBarRadius">0</CornerRadius>
+    <Thickness x:Key="DcBorderThickness">1</Thickness>
+
+    <sys:Double x:Key="DcFocusRadius">0</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInner">0</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInset">0</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInsetInner">0</sys:Double>
+
+    <!-- ===== Density ====================================================================== -->
+    <Thickness x:Key="DcCardPadding">12</Thickness>
+    <Thickness x:Key="DcCardPaddingCompact">9</Thickness>
+    <Thickness x:Key="DcCardPaddingFlush">3</Thickness>
+
+    <!-- ===== Effect: none ================================================================= -->
+    <DropShadowEffect x:Key="DcFlyoutShadow" BlurRadius="0" ShadowDepth="0" Opacity="0" Color="Black" />
+</ResourceDictionary>

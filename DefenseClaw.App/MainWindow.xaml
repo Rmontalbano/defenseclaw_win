@@ -25,7 +25,48 @@
             32 px, not WPF-UI's default 48: the caption buttons are 30 px tall and top-aligned, so at 48 the title
             text sat 9 px below their centre line and the bar wasted 16 px of a window that already scrolls its sidebar.
         -->
-        <ui:TitleBar Grid.Row="0" Height="32" Title="DefenseClaw for Windows" />
+        <!--
+            The title bar also carries the two look controls, left of the caption buttons: a one-click light/dark
+            toggle (a sun while dark, a moon while light: the icon is where a click goes; the name and tooltip say so
+            in words) and the Appearance button, which opens the style + mode flyout below. Both are hidden when there
+            is no AppearanceService (a host built without one).
+        -->
+        <ui:TitleBar Grid.Row="0" Height="32" Title="DefenseClaw for Windows">
+            <ui:TitleBar.TrailingContent>
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="0,0,6,0">
+                    <ui:Button x:Name="AppearanceButton"
+                               Appearance="Transparent"
+                               Height="26"
+                               MinHeight="0"
+                               Padding="8,0,8,0"
+                               BorderThickness="0"
+                               Click="OnAppearanceButtonClick"
+                               ToolTip="Appearance: style and light or dark"
+                               AutomationProperties.Name="Appearance"
+                               AutomationProperties.HelpText="Opens a menu to choose the style (Default, Linear, TUI) and the mode (System, Light, Dark).">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="PaintBrush24" FontSize="14" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+
+                    <ui:Button x:Name="ThemeToggleButton"
+                               Margin="2,0,0,0"
+                               Appearance="Transparent"
+                               Height="26"
+                               MinHeight="0"
+                               Padding="8,0,8,0"
+                               BorderThickness="0"
+                               Click="OnThemeToggleClick"
+                               AutomationProperties.AcceleratorKey="Ctrl+Shift+L">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon x:Name="ThemeToggleIcon" Symbol="WeatherMoon24" FontSize="14" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
+            </ui:TitleBar.TrailingContent>
+        </ui:TitleBar>
 
         <!--
             Status strip: one line, always visible, always from the GatewayMonitor snapshot.
@@ -243,5 +284,20 @@
               Visibility="{Binding IsShortcutsOpen, Converter={StaticResource BoolToVisibility}}">
             <shell:ShortcutsOverlay x:Name="Shortcuts" />
         </Grid>
+
+        <!--
+            The Appearance flyout: a light-dismiss popup under the title-bar button, right edges aligned (placed in
+            code, MainWindow.PlaceAppearanceFlyout). Esc or a click elsewhere closes it; closing with Esc puts focus back
+            on the button. Choosing inside it applies at once, so it stays open while the operator tries things.
+        -->
+        <Popup x:Name="AppearancePopup"
+               PlacementTarget="{Binding ElementName=AppearanceButton}"
+               Placement="Custom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               Closed="OnAppearancePopupClosed">
+            <shell:AppearanceFlyout x:Name="AppearanceFlyoutControl" />
+        </Popup>
     </Grid>
 </ui:FluentWindow>

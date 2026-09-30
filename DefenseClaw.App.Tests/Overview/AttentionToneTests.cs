@@ -252,19 +252,21 @@ public sealed class AttentionToneTests : IDisposable
     // ------------------------------------------------------------------ the theme half
 
     [Theory]
-    [InlineData("DcBadge", "Background", "SystemFillColor{0}BackgroundBrush")]
-    [InlineData("DcToneText", "Foreground", "SystemFillColor{0}Brush")]
-    [InlineData("DcToneDot", "Fill", "SystemFillColor{0}Brush")]
-    [InlineData("DcToneBar", "Background", "SystemFillColor{0}Brush")]
-    [InlineData("DcToneTile", "Background", "SystemFillColor{0}BackgroundBrush")]
-    [InlineData("DcValue", "Foreground", "SystemFillColor{0}Brush")]
+    [InlineData("DcBadge", "Background", "DcTone{0}SubtleBrush")]
+    [InlineData("DcToneText", "Foreground", "DcTone{0}Brush")]
+    [InlineData("DcToneDot", "Fill", "DcTone{0}Brush")]
+    [InlineData("DcToneBar", "Background", "DcTone{0}Brush")]
+    [InlineData("DcToneTile", "Background", "DcTone{0}SubtleBrush")]
+    [InlineData("DcValue", "Foreground", "DcTone{0}Brush")]
     public void The_theme_paints_High_and_Warn_amber_and_Medium_blue(string style, string property, string brushPattern)
     {
         var triggers = ToneTriggers(style, property);
 
-        Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, brushPattern, "Caution"), triggers["High"]);
+        // The styles read the appearance TOKENS (DcTone{High,Medium,Critical}...); which WPF-UI brush each token is in the
+        // Default style (Caution / Attention / Critical) is held by AppearanceServiceTests, so the whole chain is covered.
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, brushPattern, "High"), triggers["High"]);
         Assert.Equal(triggers["High"], triggers["Warn"]);
-        Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, brushPattern, "Attention"), triggers["Medium"]);
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, brushPattern, "Medium"), triggers["Medium"]);
         Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture, brushPattern, "Critical"), triggers["Critical"]);
         Assert.Equal(triggers["Critical"], triggers["Bad"]);
     }
@@ -285,7 +287,7 @@ public sealed class AttentionToneTests : IDisposable
             var setter = trigger.Elements(presentation + "Setter").Single(s => (string?)s.Attribute("Property") == property);
             var value = (string)setter.Attribute("Value")!;
 
-            // "{DynamicResource SystemFillColorCautionBrush}" → "SystemFillColorCautionBrush"
+            // "{DynamicResource DcToneHighBrush}" → "DcToneHighBrush"
             result[(string)trigger.Attribute("Value")!] = value.Trim('{', '}').Split(' ', 2)[1];
         }
 

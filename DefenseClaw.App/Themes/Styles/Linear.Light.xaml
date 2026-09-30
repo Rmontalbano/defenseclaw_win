@@ -1,0 +1,67 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        Style "Linear", light. Same shape, type and density as Linear.Dark.xaml; only the colours differ.
+        Token values only - see Default.xaml for the vocabulary.
+    -->
+
+    <!-- ===== Brushes ====================================================================== -->
+    <SolidColorBrush x:Key="DcWindowBackgroundBrush" Color="#FCFCFD" />
+    <SolidColorBrush x:Key="DcSurfaceBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DcRaisedBrush" Color="#F4F5F8" />
+    <SolidColorBrush x:Key="DcInsetBrush" Color="#F4F5F8" />
+    <SolidColorBrush x:Key="DcDialogBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DcSubtleBrush" Color="#F4F5F8" />
+    <SolidColorBrush x:Key="DcSelectedBrush" Color="#E4E5E9" />
+    <SolidColorBrush x:Key="DcBorderBrush" Color="#E4E5E9" />
+    <SolidColorBrush x:Key="DcControlBorderBrush" Color="#E4E5E9" />
+
+    <SolidColorBrush x:Key="DcTextPrimaryBrush" Color="#1C1D1F" />
+    <SolidColorBrush x:Key="DcTextSecondaryBrush" Color="#62666D" />
+    <SolidColorBrush x:Key="DcTextTertiaryBrush" Color="#8A8F98" />
+
+    <SolidColorBrush x:Key="DcAccentBrush" Color="#5E6AD2" />
+    <SolidColorBrush x:Key="DcAccentHoverBrush" Color="#4C57C4" />
+    <SolidColorBrush x:Key="DcOnAccentBrush" Color="#FFFFFF" />
+
+    <SolidColorBrush x:Key="DcFocusRingBrush" Color="#5E6AD2" />
+    <SolidColorBrush x:Key="DcFocusRingInnerBrush" Color="#FFFFFF" />
+
+    <SolidColorBrush x:Key="DcToneCriticalBrush" Color="#D93F3F" />
+    <SolidColorBrush x:Key="DcToneCriticalSubtleBrush" Color="#1FD93F3F" />
+    <SolidColorBrush x:Key="DcToneHighBrush" Color="#C7641A" />
+    <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#1FC7641A" />
+    <SolidColorBrush x:Key="DcToneMediumBrush" Color="#2B7FD6" />
+    <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#1F2B7FD6" />
+    <SolidColorBrush x:Key="DcToneOkBrush" Color="#2E8B5F" />
+    <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#1F2E8B5F" />
+    <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#62666D" />
+    <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#1F62666D" />
+
+    <!-- ===== Type ========================================================================= -->
+    <FontFamily x:Key="DcUiFontFamily">Inter, Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="DcMonoFontFamily">JetBrains Mono, Cascadia Mono, Consolas</FontFamily>
+    <sys:Double x:Key="DcFontSize">13</sys:Double>
+
+    <!-- ===== Shape ======================================================================== -->
+    <CornerRadius x:Key="DcRadiusS">4</CornerRadius>
+    <CornerRadius x:Key="DcRadiusM">6</CornerRadius>
+    <CornerRadius x:Key="DcRadiusL">8</CornerRadius>
+    <CornerRadius x:Key="DcControlRadius">6</CornerRadius>
+    <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <Thickness x:Key="DcBorderThickness">1</Thickness>
+
+    <sys:Double x:Key="DcFocusRadius">8</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInner">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInset">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInsetInner">5</sys:Double>
+
+    <!-- ===== Density ====================================================================== -->
+    <Thickness x:Key="DcCardPadding">12</Thickness>
+    <Thickness x:Key="DcCardPaddingCompact">9</Thickness>
+    <Thickness x:Key="DcCardPaddingFlush">3</Thickness>
+
+    <!-- ===== Effect ======================================================================= -->
+    <DropShadowEffect x:Key="DcFlyoutShadow" BlurRadius="0" ShadowDepth="0" Opacity="0" Color="Black" />
+</ResourceDictionary>

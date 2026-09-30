@@ -346,7 +346,7 @@ public class ActivityPanelLayoutTests
 
             var critical = (System.Windows.Media.Brush)list.FindResource("SystemFillColorCriticalBrush");
             var caution = (System.Windows.Media.Brush)list.FindResource("SystemFillColorCautionBrush");
-            var primary = (System.Windows.Media.Brush)list.FindResource("TextFillColorPrimaryBrush");
+            var primary = (System.Windows.Media.Brush)list.FindResource("DcTextPrimaryBrush");   // the Dc styles read the appearance token, not WPF-UI's brush
 
             var marker = TextOf(list, line => line.IsNotice);
             Assert.Same(caution, marker.Foreground);

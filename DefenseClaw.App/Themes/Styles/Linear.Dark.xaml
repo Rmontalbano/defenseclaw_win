@@ -1,0 +1,74 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        Style "Linear", dark. A clean product UI: solid backgrounds (no Mica), 1 px hairline borders instead
+        of shadows, compact density, an indigo accent. Token values only - the vocabulary is listed in
+        Default.xaml and consumed by Themes\DefenseClaw.xaml; AppearanceService bridges these tokens onto
+        WPF-UI's own brushes so its controls follow.
+
+        Values are the design brief's, unchanged. Tones carry the same meaning as everywhere else
+        (critical red, high orange, medium blue, ok green, neutral grey); the tinted fill behind each is the
+        tone at ~15% so the tone colour still reads on its own badge (see AppearanceContrastTests).
+    -->
+
+    <!-- ===== Brushes ====================================================================== -->
+    <SolidColorBrush x:Key="DcWindowBackgroundBrush" Color="#0F1011" />
+    <SolidColorBrush x:Key="DcSurfaceBrush" Color="#151619" />
+    <SolidColorBrush x:Key="DcRaisedBrush" Color="#1B1C1F" />
+    <SolidColorBrush x:Key="DcInsetBrush" Color="#0F1011" />
+    <SolidColorBrush x:Key="DcDialogBrush" Color="#1B1C1F" />
+    <SolidColorBrush x:Key="DcSubtleBrush" Color="#1B1C1F" />
+    <SolidColorBrush x:Key="DcSelectedBrush" Color="#23252A" />
+    <SolidColorBrush x:Key="DcBorderBrush" Color="#23252A" />
+    <SolidColorBrush x:Key="DcControlBorderBrush" Color="#23252A" />
+
+    <SolidColorBrush x:Key="DcTextPrimaryBrush" Color="#F7F8F8" />
+    <SolidColorBrush x:Key="DcTextSecondaryBrush" Color="#8A8F98" />
+    <SolidColorBrush x:Key="DcTextTertiaryBrush" Color="#62666D" />
+
+    <SolidColorBrush x:Key="DcAccentBrush" Color="#5E6AD2" />
+    <SolidColorBrush x:Key="DcAccentHoverBrush" Color="#6E79E0" />
+    <SolidColorBrush x:Key="DcOnAccentBrush" Color="#FFFFFF" />
+
+    <SolidColorBrush x:Key="DcFocusRingBrush" Color="#5E6AD2" />
+    <SolidColorBrush x:Key="DcFocusRingInnerBrush" Color="#0F1011" />
+
+    <SolidColorBrush x:Key="DcToneCriticalBrush" Color="#EB5757" />
+    <SolidColorBrush x:Key="DcToneCriticalSubtleBrush" Color="#26EB5757" />
+    <SolidColorBrush x:Key="DcToneHighBrush" Color="#F2994A" />
+    <SolidColorBrush x:Key="DcToneHighSubtleBrush" Color="#26F2994A" />
+    <SolidColorBrush x:Key="DcToneMediumBrush" Color="#4EA7FC" />
+    <SolidColorBrush x:Key="DcToneMediumSubtleBrush" Color="#264EA7FC" />
+    <SolidColorBrush x:Key="DcToneOkBrush" Color="#4CB782" />
+    <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="#264CB782" />
+    <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#8A8F98" />
+    <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#268A8F98" />
+
+    <!-- ===== Type ========================================================================= -->
+    <!-- Named, not bundled: a machine without Inter or JetBrains Mono falls through to the Windows faces. -->
+    <FontFamily x:Key="DcUiFontFamily">Inter, Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="DcMonoFontFamily">JetBrains Mono, Cascadia Mono, Consolas</FontFamily>
+    <sys:Double x:Key="DcFontSize">13</sys:Double>
+
+    <!-- ===== Shape ======================================================================== -->
+    <CornerRadius x:Key="DcRadiusS">4</CornerRadius>
+    <CornerRadius x:Key="DcRadiusM">6</CornerRadius>
+    <CornerRadius x:Key="DcRadiusL">8</CornerRadius>
+    <CornerRadius x:Key="DcControlRadius">6</CornerRadius>
+    <CornerRadius x:Key="DcBarRadius">2</CornerRadius>
+    <Thickness x:Key="DcBorderThickness">1</Thickness>
+
+    <sys:Double x:Key="DcFocusRadius">8</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInner">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInset">6</sys:Double>
+    <sys:Double x:Key="DcFocusRadiusInsetInner">5</sys:Double>
+
+    <!-- ===== Density: ~25% tighter than Default (16 / 12 / 4) ============================== -->
+    <Thickness x:Key="DcCardPadding">12</Thickness>
+    <Thickness x:Key="DcCardPaddingCompact">9</Thickness>
+    <Thickness x:Key="DcCardPaddingFlush">3</Thickness>
+
+    <!-- ===== Effect: hairlines, not shadows =============================================== -->
+    <DropShadowEffect x:Key="DcFlyoutShadow" BlurRadius="0" ShadowDepth="0" Opacity="0" Color="Black" />
+</ResourceDictionary>
