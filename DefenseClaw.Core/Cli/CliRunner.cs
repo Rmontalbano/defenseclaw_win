@@ -622,7 +622,8 @@ public sealed class CliRunner : IDisposable
 
         // Resumes on the caller's context, as it always did: InvocationStarted is raised from the start of
         // RunExecutableAsync on that thread, and a UI subscriber that adds a row there relies on it.
-        var path = await Task.Run(() => _paths.FindExecutable(executableName), CancellationToken.None).ConfigureAwait(true)
+        // FindExecutableAsync scans on the pool and joins a scan already in flight for the same name.
+        var path = await _paths.FindExecutableAsync(executableName).ConfigureAwait(true)
             ?? throw new CliNotFoundException(executableName, _paths.CandidatesFor(executableName));
 
         return await RunExecutableAsync(path, args, stdinSecret, cancellationToken, options).ConfigureAwait(true);

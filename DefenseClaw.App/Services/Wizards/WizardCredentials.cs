@@ -146,7 +146,9 @@ public sealed class WizardCredentials
             return "The variable name is missing or has characters an environment variable cannot have.";
         }
 
-        var executable = _paths.FindExecutable("defenseclaw");
+        // A click handler on the UI thread: use the remembered answer when there is one (the wizard has usually primed it)
+        // and only fall back to a PATH scan when nothing is known yet.
+        var executable = _paths.TryGetKnownExecutable("defenseclaw", out var known) ? known : _paths.FindExecutable("defenseclaw");
         if (executable is null)
         {
             return "defenseclaw is not on PATH or in the installer's bin directory, so there is nothing to run.";
