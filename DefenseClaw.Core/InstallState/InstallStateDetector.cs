@@ -42,6 +42,13 @@ public sealed record InstallStatus
 
     public PortOwner? PortOwner { get; init; }
 
+    /// <summary>
+    /// Whether <see cref="PortOwner"/> is the DefenseClaw gateway from the install directory.
+    /// Only <see cref="PortOwnerTrust.Gateway"/> may be sent the bearer token; everything else is
+    /// read through <c>/health</c> alone. See <see cref="GatewayPeerVerifier"/>.
+    /// </summary>
+    public PortOwnerTrust OwnerTrust { get; init; }
+
     public string? CliPath { get; init; }
 
     public string? GatewayCliPath { get; init; }
@@ -92,6 +99,7 @@ public sealed class InstallStateDetector
     private readonly DefenseClawPaths _paths;
     private readonly IGatewayClient _gateway;
     private readonly IPortOwnerInspector _portInspector;
+    private readonly GatewayPeerVerifier _peer;
 
     public InstallStateDetector(
         DefenseClawPaths paths,
@@ -101,6 +109,7 @@ public sealed class InstallStateDetector
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         _portInspector = portInspector ?? new PortOwnerInspector();
+        _peer = new GatewayPeerVerifier(_paths, _portInspector);
     }
 
     /// <summary>Detects using the port from <paramref name="config"/>.</summary>
@@ -133,6 +142,7 @@ public sealed class InstallStateDetector
         var gatewayCliPath = _paths.GatewayCliPath;
         var owner = _portInspector.FindListener(port);
         var wslDetected = owner?.IsWslRelay ?? false;
+        var trust = _peer.Classify(owner);
 
         if (cliPath is null && gatewayCliPath is null)
         {
@@ -141,6 +151,7 @@ public sealed class InstallStateDetector
                 State = InstallState.NotInstalled,
                 Port = port,
                 PortOwner = owner,
+                OwnerTrust = trust,
                 WslGatewayDetected = wslDetected,
                 Detail = wslDetected
                     ? "DefenseClaw is not installed natively, but a WSL gateway is relaying port " +
@@ -158,6 +169,7 @@ public sealed class InstallStateDetector
                 CliPath = cliPath,
                 GatewayCliPath = gatewayCliPath,
                 PortOwner = owner,
+                OwnerTrust = trust,
                 WslGatewayDetected = wslDetected,
                 Detail = $"No config.yaml in {_paths.DataDirectory}. Run 'defenseclaw init' to set it up.",
             };
@@ -176,20 +188,22 @@ public sealed class InstallStateDetector
             CliPath = cliPath,
             GatewayCliPath = gatewayCliPath,
             PortOwner = owner,
+            OwnerTrust = trust,
             WslGatewayDetected = wslDetected,
             HealthProbe = health.Status,
             Health = health,
             BinaryVersion = health.Value?.Provenance?.BinaryVersion,
-            Detail = BuildDetail(running, port, owner, wslDetected, health),
+            Detail = BuildDetail(running, port, owner, wslDetected, health, trust),
         };
     }
 
-    private static string BuildDetail(
+    private string BuildDetail(
         bool running,
         int port,
         PortOwner? owner,
         bool wslDetected,
-        GatewayResult<GatewayHealth> health)
+        GatewayResult<GatewayHealth> health,
+        PortOwnerTrust trust)
     {
         if (wslDetected)
         {
@@ -200,6 +214,14 @@ public sealed class InstallStateDetector
         if (!running)
         {
             return $"Nothing is listening on 127.0.0.1:{port}. Start it with 'defenseclaw-gateway start'.";
+        }
+
+        // Something answers, but not the gateway we know: say so, and that nothing secret is sent.
+        // (Unknown — no owner found — stays quiet: the lookup can miss, and it is not evidence.)
+        if (trust == PortOwnerTrust.Other)
+        {
+            return $"Something is answering on 127.0.0.1:{port}, but {_peer.DescribeUntrusted(owner)}. " +
+                   "The app reads only /health from it and sends it no credentials.";
         }
 
         return health.IsOk

@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Gateway.Models;
 using DefenseClaw.Core.Install;
 using DefenseClaw.Core.Net;
+using DefenseClaw.Core.Time;
 
 namespace DefenseClaw.App.Services;
 
@@ -328,6 +330,26 @@ public sealed class GatewaySnapshotEventArgs : EventArgs
 /// itself in the states where detection stops before probing (not installed, not
 /// initialized), which is when a WSL relay can still be answering.
 /// </para>
+/// <para>
+/// <b>The token goes to the gateway only.</b> <c>/alerts</c> and <c>/status</c> are polled, with
+/// the bearer token, only when the port's owner is <c>defenseclaw-gateway</c> from the install
+/// directory (<see cref="InstallStatus.OwnerTrust"/>) and <c>/health</c> parsed. A WSL relay or
+/// any other listener is read through <c>/health</c> alone, and the alerts note says why. See
+/// <see cref="GatewayPeerVerifier"/>.
+/// </para>
+/// <para>
+/// <b>A poll never dies silently.</b> A poll that throws is traced (rate-limited) and counted;
+/// after <see cref="PollFaultsBeforeSurface"/> in a row — or at once, for a manual refresh — a
+/// snapshot is published whose <see cref="GatewaySnapshot.Detail"/> names the fault, so the
+/// dashboard and tray say the monitor is failing instead of freezing on the last good state. A
+/// subscriber that throws costs only its own delivery.
+/// </para>
+/// <para>
+/// <b>Gates run on the monotonic clock</b> (<see cref="MonotonicStamp"/>): a wall-clock step
+/// must not stop <c>/alerts</c> — and with it the tray's CRITICAL toasts — for the size of the
+/// step. Wall time (<see cref="GatewaySnapshot.PolledAt"/>, <see cref="GatewaySnapshot.AlertsFetchedAt"/>)
+/// is for display only.
+/// </para>
 /// </summary>
 public sealed class GatewayMonitor : IDisposable
 {
@@ -344,6 +366,15 @@ public sealed class GatewayMonitor : IDisposable
     /// <summary>Unreachable polls tolerated before backing off to <see cref="SlowInterval"/>.</summary>
     public const int FailuresBeforeBackoff = 3;
 
+    /// <summary>
+    /// Polls in a row that may throw before a snapshot saying so is published. One is a blip
+    /// (a file locked for a moment); three is a defect the operator should be told about.
+    /// </summary>
+    public const int PollFaultsBeforeSurface = 3;
+
+    /// <summary>The same fault is traced at most this often; a different one is traced at once.</summary>
+    private static readonly TimeSpan FaultTraceInterval = TimeSpan.FromMinutes(1);
+
     /// <summary>Matches the TUI's alert page size.</summary>
     public const int AlertLimit = 25;
 
@@ -351,6 +382,9 @@ public sealed class GatewayMonitor : IDisposable
     public const string ClaudeCodeConnector = "claudecode";
 
     private readonly AppServices _services;
+    private readonly TimeProvider _time;
+    private readonly InstallStateDetector? _detector;
+    private readonly GatewayPeerVerifier _peer;
     private readonly CancellationTokenSource _stop = new();
 
     /// <summary>Guards <see cref="_current"/>, which other threads read through <see cref="Current"/>.</summary>
@@ -369,10 +403,20 @@ public sealed class GatewayMonitor : IDisposable
     private SynchronizationContext? _uiContext;
     private Task? _loop;
     private int _consecutiveFailures;
-    private DateTimeOffset _lastAlertPoll = DateTimeOffset.MinValue;
-    private DateTimeOffset _lastStatusPoll = DateTimeOffset.MinValue;
 
-    /// <summary>Completion time of the last successful <c>/alerts</c> fetch; see <see cref="GatewaySnapshot.AlertsFetchedAt"/>.</summary>
+    /// <summary>When <c>/alerts</c> and <c>/status</c> were last requested; the gates behind their 30 s cadence. Monotonic.</summary>
+    private MonotonicStamp _lastAlertPoll = MonotonicStamp.Never;
+    private MonotonicStamp _lastStatusPoll = MonotonicStamp.Never;
+
+    /// <summary>Polls in a row that threw before producing a snapshot. Only touched while holding <c>_pollGate</c>.</summary>
+    private int _consecutivePollFaults;
+
+    /// <summary>What was last traced and when, so a fault that repeats every five seconds is not logged every five seconds.</summary>
+    private readonly object _faultTraceGate = new();
+    private string? _lastTracedFault;
+    private MonotonicStamp _lastFaultTraceAt = MonotonicStamp.Never;
+
+    /// <summary>Completion time of the last successful <c>/alerts</c> fetch (wall clock, for display); see <see cref="GatewaySnapshot.AlertsFetchedAt"/>.</summary>
     private DateTimeOffset? _lastAlertsFetchedAt;
 
     /// <summary>Port the previous poll used; 0 before the first. See <c>ResetForNewEndpoint</c>.</summary>
@@ -399,10 +443,19 @@ public sealed class GatewayMonitor : IDisposable
 
     private bool _disposed;
 
-    internal GatewayMonitor(AppServices services)
+    /// <param name="services">The composition this monitor polls through.</param>
+    /// <param name="timeProvider">Clock for the cadence gates and the snapshot stamps; tests pass a manual one.</param>
+    /// <param name="detector">Overrides <see cref="AppServices.InstallDetector"/>; tests hand in one over a fake port owner.</param>
+    internal GatewayMonitor(AppServices services, TimeProvider? timeProvider = null, InstallStateDetector? detector = null)
     {
         _services = services;
+        _time = timeProvider ?? TimeProvider.System;
+        _detector = detector;
+        _peer = new GatewayPeerVerifier(services.Paths, services.PortInspector);
     }
+
+    /// <summary>How many handlers are attached to <see cref="PollCompleted"/> right now; what the idle-cost tests read.</summary>
+    internal int PollCompletedSubscriberCount => PollCompleted?.GetInvocationList().Length ?? 0;
 
     /// <summary>
     /// Raised on the UI thread, once per <i>material</i> change: the first poll, and after
@@ -483,10 +536,27 @@ public sealed class GatewayMonitor : IDisposable
     public Task<GatewaySnapshot> RefreshAlertsNowAsync(CancellationToken cancellationToken = default) =>
         ManualPollAsync(forceAlerts: true, cancellationToken);
 
+    /// <summary>
+    /// One background-loop poll: exactly what <see cref="RunAsync"/> does each round, minus the
+    /// wait. A fault is counted rather than shown until <see cref="PollFaultsBeforeSurface"/> of
+    /// them ran in a row. Internal so a test can drive the loop's cadence without sleeping.
+    /// </summary>
+    internal Task<GatewaySnapshot> PollOnceAsync(CancellationToken cancellationToken = default) =>
+        PollAndPublishAsync(forceAlerts: false, surfaceFaultNow: false, cancellationToken);
+
+    /// <summary>How many times <c>/alerts</c> was requested; the tests' view of the 30 s cadence gate.</summary>
+    internal int AlertsFetchCount => Volatile.Read(ref _alertsFetchCount);
+
+    /// <summary>How many times <c>/status</c> was requested; the tests' view of its cadence gate.</summary>
+    internal int StatusFetchCount => Volatile.Read(ref _statusFetchCount);
+
+    private int _alertsFetchCount;
+    private int _statusFetchCount;
+
     private Task<GatewaySnapshot> ManualPollAsync(bool forceAlerts, CancellationToken cancellationToken)
     {
         _services.Paths.InvalidateExecutableCache();
-        return PollAndPublishAsync(forceAlerts, cancellationToken);
+        return PollAndPublishAsync(forceAlerts, surfaceFaultNow: true, cancellationToken);
     }
 
     public void Dispose()
@@ -507,15 +577,18 @@ public sealed class GatewayMonitor : IDisposable
         {
             try
             {
-                _ = await PollAndPublishAsync(forceAlerts: false, cancellationToken).ConfigureAwait(false);
+                _ = await PollOnceAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 return;
             }
 #pragma warning disable CA1031 // A poll loop that dies takes the whole UI's state with it.
-            catch (Exception)
+            catch (Exception ex)
             {
+                // PollAndPublishAsync already records a poll's own faults; what reaches here is
+                // the gate or the plumbing around it. Still traced, never swallowed silently.
+                TraceFault("poll loop", ex);
                 Interlocked.Increment(ref _consecutiveFailures);
             }
 #pragma warning restore CA1031
@@ -536,20 +609,123 @@ public sealed class GatewayMonitor : IDisposable
     /// The only way a poll starts, from the loop or from a manual refresh. Polling
     /// and publishing are one critical section so snapshots are published in the order they
     /// were taken: released between the two, a slow poll could overwrite a newer one.
+    /// <para>
+    /// <b>Never throws for a poll's own fault</b> (only for cancellation): a poll that threw is
+    /// recorded, and once <see cref="PollFaultsBeforeSurface"/> of them ran in a row — or at once,
+    /// for a manual refresh, so the relay command that asked gets an answer instead of an
+    /// exception — a snapshot carrying "The gateway poll is failing: …" is published. Below that
+    /// the previous snapshot stands and is what this returns.
+    /// </para>
     /// </summary>
-    private async Task<GatewaySnapshot> PollAndPublishAsync(bool forceAlerts, CancellationToken cancellationToken)
+    private async Task<GatewaySnapshot> PollAndPublishAsync(bool forceAlerts, bool surfaceFaultNow, CancellationToken cancellationToken)
     {
         await _pollGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var snapshot = await PollAsync(forceAlerts, cancellationToken).ConfigureAwait(false);
-            Publish(snapshot);
+            GatewaySnapshot? snapshot;
+            try
+            {
+                snapshot = await PollAsync(forceAlerts, cancellationToken).ConfigureAwait(false);
+                _consecutivePollFaults = 0;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+#pragma warning disable CA1031 // A poll that throws must be recorded and shown, not allowed to end the loop or the refresh command.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                snapshot = RecordPollFault(ex, surfaceFaultNow);
+            }
+
+            if (snapshot is null)
+            {
+                return Current;
+            }
+
+            try
+            {
+                Publish(snapshot);
+            }
+#pragma warning disable CA1031 // Publish stores the snapshot before it raises anything; a fault after that must not look like a failed poll.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                TraceFault("publish", ex);
+            }
+
             return snapshot;
         }
         finally
         {
             _ = _pollGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Counts a poll that threw and traces it (rate-limited). Returns the snapshot to publish —
+    /// the last one, with <see cref="GatewaySnapshot.Detail"/> naming the fault — once it is time
+    /// to tell the operator, or null while it is still only a blip. Callers must hold <c>_pollGate</c>.
+    /// </summary>
+    private GatewaySnapshot? RecordPollFault(Exception ex, bool surfaceNow)
+    {
+        _consecutivePollFaults++;
+        TraceFault("poll", ex);
+        Interlocked.Increment(ref _consecutiveFailures);
+
+        if (!surfaceNow && _consecutivePollFaults < PollFaultsBeforeSurface)
+        {
+            return null;
+        }
+
+        var current = Current;
+        return current with
+        {
+            // Before the first good poll there is no state to keep; "Checking…" forever is the
+            // one thing this must not say.
+            State = current.State == AppGatewayState.Unknown ? AppGatewayState.Degraded : current.State,
+            Detail = $"The gateway poll is failing: {DescribeFault(ex)}",
+            PolledAt = _time.GetUtcNow(),
+            ConsecutiveFailures = Volatile.Read(ref _consecutiveFailures),
+        };
+    }
+
+    /// <summary>
+    /// <c>Type: message</c>, on one line, capped, with the gateway token masked should an
+    /// exception message ever quote it. The text ends up on the dashboard and in the tray.
+    /// </summary>
+    private string DescribeFault(Exception ex)
+    {
+        var text = $"{ex.GetType().Name}: {ex.Message}";
+        if (_services.Token.Token is { IsEmpty: false } token)
+        {
+            text = token.Scrub(text);
+        }
+
+        text = text.ReplaceLineEndings(" ");
+        return text.Length <= 300 ? text : text[..300] + "…";
+    }
+
+    /// <summary>
+    /// Writes <paramref name="ex"/> to the trace, but a fault that repeats verbatim every poll
+    /// only once a minute; a different fault is written at once.
+    /// </summary>
+    private void TraceFault(string what, Exception ex)
+    {
+        var key = $"{what}|{ex.GetType().FullName}|{ex.Message}";
+        lock (_faultTraceGate)
+        {
+            if (key == _lastTracedFault && !_lastFaultTraceAt.HasElapsed(FaultTraceInterval, _time))
+            {
+                return;
+            }
+
+            _lastTracedFault = key;
+            _lastFaultTraceAt = MonotonicStamp.Now(_time);
+        }
+
+        Trace.TraceError($"gateway monitor: {what} failed: {ex}");
     }
 
     /// <summary>
@@ -566,7 +742,7 @@ public sealed class GatewayMonitor : IDisposable
 
         ResetForNewEndpoint(endpoint.Port);
 
-        var status = await _services.InstallDetector
+        var status = await (_detector ?? _services.InstallDetector)
             .DetectAsync(endpoint.Port, endpoint.Client, cancellationToken)
             .ConfigureAwait(false);
 
@@ -589,14 +765,27 @@ public sealed class GatewayMonitor : IDisposable
 
         if (state is AppGatewayState.Running or AppGatewayState.Degraded or AppGatewayState.WslGatewayDetected)
         {
-            if (forceAlerts || DateTimeOffset.UtcNow - _lastAlertPoll >= AlertInterval)
+            // The authenticated endpoints are polled only for the gateway itself: its owner
+            // checked out AND /health parsed. Anything else that answers on the port — a WSL
+            // relay, another server, a gateway from outside the install directory — is read
+            // through /health alone, so the bearer token never leaves for it.
+            if (status.OwnerTrust == PortOwnerTrust.Gateway && health.IsOk)
             {
-                await RefreshAlertsAsync(endpoint.Client, cancellationToken).ConfigureAwait(false);
-            }
+                if (forceAlerts || _lastAlertPoll.HasElapsed(AlertInterval, _time))
+                {
+                    await RefreshAlertsAsync(endpoint.Client, cancellationToken).ConfigureAwait(false);
+                }
 
-            if (DateTimeOffset.UtcNow - _lastStatusPoll >= StatusInterval)
+                if (_lastStatusPoll.HasElapsed(StatusInterval, _time))
+                {
+                    await RefreshClaudeCodeModeAsync(endpoint.Client, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            else
             {
-                await RefreshClaudeCodeModeAsync(endpoint.Client, cancellationToken).ConfigureAwait(false);
+                _lastAlerts = Array.Empty<GatewayAlert>();
+                _lastAlertsUnavailable = DescribeUnverifiedPeer(status, health);
+                _lastClaudeCodeMode = null;
             }
         }
         else if (state is AppGatewayState.GatewayStopped or AppGatewayState.NotInstalled or AppGatewayState.NotInitialized)
@@ -637,9 +826,25 @@ public sealed class GatewayMonitor : IDisposable
             AlertsFetchedAt = _lastAlertsFetchedAt,
             ActiveConnectors = ResolveConnectors(health.Value),
             FailModeDrift = drift,
-            PolledAt = DateTimeOffset.UtcNow,
+            PolledAt = _time.GetUtcNow(),
             ConsecutiveFailures = Volatile.Read(ref _consecutiveFailures),
         };
+    }
+
+    /// <summary>
+    /// Why <c>/alerts</c> is not being read when something is answering on the port: the answer is
+    /// not the gateway, or is not a healthy one. Never blames the token — none was sent.
+    /// </summary>
+    private string DescribeUnverifiedPeer(InstallStatus status, GatewayResult<GatewayHealth> health)
+    {
+        if (status.OwnerTrust == PortOwnerTrust.Gateway)
+        {
+            return $"Alerts are unavailable: the gateway's /health did not answer as expected ({health.Status}), " +
+                   "so no credentials were sent.";
+        }
+
+        return $"Alerts are unavailable: {_peer.DescribeUntrusted(status.PortOwner)}, " +
+               "so the app reads only /health from it and sends it no credentials.";
     }
 
     /// <summary>
@@ -659,8 +864,8 @@ public sealed class GatewayMonitor : IDisposable
             return;
         }
 
-        _lastAlertPoll = DateTimeOffset.MinValue;
-        _lastStatusPoll = DateTimeOffset.MinValue;
+        _lastAlertPoll = MonotonicStamp.Never;
+        _lastStatusPoll = MonotonicStamp.Never;
         _lastAlerts = Array.Empty<GatewayAlert>();
         _lastAlertsUnavailable = "Alerts have not been polled yet.";
         _lastAlertsFetchedAt = null;
@@ -670,11 +875,28 @@ public sealed class GatewayMonitor : IDisposable
 
     private async Task RefreshAlertsAsync(GatewayClient gateway, CancellationToken cancellationToken)
     {
-        var result = await gateway
-            .GetAlertsAsync(AlertLimit, cancellationToken)
-            .ConfigureAwait(false);
+        _ = Interlocked.Increment(ref _alertsFetchCount);
 
-        _lastAlertPoll = DateTimeOffset.UtcNow;
+        GatewayResult<IReadOnlyList<GatewayAlert>> result;
+        try
+        {
+            result = await gateway
+                .GetAlertsAsync(AlertLimit, cancellationToken)
+                .ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // The snapshot must still be published: a throwing fetch is "alerts unavailable", not a frozen dashboard.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            TraceFault("alerts fetch", ex);
+            _lastAlertPoll = MonotonicStamp.Now(_time);
+            _lastAlerts = Array.Empty<GatewayAlert>();
+            _lastAlertsUnavailable = $"Alerts could not be read: {DescribeFault(ex)}";
+            return;
+        }
+
+        var completedAt = _time.GetUtcNow();
+        _lastAlertPoll = MonotonicStamp.Now(_time);
 
         switch (result.Status)
         {
@@ -689,7 +911,7 @@ public sealed class GatewayMonitor : IDisposable
                 }
 
                 _lastAlertsUnavailable = null;
-                _lastAlertsFetchedAt = _lastAlertPoll;
+                _lastAlertsFetchedAt = completedAt;
                 break;
 
             // Sidecar alive, subsystem unwired. Normal on this install — informational,
@@ -702,7 +924,8 @@ public sealed class GatewayMonitor : IDisposable
             case GatewayStatus.Unauthorized:
                 _lastAlerts = Array.Empty<GatewayAlert>();
                 _lastAlertsUnavailable =
-                    $"/alerts needs a bearer token; none was found via {_services.Token.VariableName}.";
+                    $"/alerts needs a bearer token; none was found via {_services.Token.VariableName}." +
+                    (_services.Token.Note is { } note ? $" {note}" : string.Empty);
                 break;
 
             default:
@@ -729,9 +952,23 @@ public sealed class GatewayMonitor : IDisposable
     /// </summary>
     private async Task RefreshClaudeCodeModeAsync(GatewayClient gateway, CancellationToken cancellationToken)
     {
-        var result = await gateway.GetStatusAsync(cancellationToken).ConfigureAwait(false);
+        _ = Interlocked.Increment(ref _statusFetchCount);
 
-        _lastStatusPoll = DateTimeOffset.UtcNow;
+        GatewayResult<GatewayStatusResponse> result;
+        try
+        {
+            result = await gateway.GetStatusAsync(cancellationToken).ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // Same as the alerts fetch: the cached contract stands and the poll still publishes.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            TraceFault("status fetch", ex);
+            _lastStatusPoll = MonotonicStamp.Now(_time);
+            return;
+        }
+
+        _lastStatusPoll = MonotonicStamp.Now(_time);
 
         if (!result.IsOk || result.Value is not { } status)
         {
@@ -772,7 +1009,10 @@ public sealed class GatewayMonitor : IDisposable
             InstallState.NotInstalled => AppGatewayState.NotInstalled,
             InstallState.InstalledNotInitialized => AppGatewayState.NotInitialized,
             InstallState.GatewayStopped => AppGatewayState.GatewayStopped,
-            InstallState.Running when healthStatus == GatewayStatus.Ok => AppGatewayState.Running,
+            // A clean /health from a process that is demonstrably not the gateway (or not the
+            // installed one) is not "Running": it is something else answering on the port.
+            InstallState.Running when healthStatus == GatewayStatus.Ok && status.OwnerTrust != PortOwnerTrust.Other =>
+                AppGatewayState.Running,
             InstallState.Running => AppGatewayState.Degraded,
             _ => AppGatewayState.Unknown,
         };
@@ -920,6 +1160,12 @@ public sealed class GatewayMonitor : IDisposable
     /// <summary>
     /// Runs on the UI thread. Reads both delegates here rather than at publish time, so a
     /// panel that deactivated while the call was queued is not called into.
+    /// <para>
+    /// Each subscriber is called on its own: one that throws is traced and skipped, and neither
+    /// the ones after it nor <see cref="PollCompleted"/> are cheated of this poll. (A plain
+    /// <c>Invoke</c> stops at the first throw — and since <c>_lastPublished</c> was set before
+    /// this ran, the material change it announced would never have been announced again.)
+    /// </para>
     /// </summary>
     private void Raise(GatewaySnapshot snapshot, bool changed)
     {
@@ -927,9 +1173,31 @@ public sealed class GatewayMonitor : IDisposable
 
         if (changed)
         {
-            StateChanged?.Invoke(this, args);
+            InvokeEach(StateChanged, args, nameof(StateChanged));
         }
 
-        PollCompleted?.Invoke(this, args);
+        InvokeEach(PollCompleted, args, nameof(PollCompleted));
+    }
+
+    private void InvokeEach(EventHandler<GatewaySnapshotEventArgs>? handlers, GatewaySnapshotEventArgs args, string eventName)
+    {
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((EventHandler<GatewaySnapshotEventArgs>)handler)(this, args);
+            }
+#pragma warning disable CA1031 // A misbehaving subscriber must not silence the others.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                TraceFault($"{eventName} subscriber {handler.Method.DeclaringType?.Name}.{handler.Method.Name}", ex);
+            }
+        }
     }
 }

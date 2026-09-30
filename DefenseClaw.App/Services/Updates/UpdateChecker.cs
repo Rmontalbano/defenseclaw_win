@@ -167,7 +167,7 @@ public sealed class UpdateChecker : IDisposable
         var installedVersion = await ResolveInstalledVersionAsync(cancellationToken).ConfigureAwait(false);
 
         var cached = TryReadCache();
-        var cacheIsFresh = cached is not null && DateTimeOffset.UtcNow - cached.FetchedAt < CacheLifetime;
+        var cacheIsFresh = cached is not null && DefenseClaw.Core.Time.WallClock.Elapsed(cached.FetchedAt) < CacheLifetime;
 
         if (!forceRefresh && cacheIsFresh)
         {

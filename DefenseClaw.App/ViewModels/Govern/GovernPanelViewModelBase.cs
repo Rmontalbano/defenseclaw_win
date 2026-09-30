@@ -251,7 +251,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
         // One catch-up read per visit, and only when the data is old (or never arrived). Not a timer.
         var stale = _lastLoadedAt is null
-                    || DateTimeOffset.Now - _lastLoadedAt.Value >= StaleAfter
+                    || DefenseClaw.Core.Time.WallClock.Elapsed(_lastLoadedAt.Value) >= StaleAfter
                     || !string.Equals(_loadedScopeKey, ScopeKey(), StringComparison.Ordinal);
         if (!_everRequested || stale)
         {

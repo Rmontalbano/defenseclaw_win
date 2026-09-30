@@ -149,7 +149,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
         // One read of the guardrail posture when there is none yet or it has gone stale — a CLI call,
         // so never more often than that.
-        if (_guardrailLoadedAt is null || DateTimeOffset.UtcNow - _guardrailLoadedAt > GuardrailFreshFor)
+        if (_guardrailLoadedAt is null || DefenseClaw.Core.Time.WallClock.Elapsed(_guardrailLoadedAt.Value) > GuardrailFreshFor)
         {
             _ = LoadGuardrailAsync();
         }

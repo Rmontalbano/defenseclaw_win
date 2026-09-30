@@ -21,11 +21,22 @@ public sealed record TokenResolution(SecretValue? Token, TokenSource Source, str
 {
     public bool Found => Token is not null;
 
+    /// <summary>
+    /// What was wrong with a rung that was passed over — currently: a value with control
+    /// characters in it, treated as absent. Names the variable and the rung, never the value.
+    /// Null when nothing was skipped; the text to append when a 401 says "no token".
+    /// </summary>
+    public string? Note { get; init; }
+
     /// <summary>Safe for logs and banners: names the rung, never the value.</summary>
-    public override string ToString() =>
-        Found
+    public override string ToString()
+    {
+        var text = Found
             ? $"token from {Source} ({VariableName}), length {Token!.Length}"
             : $"no token found for {VariableName}";
+
+        return Note is null ? text : $"{text}; {Note}";
+    }
 }
 
 /// <summary>Indirection over the process environment so tests can supply their own.</summary>
@@ -63,6 +74,13 @@ public sealed class DictionaryEnvironmentReader : IEnvironmentReader
 ///   <item>a literal <c>gateway.token</c> in config.yaml.</item>
 /// </list>
 /// Empty or whitespace-only values at a rung are treated as absent and the walk continues.
+/// <para>
+/// <b>Every rung is trimmed</b> — a token pasted into an environment variable or a config line
+/// routinely carries a trailing newline or space, and a header value with one is either a
+/// <see cref="FormatException"/> or a 401. A value with a control character <i>inside</i> it
+/// (a NUL, an embedded newline, an escape) is not a token anyone meant: it is treated as absent,
+/// the walk continues, and <see cref="TokenResolution.Note"/> says which rung was skipped.
+/// </para>
 /// </summary>
 public sealed class TokenResolver
 {
@@ -88,24 +106,50 @@ public sealed class TokenResolver
         ArgumentNullException.ThrowIfNull(config);
 
         var variableName = config.Gateway.TokenEnv;
+        string? note = null;
 
-        var fromEnvironment = _environment.GetVariable(variableName);
-        if (!string.IsNullOrWhiteSpace(fromEnvironment))
+        if (Clean(_environment.GetVariable(variableName), $"{variableName} in the process environment", ref note) is { } fromEnvironment)
         {
-            return new TokenResolution(new SecretValue(fromEnvironment), TokenSource.Environment, variableName);
+            return new TokenResolution(new SecretValue(fromEnvironment), TokenSource.Environment, variableName) { Note = note };
         }
 
         var dotEnv = _dotEnvProvider();
-        if (dotEnv.TryGetValue(variableName, out var fromDotEnv) && !string.IsNullOrWhiteSpace(fromDotEnv))
+        dotEnv.TryGetValue(variableName, out var rawDotEnv);
+        if (Clean(rawDotEnv, $"{variableName} in .env", ref note) is { } fromDotEnv)
         {
-            return new TokenResolution(new SecretValue(fromDotEnv), TokenSource.DotEnvFile, variableName);
+            return new TokenResolution(new SecretValue(fromDotEnv), TokenSource.DotEnvFile, variableName) { Note = note };
         }
 
-        if (!string.IsNullOrWhiteSpace(config.Gateway.Token))
+        if (Clean(config.Gateway.Token, "gateway.token in config.yaml", ref note) is { } fromConfig)
         {
-            return new TokenResolution(new SecretValue(config.Gateway.Token), TokenSource.ConfigLiteral, variableName);
+            return new TokenResolution(new SecretValue(fromConfig), TokenSource.ConfigLiteral, variableName) { Note = note };
         }
 
-        return new TokenResolution(null, TokenSource.None, variableName);
+        return new TokenResolution(null, TokenSource.None, variableName) { Note = note };
+    }
+
+    /// <summary>
+    /// The trimmed value, or null when it is absent, blank or holds a control character (in which
+    /// case <paramref name="note"/> gains a sentence naming <paramref name="where"/>).
+    /// </summary>
+    private static string? Clean(string? raw, string where, ref string? note)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var trimmed = raw.Trim();
+        foreach (var c in trimmed)
+        {
+            if (char.IsControl(c))
+            {
+                var sentence = $"{where} contains a control character, so it was ignored.";
+                note = note is null ? sentence : $"{note} {sentence}";
+                return null;
+            }
+        }
+
+        return trimmed;
     }
 }

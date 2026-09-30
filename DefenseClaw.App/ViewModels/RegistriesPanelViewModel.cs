@@ -447,7 +447,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     /// <summary>One-shot catch-up when the panel comes back on screen after the data has gone stale; no timer.</summary>
     protected override void OnActivated()
     {
-        if (_loadRunning || (_loadedAt is { } at && DateTimeOffset.Now - at < StaleAfter))
+        if (_loadRunning || (_loadedAt is { } at && DefenseClaw.Core.Time.WallClock.Elapsed(at) < StaleAfter))
         {
             return;
         }

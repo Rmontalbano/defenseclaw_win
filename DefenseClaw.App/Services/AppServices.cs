@@ -87,11 +87,12 @@ public sealed class AppServices : IDisposable
         _token = initial.Token;
         ConfigLoadError = initial.Error;
 
+        PortInspector = new PortOwnerInspector();
+        _peerVerifier = new GatewayPeerVerifier(Paths, PortInspector);
+
         _endpoint = new GatewayEndpoint(
             _config.Config.Gateway.ApiPort,
-            GatewayClient.Create(_config.Config.Gateway.ApiPort, CurrentToken));
-
-        PortInspector = new PortOwnerInspector();
+            CreateGatewayClient(_config.Config.Gateway.ApiPort));
 
         // The detector's own client is only its default for the parameterless overloads; the
         // monitor always hands it the live endpoint's client (see GatewayMonitor.PollAsync), so
@@ -303,6 +304,19 @@ public sealed class AppServices : IDisposable
     public SecretValue? CurrentToken() => Token.Token;
 
     /// <summary>
+    /// Decides whether the process on the API port is the gateway the token may go to. Assigned
+    /// before the first client is built.
+    /// </summary>
+    private readonly GatewayPeerVerifier _peerVerifier;
+
+    /// <summary>
+    /// A client for <paramref name="port"/> that sends the bearer token only to the DefenseClaw
+    /// gateway from the install directory — see <see cref="GatewayPeerVerifier"/>.
+    /// </summary>
+    private GatewayClient CreateGatewayClient(int port) =>
+        GatewayClient.Create(port, CurrentToken, verifyPeer: _peerVerifier.ForPort(port));
+
+    /// <summary>
     /// Re-reads config.yaml and the .env file, then re-resolves the token ladder, and
     /// re-targets the gateway client when <c>gateway.api_port</c> moved.
     /// <para>
@@ -346,7 +360,7 @@ public sealed class AppServices : IDisposable
                 // of bug gets written) leaves the old client, config and token all in place.
                 GatewayClient? fresh = port == _endpoint.Port
                     ? null
-                    : GatewayClient.Create(port, CurrentToken);
+                    : CreateGatewayClient(port);
 
                 lock (_gate)
                 {

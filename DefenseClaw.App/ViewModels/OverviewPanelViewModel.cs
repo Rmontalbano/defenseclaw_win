@@ -514,7 +514,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
     private void RefreshDataIfDue()
     {
-        if (DateTimeOffset.UtcNow - _lastDataRefresh >= DataRefreshInterval)
+        if (DefenseClaw.Core.Time.WallClock.Elapsed(_lastDataRefresh) >= DataRefreshInterval)
         {
             _ = RefreshDataAsync(CancellationToken.None);
         }
@@ -768,7 +768,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// </summary>
     private void EnsureScannerPathsProbed()
     {
-        if (DateTimeOffset.UtcNow - _scannerPathsProbedAt < DataRefreshInterval)
+        if (DefenseClaw.Core.Time.WallClock.Elapsed(_scannerPathsProbedAt) < DataRefreshInterval)
         {
             return;
         }

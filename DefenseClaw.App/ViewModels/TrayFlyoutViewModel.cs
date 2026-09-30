@@ -12,13 +12,13 @@ namespace DefenseClaw.App.ViewModels;
 /// never disagree with the dashboard.
 /// </para>
 /// <para>
-/// Two subscriptions, both for the life of the process (the flyout is a tray surface, not a
-/// panel, and nothing tells this view-model when the flyout window is showing):
-/// <see cref="GatewayMonitor.StateChanged"/> for everything that can change materially, and
-/// <see cref="GatewayMonitor.PollCompleted"/> for the one volatile field it prints,
-/// <see cref="LastPolled"/>. The second costs one dispatcher hop and one short string per
-/// poll; it exists so the "polled at" line stays truthful without turning every poll back
-/// into a full StateChanged fan-out.
+/// Two subscriptions with two lifetimes. <see cref="GatewayMonitor.StateChanged"/> — everything
+/// that can change materially — is held for the life of the process, so the flyout is right the
+/// instant it opens. <see cref="GatewayMonitor.PollCompleted"/>, for the one volatile field the
+/// flyout prints (<see cref="LastPolled"/>), is held <b>only while the flyout is on screen</b>
+/// (<see cref="SetVisible"/>, driven by the window): a subscriber costs one dispatcher hop per
+/// poll, and a tray app spends nearly all of its life with the flyout hidden. Showing it reads
+/// <see cref="GatewayMonitor.Current"/>, so nothing waits a poll to be current.
 /// </para>
 /// </summary>
 public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
@@ -26,6 +26,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     private readonly AppServices _services;
     private readonly Action _openDashboard;
     private readonly Action _exit;
+    private bool _trackingPolls;
     private bool _disposed;
 
     [ObservableProperty]
@@ -81,8 +82,40 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         _exit = exit ?? throw new ArgumentNullException(nameof(exit));
 
         _services.Monitor.StateChanged += OnStateChanged;
-        _services.Monitor.PollCompleted += OnPollCompleted;
         Apply(_services.Monitor.Current);
+    }
+
+    /// <summary>True while <see cref="GatewayMonitor.PollCompleted"/> is subscribed, i.e. while the flyout is showing.</summary>
+    internal bool IsTrackingPolls => _trackingPolls;
+
+    /// <summary>
+    /// Called by the flyout window (UI thread) when it is shown or hidden. Showing subscribes to
+    /// <see cref="GatewayMonitor.PollCompleted"/> and re-reads <see cref="GatewayMonitor.Current"/>,
+    /// which also refreshes <see cref="LastPolled"/> for the polls that went by while hidden;
+    /// hiding drops the subscription so an idle poll queues nothing to the UI thread.
+    /// </summary>
+    public void SetVisible(bool visible)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (visible)
+        {
+            if (!_trackingPolls)
+            {
+                _trackingPolls = true;
+                _services.Monitor.PollCompleted += OnPollCompleted;
+            }
+
+            Apply(_services.Monitor.Current);
+        }
+        else if (_trackingPolls)
+        {
+            _trackingPolls = false;
+            _services.Monitor.PollCompleted -= OnPollCompleted;
+        }
     }
 
     public void Dispose()
@@ -93,6 +126,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        _trackingPolls = false;
         _services.Monitor.StateChanged -= OnStateChanged;
         _services.Monitor.PollCompleted -= OnPollCompleted;
     }

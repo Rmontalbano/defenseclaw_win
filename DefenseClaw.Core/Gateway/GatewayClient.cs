@@ -37,6 +37,17 @@ public interface IGatewayClient
 /// <see cref="GatewayResult{T}.ErrorMessage"/>.
 /// </para>
 /// <para>
+/// <b>Who gets the token.</b> Whoever binds the loopback port answers, so when the client is
+/// built with a <c>verifyPeer</c> check it sends the token — and issues any authenticated
+/// request at all — only if that check passes <i>and</i> the last <c>/health</c> through this
+/// client parsed as a <see cref="GatewayHealth"/> (probed on the spot when there has been none).
+/// Otherwise the call ends without a request leaving: <see cref="GatewayStatus.Unreachable"/> when
+/// nothing is listening (so the panels' fallbacks still fire), <see cref="GatewayStatus.Error"/>
+/// for a listener that is not the gateway. <see cref="Create"/> never follows redirects: a 3xx from a foreign listener must not
+/// be a way to carry the header elsewhere. A client without a <c>verifyPeer</c> keeps the old
+/// unconditional behaviour, which is what the unit tests over a fake handler want.
+/// </para>
+/// <para>
 /// This client is deliberately read-only. Every mutation goes through the CLI so the
 /// Activity panel can record exact argv — see <c>Cli.CliRunner</c>.
 /// </para>
@@ -61,34 +72,65 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
 
     private readonly HttpClient _http;
     private readonly Func<SecretValue?> _tokenProvider;
+    private readonly Func<PortOwnerTrust>? _verifyPeer;
     private readonly bool _ownsHttpClient;
+
+    /// <summary>
+    /// True while the last <c>/health</c> through this client answered and parsed. Half of the
+    /// "may this peer have the token" check; see the type documentation.
+    /// </summary>
+    private volatile bool _healthConfirmed;
 
     /// <param name="httpClient">Must have a BaseAddress, or use <see cref="Create"/>.</param>
     /// <param name="tokenProvider">
     /// Re-evaluated per request so a token that appears after startup (env var set,
     /// .env written) is picked up without recreating the client.
     /// </param>
-    public GatewayClient(HttpClient httpClient, Func<SecretValue?>? tokenProvider = null, bool ownsHttpClient = false)
+    /// <param name="verifyPeer">
+    /// The peer-verification seam: what the process listening on this client's port is, as far as
+    /// the bearer token goes (see <see cref="GatewayPeerVerifier"/>). Only
+    /// <see cref="PortOwnerTrust.Gateway"/> lets a request through; <see cref="PortOwnerTrust.Unknown"/>
+    /// (nothing listening) reads as unreachable, anything else as a refused peer. Evaluated on
+    /// every authenticated request, so a listener replaced since the last poll is not believed.
+    /// Null means no check.
+    /// </param>
+    public GatewayClient(
+        HttpClient httpClient,
+        Func<SecretValue?>? tokenProvider = null,
+        bool ownsHttpClient = false,
+        Func<PortOwnerTrust>? verifyPeer = null)
     {
         _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _tokenProvider = tokenProvider ?? (static () => null);
         _ownsHttpClient = ownsHttpClient;
+        _verifyPeer = verifyPeer;
     }
 
     /// <summary>Builds a client for the loopback sidecar on <paramref name="port"/>.</summary>
-    public static GatewayClient Create(int port, Func<SecretValue?>? tokenProvider = null, TimeSpan? timeout = null)
+    public static GatewayClient Create(
+        int port,
+        Func<SecretValue?>? tokenProvider = null,
+        TimeSpan? timeout = null,
+        Func<PortOwnerTrust>? verifyPeer = null)
     {
-        var http = new HttpClient
+        // No redirects: the token rides the request, and a 3xx from whatever answered must not
+        // be able to carry it to another address (or downgrade it to another scheme).
+        var handler = new SocketsHttpHandler { AllowAutoRedirect = false };
+        var http = new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = new Uri($"http://127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}/"),
             Timeout = timeout ?? TimeSpan.FromSeconds(10),
         };
 
-        return new GatewayClient(http, tokenProvider, ownsHttpClient: true);
+        return new GatewayClient(http, tokenProvider, ownsHttpClient: true, verifyPeer);
     }
 
-    public Task<GatewayResult<GatewayHealth>> GetHealthAsync(CancellationToken cancellationToken = default) =>
-        GetAsync<GatewayHealth>("health", requiresAuth: false, cancellationToken);
+    public async Task<GatewayResult<GatewayHealth>> GetHealthAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await GetAsync<GatewayHealth>("health", requiresAuth: false, cancellationToken).ConfigureAwait(false);
+        _healthConfirmed = result.IsOk;
+        return result;
+    }
 
     public Task<GatewayResult<GatewayStatusResponse>> GetStatusAsync(CancellationToken cancellationToken = default) =>
         GetAsync<GatewayStatusResponse>("status", requiresAuth: true, cancellationToken);
@@ -131,10 +173,29 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
 
         if (requiresAuth)
         {
+            if (await RefusePeerAsync<T>(cancellationToken).ConfigureAwait(false) is { } refused)
+            {
+                return refused;
+            }
+
             var token = _tokenProvider();
             if (token is { IsEmpty: false })
             {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Reveal());
+                var plain = token.Reveal();
+                if (!IsHeaderSafe(plain))
+                {
+                    // Not sent, and not echoed: FormatException's own message quotes the value.
+                    return GatewayResult<T>.Error(UnsendableTokenMessage);
+                }
+
+                try
+                {
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", plain);
+                }
+                catch (FormatException)
+                {
+                    return GatewayResult<T>.Error(UnsendableTokenMessage);
+                }
             }
         }
 
@@ -153,6 +214,13 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
             // HttpClient surfaces its own timeout as a cancellation.
             return GatewayResult<T>.Unreachable($"gateway timed out: {ex.Message}");
         }
+        catch (Exception ex) when (ex is FormatException or InvalidOperationException)
+        {
+            // A request the client refused to build or send (a header value HttpClient rejects
+            // after the fact, a malformed URI). Not a dead sidecar, and the text can quote the
+            // header, so it is not passed on.
+            return GatewayResult<T>.Error($"the request could not be sent ({ex.GetType().Name})");
+        }
 
         using (response)
         {
@@ -170,13 +238,88 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         }
     }
 
-    /// <summary>Maps an HTTP status plus body onto a <see cref="GatewayResult{T}"/>.</summary>
+    public const string PeerRefusedMessage =
+        "the process listening on the gateway port is not the DefenseClaw gateway, so nothing was sent";
+
+    public const string HealthRefusedMessage =
+        "the gateway's /health did not answer as expected, so nothing was sent";
+
+    public const string UnsendableTokenMessage =
+        "the gateway token contains characters that cannot be sent in an HTTP header (whitespace, control or non-ASCII); it was not sent";
+
+    /// <summary>
+    /// The two halves of "this peer may have the token": the owner check the caller supplied, and
+    /// a <c>/health</c> that parsed. Returns null when both hold — send the request — and otherwise
+    /// the result to hand back <i>instead of</i> sending it. Probes <c>/health</c> itself when
+    /// there has been none, so a panel that calls before the monitor's first poll still
+    /// authenticates.
+    /// <para>
+    /// Nothing listening (or nothing identifiable) is <see cref="GatewayStatus.Unreachable"/>, as
+    /// it always was, so the panels' "gateway stopped, read from SQLite" fallbacks still fire.
+    /// </para>
+    /// </summary>
+    private async Task<GatewayResult<T>?> RefusePeerAsync<T>(CancellationToken cancellationToken)
+    {
+        if (_verifyPeer is null)
+        {
+            return null;
+        }
+
+        // Cheap and local first: no request goes to a listener that is not the gateway at all. On the
+        // pool: the lookup walks the listener table and opens the owning process, which is not work
+        // for a UI thread that called this from a panel.
+        var trust = await Task.Run(_verifyPeer, cancellationToken).ConfigureAwait(false);
+        switch (trust)
+        {
+            case PortOwnerTrust.Gateway:
+                break;
+            case PortOwnerTrust.Unknown:
+                return GatewayResult<T>.Unreachable("gateway is not listening");
+            default:
+                return GatewayResult<T>.Error(PeerRefusedMessage);
+        }
+
+        if (_healthConfirmed)
+        {
+            return null;
+        }
+
+        var probe = await GetHealthAsync(cancellationToken).ConfigureAwait(false);
+        if (probe.IsOk)
+        {
+            return null;
+        }
+
+        return probe.Status == GatewayStatus.Unreachable
+            ? GatewayResult<T>.Unreachable(probe.ErrorMessage)
+            : GatewayResult<T>.Error(HealthRefusedMessage);
+    }
+
+    /// <summary>
+    /// True when <paramref name="token"/> is nothing but visible ASCII — what an HTTP header value
+    /// can carry unmangled. Anything else (an embedded space, a control character, non-ASCII)
+    /// either throws inside HttpClient or is mangled into a 401 or a mislabelled "unreachable".
+    /// </summary>
+    private static bool IsHeaderSafe(string token)
+    {
+        foreach (var c in token)
+        {
+            if (c is < '!' or > '~')
+            {
+                return false;
+            }
+        }
+
+        return token.Length > 0;
+    }
+
     /// <summary>An empty array for an <c>IReadOnlyList&lt;X&gt;</c> payload type; null otherwise.</summary>
     private static object? EmptyListFor(Type type) =>
         type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IReadOnlyList<>)
             ? Array.CreateInstance(type.GetGenericArguments()[0], 0)
             : null;
 
+    /// <summary>Maps an HTTP status plus body onto a <see cref="GatewayResult{T}"/>.</summary>
     internal static GatewayResult<T> Interpret<T>(HttpStatusCode statusCode, string body)
     {
         var code = (int)statusCode;

@@ -272,7 +272,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     /// </summary>
     protected override void OnActivated()
     {
-        if (_loadRunning || (_loadedAt is { } at && DateTimeOffset.Now - at < StaleAfter))
+        if (_loadRunning || (_loadedAt is { } at && DefenseClaw.Core.Time.WallClock.Elapsed(at) < StaleAfter))
         {
             return;
         }

@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using DefenseClaw.App.Services.Appearance;
+using DefenseClaw.App.ViewModels;
 
 namespace DefenseClaw.App.Views;
 
@@ -11,8 +13,9 @@ namespace DefenseClaw.App.Views;
 /// <para>
 /// Windows gives no supported way to ask "where is my tray icon", so the flyout anchors
 /// to the cursor — which is over the icon at the moment of the click — clamped to the
-/// work area. That also puts it on the right monitor and on the right side of a taskbar
-/// the user may have moved, which a hard-coded bottom-right corner would not.
+/// work area <i>of the monitor the cursor is on</i> (<see cref="FlyoutPlacement"/>, in pixels). That also puts it on the right monitor and on the
+/// right side of a taskbar the user may have moved, which a hard-coded bottom-right corner
+/// would not.
 /// </para>
 /// <para>
 /// <b>Dismissing with the tray icon.</b> The flyout hides itself when it loses focus, and the
@@ -51,6 +54,12 @@ public partial class TrayFlyoutWindow : Window
                 Hide();
             }
         };
+
+        // The view-model only follows the poll stream while this window is on screen; see
+        // TrayFlyoutViewModel.SetVisible. Read at event time: the DataContext is set after
+        // construction, and every way the window goes away (Hide, Escape, focus loss, close)
+        // ends here.
+        IsVisibleChanged += (_, e) => (DataContext as TrayFlyoutViewModel)?.SetVisible((bool)e.NewValue);
     }
 
     /// <summary>
@@ -120,6 +129,16 @@ public partial class TrayFlyoutWindow : Window
             return;
         }
 
+        // The monitor the cursor is on — its work area and its DPI — not the primary's.
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero &&
+            FlyoutPlacement.MonitorAt(point.X, point.Y) is { } monitor &&
+            PlaceOnMonitor(handle, point, monitor))
+        {
+            return;
+        }
+
+        // No monitor answer, no handle yet or no window size: the old primary-screen placement.
         var dpi = VisualTreeHelper.GetDpi(this);
         var cursorX = point.X / dpi.DpiScaleX;
         var cursorY = point.Y / dpi.DpiScaleY;
@@ -135,6 +154,33 @@ public partial class TrayFlyoutWindow : Window
 
         Left = Math.Clamp(left, work.Left, Math.Max(work.Left, work.Right - width));
         Top = Math.Clamp(top, work.Top, Math.Max(work.Top, work.Bottom - height));
+    }
+
+    /// <summary>
+    /// Places the flyout on <paramref name="monitor"/>, in pixels, sized by what the window actually
+    /// measures right now. The move can carry a per-monitor-aware window onto a screen with a
+    /// different DPI, which makes WPF resize it; so the size is read back afterwards and, if it
+    /// changed, the clamp is redone once with the real size. Returns false when the window's size
+    /// cannot be read, and the caller falls back to the primary-screen placement.
+    /// </summary>
+    private bool PlaceOnMonitor(IntPtr handle, NativePoint cursor, MonitorGeometry monitor)
+    {
+        if (FlyoutPlacement.BoundsOf(handle) is not { } before)
+        {
+            return false;
+        }
+
+        var (x, y) = FlyoutPlacement.Compute(cursor.X, cursor.Y, monitor.WorkArea, before.Width, before.Height);
+        _ = FlyoutPlacement.MoveTo(handle, x, y);
+
+        UpdateLayout();
+        if (FlyoutPlacement.BoundsOf(handle) is { } after && (after.Width != before.Width || after.Height != before.Height))
+        {
+            var (settledX, settledY) = FlyoutPlacement.Compute(cursor.X, cursor.Y, monitor.WorkArea, after.Width, after.Height);
+            _ = FlyoutPlacement.MoveTo(handle, settledX, settledY);
+        }
+
+        return true;
     }
 
     [DllImport("user32.dll", SetLastError = true)]

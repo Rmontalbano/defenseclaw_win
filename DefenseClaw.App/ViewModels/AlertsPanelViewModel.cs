@@ -795,7 +795,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase
             // The master list no longer mirrors /alerts, so the next answer must re-project.
             _appliedAlerts = null;
 
-            if (Services.Audit.Exists && DateTimeOffset.UtcNow - _lastFallbackLoad > TimeSpan.FromSeconds(30))
+            if (Services.Audit.Exists && DefenseClaw.Core.Time.WallClock.Elapsed(_lastFallbackLoad) > TimeSpan.FromSeconds(30))
             {
                 _ = LoadFallbackAsync();
             }
