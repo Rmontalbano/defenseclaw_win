@@ -187,8 +187,11 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         Apply(Services.Monitor.Current);
     }
 
+    /// <summary>The argv the Run doctor button hands the CLI: plain <c>doctor</c>, never <c>--fix</c>.</summary>
+    internal static readonly string[] DoctorArgv = { "doctor" };
+
     /// <summary>What the Run doctor button executes: <c>defenseclaw doctor</c>, never <c>--fix</c>.</summary>
-    public string DoctorCommandText => "defenseclaw doctor";
+    public string DoctorCommandText => CommandReview.CommandLine(CommandReview.DefaultExecutable, DoctorArgv);
 
     /// <summary>Failing then warning checks from the cache (all of them, capped for the card).</summary>
     public ObservableCollection<DoctorCheckRow> DoctorChecks { get; } = new();
@@ -270,14 +273,17 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// <summary>
     /// Runs <c>defenseclaw doctor</c> (10-30 s of live probes; it writes only its own results
     /// cache), then re-reads that cache. The tier comes from <see cref="CommandTiers"/> rather than
-    /// being assumed: plain <c>doctor</c> classifies as read-only and runs with no review, and if
-    /// that ever stopped being true this action refuses rather than silently running an unreviewed
-    /// state-changing command. <c>doctor --fix</c> is deliberately not offered here.
+    /// being assumed: plain <c>doctor</c> classifies as read-only, so — like every read-only command
+    /// in the app — it runs with no <see cref="CommandReview"/> in front of it. This panel offers no
+    /// other command to run (the fixes on its attention rows are text to copy, never run), so it has no
+    /// review surface of its own; if <c>doctor</c> ever stopped being read-only this action refuses
+    /// rather than silently running an unreviewed state-changing command. <c>doctor --fix</c> is
+    /// deliberately not offered here.
     /// </summary>
     [RelayCommand]
     private async Task RunDoctorAsync()
     {
-        var argv = new[] { "doctor" };
+        var argv = DoctorArgv;
         if (CommandTiers.Classify(argv) != CommandTier.ReadOnly)
         {
             SetDoctorRunMessage("Doctor is no longer classified read-only, so it will not run without a review step.");

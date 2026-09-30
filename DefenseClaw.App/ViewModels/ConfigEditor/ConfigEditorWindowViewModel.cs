@@ -921,9 +921,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     /// <summary>
     /// Runs a command that must be read-only. The tier comes from <see cref="CommandTiers"/>, the one
     /// classifier every review surface in the app shares: a verb it does not call read-only would need a
-    /// confirmation step, which this window does not have, so it is refused rather than run.
+    /// confirmation step, which this window does not have (its only prompt is the unsaved-changes question,
+    /// which is about the buffer, not a command), so it is refused rather than run.
     /// </summary>
-    private Task<CliInvocation> RunReadOnlyAsync(string[] argv, CancellationToken cancellationToken)
+    internal Task<CliInvocation> RunReadOnlyAsync(string[] argv, CancellationToken cancellationToken)
     {
         if (CommandTiers.Classify(argv) != CommandTier.ReadOnly)
         {

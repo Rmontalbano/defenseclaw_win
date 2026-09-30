@@ -62,7 +62,7 @@ public sealed class ConfigSaveService
     internal static readonly TimeSpan ReplaceRetryDelay = TimeSpan.FromMilliseconds(50);
 
     /// <summary>Verified against `defenseclaw config validate --help` on 0.8.10: "Verify the config file parses and references valid enums." Exit 0/1; `--quiet` is deliberately not used so failures explain themselves.</summary>
-    private static readonly string[] ValidateArgv = { "config", "validate" };
+    internal static readonly string[] ValidateArgv = { "config", "validate" };
 
     private readonly DefenseClawPaths _paths;
     private readonly CliRunner? _cli;
