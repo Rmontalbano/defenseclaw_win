@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              d:DataContext="{d:DesignInstance Type=vm:InventoryPanelViewModel}"
@@ -66,7 +67,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="BookDatabase24"
+                                ctl:DcIcon.Section="Discover">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -79,7 +82,7 @@
                            Command="{Binding RefreshCommand}"
                            AutomationProperties.HelpText="Re-read inventory.db (F5).">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -117,6 +120,7 @@
                                           SelectedItem="{Binding SelectedBomConnector}" />
                             </StackPanel>
                             <ui:Button Content="Generate AI BOM…"
+                                       Icon="{ctl:DcSymbolIcon ClipboardTaskListLtr24}"
                                        Command="{Binding GenerateAiBomCommand}"
                                        ToolTip="defenseclaw aibom scan --json: inventories the connectors' skills, plugins, MCP servers, agents, tools, models and memory. Records a scan event in audit.db, so it asks first."
                                        AutomationProperties.HelpText="Builds an AI bill of materials. Records a scan event, so it shows the exact command first." />
@@ -150,7 +154,7 @@
                                 Margin="{StaticResource DcCardGap}"
                                 Visibility="{Binding HasBom, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource DcCardTitle}" Text="AI BOM" />
+                                <ctl:DcCardHeader Symbol="ClipboardTaskListLtr24" Section="Discover" Content="AI BOM" />
                                 <TextBlock Style="{StaticResource DcTextSecondary}"
                                            AutomationProperties.LiveSetting="Polite"
                                            Text="{Binding BomStatus}" />
@@ -169,6 +173,7 @@
                                 </ItemsControl>
                                 <StackPanel Style="{StaticResource DcActionBar}" HorizontalAlignment="Left">
                                     <ui:Button Content="Save JSON…"
+                                               Icon="{ctl:DcSymbolIcon Save24}"
                                                Command="{Binding SaveBomCommand}"
                                                IsEnabled="{Binding CanSaveBom}"
                                                AutomationProperties.HelpText="Save the generated AI BOM to a file you choose." />
@@ -269,7 +274,7 @@
                             <StackPanel Style="{StaticResource DcEmptyState}"
                                         MaxWidth="440"
                                         Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVisibility}}">
-                                <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
+                                <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
                                 <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
                                 <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                             </StackPanel>
@@ -289,7 +294,7 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Style="{StaticResource DcCardTitle}" Text="Raw row detail" />
+                            <ctl:DcCardHeader Grid.Row="0" Symbol="Code24" Section="Discover" Content="Raw row detail" />
 
                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                                 <ItemsControl ItemsSource="{Binding DetailRows}"
@@ -351,6 +356,7 @@
                             <ui:Button Margin="{StaticResource DcCardGap}"
                                        HorizontalAlignment="Left"
                                        Content="Load this view anyway"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding LoadSelectedViewCommand}"
                                        Visibility="{Binding IsViewLoadPending, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>

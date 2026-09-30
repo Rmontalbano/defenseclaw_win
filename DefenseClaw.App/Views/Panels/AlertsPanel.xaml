@@ -1,7 +1,8 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.AlertsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
     <!--
         Filters above, virtualized list left, detail pane right. The list is a ListView so
         WPF's own VirtualizingStackPanel does the recycling - the alert stream on a busy box
@@ -100,7 +101,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="AlertUrgent24"
+                                ctl:DcIcon.Section="Observe">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -113,10 +116,11 @@
                            Command="{Binding OpenAcknowledgeCommand}"
                            AutomationProperties.HelpText="Acknowledge every active alert of one severity. Shows a preview of what would match before anything is changed.">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ShieldCheckmark24" />
+                        <ctl:DcSymbolIcon Symbol="ShieldCheckmark24" />
                     </ui:Button.Icon>
                 </ui:Button>
                 <ui:Button Content="Dismiss…"
+                           Icon="{ctl:DcSymbolIcon AlertOff24}"
                            Appearance="Secondary"
                            Command="{Binding OpenDismissCommand}"
                            AutomationProperties.HelpText="Dismiss every active alert of one severity from the active list. Shows a preview of what would match before anything is changed." />
@@ -124,7 +128,7 @@
                            Command="{Binding RefreshCommand}"
                            AutomationProperties.HelpText="Re-read the alert list from the gateway now. Shortcut F5.">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -183,6 +187,7 @@
                                      AutomationProperties.HelpText="Folds alerts with the same rule and action into one row with a count." />
 
                     <ui:Button Content="Clear"
+                               Icon="{ctl:DcSymbolIcon FilterDismiss24}"
                                Appearance="Secondary"
                                Command="{Binding ClearFiltersCommand}"
                                AutomationProperties.HelpText="Turn every severity back on and clear the text filter." />
@@ -230,14 +235,21 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
-                                    <Border Grid.Column="0"
-                                            Style="{StaticResource DcBadge}"
-                                            Tag="{Binding SeverityKey}"
-                                            MinWidth="66"
-                                            VerticalAlignment="Top"
-                                            Margin="0,2,10,0">
-                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Severity}" />
-                                    </Border>
+                                    <!-- The severity as a mark before the badge as well as words in it (Linear's priority glyphs,
+                                         TUI's shapes; none under Default). Outside the badge, so every row's badge is the same width. -->
+                                    <StackPanel Grid.Column="0"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Top"
+                                                Margin="0,2,10,0">
+                                        <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}"
+                                                             SlotHeight="20"
+                                                             Gap="8" />
+                                        <Border Style="{StaticResource DcBadge}"
+                                                Tag="{Binding SeverityKey}"
+                                                MinWidth="66">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Severity}" />
+                                        </Border>
+                                    </StackPanel>
 
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Style="{StaticResource DcBody}"
@@ -293,7 +305,7 @@
                     <StackPanel Style="{StaticResource DcEmptyState}"
                                 MaxWidth="420"
                                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldCheckmark24" />
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldCheckmark24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                     </StackPanel>
@@ -316,10 +328,11 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                           Style="{StaticResource DcCardTitle}"
+                                <ctl:DcCardHeader Grid.Column="0"
                                            VerticalAlignment="Center"
-                                           Text="Alert details" />
+                                           Symbol="Alert24"
+                                           Section="Observe"
+                                           Content="Alert details" />
                                 <ui:Button Grid.Column="1"
                                            Appearance="Transparent"
                                            Command="{Binding ClearSelectionCommand}"
@@ -327,7 +340,7 @@
                                            AutomationProperties.Name="Close alert details"
                                            AutomationProperties.HelpText="Closes this pane. Shortcut Esc.">
                                     <ui:Button.Icon>
-                                        <ui:SymbolIcon Symbol="Dismiss24" />
+                                        <ctl:DcSymbolIcon Symbol="Dismiss24" />
                                     </ui:Button.Icon>
                                 </ui:Button>
                             </Grid>
@@ -338,7 +351,10 @@
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
                                                 <Border Style="{StaticResource DcBadge}" Tag="{Binding SeverityKey}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Severity}" />
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}" GlyphSize="12" Gap="5" />
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Severity}" />
+                                                    </StackPanel>
                                                 </Border>
                                                 <TextBlock Style="{StaticResource DcSectionHeader}"
                                                            Margin="10,0,0,0"
@@ -357,14 +373,14 @@
                                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding ConfidenceText, StringFormat='confidence: {0}'}" />
                                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Tags, StringFormat='tags: {0}'}" />
 
-                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="Evidence" />
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="DocumentSearch24" Section="Observe" Content="Evidence" />
                                             <Border Style="{StaticResource DcCodeBlock}">
                                                 <TextBox Style="{StaticResource DcMonoTextBox}"
                                                          AutomationProperties.Name="Evidence"
                                                          Text="{Binding Evidence, Mode=OneWay}" />
                                             </Border>
 
-                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="Attributes" />
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TagMultiple24" Section="Observe" Content="Attributes" />
                                             <ItemsControl ItemsSource="{Binding Fields}"
                                                           AutomationProperties.Name="Alert attributes">
                                                 <ItemsControl.ItemTemplate>
@@ -494,11 +510,13 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
                         <ui:Button x:Name="ReviewCancelButton"
                                    Content="Cancel"
+                                   Icon="{ctl:DcSymbolIcon Dismiss24}"
                                    Appearance="Secondary"
                                    Command="{Binding CancelReviewCommand}"
                                    ToolTip="Close without changing anything (Esc)" />
                         <ui:Button Margin="8,0,0,0"
                                    Content="{Binding ConfirmButtonText}"
+                                   Icon="{ctl:DcSymbolIcon Checkmark24}"
                                    Appearance="Primary"
                                    Command="{Binding ConfirmReviewCommand}"
                                    IsEnabled="{Binding CanConfirmReview}"
@@ -507,6 +525,7 @@
                         <ui:Button Margin="8,0,0,0"
                                    Content="{Binding ConfirmButtonText}"
                                    Appearance="Danger"
+                                   Icon="{ctl:DcSymbolIcon Delete24}"
                                    Command="{Binding ConfirmReviewCommand}"
                                    IsEnabled="{Binding CanConfirmReview}"
                                    Visibility="{Binding IsDestructive, Converter={StaticResource BoolToVisibility}}"

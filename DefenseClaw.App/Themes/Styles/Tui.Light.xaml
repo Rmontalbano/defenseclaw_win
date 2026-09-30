@@ -43,6 +43,37 @@
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#475569" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#1F475569" />
 
+    <!-- ===== Icons: secondary ink for the sidebar and page headers, the accent for card headers and every named tint (Gray: the ink) ===== -->
+    <SolidColorBrush x:Key="DcIconBrush" Color="#3B4A63" />
+    <SolidColorBrush x:Key="DcIconMutedBrush" Color="#64748B" />
+
+    <SolidColorBrush x:Key="DcTintIndigoBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintBlueBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintVioletBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintTealBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintGreenBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintAmberBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintOrangeBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintRedBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintPinkBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcTintGrayBrush" Color="#3B4A63" />
+
+    <SolidColorBrush x:Key="DcSectionOverviewBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcSectionObserveBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcSectionGovernBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcSectionDiscoverBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcSectionSetupBrush" Color="#0E7490" />
+    <SolidColorBrush x:Key="DcSectionUpdatesBrush" Color="#0E7490" />
+
+    <SolidColorBrush x:Key="DcNavIconOverviewBrush" Color="#3B4A63" />
+    <SolidColorBrush x:Key="DcNavIconObserveBrush" Color="#3B4A63" />
+    <SolidColorBrush x:Key="DcNavIconGovernBrush" Color="#3B4A63" />
+    <SolidColorBrush x:Key="DcNavIconDiscoverBrush" Color="#3B4A63" />
+    <SolidColorBrush x:Key="DcNavIconSetupBrush" Color="#3B4A63" />
+    <SolidColorBrush x:Key="DcNavIconUpdatesBrush" Color="#3B4A63" />
+
+    <sys:String x:Key="DcGlyphFamily">Terminal</sys:String>
+
     <!-- ===== Type: one monospace family for everything ==================================== -->
     <FontFamily x:Key="DcUiFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>
     <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>

@@ -54,6 +54,44 @@
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#9FB2CC" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#269FB2CC" />
 
+    <!--
+        ===== Icons: a terminal draws in one or two colours =====
+        The sidebar and the page headers wear the secondary text colour, the card headers the accent (cyan). A view that
+        names a tint (Orange, Green ...) gets the accent too, and Gray the secondary text colour: the palette exists in
+        every style so a view never has to know which one is on screen, and here it is one colour on purpose. Only the
+        status and severity glyphs speak in the tone colours.
+    -->
+    <SolidColorBrush x:Key="DcIconBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcIconMutedBrush" Color="#64748B" />
+
+    <SolidColorBrush x:Key="DcTintIndigoBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintBlueBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintVioletBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintTealBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintGreenBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintAmberBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintOrangeBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintRedBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintPinkBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcTintGrayBrush" Color="#9FB2CC" />
+
+    <SolidColorBrush x:Key="DcSectionOverviewBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcSectionObserveBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcSectionGovernBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcSectionDiscoverBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcSectionSetupBrush" Color="#22D3EE" />
+    <SolidColorBrush x:Key="DcSectionUpdatesBrush" Color="#22D3EE" />
+
+    <SolidColorBrush x:Key="DcNavIconOverviewBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcNavIconObserveBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcNavIconGovernBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcNavIconDiscoverBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcNavIconSetupBrush" Color="#9FB2CC" />
+    <SolidColorBrush x:Key="DcNavIconUpdatesBrush" Color="#9FB2CC" />
+
+    <!-- Status and severity glyphs are square, ASCII-like shapes (a filled circle, a triangle, a square, "!") in the tone colour. -->
+    <sys:String x:Key="DcGlyphFamily">Terminal</sys:String>
+
     <!-- ===== Type: one monospace family for everything ==================================== -->
     <FontFamily x:Key="DcUiFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>
     <FontFamily x:Key="DcMonoFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New</FontFamily>

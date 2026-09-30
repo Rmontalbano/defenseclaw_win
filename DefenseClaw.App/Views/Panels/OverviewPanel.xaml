@@ -1,7 +1,8 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.OverviewPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
     <!--
         Dashboard layout mirroring the TUI's boxes, on the shared Dc* design system
         (Themes\DefenseClaw.xaml). Every severity / state colour is a Tag on a Dc* tone style
@@ -19,7 +20,10 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0"
+                                Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="AppsListDetail24"
+                                ctl:DcIcon.Section="Overview">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -33,7 +37,7 @@
                            Command="{Binding RefreshCommand}"
                            AutomationProperties.HelpText="Poll the gateway again and re-read the audit counts, enforcement lists and doctor results. Shortcut F5.">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -51,9 +55,10 @@
                         <!-- WrapPanel, not StackPanel: the version and uptime must fall to a
                              second line on a narrow window instead of being clipped. -->
                         <WrapPanel>
-                            <Ellipse Style="{StaticResource DcToneDotLarge}"
-                                     Tag="{Binding GatewayStateKey}"
-                                     Margin="0,0,10,0" />
+                            <ctl:DcStatusGlyph Tone="{Binding GatewayStateKey}"
+                                               GlyphSize="20"
+                                               DotSize="12"
+                                               Margin="0,0,10,0" />
                             <TextBlock Style="{StaticResource DcSectionHeader}"
                                        Margin="0"
                                        FontSize="20"
@@ -80,7 +85,7 @@
 
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Audit severity — last 24 hours" />
+                        <ctl:DcCardHeader Symbol="DataBarVertical24" Section="Observe" Content="Audit severity — last 24 hours" />
                         <!-- Equal-width tiles (112 px; the widest count seen - "139,825" at 24 px - fits) in a wrap
                              panel: five tiles take one row at the 940 px minimum window, and a sixth wraps as a whole
                              tile instead of squeezing the digits. The negative right margin cancels the last tile's gap
@@ -104,7 +109,14 @@
                                             <TextBlock Style="{StaticResource DcValue}"
                                                        Tag="{Binding SeverityKey}"
                                                        Text="{Binding Value}" />
-                                            <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
+                                            <!-- The severity glyph repeats the label in a shape (nothing under Default). -->
+                                            <StackPanel Orientation="Horizontal">
+                                                <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}"
+                                                                     GlyphSize="12"
+                                                                     Gap="6"
+                                                                     Margin="0,2,0,0" />
+                                                <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -120,7 +132,7 @@
                 <!-- What Needs Attention -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DcCardTitle}" Text="What needs attention" />
+                        <ctl:DcCardHeader Symbol="Warning24" Tint="Orange" Content="What needs attention" />
                         <ItemsControl ItemsSource="{Binding Attention}"
                                       AutomationProperties.Name="What needs attention">
                             <ItemsControl.ItemTemplate>
@@ -134,9 +146,13 @@
                                                 Style="{StaticResource DcToneBar}"
                                                 Tag="{Binding SeverityKey}" />
                                         <StackPanel Grid.Column="1">
-                                            <TextBlock Style="{StaticResource DcBody}"
-                                                       FontWeight="SemiBold"
-                                                       Text="{Binding Title}" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}"
+                                                                     Gap="8" />
+                                                <TextBlock Style="{StaticResource DcBody}"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding Title}" />
+                                            </StackPanel>
                                             <TextBlock Style="{StaticResource DcTextSecondary}"
                                                        Margin="0,2,0,0"
                                                        Text="{Binding Detail}" />
@@ -168,10 +184,12 @@
                             </Grid.ColumnDefinitions>
 
                             <WrapPanel Grid.Column="0" VerticalAlignment="Center">
-                                <TextBlock Style="{StaticResource DcCardTitle}"
-                                           Margin="0,0,10,0"
-                                           VerticalAlignment="Center"
-                                           Text="Health check (doctor)" />
+                                <ctl:DcCardHeader Symbol="HeartPulse24"
+                                                  Tint="Green"
+                                                  Margin="0,0,10,0"
+                                                  HorizontalAlignment="Left"
+                                                  VerticalAlignment="Center"
+                                                  Content="Health check (doctor)" />
                                 <Border Style="{StaticResource DcBadge}"
                                         Tag="Warn"
                                         VerticalAlignment="Center"
@@ -187,11 +205,13 @@
                                                  IsIndeterminate="True"
                                                  Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}" />
                                 <ui:Button Content="Cancel"
+                                           Icon="{ctl:DcSymbolIcon Dismiss24}"
                                            Appearance="Secondary"
                                            Command="{Binding CancelDoctorCommand}"
                                            Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}"
                                            AutomationProperties.HelpText="Stop the doctor run and kill its process tree." />
                                 <ui:Button Content="Run doctor"
+                                           Icon="{ctl:DcSymbolIcon Stethoscope24}"
                                            Command="{Binding RunDoctorCommand}"
                                            ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds. Writes only its own results cache."
                                            AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
@@ -208,7 +228,7 @@
                         <!-- Never run: a normal state on a fresh install, not a fault. -->
                         <StackPanel Style="{StaticResource DcEmptyState}"
                                     Visibility="{Binding DoctorIsEmpty, Converter={StaticResource BoolToVisibility}}">
-                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
                             <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Doctor has not run yet" />
                             <TextBlock Style="{StaticResource DcEmptyDetail}"
                                        Text="doctor_cache.json does not exist. Run doctor to check credentials, endpoints and connector wiring; the result is kept here so it does not need re-probing every time you open this page." />
@@ -224,9 +244,8 @@
 
                         <StackPanel Visibility="{Binding DoctorHasData, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <Ellipse Style="{StaticResource DcToneDot}"
-                                         Tag="{Binding DoctorStateKey}"
-                                         Margin="0,0,10,0" />
+                                <ctl:DcStatusGlyph Tone="{Binding DoctorStateKey}"
+                                                   Margin="0,0,10,0" />
                                 <TextBlock Style="{StaticResource DcBody}"
                                            FontWeight="SemiBold"
                                            Text="{Binding DoctorVerdict}" />
@@ -267,7 +286,7 @@
 
                             <StackPanel Margin="0,12,0,0"
                                         Visibility="{Binding DoctorHasProblems, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Style="{StaticResource DcCardTitle}" Text="Failing and warning checks" />
+                                <ctl:DcCardHeader Symbol="ShieldError24" Tint="Red" Content="Failing and warning checks" />
                                 <ItemsControl ItemsSource="{Binding DoctorChecks}"
                                               AutomationProperties.Name="Failing and warning doctor checks">
                                     <ItemsControl.ItemTemplate>
@@ -317,7 +336,7 @@
 
                     <Border Grid.Column="0" Style="{StaticResource DcCard}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource DcCardTitle}" Text="Services" />
+                            <ctl:DcCardHeader Symbol="Server24" Section="Overview" Content="Services" />
                             <TextBlock Style="{StaticResource DcCaption}"
                                        Margin="0,0,0,10"
                                        Text="Liveness and enforcement posture are separate: a subsystem can run while enforcement stays off, and &quot;disabled&quot; is a configuration, not a fault." />
@@ -330,11 +349,11 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Ellipse Grid.Column="0"
-                                                     Style="{StaticResource DcToneDot}"
-                                                     Tag="{Binding StateKey}"
-                                                     Margin="0,6,10,0"
-                                                     VerticalAlignment="Top" />
+                                            <ctl:DcStatusGlyph Grid.Column="0"
+                                                               Tone="{Binding StateKey}"
+                                                               SlotHeight="18"
+                                                               Margin="0,0,10,0"
+                                                               VerticalAlignment="Top" />
                                             <StackPanel Grid.Column="1">
                                                 <WrapPanel>
                                                     <TextBlock Style="{StaticResource DcBody}"
@@ -366,7 +385,7 @@
 
                     <Border Grid.Column="2" Style="{StaticResource DcCard}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource DcCardTitle}" Text="Scanners" />
+                            <ctl:DcCardHeader Symbol="ScanText24" Section="Govern" Content="Scanners" />
                             <ItemsControl ItemsSource="{Binding ScannerRows}"
                                           AutomationProperties.Name="Scanners">
                                 <ItemsControl.ItemTemplate>
@@ -376,11 +395,11 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Ellipse Grid.Column="0"
-                                                     Style="{StaticResource DcToneDot}"
-                                                     Tag="{Binding StateKey}"
-                                                     Margin="0,6,10,0"
-                                                     VerticalAlignment="Top" />
+                                            <ctl:DcStatusGlyph Grid.Column="0"
+                                                               Tone="{Binding StateKey}"
+                                                               SlotHeight="18"
+                                                               Margin="0,0,10,0"
+                                                               VerticalAlignment="Top" />
                                             <StackPanel Grid.Column="1">
                                                 <WrapPanel>
                                                     <TextBlock Style="{StaticResource DcBody}"
@@ -405,7 +424,7 @@
                 <!-- Connectors -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Connectors" />
+                        <ctl:DcCardHeader Symbol="PlugConnected24" Section="Discover" Content="Connectors" />
                         <ItemsControl ItemsSource="{Binding ConnectorRows}"
                                       AutomationProperties.Name="Connectors">
                             <ItemsControl.ItemTemplate>
@@ -413,61 +432,70 @@
                                     <Border Style="{StaticResource DcSubtleRow}"
                                             Margin="0,0,0,10"
                                             Padding="12">
-                                        <StackPanel>
-                                            <WrapPanel>
-                                                <Ellipse Style="{StaticResource DcToneDot}"
-                                                         Tag="{Binding StateKey}"
-                                                         Margin="0,0,10,0" />
-                                                <TextBlock Style="{StaticResource DcBody}"
-                                                           FontWeight="SemiBold"
-                                                           Text="{Binding Name}" />
-                                                <TextBlock Style="{StaticResource DcTextSecondary}"
-                                                           Margin="10,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           Text="{Binding StateText}" />
-                                            </WrapPanel>
+                                        <!-- The state mark has its own column so every line below lines up with the name, whatever size the style draws it. -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <ctl:DcStatusGlyph Grid.Column="0"
+                                                               Tone="{Binding StateKey}"
+                                                               SlotHeight="18"
+                                                               Margin="0,0,10,0"
+                                                               VerticalAlignment="Top" />
+                                            <StackPanel Grid.Column="1">
+                                                <WrapPanel>
+                                                    <TextBlock Style="{StaticResource DcBody}"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding Name}" />
+                                                    <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                               Margin="10,0,0,0"
+                                                               VerticalAlignment="Center"
+                                                               Text="{Binding StateText}" />
+                                                </WrapPanel>
 
-                                            <!-- Mode, fail-mode and source are metadata, not status: neutral chips. -->
-                                            <WrapPanel Margin="19,6,0,0">
-                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}"
-                                                               Text="{Binding Mode, StringFormat='mode {0}'}" />
-                                                </Border>
-                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}"
-                                                               Text="{Binding FailMode, StringFormat='fail-mode {0}'}" />
-                                                </Border>
-                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}"
-                                                               Text="{Binding Source, StringFormat='source {0}'}" />
-                                                </Border>
-                                            </WrapPanel>
+                                                <!-- Mode, fail-mode and source are metadata, not status: neutral chips. -->
+                                                <WrapPanel Margin="0,6,0,0">
+                                                    <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                                   Text="{Binding Mode, StringFormat='mode {0}'}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                                   Text="{Binding FailMode, StringFormat='fail-mode {0}'}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                                   Text="{Binding Source, StringFormat='source {0}'}" />
+                                                    </Border>
+                                                </WrapPanel>
 
-                                            <TextBlock Style="{StaticResource DcCaption}"
-                                                       Margin="19,4,0,0"
-                                                       Visibility="{Binding HasCounters, Converter={StaticResource BoolToVisibility}}"
-                                                       Text="{Binding Counters}" />
-                                            <TextBlock Style="{StaticResource DcCaption}"
-                                                       Margin="19,2,0,0"
-                                                       Text="{Binding Surface}" />
-                                            <TextBlock Style="{StaticResource DcCaption}"
-                                                       Margin="19,2,0,0"
-                                                       Text="{Binding LastActivity}" />
-                                            <TextBlock Style="{StaticResource DcToneText}"
-                                                       Tag="Warn"
-                                                       FontSize="12"
-                                                       TextWrapping="Wrap"
-                                                       Margin="19,2,0,0"
-                                                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"
-                                                       Text="{Binding Drift}" />
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           Margin="0,4,0,0"
+                                                           Visibility="{Binding HasCounters, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding Counters}" />
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           Margin="0,2,0,0"
+                                                           Text="{Binding Surface}" />
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           Margin="0,2,0,0"
+                                                           Text="{Binding LastActivity}" />
+                                                <TextBlock Style="{StaticResource DcToneText}"
+                                                           Tag="Warn"
+                                                           FontSize="12"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,2,0,0"
+                                                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding Drift}" />
 
-                                            <ui:InfoBar Margin="0,8,0,0"
-                                                        IsClosable="False"
-                                                        Severity="Warning"
-                                                        Title="Fail-mode mismatch"
-                                                        IsOpen="{Binding HasWarning}"
-                                                        Message="{Binding WarningText}" />
-                                        </StackPanel>
+                                                <ui:InfoBar Margin="0,8,0,0"
+                                                            IsClosable="False"
+                                                            Severity="Warning"
+                                                            Title="Fail-mode mismatch"
+                                                            IsOpen="{Binding HasWarning}"
+                                                            Message="{Binding WarningText}" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -478,7 +506,7 @@
                 <!-- Enforcement -->
                 <Border Style="{StaticResource DcCard}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Enforcement" />
+                        <ctl:DcCardHeader Symbol="ShieldLock24" Section="Govern" Content="Enforcement" />
                         <ItemsControl ItemsSource="{Binding EnforcementTiles}"
                                       AutomationProperties.Name="Enforcement lists">
                             <ItemsControl.ItemsPanel>

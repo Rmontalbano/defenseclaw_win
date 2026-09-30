@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+                 xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
                  Title="DefenseClaw for Windows"
                  Width="1200"
                  Height="800"
@@ -47,7 +48,7 @@
                                AutomationProperties.Name="Appearance"
                                AutomationProperties.HelpText="Opens a menu to choose the style (Default, Linear, TUI) and the mode (System, Light, Dark).">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="PaintBrush24" FontSize="14" />
+                            <ctl:DcSymbolIcon Symbol="PaintBrush24" FontSize="14" />
                         </ui:Button.Icon>
                     </ui:Button>
 
@@ -61,7 +62,7 @@
                                Click="OnThemeToggleClick"
                                AutomationProperties.AcceleratorKey="Ctrl+Shift+L">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon x:Name="ThemeToggleIcon" Symbol="WeatherMoon24" FontSize="14" />
+                            <ctl:DcSymbolIcon x:Name="ThemeToggleIcon" Symbol="WeatherMoon24" FontSize="14" />
                         </ui:Button.Icon>
                     </ui:Button>
                 </StackPanel>
@@ -90,9 +91,9 @@
                         VerticalAlignment="Center"
                         ToolTip="{Binding StateDetail}">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse Style="{StaticResource DcToneDot}"
-                                 Tag="{Binding StateTone}"
-                                 Margin="0,0,8,0" />
+                        <!-- The state as a mark: a tone dot under Default, a status circle under Linear, a flat shape under TUI. -->
+                        <ctl:DcStatusGlyph Tone="{Binding StateTone}"
+                                           Margin="0,0,8,0" />
                         <TextBlock x:Name="StateText"
                                    Style="{StaticResource DcBadgeText}"
                                    FontSize="13"
@@ -158,7 +159,7 @@
                                AutomationProperties.Name="Refresh gateway status"
                                AutomationProperties.HelpText="Polls the gateway immediately instead of waiting for the next automatic check.">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="ArrowSync24" />
+                            <ctl:DcSymbolIcon Symbol="ArrowSync24" />
                         </ui:Button.Icon>
                     </ui:Button>
 
@@ -168,7 +169,7 @@
                                AutomationProperties.Name="Open command palette"
                                AutomationProperties.AcceleratorKey="Ctrl+K">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="Search24" />
+                            <ctl:DcSymbolIcon Symbol="Search24" />
                         </ui:Button.Icon>
                     </ui:Button>
 
@@ -178,7 +179,7 @@
                                AutomationProperties.Name="Show keyboard shortcuts"
                                AutomationProperties.AcceleratorKey="F1">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="Keyboard24" />
+                            <ctl:DcSymbolIcon Symbol="Keyboard24" />
                         </ui:Button.Icon>
                     </ui:Button>
                 </StackPanel>
@@ -234,8 +235,9 @@
                     Margin="0,12,0,0"
                     Visibility="{Binding ShowNotInitializedBanner, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource DcCardTitle}"
-                               Text="DefenseClaw is installed but not initialized" />
+                    <ctl:DcCardHeader Symbol="Warning24"
+                               Tint="Amber"
+                               Content="DefenseClaw is installed but not initialized" />
                     <TextBlock Style="{StaticResource DcTextSecondary}"
                                Text="{Binding NotInitializedMessage}" />
                     <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
@@ -247,6 +249,7 @@
                         <ui:Button Margin="8,0,0,0"
                                    VerticalAlignment="Center"
                                    Content="Copy"
+                                   Icon="{ctl:DcSymbolIcon Copy24}"
                                    AutomationProperties.Name="Copy the defenseclaw init command"
                                    Command="{Binding CopyCommandCommand}"
                                    CommandParameter="defenseclaw init" />
@@ -264,7 +267,15 @@
                            IsBackButtonVisible="Collapsed"
                            IsPaneToggleVisible="True"
                            OpenPaneLength="220"
-                           PaneDisplayMode="Left" />
+                           PaneDisplayMode="Left">
+            <ui:NavigationView.Resources>
+                <!--
+                    The items and their icons are made in code, so this is how an icon learns its section: it looks up the
+                    sidebar item it sits in (Themes\DefenseClaw.xaml, DcNavIcon). Icons outside an item are untouched.
+                -->
+                <Style TargetType="{x:Type ui:SymbolIcon}" BasedOn="{StaticResource DcNavIcon}" />
+            </ui:NavigationView.Resources>
+        </ui:NavigationView>
 
         <!--
             Overlays. They start under the title bar so the window buttons stay usable, and sit last

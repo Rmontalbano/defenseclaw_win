@@ -1,7 +1,8 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.AuditPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
     <!--
         Filter bar, virtualized row list with a fixed-width header, keyset "Load more", and a
         detail pane that pretty-prints structured_json. Column widths are repeated between the
@@ -21,7 +22,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="DatabaseSearch24"
+                                ctl:DcIcon.Section="Observe">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -30,6 +33,7 @@
             </HeaderedContentControl.Header>
             <StackPanel Style="{StaticResource DcActionBar}">
                 <ui:Button Content="Reset filters"
+                           Icon="{ctl:DcSymbolIcon ArrowReset24}"
                            Appearance="Secondary"
                            Command="{Binding ResetFiltersCommand}"
                            AutomationProperties.HelpText="Set every filter back to its default: all buckets, any severity, all connectors, the last 24 hours, no text." />
@@ -37,7 +41,7 @@
                            Command="{Binding RefreshCommand}"
                            AutomationProperties.HelpText="Run the current query again from the newest event. Shortcut F5.">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -246,7 +250,7 @@
                                 Style="{StaticResource DcEmptyState}"
                                 MaxWidth="420"
                                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="DatabaseSearch24" />
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="DatabaseSearch24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                     </StackPanel>
@@ -257,6 +261,7 @@
                                Margin="8,8,8,2"
                                HorizontalAlignment="Center">
                         <ui:Button Content="Load more"
+                                   Icon="{ctl:DcSymbolIcon ArrowDown24}"
                                    Appearance="Secondary"
                                    Command="{Binding LoadMoreCommand}"
                                    AutomationProperties.HelpText="Load the next 100 events after the last one shown."
@@ -299,10 +304,11 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                           Style="{StaticResource DcCardTitle}"
+                                <ctl:DcCardHeader Grid.Column="0"
                                            VerticalAlignment="Center"
-                                           Text="Event details" />
+                                           Symbol="DocumentText24"
+                                           Section="Observe"
+                                           Content="Event details" />
                                 <ui:Button Grid.Column="1"
                                            Appearance="Transparent"
                                            Command="{Binding ClearSelectionCommand}"
@@ -310,7 +316,7 @@
                                            AutomationProperties.Name="Close event details"
                                            AutomationProperties.HelpText="Closes this pane. Shortcut Esc.">
                                     <ui:Button.Icon>
-                                        <ui:SymbolIcon Symbol="Dismiss24" />
+                                        <ctl:DcSymbolIcon Symbol="Dismiss24" />
                                     </ui:Button.Icon>
                                 </ui:Button>
                             </Grid>
@@ -320,6 +326,7 @@
                                     <DataTemplate>
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
+                                                <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}" Gap="6" />
                                                 <TextBlock Style="{StaticResource DcToneText}"
                                                            Tag="{Binding SeverityKey}"
                                                            FontSize="13"
@@ -338,7 +345,7 @@
                                                        Margin="0,4,0,0"
                                                        Text="{Binding TimestampText}" />
 
-                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="Columns" />
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TableSimple24" Section="Observe" Content="Columns" />
                                             <ItemsControl ItemsSource="{Binding Fields}"
                                                           AutomationProperties.Name="Event columns">
                                                 <ItemsControl.ItemTemplate>
@@ -360,7 +367,7 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
 
-                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,14,0,4" Text="structured_json" />
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Code24" Section="Observe" Content="structured_json" />
                                             <Border Style="{StaticResource DcCodeBlock}">
                                                 <ScrollViewer MaxHeight="420"
                                                               VerticalScrollBarVisibility="Auto"

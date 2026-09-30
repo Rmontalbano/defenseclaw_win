@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -26,7 +27,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="WrenchScrewdriver24"
+                                ctl:DcIcon.Section="Govern">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -45,7 +48,7 @@
                            IsEnabled="{Binding IsIdle}"
                            ToolTip="Read the tool rules again (F5)">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -92,7 +95,7 @@
                 Style="{StaticResource DcCard}"
                 Margin="{StaticResource DcCardGap}">
             <StackPanel>
-                <TextBlock Style="{StaticResource DcCardTitle}" Text="Manage a tool by name" />
+                <ctl:DcCardHeader Symbol="WrenchScrewdriver24" Section="Govern" Content="Manage a tool by name" />
                 <TextBlock Style="{StaticResource DcCaption}"
                            Text="A tool with no rule yet is not listed above. Enter its bare name to block or allow it, remove its rule, or read which rule applies (Status is read-only). The scope is the connector chosen in the toolbar: 'All configured connectors' sets the fallback rule for every connector; one connector sets a rule for that connector only." />
                 <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
@@ -101,21 +104,25 @@
                                 Text="{Binding ManageToolName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                 AutomationProperties.Name="Tool name" />
                     <ui:Button Content="Status"
+                               Icon="{ctl:DcSymbolIcon Info24}"
                                Command="{Binding ManageStatusCommand}"
                                IsEnabled="{Binding IsIdle}"
                                ToolTip="Read-only: shows the effective block/allow status of this tool"
                                AutomationProperties.Name="Show the effective status of the named tool" />
                     <ui:Button Content="Block"
+                               Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
                                Command="{Binding ManageBlockCommand}"
                                IsEnabled="{Binding IsIdle}"
                                ToolTip="Opens a review of the exact command first"
                                AutomationProperties.Name="Block the named tool" />
                     <ui:Button Content="Allow"
+                               Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                                Command="{Binding ManageAllowCommand}"
                                IsEnabled="{Binding IsIdle}"
                                ToolTip="Opens a review of the exact command first"
                                AutomationProperties.Name="Allow the named tool" />
                     <ui:Button Content="Unblock"
+                               Icon="{ctl:DcSymbolIcon LockOpen24}"
                                Command="{Binding ManageUnblockCommand}"
                                IsEnabled="{Binding IsIdle}"
                                ToolTip="Removes the rule for this tool. Opens a review first."
@@ -177,7 +184,7 @@
                             VerticalAlignment="Top"
                             Visibility="{Binding ShowCliMissing, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
                             <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
                             <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
                         </StackPanel>
@@ -187,7 +194,7 @@
                             VerticalAlignment="Top"
                             Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
                             <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
                             <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
                             <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Press Refresh to try again. The command and its output are in Activity." />
@@ -198,7 +205,7 @@
                             VerticalAlignment="Top"
                             Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="WrenchScrewdriver24" />
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="WrenchScrewdriver24" />
                             <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
                             <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                         </StackPanel>
@@ -208,12 +215,13 @@
                             VerticalAlignment="Top"
                             Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Style="{StaticResource DcEmptyState}">
-                            <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                             <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No tool rules match the filter" />
                             <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every rule the CLI listed. Clear it to see them all." />
                             <ui:Button Margin="0,12,0,0"
                                        HorizontalAlignment="Center"
                                        Content="Clear filter"
+                                       Icon="{ctl:DcSymbolIcon FilterDismiss24}"
                                        Command="{Binding ClearFilterCommand}" />
                         </StackPanel>
                     </Border>

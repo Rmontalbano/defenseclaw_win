@@ -20,6 +20,11 @@ namespace DefenseClaw.App.Tests.Appearance;
 /// Tertiary text is deliberately not held to a bar - it is hint text, and the Dc styles do not use it for anything that
 /// carries meaning (see the note on DcCaption).
 /// </para>
+/// <para>
+/// The icon colours (default and muted icon, the tint palette, both section mappings) and the tone colours the status and
+/// severity glyphs are drawn in are held to the non-text bar, 3:1 on the window and on the surface, in
+/// <c>Icons\IconTokenTests</c>, which reads the same values the same way and reuses <see cref="Ratio"/>.
+/// </para>
 /// </summary>
 [Collection(UiCollection.Name)]
 public sealed class AppearanceContrastTests

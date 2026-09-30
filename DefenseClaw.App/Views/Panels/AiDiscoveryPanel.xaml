@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              d:DataContext="{d:DesignInstance Type=vm:AiDiscoveryPanelViewModel}"
@@ -20,7 +21,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="Bot24"
+                                ctl:DcIcon.Section="Discover">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -33,7 +36,7 @@
                            Command="{Binding RefreshCommand}"
                            AutomationProperties.HelpText="Re-read the discovery files and ask the gateway for its live status (F5).">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -52,12 +55,16 @@
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource DcCardTitle}" Text="Discovery coverage" />
+                            <ctl:DcCardHeader Symbol="Eye24" Section="Discover" Content="Discovery coverage" />
                             <Border Style="{StaticResource DcBadge}"
                                     Tag="{Binding CoverageBadgeKey}"
                                     Margin="10,0,0,8"
                                     VerticalAlignment="Top">
-                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding CoverageBadgeText}" />
+                                <!-- The status glyph repeats the badge's tone as a shape under Linear and TUI; Default draws none. -->
+                                <StackPanel Orientation="Horizontal">
+                                    <ctl:DcStatusGlyph Tone="{Binding CoverageBadgeKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding CoverageBadgeText}" />
+                                </StackPanel>
                             </Border>
                             <ui:ProgressRing Width="18"
                                              Height="18"
@@ -92,10 +99,12 @@
                         <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,12,0,0">
                             <ui:Button Appearance="Primary"
                                        Content="Run scan…"
+                                       Icon="{ctl:DcSymbolIcon Play24}"
                                        Command="{Binding RunScanCommand}"
                                        ToolTip="defenseclaw agent discovery scan: asks the running gateway for one immediate AI discovery scan, which is what the component cards read."
                                        AutomationProperties.HelpText="Asks the gateway for one immediate AI discovery scan. Shows the exact command first." />
                             <ui:Button Content="{Binding ToggleDiscoveryText}"
+                                       Icon="{ctl:DcSymbolIcon Power24}"
                                        Command="{Binding ToggleDiscoveryCommand}"
                                        AutomationProperties.HelpText="Turns the AI discovery service on or off in config.yaml. Shows the exact command first." />
                             <CheckBox Content="Restart the gateway now"
@@ -103,6 +112,7 @@
                                       ToolTip="On: turning discovery on or off also restarts the gateway so it takes effect. Off: only config.yaml changes; it applies at the next restart."
                                       AutomationProperties.HelpText="Applies to turning AI Discovery on or off." />
                             <ui:Button Content="Re-detect agents…"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding RefreshConnectorsCommand}"
                                        ToolTip="defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards."
                                        AutomationProperties.HelpText="Re-checks which agent command-line tools are installed. Shows the exact command first." />
@@ -212,7 +222,7 @@
                         Margin="{StaticResource DcCardGap}"
                         Visibility="{Binding HasNoComponents, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Style="{StaticResource DcEmptyState}">
-                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                     </StackPanel>
@@ -223,6 +233,7 @@
                         Margin="{StaticResource DcCardGap}"
                         Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Style="{StaticResource DcEmptyState}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No component matches the search" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear or change the search text above." />
                     </StackPanel>
@@ -233,12 +244,15 @@
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource DcCardTitle}" Text="{Binding RuntimeTitle}" />
+                            <ctl:DcCardHeader Symbol="Pulse24" Section="Observe" Content="{Binding RuntimeTitle}" />
                             <Border Style="{StaticResource DcBadge}"
                                     Tag="{Binding RuntimeBadgeKey}"
                                     Margin="10,0,0,8"
                                     VerticalAlignment="Top">
-                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding RuntimeBadgeText}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <ctl:DcStatusGlyph Tone="{Binding RuntimeBadgeKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding RuntimeBadgeText}" />
+                                </StackPanel>
                             </Border>
                             <ui:ProgressRing Width="18"
                                              Height="18"
@@ -259,7 +273,10 @@
                                     <StackPanel Margin="0,0,0,8">
                                         <StackPanel Orientation="Horizontal">
                                             <Border Style="{StaticResource DcBadge}" Tag="{Binding StateKey}" Margin="0,0,8,0">
-                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StateText}" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ctl:DcStatusGlyph Tone="{Binding StateKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StateText}" />
+                                                </StackPanel>
                                             </Border>
                                             <TextBlock Style="{StaticResource DcBody}" VerticalAlignment="Center" Text="{Binding Name}" />
                                         </StackPanel>

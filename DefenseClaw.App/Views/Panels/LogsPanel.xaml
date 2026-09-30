@@ -1,7 +1,8 @@
 <UserControl x:Class="DefenseClaw.App.Views.Panels.LogsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
     <!--
         Filters above, virtualized monospace list below. gateway.log / watchdog.log carry no
         timestamp and almost never a level - just "[component] message" - so the component
@@ -30,7 +31,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="DocumentBulletList24"
+                                ctl:DcIcon.Section="Observe">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -115,7 +118,7 @@
                                Command="{Binding ClearCommand}"
                                AutomationProperties.HelpText="Empty the buffered lines for the source on screen. The log file itself is untouched.">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="Broom24" />
+                            <ctl:DcSymbolIcon Symbol="Broom24" />
                         </ui:Button.Icon>
                     </ui:Button>
 
@@ -124,7 +127,7 @@
                                Command="{Binding CopySelectionCommand}"
                                AutomationProperties.HelpText="Copy the selected log lines to the clipboard.">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="Copy24" />
+                            <ctl:DcSymbolIcon Symbol="Copy24" />
                         </ui:Button.Icon>
                     </ui:Button>
                 </WrapPanel>
@@ -187,7 +190,7 @@
                 <StackPanel Style="{StaticResource DcEmptyState}"
                             MaxWidth="420"
                             Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                    <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="DocumentBulletList24" />
+                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="DocumentBulletList24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                 </StackPanel>

@@ -1,6 +1,7 @@
 <UserControl x:Class="DefenseClaw.App.Views.Shell.AppearanceFlyout"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              IsTabStop="False"
              AutomationProperties.Name="Appearance">
     <!--
@@ -19,16 +20,18 @@
             Style="{StaticResource DcDialogCard}"
             Effect="{DynamicResource DcFlyoutShadow}">
         <StackPanel>
-            <TextBlock Style="{StaticResource DcCardTitle}"
-                       Margin="0,0,0,6"
+            <ctl:DcCardHeader Margin="0,0,0,6"
                        AutomationProperties.HeadingLevel="Level2"
-                       Text="Style" />
+                       Symbol="PaintBrush24"
+                       Section="Setup"
+                       Content="Style" />
             <StackPanel x:Name="StyleGroup" />
 
-            <TextBlock Style="{StaticResource DcCardTitle}"
-                       Margin="0,12,0,6"
+            <ctl:DcCardHeader Margin="0,12,0,6"
                        AutomationProperties.HeadingLevel="Level2"
-                       Text="Mode" />
+                       Symbol="WeatherMoon24"
+                       Section="Setup"
+                       Content="Mode" />
             <StackPanel x:Name="ModeGroup" />
 
             <TextBlock x:Name="HintText"

@@ -45,6 +45,45 @@
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="#8A8F98" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="#268A8F98" />
 
+    <!--
+        ===== Icons =====
+        Linear is the coloured style: Linear's own label colours (indigo, blue, teal, green, yellow, orange, red, pink,
+        gray) plus a violet, each held at 3:1 or better on the window and the card (AppearanceContrastTests).
+        Indigo is the accent's lighter step (#6E79E0, the hover colour) because the accent itself is dim as a 16 px line
+        icon. The sidebar and the page headers wear the section's tint (Nav*), and so do the card headers (Section*).
+    -->
+    <SolidColorBrush x:Key="DcIconBrush" Color="#8A8F98" />
+    <SolidColorBrush x:Key="DcIconMutedBrush" Color="#62666D" />
+
+    <SolidColorBrush x:Key="DcTintIndigoBrush" Color="#6E79E0" />
+    <SolidColorBrush x:Key="DcTintBlueBrush" Color="#4EA7FC" />
+    <SolidColorBrush x:Key="DcTintVioletBrush" Color="#A78BFA" />
+    <SolidColorBrush x:Key="DcTintTealBrush" Color="#26B5CE" />
+    <SolidColorBrush x:Key="DcTintGreenBrush" Color="#4CB782" />
+    <SolidColorBrush x:Key="DcTintAmberBrush" Color="#F2C94C" />
+    <SolidColorBrush x:Key="DcTintOrangeBrush" Color="#F2994A" />
+    <SolidColorBrush x:Key="DcTintRedBrush" Color="#EB5757" />
+    <SolidColorBrush x:Key="DcTintPinkBrush" Color="#EB5DA0" />
+    <SolidColorBrush x:Key="DcTintGrayBrush" Color="#95A2B3" />
+
+    <!-- Section -> tint: Overview indigo, Observe teal, Govern violet, Discover blue, Setup pink, Updates green. -->
+    <SolidColorBrush x:Key="DcSectionOverviewBrush" Color="#6E79E0" />
+    <SolidColorBrush x:Key="DcSectionObserveBrush" Color="#26B5CE" />
+    <SolidColorBrush x:Key="DcSectionGovernBrush" Color="#A78BFA" />
+    <SolidColorBrush x:Key="DcSectionDiscoverBrush" Color="#4EA7FC" />
+    <SolidColorBrush x:Key="DcSectionSetupBrush" Color="#EB5DA0" />
+    <SolidColorBrush x:Key="DcSectionUpdatesBrush" Color="#4CB782" />
+
+    <SolidColorBrush x:Key="DcNavIconOverviewBrush" Color="#6E79E0" />
+    <SolidColorBrush x:Key="DcNavIconObserveBrush" Color="#26B5CE" />
+    <SolidColorBrush x:Key="DcNavIconGovernBrush" Color="#A78BFA" />
+    <SolidColorBrush x:Key="DcNavIconDiscoverBrush" Color="#4EA7FC" />
+    <SolidColorBrush x:Key="DcNavIconSetupBrush" Color="#EB5DA0" />
+    <SolidColorBrush x:Key="DcNavIconUpdatesBrush" Color="#4CB782" />
+
+    <!-- Which shapes the status and severity glyphs draw (Views\Controls\DcGlyphs.cs): Linear's status circles and priority bars. -->
+    <sys:String x:Key="DcGlyphFamily">Linear</sys:String>
+
     <!-- ===== Type ========================================================================= -->
     <!-- Named, not bundled: a machine without Inter or JetBrains Mono falls through to the Windows faces. -->
     <FontFamily x:Key="DcUiFontFamily">Inter, Segoe UI Variable Text, Segoe UI</FontFamily>

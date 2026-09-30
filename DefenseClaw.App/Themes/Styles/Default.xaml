@@ -20,6 +20,10 @@
                    DcBorder (hairline), DcControlBorder, DcTextPrimary/Secondary/Tertiary, DcAccent,
                    DcAccentHover, DcOnAccent, DcFocusRing (outer), DcFocusRingInner,
                    DcTone{Critical,High,Medium,Ok,Neutral} and DcTone...Subtle (foreground / tinted fill)
+          Icons    DcIconBrush (default icon), DcIconMutedBrush, DcTint{Indigo,Blue,Violet,Teal,Green,Amber,Orange,Red,
+                   Pink,Gray}Brush (the palette), DcSection{Overview,Observe,Govern,Discover,Setup,Updates}Brush (a card
+                   header's tint) and DcNavIcon{...}Brush (the sidebar's and a page header's); DcGlyphFamily, a string:
+                   Dot | Linear | Terminal, the shape set of the status and severity glyphs
           Fonts    DcUiFontFamily, DcMonoFontFamily      Size DcFontSize
           Shape    DcRadiusS/M/L, DcControlRadius, DcBarRadius, DcFocusRadius* (doubles), DcBorderThickness
           Density  DcCardPadding, DcCardPaddingCompact, DcCardPaddingFlush
@@ -59,6 +63,44 @@
     <SolidColorBrush x:Key="DcToneOkSubtleBrush" Color="{DynamicResource SystemFillColorSuccessBackground}" />
     <SolidColorBrush x:Key="DcToneNeutralBrush" Color="{DynamicResource SystemFillColorNeutral}" />
     <SolidColorBrush x:Key="DcToneNeutralSubtleBrush" Color="{DynamicResource SystemFillColorNeutralBackground}" />
+
+    <!--
+        ===== Icons: restrained =====
+        Icons are the secondary text colour (the muted step for the big empty-state glyphs), the sidebar and the page
+        headers included; the only colour is the tint on a card header. Those tints are the one place this file holds
+        colours of its own: this one file serves both modes, so each is a mid-tone that clears 3:1 on the light card
+        and on the dark one alike (AppearanceContrastTests holds every one to it).
+    -->
+    <SolidColorBrush x:Key="DcIconBrush" Color="{DynamicResource TextFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcIconMutedBrush" Color="{DynamicResource TextFillColorTertiary}" />
+
+    <SolidColorBrush x:Key="DcTintIndigoBrush" Color="#6C74F0" />
+    <SolidColorBrush x:Key="DcTintBlueBrush" Color="#3B82F6" />
+    <SolidColorBrush x:Key="DcTintVioletBrush" Color="#8E63F2" />
+    <SolidColorBrush x:Key="DcTintTealBrush" Color="#0B8FA1" />
+    <SolidColorBrush x:Key="DcTintGreenBrush" Color="#17984F" />
+    <SolidColorBrush x:Key="DcTintAmberBrush" Color="#B8770B" />
+    <SolidColorBrush x:Key="DcTintOrangeBrush" Color="#DC560A" />
+    <SolidColorBrush x:Key="DcTintRedBrush" Color="#EF4444" />
+    <SolidColorBrush x:Key="DcTintPinkBrush" Color="#E0448C" />
+    <SolidColorBrush x:Key="DcTintGrayBrush" Color="#7C8794" />
+
+    <SolidColorBrush x:Key="DcSectionOverviewBrush" Color="#6C74F0" />
+    <SolidColorBrush x:Key="DcSectionObserveBrush" Color="#0B8FA1" />
+    <SolidColorBrush x:Key="DcSectionGovernBrush" Color="#8E63F2" />
+    <SolidColorBrush x:Key="DcSectionDiscoverBrush" Color="#3B82F6" />
+    <SolidColorBrush x:Key="DcSectionSetupBrush" Color="#E0448C" />
+    <SolidColorBrush x:Key="DcSectionUpdatesBrush" Color="#17984F" />
+
+    <SolidColorBrush x:Key="DcNavIconOverviewBrush" Color="{DynamicResource TextFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcNavIconObserveBrush" Color="{DynamicResource TextFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcNavIconGovernBrush" Color="{DynamicResource TextFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcNavIconDiscoverBrush" Color="{DynamicResource TextFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcNavIconSetupBrush" Color="{DynamicResource TextFillColorSecondary}" />
+    <SolidColorBrush x:Key="DcNavIconUpdatesBrush" Color="{DynamicResource TextFillColorSecondary}" />
+
+    <!-- The status glyph is the plain tone dot the app has always had, and the severity glyph draws nothing. -->
+    <sys:String x:Key="DcGlyphFamily">Dot</sys:String>
 
     <!-- ===== Type ========================================================================= -->
     <!--

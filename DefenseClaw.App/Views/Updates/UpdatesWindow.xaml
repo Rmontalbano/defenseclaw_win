@@ -2,6 +2,7 @@
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
                  xmlns:cfg="clr-namespace:DefenseClaw.App.Views.ConfigEditor"
                  Title="DefenseClaw Updates"
                  Width="820"
@@ -111,17 +112,21 @@
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <TextBlock Margin="0"
+                                <ctl:DcCardHeader Margin="0"
                                            VerticalAlignment="Center"
-                                           Style="{StaticResource DcCardTitle}"
-                                           Text="Version" />
+                                           Symbol="Tag24"
+                                           Section="Updates"
+                                           Content="Version" />
                                 <Border Margin="10,0,0,0"
                                         VerticalAlignment="Center"
                                         Style="{StaticResource DcBadge}"
                                         Tag="{Binding StateBadgeKey}">
-                                    <TextBlock AutomationProperties.Name="{Binding StateLabel, StringFormat='Update status: {0}'}"
-                                               Style="{StaticResource DcBadgeText}"
-                                               Text="{Binding StateLabel}" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="{Binding StateBadgeKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                        <TextBlock AutomationProperties.Name="{Binding StateLabel, StringFormat='Update status: {0}'}"
+                                                   Style="{StaticResource DcBadgeText}"
+                                                   Text="{Binding StateLabel}" />
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
 
@@ -130,12 +135,13 @@
                                            Command="{Binding RefreshCommand}"
                                            Content="Check again">
                                     <ui:Button.Icon>
-                                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                                     </ui:Button.Icon>
                                 </ui:Button>
                                 <ui:Button Appearance="Secondary"
                                            Command="{Binding OpenReleasePageCommand}"
-                                           Content="Open release page" />
+                                           Content="Open release page"
+                                           Icon="{ctl:DcSymbolIcon Open24}" />
                             </StackPanel>
                         </Grid>
 
@@ -194,7 +200,7 @@
                 <!-- Trust panel -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Trust" />
+                        <ctl:DcCardHeader Symbol="ShieldCheckmark24" Section="Updates" Content="Trust" />
 
                         <!-- Authenticode -->
                         <Grid Margin="0,0,0,12">
@@ -314,7 +320,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="0" Style="{StaticResource DcCardTitle}" Text="Upgrade this machine" />
+                            <ctl:DcCardHeader Grid.Column="0" Symbol="ArrowCircleUp24" Section="Updates" Content="Upgrade this machine" />
                             <TextBlock Grid.Column="1"
                                        Margin="0,0,0,8"
                                        FontFamily="{DynamicResource DcMonoFontFamily}"
@@ -327,7 +333,7 @@
                                 Padding="12"
                                 Style="{StaticResource DcSubtleRow}">
                             <StackPanel>
-                                <TextBlock Margin="0,0,0,4" Style="{StaticResource DcCardTitle}" Text="Channel" />
+                                <ctl:DcCardHeader Margin="0,0,0,4" Symbol="BranchFork24" Section="Updates" Content="Channel" />
 
                                 <RadioButton Content="Setup installer (recommended on this install)"
                                              GroupName="UpgradeChannel"
@@ -378,7 +384,8 @@
                                        Appearance="Secondary"
                                        AutomationProperties.HelpText="Looks for cosign on this machine again."
                                        Command="{Binding RefreshCosignCommand}"
-                                       Content="Re-check" />
+                                       Content="Re-check"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}" />
                         </Grid>
 
                         <ui:InfoBar Title="cosign is required"
@@ -389,13 +396,14 @@
                                     Severity="Warning" />
 
                         <!-- Step 1 -->
-                        <TextBlock Margin="0,0,0,2" Style="{StaticResource DcCardTitle}" Text="Step 1 — download and verify" />
+                        <ctl:DcCardHeader Margin="0,0,0,2" Symbol="ArrowDownload24" Section="Updates" Content="Step 1 — download and verify" />
                         <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding StagingStepNote}" />
 
                         <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
                             <ui:Button Appearance="Primary"
                                        Command="{Binding DownloadAndVerifyCommand}"
                                        Content="Download &amp; verify"
+                                       Icon="{ctl:DcSymbolIcon ArrowDownload24}"
                                        IsEnabled="{Binding CanDownload}" />
                             <StackPanel Margin="12,0,0,0"
                                         MaxWidth="470"
@@ -469,7 +477,8 @@
                                            Appearance="Secondary"
                                            AutomationProperties.HelpText="Reveals the staged file in Explorer."
                                            Command="{Binding ShowStagedFileCommand}"
-                                           Content="Show staged file" />
+                                           Content="Show staged file"
+                                           Icon="{ctl:DcSymbolIcon FolderOpen24}" />
                             </Grid>
                         </Border>
 
@@ -481,7 +490,7 @@
                                     Severity="Error" />
 
                         <!-- Step 2 -->
-                        <TextBlock Margin="0,0,0,2" Style="{StaticResource DcCardTitle}" Text="Step 2 — run the upgrade" />
+                        <ctl:DcCardHeader Margin="0,0,0,2" Symbol="Play24" Section="Updates" Content="Step 2 — run the upgrade" />
                         <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding RunStepNote}" />
 
                         <ui:Button x:Name="RunUpgradeButton"
@@ -490,6 +499,7 @@
                                    AutomationProperties.HelpText="Opens a confirmation that shows the exact command. Nothing runs until you confirm."
                                    Command="{Binding OpenConfirmCommand}"
                                    Content="Run upgrade…"
+                                   Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
                                    IsEnabled="{Binding CanOpenConfirm}" />
 
                         <ui:InfoBar Title="After the upgrade"
@@ -508,11 +518,12 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0"
+                                <ctl:DcCardHeader Grid.Column="0"
                                            Margin="0"
                                            VerticalAlignment="Center"
-                                           Style="{StaticResource DcCardTitle}"
-                                           Text="{Binding ConsoleTitle}" />
+                                           Symbol="Code24"
+                                           Section="Updates"
+                                           Content="{Binding ConsoleTitle}" />
 
                                 <Border Grid.Column="1"
                                         Margin="10,0,0,0"
@@ -598,7 +609,7 @@
                 <!-- Upgrade guidance -->
                 <Border Style="{StaticResource DcCard}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DcCardTitle}" Text="Upgrade guidance" />
+                        <ctl:DcCardHeader Symbol="Info24" Section="Updates" Content="Upgrade guidance" />
 
                         <ui:InfoBar Title="Known upgrade issue"
                                     Margin="0,0,0,12"
@@ -608,7 +619,7 @@
                                     Severity="Warning" />
 
                         <!-- Setup exe first: it is the channel that works on this install layout. -->
-                        <TextBlock Margin="0,0,0,4" Style="{StaticResource DcCardTitle}" Text="Setup installer (recommended)" />
+                        <ctl:DcCardHeader Margin="0,0,0,4" Symbol="Rocket24" Section="Updates" Content="Setup installer (recommended)" />
                         <Border Margin="0,0,0,8" Style="{StaticResource DcCodeBlock}">
                             <TextBox AcceptsReturn="True"
                                      AutomationProperties.Name="Setup installer command"
@@ -620,9 +631,10 @@
                                    AutomationProperties.Name="Copy the Setup installer command"
                                    Command="{Binding CopySetupCommandCommand}"
                                    Content="Copy"
+                                   Icon="{ctl:DcSymbolIcon Copy24}"
                                    IsEnabled="{Binding HasSetupAsset}" />
 
-                        <TextBlock Margin="0,0,0,4" Style="{StaticResource DcCardTitle}" Text="Upgrade script (release asset)" />
+                        <ctl:DcCardHeader Margin="0,0,0,4" Symbol="DocumentText24" Section="Updates" Content="Upgrade script (release asset)" />
                         <Border Margin="0,0,0,8" Style="{StaticResource DcCodeBlock}">
                             <TextBox AcceptsReturn="True"
                                      AutomationProperties.Name="Upgrade script command"
@@ -633,6 +645,7 @@
                                    AutomationProperties.Name="Copy the upgrade script command"
                                    Command="{Binding CopyUpgradeScriptCommandCommand}"
                                    Content="Copy"
+                                   Icon="{ctl:DcSymbolIcon Copy24}"
                                    IsEnabled="{Binding HasUpgradeScriptAsset}" />
                     </StackPanel>
                 </Border>
@@ -702,12 +715,13 @@
                         <ui:Button Margin="0,8,0,16"
                                    Appearance="Secondary"
                                    Command="{Binding CopyCommandCommand}"
-                                   Content="Copy command" />
+                                   Content="Copy command"
+                                   Icon="{ctl:DcSymbolIcon Copy24}" />
 
-                        <TextBlock Margin="0,0,0,4" Style="{StaticResource DcCardTitle}" Text="What this does" />
+                        <ctl:DcCardHeader Margin="0,0,0,4" Symbol="Info24" Section="Updates" Content="What this does" />
                         <TextBlock Margin="0,0,0,12" Style="{StaticResource DcCaption}" Text="{Binding ResolverPlan}" />
 
-                        <TextBlock Margin="0,0,0,4" Style="{StaticResource DcCardTitle}" Text="If it fails" />
+                        <ctl:DcCardHeader Margin="0,0,0,4" Symbol="Warning24" Tint="Orange" Content="If it fails" />
                         <TextBlock Margin="0,0,0,12" Style="{StaticResource DcCaption}" Text="{Binding RollbackStory}" />
 
                         <ui:InfoBar Title="This app will be out of date until you restart it"
@@ -721,11 +735,13 @@
                             <ui:Button x:Name="ConfirmCancelButton"
                                        AutomationProperties.HelpText="Closes this confirmation without running anything. Shortcut: Esc."
                                        Command="{Binding CancelConfirmCommand}"
-                                       Content="Cancel" />
+                                       Content="Cancel"
+                                       Icon="{ctl:DcSymbolIcon Dismiss24}" />
                             <ui:Button Margin="8,0,0,0"
                                        Appearance="Primary"
                                        Command="{Binding RunUpgradeCommand}"
                                        Content="Run upgrade now"
+                                       Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
                                        IsEnabled="{Binding CanRunUpgrade}" />
                         </StackPanel>
                     </StackPanel>

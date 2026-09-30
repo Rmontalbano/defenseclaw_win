@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
              xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell">
     <!--
@@ -36,7 +37,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="ShieldSettings24"
+                                ctl:DcIcon.Section="Setup">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}"
@@ -51,14 +54,14 @@
                            ToolTip="Re-read the guardrail posture and the connector roster (F5)"
                            Command="{Binding RefreshCommand}">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
                 <ui:Button Content="Re-read catalog"
                            ToolTip="Ask the CLI again which setup targets it has and re-read every help screen (slow: about thirty CLI calls)"
                            Command="{Binding ReloadCatalogCommand}">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowSync24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowSync24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -69,9 +72,10 @@
                 <!-- Connector roster: what the wizards are acting on right now. -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DcCardTitle}"
-                                   AutomationProperties.HeadingLevel="Level2"
-                                   Text="Configured connectors" />
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                   Symbol="PlugConnected24"
+                                   Section="Setup"
+                                   Content="Configured connectors" />
 
                         <ItemsControl ItemsSource="{Binding Connectors}"
                                       IsTabStop="False"
@@ -132,17 +136,21 @@
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource DcCardTitle}"
-                                           Margin="0,0,10,0"
+                                <ctl:DcCardHeader Margin="0,0,10,0"
                                            VerticalAlignment="Center"
                                            AutomationProperties.HeadingLevel="Level2"
-                                           Text="Guardrail" />
+                                           Symbol="ShieldCheckmark24"
+                                           Section="Govern"
+                                           Content="Guardrail" />
                                 <Border VerticalAlignment="Center"
                                         Style="{StaticResource DcBadge}"
                                         Tag="{Binding GuardrailHeadlineKey}">
-                                    <TextBlock Style="{StaticResource DcBadgeText}"
-                                               AutomationProperties.LiveSetting="Polite"
-                                               Text="{Binding GuardrailHeadline}" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="{Binding GuardrailHeadlineKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                   AutomationProperties.LiveSetting="Polite"
+                                                   Text="{Binding GuardrailHeadline}" />
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
 
@@ -176,7 +184,10 @@
                                                 <TextBlock Style="{StaticResource ChipName}" Text="{Binding Name}" />
                                                 <Border Margin="10,0,0,0" VerticalAlignment="Center"
                                                         Style="{StaticResource DcBadge}" Tag="{Binding StateKey}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding State}" />
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ctl:DcStatusGlyph Tone="{Binding StateKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding State}" />
+                                                    </StackPanel>
                                                 </Border>
                                                 <Border Margin="6,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcChip}">
                                                     <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Mode}" />
@@ -229,21 +240,25 @@
                                       Visibility="{Binding HasMultipleGuardrailConnectors, Converter={StaticResource BoolToVisibility}}" />
 
                             <ui:Button Content="Enable"
+                                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                                        AutomationProperties.Name="Enable the guardrail"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
                                        Visibility="{Binding ShowEnableGuardrail, Converter={StaticResource BoolToVisibility}}"
                                        Command="{Binding EnableGuardrailCommand}" />
                             <ui:Button Content="Disable"
+                                       Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
                                        AutomationProperties.Name="Disable the guardrail"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
                                        Visibility="{Binding ShowDisableGuardrail, Converter={StaticResource BoolToVisibility}}"
                                        Command="{Binding DisableGuardrailCommand}" />
                             <ui:Button Content="Fail open"
+                                       Icon="{ctl:DcSymbolIcon LockOpen24}"
                                        AutomationProperties.Name="Set the hook fail mode to open"
                                        ToolTip="Allow and log when the gateway errors (recommended)"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
                                        Command="{Binding SetFailModeOpenCommand}" />
                             <ui:Button Content="Fail closed"
+                                       Icon="{ctl:DcSymbolIcon LockClosed24}"
                                        AutomationProperties.Name="Set the hook fail mode to closed"
                                        ToolTip="Block whenever the gateway errors or is unreachable"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
@@ -283,6 +298,7 @@
                                            HorizontalAlignment="Left"
                                            Appearance="Secondary"
                                            Content="Dismiss"
+                                           Icon="{ctl:DcSymbolIcon Dismiss24}"
                                            Command="{Binding DismissGuardrailResultCommand}" />
                             </StackPanel>
                         </Border>
@@ -305,16 +321,17 @@
 
                             <ui:Button Appearance="Secondary"
                                        Content="Clear"
+                                       Icon="{ctl:DcSymbolIcon FilterDismiss24}"
                                        Command="{Binding ClearFiltersCommand}" />
 
                             <ui:Button Appearance="Secondary"
-                                       Icon="{ui:SymbolIcon DocumentEdit24}"
+                                       Icon="{ctl:DcSymbolIcon DocumentEdit24}"
                                        Content="Config editor"
                                        ToolTip="Edit config.yaml with backup, validation and restore"
                                        Command="{Binding OpenConfigEditorCommand}" />
 
                             <ui:Button Appearance="Secondary"
-                                       Icon="{ui:SymbolIcon ArrowSync24}"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Content="Updates &amp; trust"
                                        ToolTip="Installed vs latest release, signing and provenance status"
                                        Command="{Binding OpenUpdatesCommand}" />
@@ -424,6 +441,7 @@
                                                             <ui:Button Grid.Column="1"
                                                                        Appearance="Secondary"
                                                                        Content="Configure"
+                                                                       Icon="{ctl:DcSymbolIcon Settings24}"
                                                                        AutomationProperties.Name="{Binding LaunchAutomationName}"
                                                                        IsEnabled="{Binding IsAvailable}"
                                                                        Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -452,7 +470,7 @@
 
                 <StackPanel Style="{StaticResource DcEmptyState}"
                             Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                    <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No wizards match" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}"
                                Text="Clear the search, or turn off the certification filter: on this platform only Claude Code and Codex are certified connectors." />

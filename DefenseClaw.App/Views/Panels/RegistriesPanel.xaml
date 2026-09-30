@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              d:DataContext="{d:DesignInstance Type=vm:RegistriesPanelViewModel}"
@@ -22,7 +23,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}">
+        <HeaderedContentControl Grid.Row="0" Style="{StaticResource DcPageHeader}"
+                                ctl:DcIcon.Symbol="Library24"
+                                ctl:DcIcon.Section="Discover">
             <HeaderedContentControl.Header>
                 <StackPanel>
                     <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
@@ -35,7 +38,7 @@
                            Command="{Binding RefreshCommand}"
                            AutomationProperties.HelpText="Re-read the registry sources (F5).">
                     <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="ArrowClockwise24" />
+                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -46,21 +49,26 @@
             <WrapPanel Style="{StaticResource DcToolbarPanel}">
                 <ui:Button Appearance="Primary"
                            Content="Add source…"
+                           Icon="{ctl:DcSymbolIcon Add24}"
                            Command="{Binding OpenAddFormCommand}"
                            AutomationProperties.HelpText="Register a new registry source. Nothing is fetched until you sync it." />
                 <ui:Button Content="Sync selected…"
+                           Icon="{ctl:DcSymbolIcon ArrowSync24}"
                            Command="{Binding SyncSelectedCommand}"
                            IsEnabled="{Binding HasSelectedSource}"
                            AutomationProperties.HelpText="Fetch, scan and promote the selected source's entries." />
                 <ui:Button Content="Sync all…"
+                           Icon="{ctl:DcSymbolIcon ArrowSync24}"
                            Command="{Binding SyncAllCommand}"
                            IsEnabled="{Binding HasSources}"
                            AutomationProperties.HelpText="Fetch, scan and promote entries from every enabled source." />
                 <ui:Button Content="{Binding ToggleEnabledText}"
+                           Icon="{ctl:DcSymbolIcon Power24}"
                            Command="{Binding ToggleSelectedEnabledCommand}"
                            IsEnabled="{Binding HasSelectedSource}"
                            AutomationProperties.HelpText="Turn the selected source on or off." />
                 <ui:Button Content="Remove…"
+                           Icon="{ctl:DcSymbolIcon Delete24}"
                            Command="{Binding RemoveSelectedCommand}"
                            IsEnabled="{Binding HasSelectedSource}"
                            AutomationProperties.HelpText="Delete the selected source, the rules it promoted and its cache." />
@@ -87,17 +95,19 @@
                     Margin="{StaticResource DcCardGap}"
                     Visibility="{Binding ShowPolicyCard, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource DcCardTitle}" Text="Default-deny for registries" />
+                    <ctl:DcCardHeader Symbol="ShieldLock24" Section="Govern" Content="Default-deny for registries" />
                     <TextBlock Style="{StaticResource DcCaption}"
                                Text="Off by default. When on, a skill or MCP server has to match a rule from a registry to be admitted; anything else falls back to the default action. Turning it on before approving entries blocks everything not already covered." />
                     <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
                         <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding SkillsRegistryText}" />
                         <ui:Button Content="Require…"
+                                   Icon="{ctl:DcSymbolIcon ShieldLock24}"
                                    Command="{Binding SetRegistryRequiredCommand}"
                                    CommandParameter="skill:on"
                                    IsEnabled="{Binding SkillsRegistryOptional}"
                                    AutomationProperties.Name="Require a registry for skills" />
                         <ui:Button Content="Make optional…"
+                                   Icon="{ctl:DcSymbolIcon LockOpen24}"
                                    Command="{Binding SetRegistryRequiredCommand}"
                                    CommandParameter="skill:off"
                                    IsEnabled="{Binding SkillsRegistryRequired}"
@@ -106,11 +116,13 @@
                     <WrapPanel Style="{StaticResource DcToolbarPanel}">
                         <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding McpsRegistryText}" />
                         <ui:Button Content="Require…"
+                                   Icon="{ctl:DcSymbolIcon ShieldLock24}"
                                    Command="{Binding SetRegistryRequiredCommand}"
                                    CommandParameter="mcp:on"
                                    IsEnabled="{Binding McpsRegistryOptional}"
                                    AutomationProperties.Name="Require a registry for MCP servers" />
                         <ui:Button Content="Make optional…"
+                                   Icon="{ctl:DcSymbolIcon LockOpen24}"
                                    Command="{Binding SetRegistryRequiredCommand}"
                                    CommandParameter="mcp:off"
                                    IsEnabled="{Binding McpsRegistryRequired}"
@@ -124,7 +136,7 @@
                     Margin="{StaticResource DcCardGap}"
                     Visibility="{Binding IsAddFormOpen, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource DcCardTitle}" Text="Add a registry source" />
+                    <ctl:DcCardHeader Symbol="Add24" Section="Discover" Content="Add a registry source" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -199,9 +211,10 @@
                                Visibility="{Binding HasAddValidationMessage, Converter={StaticResource BoolToVisibility}}" />
 
                     <StackPanel Style="{StaticResource DcActionBar}" HorizontalAlignment="Right">
-                        <ui:Button Content="Cancel" Command="{Binding CancelAddFormCommand}" />
+                        <ui:Button Content="Cancel" Icon="{ctl:DcSymbolIcon Dismiss24}" Command="{Binding CancelAddFormCommand}" />
                         <ui:Button Appearance="Primary"
                                    Content="Review and add…"
+                                   Icon="{ctl:DcSymbolIcon ClipboardCheckmark24}"
                                    Command="{Binding SubmitAddCommand}"
                                    AutomationProperties.HelpText="Shows the exact command before anything runs." />
                     </StackPanel>
@@ -224,7 +237,7 @@
                     Visibility="{Binding ShowNotConfigured, Converter={StaticResource BoolToVisibility}}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                        <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No registry sources yet" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}"
                                    Text="A registry is a catalog of skills or MCP servers that DefenseClaw can pull on demand: a company HTTPS manifest, smithery.ai, or a git repository with a defenseclaw-registry.yaml. Each synced entry is scanned, and clean ones can be promoted into your allow policy. Registries are optional; skills and MCP servers work without one." />
@@ -239,6 +252,7 @@
                                    HorizontalAlignment="Center"
                                    Margin="0,16,0,0"
                                    Content="Add a registry source…"
+                                   Icon="{ctl:DcSymbolIcon Add24}"
                                    Command="{Binding OpenAddFormCommand}" />
 
                         <StackPanel Margin="0,20,0,0"
@@ -259,13 +273,14 @@
             <Border Style="{StaticResource DcCard}"
                     Visibility="{Binding ShowUnavailable, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="520">
-                    <ui:SymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Warning24" />
+                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Warning24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Registry sources could not be read" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}"
                                Text="The DefenseClaw command did not answer, so this panel cannot say whether any sources are configured. The reason is in the banner above." />
                     <ui:Button HorizontalAlignment="Center"
                                Margin="0,16,0,0"
                                Content="Try again"
+                               Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}" />
                 </StackPanel>
             </Border>
@@ -323,7 +338,7 @@
                                     </Border>
                                 </WrapPanel>
 
-                                <TextBlock Style="{StaticResource DcCardTitle}" Text="Cached entries" />
+                                <ctl:DcCardHeader Symbol="Database24" Section="Discover" Content="Cached entries" />
                                 <TextBlock Style="{StaticResource DcCaption}"
                                            Margin="0,0,0,8"
                                            Text="{Binding EntriesMessage}" />
@@ -393,16 +408,18 @@
                                 </ui:DataGrid>
                                 <StackPanel Style="{StaticResource DcActionBar}" Margin="0,8,0,16">
                                     <ui:Button Content="Approve…"
+                                               Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                                                Command="{Binding ApproveEntryCommand}"
                                                IsEnabled="{Binding CanReviewEntry}"
                                                AutomationProperties.HelpText="Approve the selected entry and promote it into the allow policy." />
                                     <ui:Button Content="Reject…"
+                                               Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
                                                Command="{Binding RejectEntryCommand}"
                                                IsEnabled="{Binding CanReviewEntry}"
                                                AutomationProperties.HelpText="Reject the selected entry so it stays blocked." />
                                 </StackPanel>
 
-                                <TextBlock Style="{StaticResource DcCardTitle}" Text="Raw fields" />
+                                <ctl:DcCardHeader Symbol="Code24" Section="Discover" Content="Raw fields" />
                                 <ItemsControl ItemsSource="{Binding SelectedSource.Fields}"
                                               Focusable="False"
                                               AutomationProperties.Name="Raw fields of the selected source">

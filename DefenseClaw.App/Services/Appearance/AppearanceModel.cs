@@ -161,6 +161,39 @@ internal static class AppearanceTokens
     public const string ToneNeutral = "DcToneNeutralBrush";
     public const string ToneNeutralSubtle = "DcToneNeutralSubtleBrush";
 
+    // Icons. The default and the muted icon colour, the named tint palette, and the section -> tint mapping twice: the
+    // sidebar and page headers (NavIcon*) and the card headers (Section*), so a style can tint one and not the other.
+    public const string Icon = "DcIconBrush";
+    public const string IconMuted = "DcIconMutedBrush";
+
+    public const string TintIndigo = "DcTintIndigoBrush";
+    public const string TintBlue = "DcTintBlueBrush";
+    public const string TintViolet = "DcTintVioletBrush";
+    public const string TintTeal = "DcTintTealBrush";
+    public const string TintGreen = "DcTintGreenBrush";
+    public const string TintAmber = "DcTintAmberBrush";
+    public const string TintOrange = "DcTintOrangeBrush";
+    public const string TintRed = "DcTintRedBrush";
+    public const string TintPink = "DcTintPinkBrush";
+    public const string TintGray = "DcTintGrayBrush";
+
+    public const string SectionOverview = "DcSectionOverviewBrush";
+    public const string SectionObserve = "DcSectionObserveBrush";
+    public const string SectionGovern = "DcSectionGovernBrush";
+    public const string SectionDiscover = "DcSectionDiscoverBrush";
+    public const string SectionSetup = "DcSectionSetupBrush";
+    public const string SectionUpdates = "DcSectionUpdatesBrush";
+
+    public const string NavIconOverview = "DcNavIconOverviewBrush";
+    public const string NavIconObserve = "DcNavIconObserveBrush";
+    public const string NavIconGovern = "DcNavIconGovernBrush";
+    public const string NavIconDiscover = "DcNavIconDiscoverBrush";
+    public const string NavIconSetup = "DcNavIconSetupBrush";
+    public const string NavIconUpdates = "DcNavIconUpdatesBrush";
+
+    /// <summary>Which shapes the status and severity glyphs draw: "Dot" (Default), "Linear" or "Terminal". A string, not a brush.</summary>
+    public const string GlyphFamily = "DcGlyphFamily";
+
     public const string UiFontFamily = "DcUiFontFamily";
     public const string MonoFontFamily = "DcMonoFontFamily";
     public const string FontSize = "DcFontSize";
@@ -190,11 +223,29 @@ internal static class AppearanceTokens
         Accent, AccentHover, OnAccent, FocusRing, FocusRingInner,
         ToneCritical, ToneCriticalSubtle, ToneHigh, ToneHighSubtle, ToneMedium, ToneMediumSubtle,
         ToneOk, ToneOkSubtle, ToneNeutral, ToneNeutralSubtle,
+        Icon, IconMuted,
+        TintIndigo, TintBlue, TintViolet, TintTeal, TintGreen, TintAmber, TintOrange, TintRed, TintPink, TintGray,
+        SectionOverview, SectionObserve, SectionGovern, SectionDiscover, SectionSetup, SectionUpdates,
+        NavIconOverview, NavIconObserve, NavIconGovern, NavIconDiscover, NavIconSetup, NavIconUpdates,
+    };
+
+    /// <summary>
+    /// The icon colours that stand on the window or a card and carry meaning as shapes, so the contrast test holds each to
+    /// 3:1 there (WCAG non-text contrast): the default and muted icon, the tint palette, and both section mappings. The
+    /// tone brushes, which the status and severity glyphs use, are held by the tone rules already.
+    /// </summary>
+    public static IReadOnlyList<string> IconColours { get; } = new[]
+    {
+        Icon, IconMuted,
+        TintIndigo, TintBlue, TintViolet, TintTeal, TintGreen, TintAmber, TintOrange, TintRed, TintPink, TintGray,
+        SectionOverview, SectionObserve, SectionGovern, SectionDiscover, SectionSetup, SectionUpdates,
+        NavIconOverview, NavIconObserve, NavIconGovern, NavIconDiscover, NavIconSetup, NavIconUpdates,
     };
 
     /// <summary>Every token a style dictionary must define: the brushes plus fonts, size, shape, density and effect.</summary>
     public static IReadOnlyList<string> All { get; } = Brushes.Concat(new[]
     {
+        GlyphFamily,
         UiFontFamily, MonoFontFamily, FontSize,
         RadiusS, RadiusM, RadiusL, ControlRadius, BarRadius, BorderThickness,
         FocusRadius, FocusRadiusInner, FocusRadiusInset, FocusRadiusInsetInner,

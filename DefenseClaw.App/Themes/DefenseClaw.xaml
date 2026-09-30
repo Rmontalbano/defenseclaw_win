@@ -1,7 +1,8 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+                    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                    xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
     <!--
         DefenseClaw shared design system.
 
@@ -23,6 +24,11 @@
                      DcTextPrimaryBrush / DcTextSecondaryBrush / DcTextTertiaryBrush
                      DcAccentBrush | DcAccentHoverBrush | DcOnAccentBrush | DcFocusRingBrush | DcFocusRingInnerBrush
                      DcTone{Critical,High,Medium,Ok,Neutral}Brush and ...SubtleBrush (foreground / tinted fill)
+          Icons      DcIconBrush (default icon: secondary text) | DcIconMutedBrush (empty-state glyphs)
+                     DcTint{Indigo,Blue,Violet,Teal,Green,Amber,Orange,Red,Pink,Gray}Brush (the named palette)
+                     DcSection{Overview,Observe,Govern,Discover,Setup,Updates}Brush (a card header's tint, per section)
+                     DcNavIcon{Overview,Observe,Govern,Discover,Setup,Updates}Brush (the sidebar's and a page header's)
+                     DcGlyphFamily (string: Dot | Linear | Terminal - the shape set of the status/severity glyphs)
           Type       DcUiFontFamily | DcMonoFontFamily | DcFontSize (body size)
           Shape      DcRadiusS 4 | DcRadiusM 6 | DcRadiusL 8 (badges + inner rows | code blocks | cards, in Default),
                      DcControlRadius, DcBarRadius, DcFocusRadius* (doubles), DcBorderThickness
@@ -84,16 +90,38 @@
           DcPage                 Grid style: root of a panel; applies DcPageMargin.
           DcPageScroll           ScrollViewer style: vertical auto, horizontal off, room for the bar.
           DcPageHeader           HeaderedContentControl: Header = title+subtitle block, Content =
-                                 right-aligned actions. Applies DcHeaderMargin.
+                                 right-aligned actions. Applies DcHeaderMargin. ctl:DcIcon.Symbol and
+                                 ctl:DcIcon.Section add the panel's glyph in a tinted tile before the title.
           DcActionBar            StackPanel for the header's Content: horizontal, buttons spaced 8.
           DcToolbar              Border: the card that holds a filter/toolbar row.
           DcToolbarPanel         WrapPanel inside a DcToolbar: spaces buttons, combos, text boxes,
                                  toggles and DcToolbarLabels, and wraps at narrow widths.
           DcField                StackPanel: label above value, DcFieldGap under it.
 
+        ICONS (WPF-UI's Fluent SymbolIcon in its decorative form, ctl:DcSymbolIcon; nothing is drawn from a file)
+          Making one             <ctl:DcSymbolIcon Symbol="Shield24" />, or on a button Icon="{ctl:DcSymbolIcon Refresh24}".
+          Sizes                  16 in a row, a button or the palette | 20 in a card header | 20 in a page header's tile
+                                 | 48 muted in an empty state. Spacing: 8 to the text beside a 16-20 px icon.
+          DcIcon                 SymbolIcon style, 16, DcIconBrush. A glyph beside text in a row.
+          DcIconMuted            The same in the muted colour.
+          DcIconCard             20, tinted: DcIcon.Tint (a palette name) wins over DcIcon.Section (a section) over the default.
+          DcIconNav              20, the sidebar's and page header's tint of DcIcon.Section.
+          DcNavIcon              Applied by MainWindow.xaml to every icon in the sidebar: tints it by its item's panel.
+          ctl:DcCardHeader       A card's heading with its glyph: <ctl:DcCardHeader Symbol="Shield24" Section="Govern">Title</ctl:DcCardHeader>
+                                 (Tint="Orange" instead of Section for a card that is not one section; Trailing = right-hand content).
+          DcPageHeader           Takes ctl:DcIcon.Symbol and ctl:DcIcon.Section: a tinted tile with the glyph before the title.
+          Decorative             An icon beside its own label needs no automation name: a stock SymbolIcon would expose its
+                                 glyph as an unnamed Text element next to the label, so ctl:DcSymbolIcon is neither a
+                                 control nor content and holds no children, and the label is read once. An icon that IS
+                                 the label (an icon-only button) carries the button's AutomationProperties.Name.
+          ctl:DcStatusGlyph      A state as a mark (Tone="{Binding StateKey}"): Default a tone dot, Linear a status circle
+                                 (check / half / cross / ring), TUI a filled circle / triangle / square. Replaces DcToneDot.
+          ctl:DcSeverityGlyph    A severity as a mark: Linear's priority glyphs, TUI's flat shapes; Default draws nothing.
+                                 Both follow the DcGlyphFamily token live, and always sit beside the words they repeat.
+
         EMPTY STATE
           DcEmptyState           StackPanel, centred, max 480 wide.
-          DcEmptyIcon            ui:SymbolIcon, 40px, muted.
+          DcEmptyIcon            ui:SymbolIcon, 48px, muted.
           DcEmptyTitle           16 semibold, centred.
           DcEmptyDetail          13 secondary, centred, wraps.
 
@@ -567,14 +595,36 @@
                 <ControlTemplate TargetType="HeaderedContentControl">
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ContentPresenter Grid.Column="0"
+                        <!--
+                            The panel's glyph in a tile: the section's nav tint at ~16% behind the glyph in the full tint (under
+                            Default both are the secondary text colour, so the tile is a quiet grey). Absent unless the header
+                            sets ctl:DcIcon.Symbol.
+                        -->
+                        <Grid x:Name="IconTile"
+                              Grid.Column="0"
+                              Width="32"
+                              Height="32"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Top">
+                            <Border Background="{Binding Foreground, ElementName=Glyph}"
+                                    CornerRadius="{DynamicResource DcRadiusL}"
+                                    Opacity="0.16" />
+                            <!-- DynamicResource: the icon styles are defined further down this file. -->
+                            <ctl:DcSymbolIcon x:Name="Glyph"
+                                              Style="{DynamicResource DcIconNav}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Symbol="{Binding (ctl:DcIcon.Symbol), RelativeSource={RelativeSource TemplatedParent}}" />
+                        </Grid>
+                        <ContentPresenter Grid.Column="1"
                                           ContentSource="Header"
                                           VerticalAlignment="Top" />
                         <ContentPresenter x:Name="Actions"
-                                          Grid.Column="1"
+                                          Grid.Column="2"
                                           Margin="16,0,0,0"
                                           HorizontalAlignment="Right"
                                           VerticalAlignment="Top" />
@@ -582,6 +632,9 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="HasContent" Value="False">
                             <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="ctl:DcIcon.Symbol" Value="Empty">
+                            <Setter TargetName="IconTile" Property="Visibility" Value="Collapsed" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -639,6 +692,177 @@
         <Setter Property="Margin" Value="{StaticResource DcFieldGap}" />
     </Style>
 
+    <!-- ===== Icons ======================================================================= -->
+    <!--
+        The colour of an icon is a token, and the token is chosen by what the icon is for: DcIcon.Section (Overview,
+        Observe, Govern, Discover, Setup, Updates) or DcIcon.Tint (a palette name). Every style decides what those
+        tokens are: Linear tints them, Default keeps the sidebar and rows in the secondary text colour and tints only a
+        card header, TUI uses the accent. The triggers below only pick a key, always as a DynamicResource.
+    -->
+    <Style x:Key="DcIcon" TargetType="{x:Type ui:SymbolIcon}">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource DcIconBrush}" />
+    </Style>
+
+    <Style x:Key="DcIconMuted" TargetType="{x:Type ui:SymbolIcon}" BasedOn="{StaticResource DcIcon}">
+        <Setter Property="Foreground" Value="{DynamicResource DcIconMutedBrush}" />
+    </Style>
+
+    <!-- A card header's glyph: a palette tint wins over the section's, which wins over the default icon colour. -->
+    <Style x:Key="DcIconCard" TargetType="{x:Type ui:SymbolIcon}" BasedOn="{StaticResource DcIcon}">
+        <Setter Property="FontSize" Value="20" />
+        <Style.Triggers>
+            <Trigger Property="ctl:DcIcon.Section" Value="Overview">
+                <Setter Property="Foreground" Value="{DynamicResource DcSectionOverviewBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Observe">
+                <Setter Property="Foreground" Value="{DynamicResource DcSectionObserveBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Govern">
+                <Setter Property="Foreground" Value="{DynamicResource DcSectionGovernBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Discover">
+                <Setter Property="Foreground" Value="{DynamicResource DcSectionDiscoverBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Setup">
+                <Setter Property="Foreground" Value="{DynamicResource DcSectionSetupBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Updates">
+                <Setter Property="Foreground" Value="{DynamicResource DcSectionUpdatesBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Indigo">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintIndigoBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Blue">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintBlueBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Violet">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintVioletBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Teal">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintTealBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Green">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintGreenBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Amber">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintAmberBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Orange">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintOrangeBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Red">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintRedBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Pink">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintPinkBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Tint" Value="Gray">
+                <Setter Property="Foreground" Value="{DynamicResource DcTintGrayBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The sidebar's and a page header's glyph: the section's nav tint (secondary text under Default). -->
+    <Style x:Key="DcIconNav" TargetType="{x:Type ui:SymbolIcon}" BasedOn="{StaticResource DcIcon}">
+        <Setter Property="FontSize" Value="20" />
+        <Style.Triggers>
+            <Trigger Property="ctl:DcIcon.Section" Value="Overview">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconOverviewBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Observe">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconObserveBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Govern">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconGovernBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Discover">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconDiscoverBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Setup">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconSetupBrush}" />
+            </Trigger>
+            <Trigger Property="ctl:DcIcon.Section" Value="Updates">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconUpdatesBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--
+        The sidebar's icons are made in code (MainWindow.BuildNavigation) with no style, so MainWindow.xaml applies this one
+        to every SymbolIcon under the NavigationView: the icon looks up its item and, through the item's target page, the
+        section. It sets nothing for an icon that is not in a sidebar item (a page's, the pane toggle's).
+    -->
+    <Style x:Key="DcNavIcon" TargetType="{x:Type ui:SymbolIcon}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding TargetPageType, RelativeSource={RelativeSource AncestorType={x:Type ui:NavigationViewItem}}, Converter={x:Static ctl:PanelSectionConverter.Instance}}" Value="Overview">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconOverviewBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding TargetPageType, RelativeSource={RelativeSource AncestorType={x:Type ui:NavigationViewItem}}, Converter={x:Static ctl:PanelSectionConverter.Instance}}" Value="Observe">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconObserveBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding TargetPageType, RelativeSource={RelativeSource AncestorType={x:Type ui:NavigationViewItem}}, Converter={x:Static ctl:PanelSectionConverter.Instance}}" Value="Govern">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconGovernBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding TargetPageType, RelativeSource={RelativeSource AncestorType={x:Type ui:NavigationViewItem}}, Converter={x:Static ctl:PanelSectionConverter.Instance}}" Value="Discover">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconDiscoverBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding TargetPageType, RelativeSource={RelativeSource AncestorType={x:Type ui:NavigationViewItem}}, Converter={x:Static ctl:PanelSectionConverter.Instance}}" Value="Setup">
+                <Setter Property="Foreground" Value="{DynamicResource DcNavIconSetupBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--
+        A card's heading: glyph, title, optional trailing content. The title is whatever the content is; a plain string
+        is drawn as DcCardTitle without its bottom margin (the header carries it).
+    -->
+    <Style TargetType="{x:Type ctl:DcCardHeader}">
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ctl:DcCardHeader}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ctl:DcSymbolIcon x:Name="Glyph"
+                                          Grid.Column="0"
+                                          Style="{StaticResource DcIconCard}"
+                                          Margin="0,0,8,0"
+                                          Symbol="{TemplateBinding Symbol}"
+                                          ctl:DcIcon.Section="{TemplateBinding Section}"
+                                          ctl:DcIcon.Tint="{TemplateBinding Tint}" />
+                        <ContentPresenter Grid.Column="1" VerticalAlignment="Center">
+                            <ContentPresenter.Resources>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DcCardTitle}">
+                                    <Setter Property="Margin" Value="0" />
+                                    <!-- The header has no automation peer of its own, so its heading level rides on the title text. -->
+                                    <Setter Property="AutomationProperties.HeadingLevel"
+                                            Value="{Binding (AutomationProperties.HeadingLevel), RelativeSource={RelativeSource AncestorType={x:Type ctl:DcCardHeader}}}" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
+                        <ContentPresenter Grid.Column="2"
+                                          Margin="12,0,0,0"
+                                          VerticalAlignment="Center"
+                                          Content="{TemplateBinding Trailing}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Symbol" Value="Empty">
+                            <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===== Empty state ================================================================= -->
     <Style x:Key="DcEmptyState" TargetType="StackPanel">
         <Setter Property="HorizontalAlignment" Value="Center" />
@@ -648,10 +872,10 @@
     </Style>
 
     <Style x:Key="DcEmptyIcon" TargetType="{x:Type ui:SymbolIcon}">
-        <Setter Property="FontSize" Value="40" />
+        <Setter Property="FontSize" Value="48" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="Margin" Value="0,0,0,12" />
-        <Setter Property="Foreground" Value="{DynamicResource DcTextTertiaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcIconMutedBrush}" />
     </Style>
 
     <Style x:Key="DcEmptyTitle" TargetType="TextBlock">

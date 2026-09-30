@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
              x:Name="Root"
              IsTabStop="False"
@@ -105,6 +106,7 @@
                 <ui:Button x:Name="CopyButton"
                            Appearance="Secondary"
                            Content="Copy command"
+                           Icon="{ctl:DcSymbolIcon Copy24}"
                            Click="OnCopyClick"
                            AutomationProperties.Name="Copy the command to the clipboard" />
                 <TextBlock x:Name="CopyStatus"
@@ -122,14 +124,17 @@
             <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <ui:Button x:Name="CancelButton"
                            Margin="0,0,8,0"
+                           Icon="{ctl:DcSymbolIcon Dismiss24}"
                            Command="{Binding CancelCommand, ElementName=Root}"
                            AutomationProperties.HelpText="Close without running anything. Escape does the same." />
                 <ui:Button x:Name="ConfirmButton"
                            Appearance="Primary"
+                           Icon="{ctl:DcSymbolIcon Checkmark24}"
                            Command="{Binding ConfirmCommand, ElementName=Root}"
                            AutomationProperties.HelpText="Runs the command shown above." />
                 <ui:Button x:Name="CloseButton"
                            Appearance="Primary"
+                           Icon="{ctl:DcSymbolIcon Dismiss24}"
                            Command="{Binding CancelCommand, ElementName=Root}"
                            AutomationProperties.HelpText="Close this dialog." />
             </StackPanel>
@@ -155,7 +160,11 @@
 
                     <StackPanel x:Name="Badges" Orientation="Horizontal" Margin="0,0,0,8">
                         <Border x:Name="TierBadge" Style="{DynamicResource DcBadge}" Margin="0,0,8,0" VerticalAlignment="Center">
-                            <TextBlock x:Name="TierText" Style="{DynamicResource DcBadgeText}" />
+                            <!-- The tier's tone as a shape too (a ring, a half circle, a cross under Linear); Default draws none. -->
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcStatusGlyph Tone="{Binding Tag, ElementName=TierBadge}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                <TextBlock x:Name="TierText" Style="{DynamicResource DcBadgeText}" />
+                            </StackPanel>
                         </Border>
                         <Border x:Name="RestartBadge" Style="{DynamicResource DcBadge}" Tag="Warn" VerticalAlignment="Center" Visibility="Collapsed">
                             <TextBlock Style="{DynamicResource DcBadgeText}" Text="Restarts the gateway" />
