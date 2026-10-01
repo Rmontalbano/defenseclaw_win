@@ -257,8 +257,9 @@ public sealed class SettingsPanelViewTests : IDisposable
                 previous = Math.Max(previous, y);
             }
 
-            // The first stop is the first setting, not chrome.
-            Assert.IsType<Slider>(stops[0]);
+            // The page toolbar's Refresh comes first, as on every page; the stop after it is the first setting.
+            Assert.Equal("Refresh", System.Windows.Automation.AutomationProperties.GetName(stops[0]));
+            Assert.IsType<Slider>(stops[1]);
         });
     }
 

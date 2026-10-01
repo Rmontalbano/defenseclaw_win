@@ -695,6 +695,19 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         }
     }
 
+    /// <summary>
+    /// F5 and the toolbar's Refresh: everything the page shows, read again — the store, config.yaml's endpoint, the update result, and the
+    /// machine facts (a "Start with Windows" changed from the tray menu while the page was open shows up here). Writes nothing.
+    /// </summary>
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        LoadFromSettings();
+        ShowGateway();
+        ShowUpdates();
+        await RefreshMachineFactsAsync().ConfigureAwait(true);
+    }
+
     /// <summary>The registry, the disk and PATH. Safe to run again at any time; the answers land on the UI thread.</summary>
     internal async Task RefreshMachineFactsAsync()
     {

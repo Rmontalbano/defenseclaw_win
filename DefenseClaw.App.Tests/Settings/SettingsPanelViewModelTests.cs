@@ -333,6 +333,22 @@ public sealed class SettingsPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Refresh_picks_up_a_start_with_windows_changed_elsewhere_without_toggling_it()
+    {
+        var platform = new FakePlatform();
+        var model = Build(Create(), platform);
+        await UiThread.Run(model.RefreshMachineFactsAsync);
+        Assert.False(model.StartWithWindows);
+
+        // The tray menu's "Start with Windows" while the page stays open: F5 shows it.
+        platform.AutostartOn = true;
+        await UiThread.Run(() => model.RefreshCommand.ExecuteAsync(null));
+
+        Assert.True(model.StartWithWindows);
+        Assert.Equal(0, platform.Toggles);
+    }
+
+    [Fact]
     public async Task Start_with_windows_goes_through_the_guarded_toggle_and_only_when_it_has_to()
     {
         var platform = new FakePlatform();
