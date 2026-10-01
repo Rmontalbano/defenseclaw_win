@@ -582,8 +582,29 @@ internal sealed class UpdateWatcher : IDisposable
 
         if (moved)
         {
-            _ = CheckNowAsync();
+            _ = RecheckAfterUpgradeAsync();
         }
+    }
+
+    /// <summary>
+    /// The check for a moved version. It must not join a check already running: that one publishes its banner a moment before it
+    /// clears <see cref="_inFlight"/>, so a version change arriving in between would get the old answer back and the banner for the
+    /// release just installed would stay until the next tick. Wait for it, then ask.
+    /// </summary>
+    private async Task RecheckAfterUpgradeAsync()
+    {
+        Task<UpdateCheckResult>? running;
+        lock (_lock)
+        {
+            running = _inFlight;
+        }
+
+        if (running is not null)
+        {
+            _ = await running.ConfigureAwait(false);
+        }
+
+        _ = await CheckNowAsync().ConfigureAwait(false);
     }
 
     /// <summary>Another writer changed the updates section (a future settings page resetting the dismissal): the banner follows.</summary>

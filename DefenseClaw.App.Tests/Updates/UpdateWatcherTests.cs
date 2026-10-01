@@ -855,6 +855,29 @@ public sealed class UpdateWatcherTests : IDisposable
     }
 
     [Fact]
+    public async Task A_version_change_while_a_check_is_running_is_checked_again_after_it_not_folded_into_it()
+    {
+        var entered = new TaskCompletionSource();
+        var release = new TaskCompletionSource<UpdateCheckResult>();
+        var rig = NewRig(configure: c => c.Behavior = _ =>
+        {
+            _ = entered.TrySetResult();
+            return release.Task;
+        });
+        rig.Watcher.Start();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The upgrade finishes while the launch check, which saw the old build, is still running; that check then answers "available".
+        rig.Checks.Answer(UpToDate("v0.8.11", installed: "0.8.11"));
+        rig.Source.Publish(rig.Source.Current with { BinaryVersion = "0.8.11" });
+        release.SetResult(Available("v0.8.11"));
+
+        // Folded into the running check, the move would get that stale answer and the banner would stay until the next tick.
+        await Eventually(() => rig.Checks.Count >= 2, "a second check after the running one");
+        await Eventually(() => !rig.Watcher.ShowBanner, "the banner for the release just installed to go away");
+    }
+
+    [Fact]
     public async Task The_same_version_reported_again_and_a_blank_one_do_not_trigger_a_check()
     {
         var rig = NewRig(configure: c => c.Answer(UpToDate()));
