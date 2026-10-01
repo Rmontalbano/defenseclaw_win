@@ -60,7 +60,7 @@ public sealed partial class OverviewPanelViewModel
                 () =>
                 {
                     var text = File.ReadAllText(path);
-                    return (OverviewAgentReader.Parse(text, now), ConnectorOnboarding.ParseDetected(text));
+                    return (OverviewAgentReader.Parse(text, now), OverviewDetectedConnectors.Parse(text));
                 },
                 cancellationToken).ConfigureAwait(true);
             SetDetectedConnectors(detected);
@@ -72,6 +72,7 @@ public sealed partial class OverviewPanelViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+            SetDetectedConnectors(Array.Empty<string>());
             SetAgents(DiscoveredAgents.None, $"ai_discovery_state.json could not be read: {ex.Message}");
         }
     }

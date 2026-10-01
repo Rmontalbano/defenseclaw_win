@@ -56,6 +56,14 @@ public sealed record AuditPreset(string Name);
 /// <param name="Name">The preset's name, as the Logs panel knows it.</param>
 public sealed record LogsPreset(string Name);
 
+/// <summary>Payload for <c>overview</c>: scroll to a card and put focus on its action (the command palette's "Run doctor"). Nothing is run by it.</summary>
+/// <param name="Section">The card, as the Overview knows it: <see cref="DoctorSection"/>.</param>
+public sealed record OverviewFocus(string Section)
+{
+    /// <summary>The Doctor card: focus lands on its Run doctor button, which the operator still has to press.</summary>
+    public const string DoctorSection = "doctor";
+}
+
 /// <summary>What <see cref="ShellNavigation.Requested"/> carries.</summary>
 public sealed class NavigationRequestedEventArgs : EventArgs
 {

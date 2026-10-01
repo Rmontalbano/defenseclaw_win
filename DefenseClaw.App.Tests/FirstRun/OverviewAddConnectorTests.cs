@@ -7,7 +7,7 @@ namespace DefenseClaw.App.Tests.FirstRun;
 /// <summary>
 /// The Overview's Connectors table lists the detected-but-not-configured connectors with the Mac's orange "not configured" and an Add that
 /// opens the review of <c>setup &lt;alias&gt; --yes --mode observe</c> (CUST-210). The scene's config has claudecode and hermes; its
-/// AI-discovery file has seen those two plus codex, cursor, antigravity, geminicli, copilot, windsurf, openclaw (a proxy connector) and a gone agent.
+/// AI-discovery file has seen those two plus codex, cursor, antigravity, geminicli, copilot, windsurf (at 0.70, under the Mac's 0.8 confidence gate, so not offered), openclaw (a proxy connector) and a gone agent.
 /// </summary>
 [Collection(UiCollection.Name)]
 public sealed class OverviewAddConnectorTests : IDisposable
@@ -31,7 +31,7 @@ public sealed class OverviewAddConnectorTests : IDisposable
 
         var names = vm.ConnectorRows.Select(r => r.Name).ToArray();
         Assert.Equal(new[] { "claudecode", "hermes" }, names.Take(2).OrderBy(n => n, StringComparer.Ordinal).ToArray());
-        Assert.Equal(new[] { "codex", "cursor", "windsurf", "geminicli", "copilot", "antigravity" }, names.Skip(2).ToArray());
+        Assert.Equal(new[] { "codex", "cursor", "geminicli", "copilot", "antigravity" }, names.Skip(2).ToArray());
 
         Assert.All(vm.ConnectorRows.Take(2), r => Assert.False(r.IsUnconfigured));
         Assert.All(vm.ConnectorRows.Skip(2), r =>
@@ -78,7 +78,7 @@ public sealed class OverviewAddConnectorTests : IDisposable
 
         Assert.Equal(1, raised);
         Assert.Equal(
-            new[] { "codex", "cursor", "windsurf", "geminicli", "copilot", "antigravity" },
+            new[] { "codex", "cursor", "geminicli", "copilot", "antigravity" },
             vm.UnconfiguredConnectors.Select(c => c.Id).ToArray());
         Assert.Equal("Codex", vm.UnconfiguredConnectors[0].Label);
 

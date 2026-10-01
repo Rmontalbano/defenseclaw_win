@@ -89,6 +89,7 @@ public static class DcSections
             "app.refresh-panel" => (SymbolRegular.ArrowClockwise24, Overview),
             "app.refresh-gateway" => (SymbolRegular.ArrowSync24, Overview),
             "app.config-editor" => (SymbolRegular.DocumentEdit24, Setup),
+            "app.run-doctor" => (SymbolRegular.Stethoscope24, Overview),
             "app.check-updates" => (SymbolRegular.ArrowCircleUp24, Updates),
             "app.toggle-autostart" => (SymbolRegular.Power24, Setup),
             "app.reset-seen-alerts" => (SymbolRegular.ArrowReset24, Setup),

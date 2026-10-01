@@ -109,6 +109,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _showConfigErrorBanner;
 
+    /// <summary>The gateway answered 401 to the token the app sent (CUST-213): the token was probably rotated. Cleared by the first poll that is not rejected.</summary>
+    [ObservableProperty]
+    private bool _showTokenBanner;
+
+    /// <summary>The token banner's "Reload config": re-reads config.yaml and the .env (where the rotated token lives), then polls again. Read-only.</summary>
+    [RelayCommand]
+    private void ReloadConfig()
+    {
+        _services.ReloadConfig();
+        _ = _services.Monitor.RefreshAsync();
+    }
+
     [ObservableProperty]
     private string _configErrorMessage = string.Empty;
 
@@ -292,6 +304,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
               "relayed onto Windows, not the native install — everything below describes the WSL instance. " +
               "Stop the gateway inside WSL, then restart the native one."
             : $"Port {snapshot.ApiPort} is relayed from WSL, not served by the native install.";
+
+        ShowTokenBanner = snapshot.IsTokenRejected;
 
         ShowNotInitializedBanner = snapshot.State == AppGatewayState.NotInitialized;
         NotInitializedMessage = snapshot.Detail;

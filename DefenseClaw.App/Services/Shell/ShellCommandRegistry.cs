@@ -166,6 +166,17 @@ internal static class ShellCommandRegistry
             Run: actions.OpenConfigEditor));
 
         commands.Add(new ShellCommand(
+            Id: "app.run-doctor",
+            Title: "Run doctor",
+            Category: AppCategory,
+            Description: "Open the Overview's Doctor card on its Run doctor button. Nothing runs until you press it.",
+            Shortcut: null,
+            Keywords: "doctor health check diagnose probe fix problems keys credentials",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: () => actions.OpenPanel("overview", new OverviewFocus(OverviewFocus.DoctorSection))));
+
+        commands.Add(new ShellCommand(
             Id: "app.check-updates",
             Title: "Check for updates",
             Category: AppCategory,

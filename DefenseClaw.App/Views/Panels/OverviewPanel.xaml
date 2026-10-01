@@ -1077,7 +1077,8 @@
                                                Command="{Binding CancelDoctorCommand}"
                                                Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}"
                                                AutomationProperties.HelpText="Stop the doctor run and kill its process tree." />
-                                    <ui:Button Content="Run doctor"
+                                    <ui:Button x:Name="DoctorRunButton"
+                                               Content="Run doctor"
                                                Icon="{ctl:DcSymbolIcon Stethoscope24}"
                                                Command="{Binding RunDoctorCommand}"
                                                ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds. Writes only its own results cache."

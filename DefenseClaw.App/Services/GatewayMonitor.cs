@@ -115,6 +115,15 @@ public sealed record GatewaySnapshot
     /// </summary>
     public string? AlertsUnavailable { get; init; }
 
+    /// <summary>The raw outcome of the last <c>/alerts</c> call; null when none was made (nothing trusted to send a token to, or not polled yet).</summary>
+    public GatewayStatus? AlertsStatus { get; init; }
+
+    /// <summary>
+    /// True while the gateway answers 401 to the bearer token the app sent: the token in config.yaml / the environment was probably rotated
+    /// (the Mac's token-rejected banner). Part of <see cref="RendersSameAs"/>: the shell banner follows it.
+    /// </summary>
+    public bool IsTokenRejected => HealthStatus == GatewayStatus.Unauthorized || AlertsStatus == GatewayStatus.Unauthorized;
+
     /// <summary>
     /// When the last <i>successful</i> <c>/alerts</c> fetch completed; null if there has never
     /// been one (or the monitored port changed since). This is not <see cref="PolledAt"/>:
@@ -235,6 +244,7 @@ public sealed record GatewaySnapshot
                Install == other.Install &&
                HealthStatus == other.HealthStatus &&
                PortRefused == other.PortRefused &&
+               AlertsStatus == other.AlertsStatus &&
                WslGatewayDetected == other.WslGatewayDetected &&
                ApiPort == other.ApiPort &&
                AlertCount == other.AlertCount &&
@@ -471,6 +481,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     private ConnectorMode? _lastClaudeCodeMode;
     private IReadOnlyList<GatewayAlert> _lastAlerts = Array.Empty<GatewayAlert>();
     private string? _lastAlertsUnavailable = "Alerts have not been polled yet.";
+    private GatewayStatus? _lastAlertsStatus;
     private GatewaySnapshot _current = GatewaySnapshot.Initial;
 
     /// <summary>
@@ -1052,6 +1063,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             {
                 _lastAlerts = Array.Empty<GatewayAlert>();
                 _lastAlertsUnavailable = DescribeUnverifiedPeer(status, health);
+                _lastAlertsStatus = null;
                 _lastClaudeCodeMode = null;
             }
         }
@@ -1059,6 +1071,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
         {
             _lastAlerts = Array.Empty<GatewayAlert>();
             _lastAlertsUnavailable = "The gateway is not answering; alerts are unavailable.";
+            _lastAlertsStatus = null;
 
             // Nothing is serving /status, so the runtime hook contract is unknowable and a
             // stale cached one would be a lie. config.yaml takes over as the comparison side.
@@ -1092,6 +1105,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             AlertCount = alerts.Count,
             CriticalAlertCount = alerts.Count(IsCritical),
             AlertsUnavailable = _lastAlertsUnavailable,
+            AlertsStatus = _lastAlertsStatus,
             AlertsFetchedAt = _lastAlertsFetchedAt,
             ActiveConnectors = ResolveConnectors(health.Value),
             FailModeDrift = drift,
@@ -1138,6 +1152,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
         _lastStatusPoll = MonotonicStamp.Never;
         _lastAlerts = Array.Empty<GatewayAlert>();
         _lastAlertsUnavailable = "Alerts have not been polled yet.";
+        _lastAlertsStatus = null;
         _lastAlertsFetchedAt = null;
         _lastClaudeCodeMode = null;
         Interlocked.Exchange(ref _consecutiveFailures, 0);
@@ -1162,11 +1177,13 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             _lastAlertPoll = MonotonicStamp.Now(_time);
             _lastAlerts = Array.Empty<GatewayAlert>();
             _lastAlertsUnavailable = $"Alerts could not be read: {DescribeFault(ex)}";
+            _lastAlertsStatus = null;
             return;
         }
 
         var completedAt = _time.GetUtcNow();
         _lastAlertPoll = MonotonicStamp.Now(_time);
+        _lastAlertsStatus = result.Status;
 
         switch (result.Status)
         {

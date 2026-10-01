@@ -73,6 +73,13 @@ public static class ConnectorOnboarding
 
     public static bool IsProxy(string? connector) => ProxyConnectors.Contains(Normalize(connector));
 
+    /// <summary>A hook connector this app knows how to name and offer (the built-in list), whatever the catalog says about this machine.</summary>
+    public static bool IsKnownHookConnector(string? connector)
+    {
+        var id = Normalize(connector);
+        return Array.Exists(KnownHookConnectors, k => k.Id == id);
+    }
+
     public static string Label(string? connector)
     {
         var id = Normalize(connector);

@@ -203,6 +203,47 @@
                         IsOpen="{Binding ShowWslBanner}"
                         Message="{Binding WslMessage}" />
 
+            <!--
+                The gateway said 401 to the token we sent: config.yaml's token (or the env var) was probably rotated. Not an InfoBar (its
+                content is not hosted, and this one has an action): a slim bar of the High tone's tokens, like the update banner beside it.
+            -->
+            <Border Margin="0,12,0,0"
+                    Padding="12,8,8,8"
+                    Background="{DynamicResource DcToneHighSubtleBrush}"
+                    BorderBrush="{DynamicResource DcToneHighBrush}"
+                    BorderThickness="{DynamicResource DcBorderThickness}"
+                    CornerRadius="{DynamicResource DcControlRadius}"
+                    Visibility="{Binding ShowTokenBanner, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ctl:DcSymbolIcon Grid.Column="0"
+                                      Margin="0,0,10,0"
+                                      VerticalAlignment="Center"
+                                      Symbol="Key24"
+                                      FontSize="20"
+                                      Foreground="{DynamicResource DcToneHighBrush}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   FontWeight="SemiBold"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Text="Gateway token rejected" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Text="The gateway refused the token the app sent. The token in config.yaml may have been rotated." />
+                    </StackPanel>
+                    <ui:Button Grid.Column="2"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center"
+                               Content="Reload config"
+                               Command="{Binding ReloadConfigCommand}"
+                               AutomationProperties.Name="Reload config"
+                               AutomationProperties.HelpText="Re-reads config.yaml and the .env file, then polls the gateway again." />
+                </Grid>
+            </Border>
+
             <ui:InfoBar Margin="0,12,0,0"
                         IsClosable="False"
                         Severity="Error"

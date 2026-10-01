@@ -468,6 +468,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         }
 
         ApplyDoctorState();
+        BuildAttention(_snapshot);
     }
 
     /// <summary>
@@ -497,6 +498,14 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         var now = DateTimeOffset.UtcNow;
         var stale = snapshot.IsStale(now, DoctorStaleAfter);
 
+        // The Mac's liveHealthContradicts: a cached fail/warn for a subsystem /health says is running is a stale result, not a failure.
+        var health = _snapshot.Health;
+        var staleFailures = snapshot.Checks.Count(c => c.Status == "fail" && DoctorReconciliation.LiveHealthContradicts(c, health));
+        var staleWarnings = snapshot.Checks.Count(c => c.Status == "warn" && DoctorReconciliation.LiveHealthContradicts(c, health));
+        var failed = Math.Max(snapshot.Failed - staleFailures, 0);
+        var warned = Math.Max(snapshot.Warned - staleWarnings, 0);
+        var staleCount = staleFailures + staleWarnings;
+
         DoctorHasData = true;
         DoctorIsEmpty = false;
         DoctorIsStale = stale;
@@ -506,19 +515,25 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         DoctorSummary =
             $"{snapshot.Passed.ToString("N0", CultureInfo.CurrentCulture)} pass · " +
-            $"{snapshot.Failed.ToString("N0", CultureInfo.CurrentCulture)} fail · " +
-            $"{snapshot.Warned.ToString("N0", CultureInfo.CurrentCulture)} warn · " +
+            $"{failed.ToString("N0", CultureInfo.CurrentCulture)} fail · " +
+            $"{warned.ToString("N0", CultureInfo.CurrentCulture)} warn · " +
+            (staleCount > 0 ? $"{staleCount.ToString("N0", CultureInfo.CurrentCulture)} stale · " : string.Empty) +
             $"{snapshot.Skipped.ToString("N0", CultureInfo.CurrentCulture)} skip";
 
-        if (snapshot.Failed > 0)
+        if (failed > 0)
         {
-            DoctorVerdict = snapshot.Failed == 1 ? "1 check failed" : $"{snapshot.Failed} checks failed";
+            DoctorVerdict = failed == 1 ? "1 check failed" : $"{failed} checks failed";
             DoctorStateKey = "Bad";
         }
-        else if (snapshot.Warned > 0)
+        else if (warned > 0)
         {
-            DoctorVerdict = snapshot.Warned == 1 ? "1 warning" : $"{snapshot.Warned} warnings";
+            DoctorVerdict = warned == 1 ? "1 warning" : $"{warned} warnings";
             DoctorStateKey = "Warn";
+        }
+        else if (staleCount > 0)
+        {
+            DoctorVerdict = staleCount == 1 ? "1 stale result" : $"{staleCount} stale results";
+            DoctorStateKey = "Neutral";
         }
         else if (snapshot.Passed > 0)
         {
@@ -536,12 +551,16 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         SyncTiles(DoctorTiles, new[]
         {
             new CountTile { Label = "PASS", Value = snapshot.Passed.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = snapshot.Passed > 0 ? "Ok" : "Info" },
-            new CountTile { Label = "FAIL", Value = snapshot.Failed.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = snapshot.Failed > 0 ? "Critical" : "Info" },
-            new CountTile { Label = "WARN", Value = snapshot.Warned.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = snapshot.Warned > 0 ? "High" : "Info" },
+            new CountTile { Label = "FAIL", Value = failed.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = failed > 0 ? "Critical" : "Info" },
+            new CountTile { Label = "WARN", Value = warned.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = warned > 0 ? "High" : "Info" },
             new CountTile { Label = "SKIP", Value = snapshot.Skipped.ToString("N0", CultureInfo.CurrentCulture), SeverityKey = "Info" },
         });
 
-        var problems = snapshot.Problems();
+        var problems = snapshot.Problems()
+            .Select(c => DoctorReconciliation.LiveHealthContradicts(c, health)
+                ? c with { IsStale = true, Detail = c.Detail.Length > 0 ? c.Detail + " (live state OK)" : string.Empty }
+                : c)
+            .ToList();
         var shown = problems.Take(MaxDoctorProblemsShown).ToList();
         DoctorHasProblems = shown.Count > 0;
         DoctorProblemsNote = problems.Count > shown.Count
@@ -741,6 +760,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 Command = drift.RemediationCommand,
             });
         }
+
+        // The Mac's remaining rules (CUST-213): detected-but-unconfigured agents, guardrail, doctor, missing keys, drift, zero requests.
+        AppendParityAttention(rows, snapshot);
 
         if (snapshot.CriticalAlertCount > 0)
         {
@@ -1782,8 +1804,14 @@ public sealed record DoctorCheckRow
     /// <summary><c>pass</c> / <c>fail</c> / <c>warn</c> / <c>skip</c>, lower-case as the CLI writes it.</summary>
     public string Status { get; init; } = "skip";
 
+    /// <summary>
+    /// True when this cached fail/warn names a subsystem that the live <c>/health</c> now reports running
+    /// (<see cref="DoctorReconciliation"/>): the result is out of date, not the service. Shown as STALE, not as a failure.
+    /// </summary>
+    public bool IsStale { get; init; }
+
     /// <summary>Bad / Warn / Ok / Neutral - the tone key for the badge.</summary>
-    public string StatusKey => Status switch
+    public string StatusKey => IsStale ? "Neutral" : Status switch
     {
         "fail" => "Bad",
         "warn" => "Warn",
@@ -1791,8 +1819,8 @@ public sealed record DoctorCheckRow
         _ => "Neutral",
     };
 
-    /// <summary>FAIL / WARN / PASS / SKIP.</summary>
-    public string StatusText => Status.ToUpperInvariant();
+    /// <summary>FAIL / WARN / PASS / SKIP, or STALE for a result the live state contradicts.</summary>
+    public string StatusText => IsStale ? "STALE" : Status.ToUpperInvariant();
 
     public bool HasDetail => Detail.Length > 0;
 

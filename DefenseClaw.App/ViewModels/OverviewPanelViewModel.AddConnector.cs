@@ -34,9 +34,13 @@ public sealed partial class OverviewPanelViewModel
     /// <summary>Raised (UI thread) when <see cref="UnconfiguredConnectors"/> changed.</summary>
     internal event EventHandler? UnconfiguredConnectorsChanged;
 
-    /// <summary>The Agents card read a scan: remember which connectors it maps to and redraw the table when that changed.</summary>
+    /// <summary>
+    /// The Agents card read a scan: remember which connectors it maps to (<see cref="OverviewDetectedConnectors.Parse"/>, the Mac's 0.8
+    /// confidence gate) and redraw the attention list, and the table when that changed. One list for both, so they never disagree.
+    /// </summary>
     private void SetDetectedConnectors(IReadOnlyList<string> detected)
     {
+        SetDetectedForAttention(detected);
         if (_detectedConnectors.SequenceEqual(detected, StringComparer.Ordinal))
         {
             return;
