@@ -16,7 +16,9 @@ namespace DefenseClaw.App.Services;
 /// <param name="Keywords">Extra search terms that are not in the title.</param>
 /// <param name="IsEnabled">False greys the row out and makes Enter do nothing.</param>
 /// <param name="DisabledReason">Why it is unavailable; shown in place of the description.</param>
-/// <param name="Run">What Enter does. Only ever a named app action or a navigation.</param>
+/// <param name="Run">What Enter does. Only ever a named app action, a navigation, or a curated CLI command (reviewed unless read-only).</param>
+/// <param name="Cli">The curated CLI command this row stands for, when it is one: the detail pane shows its argv and Copy / Run.</param>
+/// <param name="Copy">Puts the row's command line on the clipboard (a curated CLI row).</param>
 internal sealed record ShellCommand(
     string Id,
     string Title,
@@ -26,7 +28,9 @@ internal sealed record ShellCommand(
     string Keywords,
     bool IsEnabled,
     string? DisabledReason,
-    Action Run);
+    Action Run,
+    CuratedCommand? Cli = null,
+    Action? Copy = null);
 
 /// <summary>
 /// A palette row: the command plus what a screen reader is told. <see cref="ToString"/> is the
@@ -51,6 +55,26 @@ internal sealed class PaletteItem
     public bool HasShortcut => !string.IsNullOrEmpty(Command.Shortcut);
 
     public bool IsEnabled => Command.IsEnabled;
+
+    /// <summary>True for a curated CLI row; the detail pane shows only for those.</summary>
+    public bool IsCli => Command.Cli is not null;
+
+    /// <summary>The command as it will run (argv preview), for a CLI row.</summary>
+    public string ArgvPreview => Command.Cli?.Title ?? string.Empty;
+
+    /// <summary>"Read-only" / "Changes state" / "Destructive", for a CLI row.</summary>
+    public string TierLabel => Command.Cli is { } cli ? CommandReview.LabelFor(cli.Tier) : string.Empty;
+
+    /// <summary>What the detail pane says about pressing Run.</summary>
+    public string RunNote => Command.Cli switch
+    {
+        null => string.Empty,
+        { NeedsArguments: true } cli => $"Needs {string.Join(", ", cli.RequiredArguments)}: Run copies the command for you to complete.",
+        { Tier: DefenseClaw.Core.Cli.CommandTier.ReadOnly } => "Read-only: runs straight away and shows in Activity.",
+        _ => "You review the exact command before it runs.",
+    };
+
+    public string RunLabel => Command.Cli is { NeedsArguments: true } ? "Copy to complete" : "Run";
 
     /// <summary>The line under the title: the description, or why the command is unavailable.</summary>
     public string DetailLine => Command.IsEnabled
@@ -92,7 +116,12 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
     private string _query = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Detail))]
     private PaletteItem? _selected;
+
+    /// <summary>"12 of 240 commands": rows the search left, of every row there is.</summary>
+    [ObservableProperty]
+    private string _countLine = string.Empty;
 
     /// <summary>
     /// "Go to Alerts, 2 of 13" / "No matching commands". Shown in the palette's footer and used as a
@@ -103,6 +132,12 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
     private string _statusLine = string.Empty;
 
     public ObservableCollection<PaletteItem> Results { get; } = new();
+
+    /// <summary>The selected row when it is a curated CLI command (the detail pane's subject); null otherwise.</summary>
+    public PaletteItem? Detail => Selected is { IsCli: true } item ? item : null;
+
+    /// <summary>Total number of commands loaded, whatever the search says.</summary>
+    public int TotalCount => _all.Count;
 
     /// <summary>Raised when a command was chosen (Enter or click) and should run after the palette closes.</summary>
     public event EventHandler<ShellCommand>? CommandChosen;
@@ -123,6 +158,33 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
         {
             Query = string.Empty; // OnQueryChanged refilters.
         }
+    }
+
+    /// <summary>
+    /// Swaps the command list for a newer one without clearing the search (the curated CLI commands arrive after the palette
+    /// is already open). The selection stays on the same command when it is still there.
+    /// </summary>
+    public void Reload(IReadOnlyList<ShellCommand> commands)
+    {
+        var keep = Selected?.Command.Id;
+        _all = commands ?? throw new ArgumentNullException(nameof(commands));
+        Refilter();
+        if (keep is not null && Results.FirstOrDefault(i => i.IsEnabled && i.Command.Id == keep) is { } same)
+        {
+            Selected = same;
+        }
+    }
+
+    /// <summary>Copies the selected CLI row's command (the detail pane's Copy button); false when the row has no command.</summary>
+    public bool CopySelected()
+    {
+        if (Selected?.Command.Copy is not { } copy)
+        {
+            return false;
+        }
+
+        copy();
+        return true;
     }
 
     partial void OnQueryChanged(string value) => Refilter();
@@ -198,6 +260,8 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
         // OnSelectedChanged does not fire when the selection did not change (same first row), and the
         // count may have.
         UpdateStatusLine();
+        OnPropertyChanged(nameof(TotalCount));
+        CountLine = $"{Results.Count} of {_all.Count} commands";
     }
 
     private void UpdateStatusLine()

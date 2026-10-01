@@ -15,6 +15,9 @@ internal static class ShellCommandRegistry
 
     public const string GatewayCategory = "Gateway";
 
+    /// <summary>The chip on the Mac's Monitor / Commands menu entries (health check, scan, diagnose, copy / export output).</summary>
+    public const string MonitorCategory = "Monitor";
+
     /// <summary>
     /// The "Go to" entry for every panel, in sidebar order, so the first screen of an empty search
     /// matches the sidebar and each row shows the Ctrl+N chord that jumps there (Settings, last, shows Ctrl+,). Split out of
@@ -117,12 +120,14 @@ internal static class ShellCommandRegistry
     /// <param name="navigateTo">Selects a panel in the sidebar.</param>
     /// <param name="showShortcuts">Opens the keyboard-shortcuts overlay.</param>
     /// <param name="appearance">The look controls; null (a test without a service) leaves the appearance commands out.</param>
+    /// <param name="curated">The CLI commands read from the CLI's help (see <see cref="CuratedCommandCatalog"/>); null or empty adds none.</param>
     public static IReadOnlyList<ShellCommand> Build(
         PanelCatalog catalog,
         ShellActions actions,
         Action<PanelDescriptor> navigateTo,
         Action showShortcuts,
-        IAppearanceControl? appearance = null)
+        IAppearanceControl? appearance = null,
+        IReadOnlyList<CuratedCommand>? curated = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(actions);
@@ -136,7 +141,7 @@ internal static class ShellCommandRegistry
             Id: "app.refresh-panel",
             Title: "Refresh current panel",
             Category: AppCategory,
-            Description: "Reload the panel you are looking at.",
+            Description: "Reload the panel you are looking at (also " + ShellShortcuts.RefreshAliasText + ").",
             Shortcut: ShellShortcuts.RefreshText,
             Keywords: "reload update data",
             IsEnabled: canRefresh,
@@ -167,14 +172,58 @@ internal static class ShellCommandRegistry
 
         commands.Add(new ShellCommand(
             Id: "app.run-doctor",
-            Title: "Run doctor",
-            Category: AppCategory,
+            Title: "Run health check",
+            Category: MonitorCategory,
             Description: "Open the Overview's Doctor card on its Run doctor button. Nothing runs until you press it.",
-            Shortcut: null,
-            Keywords: "doctor health check diagnose probe fix problems keys credentials",
+            Shortcut: ShellShortcuts.HealthCheckText,
+            Keywords: "doctor run doctor health check diagnose probe fix problems keys credentials",
             IsEnabled: true,
             DisabledReason: null,
-            Run: () => actions.OpenPanel("overview", new OverviewFocus(OverviewFocus.DoctorSection))));
+            Run: actions.RunHealthCheck));
+
+        commands.Add(new ShellCommand(
+            Id: "app.scan-ai",
+            Title: "Scan AI components",
+            Category: MonitorCategory,
+            Description: "Open AI Discovery on its scan review. The scan runs only after you confirm it.",
+            Shortcut: ShellShortcuts.ScanAiText,
+            Keywords: "ai discovery scan components agents inventory find",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: actions.ScanAiComponents));
+
+        commands.Add(new ShellCommand(
+            Id: "app.diagnose",
+            Title: "Diagnose in background",
+            Category: MonitorCategory,
+            Description: "Run the read-only doctor without leaving this panel and toast the result. Changes nothing.",
+            Shortcut: ShellShortcuts.DiagnoseText,
+            Keywords: "doctor health check background diagnostics probe problems",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: () => _ = actions.DiagnoseInBackgroundAsync()));
+
+        commands.Add(new ShellCommand(
+            Id: "app.copy-last-output",
+            Title: "Copy last command output",
+            Category: MonitorCategory,
+            Description: "Put the newest Activity entry's output on the clipboard.",
+            Shortcut: ShellShortcuts.CopyOutputText,
+            Keywords: "clipboard copy activity transcript result",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: () => actions.CopyLastOutput()));
+
+        commands.Add(new ShellCommand(
+            Id: "app.export-last-output",
+            Title: "Export last command output",
+            Category: MonitorCategory,
+            Description: "Save the newest Activity entry (command, outcome and output) to a file.",
+            Shortcut: ShellShortcuts.ExportOutputText,
+            Keywords: "save file log activity transcript result download",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: () => actions.ExportLastOutput()));
 
         commands.Add(new ShellCommand(
             Id: "app.check-updates",
@@ -247,6 +296,47 @@ internal static class ShellCommandRegistry
                 Run: () => _ = actions.RunGatewayActionAsync(captured)));
         }
 
+        if (curated is { Count: > 0 })
+        {
+            commands.AddRange(BuildCliCommands(curated, actions));
+        }
+
         return commands;
+    }
+
+    /// <summary>
+    /// One palette row per curated CLI command: category chip, the CLI's one-line description, the argv as its preview, Copy and Run.
+    /// Enter / Run goes through <see cref="ShellActions.RunCuratedAsync"/> (read-only runs, everything else is reviewed first).
+    /// An entry whose argv <see cref="CuratedCommandCatalog.Refuses"/> is left out.
+    /// </summary>
+    internal static List<ShellCommand> BuildCliCommands(IReadOnlyList<CuratedCommand> curated, ShellActions actions)
+    {
+        ArgumentNullException.ThrowIfNull(curated);
+        ArgumentNullException.ThrowIfNull(actions);
+
+        var rows = new List<ShellCommand>(curated.Count);
+        foreach (var command in curated)
+        {
+            if (CuratedCommandCatalog.Refuses(command.Argv))
+            {
+                continue;
+            }
+
+            var captured = command;
+            rows.Add(new ShellCommand(
+                Id: command.Id,
+                Title: command.Title,
+                Category: command.Category,
+                Description: command.Summary,
+                Shortcut: null,
+                Keywords: "cli command " + string.Join(' ', command.Argv),
+                IsEnabled: true,
+                DisabledReason: null,
+                Run: () => _ = actions.RunCuratedAsync(captured),
+                Cli: command,
+                Copy: () => actions.CopyCurated(captured)));
+        }
+
+        return rows;
     }
 }

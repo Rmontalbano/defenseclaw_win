@@ -64,6 +64,12 @@ public sealed record OverviewFocus(string Section)
     public const string DoctorSection = "doctor";
 }
 
+/// <summary>
+/// Payload for <c>ai-discovery</c>: open the reviewed "Run an AI discovery scan?" dialog (the palette's and Ctrl+Shift+A's "Scan AI
+/// components"). Nothing is run by it; the operator still confirms the review.
+/// </summary>
+public sealed record AiDiscoveryScan;
+
 /// <summary>What <see cref="ShellNavigation.Requested"/> carries.</summary>
 public sealed class NavigationRequestedEventArgs : EventArgs
 {

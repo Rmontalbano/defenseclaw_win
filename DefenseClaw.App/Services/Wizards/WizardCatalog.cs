@@ -93,6 +93,9 @@ public sealed class WizardCatalog
     /// <summary>Null until the first load; otherwise why the top-level probe failed.</summary>
     public string? LoadError { get; private set; }
 
+    /// <summary>The help probe behind this catalog; the command palette reads its curated commands through it.</summary>
+    internal SetupHelpProbe Probe => _probe;
+
     /// <summary>Help screens read so far — shown in the hub footer so the cost is visible.</summary>
     public int ProbeCount => _probe.CachedProbeCount;
 

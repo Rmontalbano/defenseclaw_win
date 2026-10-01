@@ -29,6 +29,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <ui:TextBox x:Name="SearchBox"
@@ -163,9 +164,67 @@
                     </TextBlock>
                 </Grid>
 
-                <Grid Grid.Row="2" Margin="0,12,0,0">
+                <!--
+                    Detail of a curated CLI command (the Mac's right-hand pane): category chip, the CLI's own description, the argv
+                    that would run, Copy command and Run. Shown only while such a row is selected.
+                -->
+                <Border Grid.Row="2"
+                        Margin="0,8,0,0"
+                        DataContext="{Binding Detail}"
+                        AutomationProperties.Name="Command detail">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource DcCodeBlock}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Border Style="{StaticResource DcChip}">
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Category}" />
+                            </Border>
+                            <Border Style="{StaticResource DcChip}" Margin="6,0,0,0">
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding TierLabel}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding Command.Description}" />
+                        <TextBox Style="{StaticResource DcMonoTextBox}"
+                                 Margin="0,6,0,0"
+                                 IsReadOnly="True"
+                                 IsTabStop="False"
+                                 TextAlignment="Left"
+                                 AutomationProperties.Name="Command that will run"
+                                 Text="{Binding ArgvPreview, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding RunNote}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <ui:Button Appearance="Secondary"
+                                       Content="Copy command"
+                                       Icon="{ctl:DcSymbolIcon Copy24}"
+                                       Click="OnCopyCommandClick"
+                                       AutomationProperties.Name="Copy the command to the clipboard" />
+                            <ui:Button Appearance="Primary"
+                                       Margin="8,0,0,0"
+                                       Content="{Binding RunLabel}"
+                                       Icon="{ctl:DcSymbolIcon Play24}"
+                                       Click="OnRunClick"
+                                       AutomationProperties.Name="Run the command" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Row="3" Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
@@ -179,7 +238,13 @@
                                shell:LiveRegion.RaisedByCode="True"
                                Text="{Binding StatusLine}" />
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Grid.Column="1"
+                               Style="{StaticResource DcCaption}"
+                               Margin="0,0,16,0"
+                               VerticalAlignment="Center"
+                               Text="{Binding CountLine}" />
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Style="{StaticResource DcKeyCap}"><TextBlock Style="{StaticResource DcKeyCapText}" Text="↑↓" /></Border>
                         <TextBlock Style="{StaticResource DcCaption}" Margin="6,0,12,0" VerticalAlignment="Center" Text="choose" />
                         <Border Style="{StaticResource DcKeyCap}"><TextBlock Style="{StaticResource DcKeyCapText}" Text="Enter" /></Border>

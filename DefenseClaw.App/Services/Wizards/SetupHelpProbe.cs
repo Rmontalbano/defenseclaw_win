@@ -62,6 +62,13 @@ public sealed class SetupHelpProbe
     /// <summary>Bounded so a catalog warm-up cannot spawn thirty interpreters at once.</summary>
     public const int MaxParallelProbes = 6;
 
+    /// <summary>
+    /// First element of a path that asks for a screen of the CLI itself rather than of <c>setup</c> (the command palette's
+    /// curated commands): <c>@cli doctor</c> is <c>defenseclaw doctor --help</c>. It is part of the cache key, so the two
+    /// families never collide, and those screens do not count in <see cref="CachedProbeCount"/> (the Setup hub's footer).
+    /// </summary>
+    internal const string RootMarker = "@cli";
+
     /// <summary>A single help screen has never taken close to this; it guards a hung child.</summary>
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(30);
 
@@ -101,7 +108,7 @@ public sealed class SetupHelpProbe
     /// Failed probes are evicted, so this is "read so far", never "attempted". Surfaced in the
     /// hub's footer note.
     /// </summary>
-    public int CachedProbeCount => _cache.Count;
+    public int CachedProbeCount => _cache.Keys.Count(key => !key.StartsWith(RootMarker, StringComparison.Ordinal));
 
     /// <summary>
     /// Forgets every cached help screen so the next <see cref="HelpAsync"/> re-reads the CLI —
@@ -153,6 +160,16 @@ public sealed class SetupHelpProbe
         }
 
         return cancellationToken.CanBeCanceled ? probe.WaitAsync(cancellationToken) : probe;
+    }
+
+    /// <summary>
+    /// <c>defenseclaw <paramref name="path"/> --help</c> (empty for the top-level screen), cached like <see cref="HelpAsync"/>.
+    /// Only ever <c>--help</c>: it reads a screen and runs nothing.
+    /// </summary>
+    public Task<HelpProbeResult> CliHelpAsync(IReadOnlyList<string> path, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return HelpAsync(new[] { RootMarker }.Concat(path).ToArray(), cancellationToken);
     }
 
     private async Task<HelpProbeResult> RunAsync(IReadOnlyList<string> path)
@@ -232,8 +249,17 @@ public sealed class SetupHelpProbe
         IReadOnlyList<string> path,
         CancellationToken cancellationToken)
     {
-        var arguments = new List<string>(path.Count + 2) { "setup" };
-        arguments.AddRange(path);
+        var arguments = new List<string>(path.Count + 2);
+        if (path.Count > 0 && string.Equals(path[0], RootMarker, StringComparison.Ordinal))
+        {
+            arguments.AddRange(path.Skip(1));
+        }
+        else
+        {
+            arguments.Add("setup");
+            arguments.AddRange(path);
+        }
+
         arguments.Add("--help");
         return ExecuteAsync(executable, arguments, cancellationToken);
     }

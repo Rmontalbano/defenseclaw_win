@@ -192,7 +192,7 @@ public sealed record DiscoverySourceInfo(string Label, string Detail, DateTimeOf
 /// explicitly when a component has none recorded.
 /// </para>
 /// </summary>
-public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
+public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
     private const string AuditBucket = "ai.discovery";
     private readonly List<DiscoveryComponentCard> _allCards = new();

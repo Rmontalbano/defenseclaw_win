@@ -40,6 +40,33 @@ public static class WizardWindowsPolicy
         "--refresh-bundle",
     };
 
+    /// <summary>Command words that name something Windows does not run: sandboxes, OpenClaw, ZeptoClaw and the Docker stacks.</summary>
+    private static readonly string[] HiddenWords = { "sandbox", "openclaw", "zeptoclaw", "docker", "local-observability", "local-stack" };
+
+    /// <summary>
+    /// True when the command palette must not list the command at <paramref name="path"/> (its nouns, without the executable):
+    /// a noun that names a sandbox / OpenClaw / ZeptoClaw / Docker feature, or a summary that says it needs one. The same
+    /// things the Setup hub puts in "not available", for the same reasons.
+    /// </summary>
+    /// <param name="path">The command's nouns, e.g. <c>setup local-observability up</c>.</param>
+    /// <param name="summary">Its one-line help summary; may be empty.</param>
+    public static bool HidesCommand(IReadOnlyList<string> path, string summary)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        foreach (var word in HiddenWords)
+        {
+            if (path.Any(noun => noun.Contains(word, StringComparison.OrdinalIgnoreCase)) ||
+                (summary ?? string.Empty).Contains(word, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return path.Count == 2 && string.Equals(path[0], "setup", StringComparison.Ordinal) &&
+               UnavailableReason(path[1], PlatformStatus.Certified) is not null;
+    }
+
     /// <summary>Why a hub card cannot be launched here, or null when it can.</summary>
     public static string? UnavailableReason(string target, PlatformStatus status)
     {

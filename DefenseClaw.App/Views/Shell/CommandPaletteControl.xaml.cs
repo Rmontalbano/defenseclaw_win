@@ -96,7 +96,8 @@ public partial class CommandPaletteControl : UserControl
                 e.Handled = true;
                 break;
 
-            case Key.Enter when _viewModel.ChooseSelected():
+            // Enter on the detail pane's own buttons presses that button, not the highlighted row.
+            case Key.Enter when e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase && _viewModel.ChooseSelected():
                 e.Handled = true;
                 break;
 
@@ -121,6 +122,10 @@ public partial class CommandPaletteControl : UserControl
                 break;
         }
     }
+
+    private void OnCopyCommandClick(object sender, RoutedEventArgs e) => _ = _viewModel?.CopySelected();
+
+    private void OnRunClick(object sender, RoutedEventArgs e) => _ = _viewModel?.ChooseSelected();
 
     private void OnScrimMouseDown(object sender, MouseButtonEventArgs e)
     {

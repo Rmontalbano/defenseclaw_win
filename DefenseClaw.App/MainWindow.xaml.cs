@@ -718,6 +718,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             RefreshFromKeyboard();
             e.Handled = true;
         }
+        else if (ShellShortcuts.ActionFor(e.Key, modifiers) is { } chordAction)
+        {
+            RunChordAction(chordAction);
+            e.Handled = true;
+        }
         else if (ShellShortcuts.IsToggleThemeChord(e.Key, modifiers) && _appearance is not null)
         {
             _appearance.ToggleLightDark();
@@ -798,6 +803,32 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             or System.Windows.Controls.PasswordBox
             or System.Windows.Controls.ComboBox { IsEditable: true };
 
+    /// <summary>The Mac's Monitor / Commands chords (Ctrl+R, Ctrl+Shift+H / A / D / Y / E): each does what its palette row does.</summary>
+    private void RunChordAction(ShellChordAction action)
+    {
+        switch (action)
+        {
+            case ShellChordAction.Refresh:
+                RefreshFromKeyboard();
+                break;
+            case ShellChordAction.HealthCheck:
+                _actions.RunHealthCheck();
+                break;
+            case ShellChordAction.ScanAi:
+                _actions.ScanAiComponents();
+                break;
+            case ShellChordAction.Diagnose:
+                _ = _actions.DiagnoseInBackgroundAsync();
+                break;
+            case ShellChordAction.CopyOutput:
+                _ = _actions.CopyLastOutput();
+                break;
+            case ShellChordAction.ExportOutput:
+                _ = _actions.ExportLastOutput();
+                break;
+        }
+    }
+
     /// <summary>F5: the current panel's refresh, or a gateway poll when the panel has none.</summary>
     private void RefreshFromKeyboard()
     {
@@ -828,9 +859,37 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         RememberFocus();
 
         // Built fresh on every open: toggle titles and the gateway controls' availability are read now.
-        _paletteViewModel.Load(ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance));
+        _paletteViewModel.Load(BuildPaletteCommands());
+        StartCuratedCommands();
         _viewModel.IsPaletteOpen = true;
         Palette.FocusSearch();
+    }
+
+    private IReadOnlyList<ShellCommand> BuildPaletteCommands() =>
+        ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance, _actions.Curated.Commands);
+
+    private bool _curatedHooked;
+
+    /// <summary>
+    /// Starts reading the CLI's command list from its help (once; later opens find it cached) and, when it arrives while the palette
+    /// is open, swaps the rows in without touching what was typed.
+    /// </summary>
+    private void StartCuratedCommands()
+    {
+        var curated = _actions.Curated;
+        if (!_curatedHooked)
+        {
+            _curatedHooked = true;
+            curated.Changed += (_, _) => _ = Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_viewModel.IsPaletteOpen)
+                {
+                    _paletteViewModel.Reload(BuildPaletteCommands());
+                }
+            }));
+        }
+
+        _ = curated.EnsureLoaded();
     }
 
     private void ClosePalette(bool restoreFocus = true)

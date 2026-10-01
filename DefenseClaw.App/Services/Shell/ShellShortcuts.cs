@@ -44,6 +44,37 @@ internal static class ShellShortcuts
     /// </summary>
     public const string SettingsText = "Ctrl+,";
 
+    /// <summary>Run the health check (the Overview's Doctor flow). <c>Ctrl+Shift+H</c>, the Mac's Shift-Cmd-H.</summary>
+    public const string HealthCheckText = "Ctrl+Shift+H";
+
+    /// <summary>Scan AI components (AI Discovery's reviewed scan). <c>Ctrl+Shift+A</c>, the Mac's Shift-Cmd-A.</summary>
+    public const string ScanAiText = "Ctrl+Shift+A";
+
+    /// <summary>Diagnose in the background (read-only doctor, result as a toast). <c>Ctrl+Shift+D</c>, the Mac's Shift-Cmd-D.</summary>
+    public const string DiagnoseText = "Ctrl+Shift+D";
+
+    /// <summary>
+    /// Copy the last command's output. The Mac uses Ctrl+Y; here it is <c>Ctrl+Shift+Y</c>, because a bare Ctrl+Y is Redo in every
+    /// text box. Likewise <see cref="ExportOutputText"/> is not the Mac's Ctrl+S (Save).
+    /// </summary>
+    public const string CopyOutputText = "Ctrl+Shift+Y";
+
+    /// <summary>Export the last command's output to a file. <c>Ctrl+Shift+E</c> (Audit's own export is the plain Ctrl+E, a panel chord).</summary>
+    public const string ExportOutputText = "Ctrl+Shift+E";
+
+    /// <summary>A second spelling of F5 (the Mac's Cmd-R). Refreshes the current panel, or the gateway status.</summary>
+    public const string RefreshAliasText = "Ctrl+R";
+
+    /// <summary>
+    /// Every chord the shell itself claims, for the collision tests and the overlay. Bare Ctrl+M, Ctrl+S and Ctrl+Y are deliberately
+    /// absent (text editing owns them), and Ctrl+Shift+M belongs to the connector-scope chip.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ShellChords = new[]
+    {
+        PaletteText, RefreshText, RefreshAliasText, HelpText, FindText, CloseText, ToggleThemeText, SettingsText,
+        HealthCheckText, ScanAiText, DiagnoseText, CopyOutputText, ExportOutputText,
+    };
+
     /// <summary>
     /// The chord for the panel at <paramref name="index"/> (0-based, sidebar order) as display
     /// text, e.g. <c>Ctrl+3</c>; null when that panel has none.
@@ -93,6 +124,30 @@ internal static class ShellShortcuts
     public static bool IsToggleThemeChord(Key key, ModifierKeys modifiers) =>
         key == Key.L && modifiers == (ModifierKeys.Control | ModifierKeys.Shift);
 
+    /// <summary>The shell-level action a Ctrl+Shift chord selects, or null when the key press is none of them.</summary>
+    public static ShellChordAction? ActionFor(Key key, ModifierKeys modifiers)
+    {
+        if (modifiers == ModifierKeys.Control && key == Key.R)
+        {
+            return ShellChordAction.Refresh;
+        }
+
+        if (modifiers != (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            return null;
+        }
+
+        return key switch
+        {
+            Key.H => ShellChordAction.HealthCheck,
+            Key.A => ShellChordAction.ScanAi,
+            Key.D => ShellChordAction.Diagnose,
+            Key.Y => ShellChordAction.CopyOutput,
+            Key.E => ShellChordAction.ExportOutput,
+            _ => null,
+        };
+    }
+
     /// <summary>True for exactly Ctrl+, (see <see cref="SettingsText"/>); the comma key of the main block on any layout.</summary>
     public static bool IsSettingsChord(Key key, ModifierKeys modifiers) =>
         key == Key.OemComma && modifiers == ModifierKeys.Control;
@@ -103,4 +158,15 @@ internal static class ShellShortcuts
         >= Key.NumPad0 and <= Key.NumPad9 => key - Key.NumPad0,
         _ => null,
     };
+}
+
+/// <summary>The shell actions with a chord of their own beyond navigation and the overlays (see <see cref="ShellShortcuts.ActionFor"/>).</summary>
+internal enum ShellChordAction
+{
+    Refresh,
+    HealthCheck,
+    ScanAi,
+    Diagnose,
+    CopyOutput,
+    ExportOutput,
 }

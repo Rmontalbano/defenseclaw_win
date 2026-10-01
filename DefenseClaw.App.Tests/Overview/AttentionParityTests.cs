@@ -470,7 +470,7 @@ public sealed class AttentionParityTests : IDisposable
         var actions = new ShellActions(_services, catalog, tray, () => null);
 
         var command = Assert.Single(ShellCommandRegistry.Build(catalog, actions, _ => { }, () => { }), c => c.Id == "app.run-doctor");
-        Assert.Equal("Run doctor", command.Title);
+        Assert.Equal("Run health check", command.Title);
         Assert.True(command.IsEnabled);
 
         command.Run();
