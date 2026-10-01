@@ -257,6 +257,14 @@ public sealed class GovernTableTests
                 () =>
                 {
                     Host.Relayout();
+                    if (Grid is { ActualHeight: > 0, Items.Count: > 0 } grid && !VisualTree.Descendants<DataGridRow>(grid).Any())
+                    {
+                        // A virtualizing grid measured before its rows arrived can sit with none realized until something asks for
+                        // one (seen once on CI under Cisco Light): ask, as a scroll into view would.
+                        grid.ScrollIntoView(grid.Items[0]);
+                        grid.UpdateLayout();
+                    }
+
                     return Grid is { ActualHeight: > 0 } && VisualTree.Descendants<DataGridRow>(Grid).Any();
                 },
                 "table laid out",
