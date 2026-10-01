@@ -55,9 +55,12 @@ public sealed partial class GatewayActionDialog : FluentWindow
     /// <param name="owner">The dashboard when it is showing; null (the tray-only start, before any window exists)
     /// or a hidden or minimised window centres the dialog on screen.</param>
     /// <param name="action">The gateway verb to review.</param>
-    public static bool Confirm(Window? owner, GatewayAction action)
+    public static bool Confirm(Window? owner, GatewayAction action) => Confirm(owner, ReviewFor(action));
+
+    /// <summary>Shows an arbitrary review (the Settings page's one-time consent for the automatic start) the same way; true only if confirmed.</summary>
+    public static bool Confirm(Window? owner, CommandReview review)
     {
-        var dialog = new GatewayActionDialog(ReviewFor(action));
+        var dialog = new GatewayActionDialog(review);
 
         if (owner is { IsVisible: true, WindowState: not WindowState.Minimized } && !ReferenceEquals(owner, dialog))
         {

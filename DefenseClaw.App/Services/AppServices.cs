@@ -141,6 +141,9 @@ public sealed class AppServices : IDisposable
 
         // Knows whether a newer runtime is out (the banner and the one toast). Nothing runs until the app calls Start on it.
         UpdateWatcher = updateWatcherFactory?.Invoke(this) ?? UpdateWatcher.Create(this);
+
+        // Opt-in "start the gateway automatically" (off by default). Nothing runs until the app calls Start on it.
+        GatewayAutoStart = GatewayAutoStart.Create(this);
     }
 
     /// <summary>The single instance, created by <see cref="Initialize"/> at startup.</summary>
@@ -212,6 +215,9 @@ public sealed class AppServices : IDisposable
     /// banner, <c>NewVersionAvailable</c> for the tray toast). It only asks; the upgrade stays the Updates window's. See <see cref="Updates.UpdateWatcher"/>.
     /// </summary>
     internal UpdateWatcher UpdateWatcher { get; }
+
+    /// <summary>The opt-in single automatic <c>defenseclaw-gateway start</c> per launch, and the "operator stopped it" flag that vetoes it. See <see cref="Services.GatewayAutoStart"/>.</summary>
+    internal GatewayAutoStart GatewayAutoStart { get; }
 
     /// <summary>
     /// REST port the <see cref="Gateway"/> client is currently built against. Tracks
@@ -495,6 +501,7 @@ public sealed class AppServices : IDisposable
         Settings.Changed -= OnSettingsChanged;
         AlertCounts.Dispose();
         UpdateWatcher.Dispose();
+        GatewayAutoStart.Dispose();
         ConnectorScope.Dispose();
         Monitor.Dispose();
         ConfigWatcher.Dispose();

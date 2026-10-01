@@ -910,6 +910,11 @@ internal sealed class FakePlatform
 
     public List<(string Path, bool Select)> Revealed { get; } = new();
 
+    /// <summary>What the operator answers to the one-time review of the automatic gateway start; every review shown is kept.</summary>
+    public bool ConsentAnswer { get; set; } = true;
+
+    public List<CommandReview> ConsentReviews { get; } = new();
+
     public int UpdatesOpened { get; private set; }
 
     public AppServices? UpdatesOpenedWith { get; private set; }
@@ -946,6 +951,11 @@ internal sealed class FakePlatform
         {
             Revealed.Add((path, select));
             return true;
+        },
+        ConfirmGatewayAutoStart = review =>
+        {
+            ConsentReviews.Add(review);
+            return ConsentAnswer;
         },
         OpenUpdates = services =>
         {

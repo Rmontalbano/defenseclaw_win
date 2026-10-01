@@ -89,6 +89,12 @@ public sealed record GatewaySnapshot
     /// <summary>Raw outcome of the last <c>/health</c> call.</summary>
     public GatewayStatus? HealthStatus { get; init; }
 
+    /// <summary>
+    /// True when the last <c>/health</c> was unreachable <i>because the port refused the connection</i> (nothing listening), not because
+    /// it timed out or failed some other way. The one signal the opt-in gateway auto-start (<see cref="GatewayAutoStart"/>) trusts.
+    /// </summary>
+    public bool PortRefused { get; init; }
+
     /// <summary>e.g. <c>0.8.7</c>, from <c>/health</c> provenance.</summary>
     public string? BinaryVersion { get; init; }
 
@@ -228,6 +234,7 @@ public sealed record GatewaySnapshot
                IsPaused == other.IsPaused &&
                Install == other.Install &&
                HealthStatus == other.HealthStatus &&
+               PortRefused == other.PortRefused &&
                WslGatewayDetected == other.WslGatewayDetected &&
                ApiPort == other.ApiPort &&
                AlertCount == other.AlertCount &&
@@ -1076,6 +1083,8 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             PortOwner = status.PortOwner,
             Health = health.Value,
             HealthStatus = health.Status,
+            PortRefused = health.Status == GatewayStatus.Unreachable &&
+                          string.Equals(health.ErrorMessage, GatewayClient.RefusedMessage, StringComparison.Ordinal),
             BinaryVersion = status.BinaryVersion ?? health.Value?.Provenance?.BinaryVersion,
             ApiPort = status.Port,
             CliPath = status.CliPath,

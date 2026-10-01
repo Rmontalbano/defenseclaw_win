@@ -404,9 +404,12 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         }
     }
 
+    /// <summary>The <see cref="GatewayResult{T}.ErrorMessage"/> of an <see cref="GatewayStatus.Unreachable"/> result whose cause was a refused connection (nothing listening), as opposed to a timeout or another transport failure.</summary>
+    public const string RefusedMessage = "gateway is not listening (connection refused)";
+
     private static string Describe(HttpRequestException ex) =>
         ex.HttpRequestError == HttpRequestError.ConnectionError
-            ? "gateway is not listening (connection refused)"
+            ? RefusedMessage
             : $"gateway unreachable: {ex.Message}";
 
     public void Dispose()

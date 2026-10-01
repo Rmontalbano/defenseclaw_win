@@ -299,6 +299,14 @@
                         </HeaderedContentControl>
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Start the gateway automatically"
+                                                local:SettingsRow.Caption="Once per launch, if the gateway is stopped because nothing is listening on its port, runs defenseclaw-gateway start. Never after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it yourself. Off by default; turning it on shows the command first.">
+                            <ui:ToggleSwitch IsChecked="{Binding AutoStartGateway, Mode=TwoWay}"
+                                             AutomationProperties.Name="Start the gateway automatically"
+                                             AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. You review the command when you turn this on." />
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 Header="Reopen on the last panel"
                                                 local:SettingsRow.Caption="Opens the dashboard on the panel you were last looking at, instead of Overview.">
                             <ui:ToggleSwitch IsChecked="{Binding RememberLastPanel, Mode=TwoWay}"

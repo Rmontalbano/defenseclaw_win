@@ -33,6 +33,10 @@ internal sealed class SettingsPlatform
     /// <summary>Shows a file in Explorer (selected, when the flag is set) or opens a folder; false when Explorer could not be started.</summary>
     public Func<string, bool, bool> Reveal { get; init; } = RevealInExplorer;
 
+    /// <summary>Shows the one-time review of <c>defenseclaw-gateway start</c> when the automatic start is switched on; true only if the operator confirmed it.</summary>
+    public Func<CommandReview, bool> ConfirmGatewayAutoStart { get; init; } =
+        review => Views.Shell.GatewayActionDialog.Confirm(Application.Current?.MainWindow, review);
+
     /// <summary>Opens the Updates window (or brings it forward).</summary>
     public Action<AppServices> OpenUpdates { get; init; } = services => Views.Updates.UpdatesWindow.Show(services);
 

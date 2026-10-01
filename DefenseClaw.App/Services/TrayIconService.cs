@@ -396,6 +396,12 @@ public sealed class TrayIconService : IDisposable
                 return;
             }
 
+            // A confirmed Stop is the operator's word for the rest of the session: no automatic start follows it.
+            if (action == GatewayAction.Stop)
+            {
+                _services.GatewayAutoStart.MarkUserStopped();
+            }
+
             var invocation = await _services.Cli.RunGatewayAsync(argv);
             Notify(
                 title,

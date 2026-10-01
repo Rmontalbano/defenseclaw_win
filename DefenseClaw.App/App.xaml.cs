@@ -142,6 +142,10 @@ public partial class App : Application
         _services.UpdateWatcher.NewVersionAvailable += (_, e) => _tray?.Notify("DefenseClaw update", e.Text + ". Open the dashboard to review it.", NotificationIcon.Info);
         _services.UpdateWatcher.Start();
 
+        // Opt-in automatic gateway start: decides once, on the monitor's first settled snapshot (off unless Settings turned it on).
+        _services.GatewayAutoStart.NoticeRaised += (_, e) => _tray?.Notify(e.Title, e.Body, e.IsFailure ? NotificationIcon.Warning : NotificationIcon.Info);
+        _services.GatewayAutoStart.Start();
+
         // Last statement, deliberately: from here on a dispatcher fault costs a panel
         // interaction rather than the session, because the tray can still drive everything.
         _shellReady = true;

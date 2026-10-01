@@ -237,6 +237,27 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _rememberLastPanel;
 
+    /// <summary>The "Start the gateway automatically" switch (<c>startup.autoStartGateway</c>, off by default). Turning it on shows a one-time review first.</summary>
+    [ObservableProperty]
+    private bool _autoStartGateway;
+
+    partial void OnAutoStartGatewayChanged(bool value)
+    {
+        if (_syncing > 0)
+        {
+            return;
+        }
+
+        if (value && !_platform.ConfirmGatewayAutoStart(GatewayAutoStart.ConsentReview()))
+        {
+            // Declined: it stays off, and the switch says so.
+            Sync(() => AutoStartGateway = false);
+            return;
+        }
+
+        Write(settings => settings with { Startup = settings.Startup with { GatewayAutoStart = value } });
+    }
+
     partial void OnStartWithWindowsChanged(bool value)
     {
         if (_syncing == 0)
@@ -755,6 +776,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
             NotifyGateway = settings.Notifications.Gateway;
             CloseToTray = settings.Startup.CloseToTray;
             RememberLastPanel = settings.Startup.RememberLastPanel;
+            AutoStartGateway = settings.Startup.GatewayAutoStart;
             CliOverridePath = settings.Connection.CliPathOverride;
         });
     }

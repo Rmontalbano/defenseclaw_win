@@ -369,6 +369,20 @@ public class GatewayClientTests
         Assert.Equal(GatewayStatus.Unreachable, result.Status);
         Assert.False(result.Responded);
         Assert.Contains("not listening", result.ErrorMessage!, StringComparison.Ordinal);
+        Assert.Equal(GatewayClient.RefusedMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Another_transport_failure_is_Unreachable_but_not_the_refused_message()
+    {
+        var (client, _) = Build(h => h.MapThrow(
+            "/health",
+            new HttpRequestException(HttpRequestError.NameResolutionError, "no such host")));
+
+        var result = await client.GetHealthAsync();
+
+        Assert.Equal(GatewayStatus.Unreachable, result.Status);
+        Assert.NotEqual(GatewayClient.RefusedMessage, result.ErrorMessage);
     }
 
     [Fact]

@@ -164,7 +164,16 @@ public sealed partial class OverviewPanelViewModel
                     CommandTier.StateChanging,
                     Executable: GatewayControl.Executable),
             },
-            onFinished: _ => RefreshAfterActionAsync(),
+            onFinished: _ =>
+            {
+                // A Stop the operator ran is theirs for the session: no automatic start follows it.
+                if (action == GatewayAction.Stop)
+                {
+                    Services.GatewayAutoStart.MarkUserStopped();
+                }
+
+                return RefreshAfterActionAsync();
+            },
             primaryText: GatewayControl.Title(action));
     }
 

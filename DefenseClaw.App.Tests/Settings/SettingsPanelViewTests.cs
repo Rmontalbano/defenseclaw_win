@@ -277,8 +277,8 @@ public sealed class SettingsPanelViewTests : IDisposable
             using var shell = Open(940, 620, out var page);
             var switches = VisualTree.Descendants<ToggleSwitch>(page).ToList();
 
-            // Pause, three notifications, start with Windows, close to tray, reopen on the last panel.
-            Assert.Equal(7, switches.Count);
+            // Pause, three notifications, start with Windows, close to tray, start the gateway automatically, reopen on the last panel.
+            Assert.Equal(8, switches.Count);
             var high = switches.Single(s => System.Windows.Automation.AutomationProperties.GetName(s) == "Notify on HIGH findings");
             Assert.False(high.IsChecked);
 
