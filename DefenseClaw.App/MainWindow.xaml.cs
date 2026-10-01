@@ -177,6 +177,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
         // A deep link (ShellNavigation): select the panel it names. The catalog hands it its payload when it comes up.
         services.Navigation.Requested += OnNavigationRequested;
+        services.Navigation.PaletteRequested += OnPaletteRequested;
         _navigation = services.Navigation;
 
         // What Settings asks of the tray (its "Reset seen-alert history" button): the same call the command palette's entry makes.
@@ -204,6 +205,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             services.Monitor.StateChanged -= OnMonitorStateChanged;
             services.Navigation.Requested -= OnNavigationRequested;
             _settings.Changed -= OnSettingsChanged;
+            services.Navigation.PaletteRequested -= OnPaletteRequested;
             _catalog.PanelFaulted -= OnPanelFaulted;
             if (_appearance is not null)
             {
@@ -434,6 +436,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _catalog.PanelFaulted -= OnPanelFaulted;
         _navigation.Requested -= OnNavigationRequested;
         _settings.Changed -= OnSettingsChanged;
+        _navigation.PaletteRequested -= OnPaletteRequested;
         _viewModel.Dispose();
         base.OnClosing(e);
     }
@@ -804,6 +807,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     // ------------------------------------------------------------------ overlays
 
     private void OnPaletteButtonClick(object sender, RoutedEventArgs e) => OpenPalette();
+
+    /// <summary>A panel asked for the palette (the Overview's Diagnostics menu); same as the status strip's Search button.</summary>
+    private void OnPaletteRequested(object? sender, EventArgs e) => OpenPalette();
 
     private void OnShortcutsButtonClick(object sender, RoutedEventArgs e) => OpenShortcuts();
 

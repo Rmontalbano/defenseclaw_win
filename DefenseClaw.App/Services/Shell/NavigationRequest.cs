@@ -94,6 +94,16 @@ public sealed class ShellNavigation
     /// </summary>
     public event EventHandler<NavigationRequestedEventArgs>? Requested;
 
+    /// <summary>
+    /// Raised by <see cref="RequestPalette"/>: a panel asking the shell to open its command palette (the Overview's Diagnostics
+    /// menu). Not a panel request, so nothing waits in the inbox: the dashboard window, which owns the palette, opens it, or
+    /// ignores the call while it is not built. On the caller's thread (the UI thread).
+    /// </summary>
+    public event EventHandler? PaletteRequested;
+
+    /// <summary>Asks the shell to open the command palette; see <see cref="PaletteRequested"/>.</summary>
+    public void RequestPalette() => PaletteRequested?.Invoke(this, EventArgs.Empty);
+
     /// <summary>The request waiting for its panel, or null. Replaced by the next <see cref="Request(NavigationRequest)"/>.</summary>
     public NavigationRequest? Pending
     {

@@ -22,9 +22,24 @@ public enum RecentAuditMetricsStatus
 /// <param name="Elapsed">How long the read took, open to last row; what a slow database is diagnosed from.</param>
 public sealed record RecentAuditMetrics(RecentAuditMetricsStatus Status, int HookCalls, int Blocks, int Window, TimeSpan Elapsed)
 {
+    /// <summary>
+    /// The same two counts per connector (<c>audit_events.connector</c>, compared without case), over the same rows: what a connector-scoped
+    /// Overview shows. Rows with no connector are under the empty string. Empty on a database with no <c>connector</c> column.
+    /// </summary>
+    public IReadOnlyDictionary<string, ConnectorMetrics> ByConnector { get; init; } = NoConnectors;
+
+    private static readonly IReadOnlyDictionary<string, ConnectorMetrics> NoConnectors = new Dictionary<string, ConnectorMetrics>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The counts for <paramref name="connector"/> (without case); zero for one the window has no row for.</summary>
+    public ConnectorMetrics For(string connector) =>
+        ByConnector.TryGetValue(connector?.Trim() ?? string.Empty, out var counts) ? counts : default;
+
     /// <summary>Nothing recorded: what a missing database reads as.</summary>
     public static RecentAuditMetrics None(RecentAuditMetricsStatus status, TimeSpan elapsed) => new(status, 0, 0, 0, elapsed);
 }
+
+/// <summary>Hook calls and blocks for one connector within the window; see <see cref="RecentAuditMetrics.ByConnector"/>.</summary>
+public readonly record struct ConnectorMetrics(int HookCalls, int Blocks);
 
 /// <summary>
 /// The two numbers behind the tray flyout's "Hook Calls" and "Blocks" rows, counted over the newest
@@ -193,6 +208,7 @@ public sealed class RecentAuditMetricsReader
         var rows = 0;
         var hooks = 0;
         var blocks = 0;
+        var byConnector = new Dictionary<string, ConnectorMetrics>(StringComparer.OrdinalIgnoreCase);
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -200,20 +216,29 @@ public sealed class RecentAuditMetricsReader
                 rows++;
                 var action = reader.IsDBNull(0) ? null : reader.GetString(0);
                 var details = reader.IsDBNull(1) ? null : reader.GetString(1);
+                var connector = reader.IsDBNull(2) ? string.Empty : reader.GetString(2).Trim();
 
-                if (string.Equals(action, "connector-hook", StringComparison.Ordinal))
+                var isHook = string.Equals(action, "connector-hook", StringComparison.Ordinal);
+                var isBlock = IsBlock(action, details);
+                if (isHook)
                 {
                     hooks++;
                 }
 
-                if (IsBlock(action, details))
+                if (isBlock)
                 {
                     blocks++;
+                }
+
+                if (isHook || isBlock)
+                {
+                    var counts = byConnector.TryGetValue(connector, out var existing) ? existing : default;
+                    byConnector[connector] = new ConnectorMetrics(counts.HookCalls + (isHook ? 1 : 0), counts.Blocks + (isBlock ? 1 : 0));
                 }
             }
         }
 
-        return new RecentAuditMetrics(RecentAuditMetricsStatus.Ok, hooks, blocks, rows, clock.Elapsed);
+        return new RecentAuditMetrics(RecentAuditMetricsStatus.Ok, hooks, blocks, rows, clock.Elapsed) { ByConnector = byConnector };
     }
 
     private async Task<IReadOnlyList<string>> ExplainCoreAsync(CancellationToken cancellationToken)
@@ -248,14 +273,19 @@ public sealed class RecentAuditMetricsReader
         return lines;
     }
 
-    /// <summary>The statement. A database with no <c>details</c> column (a very old schema) reads NULL there: only the action can then count.</summary>
+    /// <summary>
+    /// The statement. A database with no <c>details</c> column (a very old schema) reads NULL there: only the action can then count; one with no
+    /// <c>connector</c> column reads NULL there, so nothing is attributed to a connector.
+    /// </summary>
     private static string BuildSql(HashSet<string> columns)
     {
         var details = columns.Contains("details")
             ? $"substr(details, 1, {DetailsLimit.ToString(CultureInfo.InvariantCulture)})"
             : "NULL";
 
-        return $"SELECT action, {details} FROM audit_events ORDER BY timestamp DESC, rowid DESC LIMIT $limit";
+        var connector = columns.Contains("connector") ? "connector" : "NULL";
+
+        return $"SELECT action, {details}, {connector} FROM audit_events ORDER BY timestamp DESC, rowid DESC LIMIT $limit";
     }
 
     /// <summary>The table's column names, without case; empty when the table does not exist (<c>pragma_table_info</c> of a missing table is no rows).</summary>

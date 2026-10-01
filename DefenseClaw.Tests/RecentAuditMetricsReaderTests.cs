@@ -63,6 +63,53 @@ public sealed class RecentAuditMetricsReaderTests : IDisposable
         Assert.Equal(4, result.Blocks);
     }
 
+    // ---- Per connector (the Overview scoped to one) ----
+
+    [Fact]
+    public async Task The_same_window_is_counted_per_connector_without_case_and_rows_with_none_are_under_the_empty_string()
+    {
+        _database.InsertEvent("a", Base.AddMinutes(1), "connector-hook", "INFO", connector: "claudecode", details: Hook("allow"));
+        _database.InsertEvent("b", Base.AddMinutes(2), "connector-hook", "INFO", connector: "ClaudeCode", details: Hook("block"));
+        _database.InsertEvent("c", Base.AddMinutes(3), "connector-hook", "INFO", connector: "codex", details: Hook("allow"));
+        _database.InsertEvent("d", Base.AddMinutes(4), "guardrail-block", "INFO", connector: "codex");
+        _database.InsertEvent("e", Base.AddMinutes(5), "block", "INFO");
+        _database.InsertEvent("f", Base.AddMinutes(6), "tool_invocation", "INFO", connector: "codex");   // neither: not in the breakdown
+
+        var result = await Reader().ReadAsync();
+
+        Assert.Equal(new ConnectorMetrics(2, 1), result.For("claudecode"));
+        Assert.Equal(new ConnectorMetrics(2, 1), result.For("CLAUDECODE"));
+        Assert.Equal(new ConnectorMetrics(1, 1), result.For("codex"));
+        Assert.Equal(new ConnectorMetrics(0, 1), result.For(string.Empty));
+        Assert.Equal(default, result.For("hermes"));
+
+        // The breakdown is the same rows as the totals.
+        Assert.Equal(result.HookCalls, result.ByConnector.Values.Sum(c => c.HookCalls));
+        Assert.Equal(result.Blocks, result.ByConnector.Values.Sum(c => c.Blocks));
+    }
+
+    [Fact]
+    public async Task A_database_without_a_connector_column_has_totals_and_an_empty_breakdown_under_one_name()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.File("audit.db");
+        using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE audit_events (id TEXT PRIMARY KEY, timestamp TEXT, action TEXT);
+                INSERT INTO audit_events VALUES ('1', '2026-07-22T12:00:00Z', 'connector-hook');
+                """;
+            _ = command.ExecuteNonQuery();
+        }
+
+        var result = await new RecentAuditMetricsReader(path).ReadAsync();
+
+        Assert.Equal(1, result.HookCalls);
+        Assert.Equal(new ConnectorMetrics(1, 0), result.For(string.Empty));
+    }
+
     // ---- The window ----
 
     [Fact]

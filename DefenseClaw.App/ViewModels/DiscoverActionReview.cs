@@ -11,12 +11,15 @@ namespace DefenseClaw.App.ViewModels;
 /// One command inside a reviewed action. <see cref="MinimumTier"/> is a floor, not a replacement for
 /// <see cref="CommandTiers.Classify"/>: the review uses whichever of the two is stricter, so a source id
 /// that happens to spell a read-only verb (<c>registry sync list</c>) cannot downgrade the review.
+/// <see cref="Executable"/> is what <see cref="Argv"/> is handed to: <c>defenseclaw</c> unless the step is a gateway action
+/// (<c>defenseclaw-gateway restart</c>, from the Overview's Quick Actions).
 /// </summary>
 public sealed record DiscoverStep(
     IReadOnlyList<string> Argv,
     string Purpose,
     CommandTier MinimumTier = CommandTier.StateChanging,
-    TimeSpan? Timeout = null);
+    TimeSpan? Timeout = null,
+    string Executable = CommandReview.DefaultExecutable);
 
 /// <summary>What a reviewed action did, handed to the panel so it can re-read its state.</summary>
 public sealed record DiscoverReviewResult(bool Succeeded, IReadOnlyList<CliInvocation> Invocations);
@@ -196,6 +199,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     s.Argv,
                     s.Purpose,
                     CommandReview.Stricter(s.MinimumTier, CommandTier.StateChanging),
+                    s.Executable,
                     number: steps.Count > 1 ? i + 1 : 0))
                 .ToArray(),
             Warnings = warnings,
@@ -269,7 +273,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 {
                     var options = step.Timeout is { } timeout ? CliRunOptions.WithTimeout(timeout) : null;
                     var invocation = await _services.Cli
-                        .RunAsync(step.Argv, cancellationToken: CancellationToken.None, options: options)
+                        .RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options)
                         .ConfigureAwait(true);
                     invocations.Add(invocation);
 
@@ -293,7 +297,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 catch (CliNotFoundException ex)
                 {
                     row.SetStatus("Could not start", "Bad");
-                    output.AppendLine($"'defenseclaw' was not found: {ex.Message}");
+                    output.AppendLine($"'{ex.ExecutableName}' was not found: {ex.Message}");
                     succeeded = false;
                 }
                 catch (SecretInArgumentException)

@@ -2,18 +2,237 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels">
     <!--
-        Dashboard layout mirroring the TUI's boxes, on the shared Dc* design system
-        (Themes\DefenseClaw.xaml). Every severity / state colour is a Tag on a Dc* tone style
-        bound to the plain string key the view-model already exposes, so both themes track the
-        system and no converter is needed. The panel keeps no local styles.
+        Dashboard in the Mac's order (CUST-209): What Needs Attention (top three), an equal-height hero row - Services, Scanners, Enforcement
+        (2 x 2 buttons that open the panel each number comes from, CUST-205) - Quick Actions, Configuration, Connectors, Observability,
+        Activity (last 24 h) and Doctor beside the discovered AI agents. Under 1000 DIPs of panel width the hero row is Services and Scanners
+        over Enforcement, and Doctor and the agents stack.
 
-        Accessibility: every list item announces through its record's ToString() (the view-model
-        rows override it), every list carries a name, and status text that changes on its own
-        (doctor progress) is a polite live region.
+        Every severity / state colour is a Tag on a Dc* tone style bound to the plain string key the view-model already exposes, so every
+        style and both modes track the tokens and no converter is needed. The mono bracket tags ([!] [*] [>] [OK]) and the state words are
+        drawn in their tone; none of them is the only carrier of the meaning (the severity is also a word, a state is also a word).
+
+        Accessibility: every list item announces through its record's ToString() (the view-model rows override it), every list carries a
+        name, every button carries a name and, where it does something non-obvious, a help text; status text that changes on its own
+        (doctor progress, a diagnostic's result) is a polite live region. The chart is one named picture with its totals as help text.
     -->
-    <Grid Style="{StaticResource DcPage}">
+    <UserControl.Resources>
+        <!--
+            The Enforcement tile (CUST-205): a whole-card button with the stroke of a hovered or focused control and a chevron. Not a ui:Button,
+            whose template is a filled control: this is a card that can be pressed. Focus keeps the shared focus ring (DcFocusVisualStyle).
+        -->
+        <Style x:Key="DcInteractiveTile" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource DcRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
+            <Setter Property="BorderThickness" Value="{DynamicResource DcBorderThickness}" />
+            <Setter Property="Padding" Value="12,10,10,10" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource DcFocusVisualStyle}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{DynamicResource DcRadiusM}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcAccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcAccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            The hero row is one grid of six equal columns, and each card says how many it takes (the 12 DIP gaps are card margins, so there is
+            no gap column to keep empty). Wide: three cards of two columns, Services | Scanners | Enforcement, all in row 0, so they are as tall as
+            the tallest. Compact (panel under 1000 DIPs): Services and Scanners take three columns each, and Enforcement drops to row 1 across all six.
+        -->
+        <Style x:Key="OverviewHeroServices" TargetType="Border" BasedOn="{StaticResource DcCard}">
+            <Setter Property="Grid.Row" Value="0" />
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Grid.ColumnSpan" Value="3" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="OverviewHeroScanners" TargetType="Border" BasedOn="{StaticResource DcCard}">
+            <Setter Property="Grid.Row" Value="0" />
+            <Setter Property="Grid.Column" Value="2" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+            <Setter Property="Margin" Value="6,0,6,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Grid.Column" Value="3" />
+                    <Setter Property="Grid.ColumnSpan" Value="3" />
+                    <Setter Property="Margin" Value="6,0,0,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="OverviewEnforcementCard" TargetType="Border" BasedOn="{StaticResource DcCard}">
+            <Setter Property="Grid.Row" Value="0" />
+            <Setter Property="Grid.Column" Value="4" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Grid.Row" Value="1" />
+                    <Setter Property="Grid.Column" Value="0" />
+                    <Setter Property="Grid.ColumnSpan" Value="6" />
+                    <Setter Property="Margin" Value="0,12,0,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Doctor | Agents: two halves; under 1000 DIPs the doctor takes the row and the agents drop under it. -->
+        <Style x:Key="OverviewDoctorCard" TargetType="Border" BasedOn="{StaticResource DcCard}">
+            <Setter Property="Grid.Row" Value="0" />
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Grid.ColumnSpan" Value="2" />
+                    <Setter Property="Margin" Value="0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="OverviewAgentsCard" TargetType="Border" BasedOn="{StaticResource DcCard}">
+            <Setter Property="Grid.Row" Value="0" />
+            <Setter Property="Grid.Column" Value="1" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Grid.Row" Value="1" />
+                    <Setter Property="Grid.Column" Value="0" />
+                    <Setter Property="Grid.ColumnSpan" Value="2" />
+                    <Setter Property="Margin" Value="0,12,0,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The big number of an Enforcement tile: the tone styles of DcValue, plus Accent for the one count that is not good or bad news (Hook Calls). -->
+        <Style x:Key="OverviewTileValue" TargetType="TextBlock" BasedOn="{StaticResource DcValue}">
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="Accent">
+                    <Setter Property="Foreground" Value="{DynamicResource DcAccentBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The mono bracket tag of an attention row and of an agent: a state mark in text, drawn in the tone of the row. -->
+        <Style x:Key="OverviewMonoTag" TargetType="TextBlock" BasedOn="{StaticResource DcToneText}">
+            <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+        </Style>
+
+        <!-- A mono state word (running, disabled, installed): the state in words, in the state's tone. -->
+        <Style x:Key="OverviewStateWord" TargetType="TextBlock" BasedOn="{StaticResource DcToneText}">
+            <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+        </Style>
+
+        <!-- A table cell: one line, the tone of its Tag (or secondary text), trimmed rather than wrapped so the columns stay aligned. -->
+        <Style x:Key="OverviewCell" TargetType="TextBlock" BasedOn="{StaticResource DcToneText}">
+            <Setter Property="FontSize" Value="{DynamicResource DcFontSize}" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+
+        <Style x:Key="OverviewColumnHead" TargetType="TextBlock" BasedOn="{StaticResource DcColumnHeader}">
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+
+        <!-- The connectors table: a list box with no chrome and no scroll bar of its own (the page scrolls), whose rows are selectable. -->
+        <Style x:Key="OverviewTableRow" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="6,5,0,5" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource DcFocusVisualStyleInset}" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Root"
+                                Background="Transparent"
+                                CornerRadius="{DynamicResource DcRadiusS}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="OverviewTable" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource OverviewTableRow}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <ItemsPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Zebra stripe of the Configuration card: the row's own Alternate flag, the token brush for the stripe. -->
+        <Style x:Key="OverviewZebraRow" TargetType="Border">
+            <Setter Property="Padding" Value="8,5,8,5" />
+            <Setter Property="Background" Value="Transparent" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Alternate}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource DcZebraBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource DcPage}" panels:CompactLayout.Below="1000">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -35,7 +254,7 @@
                 <!-- AsyncRelayCommand disables itself while it runs, so no IsEnabled plumbing. -->
                 <ui:Button Content="Refresh"
                            Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Poll the gateway again and re-read the audit counts, enforcement lists and doctor results. Shortcut F5.">
+                           AutomationProperties.HelpText="Poll the gateway again and re-read the audit counts, enforcement lists, doctor results and configuration. Shortcut F5.">
                     <ui:Button.Icon>
                         <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
                     </ui:Button.Icon>
@@ -46,54 +265,704 @@
         <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
             <StackPanel>
 
-                <!-- Gateway headline, then the severity tiles. Two full-width cards, not two columns: side by side
-                     the tiles had ~350 px to share, wrapped 2+2+1 and stretched the gateway card (three short lines)
-                     to the same height, leaving it half empty. Stacked, the five tiles get one row at every
-                     window width the app allows. -->
+                <!-- The gateway headline, slim: one wrapped line (the version and uptime fall to a second line on a narrow window instead of
+                     being clipped), then what it means. The data directory moved into the Configuration card. -->
+                <StackPanel Margin="2,0,0,10">
+                    <WrapPanel>
+                        <ctl:DcStatusGlyph Tone="{Binding GatewayStateKey}"
+                                           GlyphSize="16"
+                                           DotSize="10"
+                                           Margin="0,0,8,0" />
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding GatewayHeadline}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding VersionText}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding UptimeText, StringFormat='uptime {0}'}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding GatewayDetail}" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <!-- 1. What Needs Attention: the top three, then "Show all". -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <!-- WrapPanel, not StackPanel: the version and uptime must fall to a
-                             second line on a narrow window instead of being clipped. -->
-                        <WrapPanel>
-                            <ctl:DcStatusGlyph Tone="{Binding GatewayStateKey}"
-                                               GlyphSize="20"
-                                               DotSize="12"
-                                               Margin="0,0,10,0" />
-                            <TextBlock Style="{StaticResource DcSectionHeader}"
-                                       Margin="0"
-                                       FontSize="20"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding GatewayHeadline}" />
-                            <TextBlock Style="{StaticResource DcCaption}"
-                                       Margin="14,0,0,0"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding VersionText}" />
-                            <TextBlock Style="{StaticResource DcCaption}"
-                                       Margin="14,0,0,0"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding UptimeText, StringFormat='uptime {0}'}" />
-                        </WrapPanel>
-                        <TextBlock Style="{StaticResource DcTextSecondary}"
-                                   Margin="0,8,0,0"
-                                   Text="{Binding GatewayDetail}" />
-                        <TextBox Style="{StaticResource DcMonoTextBox}"
-                                 Margin="0,8,0,0"
-                                 AutomationProperties.Name="DefenseClaw data directory"
-                                 Text="{Binding DataDirectoryText, Mode=OneWay}" />
-                        <TextBlock Style="{StaticResource DcCaption}"
-                                   Margin="0,4,0,0"
-                                   TextWrapping="Wrap"
-                                   Text="{Binding DataDirectorySourceText}" />
+                        <ctl:DcCardHeader Symbol="ChatWarning24" Tint="Orange" Content="What needs attention" />
+                        <ItemsControl ItemsSource="{Binding VisibleAttention}"
+                                      AutomationProperties.Name="What needs attention">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="30" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Style="{StaticResource OverviewMonoTag}"
+                                                   Tag="{Binding SeverityKey}"
+                                                   Text="{Binding Tag}" />
+                                        <StackPanel Grid.Column="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <!-- The severity as a word: the tag, its colour and the badge's colour are not enough on their own. -->
+                                                <Border Style="{StaticResource DcBadge}"
+                                                        Margin="0,0,8,0"
+                                                        VerticalAlignment="Center"
+                                                        Tag="{Binding SeverityKey}">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SeverityKey}" />
+                                                </Border>
+                                                <TextBlock Style="{StaticResource DcBody}"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding Title}" />
+                                            </StackPanel>
+                                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                       Margin="0,2,0,0"
+                                                       Text="{Binding Detail}" />
+                                            <Border Style="{StaticResource DcCodeBlock}"
+                                                    Margin="0,6,0,0"
+                                                    HorizontalAlignment="Left"
+                                                    Visibility="{Binding HasCommand, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="Suggested command"
+                                                         AutomationProperties.HelpText="Read-only text you can select and copy. The app never runs it for you."
+                                                         Text="{Binding Command, Mode=OneWay}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ui:Button Content="{Binding AttentionMoreText}"
+                                   Appearance="Transparent" BorderThickness="0"
+                                   Foreground="{DynamicResource DcAccentBrush}"
+                                   Padding="6,3,6,3"
+                                   Command="{Binding ToggleAttentionCommand}"
+                                   Visibility="{Binding HasAttentionOverflow, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.HelpText="Shows every item, or only the first three." />
                     </StackPanel>
                 </Border>
 
+                <!-- 2. Hero row. Wide: Services | Scanners | Enforcement. Narrow: Services | Scanners over Enforcement. The cells of a
+                     grid row are as tall as its tallest card, so the cards are equal height without measuring anything. -->
+                <Grid Margin="{StaticResource DcCardGap}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Services: dot, name, state word, detail. -->
+                    <Border Style="{StaticResource OverviewHeroServices}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Symbol="Layer24" Section="Overview" Content="Services" />
+                            <ItemsControl ItemsSource="{Binding ServiceRows}"
+                                          Grid.IsSharedSizeScope="True"
+                                          AutomationProperties.Name="Services">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,7">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ServiceName" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <ctl:DcStatusGlyph Grid.Row="0"
+                                                               Grid.Column="0"
+                                                               Tone="{Binding StateKey}"
+                                                               SlotHeight="18"
+                                                               Margin="0,0,8,0"
+                                                               VerticalAlignment="Top" />
+                                            <TextBlock Grid.Row="0"
+                                                       Grid.Column="1"
+                                                       Style="{StaticResource DcBody}"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="NoWrap"
+                                                       Margin="0,0,12,0"
+                                                       Text="{Binding Name}" />
+                                            <TextBlock Grid.Row="0"
+                                                       Grid.Column="2"
+                                                       Style="{StaticResource OverviewStateWord}"
+                                                       Tag="{Binding StateKey}"
+                                                       Text="{Binding StateText}" />
+                                            <TextBlock Grid.Row="1"
+                                                       Grid.Column="1"
+                                                       Grid.ColumnSpan="2"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Margin="0,1,0,0"
+                                                       Visibility="{Binding HasSummary, Converter={StaticResource BoolToVisibility}}"
+                                                       Text="{Binding Summary}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Scanners: dot, name, state word at the right, the detail under the name. -->
+                    <Border Style="{StaticResource OverviewHeroScanners}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Symbol="ScanText24" Section="Govern" Content="{Binding ScannersTitle}" />
+                            <ItemsControl ItemsSource="{Binding ScannerRows}"
+                                          AutomationProperties.Name="Scanners">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,7">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <ctl:DcStatusGlyph Grid.Row="0"
+                                                               Grid.Column="0"
+                                                               Tone="{Binding StateKey}"
+                                                               SlotHeight="18"
+                                                               Margin="0,0,8,0"
+                                                               VerticalAlignment="Top" />
+                                            <TextBlock Grid.Row="0"
+                                                       Grid.Column="1"
+                                                       Style="{StaticResource DcBody}"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding Name}" />
+                                            <TextBlock Grid.Row="0"
+                                                       Grid.Column="2"
+                                                       Style="{StaticResource OverviewStateWord}"
+                                                       Tag="{Binding StateKey}"
+                                                       Margin="8,0,0,0"
+                                                       Text="{Binding StateText}" />
+                                            <TextBlock Grid.Row="1"
+                                                       Grid.Column="1"
+                                                       Grid.ColumnSpan="2"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Margin="0,1,0,0"
+                                                       Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}"
+                                                       Text="{Binding Detail}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Enforcement: four tiles, each a button into the panel its number comes from (CUST-205). -->
+                    <Border Style="{StaticResource OverviewEnforcementCard}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Symbol="ShieldCheckmark24" Section="Govern" Content="{Binding EnforcementTitle}" />
+                            <ItemsControl ItemsSource="{Binding EnforcementCards}"
+                                          Margin="0,0,-8,0"
+                                          KeyboardNavigation.TabNavigation="Continue"
+                                          AutomationProperties.Name="Enforcement">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource DcInteractiveTile}"
+                                                Margin="0,0,8,8"
+                                                Command="{Binding Command}"
+                                                ToolTip="{Binding ToolTipText}"
+                                                AutomationProperties.Name="{Binding AutomationName}"
+                                                AutomationProperties.HelpText="{Binding AutomationHint}">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"
+                                                           Text="{Binding Title}" />
+                                                <TextBlock Style="{StaticResource OverviewTileValue}"
+                                                           FontSize="30"
+                                                           Margin="0,4,0,4"
+                                                           Tag="{Binding ToneKey}"
+                                                           Text="{Binding Value}" />
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Style="{StaticResource DcCaption}"
+                                                               Text="{Binding Caption}" />
+                                                    <ctl:DcSymbolIcon Grid.Column="1"
+                                                                      Symbol="ChevronRight16"
+                                                                      Style="{StaticResource DcIconMuted}"
+                                                                      FontSize="12"
+                                                                      Margin="6,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0">
+                                <Run Text="Block and allow lists: " />
+                                <Run Text="{Binding EnforcementSummary, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,2,0,0"
+                                       Text="{Binding EnforcementNote}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,6,0,0"
+                                       Text="{Binding EnforcementUpdatedText}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- 3. Quick Actions: nothing runs until asked, and nothing that changes state runs without the review. -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
-                        <ctl:DcCardHeader Symbol="DataBarVertical24" Section="Observe" Content="Audit severity — last 24 hours" />
-                        <!-- Equal-width tiles (112 px; the widest count seen - "139,825" at 24 px - fits) in a wrap
-                             panel: five tiles take one row at the 940 px minimum window, and a sixth wraps as a whole
-                             tile instead of squeezing the digits. The negative right margin cancels the last tile's gap
-                             so a full row ends flush with the card padding. -->
+                        <ctl:DcCardHeader Symbol="Flash24" Tint="Amber" Content="Quick Actions" />
+                        <WrapPanel>
+                            <ui:Button Content="Scan Skills"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon ScanText24}"
+                                       Command="{Binding ScanSkillsCommand}"
+                                       ToolTip="Scan every configured skill: defenseclaw skill scan --all. Asks for confirmation first."
+                                       AutomationProperties.HelpText="Runs defenseclaw skill scan --all after you confirm it. The scan records results and findings." />
+                            <ui:Button Content="Open Inventory"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon BookDatabase24}"
+                                       Command="{Binding OpenInventoryCommand}"
+                                       ToolTip="Open the Inventory panel. Nothing is scanned."
+                                       AutomationProperties.HelpText="Opens the Inventory panel. Nothing is scanned." />
+                            <ui:Button Content="{Binding GatewayActionLabel}"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                       Command="{Binding RunGatewayActionCommand}"
+                                       ToolTip="{Binding GatewayActionTip}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       AutomationProperties.HelpText="Starts or restarts the DefenseClaw gateway after you confirm the exact command." />
+                            <ui:Button Content="Run Doctor"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon Stethoscope24}"
+                                       Command="{Binding RunDoctorCommand}"
+                                       ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds."
+                                       AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
+                            <ui:DropDownButton Content="Diagnostics"
+                                               Margin="0,0,8,8"
+                                               Icon="{ctl:DcSymbolIcon MoreHorizontal24}"
+                                               AutomationProperties.Name="Diagnostics"
+                                               AutomationProperties.HelpText="A menu of read-only checks, gateway stop and restart (which ask first), and the command palette.">
+                                <ui:DropDownButton.Flyout>
+                                    <ContextMenu>
+                                        <MenuItem Header="Validate configuration"
+                                                  ToolTip="defenseclaw config validate"
+                                                  Command="{Binding PlacementTarget.DataContext.RunDiagnosticCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext.Diagnostics[0], RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Check credentials"
+                                                  ToolTip="defenseclaw keys check"
+                                                  Command="{Binding PlacementTarget.DataContext.RunDiagnosticCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext.Diagnostics[1], RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Gateway status"
+                                                  ToolTip="defenseclaw-gateway status"
+                                                  Command="{Binding PlacementTarget.DataContext.RunDiagnosticCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext.Diagnostics[2], RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Show provenance"
+                                                  ToolTip="defenseclaw-gateway provenance show"
+                                                  Command="{Binding PlacementTarget.DataContext.RunDiagnosticCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext.Diagnostics[3], RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Separator />
+                                        <MenuItem Header="Restart Gateway…"
+                                                  ToolTip="Asks for confirmation first."
+                                                  Command="{Binding PlacementTarget.DataContext.RestartGatewayCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Stop Gateway…"
+                                                  ToolTip="Asks for confirmation first."
+                                                  Command="{Binding PlacementTarget.DataContext.StopGatewayCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Separator />
+                                        <MenuItem Header="Open Command Palette"
+                                                  Command="{Binding PlacementTarget.DataContext.OpenCommandPaletteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                    </ContextMenu>
+                                </ui:DropDownButton.Flyout>
+                            </ui:DropDownButton>
+                        </WrapPanel>
+
+                        <!-- What a Diagnostics command did: a live region, so a screen reader hears the result without hunting for it. -->
+                        <StackPanel AutomationProperties.LiveSetting="Polite"
+                                    Visibility="{Binding HasDiagnosticMessage, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <Border Style="{StaticResource DcBadge}"
+                                        Margin="0,0,8,0"
+                                        VerticalAlignment="Center"
+                                        Tag="{Binding DiagnosticKey}">
+                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding DiagnosticTitle}" />
+                                </Border>
+                                <ui:ProgressRing Width="18"
+                                                 Height="18"
+                                                 Margin="0,0,8,0"
+                                                 IsIndeterminate="True"
+                                                 Visibility="{Binding IsDiagnosticRunning, Converter={StaticResource BoolToVisibility}}" />
+                                <ui:Button Content="Cancel"
+                                           Appearance="Secondary"
+                                           Padding="8,2,8,2"
+                                           Command="{Binding CancelDiagnosticCommand}"
+                                           Visibility="{Binding IsDiagnosticRunning, Converter={StaticResource BoolToVisibility}}"
+                                           AutomationProperties.HelpText="Stop the command and kill its process tree." />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,6,0,0"
+                                       Text="{Binding DiagnosticMessage}" />
+                            <Border Style="{StaticResource DcCodeBlock}"
+                                    Margin="0,6,0,0"
+                                    MaxHeight="180"
+                                    Visibility="{Binding HasDiagnosticOutput, Converter={StaticResource BoolToVisibility}}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         AutomationProperties.Name="Diagnostic output"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Text="{Binding DiagnosticOutput, Mode=OneWay}" />
+                            </Border>
+                            <ui:Button Content="View in Activity"
+                                       Appearance="Transparent" BorderThickness="0"
+                                       Foreground="{DynamicResource DcAccentBrush}"
+                                       Padding="6,3,6,3"
+                                       Command="{Binding OpenActivityCommand}"
+                                       AutomationProperties.HelpText="Opens the Activity panel, where every command this page ran is recorded with its full output." />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="Scan Skills and the gateway actions show the exact command and ask first. The Diagnostics checks are read-only and run at once; their output is in Activity." />
+                    </StackPanel>
+                </Border>
+
+                <!-- 4. Configuration: zebra rows, four of them, then "Show N more settings". -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="Options24" Section="Setup" Content="{Binding ConfigurationTitle}" />
+                        <Border CornerRadius="{DynamicResource DcRadiusS}" ClipToBounds="True">
+                            <ItemsControl ItemsSource="{Binding ConfigurationRows}"
+                                          Grid.IsSharedSizeScope="True"
+                                          AutomationProperties.Name="Configuration">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource OverviewZebraRow}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="150" SharedSizeGroup="ConfigLabel" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcBody}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"
+                                                           Margin="0,0,12,0"
+                                                           Text="{Binding Label}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource DcToneText}"
+                                                           FontSize="{DynamicResource DcFontSize}"
+                                                           FontWeight="Normal"
+                                                           TextWrapping="Wrap"
+                                                           Tag="{Binding ToneKey}"
+                                                           Text="{Binding Value}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <ui:Button Content="{Binding ConfigurationMoreText}"
+                                   Appearance="Transparent" BorderThickness="0"
+                                   Foreground="{DynamicResource DcAccentBrush}"
+                                   Margin="0,4,0,0"
+                                   Padding="6,3,6,3"
+                                   Command="{Binding ToggleConfigurationCommand}"
+                                   Visibility="{Binding HasConfigurationOverflow, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.HelpText="Shows every setting, or only the first four." />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="{Binding ConfigurationSourceNote}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 5. Connectors: a table whose rows are the scope selector. -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel Grid.IsSharedSizeScope="True">
+                        <ctl:DcCardHeader Symbol="PlugConnected24" Section="Discover" Content="Connectors" />
+
+                        <Grid Margin="6,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" MinWidth="120" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnMode" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnPack" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnSeen" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnCalls" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnBlocks" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnAlerts" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnStatus" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="18" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource OverviewColumnHead}" Text="Connector" />
+                            <TextBlock Grid.Column="2" Style="{StaticResource OverviewColumnHead}" Text="Mode" />
+                            <TextBlock Grid.Column="3" Style="{StaticResource OverviewColumnHead}" Text="Rule Pack" />
+                            <TextBlock Grid.Column="4" Style="{StaticResource OverviewColumnHead}" Text="Last Activity" />
+                            <TextBlock Grid.Column="5" Style="{StaticResource OverviewColumnHead}" TextAlignment="Right" Text="Calls" ToolTip="Requests served since the gateway started" />
+                            <TextBlock Grid.Column="6" Style="{StaticResource OverviewColumnHead}" TextAlignment="Right" Text="Blocks" ToolTip="Tool and subprocess blocks since the gateway started" />
+                            <TextBlock Grid.Column="7" Style="{StaticResource OverviewColumnHead}" TextAlignment="Right" Text="Alerts" ToolTip="Unacknowledged findings for this connector" />
+                            <TextBlock Grid.Column="8" Style="{StaticResource OverviewColumnHead}" Text="Status" />
+                        </Grid>
+
+                        <ListBox Style="{StaticResource OverviewTable}"
+                                 ItemsSource="{Binding ConnectorRows}"
+                                 SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
+                                 AutomationProperties.Name="Connectors"
+                                 AutomationProperties.HelpText="Select a row to scope the Overview to that connector.">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" MinWidth="120" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnMode" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnPack" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnSeen" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnCalls" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnBlocks" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnAlerts" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ConnStatus" />
+                                            </Grid.ColumnDefinitions>
+                                            <ctl:DcStatusGlyph Grid.Column="0"
+                                                               Tone="{Binding StateKey}"
+                                                               Margin="0,0,8,0"
+                                                               SlotHeight="18" />
+                                            <TextBlock Grid.Column="1"
+                                                       Style="{StaticResource OverviewCell}"
+                                                       Tag="Neutral"
+                                                       Foreground="{DynamicResource DcTextPrimaryBrush}"
+                                                       Text="{Binding DisplayName}" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource OverviewCell}" Text="{Binding Mode}" />
+                                            <TextBlock Grid.Column="3" Style="{StaticResource OverviewCell}" Text="{Binding RulePack}" />
+                                            <TextBlock Grid.Column="4" Style="{StaticResource OverviewCell}" Text="{Binding LastActivityShort}" />
+                                            <TextBlock Grid.Column="5" Style="{StaticResource OverviewCell}" TextAlignment="Right" Text="{Binding CallsText}" />
+                                            <TextBlock Grid.Column="6" Style="{StaticResource OverviewCell}" TextAlignment="Right" Tag="{Binding BlocksKey}" Text="{Binding BlocksText}" />
+                                            <TextBlock Grid.Column="7" Style="{StaticResource OverviewCell}" TextAlignment="Right" Tag="{Binding AlertsKey}" Text="{Binding AlertsText}" />
+                                            <TextBlock Grid.Column="8" Style="{StaticResource OverviewCell}" Margin="0" Tag="{Binding StateKey}" Text="{Binding StateText}" />
+                                        </Grid>
+
+                                        <!-- What was a warning or a drift on the row stays on it, in words. -->
+                                        <TextBlock Style="{StaticResource DcToneText}"
+                                                   Tag="Warn"
+                                                   FontSize="12"
+                                                   FontWeight="Normal"
+                                                   TextWrapping="Wrap"
+                                                   Margin="26,2,0,0"
+                                                   Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"
+                                                   Text="{Binding Drift}" />
+                                        <TextBlock Style="{StaticResource DcToneText}"
+                                                   Tag="Warn"
+                                                   FontSize="12"
+                                                   FontWeight="Normal"
+                                                   TextWrapping="Wrap"
+                                                   Margin="26,2,0,0"
+                                                   Visibility="{Binding HasWarning, Converter={StaticResource BoolToVisibility}}"
+                                                   Text="{Binding WarningText, StringFormat='Fail-mode mismatch: {0}'}" />
+
+                                        <!-- The selected row's detail: posture chips, counters, surface and last activity. -->
+                                        <StackPanel Margin="26,4,0,0">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <WrapPanel>
+                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Mode, StringFormat='mode {0}'}" />
+                                                </Border>
+                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FailMode, StringFormat='fail-mode {0}'}" />
+                                                </Border>
+                                                <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Source, StringFormat='source {0}'}" />
+                                                </Border>
+                                            </WrapPanel>
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Visibility="{Binding HasCounters, Converter={StaticResource BoolToVisibility}}"
+                                                       Text="{Binding Counters}" />
+                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Surface}" />
+                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding LastActivity}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <Grid Margin="0,6,0,0"
+                              Visibility="{Binding HasConnectorCaption, Converter={StaticResource BoolToVisibility}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Style="{StaticResource DcCaption}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding ConnectorCaption}" />
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        Visibility="{Binding IsScoped, Converter={StaticResource BoolToVisibility}}">
+                                <ui:Button Content="Show all connectors"
+                                           Appearance="Transparent" BorderThickness="0"
+                                           Foreground="{DynamicResource DcAccentBrush}"
+                                           Padding="6,3,6,3"
+                                           Command="{Binding ClearScopeCommand}"
+                                           AutomationProperties.HelpText="Go back to every connector." />
+                                <ui:Button Content="{Binding ScopedAlertsText}"
+                                           Appearance="Transparent" BorderThickness="0"
+                                           Foreground="{DynamicResource DcAccentBrush}"
+                                           Padding="6,3,6,3"
+                                           Command="{Binding OpenScopedAlertsCommand}"
+                                           AutomationProperties.HelpText="Opens the Alerts panel." />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 6. Observability destinations, and the gateway's event-history failure when it reports one. -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel Grid.IsSharedSizeScope="True">
+                        <ctl:DcCardHeader Symbol="Rss24" Section="Observe" Content="Observability destinations" />
+
+                        <ui:InfoBar Margin="0,0,0,8"
+                                    IsClosable="False"
+                                    Severity="Error"
+                                    Title="Event history is failing"
+                                    IsOpen="{Binding HasEventHistoryFailure}"
+                                    Message="{Binding EventHistoryFailure}" />
+
+                        <TextBlock Text="{Binding ObservabilityEmptyText}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasObservabilityRows}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <StackPanel Visibility="{Binding HasObservabilityRows, Converter={StaticResource BoolToVisibility}}">
+                            <Grid Margin="6,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" MinWidth="120" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ObsTarget" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ObsKind" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ObsState" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ObsSignals" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="18" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource OverviewColumnHead}" Text="Name" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource OverviewColumnHead}" Text="Target" />
+                                <TextBlock Grid.Column="3" Style="{StaticResource OverviewColumnHead}" Text="Kind" />
+                                <TextBlock Grid.Column="4" Style="{StaticResource OverviewColumnHead}" Text="State" />
+                                <TextBlock Grid.Column="5" Style="{StaticResource OverviewColumnHead}" Text="Signals" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding ObservabilityRows}"
+                                          AutomationProperties.Name="Observability destinations">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="6,0,0,6" ToolTip="{Binding Detail}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" MinWidth="120" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ObsTarget" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ObsKind" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ObsState" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ObsSignals" />
+                                            </Grid.ColumnDefinitions>
+                                            <ctl:DcStatusGlyph Grid.Column="0"
+                                                               Tone="{Binding StateKey}"
+                                                               Margin="0,0,8,0"
+                                                               SlotHeight="18" />
+                                            <TextBlock Grid.Column="1"
+                                                       Style="{StaticResource OverviewCell}"
+                                                       Foreground="{DynamicResource DcTextPrimaryBrush}"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding Name}" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource OverviewCell}" Text="{Binding Target}" />
+                                            <TextBlock Grid.Column="3" Style="{StaticResource OverviewCell}" Text="{Binding Kind}" />
+                                            <TextBlock Grid.Column="4" Style="{StaticResource OverviewCell}" Tag="{Binding StateKey}" Text="{Binding State}" />
+                                            <TextBlock Grid.Column="5" Style="{StaticResource OverviewCell}" Margin="0" Text="{Binding Signals}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 7. Activity, last 24 h: the numbers, the hourly chart, and the audit events by severity. -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="DataBarVertical24" Section="Observe" Content="Activity — last 24 h" />
+
+                        <ItemsControl ItemsSource="{Binding ActivitySummary}"
+                                      Margin="0,0,0,8"
+                                      AutomationProperties.Name="Activity summary">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,24,6">
+                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Label}" />
+                                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Value}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <ctl:HourlyBarChart Height="150"
+                                            Buckets="{Binding HourlyBuckets}"
+                                            AutomationProperties.Name="Hook decisions per hour, last 24 hours"
+                                            Visibility="{Binding HasHourlyData, Converter={StaticResource BoolToVisibility}}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,4,0,0"
+                                    Visibility="{Binding HasHourlyData, Converter={StaticResource BoolToVisibility}}">
+                            <Border Style="{StaticResource DcToneDot}" Tag="Ok" Margin="0,0,6,0" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,14,0" Text="allowed" />
+                            <Border Style="{StaticResource DcToneDot}" Tag="Critical" Margin="0,0,6,0" />
+                            <TextBlock Style="{StaticResource DcCaption}" Text="blocked" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="{Binding ActivityNote}" />
+
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,14,0,6"
+                                   Text="Audit events by severity" />
+                        <!-- Equal-width tiles (112 px; the widest count seen - "139,825" at 24 px - fits) in a wrap panel: five tiles take one row
+                             at the 940 px minimum window, and a sixth wraps as a whole tile instead of squeezing the digits. The negative right
+                             margin cancels the last tile's gap so a full row ends flush with the card padding. -->
                         <ItemsControl Margin="0,0,-8,4"
                                       ItemsSource="{Binding SeverityTiles}"
                                       AutomationProperties.Name="Audit events by severity, last 24 hours">
@@ -133,426 +1002,236 @@
                     </StackPanel>
                 </Border>
 
-                <!-- What Needs Attention -->
-                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
-                    <StackPanel>
-                        <ctl:DcCardHeader Symbol="Warning24" Tint="Orange" Content="What needs attention" />
-                        <ItemsControl ItemsSource="{Binding Attention}"
-                                      AutomationProperties.Name="What needs attention">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0"
-                                                Style="{StaticResource DcToneBar}"
-                                                Tag="{Binding SeverityKey}" />
-                                        <StackPanel Grid.Column="1">
-                                            <StackPanel Orientation="Horizontal">
-                                                <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}"
-                                                                     Gap="8" />
-                                                <!-- The severity as a word: the bar, the glyph and the badge's colour are not enough on their own (and
-                                                     Default draws no glyph). -->
-                                                <Border Style="{StaticResource DcBadge}"
-                                                        Margin="0,0,8,0"
-                                                        VerticalAlignment="Center"
-                                                        Tag="{Binding SeverityKey}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SeverityKey}" />
-                                                </Border>
-                                                <TextBlock Style="{StaticResource DcBody}"
-                                                           FontWeight="SemiBold"
-                                                           Text="{Binding Title}" />
-                                            </StackPanel>
-                                            <TextBlock Style="{StaticResource DcTextSecondary}"
-                                                       Margin="0,2,0,0"
-                                                       Text="{Binding Detail}" />
-                                            <Border Style="{StaticResource DcCodeBlock}"
-                                                    Margin="0,6,0,0"
-                                                    HorizontalAlignment="Left"
-                                                    Visibility="{Binding HasCommand, Converter={StaticResource BoolToVisibility}}">
-                                                <TextBox Style="{StaticResource DcMonoTextBox}"
-                                                         AutomationProperties.Name="Suggested command"
-                                                         AutomationProperties.HelpText="Read-only text you can select and copy. The app never runs it for you."
-                                                         Text="{Binding Command, Mode=OneWay}" />
-                                            </Border>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
+                <!-- 8. Doctor beside the discovered AI agents. -->
+                <Grid Margin="{StaticResource DcCardGap}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                <!-- Doctor (health check). Results come from doctor_cache.json, never from a probe the
-                     panel starts by itself; the button runs 'defenseclaw doctor' on purpose. -->
-                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
-                    <StackPanel>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                    <!-- Doctor (health check). Results come from doctor_cache.json, never from a probe the panel starts by itself; the button
+                         runs 'defenseclaw doctor' on purpose. -->
+                    <Border Style="{StaticResource OverviewDoctorCard}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                            <WrapPanel Grid.Column="0" VerticalAlignment="Center">
-                                <ctl:DcCardHeader Symbol="HeartPulse24"
-                                                  Tint="Green"
-                                                  Margin="0,0,10,0"
-                                                  HorizontalAlignment="Left"
-                                                  VerticalAlignment="Center"
-                                                  Content="Health check (doctor)" />
-                                <Border Style="{StaticResource DcBadge}"
-                                        Tag="Warn"
-                                        VerticalAlignment="Center"
-                                        ToolTip="These results are older than 15 minutes."
-                                        Visibility="{Binding DoctorIsStale, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="STALE" />
-                                </Border>
-                            </WrapPanel>
+                                <WrapPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <ctl:DcCardHeader Symbol="Stethoscope24"
+                                                      Tint="Green"
+                                                      Margin="0,0,10,0"
+                                                      HorizontalAlignment="Left"
+                                                      VerticalAlignment="Center"
+                                                      Content="Doctor" />
+                                    <Border Style="{StaticResource DcBadge}"
+                                            Tag="Warn"
+                                            VerticalAlignment="Center"
+                                            ToolTip="These results are older than 15 minutes."
+                                            Visibility="{Binding DoctorIsStale, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="STALE" />
+                                    </Border>
+                                </WrapPanel>
 
-                            <StackPanel Grid.Column="1" Style="{StaticResource DcActionBar}">
-                                <ui:ProgressRing Width="20"
-                                                 Height="20"
-                                                 IsIndeterminate="True"
-                                                 Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}" />
-                                <ui:Button Content="Cancel"
-                                           Icon="{ctl:DcSymbolIcon Dismiss24}"
-                                           Appearance="Secondary"
-                                           Command="{Binding CancelDoctorCommand}"
-                                           Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}"
-                                           AutomationProperties.HelpText="Stop the doctor run and kill its process tree." />
-                                <ui:Button Content="Run doctor"
-                                           Icon="{ctl:DcSymbolIcon Stethoscope24}"
-                                           Command="{Binding RunDoctorCommand}"
-                                           ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds. Writes only its own results cache."
-                                           AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
-                            </StackPanel>
-                        </Grid>
+                                <StackPanel Grid.Column="1" Style="{StaticResource DcActionBar}">
+                                    <ui:ProgressRing Width="20"
+                                                     Height="20"
+                                                     IsIndeterminate="True"
+                                                     Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}" />
+                                    <ui:Button Content="Cancel"
+                                               Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                               Appearance="Secondary"
+                                               Command="{Binding CancelDoctorCommand}"
+                                               Visibility="{Binding IsDoctorRunning, Converter={StaticResource BoolToVisibility}}"
+                                               AutomationProperties.HelpText="Stop the doctor run and kill its process tree." />
+                                    <ui:Button Content="Run doctor"
+                                               Icon="{ctl:DcSymbolIcon Stethoscope24}"
+                                               Command="{Binding RunDoctorCommand}"
+                                               ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds. Writes only its own results cache."
+                                               AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
+                                </StackPanel>
+                            </Grid>
 
-                        <!-- Live region: progress and outcome are announced without moving focus. -->
-                        <TextBlock Style="{StaticResource DcCaption}"
-                                   Margin="0,8,0,0"
-                                   AutomationProperties.LiveSetting="Polite"
-                                   Text="{Binding DoctorRunMessage}"
-                                   Visibility="{Binding DoctorHasRunMessage, Converter={StaticResource BoolToVisibility}}" />
-
-                        <!-- Never run: a normal state on a fresh install, not a fault. -->
-                        <StackPanel Style="{StaticResource DcEmptyState}"
-                                    Visibility="{Binding DoctorIsEmpty, Converter={StaticResource BoolToVisibility}}">
-                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
-                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Doctor has not run yet" />
-                            <TextBlock Style="{StaticResource DcEmptyDetail}"
-                                       Text="doctor_cache.json does not exist. Run doctor to check credentials, endpoints and connector wiring; the result is kept here so it does not need re-probing every time you open this page." />
-                        </StackPanel>
-
-                        <!-- Cache exists but could not be read: a different state from never run. -->
-                        <ui:InfoBar Margin="0,10,0,0"
-                                    IsClosable="False"
-                                    Severity="Warning"
-                                    Title="Doctor results could not be read"
-                                    IsOpen="{Binding DoctorHasReadError}"
-                                    Message="{Binding DoctorReadError}" />
-
-                        <StackPanel Visibility="{Binding DoctorHasData, Converter={StaticResource BoolToVisibility}}">
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <ctl:DcStatusGlyph Tone="{Binding DoctorStateKey}"
-                                                   Margin="0,0,10,0" />
-                                <TextBlock Style="{StaticResource DcBody}"
-                                           FontWeight="SemiBold"
-                                           Text="{Binding DoctorVerdict}" />
-                                <TextBlock Style="{StaticResource DcCaption}"
-                                           Margin="10,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Text="{Binding DoctorAsOfText}" />
-                            </StackPanel>
-
-                            <ItemsControl Margin="0,10,0,0"
-                                          ItemsSource="{Binding DoctorTiles}"
-                                          AutomationProperties.Name="Doctor check counts">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Style="{StaticResource DcToneTile}"
-                                                Tag="{Binding SeverityKey}"
-                                                Margin="0,0,10,0">
-                                            <StackPanel>
-                                                <TextBlock Style="{StaticResource DcValue}"
-                                                           Tag="{Binding SeverityKey}"
-                                                           Text="{Binding Value}" />
-                                                <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
+                            <!-- Live region: progress and outcome are announced without moving focus. -->
                             <TextBlock Style="{StaticResource DcCaption}"
                                        Margin="0,8,0,0"
-                                       Text="Results are as of the last time doctor ran (from this page, a terminal or the TUI); opening this page never re-runs it. They go STALE after 15 minutes."
-                                       Visibility="{Binding DoctorIsStale, Converter={StaticResource BoolToVisibility}}" />
+                                       AutomationProperties.LiveSetting="Polite"
+                                       Text="{Binding DoctorRunMessage}"
+                                       Visibility="{Binding DoctorHasRunMessage, Converter={StaticResource BoolToVisibility}}" />
 
-                            <StackPanel Margin="0,12,0,0"
-                                        Visibility="{Binding DoctorHasProblems, Converter={StaticResource BoolToVisibility}}">
-                                <ctl:DcCardHeader Symbol="ShieldError24" Tint="Red" Content="Failing and warning checks" />
-                                <ItemsControl ItemsSource="{Binding DoctorChecks}"
-                                              AutomationProperties.Name="Failing and warning doctor checks">
+                            <!-- Never run: a normal state on a fresh install, not a fault. -->
+                            <StackPanel Style="{StaticResource DcEmptyState}"
+                                        Visibility="{Binding DoctorIsEmpty, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldSettings24" />
+                                <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Doctor has not run yet" />
+                                <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                           Text="doctor_cache.json does not exist. Run doctor to check credentials, endpoints and connector wiring; the result is kept here so it does not need re-probing every time you open this page." />
+                            </StackPanel>
+
+                            <!-- Cache exists but could not be read: a different state from never run. -->
+                            <ui:InfoBar Margin="0,10,0,0"
+                                        IsClosable="False"
+                                        Severity="Warning"
+                                        Title="Doctor results could not be read"
+                                        IsOpen="{Binding DoctorHasReadError}"
+                                        Message="{Binding DoctorReadError}" />
+
+                            <StackPanel Visibility="{Binding DoctorHasData, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <ctl:DcStatusGlyph Tone="{Binding DoctorStateKey}"
+                                                       Margin="0,0,10,0" />
+                                    <TextBlock Style="{StaticResource DcBody}"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding DoctorVerdict}" />
+                                    <TextBlock Style="{StaticResource DcCaption}"
+                                               Margin="10,0,0,0"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding DoctorAsOfText}" />
+                                </StackPanel>
+
+                                <ItemsControl Margin="0,10,0,0"
+                                              ItemsSource="{Binding DoctorTiles}"
+                                              AutomationProperties.Name="Doctor check counts">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Style="{StaticResource DcSubtleRow}" Margin="0,0,0,6">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <Border Grid.Column="0"
-                                                            Style="{StaticResource DcBadge}"
-                                                            Tag="{Binding StatusKey}"
-                                                            MinWidth="52"
-                                                            VerticalAlignment="Top"
-                                                            Margin="0,0,10,0">
-                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusText}" />
-                                                    </Border>
-                                                    <StackPanel Grid.Column="1">
-                                                        <TextBlock Style="{StaticResource DcBody}"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="{Binding Label}" />
-                                                        <TextBlock Style="{StaticResource DcCaption}"
-                                                                   Margin="0,2,0,0"
-                                                                   Text="{Binding Detail}"
-                                                                   Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}" />
-                                                    </StackPanel>
-                                                </Grid>
+                                            <Border Style="{StaticResource DcToneTile}"
+                                                    Tag="{Binding SeverityKey}"
+                                                    MinWidth="72"
+                                                    Padding="12,8,12,8"
+                                                    Margin="0,0,8,8">
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource DcValue}"
+                                                               Tag="{Binding SeverityKey}"
+                                                               Text="{Binding Value}" />
+                                                    <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
+                                                </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+
                                 <TextBlock Style="{StaticResource DcCaption}"
-                                           Text="{Binding DoctorProblemsNote}" />
+                                           Margin="0,0,0,0"
+                                           Text="Results are as of the last time doctor ran (from this page, a terminal or the TUI); opening this page never re-runs it. They go STALE after 15 minutes."
+                                           Visibility="{Binding DoctorIsStale, Converter={StaticResource BoolToVisibility}}" />
+
+                                <StackPanel Margin="0,12,0,0"
+                                            Visibility="{Binding DoctorHasProblems, Converter={StaticResource BoolToVisibility}}">
+                                    <ctl:DcCardHeader Symbol="ShieldError24" Tint="Red" Content="Failing and warning checks" />
+                                    <ItemsControl ItemsSource="{Binding DoctorChecks}"
+                                                  AutomationProperties.Name="Failing and warning doctor checks">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource DcSubtleRow}" Margin="0,0,0,6">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0"
+                                                                Style="{StaticResource DcBadge}"
+                                                                Tag="{Binding StatusKey}"
+                                                                MinWidth="52"
+                                                                VerticalAlignment="Top"
+                                                                Margin="0,0,10,0">
+                                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusText}" />
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Style="{StaticResource DcBody}"
+                                                                       FontWeight="SemiBold"
+                                                                       Text="{Binding Label}" />
+                                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                                       Margin="0,2,0,0"
+                                                                       Text="{Binding Detail}"
+                                                                       Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Style="{StaticResource DcCaption}"
+                                               Text="{Binding DoctorProblemsNote}" />
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <!-- Services + Scanners -->
-                <Grid Margin="{StaticResource DcCardGap}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="{StaticResource DcColumnGap}" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0" Style="{StaticResource DcCard}">
-                        <StackPanel>
-                            <ctl:DcCardHeader Symbol="Server24" Section="Overview" Content="Services" />
-                            <TextBlock Style="{StaticResource DcCaption}"
-                                       Margin="0,0,0,10"
-                                       Text="Liveness and enforcement posture are separate: a subsystem can run while enforcement stays off, and &quot;disabled&quot; is a configuration, not a fault." />
-                            <ItemsControl ItemsSource="{Binding ServiceRows}"
-                                          AutomationProperties.Name="Services">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,0,0,9">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <ctl:DcStatusGlyph Grid.Column="0"
-                                                               Tone="{Binding StateKey}"
-                                                               SlotHeight="18"
-                                                               Margin="0,0,10,0"
-                                                               VerticalAlignment="Top" />
-                                            <StackPanel Grid.Column="1">
-                                                <WrapPanel>
-                                                    <TextBlock Style="{StaticResource DcBody}"
-                                                               FontWeight="SemiBold"
-                                                               Text="{Binding Name}" />
-                                                    <TextBlock Style="{StaticResource DcTextSecondary}"
-                                                               Margin="8,0,0,0"
-                                                               Text="{Binding StateText}" />
-                                                    <TextBlock Style="{StaticResource DcCaption}"
-                                                               Margin="8,0,0,0"
-                                                               VerticalAlignment="Center"
-                                                               Text="{Binding SinceText}" />
-                                                </WrapPanel>
-                                                <TextBlock Style="{StaticResource DcCaption}"
-                                                           Margin="0,2,0,0"
-                                                           Visibility="{Binding HasPosture, Converter={StaticResource BoolToVisibility}}"
-                                                           Text="{Binding Posture}" />
-                                                <TextBlock Style="{StaticResource DcCaption}"
-                                                           Margin="0,2,0,0"
-                                                           Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}"
-                                                           Text="{Binding Detail}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
                         </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="2" Style="{StaticResource DcCard}">
+                    <!-- Discovered AI agents: the top eight, with the state tag and confidence; the full table is AI Discovery. -->
+                    <Border Style="{StaticResource OverviewAgentsCard}">
                         <StackPanel>
-                            <ctl:DcCardHeader Symbol="ScanText24" Section="Govern" Content="Scanners" />
-                            <ItemsControl ItemsSource="{Binding ScannerRows}"
-                                          AutomationProperties.Name="Scanners">
+                            <ctl:DcCardHeader Symbol="SearchSparkle24" Section="Discover" Content="Discovered AI agents" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,0,0,8"
+                                       Text="{Binding AgentsSummary}" />
+                            <ItemsControl ItemsSource="{Binding AgentRows}"
+                                          Grid.IsSharedSizeScope="True"
+                                          AutomationProperties.Name="Discovered AI agents">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="0,0,0,9">
+                                        <Grid Margin="0,0,0,5">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="AgentTag" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="AgentName" />
                                                 <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="AgentConf" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="AgentSeen" />
                                             </Grid.ColumnDefinitions>
-                                            <ctl:DcStatusGlyph Grid.Column="0"
-                                                               Tone="{Binding StateKey}"
-                                                               SlotHeight="18"
-                                                               Margin="0,0,10,0"
-                                                               VerticalAlignment="Top" />
-                                            <StackPanel Grid.Column="1">
-                                                <WrapPanel>
-                                                    <TextBlock Style="{StaticResource DcBody}"
-                                                               FontWeight="SemiBold"
-                                                               Text="{Binding Name}" />
-                                                    <TextBlock Style="{StaticResource DcTextSecondary}"
-                                                               Margin="8,0,0,0"
-                                                               Text="{Binding StateText}" />
-                                                </WrapPanel>
-                                                <TextBlock Style="{StaticResource DcCaption}"
-                                                           Margin="0,2,0,0"
-                                                           Text="{Binding Detail}" />
-                                            </StackPanel>
+                                            <TextBlock Grid.Column="0"
+                                                       Style="{StaticResource OverviewMonoTag}"
+                                                       Tag="{Binding BadgeKey}"
+                                                       Margin="0,0,8,0"
+                                                       Text="{Binding Badge}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Style="{StaticResource OverviewCell}"
+                                                       Foreground="{DynamicResource DcTextPrimaryBrush}"
+                                                       Text="{Binding Name}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Style="{StaticResource OverviewCell}"
+                                                       Text="{Binding Vendor}" />
+                                            <TextBlock Grid.Column="3"
+                                                       Style="{StaticResource OverviewCell}"
+                                                       TextAlignment="Right"
+                                                       Foreground="{DynamicResource DcTextPrimaryBrush}"
+                                                       Text="{Binding Confidence}" />
+                                            <TextBlock Grid.Column="4"
+                                                       Style="{StaticResource OverviewCell}"
+                                                       Margin="0"
+                                                       Text="{Binding Seen}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,0,0,0"
+                                       Text="{Binding AgentsNote}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,2,0,0"
+                                       Text="{Binding AgentsOverflowText}" />
+                            <ui:Button Content="See all →"
+                                       Appearance="Secondary"
+                                       Margin="0,8,0,0"
+                                       Command="{Binding SeeAllAgentsCommand}"
+                                       Visibility="{Binding HasAgents, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.HelpText="Opens the AI Discovery panel, with every signal." />
                         </StackPanel>
                     </Border>
                 </Grid>
-
-                <!-- Connectors -->
-                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
-                    <StackPanel>
-                        <ctl:DcCardHeader Symbol="PlugConnected24" Section="Discover" Content="Connectors" />
-                        <ItemsControl ItemsSource="{Binding ConnectorRows}"
-                                      AutomationProperties.Name="Connectors">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource DcSubtleRow}"
-                                            Margin="0,0,0,10"
-                                            Padding="12">
-                                        <!-- The state mark has its own column so every line below lines up with the name, whatever size the style draws it. -->
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <ctl:DcStatusGlyph Grid.Column="0"
-                                                               Tone="{Binding StateKey}"
-                                                               SlotHeight="18"
-                                                               Margin="0,0,10,0"
-                                                               VerticalAlignment="Top" />
-                                            <StackPanel Grid.Column="1">
-                                                <WrapPanel>
-                                                    <TextBlock Style="{StaticResource DcBody}"
-                                                               FontWeight="SemiBold"
-                                                               Text="{Binding Name}" />
-                                                    <TextBlock Style="{StaticResource DcTextSecondary}"
-                                                               Margin="10,0,0,0"
-                                                               VerticalAlignment="Center"
-                                                               Text="{Binding StateText}" />
-                                                </WrapPanel>
-
-                                                <!-- Mode, fail-mode and source are metadata, not status: neutral chips. -->
-                                                <WrapPanel Margin="0,6,0,0">
-                                                    <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
-                                                        <TextBlock Style="{StaticResource DcBadgeText}"
-                                                                   Text="{Binding Mode, StringFormat='mode {0}'}" />
-                                                    </Border>
-                                                    <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
-                                                        <TextBlock Style="{StaticResource DcBadgeText}"
-                                                                   Text="{Binding FailMode, StringFormat='fail-mode {0}'}" />
-                                                    </Border>
-                                                    <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
-                                                        <TextBlock Style="{StaticResource DcBadgeText}"
-                                                                   Text="{Binding Source, StringFormat='source {0}'}" />
-                                                    </Border>
-                                                </WrapPanel>
-
-                                                <TextBlock Style="{StaticResource DcCaption}"
-                                                           Margin="0,4,0,0"
-                                                           Visibility="{Binding HasCounters, Converter={StaticResource BoolToVisibility}}"
-                                                           Text="{Binding Counters}" />
-                                                <TextBlock Style="{StaticResource DcCaption}"
-                                                           Margin="0,2,0,0"
-                                                           Text="{Binding Surface}" />
-                                                <TextBlock Style="{StaticResource DcCaption}"
-                                                           Margin="0,2,0,0"
-                                                           Text="{Binding LastActivity}" />
-                                                <TextBlock Style="{StaticResource DcToneText}"
-                                                           Tag="Warn"
-                                                           FontSize="12"
-                                                           TextWrapping="Wrap"
-                                                           Margin="0,2,0,0"
-                                                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"
-                                                           Text="{Binding Drift}" />
-
-                                                <ui:InfoBar Margin="0,8,0,0"
-                                                            IsClosable="False"
-                                                            Severity="Warning"
-                                                            Title="Fail-mode mismatch"
-                                                            IsOpen="{Binding HasWarning}"
-                                                            Message="{Binding WarningText}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-
-                <!-- Enforcement -->
-                <Border Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader Symbol="ShieldLock24" Section="Govern" Content="Enforcement" />
-                        <ItemsControl ItemsSource="{Binding EnforcementTiles}"
-                                      AutomationProperties.Name="Enforcement lists">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource DcToneTile}"
-                                            Tag="{Binding SeverityKey}"
-                                            Margin="0,0,10,10"
-                                            MinWidth="150">
-                                        <StackPanel>
-                                            <TextBlock Style="{StaticResource DcValue}"
-                                                       Tag="{Binding SeverityKey}"
-                                                       Text="{Binding Value}" />
-                                            <TextBlock Style="{StaticResource DcTileLabel}" Text="{Binding Label}" />
-                                            <TextBlock Style="{StaticResource DcCaption}"
-                                                       Margin="0,2,0,0"
-                                                       Visibility="{Binding HasCaption, Converter={StaticResource BoolToVisibility}}"
-                                                       Text="{Binding Caption}" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Style="{StaticResource DcBody}" Text="{Binding EnforcementSummary}" />
-                        <TextBlock Style="{StaticResource DcCaption}"
-                                   Margin="0,4,0,0"
-                                   Text="{Binding EnforcementNote}" />
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Review dialog for Scan Skills and the gateway actions: the exact command, its tier, and a button that must be pressed. -->
+        <panels:DiscoverReviewOverlay Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Review}" />
     </Grid>
 </UserControl>

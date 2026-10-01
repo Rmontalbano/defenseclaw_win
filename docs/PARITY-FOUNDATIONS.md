@@ -46,6 +46,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 - `Accept` runs on the UI thread **right after `OnActivated`** (subscribed, active), including on the very first visit where `InitializeAsync` may still be running: apply the payload to state the load will honour. An exception from `Accept` is traced and swallowed.
 - A request for a panel that is not built, or is in a hidden/minimized window, waits in the inbox. The shell shows the dashboard (building it if the session is tray-only) and selects the panel; a new window opens on `PanelCatalog.InitialPanel`. An unknown panel id is dropped with a trace.
 - The status strip / tray can raise one without a panel: `MainWindowViewModel.RequestNavigation`, `OpenPanelCommand` (`CommandParameter="alerts"`), `ShellActions.OpenPanel`.
+- A panel can also ask the shell for its command palette (the Overview's Diagnostics menu): `Services.Navigation.RequestPalette()` raises `PaletteRequested`, which the dashboard window answers by opening the palette. It is not a panel request, so nothing waits in the inbox.
 
 ## 3. Alert counts - `AlertQueueReader` / `AlertCounts` / `AlertCountsService`
 

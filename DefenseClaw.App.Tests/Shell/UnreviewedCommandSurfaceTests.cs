@@ -7,11 +7,12 @@ using DefenseClaw.Core.Cli;
 namespace DefenseClaw.App.Tests.Shell;
 
 /// <summary>
-/// The Overview panel and the config editor run commands but have no <c>CommandReview</c> of their own, on purpose: every
-/// command either one hands the CLI is read-only, and a read-only command runs without a confirmation everywhere in the app.
-/// What replaces the review is a guard that fails closed. These tests pin both halves, so a change that adds a command that
-/// is not read-only to either surface fails here (and, if it slips past, at run time) instead of running unreviewed — the
-/// fix is then to show it through <c>CommandReviewControl</c> like the Govern, Discover and gateway surfaces.
+/// The Overview panel and the config editor run some commands without a <c>CommandReview</c>, on purpose: every command either one
+/// hands the CLI unreviewed is read-only, and a read-only command runs without a confirmation everywhere in the app. (The Overview's
+/// Scan Skills and gateway actions are not among them: they open the in-panel review, see <c>OverviewQuickActionsTests</c>, as do the
+/// Diagnostics checks' read-only guards.) What replaces the review is a guard that fails closed. These tests pin both halves, so a change
+/// that adds a command that is not read-only to either surface fails here (and, if it slips past, at run time) instead of running unreviewed
+/// — the fix is then to show it through <c>CommandReviewControl</c> like the Govern, Discover and gateway surfaces.
 /// </summary>
 public sealed class UnreviewedCommandSurfaceTests
 {

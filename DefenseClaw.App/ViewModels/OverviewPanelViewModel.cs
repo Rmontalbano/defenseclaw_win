@@ -17,8 +17,11 @@ using Microsoft.Data.Sqlite;
 namespace DefenseClaw.App.ViewModels;
 
 /// <summary>
-/// The dashboard: the TUI's boxes — What Needs Attention, Services, Scanners,
-/// Enforcement, Connectors — plus severity tiles counted straight out of the audit DB.
+/// The dashboard, in the Mac's order (CUST-209): What Needs Attention, the Services | Scanners | Enforcement hero row, Quick Actions,
+/// Configuration, Connectors, Observability destinations, Activity (last 24 h) and Doctor beside the discovered AI agents. This file holds
+/// the gateway-derived cards and the two clocks; each of the newer cards is its own partial: <c>.Enforcement</c> (the four tiles),
+/// <c>.Actions</c> (Quick Actions and their review), <c>.Configuration</c> (rows and the one <c>status --json</c> read),
+/// <c>.Scope</c> (the connector table as the scope selector), <c>.Observability</c>, <c>.Activity</c> (the hourly chart) and <c>.Agents</c>.
 /// <para>
 /// <b>Two clocks.</b> Everything gateway-derived is re-derived on every poll; the audit
 /// counts, the enforcement lists and the scanner-path probes are far more expensive, so they
@@ -190,6 +193,12 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _doctorHasRunMessage;
 
+    /// <summary>
+    /// Cancelled when the panel leaves the screen: the token every read the panel starts on its own (the audit windows, the agents file, the
+    /// <c>status --json</c> run) is given, so nothing it began keeps a statement or a process running for a panel nobody is looking at.
+    /// </summary>
+    private CancellationTokenSource? _activation;
+
     public OverviewPanelViewModel(AppServices services)
         : base(services)
     {
@@ -197,8 +206,24 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // subscriptions here: OnActivated attaches them, and OnDeactivated lets go.
         DataDirectoryText = Services.Paths.DataDirectory;
         DataDirectorySourceText = Services.Paths.DataDirectoryOrigin.Description;
+
+        // Readers only hold a connection string: nothing is opened until a read is asked for.
+        _metricsReader = new RecentAuditMetricsReader(Services.Paths.AuditDatabasePath);
+        _hourlyReader = new HourlyActivityReader(Services.Paths.AuditDatabasePath);
+        Review = new DiscoverActionReview(Services);
+        BuildEnforcementCards();
+
         Apply(Services.Monitor.Current);
     }
+
+    /// <summary>
+    /// The snapshot the panel last applied: what every card that is not re-derived from a read is showing. The roster, the gateway buttons
+    /// and the guardrail mode are read from this, not from the monitor, so the panel is consistent with itself between a poll and the next.
+    /// </summary>
+    private GatewaySnapshot _snapshot = GatewaySnapshot.Initial;
+
+    /// <summary>The token to give a read the panel starts: cancelled when it leaves the screen. <see cref="CancellationToken.None"/> before the first activation.</summary>
+    private CancellationToken ActiveToken => _activation?.Token ?? CancellationToken.None;
 
     /// <summary>The argv the Run doctor button hands the CLI: plain <c>doctor</c>, never <c>--fix</c>.</summary>
     internal static readonly string[] DoctorArgv = { "doctor" };
@@ -230,8 +255,6 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// <summary>Severity counts over <see cref="CountWindow"/>, from the audit DB.</summary>
     public ObservableCollection<CountTile> SeverityTiles { get; } = new();
 
-    public ObservableCollection<CountTile> EnforcementTiles { get; } = new();
-
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         Apply(Services.Monitor.Current);
@@ -240,6 +263,19 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // slower audit / enforcement / status reads below finish.
         await ReloadDoctorCacheAsync(cancellationToken);
         await RefreshDataAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Everything the slow cadence reads for the new cards, after the original audit and enforcement reads: the tiles' audit window, the
+    /// day's hourly decisions, the agents file, and <c>status --json</c> when it is due (<paramref name="forceStatus"/> forces it: Refresh).
+    /// Each is independent and none throws past here, so one slow or failing read never blanks the others.
+    /// </summary>
+    private async Task RefreshCardsAsync(bool forceStatus, CancellationToken cancellationToken)
+    {
+        await RefreshMetricsAsync(force: true, cancellationToken).ConfigureAwait(true);
+        await RefreshHourlyAsync(cancellationToken).ConfigureAwait(true);
+        await RefreshAgentsAsync(cancellationToken).ConfigureAwait(true);
+        await RefreshStatusAsync(forceStatus, cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -252,21 +288,47 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// </summary>
     protected override void OnActivated()
     {
+        _activation?.Dispose();
+        _activation = new CancellationTokenSource();
+
         Services.Monitor.PollCompleted += OnPollCompleted;
         Services.ConfigReloaded += OnConfigReloaded;
 
+        // The scope and the unacknowledged-findings count are shared with the rest of the app (the sidebar badge, the tray): the panel
+        // follows them only while it is on screen. Subscribing to the counts is what keeps their 30 s read going, which the badge
+        // already does; it is one query of a few milliseconds.
+        Services.ConnectorScope.Changed += OnScopeChanged;
+        Services.AlertCounts.Changed += OnAlertCountsChanged;
+
         Apply(Services.Monitor.Current);
+        ApplyScope();
         RefreshDataIfDue();
 
         // One file read per activation: a doctor run from a terminal (or the TUI) while the panel
         // was away rewrote the cache, and this is the only time it is picked up without a Refresh.
         _ = ReloadDoctorCacheAsync(CancellationToken.None);
+
+        // The audit window is a few milliseconds and the tiles say how old it is: catch up now rather than at the next poll.
+        _ = RefreshMetricsAsync(force: false, ActiveToken);
     }
 
     protected override void OnDeactivated()
     {
         Services.Monitor.PollCompleted -= OnPollCompleted;
         Services.ConfigReloaded -= OnConfigReloaded;
+        Services.ConnectorScope.Changed -= OnScopeChanged;
+        Services.AlertCounts.Changed -= OnAlertCountsChanged;
+
+        // Stop what the panel started for itself: a running audit statement ends at once, and a status run's process tree is killed. A
+        // diagnostic the operator asked for is not stopped: they may well have gone to Activity to watch it.
+        try
+        {
+            _activation?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already disposed by a re-activation that raced this; nothing left to cancel.
+        }
     }
 
     /// <summary>Also what F5 invokes: an <see cref="IAsyncRelayCommand"/> that disables itself while it runs.</summary>
@@ -275,13 +337,17 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     {
         var snapshot = await Services.Monitor.RefreshAsync();
 
-        // "Refresh" means look again, including whether the scanners are installed.
+        // "Refresh" means look again, including whether the scanners are installed and what `status --json` says.
         _scannerPathsProbedAt = DateTimeOffset.MinValue;
         Apply(snapshot);
         _lastDataRefresh = DateTimeOffset.MinValue;
+        _forceStatus = true;
         await ReloadDoctorCacheAsync(CancellationToken.None);
-        await RefreshDataAsync(CancellationToken.None);
+        await RefreshDataAsync(ActiveToken);
     }
+
+    /// <summary>Set by Refresh so the next data refresh re-reads <c>status --json</c> whatever its age.</summary>
+    private bool _forceStatus;
 
     /// <summary>
     /// Runs <c>defenseclaw doctor</c> (10-30 s of live probes; it writes only its own results
@@ -510,19 +576,23 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // UI thread and the collections below can be mutated directly.
         Apply(e.Snapshot);
         RefreshDataIfDue();
+
+        // The hook-call and block counts are a few milliseconds: they follow the poll, gated to MetricsRefreshInterval.
+        _ = RefreshMetricsAsync(force: false, ActiveToken);
     }
 
     private void RefreshDataIfDue()
     {
         if (DefenseClaw.Core.Time.WallClock.Elapsed(_lastDataRefresh) >= DataRefreshInterval)
         {
-            _ = RefreshDataAsync(CancellationToken.None);
+            _ = RefreshDataAsync(ActiveToken);
         }
     }
 
     /// <summary>Renders everything derivable from one snapshot plus config.yaml.</summary>
     internal void Apply(GatewaySnapshot snapshot)
     {
+        _snapshot = snapshot;
         var health = snapshot.Health;
 
         GatewayHeadline = snapshot.StateLabel;
@@ -547,6 +617,13 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         BuildServices(health);
         BuildScanners(snapshot, health);
         BuildConnectors(snapshot, health);
+        BuildObservability(health);
+        ApplyGatewayActions(snapshot);
+
+        // Nothing below does I/O: each re-derives a card from what the panel already holds, so the tiles' ages, the roster-driven rows and
+        // the Configuration card follow the poll without a read of their own.
+        RenderEnforcementCards();
+        BuildConfiguration();
 
         // No I/O: re-derives the doctor card's "as of" text and STALE flag from the clock.
         ApplyDoctorState();
@@ -689,6 +766,18 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             });
         }
 
+        // The gateway's own admission that it cannot keep its event history (for instance sqlite_write_failed). It used to sit in /health
+        // unread; if audit.db is not being written, what every other card here counts is going stale.
+        if (snapshot.Health is { } reported && FindFailure(reported) is { } historyFailure)
+        {
+            rows.Add(new AttentionRow
+            {
+                Title = "The gateway cannot keep its event history",
+                Detail = $"/health reports event_history_failure: {historyFailure}. Events may not be reaching audit.db; the Observability card lists the destinations.",
+                SeverityKey = "High",
+            });
+        }
+
         // NotConnected/Unauthorized are informational, never errors.
         if (snapshot.AlertsUnavailable is { Length: > 0 } alertsReason && !snapshot.IsDegraded)
         {
@@ -729,6 +818,47 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         }
 
         SyncByEquality(Attention, rows, static row => row.Title);
+        RenderVisibleAttention();
+    }
+
+    /// <summary>How many rows "What needs attention" shows before "Show all": the Mac's top three.</summary>
+    internal const int AttentionRowsShown = 3;
+
+    /// <summary>The rows on screen: the first <see cref="AttentionRowsShown"/> of <see cref="Attention"/>, or all of them once expanded.</summary>
+    public ObservableCollection<AttentionRow> VisibleAttention { get; } = new();
+
+    [ObservableProperty]
+    private bool _showAllAttention;
+
+    /// <summary>"Show all 5" or "Show fewer"; empty when everything already fits.</summary>
+    [ObservableProperty]
+    private string _attentionMoreText = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasAttentionOverflow;
+
+    [RelayCommand]
+    private void ToggleAttention()
+    {
+        ShowAllAttention = !ShowAllAttention;
+        RenderVisibleAttention();
+    }
+
+    private void RenderVisibleAttention()
+    {
+        var overflow = Attention.Count > AttentionRowsShown;
+        HasAttentionOverflow = overflow;
+        if (!overflow)
+        {
+            ShowAllAttention = false;
+        }
+
+        AttentionMoreText = !overflow
+            ? string.Empty
+            : ShowAllAttention ? "Show fewer" : $"Show all {Attention.Count.ToString(CultureInfo.CurrentCulture)}";
+
+        var wanted = ShowAllAttention ? Attention.ToList() : Attention.Take(AttentionRowsShown).ToList();
+        SyncByEquality(VisibleAttention, wanted, static row => row.Title);
     }
 
     /// <summary>
@@ -784,6 +914,19 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         }
 
         _scannerPathsProbedAt = DateTimeOffset.UtcNow;
+
+        // With no synchronization context (a test, a tool: there is no dispatcher and no window to keep responsive) there is nothing to
+        // marshal the answer back to, and a continuation would resume on a pool thread and rebuild ScannerRows there while the caller
+        // is still in Apply: a race on the collection. So the answer is taken here, on the calling thread. On the UI thread, where the
+        // lookup must never wait (a dead PATH entry stalls it), it runs on the pool and is applied back on that thread.
+        if (SynchronizationContext.Current is null)
+        {
+            _skillScannerPath = paths.FindExecutable("skill-scanner");
+            _mcpScannerPath = paths.FindExecutable("mcp-scanner");
+            _scannerPathsResolved = true;
+            return;
+        }
+
         _ = RefreshScannerPathsAsync();
     }
 
@@ -880,6 +1023,19 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             });
         }
 
+        // Scoped to one connector the Mac puts that connector's policy first: its mode and rule pack.
+        if (Services.ConnectorScope.Current is { } scope)
+        {
+            Services.Config.Config.Guardrail.Connectors.TryGetValue(scope, out var settings);
+            rows.Insert(0, new ScannerRow
+            {
+                Name = "policy",
+                StateText = ModeOf(scope) ?? "—",
+                StateKey = "Medium",
+                Detail = $"{scope.ToLowerInvariant()} · rule pack {RulePackName(settings?.RulePackDir)}",
+            });
+        }
+
         SyncByEquality(ScannerRows, rows, static row => row.Name);
     }
 
@@ -917,30 +1073,46 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             }
         }
 
+        var alertCounts = Services.AlertCounts.Current.ByConnector;
         var rows = new List<ConnectorRow>();
         foreach (var name in names)
         {
             configured.TryGetValue(name, out var settings);
             live.TryGetValue(name, out var status);
             _connectorModes.TryGetValue(name, out var runtime);
+            var reported = _status.Connector(name);
 
             // config.yaml is stated intent; /status is what the running hook contract does.
             // They can disagree — say so rather than picking a winner. With /status down there
             // is no runtime side at all, and config.yaml's value is labelled as what it is.
+            // `defenseclaw status --json` (when it has been read) says what the hook EFFECTIVELY obeys, which outranks both.
             var mode = runtime?.GuardrailMode ?? ConfigOnly(settings?.Mode);
-            var failMode = runtime?.HookFailMode ?? ConfigOnly(settings?.HookFailMode);
-            var mismatch = (settings?.HasFailModeMismatch ?? false) || (runtime?.HasFailModeMismatch ?? false);
+            var effectiveFailMode = reported?.FailMode?.Effective;
+            var failMode = effectiveFailMode is { Length: > 0 } ? effectiveFailMode : runtime?.HookFailMode ?? ConfigOnly(settings?.HookFailMode);
+            var mismatch = (settings?.HasFailModeMismatch ?? false) || (runtime?.HasFailModeMismatch ?? false) ||
+                           (Equal(ModeOf(name), "observe") && Equal(effectiveFailMode, "closed"));
 
             var drift = runtime is not null && settings is not null &&
                         (!Equal(runtime.GuardrailMode, settings.Mode) ||
                          !Equal(runtime.HookFailMode, settings.HookFailMode))
                 ? $"config.yaml says mode {settings.Mode ?? "—"} / fail-mode {settings.HookFailMode ?? "—"}"
                 : string.Empty;
+            if (reported?.FailMode is { HasDrift: true, Drift.Count: > 0 } failDrift)
+            {
+                var sources = "fail-mode drift: " + string.Join(", ", failDrift.Drift);
+                drift = drift.Length > 0 ? drift + " · " + sources : sources;
+            }
 
             rows.Add(new ConnectorRow
             {
                 Name = name,
-                StateText = status?.State ?? (settings is null ? "configured elsewhere" : "not running"),
+                Friendly = reported?.Friendly ?? string.Empty,
+                RulePack = RulePackName(settings?.RulePackDir),
+                Alerts = alertCounts.TryGetValue(name, out var tally) ? tally.Total : 0,
+                Calls = status?.Requests ?? 0,
+                Blocks = (status?.ToolBlocks ?? 0) + (status?.SubprocessBlocks ?? 0),
+                LastActivityShort = status?.LastActivityAt is { } seen ? Relative(seen) : "never",
+                StateText = status?.State ?? (settings is null ? "not configured" : "not running"),
                 StateKey = status is null ? "Neutral" : ClassifyText(status.State),
                 Mode = mode,
                 FailMode = failMode,
@@ -967,16 +1139,32 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             });
         }
 
-        // Structure is compared, the two fields that tick are not: counters move on nearly
+        // Structure is compared, the fields that tick are not: counters move on nearly
         // every poll of a busy box and "last activity 5s ago" is a different string every
         // time, and replacing the row for either would rebuild the whole card. They are
         // copied onto the row that stays.
-        SyncCollection(
-            ConnectorRows,
-            rows,
-            static row => row.Name,
-            static (existing, wanted) => existing.SameStructureAs(wanted),
-            static (existing, wanted) => existing.RefreshLiveFieldsFrom(wanted));
+        //
+        // The table's selection is the operator's scope, and a list box clears its selection when the selected item leaves the collection, which
+        // a replaced row does for a moment. Nothing in that sweep may reach the scope: the selection is put back by name afterwards.
+        var selectedName = _selectionName;
+        _syncingSelection = true;
+        try
+        {
+            SyncCollection(
+                ConnectorRows,
+                rows,
+                static row => row.Name,
+                static (existing, wanted) => existing.SameStructureAs(wanted),
+                static (existing, wanted) => existing.RefreshLiveFieldsFrom(wanted));
+
+            SelectedConnector = selectedName is null
+                ? null
+                : ConnectorRows.FirstOrDefault(r => string.Equals(r.Name, selectedName, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _syncingSelection = false;
+        }
     }
 
     /// <summary>
@@ -996,7 +1184,15 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             await RefreshAuditCountsAsync(cancellationToken);
             await RefreshEnforcementAsync(cancellationToken);
             await RefreshConnectorModesAsync(cancellationToken);
+
+            var forceStatus = _forceStatus;
+            _forceStatus = false;
+            await RefreshCardsAsync(forceStatus, cancellationToken);
             _lastDataRefresh = DateTimeOffset.UtcNow;
+        }
+        catch (OperationCanceledException)
+        {
+            // The panel left the screen mid-refresh: the statements were stopped, and the next activation starts over (the floor is not stamped).
         }
         finally
         {
@@ -1064,32 +1260,15 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             var blockedItems = blocked.ValueOr(Array.Empty<EnforcementEntry>());
             var allowedItems = allowed.ValueOr(Array.Empty<EnforcementEntry>());
 
-            SyncTiles(EnforcementTiles, new[]
-            {
-                new CountTile
-                {
-                    Label = "Blocked",
-                    Value = blockedItems.Count.ToString("N0", CultureInfo.CurrentCulture),
-                    SeverityKey = blockedItems.Count > 0 ? "High" : "Ok",
-                    Caption = Kinds(blockedItems),
-                },
-                new CountTile
-                {
-                    Label = "Allowed",
-                    Value = allowedItems.Count.ToString("N0", CultureInfo.CurrentCulture),
-                    SeverityKey = "Info",
-                    Caption = Kinds(allowedItems),
-                },
-            });
-
+            // The Enforcement card's tiles are the four buttons (RenderEnforcementCards); these two lists are the gateway's explicit entries,
+            // kept as the card's footer, each with the kinds it holds ("2 blocked (1 skill · 1 mcp)").
             EnforcementSummary = blockedItems.Count == 0 && allowedItems.Count == 0
                 ? "No explicit block or allow entries"
-                : $"{blockedItems.Count} blocked · {allowedItems.Count} allowed";
+                : $"{blockedItems.Count} blocked{Parenthesized(Kinds(blockedItems))} · {allowedItems.Count} allowed{Parenthesized(Kinds(allowedItems))}";
             EnforcementNote = "Entries come from /enforce/blocked and /enforce/allowed. Changes go through the CLI.";
             return;
         }
 
-        SyncTiles(EnforcementTiles, Array.Empty<CountTile>());
         EnforcementSummary = "Enforcement lists unavailable";
         EnforcementNote = DescribeUnavailable(blocked.Status, blocked.ErrorMessage);
     }
@@ -1161,6 +1340,8 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         GatewayStatus.Unreachable => "The gateway is not answering, so enforcement lists cannot be read.",
         _ => message ?? "The gateway did not return an enforcement list.",
     };
+
+    private static string Parenthesized(string kinds) => kinds.Length == 0 ? string.Empty : $" ({kinds})";
 
     private static string Kinds(IReadOnlyList<EnforcementEntry> entries)
     {
@@ -1354,6 +1535,18 @@ public sealed record AttentionRow
     public bool HasCommand => !string.IsNullOrWhiteSpace(Command);
 
     /// <summary>
+    /// The Mac's mono bracket tag for the row: <c>[!]</c> critical, <c>[*]</c> a warning (High, Medium), <c>[OK]</c> all clear, <c>[&gt;]</c> for
+    /// information. Drawn in the row's tone beside the severity word, which stays: a bracket is a shape, not a reading.
+    /// </summary>
+    public string Tag => SeverityKey switch
+    {
+        "Critical" or "Bad" => "[!]",
+        "High" or "Warn" or "Medium" => "[*]",
+        "Ok" => "[OK]",
+        _ => "[>]",
+    };
+
+    /// <summary>
     /// What a screen reader announces for the row (UI Automation falls back to
     /// <c>ToString()</c> for an item with no explicit name). Without this it read the record's
     /// generated dump - including the raw PowerShell in <see cref="Command"/>. The command itself
@@ -1387,6 +1580,14 @@ public sealed record ServiceRow
 
     public bool HasDetail => Detail.Length > 0;
 
+    /// <summary>
+    /// What the Services box prints after the state word, in one flowing line: the detail, the enforcement posture and when the state began
+    /// (<c>127.0.0.1:18970 · since Sep 30 11:19</c>). The Mac prints the detail alone; the posture and the time are this app's additions.
+    /// </summary>
+    public string Summary => string.Join(" · ", new[] { Detail, Posture, SinceText }.Where(static part => part.Length > 0));
+
+    public bool HasSummary => Summary.Length > 0;
+
     /// <summary>The screen-reader sentence for the row; see <see cref="AttentionRow.ToString"/>.</summary>
     public override string ToString() => JoinSentences(Name, StateText, SinceText, Posture, Detail);
 
@@ -1405,6 +1606,8 @@ public sealed record ScannerRow
 
     public string Detail { get; init; } = string.Empty;
 
+    public bool HasDetail => Detail.Length > 0;
+
     /// <summary>The screen-reader sentence for the row; see <see cref="AttentionRow.ToString"/>.</summary>
     public override string ToString() => ServiceRow.JoinSentences(Name, StateText, Detail);
 }
@@ -1420,6 +1623,15 @@ public sealed record ScannerRow
 public sealed partial class ConnectorRow : ObservableObject
 {
     public required string Name { get; init; }
+
+    /// <summary>The connector's friendly name from <c>status --json</c> (<c>Claude Code</c>); empty until that has been read.</summary>
+    public string Friendly { get; init; } = string.Empty;
+
+    /// <summary>The table's first column, the Mac's: <c>Claude Code (claudecode)</c>, or just the name when there is no friendly one.</summary>
+    public string DisplayName => Friendly.Length > 0 && !string.Equals(Friendly, Name, StringComparison.Ordinal) ? $"{Friendly} ({Name})" : Name;
+
+    /// <summary>The rule pack the connector runs: the last segment of its <c>rule_pack_dir</c>, or <c>default</c>.</summary>
+    public string RulePack { get; init; } = "default";
 
     public required string StateText { get; init; }
 
@@ -1449,7 +1661,43 @@ public sealed partial class ConnectorRow : ObservableObject
     [ObservableProperty]
     private string _lastActivity = string.Empty;
 
+    /// <summary>Requests the gateway has served for this connector since it started (the table's Calls).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CallsText))]
+    private long _calls;
+
+    /// <summary>Tool and subprocess blocks since the gateway started (the table's Blocks).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BlocksText))]
+    [NotifyPropertyChangedFor(nameof(BlocksKey))]
+    private long _blocks;
+
+    /// <summary>Unacknowledged findings attributed to this connector (the table's Alerts).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AlertsText))]
+    [NotifyPropertyChangedFor(nameof(AlertsKey))]
+    private int _alerts;
+
+    /// <summary>The table's Last Activity: <c>4h ago</c>, or <c>never</c>.</summary>
+    [ObservableProperty]
+    private string _lastActivityShort = "never";
+
+    public string CallsText => Calls.ToString("N0", CultureInfo.CurrentCulture);
+
+    public string BlocksText => Blocks.ToString("N0", CultureInfo.CurrentCulture);
+
+    public string AlertsText => Alerts.ToString("N0", CultureInfo.CurrentCulture);
+
+    /// <summary>Red when something was blocked, grey when not: the Mac's colouring.</summary>
+    public string BlocksKey => Blocks > 0 ? "Bad" : "Neutral";
+
+    /// <summary>Amber when findings wait, grey when none do.</summary>
+    public string AlertsKey => Alerts > 0 ? "High" : "Neutral";
+
     public bool HasCounters => Counters.Length > 0;
+
+    /// <summary>Drift and the fail-mode warning, the lines that go under the row when there is one.</summary>
+    public bool HasNotes => HasDrift || HasWarning;
 
     /// <summary>
     /// True when every field except the two live ones matches, i.e. when keeping this row
@@ -1457,6 +1705,8 @@ public sealed partial class ConnectorRow : ObservableObject
     /// </summary>
     internal bool SameStructureAs(ConnectorRow other) =>
         string.Equals(Name, other.Name, StringComparison.Ordinal) &&
+        string.Equals(Friendly, other.Friendly, StringComparison.Ordinal) &&
+        string.Equals(RulePack, other.RulePack, StringComparison.Ordinal) &&
         string.Equals(StateText, other.StateText, StringComparison.Ordinal) &&
         string.Equals(StateKey, other.StateKey, StringComparison.Ordinal) &&
         string.Equals(Mode, other.Mode, StringComparison.Ordinal) &&
@@ -1472,6 +1722,10 @@ public sealed partial class ConnectorRow : ObservableObject
     {
         Counters = fresh.Counters;
         LastActivity = fresh.LastActivity;
+        Calls = fresh.Calls;
+        Blocks = fresh.Blocks;
+        Alerts = fresh.Alerts;
+        LastActivityShort = fresh.LastActivityShort;
     }
 
     /// <summary>
