@@ -125,7 +125,11 @@ public sealed class PanelCatalog : INavigationViewPageProvider
 
             // Configure
             new("setup", "Setup", "Configure", SymbolRegular.ShieldSettings24,
-                typeof(SetupPanel), s => new SetupPanelViewModel(s)),
+                typeof(SetupPanel), s => new SetupPanelViewModel(s)
+                {
+                    // The "Guardrail controls" tile (CUST-222/225): HILT, block message and judge, in their own window.
+                    OpenGuardrailControls = () => DefenseClaw.App.Views.Guardrail.GuardrailControlsWindow.Open(s, System.Windows.Application.Current?.MainWindow),
+                }),
 
             // Footer: the app's own settings, below the groups (Ctrl+,).
             new("settings", "Settings", FooterGroup, SymbolRegular.Settings24,

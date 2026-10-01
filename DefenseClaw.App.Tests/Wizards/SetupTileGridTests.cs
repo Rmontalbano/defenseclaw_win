@@ -109,7 +109,10 @@ public class SetupTileGridTests
                 // Keyboard: every tile is a tab stop.
                 Assert.All(tiles, t => Assert.True(t.Focusable && t.IsTabStop));
 
-                // The guardrail-controls tile is absent until the shell gives it somewhere to go.
+                // The catalog wires the guardrail-controls tile to its window (CUST-222); without somewhere to go it is absent.
+                Assert.Single(ControlsTile(shell));
+                vm.OpenGuardrailControls = null;
+                shell.Host.Relayout();
                 Assert.Empty(ControlsTile(shell));
                 var opened = 0;
                 vm.OpenGuardrailControls = () => opened++;
