@@ -61,6 +61,9 @@ public sealed class RegistrySourceRow
 
     public string EnabledKey => Enabled == true ? "Ok" : "Neutral";
 
+    /// <summary>The row menu's on/off item: what choosing it does ("Disable…" for a source that is on).</summary>
+    public string ToggleText => Enabled == true ? "Disable…" : "Enable…";
+
     public string KindDisplay => string.IsNullOrWhiteSpace(Kind) ? "—" : Kind;
 
     public string ContentDisplay => string.IsNullOrWhiteSpace(Content) ? "—" : Content;
@@ -148,6 +151,8 @@ public sealed class RegistryEntryRow
     public string SeverityDisplay => string.IsNullOrWhiteSpace(Severity) ? "—" : Severity;
 
     public string ReviewDisplay => Approved ? "Approved" : Rejected ? "Rejected" : "—";
+
+    public string ReviewKey => Approved ? "Ok" : Rejected ? "Bad" : "Neutral";
 
     public string StatusKey => (Status ?? string.Empty).ToLowerInvariant() switch
     {

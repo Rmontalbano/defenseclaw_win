@@ -271,12 +271,10 @@
                                             <TextBlock Style="{StaticResource DcBadgeText}" Text="env secret" />
                                         </Border>
 
-                                        <Border Style="{StaticResource DcBadge}"
-                                                Tag="{Binding ExitBadgeKey}"
-                                                MinWidth="76"
-                                                AutomationProperties.Name="{Binding ExitBadgeText, StringFormat='Result: {0}'}">
-                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ExitBadgeText}" />
-                                        </Border>
+                                        <!-- The outcome is a state, so it is a pill: a dot and the word ("running", "exit 0", "failed"). -->
+                                        <ctl:DcStatePill Text="{Binding ExitBadgeText}"
+                                                         Tone="{Binding ExitBadgeKey}"
+                                                         AutomationProperties.Name="{Binding ExitBadgeText, StringFormat='Result: {0}'}" />
                                     </WrapPanel>
                                 </Grid>
 

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.App.Views.Controls;
 
 namespace DefenseClaw.App.Views.Panels;
 
@@ -40,6 +41,39 @@ public sealed partial class AlertsPanel : UserControl
 
     /// <summary>Moves keyboard focus to the filter box (the toolbar's search) and selects its text, ready to type over.</summary>
     public void FocusFilter() => PageToolbar.FocusSearch();
+
+    /// <summary>The table's selection is a set (Extended): the view-model keeps all of it for the row menu; the first row still drives the detail pane.</summary>
+    private void OnAlertSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is AlertsPanelViewModel viewModel)
+        {
+            viewModel.NoteSelection(AlertList.SelectedItems.OfType<AlertItem>().OrderBy(AlertList.Items.IndexOf));
+        }
+    }
+
+    private void OnCopyDetails(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AlertsPanelViewModel { ActionRows.Count: > 0 } viewModel)
+        {
+            _ = DcClipboard.TrySetText(AlertsPanelViewModel.CopyText(viewModel.ActionRows));
+        }
+    }
+
+    private void OnAcknowledge(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AlertsPanelViewModel viewModel)
+        {
+            viewModel.OpenAcknowledgeCommand.Execute(null);
+        }
+    }
+
+    private void OnDismiss(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AlertsPanelViewModel viewModel)
+        {
+            viewModel.OpenDismissCommand.Execute(null);
+        }
+    }
 
     private void OnCanFind(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = true;
 

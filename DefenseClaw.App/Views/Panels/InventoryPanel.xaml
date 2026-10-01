@@ -23,13 +23,7 @@
         and virtualizes on its own. The page scrolls only when the pieces do not fit.
     -->
     <UserControl.Resources>
-        <!-- Cell text: trimmed with an ellipsis (the 10 DIP margin keeps it off the next column's text), and the full value in a tooltip (only when it is actually trimmed: see OnCellToolTipOpening). -->
-        <Style x:Key="InventoryCellText" TargetType="TextBlock">
-            <Setter Property="Margin" Value="0,0,10,0" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
-            <EventSetter Event="ToolTipOpening" Handler="OnCellToolTipOpening" />
-        </Style>
+        <!-- Cell text: DcCellText - trimmed with an ellipsis, the full value in a tooltip only while it is actually trimmed. -->
 
         <!--
             Narrow layout (the code-behind sets the block's Tag to "Narrow" below ~860 DIPs of block width): the
@@ -210,15 +204,10 @@
                                 virtualization off for grouped items unless it is asked for).
                             -->
                             <ui:DataGrid x:Name="ComponentsGrid"
-                                         AutoGenerateColumns="False"
-                                         IsReadOnly="True"
-                                         GridLinesVisibility="Horizontal"
-                                         HeadersVisibility="Column"
+                                         Style="{StaticResource DcDataGrid}"
                                          SelectionMode="Single"
-                                         ScrollViewer.CanContentScroll="True"
-                                         VirtualizingPanel.IsVirtualizing="True"
                                          VirtualizingPanel.IsVirtualizingWhenGrouping="True"
-                                         VirtualizingPanel.VirtualizationMode="Recycling"
+                                         Sorting="OnComponentsSorting"
                                          AutomationProperties.Name="AI components in the latest scan"
                                          ItemsSource="{Binding ComponentsView}"
                                          SelectedItem="{Binding SelectedComponent}"
@@ -237,31 +226,40 @@
                                 </ui:DataGrid.GroupStyle>
                                 <ui:DataGrid.Columns>
                                     <DataGridTextColumn Width="1.3*" MinWidth="110" Header="Vendor"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="VendorDisplay"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding VendorDisplay}" />
                                     <DataGridTextColumn Width="2.2*" MinWidth="140" Header="Name"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="Name"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding Name}" />
                                     <DataGridTextColumn Width="0.8*" MinWidth="100" Header="Ecosystem"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="EcosystemDisplay"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding EcosystemDisplay}" />
                                     <DataGridTextColumn Width="1.2*" MinWidth="104" Header="Framework"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="Framework"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding Framework}" />
                                     <DataGridTextColumn Width="0.7*" MinWidth="80" Header="Version"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="Version"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding Version}" />
                                     <DataGridTextColumn Width="0.5*" MinWidth="80" Header="Installs"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="InstallCount"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding InstallCountDisplay}" />
                                     <DataGridTextColumn Width="1.1*" MinWidth="112" Header="Identity"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="IdentityScore"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding IdentityDisplay}" />
                                     <DataGridTextColumn Width="1.1*" MinWidth="112" Header="Presence"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="PresenceScore"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding PresenceDisplay}" />
                                     <DataGridTextColumn Width="1.2*" MinWidth="140" Header="Last seen"
-                                                        ElementStyle="{StaticResource InventoryCellText}"
+                                                        SortMemberPath="LastSeen"
+                                                        ElementStyle="{StaticResource DcCellText}"
                                                         Binding="{Binding LastSeenDisplay}" />
                                 </ui:DataGrid.Columns>
                             </ui:DataGrid>
@@ -367,11 +365,8 @@
 
                         <Grid Grid.Row="3">
                             <ui:DataGrid x:Name="BrowserGrid"
+                                         Style="{StaticResource DcDataGrid}"
                                          AutoGenerateColumns="True"
-                                         IsReadOnly="True"
-                                         GridLinesVisibility="Horizontal"
-                                         HeadersVisibility="Column"
-                                         ScrollViewer.CanContentScroll="True"
                                          AutomationProperties.Name="Rows of the selected table"
                                          ItemsSource="{Binding BrowsedRows}" />
                             <ui:ProgressRing IsIndeterminate="True"

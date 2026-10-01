@@ -637,6 +637,23 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
             value is not null && value.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>The column the operator sorted the table by (a property of <see cref="InventoryComponentRow"/>); null: by name within the groups.</summary>
+    private string? _sortMember;
+
+    private ListSortDirection _sortDirection = ListSortDirection.Ascending;
+
+    /// <summary>
+    /// Sorts the rows <i>within</i> their groups by <paramref name="member"/> (a null member puts them back in name order). The
+    /// grid's own header sort would replace the view's sort descriptions - the one that keeps the groups in alphabetical order
+    /// among them - so the panel routes a header click here instead.
+    /// </summary>
+    public void SortBy(string? member, ListSortDirection direction)
+    {
+        _sortMember = string.IsNullOrEmpty(member) ? null : member;
+        _sortDirection = direction;
+        ApplySort();
+    }
+
     private void ApplyGrouping()
     {
         ComponentsView.GroupDescriptions.Clear();
@@ -644,10 +661,32 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
             ? nameof(InventoryComponentRow.EcosystemDisplay)
             : nameof(InventoryComponentRow.VendorDisplay);
         ComponentsView.GroupDescriptions.Add(new PropertyGroupDescription(property));
+        ApplySort();
+    }
 
-        ComponentsView.SortDescriptions.Clear();
-        ComponentsView.SortDescriptions.Add(new SortDescription(property, ListSortDirection.Ascending));
-        ComponentsView.SortDescriptions.Add(new SortDescription(nameof(InventoryComponentRow.Name), ListSortDirection.Ascending));
+    private void ApplySort()
+    {
+        var property = GroupBy == GroupByType
+            ? nameof(InventoryComponentRow.EcosystemDisplay)
+            : nameof(InventoryComponentRow.VendorDisplay);
+
+        var name = nameof(InventoryComponentRow.Name);
+        var groupDirection = _sortMember == property ? _sortDirection : ListSortDirection.Ascending;
+
+        using (ComponentsView.DeferRefresh())
+        {
+            ComponentsView.SortDescriptions.Clear();
+            ComponentsView.SortDescriptions.Add(new SortDescription(property, groupDirection));
+            if (_sortMember is { } member && member != property && member != name)
+            {
+                ComponentsView.SortDescriptions.Add(new SortDescription(member, _sortDirection));
+                ComponentsView.SortDescriptions.Add(new SortDescription(name, ListSortDirection.Ascending));
+            }
+            else
+            {
+                ComponentsView.SortDescriptions.Add(new SortDescription(name, _sortMember == name ? _sortDirection : ListSortDirection.Ascending));
+            }
+        }
     }
 
     private string BuildStatusMessage(InventoryScan? scan)

@@ -1,4 +1,4 @@
-using System.Globalization;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -198,34 +198,24 @@ public partial class InventoryPanel : UserControl
         _ = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => TableBrowser.BringIntoView()));
 
     /// <summary>
-    /// Shows a cell's tooltip only when its text is actually cut off; a full value needs no tooltip and
-    /// would only get in the way of the row underneath.
+    /// A header click sorts the rows within their groups (<see cref="InventoryPanelViewModel.SortBy"/>) - the grid's own sort would
+    /// replace the view's sort descriptions, the ones that keep the groups in order. Ascending first, then descending, then ascending.
     /// </summary>
-    private void OnCellToolTipOpening(object sender, ToolTipEventArgs e)
+    private void OnComponentsSorting(object sender, DataGridSortingEventArgs e)
     {
-        if (sender is TextBlock block && !IsTrimmed(block))
+        e.Handled = true;
+        if (DataContext is not InventoryPanelViewModel viewModel)
         {
-            e.Handled = true;
-        }
-    }
-
-    private static bool IsTrimmed(TextBlock block)
-    {
-        if (string.IsNullOrEmpty(block.Text))
-        {
-            return false;
+            return;
         }
 
-        var typeface = new Typeface(block.FontFamily, block.FontStyle, block.FontWeight, block.FontStretch);
-        var text = new FormattedText(
-            block.Text,
-            CultureInfo.CurrentCulture,
-            block.FlowDirection,
-            typeface,
-            block.FontSize,
-            Brushes.Black,
-            VisualTreeHelper.GetDpi(block).PixelsPerDip);
+        var direction = e.Column.SortDirection == ListSortDirection.Ascending ? ListSortDirection.Descending : ListSortDirection.Ascending;
+        foreach (var column in ComponentsGrid.Columns)
+        {
+            column.SortDirection = null;
+        }
 
-        return text.WidthIncludingTrailingWhitespace > block.ActualWidth + 0.5;
+        e.Column.SortDirection = direction;
+        viewModel.SortBy(e.Column.SortMemberPath, direction);
     }
 }

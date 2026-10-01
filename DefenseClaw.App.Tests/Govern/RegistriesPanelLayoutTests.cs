@@ -244,6 +244,66 @@ public class RegistriesPanelLayoutTests
 
     // ------------------------------------------------------------------ the scene
 
+    // ------------------------------------------------------------------ the dense tables
+
+    [Fact]
+    public void The_sources_table_shows_the_enabled_state_as_a_pill_and_each_row_has_a_menu_that_opens_the_review()
+    {
+        using var scene = Scene.Open(1400, 900);
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal(
+                new[] { "Id", "Enabled", "Entries", "Kind", "Content", "Last sync", "Location", "Actions" },
+                scene.SourcesGrid.Columns.Select(c => (string)c.Header).ToArray());
+
+            var row = VisualTree.Descendants<DataGridRow>(scene.SourcesGrid).First();
+            var pill = VisualTree.Descendants<DefenseClaw.App.Views.Controls.DcStatePill>(row).Single();
+            Assert.Equal("enabled", pill.Word);
+            Assert.Equal("Ok", pill.Tone);
+
+            var menu = ContextMenuService.GetContextMenu(row)!;
+            var items = menu.Items.OfType<MenuItem>().ToList();
+            Assert.Equal(3, items.Count);
+            Assert.Equal("Sync…", items[0].Header);
+            Assert.Equal("Remove…", items[^1].Header);
+            Assert.Same(Application.Current.FindResource("DcToneCriticalBrush"), items[^1].Foreground);
+            Assert.All(items, i => Assert.NotNull(i.Icon));
+
+            // Sync opens the shared review (the exact command, nothing run) for the row's source.
+            Assert.False(scene.ViewModel.Review.IsOpen);
+            items[0].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.True(scene.ViewModel.Review.IsOpen);
+        });
+    }
+
+    [Fact]
+    public void The_entries_table_shows_status_and_review_as_marks_with_words_and_approve_opens_the_review()
+    {
+        using var scene = Scene.Open(1400, 900);
+
+        UiThread.Run(() =>
+        {
+            var entries = scene.EntriesGrid;
+            Assert.Equal(new[] { "Name", "Type", "Status", "Review", "Actions" }, entries.Columns.Select(c => (string)c.Header).ToArray());
+
+            var rows = VisualTree.Descendants<DataGridRow>(entries).ToList();
+            var labels = VisualTree.Descendants<DefenseClaw.App.Views.Controls.DcStatusLabel>(entries).Select(l => l.Text).ToList();
+            Assert.Contains("clean", labels);
+            Assert.Contains("Approved", labels);
+
+            // A skill entry can be reviewed; the menu's Approve opens the review for it.
+            var pdf = rows.First(r => r.Item is RegistryEntryRow { Name: "pdf-tools" });
+            pdf.IsSelected = true;
+            var menu = ContextMenuService.GetContextMenu(pdf)!;
+            var approve = menu.Items.OfType<MenuItem>().First();
+            Assert.Equal("Approve…", approve.Header);
+            Assert.Same(Application.Current.FindResource("DcToneCriticalBrush"), menu.Items.OfType<MenuItem>().Last().Foreground);
+            approve.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.True(scene.ViewModel.Review.IsOpen);
+        });
+    }
+
     private sealed class Scene : IDisposable
     {
         private readonly TempDirectory _temp = new();

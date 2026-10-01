@@ -40,23 +40,44 @@ public class AuditPanelLayoutTests
     }
 
     [Fact]
-    public void The_summary_takes_the_width_the_short_columns_leave_and_the_short_columns_carry_tooltips()
+    public void The_columns_share_the_width_and_a_cell_that_is_cut_off_says_its_whole_value_in_a_tooltip()
     {
         using var scene = Scene.Open(940, 620);
 
         UiThread.Run(() =>
         {
-            var summary = scene.CellTexts("synthetic event").First();
-            var bucket = scene.CellTexts("guardrail.evaluation").First();
+            var details = scene.CellTexts("synthetic event").First();
+            var type = scene.CellTexts("guardrail.evaluation").First();
 
-            // Every column but the summary is fixed, so the summary is what is left of a 660-odd DIP list.
-            Assert.True(summary.ActualWidth >= 200, $"the summary column is only {summary.ActualWidth} DIPs wide");
-            Assert.True(bucket.ActualWidth <= 121, $"the bucket column grew to {bucket.ActualWidth}");
+            // The table's columns are star-sized with a floor each (Time, Action, Type, Target, Severity, Run, Details, row menu): at
+            // the minimum window they add up to the whole viewport, with no sideways scroll bar.
+            var total = scene.Grid.Columns.Sum(c => c.ActualWidth);
+            Assert.True(details.ActualWidth >= 90, $"the details column is only {details.ActualWidth} DIPs wide");
+            Assert.True(total <= scene.ListCard.ActualWidth, $"the columns are {total} DIPs wide in a {scene.ListCard.ActualWidth} DIP list");
 
-            // A bucket, action or connector that does not fit is cut off with an ellipsis - and says its whole value on hover.
-            Assert.Equal("guardrail.evaluation", bucket.ToolTip);
+            // A type or action that does not fit is cut off with an ellipsis - and says its whole value on hover.
+            Assert.Equal("guardrail.evaluation", type.ToolTip);
             Assert.Equal("hook_decision", scene.CellTexts("hook_decision").First().ToolTip);
-            Assert.Equal("claudecode", scene.CellTexts("claudecode").First().ToolTip);
+        });
+    }
+
+    [Fact]
+    public void The_columns_follow_the_mac_table_and_every_sortable_one_has_a_sort_key()
+    {
+        using var scene = Scene.Open(1400, 900);
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal(
+                new[] { "Time", "Action", "Type", "Target", "Severity", "Run", "Details", "Actions" },
+                scene.Grid.Columns.Select(c => (string)c.Header).ToArray());
+            Assert.All(scene.Grid.Columns.Where(c => (string)c.Header != "Actions"), c => Assert.False(string.IsNullOrEmpty(c.SortMemberPath), $"{c.Header} has no sort key"));
+            Assert.False(scene.Grid.Columns[^1].CanUserSort);
+
+            // The severity word is on every badge, whatever its colour.
+            var badges = VisualTree.Descendants<DefenseClaw.App.Views.Controls.DcSeverityBadge>(scene.ListCard).ToList();
+            Assert.NotEmpty(badges);
+            Assert.All(badges, b => Assert.False(string.IsNullOrWhiteSpace(b.Text)));
         });
     }
 
@@ -155,6 +176,36 @@ public class AuditPanelLayoutTests
         });
     }
 
+    [Fact]
+    public void A_header_sorts_the_loaded_rows_and_the_row_menu_copies_and_narrows_to_the_target()
+    {
+        using var scene = Scene.Open(1400, 900);
+
+        UiThread.Run(() =>
+        {
+            // Time descending is the query's own order; the Time header sorts the loaded rows the other way.
+            var time = VisualTree.Descendants<System.Windows.Controls.Primitives.DataGridColumnHeader>(scene.Grid)
+                .First(h => h.Column is not null && (string)h.Column.Header == "Time");
+            Assert.Equal("evt-000000", ((AuditRow)scene.Grid.Items[0]).Id);
+            var source = PresentationSource.FromVisual(time);
+            time.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, Environment.TickCount, System.Windows.Input.Key.Space) { RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent, Source = time });
+            time.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, Environment.TickCount, System.Windows.Input.Key.Space) { RoutedEvent = System.Windows.Input.Keyboard.KeyUpEvent, Source = time });
+            scene.Host.Relayout();
+            Assert.Equal(System.ComponentModel.ListSortDirection.Ascending, time.SortDirection);
+            Assert.Equal("evt-000059", ((AuditRow)scene.Grid.Items[0]).Id);
+            Assert.Equal("evt-000000", scene.ViewModel.Rows[0].Id);
+
+            // The row menu: copy the event, copy its JSON, narrow to its target. Nothing in it changes anything.
+            var row = VisualTree.Descendants<DataGridRow>(scene.Grid).First();
+            var items = ContextMenuService.GetContextMenu(row)!.Items.OfType<MenuItem>().ToList();
+            Assert.Equal(new[] { "Copy details", "Copy structured JSON", "Show same target" }, items.Select(i => (string)i.Header).ToArray());
+            Assert.All(items, i => Assert.NotNull(i.Icon));
+
+            scene.ViewModel.NoteSelection(new[] { scene.ViewModel.Rows[0], scene.ViewModel.Rows[1] });
+            Assert.Equal(2, AuditPanelViewModel.CopyDetailsText(scene.ViewModel.ActionRows).Split(Environment.NewLine).Length);
+        });
+    }
+
     private sealed class Scene : IDisposable
     {
         private readonly TempDirectory _temp = new();
@@ -203,6 +254,8 @@ public class AuditPanelLayoutTests
         public Border ListCard => (Border)Panel.FindName("ListCard");
 
         public Border DetailCard => (Border)Panel.FindName("DetailCard");
+
+        public DataGrid Grid => (DataGrid)Panel.FindName("RowList");
 
         /// <summary>The realized cell texts of the list that show <paramref name="text"/> (prefix match).</summary>
         public IEnumerable<TextBlock> CellTexts(string text) =>

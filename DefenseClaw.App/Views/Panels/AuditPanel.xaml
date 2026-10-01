@@ -6,13 +6,10 @@
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              panels:CompactLayout.Below="960">
     <!--
-        Filter bar, virtualized row list with a fixed-width header, keyset "Load more", and a
-        detail pane that pretty-prints structured_json. Column widths are repeated between the
-        header and the row template on purpose: shared-size groups defeat UI virtualization,
-        and this table has to stay smooth over tens of thousands of rows.
+        Filter bar, virtualized table (a DataGrid, DcDataGrid: sortable headers, zebra rows, a row menu), keyset
+        "Load more", and a detail pane that pretty-prints structured_json. The table recycles its rows
+        and scrolls by the pixel, because it has to stay smooth over tens of thousands of rows.
 
-        On the shared Dc* design system: the row is the same grid it always was (the wave-1/2
-        virtualization design is untouched) with the severity bar, severity text and cells restyled.
         Keyboard: Ctrl+F focuses the search box (ApplicationCommands.Find, handled in the
         code-behind), Esc closes the detail pane.
 
@@ -23,6 +20,35 @@
         instead and the list steps aside until it is closed (Esc, or its own button).
     -->
     <UserControl.Resources>
+        <!-- The time cell: the clock time (the date too when it is not today); its tooltip is the stored timestamp. -->
+        <Style x:Key="AuditTimeText" TargetType="TextBlock" BasedOn="{StaticResource DcCellText}">
+            <Setter Property="ToolTip" Value="{Binding RawTimestamp}" />
+            <Setter Property="ctl:DcCellToolTip.OnlyWhenTrimmed" Value="False" />
+        </Style>
+
+        <!--
+            The row menu, shared by every row (right-click, or the "..." button): the row under the pointer is selected first unless it is
+            already part of the selection (ctl:DcRowMenu). Nothing here changes anything - the audit log is read-only.
+        -->
+        <ContextMenu x:Key="AuditRowMenu">
+            <MenuItem Header="Copy details"
+                      Icon="{ctl:DcSymbolIcon Copy24}"
+                      InputGestureText="Ctrl+C"
+                      Click="OnCopyDetails" />
+            <MenuItem Header="Copy structured JSON"
+                      Icon="{ctl:DcSymbolIcon Code24}"
+                      Click="OnCopyStructuredJson" />
+            <Separator />
+            <MenuItem Header="Show same target"
+                      Icon="{ctl:DcSymbolIcon Filter24}"
+                      ToolTip="Searches for this row's target, which narrows the list to the events about it."
+                      Click="OnShowSameTarget" />
+        </ContextMenu>
+
+        <Style x:Key="AuditRow" TargetType="DataGridRow" BasedOn="{StaticResource DcDataGridRow}">
+            <Setter Property="ContextMenu" Value="{StaticResource AuditRowMenu}" />
+        </Style>
+
         <Style x:Key="AuditListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
             <Setter Property="Grid.Column" Value="0" />
             <Setter Property="Grid.ColumnSpan" Value="3" />
@@ -190,116 +216,70 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Column header. Widths mirror the row template below: the short columns are fixed and the
-                         summary takes whatever is left (the old star ratios gave a 661 px list about 8 characters each
-                         for bucket, action and connector, and the summary no more than the rest). -->
-                    <Grid Grid.Row="0" Margin="19,4,4,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="68" />
-                            <ColumnDefinition Width="56" />
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="104" />
-                            <ColumnDefinition Width="72" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource DcColumnHeader}" Text="TIME" />
-                        <TextBlock Grid.Column="1" Style="{StaticResource DcColumnHeader}" Text="SEVERITY" />
-                        <TextBlock Grid.Column="2" Style="{StaticResource DcColumnHeader}" Text="BUCKET" />
-                        <TextBlock Grid.Column="3" Style="{StaticResource DcColumnHeader}" Text="ACTION" />
-                        <TextBlock Grid.Column="4" Style="{StaticResource DcColumnHeader}" Text="CONN." />
-                        <TextBlock Grid.Column="5" Style="{StaticResource DcColumnHeader}" Text="SUMMARY" />
-                    </Grid>
-
-                    <ListView x:Name="RowList"
-                              Grid.Row="1"
-                              ItemsSource="{Binding Rows}"
-                              SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
-                              BorderThickness="0"
-                              Background="Transparent"
-                              HorizontalContentAlignment="Stretch"
-                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                              VirtualizingPanel.IsVirtualizing="True"
-                              VirtualizingPanel.VirtualizationMode="Recycling"
-                              VirtualizingPanel.ScrollUnit="Pixel"
-                              AutomationProperties.Name="Audit events">
-                        <!-- WPF-UI's list item pads 12 px on every side, which made each one-line event a 46 px row
-                             and left room for three of them. A table is read by the screenful: rows are ~30 px. -->
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource {x:Type ListViewItem}}">
-                                <Setter Property="Padding" Value="6,2,6,2" />
-                                <Setter Property="MinHeight" Value="0" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <!-- Widths mirror the header grid above; the summary is the one star column. -->
-                                <Grid Margin="0,3,0,3">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="68" />
-                                        <ColumnDefinition Width="56" />
-                                        <ColumnDefinition Width="120" />
-                                        <ColumnDefinition Width="104" />
-                                        <ColumnDefinition Width="72" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border Grid.Column="0"
-                                            Style="{StaticResource DcToneBar}"
-                                            Width="3"
-                                            Margin="0,0,8,0"
-                                            Tag="{Binding SeverityKey}" />
-
-                                    <TextBlock Grid.Column="1"
-                                               Style="{StaticResource DcCaption}"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="NoWrap"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding RawTimestamp}"
-                                               Text="{Binding TimestampText}" />
-
-                                    <TextBlock Grid.Column="2"
-                                               Style="{StaticResource DcToneText}"
-                                               Tag="{Binding SeverityKey}"
-                                               FontSize="11"
-                                               VerticalAlignment="Center"
-                                               Text="{Binding Severity}" />
-
-                                    <TextBlock Grid.Column="3"
-                                               Style="{StaticResource DcCaption}"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="NoWrap"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Bucket}"
-                                               Text="{Binding Bucket}" />
-
-                                    <TextBlock Grid.Column="4"
-                                               Style="{StaticResource DcCaption}"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="NoWrap"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Action}"
-                                               Text="{Binding Action}" />
-
-                                    <TextBlock Grid.Column="5"
-                                               Style="{StaticResource DcCaption}"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="NoWrap"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Connector}"
-                                               Text="{Binding Connector}" />
-
-                                    <TextBlock Grid.Column="6"
-                                               Style="{StaticResource DcCaption}"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="NoWrap"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Summary}"
-                                               Text="{Binding Summary}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                    <!--
+                        The table: Time, Action, Type (the bucket), Target, Severity, Run, Details, and the row menu. Newest first (the
+                        query's order) until a header is clicked; a header sorts the rows loaded so far. The columns share the width
+                        (DcGridColumns), a cell says its whole value in a tooltip while it is cut, and the table is virtualized by the
+                        pixel - this list can hold twenty pages of events. Extended selection: the first row drives the detail pane;
+                        the row menu (right-click, or the "..." button) acts on the selection.
+                    -->
+                    <ui:DataGrid x:Name="RowList"
+                                 Grid.Row="1"
+                                 Style="{StaticResource DcDataGrid}"
+                                 RowStyle="{StaticResource AuditRow}"
+                                 ItemsSource="{Binding Rows}"
+                                 SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                                 SelectionMode="Extended"
+                                 VirtualizingPanel.ScrollUnit="Pixel"
+                                 ctl:DcGridColumns.Fit="True"
+                                 SelectionChanged="OnRowSelectionChanged"
+                                 AutomationProperties.Name="Audit events">
+                        <ui:DataGrid.Columns>
+                            <DataGridTextColumn Width="0.9*" MinWidth="96" Header="Time"
+                                                SortMemberPath="Timestamp"
+                                                ElementStyle="{StaticResource AuditTimeText}"
+                                                Binding="{Binding TimestampText}" />
+                            <DataGridTextColumn Width="1.3*" MinWidth="80" Header="Action"
+                                                SortMemberPath="Action"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding Action}" />
+                            <DataGridTextColumn Width="1.1*" MinWidth="76" Header="Type"
+                                                SortMemberPath="Bucket"
+                                                ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                Binding="{Binding Bucket}" />
+                            <DataGridTextColumn Width="1.6*" MinWidth="80" Header="Target"
+                                                SortMemberPath="Target"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding Target}" />
+                            <DataGridTemplateColumn Width="0.9*" MinWidth="84" Header="Severity"
+                                                    SortMemberPath="SeverityRank">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ctl:DcSeverityBadge Text="{Binding Severity}"
+                                                             Tone="{Binding SeverityKey}"
+                                                             Margin="0,0,8,0" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Width="0.8*" MinWidth="60" Header="Run"
+                                                SortMemberPath="RunId"
+                                                ElementStyle="{StaticResource DcCellTextMono}"
+                                                Binding="{Binding RunId}" />
+                            <DataGridTextColumn Width="2*" MinWidth="90" Header="Details"
+                                                SortMemberPath="Summary"
+                                                ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                Binding="{Binding Summary}" />
+                            <DataGridTemplateColumn Width="32" Header="Actions"
+                                                    CanUserSort="False"
+                                                    HeaderStyle="{StaticResource DcDataGridActionsHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ctl:DcRowMenuButton AutomationProperties.HelpText="Copy the event, or show events about the same target." />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </ui:DataGrid.Columns>
+                    </ui:DataGrid>
 
                     <!-- Empty is a state, not a failure: say which one. -->
                     <StackPanel Grid.Row="1"
@@ -383,12 +363,7 @@
                                     <DataTemplate>
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
-                                                <ctl:DcSeverityGlyph Tone="{Binding SeverityKey}" Gap="6" />
-                                                <TextBlock Style="{StaticResource DcToneText}"
-                                                           Tag="{Binding SeverityKey}"
-                                                           FontSize="13"
-                                                           VerticalAlignment="Center"
-                                                           Text="{Binding Severity}" />
+                                                <ctl:DcSeverityBadge Text="{Binding Severity}" Tone="{Binding SeverityKey}" />
                                                 <TextBlock Style="{StaticResource DcSectionHeader}"
                                                            Margin="10,0,0,0"
                                                            VerticalAlignment="Center"

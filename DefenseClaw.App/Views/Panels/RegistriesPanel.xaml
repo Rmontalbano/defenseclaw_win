@@ -25,12 +25,50 @@
         whatever they need.
     -->
     <UserControl.Resources>
-        <!-- Cell text: trimmed with an ellipsis (the 10 DIP margin keeps it off the next column's text), and the full value in a tooltip (only when it is actually trimmed: see OnCellToolTipOpening). -->
-        <Style x:Key="RegistryCellText" TargetType="TextBlock">
-            <Setter Property="Margin" Value="0,0,10,0" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
-            <EventSetter Event="ToolTipOpening" Handler="OnCellToolTipOpening" />
+        <!-- Cell text: DcCellText - trimmed with an ellipsis, the full value in a tooltip only while it is actually trimmed. -->
+
+        <!--
+            The row menus (right-click, or the "..." button; the row is selected first, see ctl:DcRowMenu). Each item does what the
+            toolbar's button of the same name does to the selected source / entry: it opens the shared review dialog with the exact
+            command first. Nothing here changes anything by itself.
+        -->
+        <ContextMenu x:Key="SourceRowMenu">
+            <MenuItem Header="Sync…"
+                      Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                      ToolTip="Fetch, scan and promote this source's entries. Shows the command first."
+                      Click="OnSyncSource" />
+            <MenuItem Header="{Binding ToggleText}"
+                      Icon="{ctl:DcSymbolIcon Power24}"
+                      ToolTip="Turn this source on or off. Shows the command first."
+                      Click="OnToggleSource" />
+            <Separator />
+            <MenuItem Header="Remove…"
+                      Style="{StaticResource DcDangerMenuItem}"
+                      Icon="{ctl:DcSymbolIcon Delete24}"
+                      ToolTip="Delete this source, the rules it promoted and its cache. Shows the command first."
+                      Click="OnRemoveSource" />
+        </ContextMenu>
+
+        <ContextMenu x:Key="EntryRowMenu">
+            <MenuItem Header="Approve…"
+                      Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                      IsEnabled="{Binding CanReview}"
+                      ToolTip="Approve this entry and promote it into the allow policy. Shows the command first."
+                      Click="OnApproveEntry" />
+            <MenuItem Header="Reject…"
+                      Style="{StaticResource DcDangerMenuItem}"
+                      Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
+                      IsEnabled="{Binding CanReview}"
+                      ToolTip="Reject this entry so it stays blocked. Shows the command first."
+                      Click="OnRejectEntry" />
+        </ContextMenu>
+
+        <Style x:Key="SourceRow" TargetType="DataGridRow" BasedOn="{StaticResource DcDataGridRow}">
+            <Setter Property="ContextMenu" Value="{StaticResource SourceRowMenu}" />
+        </Style>
+
+        <Style x:Key="EntryRow" TargetType="DataGridRow" BasedOn="{StaticResource DcDataGridRow}">
+            <Setter Property="ContextMenu" Value="{StaticResource EntryRowMenu}" />
         </Style>
 
         <!-- One line of a source's facts (Location, Last sync): trimmed, the whole value in a tooltip when it is cut. -->
@@ -370,39 +408,55 @@
                             measure - and realize - every row).
                         -->
                         <ui:DataGrid x:Name="SourcesGrid"
-                                     AutoGenerateColumns="False"
-                                     IsReadOnly="True"
-                                     GridLinesVisibility="Horizontal"
-                                     HeadersVisibility="Column"
+                                     Style="{StaticResource DcDataGrid}"
+                                     RowStyle="{StaticResource SourceRow}"
                                      SelectionMode="Single"
-                                     ScrollViewer.CanContentScroll="True"
-                                     VirtualizingPanel.IsVirtualizing="True"
-                                     VirtualizingPanel.VirtualizationMode="Recycling"
                                      AutomationProperties.Name="Registry sources"
                                      ItemsSource="{Binding Sources}"
                                      SelectedItem="{Binding SelectedSource}">
                             <ui:DataGrid.Columns>
                                 <DataGridTextColumn Width="1.3*" MinWidth="88" Header="Id"
-                                                    ElementStyle="{StaticResource RegistryCellText}"
+                                                    SortMemberPath="Id"
+                                                    ElementStyle="{StaticResource DcCellText}"
                                                     Binding="{Binding Id}" />
-                                <DataGridTextColumn Width="0.7*" MinWidth="80" Header="Enabled"
-                                                    ElementStyle="{StaticResource RegistryCellText}"
-                                                    Binding="{Binding EnabledDisplay}" />
-                                <DataGridTextColumn Width="1.6*" MinWidth="100" Header="Entries"
-                                                    ElementStyle="{StaticResource RegistryCellText}"
+                                <DataGridTemplateColumn Width="0.9*" MinWidth="92" Header="Enabled"
+                                                        SortMemberPath="EnabledDisplay">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ctl:DcStatePill Text="{Binding EnabledDisplay}"
+                                                             Tone="{Binding EnabledKey}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Width="1.6*" MinWidth="88" Header="Entries"
+                                                    SortMemberPath="EntriesDisplay"
+                                                    ElementStyle="{StaticResource DcCellText}"
                                                     Binding="{Binding EntriesDisplay}" />
                                 <DataGridTextColumn Width="0.8*" MinWidth="90" Header="Kind"
-                                                    ElementStyle="{StaticResource RegistryCellText}"
+                                                    SortMemberPath="KindDisplay"
+                                                    ElementStyle="{StaticResource DcCellTextQuiet}"
                                                     Binding="{Binding KindDisplay}" />
                                 <DataGridTextColumn Width="0.6*" MinWidth="80" Header="Content"
-                                                    ElementStyle="{StaticResource RegistryCellText}"
+                                                    SortMemberPath="ContentDisplay"
+                                                    ElementStyle="{StaticResource DcCellTextQuiet}"
                                                     Binding="{Binding ContentDisplay}" />
                                 <DataGridTextColumn Width="1.0*" MinWidth="120" Header="Last sync"
-                                                    ElementStyle="{StaticResource RegistryCellText}"
+                                                    SortMemberPath="LastSyncDisplay"
+                                                    ElementStyle="{StaticResource DcCellTextQuiet}"
                                                     Binding="{Binding LastSyncDisplay}" />
                                 <DataGridTextColumn Width="2.0*" MinWidth="160" Header="Location"
-                                                    ElementStyle="{StaticResource RegistryCellText}"
+                                                    SortMemberPath="Location"
+                                                    ElementStyle="{StaticResource DcCellTextMono}"
                                                     Binding="{Binding Location}" />
+                                <DataGridTemplateColumn Width="32" Header="Actions"
+                                                        CanUserSort="False"
+                                                        HeaderStyle="{StaticResource DcDataGridActionsHeader}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ctl:DcRowMenuButton AutomationProperties.HelpText="Sync, turn on or off, or remove this source." />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </ui:DataGrid.Columns>
                         </ui:DataGrid>
                     </Border>
@@ -495,17 +549,12 @@
                                 </TextBlock>
 
                                 <ui:DataGrid Grid.Row="4"
+                                             Style="{StaticResource DcDataGrid}"
+                                             RowStyle="{StaticResource EntryRow}"
                                              MinHeight="100"
-                                             AutoGenerateColumns="False"
-                                             IsReadOnly="True"
-                                             GridLinesVisibility="Horizontal"
-                                             HeadersVisibility="Column"
                                              SelectionMode="Single"
                                              RowDetailsVisibilityMode="Visible"
                                              AreRowDetailsFrozen="True"
-                                             ScrollViewer.CanContentScroll="True"
-                                             VirtualizingPanel.IsVirtualizing="True"
-                                             VirtualizingPanel.VirtualizationMode="Recycling"
                                              panels:NestedScroll.ForwardWheel="True"
                                              AutomationProperties.Name="Cached entries of the selected source"
                                              ItemsSource="{Binding Entries}"
@@ -552,11 +601,38 @@
                                     </ui:DataGrid.RowDetailsTemplate>
                                     <ui:DataGrid.Columns>
                                         <DataGridTextColumn Width="*" MinWidth="64" Header="Name"
-                                                            ElementStyle="{StaticResource RegistryCellText}"
+                                                            SortMemberPath="Name"
+                                                            ElementStyle="{StaticResource DcCellText}"
                                                             Binding="{Binding Name}" />
-                                        <DataGridTextColumn Width="56" Header="Type" Binding="{Binding TypeDisplay}" />
-                                        <DataGridTextColumn Width="72" Header="Status" Binding="{Binding StatusDisplay}" />
-                                        <DataGridTextColumn Width="90" Header="Review" Binding="{Binding ReviewDisplay}" />
+                                        <DataGridTextColumn Width="52" Header="Type"
+                                                            SortMemberPath="TypeDisplay"
+                                                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                            Binding="{Binding TypeDisplay}" />
+                                        <DataGridTemplateColumn Width="80" Header="Status"
+                                                                SortMemberPath="StatusDisplay">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <ctl:DcStatusLabel Text="{Binding StatusDisplay}" Tone="{Binding StatusKey}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Width="88" Header="Review"
+                                                                SortMemberPath="ReviewDisplay">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <ctl:DcStatusLabel Text="{Binding ReviewDisplay}" Tone="{Binding ReviewKey}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Width="30" Header="Actions"
+                                                                CanUserSort="False"
+                                                                HeaderStyle="{StaticResource DcDataGridActionsHeader}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <ctl:DcRowMenuButton AutomationProperties.HelpText="Approve or reject this entry." />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                     </ui:DataGrid.Columns>
                                 </ui:DataGrid>
 

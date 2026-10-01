@@ -226,7 +226,7 @@ public sealed class AppearanceContrastTests
     }
 
     /// <summary>One style in one mode, read the way the app reads it.</summary>
-    private sealed class Look
+    internal sealed class Look
     {
         private readonly Func<string, Color> _color;
 
@@ -239,6 +239,10 @@ public sealed class AppearanceContrastTests
         public Color Inset => Composite(_color(AppearanceTokens.Inset), Window);
 
         public Color Zebra => _color(AppearanceTokens.Zebra);
+
+        public Color Selected => _color(AppearanceTokens.Selected);
+
+        public Color Subtle => _color(AppearanceTokens.Subtle);
 
         public Color TextPrimary => _color(AppearanceTokens.TextPrimary);
 

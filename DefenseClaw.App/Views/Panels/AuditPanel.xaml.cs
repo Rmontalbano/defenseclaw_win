@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.App.Views.Controls;
 
 namespace DefenseClaw.App.Views.Panels;
 
@@ -40,6 +41,39 @@ public sealed partial class AuditPanel : UserControl
 
     /// <summary>Moves keyboard focus to the search box (the toolbar's) and selects its text, ready to type over.</summary>
     public void FocusFilter() => PageToolbar.FocusSearch();
+
+    /// <summary>The table's selection is a set (Extended): the view-model keeps all of it for the row menu; the first row still drives the detail pane.</summary>
+    private void OnRowSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is AuditPanelViewModel viewModel)
+        {
+            viewModel.NoteSelection(RowList.SelectedItems.OfType<AuditRow>().OrderBy(RowList.Items.IndexOf));
+        }
+    }
+
+    private void OnCopyDetails(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AuditPanelViewModel { ActionRows.Count: > 0 } viewModel)
+        {
+            _ = DcClipboard.TrySetText(AuditPanelViewModel.CopyDetailsText(viewModel.ActionRows));
+        }
+    }
+
+    private void OnCopyStructuredJson(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AuditPanelViewModel { ActionRows.Count: > 0 } viewModel)
+        {
+            _ = DcClipboard.TrySetText(AuditPanelViewModel.CopyStructuredJsonText(viewModel.ActionRows));
+        }
+    }
+
+    private void OnShowSameTarget(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AuditPanelViewModel { ActionRows.Count: > 0 } viewModel)
+        {
+            viewModel.ShowSameTarget(viewModel.ActionRows[0]);
+        }
+    }
 
     private void OnCanFind(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = true;
 

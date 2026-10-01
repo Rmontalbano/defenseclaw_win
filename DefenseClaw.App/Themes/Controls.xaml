@@ -14,6 +14,16 @@
           ctl:DcSegmented      Single-select segmented control (six options or fewer; more is a ComboBox) with ctl:DcSegment items.
           DcResultCaption      TextBlock: the mono "N shown / N total" caption of a filter strip.
 
+        Tables (CUST-214):
+          DcDataGrid           Style for a DataGrid / ui:DataGrid: dense (26 DIP rows, 30 DIP header), zebra, no gridlines, sortable headers
+                               (Space / Enter), token hover and selection, 12 px text. Rows: DcDataGridRow (a panel BasedOn it to add its
+                               row menu); DcDataGridActionsHeader for the "..." column. Size its columns with ctl:DcGridColumns.Fit.
+          DcCellText / DcCellTextQuiet / DcCellTextMono   Cell text: one line, ellipsis, tooltip only while cut.
+          ctl:DcSeverityBadge  Solid capsule in the severity's tone; black or white label by contrast; the word is always shown.
+          ctl:DcStatePill      A dot and a lowercase word on a faint tint.   ctl:DcStatusLabel  A status mark and the state in words.
+          ctl:DcRowMenuButton  The "..." button that opens the row's ContextMenu (also opened by right-click); DcDangerMenuItem for the
+                               item that deletes or dismisses.
+
         Only existing tokens are used (DcInset, DcSelected, DcSubtle, DcAccent, DcOnAccent, DcBorder, DcText*, DcRadius*,
         DcFocusVisualStyleInset, the spacing keys); nothing here adds one. Everything from DefenseClaw.xaml is referenced with
         DynamicResource: this dictionary is merged BEFORE that file's own entries, so a static reference would not resolve,
@@ -293,5 +303,367 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ===== Badges, pills, status labels (Views\Controls\DcBadges.cs) ===================== -->
+    <!--
+        DcSeverityBadge  A solid capsule: the tone's colour as the fill, black or white as the label (whichever has more contrast).
+        DcStatePill      A dot and a lowercase word on a faint tint of the tone.
+        DcStatusLabel    The state's mark (ctl:DcStatusGlyph) and the state in words, no fill.
+        All three take Text and Tone (the keys DcBadge takes: Critical|Bad, High|Warn, Medium, Low, Ok, anything else neutral).
+    -->
+    <Style TargetType="{x:Type ctl:DcSeverityBadge}">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Padding" Value="9,1,9,1" />
+        <Setter Property="MinWidth" Value="60" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ctl:DcSeverityBadge}">
+                    <Border Background="{TemplateBinding Fill}"
+                            CornerRadius="{DynamicResource DcDotRadius}"
+                            MinWidth="{TemplateBinding MinWidth}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <TextBlock HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   FontWeight="{TemplateBinding FontWeight}"
+                                   Foreground="{TemplateBinding Foreground}"
+                                   TextAlignment="Center"
+                                   Text="{TemplateBinding Text}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ctl:DcStatePill}">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ctl:DcStatePill}">
+                    <Border Style="{DynamicResource DcBadge}"
+                            Tag="{TemplateBinding Tone}"
+                            CornerRadius="{DynamicResource DcDotRadius}"
+                            Padding="8,2,10,2"
+                            TextElement.Foreground="{DynamicResource DcTextPrimaryBrush}"
+                            SnapsToDevicePixels="True">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Style="{DynamicResource DcToneDot}"
+                                    Tag="{TemplateBinding Tone}"
+                                    Width="8"
+                                    Height="8"
+                                    Margin="0,0,6,0" />
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="12"
+                                       FontWeight="Medium"
+                                       Text="{TemplateBinding Word}" />
+                        </StackPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ctl:DcStatusLabel}">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ctl:DcStatusLabel}">
+                    <StackPanel Orientation="Horizontal">
+                        <ctl:DcStatusGlyph Tone="{TemplateBinding Tone}"
+                                           VerticalAlignment="Center"
+                                           DotSize="8"
+                                           GlyphSize="14"
+                                           Gap="6" />
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{TemplateBinding Foreground}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Text="{TemplateBinding Text}" />
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== Table cell text ============================================================== -->
+    <!--
+        DcCellText         12, primary, one line, trimmed with an ellipsis; its whole value is the tooltip, shown only while it is cut off.
+        DcCellTextQuiet    The same in the secondary colour (a column the eye does not read first: kind, details).
+        DcCellTextMono     The same in the mono face (a run id, a path, a source).
+    -->
+    <Style x:Key="DcCellText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="ctl:DcCellToolTip.OnlyWhenTrimmed" Value="True" />
+    </Style>
+
+    <Style x:Key="DcCellTextQuiet" TargetType="TextBlock" BasedOn="{StaticResource DcCellText}">
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
+    </Style>
+
+    <Style x:Key="DcCellTextMono" TargetType="TextBlock" BasedOn="{StaticResource DcCellText}">
+        <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
+    </Style>
+
+    <!-- ===== Row action button ("...") ===================================================== -->
+    <Style TargetType="{x:Type ctl:DcRowMenuButton}">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+        <!-- Not a tab stop: a hundred rows would be a hundred stops. The keyboard way in is the row's own menu (Menu key, Shift+F10). -->
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
+        <Setter Property="AutomationProperties.Name" Value="Row actions" />
+        <Setter Property="ToolTip" Value="Actions for this row" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ctl:DcRowMenuButton}">
+                    <Border x:Name="Root"
+                            Background="Transparent"
+                            CornerRadius="{DynamicResource DcRadiusS}"
+                            SnapsToDevicePixels="True">
+                        <ctl:DcSymbolIcon Symbol="MoreHorizontal24"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A menu item that deletes or dismisses: the critical tone, so it reads as the one to be careful with (it still opens the review). -->
+    <Style x:Key="DcDangerMenuItem" TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
+        <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
+    </Style>
+
+    <!-- ===== Dense data grid ================================================================ -->
+    <!--
+        DcDataGrid (on DataGrid / ui:DataGrid): no gridlines, a subtle zebra (DcZebra), 26 DIP rows and a 30 DIP header, hover and
+        selection fills from tokens, sortable column headers (click, or Space / Enter on the focused header; the sort glyph and an
+        "Sorted ..." item status say the state to a screen reader), 12 px text, full-row selection, no resizing or reordering (the
+        panels size their columns), and WPF-UI's own grid template underneath, so virtualization (CanContentScroll + recycling), row
+        automation names (the item's ToString), keyboard navigation and Ctrl+C all stay what the DataGrid does.
+
+        Why a DataGrid and not a ListView + GridView: the panels already had DataGrids (Inventory, Registries) with row details,
+        grouping and column sorting built in; the ListViews (Alerts, Audit) are table-shaped anyway, and a DataGrid sorts the
+        collection view in place without touching the view-models' own ordering, and keeps virtualization when it is asked for.
+    -->
+    <Style x:Key="DcDataGridColumnHeader" TargetType="{x:Type DataGridColumnHeader}">
+        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="Padding" Value="8,0,4,0" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="True" />
+        <Setter Property="IsTabStop" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource DcFocusVisualStyleInset}" />
+        <!-- A header is a button: Space sorts, and so does Enter once it asks for it. UI Automation sees its name, "Sorted ..." status and help text. -->
+        <Setter Property="KeyboardNavigation.AcceptsReturn" Value="True" />
+        <Setter Property="AutomationProperties.HelpText" Value="Sorts the table by this column. Space or Enter." />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type DataGridColumnHeader}">
+                    <Border x:Name="Root"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource DcBorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            MinHeight="{TemplateBinding MinHeight}"
+                            SnapsToDevicePixels="True">
+                        <Grid Margin="{TemplateBinding Padding}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter x:Name="Label"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="False"
+                                              TextElement.Foreground="{TemplateBinding Foreground}">
+                                <ContentPresenter.Resources>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
+                            <TextBlock x:Name="SortGlyph"
+                                       Grid.Column="1"
+                                       Margin="6,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource DcTextPrimaryBrush}"
+                                       Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="SortDirection" Value="Ascending">
+                            <Setter TargetName="SortGlyph" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE70E;" />
+                            <Setter Property="AutomationProperties.ItemStatus" Value="Sorted ascending" />
+                        </Trigger>
+                        <Trigger Property="SortDirection" Value="Descending">
+                            <Setter TargetName="SortGlyph" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE70D;" />
+                            <Setter Property="AutomationProperties.ItemStatus" Value="Sorted descending" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The header of the "..." column: no words drawn (they would not fit), the name kept for a screen reader, and nothing to sort. -->
+    <Style x:Key="DcDataGridActionsHeader" TargetType="{x:Type DataGridColumnHeader}" BasedOn="{StaticResource DcDataGridColumnHeader}">
+        <Setter Property="Cursor" Value="Arrow" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="AutomationProperties.HelpText" Value="Opens the row's actions." />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type DataGridColumnHeader}">
+                    <Border BorderBrush="{DynamicResource DcBorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            MinHeight="{TemplateBinding MinHeight}"
+                            SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="DcDataGridCell" TargetType="{x:Type DataGridCell}">
+        <Setter Property="Padding" Value="8,0,0,0" />
+        <Setter Property="MinHeight" Value="26" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource DcFocusVisualStyleInset}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type DataGridCell}">
+                    <Border Background="{TemplateBinding Background}"
+                            MinHeight="{TemplateBinding MinHeight}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="DcDataGridRow" TargetType="{x:Type DataGridRow}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="MinHeight" Value="26" />
+        <Setter Property="ValidationErrorTemplate" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="ctl:DcRowMenu.SelectsOnRightClick" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type DataGridRow}">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{DynamicResource DcRadiusS}"
+                            SnapsToDevicePixels="True">
+                        <SelectiveScrollingGrid>
+                            <SelectiveScrollingGrid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </SelectiveScrollingGrid.RowDefinitions>
+                            <DataGridCellsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                    SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                            <DataGridDetailsPresenter Grid.Row="1"
+                                                      SelectiveScrollingGrid.SelectiveScrollingOrientation="{Binding AreRowDetailsFrozen, ConverterParameter={x:Static SelectiveScrollingOrientation.Vertical}, Converter={x:Static DataGrid.RowDetailsScrollingConverter}, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}"
+                                                      Visibility="{TemplateBinding DetailsVisibility}" />
+                        </SelectiveScrollingGrid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="AlternationIndex" Value="1">
+                <Setter Property="Background" Value="{DynamicResource DcZebraBrush}" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="DcDataGrid" TargetType="{x:Type DataGrid}" BasedOn="{StaticResource DefaultDataGridStyle}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="GridLinesVisibility" Value="None" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="RowHeaderWidth" Value="0" />
+        <Setter Property="SelectionUnit" Value="FullRow" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="AutoGenerateColumns" Value="False" />
+        <Setter Property="CanUserAddRows" Value="False" />
+        <Setter Property="CanUserDeleteRows" Value="False" />
+        <Setter Property="CanUserResizeColumns" Value="False" />
+        <Setter Property="CanUserReorderColumns" Value="False" />
+        <Setter Property="CanUserSortColumns" Value="True" />
+        <Setter Property="AlternationCount" Value="2" />
+        <Setter Property="ClipboardCopyMode" Value="ExcludeHeader" />
+        <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+        <Setter Property="EnableRowVirtualization" Value="True" />
+        <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+        <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+        <Setter Property="ColumnHeaderStyle" Value="{StaticResource DcDataGridColumnHeader}" />
+        <Setter Property="CellStyle" Value="{StaticResource DcDataGridCell}" />
+        <Setter Property="RowStyle" Value="{StaticResource DcDataGridRow}" />
+        <Style.Triggers>
+            <!-- WPF's own grid style turns content scrolling off while the rows are grouped (which makes the grid realize every row);
+                 a trigger of ours, which comes later, turns it back on. Grouped grids also set VirtualizingPanel.IsVirtualizingWhenGrouping. -->
+            <Trigger Property="IsGrouping" Value="True">
+                <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 </ResourceDictionary>

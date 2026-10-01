@@ -34,8 +34,11 @@ public partial class RegistriesPanel : UserControl
     /// <summary>The columns the sources grid is read for - id, enabled, entries - however narrow it is.</summary>
     private const int MinLeadingColumns = 3;
 
-    /// <summary>The star weights the XAML gave the sources columns, captured before they are replaced by resolved widths.</summary>
+    /// <summary>The star weights the XAML gave the sources columns, captured before they are replaced by resolved widths (0 for a fixed-width column, the row menu).</summary>
     private readonly Dictionary<DataGridColumn, double> _columnWeights = new();
+
+    /// <summary>The floor of each sources column: its <c>MinWidth</c>, or for a fixed-width column that width.</summary>
+    private readonly Dictionary<DataGridColumn, double> _columnMinimums = new();
 
     /// <summary>How tall the raw-fields expander is when closed (just its header), the baseline for how much it adds when open.</summary>
     private double _rawFieldsClosedHeight;
@@ -128,13 +131,14 @@ public partial class RegistriesPanel : UserControl
         {
             foreach (var column in columns)
             {
-                _columnWeights[column] = column.Width.IsStar ? column.Width.Value : 1;
+                _columnWeights[column] = column.Width.IsStar ? column.Width.Value : 0;
+                _columnMinimums[column] = column.Width.IsStar ? column.MinWidth : column.Width.Value;
             }
         }
 
         // One DIP short of the viewport, so rounding cannot leave a one-pixel sideways scrollbar.
         var available = Math.Floor(scroll.ViewportWidth) - 1;
-        var minimums = columns.Select(column => column.MinWidth).ToArray();
+        var minimums = columns.Select(column => _columnMinimums.GetValueOrDefault(column, column.MinWidth)).ToArray();
         var widths = ColumnSizing.Distribute(
             available,
             columns.Select(column => _columnWeights.GetValueOrDefault(column, 1)).ToArray(),
@@ -180,6 +184,48 @@ public partial class RegistriesPanel : UserControl
         }
 
         return null;
+    }
+
+    // ---- Row menus. The row is already selected (ctl:DcRowMenu), so each item runs the toolbar's command on it.
+
+    private void OnSyncSource(object sender, RoutedEventArgs e) => RunOnSource(v => v.SyncSelectedCommand);
+
+    private void OnToggleSource(object sender, RoutedEventArgs e) => RunOnSource(v => v.ToggleSelectedEnabledCommand);
+
+    private void OnRemoveSource(object sender, RoutedEventArgs e) => RunOnSource(v => v.RemoveSelectedCommand);
+
+    private void OnApproveEntry(object sender, RoutedEventArgs e) => RunOnEntry(sender, v => v.ApproveEntryCommand);
+
+    private void OnRejectEntry(object sender, RoutedEventArgs e) => RunOnEntry(sender, v => v.RejectEntryCommand);
+
+    private void RunOnSource(Func<RegistriesPanelViewModel, System.Windows.Input.ICommand> command)
+    {
+        if (DataContext is RegistriesPanelViewModel viewModel)
+        {
+            Run(command(viewModel));
+        }
+    }
+
+    private void RunOnEntry(object sender, Func<RegistriesPanelViewModel, System.Windows.Input.ICommand> command)
+    {
+        if (DataContext is RegistriesPanelViewModel viewModel)
+        {
+            // The menu belongs to the row it was opened on; make sure that row is the one the command acts on.
+            if (sender is FrameworkElement { DataContext: RegistryEntryRow row })
+            {
+                viewModel.SelectedEntry = row;
+            }
+
+            Run(command(viewModel));
+        }
+    }
+
+    private static void Run(System.Windows.Input.ICommand command)
+    {
+        if (command.CanExecute(null))
+        {
+            command.Execute(null);
+        }
     }
 
     /// <summary>

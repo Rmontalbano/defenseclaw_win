@@ -510,8 +510,12 @@ public sealed class PageChromeTests
         // a static reference is to a key of this file.
         foreach (Match use in Regex.Matches(controls, @"\{StaticResource (\w+)\}"))
         {
+            // (WPF-UI's own styles, "Default...", are in the application's dictionaries before this one is read: the dense table
+            // style is built on its grid style.)
             var key = use.Groups[1].Value;
-            Assert.True(controls.Contains($"x:Key=\"{key}\"", StringComparison.Ordinal), $"{key} is a static reference to a key this file does not define");
+            Assert.True(
+                key.StartsWith("Default", StringComparison.Ordinal) || controls.Contains($"x:Key=\"{key}\"", StringComparison.Ordinal),
+                $"{key} is a static reference to a key this file does not define");
         }
     }
 

@@ -481,6 +481,30 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         }
     }
 
+    /// <summary>Every row selected in the table (the table is Extended-select; <see cref="SelectedAlert"/> is the first of them, which drives the detail pane).</summary>
+    private IReadOnlyList<AlertItem> _selectedMany = Array.Empty<AlertItem>();
+
+    /// <summary>The rows the table has selected, for the row menu: Copy details acts on all of them, and Acknowledge / Dismiss open on the worst of their severities.</summary>
+    public IReadOnlyList<AlertItem> SelectedAlerts => _selectedMany;
+
+    /// <summary>Called by the view whenever the table's selection changes.</summary>
+    public void NoteSelection(IEnumerable<AlertItem> selected)
+    {
+        ArgumentNullException.ThrowIfNull(selected);
+        _selectedMany = selected.ToList();
+    }
+
+    /// <summary>The rows a menu action applies to: the table's selection, or the one row the detail pane shows when the view has not reported a selection.</summary>
+    public IReadOnlyList<AlertItem> ActionRows =>
+        _selectedMany.Count > 0 ? _selectedMany : SelectedAlert is { } one ? new[] { one } : Array.Empty<AlertItem>();
+
+    /// <summary>"time [SEVERITY] action target - details" for each row, one per line (the Mac's Copy Details).</summary>
+    public static string CopyText(IEnumerable<AlertItem> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return string.Join(Environment.NewLine, rows.Select(r => r.CopyLine));
+    }
+
     /// <summary>Closes the detail pane (Esc, or its own close button).</summary>
     [RelayCommand]
     private void ClearSelection() => SelectedAlert = null;
@@ -543,7 +567,10 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     /// </summary>
     private SeverityChoice DefaultReviewSeverity()
     {
-        var wanted = SelectedAlert?.Severity;
+        // Several rows selected in the table (the row menu opens this review for the selection): the worst of them.
+        var wanted = _selectedMany.Count > 1
+            ? _selectedMany.OrderByDescending(a => a.SeverityRank).First().Severity
+            : SelectedAlert?.Severity;
         if (wanted is not null &&
             ReviewSeverities.FirstOrDefault(c => string.Equals(c.Value, wanted, StringComparison.OrdinalIgnoreCase)) is { } exact)
         {
@@ -1627,12 +1654,47 @@ public sealed partial class AlertItem : ObservableObject
 
     public string TimestampText => Timestamp.ToLocalTime().ToString("MMM d HH:mm:ss", CultureInfo.CurrentCulture);
 
+    /// <summary>The table's Time cell: the clock time for today's alerts, the date and minute for older ones (the full stamp is in <see cref="TimestampText"/>).</summary>
+    public string TableTimeText
+    {
+        get
+        {
+            var local = Timestamp.ToLocalTime();
+            return local.Date == DateTimeOffset.Now.Date
+                ? local.ToString("HH:mm:ss", CultureInfo.CurrentCulture)
+                : local.ToString("MMM d HH:mm", CultureInfo.CurrentCulture);
+        }
+    }
+
     public string Severity { get; private init; } = "INFO";
 
     /// <summary>Critical / High / Medium / Low / Info — the view's colour key.</summary>
     public string SeverityKey => KeyFor(Severity);
 
+    /// <summary>Critical 4 ... Info 0: what the Severity column sorts by (the words sort alphabetically, which is no order).</summary>
+    public int SeverityRank => SeverityKey switch
+    {
+        "Critical" => 4,
+        "High" => 3,
+        "Medium" => 2,
+        "Low" => 1,
+        _ => 0,
+    };
+
     public string RuleId { get; private init; } = string.Empty;
+
+    /// <summary>The run (agent session) the alert came from, as far as the source says; empty when it does not.</summary>
+    public string RunId { get; private init; } = string.Empty;
+
+    /// <summary>One line for the clipboard: "Sep 30 11:35:57 [HIGH] scan-finding target - details".</summary>
+    public string CopyLine
+    {
+        get
+        {
+            var line = $"{TimestampText} [{Severity}] {Action} {TargetRef}".TrimEnd();
+            return Headline.Length > 0 ? $"{line} - {Headline}" : line;
+        }
+    }
 
     public string Headline { get; private init; } = string.Empty;
 
@@ -1693,6 +1755,7 @@ public sealed partial class AlertItem : ObservableObject
         {
             Severity = Normalize(alert.Severity),
             RuleId = alert.RuleId ?? string.Empty,
+            RunId = alert.RunId ?? string.Empty,
             Headline = alert.Title ?? alert.Details ?? alert.Action ?? "(finding)",
             Action = alert.Action ?? string.Empty,
             TargetRef = alert.TargetRef ?? alert.Target ?? string.Empty,
@@ -1718,6 +1781,7 @@ public sealed partial class AlertItem : ObservableObject
         {
             Severity = Normalize(row.Severity),
             RuleId = row.StructuredString(GatewayAlert.Keys.RuleId) ?? string.Empty,
+            RunId = row.RunId ?? string.Empty,
             Headline = row.StructuredString(GatewayAlert.Keys.Title) ?? row.Details ?? row.Action,
             Action = row.Action,
             TargetRef = row.StructuredString(GatewayAlert.Keys.TargetRef) ?? row.Target ?? string.Empty,
@@ -1755,6 +1819,7 @@ public sealed partial class AlertItem : ObservableObject
     {
         Severity = Severity,
         RuleId = RuleId,
+        RunId = RunId,
         Headline = Headline,
         Action = Action,
         TargetRef = TargetRef,

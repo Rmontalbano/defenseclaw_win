@@ -225,6 +225,49 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private void ClearSelection() => SelectedRow = null;
 
+    private IReadOnlyList<AuditRow> _selectedMany = Array.Empty<AuditRow>();
+
+    /// <summary>Every row the table has selected (it is Extended-select; <see cref="SelectedRow"/> is the first, which drives the detail pane).</summary>
+    public IReadOnlyList<AuditRow> SelectedRows => _selectedMany;
+
+    /// <summary>Called by the view whenever the table's selection changes.</summary>
+    public void NoteSelection(IEnumerable<AuditRow> selected)
+    {
+        ArgumentNullException.ThrowIfNull(selected);
+        _selectedMany = selected.ToList();
+    }
+
+    /// <summary>The rows a menu action applies to: the table's selection, or the one row the detail pane shows when the view has not reported a selection.</summary>
+    public IReadOnlyList<AuditRow> ActionRows =>
+        _selectedMany.Count > 0 ? _selectedMany : SelectedRow is { } one ? new[] { one } : Array.Empty<AuditRow>();
+
+    /// <summary>"time action target [SEVERITY] details" for each row, one per line (the Mac's Copy Details).</summary>
+    public static string CopyDetailsText(IEnumerable<AuditRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return string.Join(Environment.NewLine, rows.Select(r => r.CopyLine));
+    }
+
+    /// <summary>The pretty-printed <c>structured_json</c> of each row, one after the other (the Mac's Copy Structured JSON).</summary>
+    public static string CopyStructuredJsonText(IEnumerable<AuditRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return string.Join(Environment.NewLine, rows.Select(r => r.StructuredJson));
+    }
+
+    /// <summary>
+    /// "Show same target": narrows the list to events about the row's target by putting it in the search box (the search
+    /// matches the target column, among others), which reloads like any other search. A row with no target changes nothing.
+    /// </summary>
+    public void ShowSameTarget(AuditRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (row.Target.Length > 0)
+        {
+            SearchText = row.Target;
+        }
+    }
+
     /// <summary>
     /// Puts every filter back and reloads <em>once</em>. Each of the seven properties reloads when it changes, so from a
     /// fully filtered state this used to start up to seven page queries and seven counts on a multi-gigabyte database, the
@@ -631,6 +674,15 @@ public sealed class AuditRow
         RelativeTime = Relative(source.Timestamp);
         Severity = string.IsNullOrWhiteSpace(source.Severity) ? "—" : source.Severity;
         SeverityKey = KeyFor(source.SeverityLevel);
+        SeverityRank = source.SeverityLevel switch
+        {
+            AuditSeverity.Critical => 4,
+            AuditSeverity.High => 3,
+            AuditSeverity.Medium or AuditSeverity.Warn => 2,
+            AuditSeverity.Low => 1,
+            AuditSeverity.Info => 0,
+            _ => -1,
+        };
         Bucket = source.Bucket ?? "—";
         Action = source.Action;
         Connector = source.Connector ?? "platform";
@@ -716,6 +768,12 @@ public sealed class AuditRow
     public IReadOnlyList<AuditDetailField> Fields { get; }
 
     public string Summary => Details.Length > 0 ? Details : EventName;
+
+    /// <summary>Critical 4 ... Info 0, unknown -1: what the Severity column sorts by (the words sort alphabetically, which is no order).</summary>
+    public int SeverityRank { get; }
+
+    /// <summary>One line for the clipboard: "Sep 30 11:35 hook_decision target [HIGH] details".</summary>
+    public string CopyLine => $"{TimestampText} {Action} {Target} [{Severity}] {Summary}".Replace("  ", " ", StringComparison.Ordinal).Trim();
 
     /// <summary>
     /// What a screen reader announces for the row (UI Automation falls back to

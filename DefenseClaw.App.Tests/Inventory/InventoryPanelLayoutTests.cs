@@ -377,6 +377,62 @@ public class InventoryPanelLayoutTests
     // ------------------------------------------------------------------ scene
 
     /// <summary>The shell stand-in with an Inventory panel over a synthetic inventory.db, loaded and laid out.</summary>
+    // ------------------------------------------------------------------ sorting
+
+    [Fact]
+    public void A_header_sorts_the_rows_within_their_groups_and_leaves_the_groups_in_order()
+    {
+        using var scene = Scene.Open(1400, 900, components: 60);
+
+        UiThread.Run(() =>
+        {
+            var installs = VisualTree.Descendants<System.Windows.Controls.Primitives.DataGridColumnHeader>(scene.ComponentsGrid)
+                .First(h => h.Column is not null && (string)h.Column.Header == "Installs");
+            Assert.False(string.IsNullOrEmpty(installs.Column.SortMemberPath));
+
+            Press(installs, System.Windows.Input.Key.Space);
+            scene.Host.Relayout();
+            Assert.Equal(System.ComponentModel.ListSortDirection.Ascending, installs.SortDirection);
+            AssertGroupedAndSorted(scene.ViewModel, descending: false);
+
+            Press(installs, System.Windows.Input.Key.Space);
+            scene.Host.Relayout();
+            Assert.Equal(System.ComponentModel.ListSortDirection.Descending, installs.SortDirection);
+            AssertGroupedAndSorted(scene.ViewModel, descending: true);
+
+            // Another header takes the arrow; the first one lets go of it.
+            var name = VisualTree.Descendants<System.Windows.Controls.Primitives.DataGridColumnHeader>(scene.ComponentsGrid)
+                .First(h => h.Column is not null && (string)h.Column.Header == "Name");
+            Press(name, System.Windows.Input.Key.Space);
+            Assert.Null(installs.SortDirection);
+            Assert.Equal(System.ComponentModel.ListSortDirection.Ascending, name.SortDirection);
+        });
+    }
+
+    private static void AssertGroupedAndSorted(InventoryPanelViewModel viewModel, bool descending)
+    {
+        var rows = viewModel.ComponentsView.Cast<InventoryComponentRow>().ToList();
+        Assert.Equal(60, rows.Count);
+
+        // The groups (vendors) stay alphabetical whatever the column order says.
+        var vendors = rows.Select(r => r.VendorDisplay).Distinct().ToList();
+        Assert.Equal(vendors.Order(StringComparer.CurrentCulture).ToList(), vendors);
+
+        // Within a group the rows follow the sorted column.
+        foreach (var group in rows.GroupBy(r => r.VendorDisplay))
+        {
+            var counts = group.Select(r => r.InstallCount ?? int.MinValue).ToList();
+            Assert.Equal(descending ? counts.OrderByDescending(c => c).ToList() : counts.OrderBy(c => c).ToList(), counts);
+        }
+    }
+
+    private static void Press(System.Windows.Controls.Primitives.DataGridColumnHeader header, System.Windows.Input.Key key)
+    {
+        var source = PresentationSource.FromVisual(header);
+        header.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, Environment.TickCount, key) { RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent, Source = header });
+        header.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, Environment.TickCount, key) { RoutedEvent = System.Windows.Input.Keyboard.KeyUpEvent, Source = header });
+    }
+
     private sealed class Scene : IDisposable
     {
         private readonly TempDirectory _temp = new();
