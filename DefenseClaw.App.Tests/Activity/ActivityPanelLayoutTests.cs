@@ -5,6 +5,7 @@ using System.Windows.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.App.Views.Controls;
 using DefenseClaw.App.Views.Panels;
 using DefenseClaw.Core.Cli;
 using Scene = DefenseClaw.App.Tests.TestSupport.ActivityScene;
@@ -95,7 +96,8 @@ public class ActivityPanelLayoutTests
         {
             var row = scene.AddRow(invocation, expand: false);
 
-            Assert.Empty(VisualTree.Descendants<ListBoxItem>(scene.Shell.Page!));
+            // The Commands | Mutations switch is a list too (DcSegmented): its two segments are not output rows.
+            Assert.All(VisualTree.Descendants<ListBoxItem>(scene.Shell.Page!), item => Assert.IsType<DcSegment>(item));
             Assert.Equal(20_000, row.Output.Count);
         });
     }

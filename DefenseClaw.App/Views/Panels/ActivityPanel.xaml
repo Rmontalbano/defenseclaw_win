@@ -194,7 +194,39 @@
                            ctl:DcIcon.Section="Observe"
                            Title="{Binding Title}"
                            TitleToolTip="{Binding Description}"
-                           Caption="{Binding CapacityNote}">
+                           Caption="{Binding CaptionText}"
+                           HasSearch="{Binding IsMutationsTab}"
+                           SearchText="{Binding Mutations.SearchText, Mode=TwoWay}"
+                           SearchDelay="300"
+                           SearchWidth="240"
+                           SearchPlaceholder="Search mutations…"
+                           SearchAutomationName="Search mutations"
+                           SearchHelpText="Free text over the actor, action, target and reason of the changes loaded.">
+            <!-- Commands | Mutations, right after the title (the Mac's picker above its table). -->
+            <ctl:DcPageToolbar.Leading>
+                <ctl:DcSegmented x:Name="TabSwitch"
+                                 Margin="12,0,0,0"
+                                 SelectedValue="{Binding ActiveTab, Mode=TwoWay}"
+                                 AutomationProperties.Name="Activity view">
+                    <ctl:DcSegment Value="Commands"
+                                   Content="Commands"
+                                   ToolTip="Commands this app has run in this session" />
+                    <ctl:DcSegment Value="Mutations"
+                                   Content="Mutations"
+                                   ToolTip="Configuration and policy changes recorded in the audit database" />
+                </ctl:DcSegmented>
+            </ctl:DcPageToolbar.Leading>
+            <!-- The connector filter, for Mutations once a change names a connector. -->
+            <ctl:DcPageToolbar.ConnectorSlot>
+                <StackPanel Orientation="Horizontal"
+                            Visibility="{Binding ShowConnectorFilter, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector" />
+                    <ComboBox Width="150"
+                              ItemsSource="{Binding Mutations.Connectors}"
+                              SelectedItem="{Binding Mutations.SelectedConnector, Mode=TwoWay}"
+                              AutomationProperties.Name="Connector" />
+                </StackPanel>
+            </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
@@ -202,12 +234,13 @@
                                ToolTip="Refresh (F5)"
                                AutomationProperties.Name="Refresh"
                                AutomationProperties.AcceleratorKey="F5"
-                               AutomationProperties.HelpText="Re-sync the list with the commands this session has run. Runs nothing. Shortcut F5." />
+                               AutomationProperties.HelpText="Commands: re-sync the list with the commands this session has run. Mutations: read the audit database again. Runs nothing. Shortcut F5." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Delete24}"
                                Command="{Binding ClearActivityCommand}"
                                ToolTip="Clear the list"
                                AutomationProperties.Name="Clear"
-                               AutomationProperties.HelpText="Forget every entry in this list. Commands that are still running keep running." />
+                               AutomationProperties.HelpText="Forget every entry in this list. Commands that are still running keep running."
+                               Visibility="{Binding IsCommandsTab, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
@@ -221,8 +254,14 @@
                     Message="{Binding NoticeText}"
                     AutomationProperties.LiveSetting="Polite" />
 
+        <!-- Mutations: the audit database's configuration and policy changes (its own view; the Commands list below is untouched). -->
+        <panels:ActivityMutationsView x:Name="MutationsView"
+                                      Grid.Row="2"
+                                      DataContext="{Binding Mutations}"
+                                      Visibility="{Binding DataContext.IsMutationsTab, RelativeSource={RelativeSource AncestorType=panels:ActivityPanel}, Converter={StaticResource BoolToVisibility}}" />
+
         <!-- List -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2" Visibility="{Binding IsCommandsTab, Converter={StaticResource BoolToVisibility}}">
             <ItemsControl x:Name="Cards"
                           Style="{StaticResource CardList}"
                           ItemsSource="{Binding Rows}"

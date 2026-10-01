@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
+using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Cli;
 
 namespace DefenseClaw.App.ViewModels;
@@ -78,9 +79,22 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     [ObservableProperty]
     private bool _hasNotice;
 
+    /// <summary>The Commands tab's value (the segmented control's <c>SelectedValue</c>).</summary>
+    public const string CommandsTab = "Commands";
+
+    /// <summary>The Mutations tab's value.</summary>
+    public const string MutationsTab = "Mutations";
+
     public ActivityPanelViewModel(AppServices services)
+        : this(services, new MutationReader((services ?? throw new ArgumentNullException(nameof(services))).Paths.AuditDatabasePath))
+    {
+    }
+
+    internal ActivityPanelViewModel(AppServices services, MutationReader mutationReader)
         : base(services)
     {
+        Mutations = new ActivityMutationsViewModel(mutationReader);
+        Mutations.PropertyChanged += OnMutationsChanged;
         Services.Cli.InvocationStarted += OnInvocationStarted;
         Services.Cli.InvocationCompleted += OnInvocationCompleted;
 
@@ -123,6 +137,56 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
 
     public ObservableCollection<ActivityRow> Rows { get; } = new();
 
+    /// <summary>The Mutations tab: configuration and policy changes read from the audit database.</summary>
+    public ActivityMutationsViewModel Mutations { get; }
+
+    /// <summary>Commands (this app's own CLI runs, in memory) or Mutations (the audit database); two-way with the segmented control.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCommandsTab))]
+    [NotifyPropertyChangedFor(nameof(IsMutationsTab))]
+    [NotifyPropertyChangedFor(nameof(CaptionText))]
+    [NotifyPropertyChangedFor(nameof(ShowConnectorFilter))]
+    private string _activeTab = CommandsTab;
+
+    /// <summary>The connector filter is for the Mutations tab, once a loaded change names a connector.</summary>
+    public bool ShowConnectorFilter => IsMutationsTab && Mutations.CanFilterConnectors;
+
+    public bool IsCommandsTab => ActiveTab != MutationsTab;
+
+    public bool IsMutationsTab => ActiveTab == MutationsTab;
+
+    /// <summary>The toolbar caption: the Commands capacity note, or the Mutations count.</summary>
+    public string CaptionText => IsMutationsTab ? Mutations.Summary : CapacityNote;
+
+    partial void OnActiveTabChanged(string value)
+    {
+        if (value == MutationsTab)
+        {
+            if (IsActive || !Mutations.HasLoaded)
+            {
+                _ = Mutations.LoadAsync();
+            }
+        }
+        else
+        {
+            // The statement stops with the tab; the rows already read stay for the way back.
+            Mutations.Cancel();
+        }
+    }
+
+    /// <summary>The toolbar caption follows the Mutations summary, which changes as reads land and filters apply.</summary>
+    private void OnMutationsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ActivityMutationsViewModel.Summary))
+        {
+            OnPropertyChanged(nameof(CaptionText));
+        }
+        else if (e.PropertyName == nameof(ActivityMutationsViewModel.CanFilterConnectors))
+        {
+            OnPropertyChanged(nameof(ShowConnectorFilter));
+        }
+    }
+
     public override Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         LoadActivity();
@@ -134,9 +198,20 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     /// output, while the panel was away is stale until then), and the timer is armed if any
     /// are still running.
     /// </summary>
-    protected override void OnActivated() => TickRunningRows();
+    protected override void OnActivated()
+    {
+        TickRunningRows();
+        if (IsMutationsTab)
+        {
+            _ = Mutations.LoadAsync();
+        }
+    }
 
-    protected override void OnDeactivated() => _timer.Stop();
+    protected override void OnDeactivated()
+    {
+        _timer.Stop();
+        Mutations.Cancel();
+    }
 
     /// <summary>
     /// What F5 invokes. Re-syncs the list with the runner's ring (rows that are already shown are
@@ -146,6 +221,12 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private void Refresh()
     {
+        if (IsMutationsTab)
+        {
+            _ = Mutations.LoadAsync();
+            return;
+        }
+
         LoadActivity();
         TickRunningRows();
     }

@@ -1,0 +1,285 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.ActivityMutationsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             panels:CompactLayout.Below="960">
+    <!--
+        The Activity panel's Mutations tab (the Mac's Activity ▸ Mutations): who changed configuration or policy, read from the audit
+        database. A dense table (DcDataGrid) beside the flush inspector (DcInspector), the same arrangement as the Audit panel: with no
+        selection the table takes the whole width; with one, the table and the 360 px inspector split, and on a narrow panel
+        (CompactLayout, under 960 px) the inspector takes the whole width until it is closed (Esc, or its X).
+
+        The inspector's diff is the Mac's DiffView: two mono columns, Before tinted in the critical tone and After in the ok tone
+        (the shared tone tints, no colours of its own), with the marker in the heading as well as the tint so it does not rest on
+        colour alone. A change that recorded only a diff shows it as a unified diff (- red, + green); an audit row with neither shows
+        its own structured record.
+    -->
+    <UserControl.Resources>
+        <Style x:Key="MutationTimeText" TargetType="TextBlock" BasedOn="{StaticResource DcCellText}">
+            <Setter Property="ToolTip" Value="{Binding FullTimestampText}" />
+            <Setter Property="ctl:DcCellToolTip.OnlyWhenTrimmed" Value="False" />
+        </Style>
+
+        <Style x:Key="MutationListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+            <Style.Triggers>
+                <!-- With the inspector open the list's right edge meets its divider: square, no border of its own on that side. -->
+                <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                    <Setter Property="Grid.ColumnSpan" Value="1" />
+                    <Setter Property="CornerRadius" Value="0" />
+                    <Setter Property="BorderThickness" Value="1,1,0,1" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasSelection}" Value="True" />
+                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- One side of the diff: a tinted well under a heading in the same tone. -->
+        <Style x:Key="DiffWell" TargetType="Border">
+            <Setter Property="CornerRadius" Value="{DynamicResource DcRadiusM}" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="Background" Value="{DynamicResource DcToneNeutralSubtleBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Before">
+                    <Setter Property="Background" Value="{DynamicResource DcToneCriticalSubtleBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="After">
+                    <Setter Property="Background" Value="{DynamicResource DcToneOkSubtleBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DiffHeading" TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Before">
+                    <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="After">
+                    <Setter Property="Foreground" Value="{DynamicResource DcToneOkBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- One line of a unified diff: removed lines on the critical tint, added on the ok tint, context plain. -->
+        <Style x:Key="UnifiedLine" TargetType="Border">
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding KindKey}" Value="Removed">
+                    <Setter Property="Background" Value="{DynamicResource DcToneCriticalSubtleBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding KindKey}" Value="Added">
+                    <Setter Property="Background" Value="{DynamicResource DcToneOkSubtleBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="360" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <Border x:Name="ListCard" Style="{StaticResource MutationListCard}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ui:DataGrid x:Name="RowList"
+                             Style="{StaticResource DcDataGrid}"
+                             RowStyle="{StaticResource DcDataGridRow}"
+                             ItemsSource="{Binding Rows}"
+                             SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                             SelectionMode="Single"
+                             VirtualizingPanel.ScrollUnit="Pixel"
+                             ctl:DcGridColumns.Fit="True"
+                             AutomationProperties.Name="Configuration and policy changes">
+                    <ui:DataGrid.Columns>
+                        <DataGridTextColumn Width="0.9*" MinWidth="88" Header="Time"
+                                            SortMemberPath="Timestamp"
+                                            ElementStyle="{StaticResource MutationTimeText}"
+                                            Binding="{Binding TimestampText}" />
+                        <DataGridTextColumn Width="1*" MinWidth="72" Header="Actor"
+                                            SortMemberPath="Actor"
+                                            ElementStyle="{StaticResource DcCellText}"
+                                            Binding="{Binding Actor}" />
+                        <DataGridTextColumn Width="1.4*" MinWidth="88" Header="Action"
+                                            SortMemberPath="Action"
+                                            ElementStyle="{StaticResource DcCellText}"
+                                            Binding="{Binding Action}" />
+                        <DataGridTextColumn Width="1.5*" MinWidth="80" Header="Target"
+                                            SortMemberPath="TargetText"
+                                            ElementStyle="{StaticResource DcCellText}"
+                                            Binding="{Binding TargetText}" />
+                        <DataGridTextColumn Width="1*" MinWidth="84" Header="Version"
+                                            SortMemberPath="VersionText"
+                                            ElementStyle="{StaticResource DcCellTextMono}"
+                                            Binding="{Binding VersionText}" />
+                        <DataGridTextColumn Width="0.9*" MinWidth="72" Header="Connector"
+                                            SortMemberPath="ConnectorText"
+                                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                                            Binding="{Binding ConnectorText}" />
+                        <DataGridTextColumn Width="2*" MinWidth="90" Header="Reason"
+                                            SortMemberPath="ReasonText"
+                                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                                            Binding="{Binding ReasonText}" />
+                    </ui:DataGrid.Columns>
+                </ui:DataGrid>
+
+                <!-- Empty is the expected state today (the live activity_events table is empty): say where changes will appear. -->
+                <StackPanel Style="{StaticResource DcEmptyState}"
+                            MaxWidth="440"
+                            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="History24" />
+                    <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                </StackPanel>
+
+                <WrapPanel Grid.Row="1" Margin="8,6,8,4" HorizontalAlignment="Center">
+                    <TextBlock Style="{StaticResource DcToneText}"
+                               Tag="Warn"
+                               FontSize="12"
+                               MaxWidth="520"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Text="{Binding StatusNote}"
+                               Visibility="{Binding HasStatusNote, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:ProgressRing Width="20"
+                                     Height="20"
+                                     Margin="10,0,0,0"
+                                     IsIndeterminate="True"
+                                     AutomationProperties.Name="Loading"
+                                     Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <!-- Inspector: opens while a change is selected; the table takes the whole width otherwise. -->
+        <ctl:DcInspector x:Name="Inspector"
+                         Title="Change details"
+                         IsOpen="{Binding HasSelection}"
+                         CloseCommand="{Binding ClearSelectionCommand}"
+                         CloseAutomationName="Close change details"
+                         AutomationProperties.Name="Change details"
+                         Content="{Binding SelectedRow}">
+            <ctl:DcInspector.ContentTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0" Text="{Binding Action}" />
+
+                        <ItemsControl Margin="0,10,0,0"
+                                      ItemsSource="{Binding Fields}"
+                                      AutomationProperties.Name="Change fields">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="82" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Style="{StaticResource DcCaption}"
+                                                   Margin="0,0,10,0"
+                                                   Text="{Binding Key}" />
+                                        <TextBox Grid.Column="1"
+                                                 Style="{StaticResource DcMonoTextBox}"
+                                                 TextWrapping="Wrap"
+                                                 AutomationProperties.Name="{Binding Key}"
+                                                 Text="{Binding Value, Mode=OneWay}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Before / After: two tinted mono columns. -->
+                        <StackPanel Margin="0,14,0,0"
+                                    Visibility="{Binding ShowBeforeAfter, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcCardHeader Margin="0,0,0,6" Symbol="ArrowSwap24" Section="Observe" Content="Before and after" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource DiffWell}" Tag="Before">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource DiffHeading}" Tag="Before" Text="− Before" />
+                                        <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                     TextWrapping="NoWrap"
+                                                     AutomationProperties.Name="Before"
+                                                     Text="{Binding BeforeText, Mode=OneWay}" />
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="2" Style="{StaticResource DiffWell}" Tag="After">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource DiffHeading}" Tag="After" Text="+ After" />
+                                        <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                     TextWrapping="NoWrap"
+                                                     AutomationProperties.Name="After"
+                                                     Text="{Binding AfterText, Mode=OneWay}" />
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Only a diff was recorded: a unified diff. -->
+                        <StackPanel Margin="0,14,0,0"
+                                    Visibility="{Binding ShowUnified, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcCardHeader Margin="0,0,0,6" Symbol="ArrowSwap24" Section="Observe" Content="Diff" />
+                            <Border Style="{StaticResource DcCodeBlock}" Padding="0,4">
+                                <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding UnifiedLines}" AutomationProperties.Name="Unified diff">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource UnifiedLine}">
+                                                    <TextBlock Style="{StaticResource DcMono}" Text="{Binding Text}" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- An audit row records what happened, not a diff: show its own record. -->
+                        <StackPanel Margin="0,14,0,0"
+                                    Visibility="{Binding ShowRecorded, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcCardHeader Margin="0,0,0,6" Symbol="Code24" Section="Observe" Content="Recorded detail" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                    <TextBox Style="{StaticResource DcMonoTextBox}"
+                                             TextWrapping="NoWrap"
+                                             AutomationProperties.Name="Recorded detail"
+                                             Text="{Binding RecordedText, Mode=OneWay}" />
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,14,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="This change recorded no before / after values or diff."
+                                   Visibility="{Binding ShowNothing, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ctl:DcInspector.ContentTemplate>
+        </ctl:DcInspector>
+    </Grid>
+</UserControl>
