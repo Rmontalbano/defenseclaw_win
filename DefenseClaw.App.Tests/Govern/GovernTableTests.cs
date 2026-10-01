@@ -189,7 +189,21 @@ public sealed class GovernTableTests
         {
             foreach (var (width, height) in new[] { (940, 620), (1400, 900) })
             {
-                using var scene = Scene.Open(panel, width, height);
+                // One retry: on CI the first scene under Cisco Light has twice stalled without realizing a row (see Scene's
+                // diagnostic). A second stall fails with that diagnostic.
+                Scene OpenScene()
+                {
+                    try
+                    {
+                        return Scene.Open(panel, width, height);
+                    }
+                    catch (TimeoutException)
+                    {
+                        return Scene.Open(panel, width, height);
+                    }
+                }
+
+                using var scene = OpenScene();
                 UiThread.Run(() =>
                 {
                     Assert.True(scene.Grid.ActualHeight >= 250, $"{panel} table is {scene.Grid.ActualHeight:0} DIPs tall at {width} x {height}");
@@ -253,22 +267,45 @@ public sealed class GovernTableTests
                 ViewModel.State = GovernState.Loaded;
                 Host.Relayout();
             });
-            UiThread.WaitFor(
-                () =>
-                {
-                    Host.Relayout();
-                    if (Grid is { ActualHeight: > 0, Items.Count: > 0 } grid && !VisualTree.Descendants<DataGridRow>(grid).Any())
+            try
+            {
+                UiThread.WaitFor(
+                    () =>
                     {
-                        // A virtualizing grid measured before its rows arrived can sit with none realized until something asks for
-                        // one (seen once on CI under Cisco Light): ask, as a scroll into view would.
-                        grid.ScrollIntoView(grid.Items[0]);
-                        grid.UpdateLayout();
-                    }
+                        Host.Relayout();
+                        if (Grid is { ActualHeight: > 0, Items.Count: > 0 } grid && !VisualTree.Descendants<DataGridRow>(grid).Any())
+                        {
+                            // A virtualizing grid measured before its rows arrived can sit with none realized until something asks for
+                            // one: ask, as a scroll into view would.
+                            grid.ScrollIntoView(grid.Items[0]);
+                            grid.UpdateLayout();
+                        }
 
-                    return Grid is { ActualHeight: > 0 } && VisualTree.Descendants<DataGridRow>(Grid).Any();
-                },
-                "table laid out",
-                timeoutMilliseconds: 60_000); // a wait, not a bound: CI runners take ~10x longer than a desktop
+                        return Grid is { ActualHeight: > 0 } && VisualTree.Descendants<DataGridRow>(Grid).Any();
+                    },
+                    "table laid out",
+                    timeoutMilliseconds: 60_000); // a wait, not a bound: CI runners take ~10x longer than a desktop
+            }
+            catch (TimeoutException ex)
+            {
+                // CI has timed out here under Cisco Light only, and never locally: say what the table looked like when it gave up.
+                throw new TimeoutException($"{ex.Message} [{panel} {width}x{height}: {UiThread.Run(Describe)}]", ex);
+            }
+        }
+
+        private string Describe()
+        {
+            if (Shell.Page is null)
+            {
+                return "no page";
+            }
+
+            var grid = Shell.Page.FindName("RowGrid") as DataGrid;
+            return grid is null
+                ? "no RowGrid"
+                : $"state {ViewModel.State}, rows {ViewModel.Rows.Count}, items {grid.Items.Count}, visible {grid.IsVisible}, " +
+                  $"size {grid.ActualWidth:0}x{grid.ActualHeight:0}, realized {VisualTree.Descendants<DataGridRow>(grid).Count()}, " +
+                  $"page {Shell.PageSize.Width:0}x{Shell.PageSize.Height:0}";
         }
 
         public PanelShell Shell { get; }
