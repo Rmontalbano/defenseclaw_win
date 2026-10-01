@@ -205,7 +205,7 @@ public class GovernPanelLayoutTests
                     return Shell.PageSize.Width <= width - 225 && list is not null && (panel == "Plugins" || list.ActualHeight > 0);
                 },
                 "page and list laid out",
-                timeoutMilliseconds: 10_000);
+                timeoutMilliseconds: 60_000); // a wait, not a bound: CI runners take ~10x longer than a desktop
         }
 
         public string Panel { get; }

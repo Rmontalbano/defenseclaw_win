@@ -260,7 +260,7 @@ public sealed class GovernTableTests
                     return Grid is { ActualHeight: > 0 } && VisualTree.Descendants<DataGridRow>(Grid).Any();
                 },
                 "table laid out",
-                timeoutMilliseconds: 10_000);
+                timeoutMilliseconds: 60_000); // a wait, not a bound: CI runners take ~10x longer than a desktop
         }
 
         public PanelShell Shell { get; }
