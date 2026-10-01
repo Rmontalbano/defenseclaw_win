@@ -252,8 +252,14 @@ public sealed class AlertsTableTests
             Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(grid));
             Assert.Equal(ScrollUnit.Pixel, VirtualizingPanel.GetScrollUnit(grid));
 
-            // Text is never below 12.
-            Assert.All(VisualTree.Descendants<TextBlock>(grid).Where(t => t.IsVisible && t.Text.Length > 0), t => Assert.True(t.FontSize >= 12, $"'{t.Text}' is {t.FontSize}"));
+            // Text is never below 12. Icon glyphs (a symbol font: the "…" button, the sort arrow) are not text: their size follows the
+            // icon control, which depends on which views the shared UI thread built earlier, and failed this check now and then.
+            static bool IsGlyph(TextBlock t) =>
+                t.FontFamily.Source.Contains("Icons", StringComparison.OrdinalIgnoreCase) ||
+                t.FontFamily.Source.Contains("MDL2", StringComparison.OrdinalIgnoreCase);
+            Assert.All(
+                VisualTree.Descendants<TextBlock>(grid).Where(t => t.IsVisible && t.Text.Length > 0 && !IsGlyph(t)),
+                t => Assert.True(t.FontSize >= 12, $"'{t.Text}' is {t.FontSize} ({t.FontFamily.Source})"));
 
             // The severity word is on every badge.
             var badges = VisualTree.Descendants<DcSeverityBadge>(grid).ToList();
