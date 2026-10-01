@@ -61,7 +61,7 @@ public sealed class LogsPanelViewModelTests : IDisposable
         Assert.Equal(100, panel.BufferedCount);
         Assert.Equal(100, seen.Count);
         Assert.All(seen, action => Assert.Equal(NotifyCollectionChangedAction.Add, action));
-        Assert.Equal("100 of 100 line(s) buffered", panel.StatusLineCount);
+        Assert.Equal("100 shown · 100 matching · 100 total", panel.StatusLineCount);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class LogsPanelViewModelTests : IDisposable
         Assert.Equal(2000, panel.DisplayedLines[0].Sequence);
         Assert.Equal(6999, panel.DisplayedLines[^1].Sequence);
         Assert.Equal(Cap, panel.BufferedCount);
-        Assert.Equal($"{Cap} of {Cap} line(s) buffered", panel.StatusLineCount);
+        Assert.Equal("5,000 shown · 5,000 matching · 5,000 total", panel.StatusLineCount);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public sealed class LogsPanelViewModelTests : IDisposable
         Assert.Equal(Cap, panel.DisplayedLines.Count);
         Assert.Equal("[api] seeded 7000", panel.DisplayedLines[0].Raw);
         Assert.Equal("[api] seeded 11999", panel.DisplayedLines[^1].Raw);
-        Assert.Equal($"{Cap} of {Cap} line(s) buffered", panel.StatusLineCount);
+        Assert.Equal("5,000 shown · 5,000 matching · 5,000 total", panel.StatusLineCount);
     }
 
     [Fact]

@@ -96,6 +96,31 @@ public sealed class BatchObservableCollection<T> : ObservableCollection<T>
         RaiseReset();
     }
 
+    /// <summary>
+    /// Replaces every row with <paramref name="items"/> as one <see cref="NotifyCollectionChangedAction.Reset"/>: a re-projection of a
+    /// 5,000-row list is one notification, not a Clear and 5,000 Adds.
+    /// </summary>
+    public void ReplaceAll(IReadOnlyList<T> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        if (Items is not List<T> list)
+        {
+            Clear();
+            foreach (var item in items)
+            {
+                Add(item);
+            }
+
+            return;
+        }
+
+        CheckReentrancy();
+        list.Clear();
+        list.AddRange(items);
+        RaiseReset();
+    }
+
     private void TrimFront(int excess)
     {
         if (excess > 0)

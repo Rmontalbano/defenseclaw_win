@@ -6,9 +6,11 @@
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              panels:CompactLayout.Below="960">
     <!--
-        Filters above, virtualized monospace list below. gateway.log / watchdog.log carry no
-        timestamp and almost never a level - just "[component] message" - so the component
-        checklist is the filter axis that matters here, not severity.
+        Filters above, virtualized monospace list below. Four streams share the list: gateway.log and watchdog.log (live tails) and
+        the canonical Verdicts / Events streams read from audit.db. Each row is a tone bar (its severity), a time, a bracketed
+        [type:action] label and the message, two lines like the Mac's; a run of identical rows is one row with a "Repeated N times" chip.
+        gateway.log / watchdog.log carry no timestamp and almost never a level - just "[component] message" - so on those two the
+        component checklist is a filter axis too.
 
         On the shared Dc* design system (the page toolbar, the segmented source control). Keyboard: Ctrl+F
         focuses the filter box (the code-behind handles ApplicationCommands.Find), Esc clears the filter text, then closes the inspector.
@@ -17,6 +19,32 @@
         With no selection the list takes the whole width; on a narrow panel (CompactLayout, under 960 px) the inspector replaces the list.
     -->
     <UserControl.Resources>
+        <!-- The row's time and [type:action] label. A row with no time of its own (most log-file lines) shows no gap; the label
+             reads on the accent fill of a selected row instead of disappearing into it. -->
+        <Style x:Key="LogTimeText" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding TimeText}" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource DcOnAccentBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="LogLabelText" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Foreground" Value="{DynamicResource DcAccentBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource DcOnAccentBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="LogListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
             <Setter Property="Grid.Column" Value="0" />
             <Setter Property="Grid.ColumnSpan" Value="2" />
@@ -59,11 +87,16 @@
                            SearchHelpText="Shows only lines that contain this text. Shortcut Ctrl+F; Esc clears it.">
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                               Command="{Binding ReloadFromDiskCommand}"
+                               ToolTip="Reload from disk"
+                               AutomationProperties.Name="Reload from disk"
+                               AutomationProperties.HelpText="Read the stream again: audit.db for Verdicts and Events, the start of the file for a log." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Broom24}"
                                Command="{Binding ClearCommand}"
                                ToolTip="Clear the buffered lines"
                                AutomationProperties.Name="Clear"
-                               AutomationProperties.HelpText="Empty the buffered lines for the source on screen. The log file itself is untouched." />
+                               AutomationProperties.HelpText="Empty the buffered lines for the log file on screen. The file itself is untouched. Not available on Verdicts and Events." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Copy24}"
                                Command="{Binding CopySelectionCommand}"
                                ToolTip="Copy selection"
@@ -73,19 +106,68 @@
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
 
-        <!-- Filter strip: which log, which components, follow the newest line. -->
+        <!-- Filter strip: which stream, the preset and the pickers, which components, follow the newest row, then the count line. -->
         <StackPanel Grid.Row="1">
             <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
-                <!-- Two logs: a segmented control (the value is the view-model's ActiveSource; SelectSourceCommand stays for callers). -->
+                <!-- Four streams: a segmented control (the value is the view-model's ActiveSource; SelectSourceCommand stays for callers).
+                     The Mac's "Otel" stream is the Events stream here: every canonical event. -->
                 <ctl:DcSegmented SelectedValue="{Binding ActiveSource, Mode=TwoWay}"
-                                 AutomationProperties.Name="Log source">
+                                 AutomationProperties.Name="Log stream">
                     <ctl:DcSegment Value="Gateway"
-                                   Content="gateway.log"
+                                   Content="Gateway"
                                    ToolTip="Show gateway.log" />
+                    <ctl:DcSegment Value="Verdicts"
+                                   Content="Verdicts"
+                                   ToolTip="Show the decisions in audit.db: guardrail evaluations, enforcement actions, scans, findings and errors" />
+                    <ctl:DcSegment Value="Events"
+                                   Content="Events"
+                                   ToolTip="Show every canonical event in audit.db (telemetry ingest is hidden unless switched on)" />
                     <ctl:DcSegment Value="Watchdog"
-                                   Content="watchdog.log"
+                                   Content="Watchdog"
                                    ToolTip="Show watchdog.log" />
                 </ctl:DcSegmented>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Preset" />
+                    <ComboBox Width="130"
+                              ItemsSource="{Binding Presets}"
+                              SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
+                              ToolTip="A saved filter: no-noise hides heartbeat chatter, important keeps errors, verdicts and lifecycle, the rest keep one topic"
+                              AutomationProperties.Name="Preset" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Severity ≥" />
+                    <ComboBox Width="140"
+                              ItemsSource="{Binding SeverityOptions}"
+                              SelectedItem="{Binding SelectedSeverity, Mode=TwoWay}"
+                              AutomationProperties.Name="Minimum severity" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Action" />
+                    <ComboBox Width="110"
+                              ItemsSource="{Binding ActionOptions}"
+                              SelectedItem="{Binding SelectedAction, Mode=TwoWay}"
+                              AutomationProperties.Name="Action" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Event" />
+                    <ComboBox Width="130"
+                              ItemsSource="{Binding EventOptions}"
+                              SelectedItem="{Binding SelectedEvent, Mode=TwoWay}"
+                              AutomationProperties.Name="Event kind" />
+                </StackPanel>
+
+                <CheckBox Margin="0,0,12,8"
+                          MinWidth="0"
+                          Content="Telemetry"
+                          IsChecked="{Binding IncludeTelemetry, Mode=TwoWay}"
+                          Visibility="{Binding IsEventsSource, Converter={StaticResource BoolToVisibility}}"
+                          ToolTip="Include the telemetry.ingest bucket, which is most of audit.db and hidden by default"
+                          AutomationProperties.Name="Include telemetry"
+                          AutomationProperties.HelpText="Events only: also show telemetry.ingest events, which are hidden by default because they are most of the table." />
 
                 <ItemsControl Margin="0,0,12,8"
                               VerticalAlignment="Center"
@@ -106,10 +188,16 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <ui:ToggleSwitch Content="{Binding LiveStateText}"
+                <ui:ToggleSwitch Margin="0,0,12,8"
+                                 Content="{Binding LiveStateText}"
                                  IsChecked="{Binding AutoScroll, Mode=TwoWay}"
-                                 AutomationProperties.Name="Follow the newest line"
-                                 AutomationProperties.HelpText="On: the list scrolls to each new line as it arrives (live). Off: the list stays where you are (paused)." />
+                                 AutomationProperties.Name="Auto-scroll"
+                                 AutomationProperties.HelpText="On: the list scrolls to each new row as it arrives (live). Off: the list stays where you are (paused)." />
+
+                <TextBlock Style="{StaticResource DcResultCaption}"
+                           Margin="0,0,0,8"
+                           Text="{Binding StatusLineCount}"
+                           AutomationProperties.Name="Row counts" />
             </WrapPanel>
 
             <ui:InfoBar Margin="0,0,0,8"
@@ -124,6 +212,13 @@
                         Title="Log tail paused"
                         IsOpen="{Binding ShowTailFault, Mode=TwoWay}"
                         Message="{Binding TailFaultText}" />
+
+            <!-- A database stream that cannot be read (or does not exist on this audit.db) says so; the rows already shown stay. -->
+            <ui:InfoBar Margin="0,0,0,8"
+                        Severity="Warning"
+                        Title="Event stream unavailable"
+                        IsOpen="{Binding ShowStreamNotice, Mode=TwoWay}"
+                        Message="{Binding StreamNoticeText}" />
         </StackPanel>
 
         <!-- List + inspector -->
@@ -142,11 +237,11 @@
                          BorderThickness="0"
                          Background="Transparent"
                          HorizontalContentAlignment="Stretch"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling"
-                         AutomationProperties.Name="Log lines"
+                         AutomationProperties.Name="Log rows"
                          SelectionChanged="OnSelectionChanged">
                     <!-- WPF-UI's list item pads 12 px on every side: a one-line log entry became a 42 px row and only
                          three fit on screen. A log is read by the screenful, so rows are 24 px. -->
@@ -160,20 +255,32 @@
                         <DataTemplate>
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="140" />
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                           Style="{StaticResource DcMono}"
-                                           TextWrapping="NoWrap"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource DcTextSecondaryBrush}"
-                                           ToolTip="{Binding ComponentText}"
-                                           Text="{Binding ComponentText}" />
-                                <TextBlock Grid.Column="1"
-                                           Style="{StaticResource DcMono}"
-                                           TextWrapping="NoWrap"
-                                           Text="{Binding Message}" />
+                                <!-- The severity bar; transparent for info. -->
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource DcToneBar}"
+                                        Margin="0,1,8,1"
+                                        Width="3"
+                                        Tag="{Binding Tone}" />
+                                <StackPanel Grid.Column="1">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource LogTimeText}" Text="{Binding TimeText}" />
+                                        <TextBlock Style="{StaticResource LogLabelText}" Text="{Binding Label}" />
+                                        <Border Style="{StaticResource DcChip}"
+                                                Padding="6,0,6,0"
+                                                Visibility="{Binding IsRepeated, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}"
+                                                       Text="{Binding RepeatText}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource DcMono}"
+                                               TextWrapping="Wrap"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxHeight="54"
+                                               Text="{Binding DisplayMessage}" />
+                                </StackPanel>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -202,6 +309,10 @@
                     <DataTemplate>
                         <StackPanel>
                             <TextBlock Style="{StaticResource DcBody}" Text="{Binding Message}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,6,0,0"
+                                       Text="{Binding RepeatText}"
+                                       Visibility="{Binding IsRepeated, Converter={StaticResource BoolToVisibility}}" />
 
                             <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TagMultiple24" Section="Observe" Content="Fields" />
                             <ItemsControl Grid.IsSharedSizeScope="True"
@@ -246,9 +357,6 @@
                      Margin="0,0,16,0"
                      AutomationProperties.Name="Log file path"
                      Text="{Binding StatusPath, Mode=OneWay}" />
-            <TextBlock Style="{StaticResource DcCaption}"
-                       VerticalAlignment="Center"
-                       Text="{Binding StatusLineCount}" />
         </WrapPanel>
     </Grid>
 </UserControl>

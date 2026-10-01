@@ -691,13 +691,13 @@ public sealed class PageChromeTests
                 var segmented = Assert.Single(VisualTree.Descendants<DcSegmented>(page));
                 var viewModel = (DefenseClaw.App.ViewModels.LogsPanelViewModel)shell.ViewModel;
 
-                Assert.Equal("Log source", AutomationProperties.GetName(segmented));
-                Assert.Equal(new[] { "Gateway", "Watchdog" }, segmented.Items.OfType<DcSegment>().Select(s => (string?)s.Value).ToArray());
-                Assert.Equal(new[] { "gateway.log", "watchdog.log" }, segmented.Items.OfType<DcSegment>().Select(s => (string?)s.Content).ToArray());
+                Assert.Equal("Log stream", AutomationProperties.GetName(segmented));
+                Assert.Equal(new[] { "Gateway", "Verdicts", "Events", "Watchdog" }, segmented.Items.OfType<DcSegment>().Select(s => (string?)s.Value).ToArray());
+                Assert.Equal(new[] { "Gateway", "Verdicts", "Events", "Watchdog" }, segmented.Items.OfType<DcSegment>().Select(s => (string?)s.Content).ToArray());
                 Assert.Equal("Gateway", segmented.SelectedValue);
 
                 // Picking a segment is what SelectSourceCommand always did: the view-model's ActiveSource follows ...
-                segmented.SelectedIndex = 1;
+                segmented.SelectedIndex = 3;
                 Assert.Equal("Watchdog", viewModel.ActiveSource);
 
                 // ... and the command (still there, for the tests and any caller) moves the segment.
