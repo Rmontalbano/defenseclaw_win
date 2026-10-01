@@ -451,6 +451,14 @@ public sealed class DefenseClawPaths
             LazyThreadSafetyMode.ExecutionAndPublication);
 
         var entry = _flights.GetOrAdd(name, mine);
+
+        // A flight that has finished but whose removal (the continuation below) has not run yet is not a scan in flight: joining
+        // it would hand back its old answer — the "not found" a caller is trying to look past once that answer went stale.
+        while (!ReferenceEquals(entry, mine) && entry.IsValueCreated && entry.Value.IsCompleted)
+        {
+            entry = _flights.TryUpdate(name, mine, entry) ? mine : _flights.GetOrAdd(name, mine);
+        }
+
         started = ReferenceEquals(entry, mine);
         var task = entry.Value;
 
