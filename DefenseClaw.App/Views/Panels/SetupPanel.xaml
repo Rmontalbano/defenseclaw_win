@@ -233,7 +233,7 @@
                         <TextBlock Margin="0,0,0,8"
                                    Style="{StaticResource DcCaption}"
                                    Visibility="{Binding ShowNoGuardrailRoster, Converter={StaticResource BoolToVisibility}}"
-                                   Text="No connector is active, so there is nothing for the guardrail to enforce yet. Configure one from the cards below." />
+                                   Text="No connector is active, so there is nothing for the guardrail to enforce yet. Configure one from the tiles below." />
 
                         <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,4,0,0">
                             <TextBlock Style="{StaticResource DcToolbarLabel}"
@@ -343,7 +343,34 @@
                             IsOpen="{Binding HasLoadError, Mode=OneWay}"
                             Message="{Binding LoadError}" />
 
-                <!-- Card grid, grouped -->
+                <!-- Guardrail controls (HILT, block message, judge): their own view, wired by the shell; absent until it is. -->
+                <Button Width="233"
+                        Height="92"
+                        Margin="0,0,0,12"
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource DcInteractiveTile}"
+                        Command="{Binding OpenGuardrailControlsTileCommand}"
+                        Visibility="{Binding HasGuardrailControlsTile, Converter={StaticResource BoolToVisibility}}"
+                        AutomationProperties.Name="Guardrail controls"
+                        AutomationProperties.HelpText="Opens the guardrail's human approval, block message and judge settings.">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ctl:DcSymbolIcon Margin="0,0,8,0"
+                                              Style="{StaticResource DcIconNav}"
+                                              ctl:DcIcon.Section="Setup"
+                                              Symbol="ShieldCheckmark24" />
+                            <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Guardrail controls" />
+                        </StackPanel>
+                        <TextBlock Margin="0,6,0,0"
+                                   MaxHeight="34"
+                                   Style="{StaticResource DcCaption}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap"
+                                   Text="Human approval, block message and the judge." />
+                    </StackPanel>
+                </Button>
+
+                <!-- Tile grid, grouped -->
                 <ItemsControl ItemsSource="{Binding Groups}" IsTabStop="False">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -361,7 +388,15 @@
                                                Text="{Binding CountText}" />
                                 </StackPanel>
 
-                                <ItemsControl ItemsSource="{Binding Cards}" IsTabStop="False">
+                                <!--
+                                    The tile grid (the mac's Setup Areas): 233 x 92 tiles, 12 apart, wrapping to whatever the page is wide. A tile is a
+                                    DcInteractiveTile, so the whole tile opens the wizard; the certification badge shares the title row, so it is a word
+                                    as well as a colour. A tile that cannot be opened here stays in the grid, disabled, and says why instead of its blurb.
+                                -->
+                                <ItemsControl ItemsSource="{Binding Cards}"
+                                              IsTabStop="False"
+                                              KeyboardNavigation.TabNavigation="Continue"
+                                              AutomationProperties.Name="{Binding Name, StringFormat='{}{0} setup tiles'}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <WrapPanel />
@@ -369,80 +404,63 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Width="300"
-                                                    MinHeight="184"
+                                            <Button Width="233"
+                                                    Height="92"
                                                     Margin="0,0,12,12"
-                                                    Style="{StaticResource DcCard}"
-                                                    AutomationProperties.Name="{Binding AutomationName}"
-                                                    AutomationProperties.HelpText="{Binding CommandHint}">
+                                                    Style="{StaticResource DcInteractiveTile}"
+                                                    IsEnabled="{Binding IsAvailable}"
+                                                    ToolTipService.ShowOnDisabled="True"
+                                                    ToolTip="{Binding TileToolTip}"
+                                                    Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    AutomationProperties.Name="{Binding LaunchAutomationName}"
+                                                    AutomationProperties.HelpText="{Binding AutomationName}">
                                                 <Grid>
                                                     <Grid.RowDefinitions>
                                                         <RowDefinition Height="Auto" />
                                                         <RowDefinition Height="*" />
-                                                        <RowDefinition Height="Auto" />
                                                     </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                    <StackPanel Grid.Row="0">
-                                                        <TextBlock Style="{StaticResource DcCardTitle}"
-                                                                   Margin="0,0,0,2"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   ToolTip="{Binding Title}"
-                                                                   Text="{Binding Title}" />
-                                                        <TextBlock Style="{StaticResource DcMono}"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   Text="{Binding CommandHint}" />
-                                                    </StackPanel>
-
-                                                    <StackPanel Grid.Row="1" Margin="0,8,0,8">
-                                                        <TextBlock MaxHeight="64"
-                                                                   Style="{StaticResource DcCaption}"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   ToolTip="{Binding Summary}"
-                                                                   Text="{Binding Summary}" />
-                                                        <!-- Why a card cannot be launched, and where to go instead. -->
-                                                        <TextBlock Margin="0,6,0,0"
-                                                                   Style="{StaticResource WarnCaption}"
-                                                                   Visibility="{Binding HasUnavailableReason, Converter={StaticResource BoolToVisibility}}"
-                                                                   Text="{Binding UnavailableReason}" />
-                                                    </StackPanel>
-
-                                                    <StackPanel Grid.Row="2">
-                                                        <!-- Certification badge: green only for a certified connector, amber for
-                                                             not_certified, red for unsupported, neutral when unknown or when the
-                                                             target is not a connector (nothing to certify). -->
-                                                        <Border Margin="0,0,0,8"
-                                                                HorizontalAlignment="Left"
-                                                                Style="{StaticResource DcBadge}"
-                                                                Tag="{Binding BadgeKey}">
-                                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Badge}" />
-                                                        </Border>
-
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-
-                                                            <TextBlock Grid.Column="0"
-                                                                       Margin="0,0,8,0"
+                                                    <ctl:DcSymbolIcon Grid.Row="0"
+                                                                      Grid.Column="0"
+                                                                      Margin="0,0,8,0"
+                                                                      VerticalAlignment="Center"
+                                                                      Style="{StaticResource DcIconNav}"
+                                                                      ctl:DcIcon.Section="Setup"
+                                                                      Symbol="{Binding Icon}" />
+                                                    <TextBlock Grid.Row="0"
+                                                               Grid.Column="1"
+                                                               VerticalAlignment="Center"
+                                                               Style="{StaticResource DcCardTitle}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               TextWrapping="NoWrap"
+                                                               Text="{Binding Title}" />
+                                                    <!-- Certification as a glyph (check, caution, cross: a shape as well as a colour); its words are the
+                                                         tile's tooltip and automation help, so the title keeps the row. -->
+                                                    <ctl:DcStatusGlyph Grid.Row="0"
+                                                                       Grid.Column="2"
+                                                                       Margin="6,0,0,0"
                                                                        VerticalAlignment="Center"
-                                                                       Style="{StaticResource DcCaption}"
-                                                                       TextTrimming="CharacterEllipsis"
-                                                                       ToolTip="{Binding StepNote}"
-                                                                       Text="{Binding StepNote}" />
-
-                                                            <ui:Button Grid.Column="1"
-                                                                       Appearance="Secondary"
-                                                                       Content="Configure"
-                                                                       Icon="{ctl:DcSymbolIcon Settings24}"
-                                                                       AutomationProperties.Name="{Binding LaunchAutomationName}"
-                                                                       IsEnabled="{Binding IsAvailable}"
-                                                                       Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                       CommandParameter="{Binding}" />
-                                                        </Grid>
-                                                    </StackPanel>
+                                                                       Tone="{Binding BadgeKey}"
+                                                                       ShowDot="False"
+                                                                       GlyphSize="14"
+                                                                       Visibility="{Binding ShowTileBadge, Converter={StaticResource BoolToVisibility}}" />
+                                                    <TextBlock Grid.Row="1"
+                                                               Grid.Column="0"
+                                                               Grid.ColumnSpan="3"
+                                                               Margin="0,6,0,0"
+                                                               Style="{StaticResource DcCaption}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               TextWrapping="Wrap"
+                                                               MaxHeight="34"
+                                                               Text="{Binding TileBlurb}" />
                                                 </Grid>
-                                            </Border>
+                                            </Button>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

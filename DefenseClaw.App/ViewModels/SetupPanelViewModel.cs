@@ -128,6 +128,37 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private void OpenUpdates() => Views.Updates.UpdatesWindow.Show(Services);
 
+    /// <summary>
+    /// Where the "Guardrail controls" tile goes (the HILT / block-message / judge view). Null until the shell wires it, and
+    /// then the tile is not shown; the wiring is one assignment, <c>setup.OpenGuardrailControls = () =&gt; ...</c>.
+    /// </summary>
+    public Action? OpenGuardrailControls
+    {
+        get => _openGuardrailControls;
+        set
+        {
+            _openGuardrailControls = value;
+            OnPropertyChanged(nameof(HasGuardrailControlsTile));
+            OpenGuardrailControlsTileCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private Action? _openGuardrailControls;
+
+    /// <summary>The "Guardrail controls" tile is offered only once something can open it.</summary>
+    public bool HasGuardrailControlsTile => _openGuardrailControls is not null;
+
+    [RelayCommand(CanExecute = nameof(HasGuardrailControlsTile))]
+    private void OpenGuardrailControlsTile() => _openGuardrailControls?.Invoke();
+
+    /// <summary>Shows these definitions as the tile grid without asking the CLI (tests).</summary>
+    internal void ShowCards(IReadOnlyList<WizardDefinition> definitions)
+    {
+        FillCards(definitions);
+        IsLoading = false;
+        ApplyFilters();
+    }
+
     public override string Description =>
         "Every defenseclaw setup flow on this machine, discovered from the CLI at runtime. Each one ends on a review screen showing the exact command before anything runs.";
 
@@ -1019,6 +1050,20 @@ public sealed partial class WizardCardViewModel : ObservableObject
     /// <summary>The name of the card's button: "Configure Claude Code" — the bare word alone says nothing in a list of cards.</summary>
     public string LaunchAutomationName => "Configure " + Title;
 
+    /// <summary>The Fluent glyph the tile wears (see <see cref="WizardTileIcons"/>).</summary>
+    public Wpf.Ui.Controls.SymbolRegular Icon { get; private set; }
+
+    /// <summary>The tile's tooltip: the command it runs, then why it cannot be opened when that is so.</summary>
+    public string TileToolTip => !IsAvailable
+        ? CommandHint + Environment.NewLine + UnavailableReason
+        : ShowTileBadge ? CommandHint + Environment.NewLine + Badge : CommandHint;
+
+    /// <summary>What the tile says under its title: the reason when it cannot be opened, otherwise the CLI's own summary.</summary>
+    /// <summary>Certification only says something about a connector; the other wizards' tiles stay unbadged to leave the title its room.</summary>
+    public bool ShowTileBadge => IsAvailable && PlatformStatus != PlatformStatus.NotApplicable;
+
+    public string TileBlurb => IsAvailable ? Summary : UnavailableReason;
+
     public void Apply(WizardDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -1026,6 +1071,7 @@ public sealed partial class WizardCardViewModel : ObservableObject
         Definition = definition;
         PlatformStatus = definition.PlatformStatus;
         Title = definition.Title;
+        Icon = WizardTileIcons.For(Target, definition.Group);
         Summary = definition.Description;
         Badge = PlatformStatusText.Badge(definition.PlatformStatus);
         BadgeKey = PlatformStatusText.Key(definition.PlatformStatus);
@@ -1048,6 +1094,10 @@ public sealed partial class WizardCardViewModel : ObservableObject
         OnPropertyChanged(nameof(HasUnavailableReason));
         OnPropertyChanged(nameof(AutomationName));
         OnPropertyChanged(nameof(LaunchAutomationName));
+        OnPropertyChanged(nameof(Icon));
+        OnPropertyChanged(nameof(TileToolTip));
+        OnPropertyChanged(nameof(TileBlurb));
+        OnPropertyChanged(nameof(ShowTileBadge));
     }
 
     public bool Matches(string needle) =>
