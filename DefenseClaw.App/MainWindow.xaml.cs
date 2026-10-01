@@ -183,6 +183,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         // What Settings asks of the tray (its "Reset seen-alert history" button): the same call the command palette's entry makes.
         _catalog.Hooks.ResetSeenAlertHistory = _tray.ResetSeenAlertHistoryAsync;
 
+        // What the config editor's post-save bar asks of the tray: the reviewed gateway restart, shown over the editor.
+        Views.ConfigEditor.ConfigEditorWindow.GatewayRestart = owner => _tray.RunGatewayActionAsync(GatewayAction.Restart, owner);
+
         // The close button's name says what it does, and what it does is a setting (startup.closeToTray).
         _settings.Changed += OnSettingsChanged;
 

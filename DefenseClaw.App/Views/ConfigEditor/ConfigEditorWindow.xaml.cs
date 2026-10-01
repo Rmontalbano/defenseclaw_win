@@ -54,6 +54,13 @@ public partial class ConfigEditorWindow : FluentWindow
 {
     private static ConfigEditorWindow? _current;
 
+    /// <summary>
+    /// How the post-save bar reaches the tray's gateway control: opens the reviewed <c>defenseclaw-gateway restart</c> over the
+    /// given window (the editor) and runs it only if the operator confirms. Set once by the dashboard window, which is built
+    /// with the tray; null in a test host, where the bar then carries no restart button.
+    /// </summary>
+    internal static Func<Window, Task>? GatewayRestart { get; set; }
+
     private readonly ConfigEditorWindowViewModel _viewModel;
 
     /// <summary>The look controls, whose changes re-colour the YAML; null when the app was built without them (a test host).</summary>
@@ -82,6 +89,11 @@ public partial class ConfigEditorWindow : FluentWindow
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         _viewModel.UnsavedChangesPrompt = request => Task.FromResult(UnsavedChangesDialog.Ask(this, request));
         _viewModel.CommitPendingEdits = CommitPendingFormEdit;
+        if (GatewayRestart is { } restart)
+        {
+            _viewModel.RestartGatewayRequest = () => restart(this);
+        }
+
         _viewModel.WatchDiskChanges();
 
         ApplyHighlighting();
@@ -271,12 +283,20 @@ public partial class ConfigEditorWindow : FluentWindow
 
     /// <summary>
     /// Window-level shortcuts. <b>Ctrl+S</b> runs Save when Save is enabled (it is the same command the
-    /// button uses, so the same CanExecute applies). <b>Esc</b> closes the on-disk preview when it is open
+    /// button uses, so the same CanExecute applies): it opens the pre-save review, and pressed again there saves.
+    /// <b>Esc</b> leaves the review (back to editing) or closes the on-disk preview when one is open
     /// and otherwise does nothing — it deliberately does not close the window, which could throw away
     /// unsaved edits.
     /// </summary>
     private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _viewModel.IsReviewing)
+        {
+            _viewModel.CancelReviewCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape && _viewModel.ShowOnDiskPreview)
         {
             _viewModel.DismissOnDiskPreviewCommand.Execute(null);
@@ -299,7 +319,17 @@ public partial class ConfigEditorWindow : FluentWindow
     /// </summary>
     private void SaveFromKeyboard()
     {
-        if (!_viewModel.SaveCommand.CanExecute(null))
+        if (_viewModel.IsReviewing)
+        {
+            if (_viewModel.ConfirmReviewedSaveCommand.CanExecute(null))
+            {
+                _viewModel.ConfirmReviewedSaveCommand.Execute(null);
+            }
+
+            return;
+        }
+
+        if (!_viewModel.ReviewAndSaveCommand.CanExecute(null))
         {
             return;
         }
@@ -311,9 +341,9 @@ public partial class ConfigEditorWindow : FluentWindow
             _ = Keyboard.Focus(null);
         }
 
-        if (_viewModel.SaveCommand.CanExecute(null))
+        if (_viewModel.ReviewAndSaveCommand.CanExecute(null))
         {
-            _viewModel.SaveCommand.Execute(null);
+            _viewModel.ReviewAndSaveCommand.Execute(null);
         }
 
         _ = restoreFocusTo?.Focus();

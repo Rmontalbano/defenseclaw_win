@@ -165,10 +165,14 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReviewAndSaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmReviewedSaveCommand))]
     private bool _isLoading = true;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReviewAndSaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmReviewedSaveCommand))]
     private bool _isSaving;
 
     /// <summary>Set when the RAW text does not parse as YAML — RAW still shows it verbatim; FORM is stale/unavailable until it parses.</summary>
@@ -181,6 +185,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     [NotifyPropertyChangedFor(nameof(IsFormEditable))]
     [NotifyPropertyChangedFor(nameof(ShowFormStaleNotice))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReviewAndSaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmReviewedSaveCommand))]
     private string? _loadError;
 
     /// <summary>Set when the CLI's source view of the configuration could not be fetched or read — FORM is unavailable, RAW still works.</summary>
@@ -220,6 +226,33 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     [ObservableProperty]
     private bool _showOnDiskPreview;
+
+    /// <summary>
+    /// Opens the reviewed <c>defenseclaw-gateway restart</c> (the same review dialog and run the tray and the palette use). Set by
+    /// the window; null in a view-model nobody wired it to, which leaves the post-save bar without a restart button instead of one
+    /// that does nothing. This view-model never runs the command itself: a restart is state-changing and only ever starts from the
+    /// operator's confirm in that review.
+    /// </summary>
+    internal Func<Task>? RestartGatewayRequest { get; set; }
+
+    /// <summary>True while the pre-save diff is on screen over the editor.</summary>
+    [ObservableProperty]
+    private bool _isReviewing;
+
+    /// <summary>The masked diff of config.yaml as it is on disk against the edited text; empty unless <see cref="IsReviewing"/>.</summary>
+    [ObservableProperty]
+    private ConfigDiffReview? _review;
+
+    /// <summary>
+    /// Set after a save the CLI validated (or could not run to validate): the gateway reads config.yaml when it starts, so the
+    /// running one still has the old settings. Cleared by Dismiss, by the next edit, by a failed save and by a reload.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRestartGateway))]
+    private bool _showRestartPrompt;
+
+    /// <summary>The restart button on the post-save bar is offered only when something can open the review.</summary>
+    public bool CanRestartGateway => ShowRestartPrompt && RestartGatewayRequest is not null;
 
     public ConfigEditorWindowViewModel(AppServices services)
     {
@@ -363,6 +396,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     partial void OnRawTextChanged(string value)
     {
         IsRawModified = !string.Equals(value, _diskText, StringComparison.Ordinal);
+        if (IsRawModified)
+        {
+            ShowRestartPrompt = false;
+        }
 
         // Programmatic publishes (a load, a FORM edit) set this around the assignment; see
         // SetRawTextWithoutRebuildFlag for why the flag is reset there and not here.
@@ -568,6 +605,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         ShowDriftBanner = false;
         ShowSaveResultBanner = false;
         ShowOnDiskPreview = false;
+        ShowRestartPrompt = false;
         await LoadCoreAsync(CancellationToken.None, keepEditedBuffer).ConfigureAwait(true);
     }
 
@@ -777,6 +815,63 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     private async Task SaveAsync() => _ = await SaveCoreAsync().ConfigureAwait(true);
 
     /// <summary>
+    /// The Save button and Ctrl+S: shows what the save would change (the on-disk text against the edited RAW, secrets masked)
+    /// and saves from that view. With nothing changed there is nothing to review and the save runs as it always did (it still
+    /// re-validates, which is what Save is for after a rejected one). <see cref="SaveCommand"/> itself is the unreviewed
+    /// pipeline the unsaved-changes prompt and the tests use.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    private async Task ReviewAndSaveAsync()
+    {
+        if (IsReviewing)
+        {
+            return;
+        }
+
+        CommitPendingEdits?.Invoke();
+
+        if (!HasUnsavedChanges)
+        {
+            _ = await SaveCoreAsync().ConfigureAwait(true);
+            return;
+        }
+
+        Review = ConfigDiffReviewBuilder.Build(_diskText, RawText);
+        IsReviewing = true;
+    }
+
+    /// <summary>"Save" on the review: the reviewed save. Hash check, backup, atomic replace and validate are the unchanged pipeline.</summary>
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    private async Task ConfirmReviewedSaveAsync()
+    {
+        CloseReview();
+        _ = await SaveCoreAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>"Back to editing" on the review (also Esc): nothing is saved and the buffer is as it was.</summary>
+    [RelayCommand]
+    private void CancelReview() => CloseReview();
+
+    private void CloseReview()
+    {
+        IsReviewing = false;
+        Review = null;
+    }
+
+    /// <summary>The post-save bar's button: asks the window for the reviewed gateway restart. Never runs anything itself.</summary>
+    [RelayCommand]
+    private async Task RestartGatewayAsync()
+    {
+        if (RestartGatewayRequest is { } request)
+        {
+            await request().ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand]
+    private void DismissRestartPrompt() => ShowRestartPrompt = false;
+
+    /// <summary>
     /// The save, for the button and for the save/discard/cancel prompt alike. Null when Save is not available right
     /// now; otherwise the pipeline's outcome (also shown on the banner). Tracked in <c>_activeSave</c> so a close or
     /// reload that arrives while it runs can wait for it.
@@ -797,6 +892,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
         IsSaving = true;
         ShowSaveResultBanner = false;
+        ShowRestartPrompt = false;
+        CloseReview();
         try
         {
             var textToSave = RawText;
@@ -844,6 +941,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
             if (outcome.Success)
             {
+                // The running gateway read config.yaml when it started; the file it will read next is this one.
+                ShowRestartPrompt = true;
+
                 // Typing that happened while the save was in flight is not saved yet.
                 IsRawModified = !string.Equals(RawText, textToSave, StringComparison.Ordinal);
                 ClearParseErrorIfParses(textToSave);

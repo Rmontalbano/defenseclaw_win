@@ -329,6 +329,51 @@
             </Border>
         </DataTemplate>
 
+        <!-- ============================ Pre-save review ============================ -->
+        <!--
+            One row of the diff. The text was masked before it got here (ConfigDiffReviewBuilder), so a secret is never
+            drawn; added / removed rows are tinted with the tone tokens and the +/- marker says the same without colour.
+        -->
+        <DataTemplate x:Key="DiffLineTemplate" DataType="{x:Type vmc:ConfigDiffLine}">
+            <Border x:Name="Row" Padding="8,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               HorizontalAlignment="Right"
+                               Style="{StaticResource DcCaption}"
+                               Text="{Binding OldNumberText}" />
+                    <TextBlock Grid.Column="1"
+                               Margin="0,0,8,0"
+                               HorizontalAlignment="Right"
+                               Style="{StaticResource DcCaption}"
+                               Text="{Binding NewNumberText}" />
+                    <TextBlock Grid.Column="2"
+                               Style="{StaticResource DcMono}"
+                               Text="{Binding Marker}" />
+                    <TextBlock Grid.Column="3"
+                               Style="{StaticResource DcMono}"
+                               Text="{Binding Text}"
+                               TextWrapping="NoWrap" />
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Added">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource DcToneOkSubtleBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Removed">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource DcToneCriticalSubtleBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Fold">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
     </ui:FluentWindow.Resources>
 
     <Grid Style="{StaticResource DcPage}">
@@ -372,10 +417,10 @@
                     </ui:Button.Icon>
                 </ui:Button>
                 <ui:Button Appearance="Primary"
-                           AutomationProperties.HelpText="Backs up config.yaml, writes the new text, then validates it with the CLI. Shortcut: Ctrl+S."
-                           Command="{Binding SaveCommand}"
+                           AutomationProperties.HelpText="Shows what will change in config.yaml, then backs it up, writes the new text and validates it with the CLI. Shortcut: Ctrl+S."
+                           Command="{Binding ReviewAndSaveCommand}"
                            Content="Save"
-                           ToolTip="Save (Ctrl+S)">
+                           ToolTip="Review and save (Ctrl+S)">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="Save24" />
                     </ui:Button.Icon>
@@ -494,6 +539,30 @@
                         Message="{Binding SaveResultMessage}"
                         Severity="Success" />
 
+            <!--
+                The gateway reads config.yaml when it starts, so a saved change does not apply to the running one. The button
+                opens the same review the tray's Restart opens; nothing restarts without that confirm.
+            -->
+            <ui:InfoBar Title="Saved — restart the gateway to apply"
+                        Margin="{StaticResource DcCardGap}"
+                        IsClosable="False"
+                        IsOpen="{Binding ShowRestartPrompt}"
+                        Message="The running gateway still has the previous settings until it restarts."
+                        Severity="Informational" />
+            <StackPanel Margin="{StaticResource DcCardGap}"
+                        Orientation="Horizontal"
+                        Visibility="{Binding ShowRestartPrompt, Converter={StaticResource BoolToVisibility}}">
+                <ui:Button Appearance="Primary"
+                           AutomationProperties.HelpText="Opens the review for defenseclaw-gateway restart. Nothing restarts until you confirm it there."
+                           Command="{Binding RestartGatewayCommand}"
+                           Content="Restart gateway…"
+                           Visibility="{Binding CanRestartGateway, Converter={StaticResource BoolToVisibility}}" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Secondary"
+                           Command="{Binding DismissRestartPromptCommand}"
+                           Content="Not now" />
+            </StackPanel>
+
             <ui:InfoBar Title="Save problem"
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
@@ -579,5 +648,62 @@
                 </Grid>
             </TabItem>
         </TabControl>
+
+        <!--
+            Review changes: what Save is about to write, as a diff of config.yaml on disk against the editor, secrets masked.
+            It covers the banners and the tabs (not the header), so nothing can be edited while it is open; Esc or
+            Back to editing returns to the buffer untouched, Save runs the unchanged save pipeline.
+        -->
+        <Grid Grid.Row="1"
+              Grid.RowSpan="2"
+              Background="{DynamicResource DcWindowBackgroundBrush}"
+              Visibility="{Binding IsReviewing, Converter={StaticResource BoolToVisibility}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0" Margin="{StaticResource DcCardGap}">
+                <TextBlock Style="{StaticResource DcSectionHeader}" Text="Review changes" />
+                <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Review.Summary}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Text="config.yaml on disk against your edits. Secret values are hidden on both sides; unchanged lines are folded." />
+            </StackPanel>
+            <Border Grid.Row="1"
+                    Margin="{StaticResource DcCardGap}"
+                    Style="{StaticResource DcCodeBlock}">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsControl AutomationProperties.Name="Changes to config.yaml"
+                                  ItemTemplate="{StaticResource DiffLineTemplate}"
+                                  ItemsSource="{Binding Review.Lines}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+            <StackPanel Grid.Row="2"
+                        Margin="{StaticResource DcCardGap}"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal">
+                <ui:Button Appearance="Secondary"
+                           AutomationProperties.HelpText="Returns to the editor without saving. Shortcut: Esc."
+                           Command="{Binding CancelReviewCommand}"
+                           Content="Back to editing"
+                           ToolTip="Back to editing (Esc)" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Primary"
+                           AutomationProperties.HelpText="Backs up config.yaml, writes the edited text, then validates it with the CLI. Shortcut: Ctrl+S."
+                           Command="{Binding ConfirmReviewedSaveCommand}"
+                           Content="Save">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="Save24" />
+                    </ui:Button.Icon>
+                </ui:Button>
+            </StackPanel>
+        </Grid>
     </Grid>
 </ui:FluentWindow>
