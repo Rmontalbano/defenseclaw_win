@@ -1,6 +1,9 @@
 using System.Globalization;
+using System.IO;
 using DefenseClaw.App.Services;
+using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Gateway.Models;
+using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -28,6 +31,59 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
         {
             DoctorFocusPending = true;
             DoctorFocusRequested?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    // ---- Silent bypass (CUST-218) ----
+
+    private NetworkEgressReader? _egressReader;
+    private int _silentBypass;
+    private int _bypassReading;
+
+    /// <summary>The egress reader behind the silent-bypass row (a test aims it at its own database).</summary>
+    internal NetworkEgressReader EgressReader
+    {
+        get => _egressReader ??= new NetworkEgressReader(Services.Paths.AuditDatabasePath);
+        set => _egressReader = value;
+    }
+
+    /// <summary>Allowed, LLM-shaped egress events in the last 5 minutes, as of the last read (the Mac's <c>silentBypassCount</c>).</summary>
+    internal int SilentBypassCount => _silentBypass;
+
+    /// <summary>
+    /// Re-counts the silent-bypass events and, when the number changed, rebuilds "What needs attention". Runs with the metrics read
+    /// (<see cref="RefreshMetricsAsync"/>, so on its 15 s cadence and while the panel is active), one at a time, and never throws: a
+    /// database that cannot answer keeps the last number rather than inventing a quiet one.
+    /// </summary>
+    internal async Task RefreshSilentBypassAsync(CancellationToken cancellationToken)
+    {
+        if (Interlocked.Exchange(ref _bypassReading, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            var count = await EgressReader.CountSilentBypassAsync(DateTimeOffset.UtcNow, timeout: TimeSpan.FromSeconds(5), cancellationToken: cancellationToken).ConfigureAwait(true);
+            if (count != _silentBypass)
+            {
+                _silentBypass = count;
+                BuildAttention(_snapshot);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The panel went away mid-read; the next activation reads again.
+        }
+#pragma warning disable CA1031 // A locked or older database leaves the row as it was; it must not fault the panel.
+        catch (Exception ex) when (ex is SqliteException or IOException or TimeoutException or InvalidOperationException)
+#pragma warning restore CA1031
+        {
+            System.Diagnostics.Trace.TraceWarning($"overview: silent bypass could not be counted: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _ = Interlocked.Exchange(ref _bypassReading, 0);
         }
     }
 
@@ -86,6 +142,16 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
             {
                 Title = "Guardrail not configured",
                 Detail = "The LLM guardrail is off in config.yaml (guardrail.enabled). Set it up in Setup, under Guardrail.",
+                SeverityKey = "High",
+            });
+        }
+
+        if (_silentBypass > 0)
+        {
+            rows.Add(new AttentionRow
+            {
+                Title = $"Silent bypass: {_silentBypass.ToString(CultureInfo.CurrentCulture)} allowed LLM-shaped egress in the last 5 min",
+                Detail = "Traffic that looks like an LLM call left this machine without the guardrail's say. Open Alerts and choose the Egress kind to see where it went.",
                 SeverityKey = "High",
             });
         }

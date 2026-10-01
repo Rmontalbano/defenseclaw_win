@@ -25,6 +25,10 @@
           ctl:DcRowMenuButton  The "..." button that opens the row's ContextMenu (also opened by right-click); DcDangerMenuItem for the
                                item that deletes or dismisses.
 
+        Tiles (CUST-205 / CUST-218):
+          DcInteractiveTile    Button style: a whole-card tile with a hover / focus stroke, for a big number and a caption (Overview's
+                               Enforcement card, Alerts' severity tiles). Set Selector.IsSelected="True" on it for the "this filter is on" look.
+
         Inspector (CUST-215):
           ctl:DcInspector      The flush right-hand detail pane (its style is the last block of this file): header with title, badges and
                                close, a scrolling body, a 1 px divider on its left; opens with a short fade.
@@ -760,4 +764,53 @@
             </MultiTrigger>
         </Style.Triggers>
     </Style>
+
+        <!--
+            DcInteractiveTile (CUST-205, promoted here by CUST-218 so Alerts shares it): a whole-card button with the stroke of a hovered or focused control and a chevron. Not a ui:Button,
+            whose template is a filled control: this is a card that can be pressed. Focus keeps the shared focus ring (DcFocusVisualStyle).
+        -->
+        <Style x:Key="DcInteractiveTile" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource DcRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
+            <Setter Property="BorderThickness" Value="{DynamicResource DcBorderThickness}" />
+            <Setter Property="Padding" Value="12,10,10,10" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource DcFocusVisualStyle}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{DynamicResource DcRadiusM}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Selector.IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcAccentBrush}" />
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcAccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcAccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 </ResourceDictionary>

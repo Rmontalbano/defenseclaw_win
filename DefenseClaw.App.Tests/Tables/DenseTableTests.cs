@@ -457,7 +457,7 @@ public sealed class AlertsTableTests
     [InlineData("Default", "Dark", "default-dark", 1400, 900)]
     [InlineData("Cisco", "Light", "cisco-light", 940, 620)]
     [InlineData("Cisco", "Light", "cisco-light", 1400, 900)]
-    public void The_kind_column_is_given_the_room_it_needs_and_an_empty_target_does_not_take_more(string styleName, string modeName, string look, int width, int height)
+    public void The_kind_column_holds_its_word_and_does_not_take_more_room_than_the_target(string styleName, string modeName, string look, int width, int height)
     {
         using var fixture = new AppearanceFixture(new AppearanceSettings(Enum.Parse<AppearanceStyle>(styleName), Enum.Parse<AppearanceMode>(modeName)));
         using var scene = Scene.Open(width, height);
@@ -466,8 +466,9 @@ public sealed class AlertsTableTests
         {
             var kind = scene.Grid.Columns.Single(c => (string)c.Header == "Kind");
             var target = scene.Grid.Columns.Single(c => (string)c.Header == "Target");
-            Assert.True(kind.ActualWidth >= 130, $"Kind is {kind.ActualWidth:0} DIPs");
-            Assert.True(kind.ActualWidth > target.ActualWidth, $"Kind {kind.ActualWidth:0} DIPs, Target {target.ActualWidth:0}");
+            // The column holds one short word (audit, scan, egress; the rule id moved to the inspector's title), so it needs little.
+            Assert.True(kind.ActualWidth >= 64, $"Kind is {kind.ActualWidth:0} DIPs");
+            Assert.True(kind.ActualWidth <= target.ActualWidth + 40, $"Kind {kind.ActualWidth:0} DIPs, Target {target.ActualWidth:0}");
             RenderTo.Png(scene.Host, $"alerts-table-{look}-{width}x{height}");
         });
     }

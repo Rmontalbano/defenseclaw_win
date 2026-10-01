@@ -6,12 +6,16 @@
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              panels:CompactLayout.Below="960">
     <!--
-        Filters above, virtualized table left, detail pane right. The table is a DataGrid (DcDataGrid) so
+        Severity tiles and filters above, virtualized table left, detail pane right. The table is a DataGrid (DcDataGrid) so
         WPF's own VirtualizingStackPanel does the recycling - the alert stream on a busy box
         is mostly the same handful of signatures repeating, and scrolling has to stay cheap.
 
-        On the shared Dc* design system. The one local visual is the severity chip (a toggle that
-        carries its severity's tone). Keyboard: Ctrl+F focuses the filter box, Esc closes the review
+        On the shared Dc* design system. The four severity tiles (CRITICAL / HIGH / MEDIUM / LOW, big tone numbers, the shared
+        DcInteractiveTile) are the severity filter: pressing one shows only that severity, pressing it again shows all, and the
+        multi-select the deep link needs ("High and above") is the same state the tiles show. They replace the old chips (a
+        segmented control cannot show a set), so the only local visual left is the small INFO chip, which appears when the list has INFO
+        rows (an egress decision that only looks like an LLM call). The Kind popup (All kinds / Blocks / Audit / Scans / Egress) sits
+        in the strip beside the repeat fold. Keyboard: Ctrl+F focuses the filter box, Esc closes the review
         dialog and then the detail pane (both handled in the code-behind).
 
         The detail pane exists only while an alert is selected (see AuditPanel for why): with no selection the
@@ -156,6 +160,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -171,14 +176,14 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter alerts…"
                            SearchAutomationName="Filter alerts"
-                           SearchHelpText="Shows only alerts whose rule, title, action, target, evidence, scanner or tags contain this text. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Shows only alerts whose rule, kind, title, action, target, evidence, scanner or tags contain this text. Shortcut Ctrl+F; Esc clears it.">
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                               Command="{Binding OpenAcknowledgeCommand}"
-                               ToolTip="Acknowledge…"
-                               AutomationProperties.Name="Acknowledge…"
-                               AutomationProperties.HelpText="Acknowledge every active alert of one severity. Shows a preview of what would match before anything is changed." />
+                               Command="{Binding OpenAcknowledgeSelectionCommand}"
+                               ToolTip="Acknowledge selection…"
+                               AutomationProperties.Name="Acknowledge selection"
+                               AutomationProperties.HelpText="Available once a row is selected. Acknowledges every active alert of the selected rows' severity (DefenseClaw acts on a whole severity class). Shows a preview of what would match before anything is changed." />
                     <ui:Button Icon="{ctl:DcSymbolIcon AlertOff24}"
                                Command="{Binding OpenDismissCommand}"
                                ToolTip="Dismiss…"
@@ -211,30 +216,78 @@
         </StackPanel>
 
         <!--
-            Filter strip (no card of its own): the severity chips - a multi-select, each one independently on or off, so they
-            stay chips and are not a DcSegmented - the repeat fold, the reset, and the quiet mono lines about the source.
+            The severity tiles: four equal tone-numbered tiles, each a DcInteractiveTile (a whole-card button; the tone is the number's
+            colour and the severity is also the word, so colour is never the only carrier). The tile of a severity that is narrowing the
+            list wears the selected look (Selector.IsSelected). The number is the loaded, un-acknowledged alerts of that severity whatever
+            the other filters hide, like the Mac's.
         -->
-        <WrapPanel Grid.Row="2" Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
-            <ItemsControl Margin="0,0,4,8"
-                          VerticalAlignment="Center"
-                          ItemsSource="{Binding SeverityFilters}"
-                          AutomationProperties.Name="Severity filters">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <ToggleButton Style="{StaticResource SeverityToggle}"
-                                      Tag="{Binding SeverityKey}"
-                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                      ToolTip="{Binding AutomationName}"
-                                      AutomationProperties.Name="{Binding AutomationName}"
-                                      AutomationProperties.HelpText="Shows or hides alerts of this severity in the list." />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+        <ItemsControl Grid.Row="2"
+                      Margin="0,0,-8,4"
+                      ItemsSource="{Binding Tiles}"
+                      KeyboardNavigation.TabNavigation="Continue"
+                      AutomationProperties.Name="Severity filters">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="4" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Button Style="{StaticResource DcInteractiveTile}"
+                            Margin="0,0,8,8"
+                            Command="{Binding DataContext.SelectSeverityCommand, RelativeSource={RelativeSource AncestorType={x:Type panels:AlertsPanel}}}"
+                            CommandParameter="{Binding}"
+                            Selector.IsSelected="{Binding IsPicked}"
+                            ToolTip="{Binding AutomationName}"
+                            AutomationProperties.Name="{Binding AutomationName}"
+                            AutomationProperties.HelpText="Shows only this severity; press it again to show every severity.">
+                        <StackPanel>
+                            <DockPanel LastChildFill="True">
+                                <TextBlock DockPanel.Dock="Right"
+                                           Style="{StaticResource DcCaption}"
+                                           Margin="8,0,0,0"
+                                           TextWrapping="NoWrap"
+                                           Text="{Binding TileCaption}" />
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           TextTrimming="CharacterEllipsis"
+                                           TextWrapping="NoWrap"
+                                           Text="{Binding Severity}" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource DcValue}"
+                                       FontSize="28"
+                                       Margin="0,2,0,0"
+                                       Tag="{Binding SeverityKey}"
+                                       Text="{Binding Count}" />
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!--
+            Filter strip (no card of its own): the Kind popup, the small INFO chip when there are INFO rows, the repeat fold, the reset,
+            and the quiet mono lines about the source.
+        -->
+        <WrapPanel Grid.Row="3" Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+            <ComboBox Margin="0,0,12,8"
+                      MinWidth="140"
+                      VerticalAlignment="Center"
+                      ItemsSource="{Binding KindChoices}"
+                      DisplayMemberPath="Label"
+                      SelectedValuePath="Value"
+                      SelectedValue="{Binding KindFilter, Mode=TwoWay}"
+                      ToolTip="Which kind of alert to list: findings from the audit log, scan findings, enforcement blocks or egress decisions."
+                      AutomationProperties.Name="Kind" />
+
+            <ToggleButton Style="{StaticResource SeverityToggle}"
+                          Margin="0,0,12,8"
+                          DataContext="{Binding InfoFilter}"
+                          Tag="{Binding SeverityKey}"
+                          IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                          Visibility="{Binding DataContext.ShowInfoFilter, RelativeSource={RelativeSource AncestorType={x:Type panels:AlertsPanel}}, Converter={StaticResource BoolToVisibility}}"
+                          ToolTip="{Binding AutomationName}"
+                          AutomationProperties.Name="{Binding AutomationName}"
+                          AutomationProperties.HelpText="Shows or hides INFO alerts (egress decisions that only look like an LLM call) in the list." />
 
             <ui:ToggleSwitch Content="Collapse repeats"
                              IsChecked="{Binding CollapseRepeats, Mode=TwoWay}"
@@ -246,7 +299,7 @@
                        Command="{Binding ClearFiltersCommand}"
                        ToolTip="Clear filters"
                        AutomationProperties.Name="Clear filters"
-                       AutomationProperties.HelpText="Turn every severity back on and clear the text filter." />
+                       AutomationProperties.HelpText="Turn every severity back on, show every kind and clear the text filter." />
 
             <TextBlock Style="{StaticResource DcResultCaption}" Margin="0,0,12,8" Text="{Binding SourceNote}" />
             <!-- Where the empty detail pane's "Select an alert ..." used to be. -->
@@ -265,7 +318,7 @@
         </WrapPanel>
 
         <!-- List + detail -->
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="360" />
                 <ColumnDefinition Width="Auto" />
@@ -274,7 +327,7 @@
             <Border x:Name="ListCard" Style="{StaticResource AlertListCard}">
                 <Grid>
                     <!--
-                        The table: Time, Severity, Kind (the rule), Action, Target, Details (the title, with the repeat count
+                        The table: Time, Severity, Kind (audit / scan / egress; the rule id is the inspector's title), Action, Target, Details (the title, with the repeat count
                         while repeats are folded), Run, and the row menu. Newest first until a header is clicked; the columns
                         share the width (DcGridColumns), the short ones keep a floor, and a cell says its whole value in a
                         tooltip while it is cut. Extended selection: Ctrl / Shift pick rows, the first one drives the detail
@@ -305,10 +358,10 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Width="2*" MinWidth="130" Header="Kind"
-                                                SortMemberPath="RuleId"
+                            <DataGridTextColumn Width="0.9*" MinWidth="70" Header="Kind"
+                                                SortMemberPath="Kind"
                                                 ElementStyle="{StaticResource DcCellTextQuiet}"
-                                                Binding="{Binding RuleId}" />
+                                                Binding="{Binding KindLabel}" />
                             <DataGridTextColumn Width="1*" MinWidth="80" Header="Action"
                                                 SortMemberPath="Action"
                                                 ElementStyle="{StaticResource DcCellText}"
@@ -420,6 +473,88 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <!-- Findings of the scans behind this alert (by run, else target), worst first; left out when there are none. -->
+                            <StackPanel Visibility="{Binding Detail.FindingsVisible, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcCardHeader Margin="0,14,0,4" Symbol="ShieldError24" Section="Observe" Content="Findings" />
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Margin="0,0,0,4"
+                                           AutomationProperties.LiveSetting="Polite"
+                                           Text="{Binding Detail.FindingsNote}" />
+                                <ItemsControl ItemsSource="{Binding Detail.Findings}" AutomationProperties.Name="Findings">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource DcCodeBlock}" Margin="0,0,0,6">
+                                                <StackPanel>
+                                                    <DockPanel LastChildFill="True">
+                                                        <ctl:DcSeverityBadge DockPanel.Dock="Left"
+                                                                             Text="{Binding Severity}"
+                                                                             Tone="{Binding SeverityKey}"
+                                                                             Margin="0,0,8,0"
+                                                                             VerticalAlignment="Center" />
+                                                        <TextBlock Style="{StaticResource DcBody}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextWrapping="Wrap"
+                                                                   Text="{Binding Title}" />
+                                                    </DockPanel>
+                                                    <TextBlock Style="{StaticResource DcTextSecondary}"
+                                                               Margin="0,4,0,0"
+                                                               TextWrapping="Wrap"
+                                                               Visibility="{Binding HasDescription, Converter={StaticResource BoolToVisibility}}"
+                                                               Text="{Binding Description}" />
+                                                    <TextBlock Style="{StaticResource DcMono}"
+                                                               Margin="0,4,0,0"
+                                                               TextWrapping="Wrap"
+                                                               Visibility="{Binding HasLocation, Converter={StaticResource BoolToVisibility}}"
+                                                               Text="{Binding Location}" />
+                                                    <TextBlock Style="{StaticResource DcCaption}"
+                                                               Margin="0,4,0,0"
+                                                               TextWrapping="Wrap"
+                                                               Visibility="{Binding HasRemediation, Converter={StaticResource BoolToVisibility}}"
+                                                               Text="{Binding Remediation, StringFormat='Remediation: {0}'}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- The target's earlier audit events (five), from the newest rows of the audit log; left out when there are none. -->
+                            <StackPanel Visibility="{Binding Detail.HistoryVisible, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcCardHeader Margin="0,14,0,4" Symbol="History24" Section="Observe" Content="History for this target" />
+                                <ItemsControl Grid.IsSharedSizeScope="True"
+                                              ItemsSource="{Binding Detail.History}"
+                                              AutomationProperties.Name="History for this target">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="AlertHistoryTime" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcMono}"
+                                                           Margin="0,0,10,0"
+                                                           Text="{Binding TimeText}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource DcCaption}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Text="{Binding Action}"
+                                                           ToolTip="{Binding Action}" />
+                                                <ctl:DcSeverityBadge Grid.Column="2"
+                                                                     Text="{Binding Severity}"
+                                                                     Tone="{Binding SeverityKey}"
+                                                                     Margin="8,0,0,0" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Margin="0,2,0,0"
+                                           AutomationProperties.LiveSetting="Polite"
+                                           Text="{Binding Detail.HistoryNote}" />
+                            </StackPanel>
                         </StackPanel>
                     </DataTemplate>
                 </ctl:DcInspector.ContentTemplate>
@@ -433,7 +568,7 @@
             matched something. Focus lands on Cancel, Tab stays inside the dialog, Esc closes it.
         -->
         <Grid x:Name="ReviewScrim"
-              Grid.RowSpan="4"
+              Grid.RowSpan="5"
               Style="{StaticResource DcScrim}"
               Visibility="{Binding IsReviewOpen, Converter={StaticResource BoolToVisibility}}">
             <Border Style="{StaticResource DcDialogCard}"

@@ -218,6 +218,7 @@ public sealed partial class OverviewPanelViewModel
         try
         {
             _metricsStamp = MonotonicStamp.Now();
+            _ = RefreshSilentBypassAsync(cancellationToken);
             _metrics = await _metricsReader.ReadAsync(MetricsTimeout, cancellationToken).ConfigureAwait(true);
             _metricsProblem = null;
             _metricsAt = DateTimeOffset.UtcNow;

@@ -37,6 +37,73 @@ internal sealed class AlertQueueDatabase
         _ = command.ExecuteNonQuery();
     }
 
+    /// <summary>A scan of <paramref name="target"/> (for <paramref name="runId"/>) with one finding per <paramref name="findings"/> entry (severity, title).</summary>
+    public void AddScan(string scanId, string target, string? runId, DateTimeOffset at, params (string Severity, string Title)[] findings)
+    {
+        using var connection = Open();
+        using (var scan = connection.CreateCommand())
+        {
+            scan.CommandText = "INSERT INTO scan_results (id, scanner, target, timestamp, run_id) VALUES ($id, 'skill-scanner', $target, $ts, $run)";
+            scan.Parameters.AddWithValue("$id", scanId);
+            scan.Parameters.AddWithValue("$target", target);
+            scan.Parameters.AddWithValue("$ts", Format(at));
+            scan.Parameters.AddWithValue("$run", (object?)runId ?? DBNull.Value);
+            _ = scan.ExecuteNonQuery();
+        }
+
+        for (var i = 0; i < findings.Length; i++)
+        {
+            using var finding = connection.CreateCommand();
+            finding.CommandText =
+                """
+                INSERT INTO scan_findings (id, scan_id, scanner, target, rule_id, severity, title, description, location, remediation, timestamp)
+                VALUES ($id, $scan, 'skill-scanner', $target, 'R-1', $severity, $title, 'Calls out to an unknown host.', 'main.py:12', 'Remove the call.', $ts)
+                """;
+            finding.Parameters.AddWithValue("$id", scanId + "-f" + i);
+            finding.Parameters.AddWithValue("$scan", scanId);
+            finding.Parameters.AddWithValue("$target", target);
+            finding.Parameters.AddWithValue("$severity", findings[i].Severity);
+            finding.Parameters.AddWithValue("$title", findings[i].Title);
+            finding.Parameters.AddWithValue("$ts", Format(at));
+            _ = finding.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>An audit row of any action on <paramref name="target"/> (not a finding: no bucket), for a target's history.</summary>
+    public void AddEvent(string id, DateTimeOffset at, string target, string action, string severity = "INFO")
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO audit_events (id, timestamp, action, target, actor, severity) VALUES ($id, $ts, $action, $target, 'audit_logger', $severity)";
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$ts", Format(at));
+        command.Parameters.AddWithValue("$action", action);
+        command.Parameters.AddWithValue("$target", target);
+        command.Parameters.AddWithValue("$severity", severity);
+        _ = command.ExecuteNonQuery();
+    }
+
+    /// <summary>An egress decision as the gateway records it: bucket <c>network.egress</c>, the <c>defenseclaw.network.*</c> attributes in <c>structured_json</c>.</summary>
+    public void AddEgress(string id, DateTimeOffset at, string decision, string branch, bool looksLikeLlm, string target = "api.example.test")
+    {
+        var attributes =
+            "{\"defenseclaw.network.decision\":\"" + decision + "\",\"defenseclaw.network.branch\":\"" + branch +
+            "\",\"defenseclaw.network.looks_like_llm\":" + (looksLikeLlm ? "true" : "false") +
+            ",\"defenseclaw.network.target_ref\":\"" + target + "\",\"defenseclaw.network.reason\":\"policy says so\"}";
+
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO audit_events (id, timestamp, action, target, actor, severity, structured_json, bucket, connector, event_name)
+            VALUES ($id, $ts, 'network-egress', '', 'gateway', 'INFO', $structured, 'network.egress', 'claudecode', 'network.egress')
+            """;
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$ts", Format(at));
+        command.Parameters.AddWithValue("$structured", attributes);
+        _ = command.ExecuteNonQuery();
+    }
+
     /// <summary>Records an acknowledgement the way the gateway's projection does, which takes the alert out of the queue.</summary>
     public void Acknowledge(string alertId)
     {

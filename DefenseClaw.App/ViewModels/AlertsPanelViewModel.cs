@@ -402,25 +402,41 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         Services.Monitor.PollCompleted -= OnPollCompleted;
         Services.AlertCounts.Changed -= OnAlertCountsChanged;
         _clock.Stop();
+        CancelDetail();
     }
 
     private void OnAlertCountsChanged(object? sender, AlertCountsChangedEventArgs e) => _ = RefreshQueueAsync();
 
     /// <summary>
-    /// A deep link (<see cref="IAcceptsNavigation"/>): an <see cref="AlertsFilter"/> opens the panel on a severity and above, with
-    /// the text filter cleared (the point of the link is to show those findings). The toggles are state, so a link that lands
-    /// before the first read is honoured when the rows arrive. <see cref="AlertsFilter.Kind"/> is not used here yet: the queue
-    /// holds findings, not enforcement blocks. A payload of another type is ignored.
+    /// A deep link (<see cref="IAcceptsNavigation"/>): an <see cref="AlertsFilter"/> opens the panel on a severity and above and/or a
+    /// kind (<see cref="AlertKinds"/>: "all", "blocks", "audit", "scans", "egress"), with the text filter cleared (the point of the link is
+    /// to show those findings). A link that names a kind and no severity shows every severity of it (the Mac's <c>.all</c> /
+    /// <c>.blocks</c> requests reset the severity filter); a link that names neither changes nothing. The toggles are state, so a link
+    /// that lands before the first read is honoured when the rows arrive. A payload of another type, or a kind this panel does not
+    /// know, is ignored.
     /// </summary>
     public void Accept(object payload)
     {
-        if (payload is not AlertsFilter { SeverityFloor: { } floor })
+        if (payload is not AlertsFilter filter)
         {
             return;
         }
 
-        SetSeverityFloor(floor);
+        var kind = AlertKinds.Normalize(filter.Kind);
+        if (filter.SeverityFloor is null && kind is null)
+        {
+            return;
+        }
+
+        if (kind is not null)
+        {
+            KindFilter = kind;
+        }
+
         FilterText = string.Empty;
+
+        // No floor means "every severity": Unknown is below them all.
+        SetSeverityFloor(filter.SeverityFloor ?? AuditSeverity.Unknown);
     }
 
     /// <summary>
@@ -458,6 +474,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        // What the inspector read for rows is read again, too: Refresh means "look now".
+        ResetDetails();
+
         // The queue first: when it serves, the gateway's list is not what is on screen and there is nothing to re-read there.
         await RefreshQueueAsync();
         if (_queueActive)
@@ -475,6 +494,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         FilterText = string.Empty;
         CollapseRepeats = false;
+        KindFilter = AlertKinds.All;
         foreach (var filter in SeverityFilters)
         {
             filter.IsEnabled = true;
@@ -492,6 +512,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         ArgumentNullException.ThrowIfNull(selected);
         _selectedMany = selected.ToList();
+        OpenAcknowledgeSelectionCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>The rows a menu action applies to: the table's selection, or the one row the detail pane shows when the view has not reported a selection.</summary>
@@ -1290,6 +1311,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         // A row flattens and pretty-prints its attribute bag, and a first load builds hundreds: not on the UI thread.
         var rows = await Task.Run(() => BuildQueueRows(window, shown, details)).ConfigureAwait(true);
 
+        // The gateway's egress decisions that deserve a row (blocked, or LLM-shaped) join the findings, newest first.
+        var egress = await ReadEgressRowsAsync(shown).ConfigureAwait(true);
+        if (egress.Count > 0)
+        {
+            rows = rows.Concat(egress).OrderByDescending(row => row.Timestamp).ToList();
+        }
+
         if (!_queueActive)
         {
             // The gateway's rows (or none) give way to the queue's, which have a different shape: the bound list starts over.
@@ -1372,9 +1400,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     /// <summary>"Unacknowledged findings · 441 · read 12s ago", or, when the queue's window was full, that the newest 500 are shown and more are waiting.</summary>
     private string QueueNote()
     {
-        var count = _all.Count.ToString("N0", CultureInfo.CurrentCulture);
+        var egress = _all.Count(item => string.Equals(item.Kind, AlertKinds.Egress, StringComparison.Ordinal));
+        var count = (_all.Count - egress).ToString("N0", CultureInfo.CurrentCulture);
         var what = _queueHasMore ? $"newest {count} (more are waiting)" : count;
-        return $"Unacknowledged findings · {what} · read {Relative(_queueReadAt)}";
+        var egressNote = egress > 0
+            ? $" · {egress.ToString("N0", CultureInfo.CurrentCulture)} egress"
+            : _egressProblem.Length > 0 ? $" · {_egressProblem}" : string.Empty;
+        return $"Unacknowledged findings · {what}{egressNote} · read {Relative(_queueReadAt)}";
     }
 
     /// <summary>
@@ -1405,7 +1437,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         {
             EmptyTitle = "No alerts match the current filters";
             EmptyDetail =
-                $"{_poolCount} alert(s) are loaded but hidden by the severity toggles or the text filter. " +
+                $"{_poolCount} alert(s) are loaded but hidden by the severity, kind or text filter. " +
                 "Use Clear to show them again.";
             return;
         }
@@ -1446,6 +1478,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
         var needle = FilterText.Trim();
         var selectedKey = SelectedAlert?.Key;
+        RefreshTileState();
 
         // Acknowledged / dismissed alerts (per audit.db's projection) are not part of the pool the
         // toggles and the text filter act on, whatever the source still serves. Counted, not silent.
@@ -1461,6 +1494,11 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         if (anyToggleOff)
         {
             query = query.Where(item => allowed.Contains(item.SeverityKey));
+        }
+
+        if (!string.Equals(KindFilter, AlertKinds.All, StringComparison.Ordinal))
+        {
+            query = query.Where(KindAllows);
         }
 
         if (needle.Length > 0)
@@ -1507,6 +1545,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         {
             filter.Count = pool.Count(item => string.Equals(item.SeverityKey, filter.SeverityKey, StringComparison.Ordinal));
         }
+
+        OnPropertyChanged(nameof(ShowInfoFilter));
     }
 
     private static List<AlertItem> Collapse(IReadOnlyList<AlertItem> items)
@@ -1581,7 +1621,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 public sealed partial class SeverityFilter : ObservableObject
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AutomationName))]
+    [NotifyPropertyChangedFor(nameof(AutomationName), nameof(TileCaption))]
     private bool _isEnabled = true;
 
     /// <summary>How many loaded, un-acknowledged alerts have this severity (regardless of the toggle).</summary>
@@ -1754,6 +1794,8 @@ public sealed partial class AlertItem : ObservableObject
         return new AlertItem(alert.Id.Length > 0 ? alert.Id : Guid.NewGuid().ToString("n"), alert.Timestamp)
         {
             Severity = Normalize(alert.Severity),
+            Kind = KindOf(alert.Action ?? string.Empty, alert.Scanner ?? string.Empty),
+            RawTarget = alert.Target ?? string.Empty,
             RuleId = alert.RuleId ?? string.Empty,
             RunId = alert.RunId ?? string.Empty,
             Headline = alert.Title ?? alert.Details ?? alert.Action ?? "(finding)",
@@ -1780,6 +1822,8 @@ public sealed partial class AlertItem : ObservableObject
         return new AlertItem(row.Id, row.Timestamp)
         {
             Severity = Normalize(row.Severity),
+            Kind = KindOf(row.Action, row.StructuredString(GatewayAlert.Keys.Scanner) ?? string.Empty),
+            RawTarget = row.Target ?? string.Empty,
             RuleId = row.StructuredString(GatewayAlert.Keys.RuleId) ?? string.Empty,
             RunId = row.RunId ?? string.Empty,
             Headline = row.StructuredString(GatewayAlert.Keys.Title) ?? row.Details ?? row.Action,
@@ -1806,6 +1850,8 @@ public sealed partial class AlertItem : ObservableObject
         return new AlertItem(item.Id.Length > 0 ? item.Id : Guid.NewGuid().ToString("n"), item.Timestamp)
         {
             Severity = item.Severity.ToStoredValue(),
+            Kind = KindOf(item.Action, string.Empty),
+            RawTarget = item.Target ?? string.Empty,
             Headline = item.Action.Length > 0 ? item.Action : "(finding)",
             Action = item.Action,
             TargetRef = item.Target ?? string.Empty,
@@ -1818,6 +1864,8 @@ public sealed partial class AlertItem : ObservableObject
     public AlertItem CloneForGroup() => new(Key, Timestamp)
     {
         Severity = Severity,
+        Kind = Kind,
+        RawTarget = RawTarget,
         RuleId = RuleId,
         RunId = RunId,
         Headline = Headline,
@@ -1843,6 +1891,7 @@ public sealed partial class AlertItem : ObservableObject
 
     public bool Matches(string needle) =>
         Contains(RuleId, needle) ||
+        Contains(Kind, needle) ||
         Contains(Headline, needle) ||
         Contains(Action, needle) ||
         Contains(TargetRef, needle) ||

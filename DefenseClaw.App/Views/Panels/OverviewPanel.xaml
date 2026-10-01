@@ -20,51 +20,6 @@
     -->
     <UserControl.Resources>
         <!--
-            The Enforcement tile (CUST-205): a whole-card button with the stroke of a hovered or focused control and a chevron. Not a ui:Button,
-            whose template is a filled control: this is a card that can be pressed. Focus keeps the shared focus ring (DcFocusVisualStyle).
-        -->
-        <Style x:Key="DcInteractiveTile" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource DcRaisedBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
-            <Setter Property="BorderThickness" Value="{DynamicResource DcBorderThickness}" />
-            <Setter Property="Padding" Value="12,10,10,10" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="VerticalContentAlignment" Value="Stretch" />
-            <Setter Property="FocusVisualStyle" Value="{StaticResource DcFocusVisualStyle}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Root"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="{DynamicResource DcRadiusM}"
-                                Padding="{TemplateBinding Padding}"
-                                SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcAccentBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource DcAccentBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.55" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!--
             The hero row is one grid of six equal columns, and each card says how many it takes (the 12 DIP gaps are card margins, so there is
             no gap column to keep empty). Wide: three cards of two columns, Services | Scanners | Enforcement, all in row 0, so they are as tall as
             the tallest. Compact (panel under 1000 DIPs): Services and Scanners take three columns each, and Enforcement drops to row 1 across all six.

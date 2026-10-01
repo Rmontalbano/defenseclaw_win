@@ -326,7 +326,7 @@ public sealed class AlertsPanelQueueTests : IDisposable
     }
 
     [Fact]
-    public void A_payload_with_no_floor_or_of_another_kind_changes_nothing()
+    public void A_payload_naming_neither_a_floor_nor_a_known_kind_changes_nothing()
     {
         Finding("crit", 2, "CRITICAL");
         Finding("med", 1, "MEDIUM");
@@ -337,12 +337,14 @@ public sealed class AlertsPanelQueueTests : IDisposable
             await vm.InitializeAsync();
             vm.FilterText = "med";
 
-            vm.Accept(new AlertsFilter(Kind: AlertsFilter.KindBlocks));
+            vm.Accept(new AlertsFilter());
+            vm.Accept(new AlertsFilter(Kind: "no such kind"));
             vm.Accept(new AuditPreset("errors"));
             vm.Accept("a string");
 
             Assert.Equal("med", vm.FilterText);
             Assert.All(vm.SeverityFilters, f => Assert.True(f.IsEnabled));
+            Assert.Equal(AlertKinds.All, vm.KindFilter);
         });
     }
 
