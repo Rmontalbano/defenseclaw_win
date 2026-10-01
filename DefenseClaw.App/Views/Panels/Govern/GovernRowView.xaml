@@ -124,6 +124,16 @@
                                ToolTip="Read-only: runs immediately and shows the result here"
                                AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Show details of {0}'}"
                                Visibility="{Binding CanInfo, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- Scan runs the scanner and records the result, so it opens a review first. Disabled (with the reason) when the
+                         scanner is not installed; the panel's CanScan also turns it off while another command runs. -->
+                    <ui:Button Content="Scan…"
+                               Icon="{ctl:DcSymbolIcon ScanText24}"
+                               Command="{Binding ActionCommand}"
+                               CommandParameter="Scan"
+                               IsEnabled="{Binding DataContext.CanScan, RelativeSource={RelativeSource AncestorType=ItemsControl}, FallbackValue=True}"
+                               ToolTip="Runs the scanner and records the result. Opens a review of the exact command first."
+                               AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Scan {0}'}"
+                               Visibility="{Binding CanScan, Converter={StaticResource BoolToVisibility}}" />
                     <ui:Button Content="Block"
                                Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
                                Command="{Binding ActionCommand}"

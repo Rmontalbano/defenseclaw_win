@@ -45,6 +45,9 @@ public sealed class GovernPlan
 
     /// <summary>Runs on the UI thread after the command exits 0 and before the list is re-read.</summary>
     public Action? OnSuccess { get; init; }
+
+    /// <summary>A ceiling for a command that legitimately runs long (a scan); null keeps the runner's default.</summary>
+    public TimeSpan? Timeout { get; init; }
 }
 
 /// <summary>
@@ -83,9 +86,14 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     private DateTimeOffset? _lastLoadedAt;
     private string? _loadedScopeKey;
     private GovernPlan? _pendingPlan;
+    private bool _scannerProbeStarted;
+
+    /// <summary>Set once the scanner lookup has answered; null until then. See <see cref="ScannerExecutable"/>.</summary>
+    private bool? _scannerFound;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle))]
+    [NotifyPropertyChangedFor(nameof(CanScan))]
     private bool _isBusy;
 
     [ObservableProperty] private string _filterText = string.Empty;
@@ -154,6 +162,16 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     protected virtual IReadOnlyList<string> StatusFilterChoices => DefaultStatusFilters;
 
+    /// <summary>
+    /// The scanner executable <c>&lt;noun&gt; scan</c> shells out to (<c>skill-scanner</c>, <c>mcp-scanner</c>); null when this
+    /// panel has none to look for. The scanner is looked up once per visit, off the UI thread, and a scan is only refused
+    /// once the lookup has answered "not installed" - until then the button works, as the Overview's Scanners box does.
+    /// </summary>
+    protected virtual string? ScannerExecutable => null;
+
+    /// <summary>The bulk scan this panel offers (<c>skill scan --all</c>); null when there is none.</summary>
+    protected virtual IReadOnlyList<string>? ScanAllArgv => null;
+
     // ---- Bindable surface ----------------------------------------------------------------------------------------
 
     /// <summary>The rows the filter lets through (real items only).</summary>
@@ -195,6 +213,19 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     public bool HasRefreshWarning => !string.IsNullOrEmpty(RefreshWarning);
 
     public bool HasArtifacts => ArtifactRows.Count > 0;
+
+    /// <summary>False while a command runs or when the scanner is known to be missing; what the Scan buttons bind to.</summary>
+    public bool CanScan => IsIdle && ScanUnavailableReason is null;
+
+    /// <summary>Why Scan cannot run (the scanner is not installed); null when it can. Shown inline, not only in a tooltip.</summary>
+    public string? ScanUnavailableReason =>
+        ScannerExecutable is { } exe && _scannerFound == false
+            ? $"Scan is unavailable: {exe} was not found on this machine. Install it and press Refresh."
+            : null;
+
+    public bool HasScanUnavailableReason => ScanUnavailableReason is not null;
+
+    public bool HasScanAll => ScanAllArgv is not null;
 
     /// <summary>"2 entries the CLI lists that are not plugins" — heads the collapsed artifact section.</summary>
     public string ArtifactHeader => $"{ArtifactRows.Count} listing artifact{(ArtifactRows.Count == 1 ? string.Empty : "s")} (not {NounPlural})";
@@ -242,12 +273,14 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         RefreshConnectorList();
+        StartScannerProbe();
         await LoadAsync().ConfigureAwait(true);
     }
 
     protected override void OnActivated()
     {
         RefreshConnectorList();
+        StartScannerProbe();
 
         // One catch-up read per visit, and only when the data is old (or never arrived). Not a timer.
         var stale = _lastLoadedAt is null
@@ -259,9 +292,60 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         }
     }
 
-    /// <summary>Re-read the list (Refresh button, F5).</summary>
+    /// <summary>Re-read the list (Refresh button, F5). Also looks for the scanner again, so installing it needs no restart.</summary>
     [RelayCommand]
-    private Task RefreshAsync() => LoadAsync();
+    private Task RefreshAsync()
+    {
+        _scannerProbeStarted = false;
+        StartScannerProbe();
+        return LoadAsync();
+    }
+
+    /// <summary>
+    /// Looks for <see cref="ScannerExecutable"/> without waiting for it on the UI thread (a dead PATH entry stalls a lookup for
+    /// tens of seconds). A cached answer is used at once; otherwise the lookup runs on the pool and the answer is applied back here.
+    /// </summary>
+    private void StartScannerProbe()
+    {
+        if (ScannerExecutable is not { } exe || _scannerProbeStarted)
+        {
+            return;
+        }
+
+        _scannerProbeStarted = true;
+        if (ScannerFinder is null && Services.Paths.TryGetKnownExecutable(exe, out var known))
+        {
+            SetScannerFound(known is not null);
+            return;
+        }
+
+        _ = ProbeScannerAsync(exe);
+    }
+
+    private async Task ProbeScannerAsync(string exe)
+    {
+        try
+        {
+            var found = await (ScannerFinder?.Invoke(exe) ?? Services.Paths.FindExecutableAsync(exe)).ConfigureAwait(true);
+            SetScannerFound(found is not null);
+        }
+        catch (Exception)
+        {
+            // An unanswered lookup leaves Scan enabled; the command itself says what is wrong if it cannot run.
+            _scannerProbeStarted = false;
+        }
+    }
+
+    /// <summary>Test seam: answers "where is this scanner" instead of the real PATH lookup, so a test does not depend on the machine.</summary>
+    internal Func<string, Task<string?>>? ScannerFinder { get; set; }
+
+    private void SetScannerFound(bool found)
+    {
+        _scannerFound = found;
+        OnPropertyChanged(nameof(CanScan));
+        OnPropertyChanged(nameof(ScanUnavailableReason));
+        OnPropertyChanged(nameof(HasScanUnavailableReason));
+    }
 
     [RelayCommand]
     private void ClearFilter()
@@ -620,11 +704,56 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             return;
         }
 
+        if (verb == GovernVerbs.Scan && ScanUnavailableReason is { } unavailable)
+        {
+            ShowResult("Scan unavailable", unavailable, InfoBarSeverity.Warning);
+            return;
+        }
+
         if (PlanFor(row, verb) is { } plan)
         {
             BeginReview(plan);
         }
     }
+
+    /// <summary>
+    /// Scan every item (<c>skill scan --all</c>, the Overview's Scan Skills): the scanner runs over all of them and records
+    /// results and an audit event, so it is reviewed like any other command. Scoped to the toolbar's connector when one is chosen.
+    /// </summary>
+    [RelayCommand]
+    private void ScanAll()
+    {
+        if (ScanAllArgv is not { } baseArgv || IsBusy)
+        {
+            return;
+        }
+
+        if (ScanUnavailableReason is { } unavailable)
+        {
+            ShowResult("Scan unavailable", unavailable, InfoBarSeverity.Warning);
+            return;
+        }
+
+        var argv = new List<string>(baseArgv);
+        var connector = ToolbarConnector();
+        if (connector is not null)
+        {
+            argv.Add("--connector");
+            argv.Add(connector);
+        }
+
+        BeginReview(new GovernPlan
+        {
+            Heading = $"Scan all {NounPlural} for {ScopeText(connector)}?",
+            Argv = argv,
+            Note = ScanNote(NounPlural),
+            SuccessMessage = $"Scanned all {NounPlural}.",
+            Timeout = CliRunner.ExtendedTimeout,
+        });
+    }
+
+    private string ScanNote(string what) =>
+        $"Runs the {NounLabel} scanner over {what} and records the results and an audit event. It changes scan results and findings; it does not change any {NounLabel}. A scan can take minutes.";
 
     /// <summary>Builds the reviewed command for a mutating row verb; null when the verb does not apply.</summary>
     protected virtual GovernPlan? PlanFor(GovernRow row, GovernVerbs verb)
@@ -632,6 +761,13 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         var word = VerbWord(verb);
         if (word is null)
         {
+            return null;
+        }
+
+        // 'skill scan all' means every skill, not a skill called "all": there is no way to scan that one by name.
+        if (verb == GovernVerbs.Scan && string.Equals(row.Name, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowResult("Scan not offered", $"A {NounLabel} called “all” cannot be scanned by name: the CLI reads that name as every {NounLabel}. Use Scan all.", InfoBarSeverity.Warning);
             return null;
         }
 
@@ -650,6 +786,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             Argv = BuildArgv(Noun, word, options, name),
             Note = NoteFor(verb, row),
             SuccessMessage = SuccessFor(verb, row),
+            Timeout = verb == GovernVerbs.Scan ? CliRunner.ExtendedTimeout : null,
         };
     }
 
@@ -680,6 +817,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             GovernVerbs.Restore => $"Restore quarantined {NounLabel} “{name}” on {scope}?",
             GovernVerbs.Remove => $"Remove {NounLabel} “{name}” from {scope}?",
             GovernVerbs.Unset => $"Remove {NounLabel} “{name}” from the config of {scope}?",
+            GovernVerbs.Scan => $"Scan {NounLabel} “{name}” for {scope}?",
             _ => $"Run {verb} on {NounLabel} “{name}”?",
         };
     }
@@ -693,6 +831,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         GovernVerbs.Quarantine =>
             $"Moves the {NounLabel}'s files into DefenseClaw's quarantine area so they stop loading. Undo with Restore.",
         GovernVerbs.Restore => "Moves the files back to the path recorded when they were quarantined.",
+        GovernVerbs.Scan => ScanNote($"this {NounLabel}"),
         GovernVerbs.Unblock => "Clears block, file and runtime decisions without adding an allow entry. Quarantined files are not restored.",
         _ => null,
     };
@@ -711,6 +850,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             GovernVerbs.Restore => $"Restored “{name}”.",
             GovernVerbs.Remove => $"Removed “{name}”.",
             GovernVerbs.Unset => $"Removed “{name}” from the config.",
+            GovernVerbs.Scan => $"Scanned “{name}”; its Scan result is read again below.",
             _ => "Done.",
         };
     }
@@ -726,6 +866,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         GovernVerbs.Restore => "restore",
         GovernVerbs.Remove => "remove",
         GovernVerbs.Unset => "unset",
+        GovernVerbs.Scan => "scan",
         _ => null,
     };
 
@@ -926,7 +1067,8 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         IsBusy = true;
         try
         {
-            var invocation = await Services.Cli.RunAsync(plan.Argv, options: ExactTargets).ConfigureAwait(true);
+            var options = plan.Timeout is { } timeout ? ExactTargets with { Timeout = timeout } : ExactTargets;
+            var invocation = await Services.Cli.RunAsync(plan.Argv, options: options).ConfigureAwait(true);
             if (invocation.ExitCode == 0 && invocation.FailureReason is null)
             {
                 succeeded = true;

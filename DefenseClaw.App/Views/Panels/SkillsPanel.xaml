@@ -54,6 +54,18 @@
             </ctl:DcPageToolbar.Leading>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowDownload24}"
+                               Command="{Binding ToggleInstallFormCommand}"
+                               IsEnabled="{Binding IsIdle}"
+                               ToolTip="Install skill…"
+                               AutomationProperties.Name="Install skill…"
+                               AutomationProperties.HelpText="Install a ClawHub skill with 'defenseclaw skill install'. You review the command first." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ScanText24}"
+                               Command="{Binding ScanAllCommand}"
+                               IsEnabled="{Binding CanScan}"
+                               ToolTip="Scan all skills…"
+                               AutomationProperties.Name="Scan all skills…"
+                               AutomationProperties.HelpText="Runs 'defenseclaw skill scan --all' and records the results. You review the command first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                IsEnabled="{Binding IsIdle}"
@@ -99,6 +111,59 @@
                                         AutomationProperties.HelpText="Sent as --reason with block, allow, disable and quarantine." />
                         </StackPanel>
                     </WrapPanel>
+
+                    <!-- Why Scan is off: the scanner is not installed. -->
+                    <TextBlock Style="{StaticResource DcToneText}"
+                               Tag="Warn"
+                               Margin="{StaticResource DcCardGap}"
+                               TextWrapping="Wrap"
+                               Text="{Binding ScanUnavailableReason}"
+                               Visibility="{Binding HasScanUnavailableReason, Converter={StaticResource BoolToVisibility}}"
+                               AutomationProperties.LiveSetting="Polite" />
+
+                    <!-- Install a skill (skill install) -->
+                    <Border Style="{StaticResource DcCard}"
+                            Margin="{StaticResource DcCardGap}"
+                            Visibility="{Binding IsInstallFormOpen, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Symbol="ArrowDownload24" Section="Govern" Content="Install a skill" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Text="Runs 'defenseclaw skill install'. The skill is downloaded from ClawHub, copied into the connector's skill folder and scanned. The scope is the connector chosen in the toolbar; 'All configured connectors' installs into every one. You review the exact command before anything runs." />
+
+                            <StackPanel Margin="0,12,0,8">
+                                <TextBlock Style="{StaticResource DcFieldLabel}" Text="ClawHub skill name" />
+                                <ui:TextBox Text="{Binding InstallName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            AutomationProperties.Name="Skill to install" />
+                            </StackPanel>
+
+                            <CheckBox Content="Force: overwrite an existing skill of the same name"
+                                      IsChecked="{Binding InstallForce, Mode=TwoWay}" />
+                            <CheckBox Margin="0,6,0,0"
+                                      Content="Apply the configured skill__actions policy based on scan severity"
+                                      IsChecked="{Binding InstallApplyActionPolicy, Mode=TwoWay}" />
+
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Bad"
+                                       Margin="0,10,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding InstallFormError}"
+                                       Visibility="{Binding HasInstallFormError, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.LiveSetting="Assertive" />
+
+                            <StackPanel Margin="0,12,0,0"
+                                        HorizontalAlignment="Right"
+                                        Orientation="Horizontal">
+                                <ui:Button Margin="0,0,8,0"
+                                           Content="Cancel"
+                                           Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                           Command="{Binding ToggleInstallFormCommand}" />
+                                <ui:Button Appearance="Primary"
+                                           Content="Review command"
+                                           Icon="{ctl:DcSymbolIcon ClipboardCheckmark24}"
+                                           Command="{Binding SubmitInstallFormCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Result of the last action and a stale-data warning -->
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"

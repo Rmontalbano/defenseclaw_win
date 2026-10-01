@@ -61,6 +61,8 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
 
     protected override string NounPlural => "MCP servers";
 
+    protected override string? ScannerExecutable => "mcp-scanner";
+
     protected override string ItemsKey => "mcp_servers";
 
     public IReadOnlyList<string> TransportChoices { get; } = new[] { TransportInfer, "stdio", "sse" };
@@ -107,7 +109,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         AddField(fields, "Scan", state.ScanLabel);
 
         // No 'mcp info' exists, so the raw JSON in the details is the per-server view. Info is not offered.
-        var verbs = (StandardVerbs(state, canDisable: false, canQuarantine: false) & ~GovernVerbs.Info) | GovernVerbs.Unset;
+        var verbs = (StandardVerbs(state, canDisable: false, canQuarantine: false) & ~GovernVerbs.Info) | GovernVerbs.Unset | GovernVerbs.Scan;
 
         return new GovernRow(this)
         {

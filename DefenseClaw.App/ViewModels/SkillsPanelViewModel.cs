@@ -1,5 +1,9 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
+using DefenseClaw.Core.Cli;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -17,8 +21,20 @@ namespace DefenseClaw.App.ViewModels;
 /// info) are built by <see cref="GovernPanelViewModelBase"/>.
 /// </para>
 /// </summary>
-public sealed class SkillsPanelViewModel : GovernPanelViewModelBase
+public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
 {
+    /// <summary>The CLI's own test of a ClawHub skill name (<c>_CLAWHUB_NAME_RE</c> in cmd_skill.py): no path, no URL, no version suffix.</summary>
+    private static readonly Regex ClawHubNamePattern = new(@"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$", RegexOptions.CultureInvariant);
+
+    [ObservableProperty] private bool _isInstallFormOpen;
+    [ObservableProperty] private string _installName = string.Empty;
+    [ObservableProperty] private bool _installForce;
+    [ObservableProperty] private bool _installApplyActionPolicy;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasInstallFormError))]
+    private string _installFormError = string.Empty;
+
     public SkillsPanelViewModel(AppServices services)
         : base(services)
     {
@@ -35,6 +51,13 @@ public sealed class SkillsPanelViewModel : GovernPanelViewModelBase
     protected override string NounPlural => "skills";
 
     protected override string ItemsKey => "skills";
+
+    protected override string? ScannerExecutable => "skill-scanner";
+
+    /// <summary>The same command as the Overview's Scan Skills quick action.</summary>
+    protected override IReadOnlyList<string>? ScanAllArgv => OverviewPanelViewModel.ScanSkillsArgv;
+
+    public bool HasInstallFormError => InstallFormError.Length > 0;
 
     protected override string BuildEmptyTitle(string scope) => $"No skills installed for {scope}";
 
@@ -104,9 +127,9 @@ public sealed class SkillsPanelViewModel : GovernPanelViewModelBase
             RawJson = GovernJson.Pretty(item),
             Fields = fields,
             // A bundled skill ships with the connector: it can be inspected but not blocked, disabled or moved.
-            Verbs = bundled
+            Verbs = GovernVerbs.Scan | (bundled
                 ? GovernVerbs.Info | GovernVerbs.CopyName
-                : StandardVerbs(state, canDisable: true, canQuarantine: true),
+                : StandardVerbs(state, canDisable: true, canQuarantine: true)),
         };
     }
 
@@ -118,4 +141,101 @@ public sealed class SkillsPanelViewModel : GovernPanelViewModelBase
             "Allow-listed skills skip the scan gate during install. Allowing also removes the skill from the block list.",
         _ => base.NoteFor(verb, row),
     };
+    // ---- Install (skill install) ---------------------------------------------------------------------------------
+
+    [RelayCommand]
+    private void ToggleInstallForm()
+    {
+        IsInstallFormOpen = !IsInstallFormOpen;
+        InstallFormError = string.Empty;
+    }
+
+    protected override bool CloseTransientUi()
+    {
+        if (!IsInstallFormOpen)
+        {
+            return false;
+        }
+
+        IsInstallFormOpen = false;
+        InstallFormError = string.Empty;
+        return true;
+    }
+
+    [RelayCommand]
+    private void SubmitInstallForm()
+    {
+        var name = InstallName.Trim();
+        if (name.Length == 0)
+        {
+            InstallFormError = "Enter the ClawHub name of the skill.";
+            return;
+        }
+
+        if (InstallNameProblem(name) is { } problem)
+        {
+            InstallFormError = problem;
+            return;
+        }
+
+        InstallFormError = string.Empty;
+
+        var options = new List<string>();
+        if (InstallForce)
+        {
+            options.Add("--force");
+        }
+
+        if (InstallApplyActionPolicy)
+        {
+            options.Add("--action");
+        }
+
+        // Bare install puts a copy into every configured connector's skill folder (skill install --help), so the
+        // heading says where it will land.
+        var connector = ToolbarConnector();
+        if (connector is not null)
+        {
+            options.Add("--connector");
+            options.Add(connector);
+        }
+
+        var notes = new List<string> { "Downloads the skill from ClawHub, copies it into the connector's skill folder and scans it." };
+        if (InstallApplyActionPolicy)
+        {
+            notes.Add("After the scan, the configured skill_actions policy may quarantine, disable or block it depending on severity.");
+        }
+        else
+        {
+            notes.Add("Without the policy option the scan only reports findings; nothing is enforced.");
+        }
+
+        if (InstallForce)
+        {
+            notes.Add("Force overwrites an existing skill of the same name.");
+        }
+
+        BeginReview(new GovernPlan
+        {
+            Heading = $"Install skill “{name}” into {ScopeText(connector)}?",
+            Argv = BuildArgv(Noun, "install", options, name),
+            Note = string.Join(" ", notes),
+            SuccessMessage = $"Installed “{name}”.",
+            MinimumTier = InstallForce ? CommandTier.Destructive : null,
+            Timeout = CliRunner.ExtendedTimeout,
+            OnSuccess = () => IsInstallFormOpen = false,
+        });
+    }
+
+    /// <summary>
+    /// Why <paramref name="name"/> cannot be handed to <c>skill install</c>, or null when it can. Unlike <c>plugin install</c> the
+    /// target is only ever a ClawHub name: the CLI refuses anything with a path separator, a scheme or a version suffix.
+    /// </summary>
+    internal static string? InstallNameProblem(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return ClawHubNamePattern.IsMatch(name)
+            ? null
+            : "That is not a ClawHub skill name: use letters, digits, '.', '_' and '-' (up to 128 characters), with no path, URL or @version.";
+    }
 }

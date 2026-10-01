@@ -62,7 +62,7 @@ public sealed class GovernPanelParsingTests : IDisposable
         Assert.Contains(pdf.Fields, f => f is { Label: "Findings", Value: "high 2 · medium 1" });
         Assert.Contains(pdf.Fields, f => f is { Label: "Homepage", Value: "https://example.test/pdf" });
         Assert.Equal(
-            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Disable | GovernVerbs.Quarantine,
+            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Disable | GovernVerbs.Quarantine,
             pdf.Verbs);
         Assert.Contains("\"pdf-tools\"", pdf.RawJson, StringComparison.Ordinal);
     }
@@ -74,7 +74,7 @@ public sealed class GovernPanelParsingTests : IDisposable
 
         var bundled = vm.ParseRows(SkillsBareArray)[1];
 
-        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName, bundled.Verbs);
+        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan, bundled.Verbs);
         Assert.False(bundled.CanBlock);
         Assert.False(bundled.CanQuarantine);
     }
@@ -171,13 +171,13 @@ public sealed class GovernPanelParsingTests : IDisposable
         Assert.Equal("Configured", docs.StateLabel);
         Assert.Equal("MEDIUM", docs.ScanLabel);
         Assert.True(docs.NeedsAttention);
-        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Unset, docs.Verbs);
+        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Unset, docs.Verbs);
         Assert.False(docs.CanInfo);
 
         var remote = rows[1];
         Assert.True(remote.IsAllowed);
         Assert.Contains(remote.Fields, f => f is { Label: "URL", Value: "https://mcp.example.test/sse" });
-        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Unset, remote.Verbs);
+        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Unset, remote.Verbs);
     }
 
     // ------------------------------------------------------------------ plugins
@@ -267,7 +267,7 @@ public sealed class GovernPanelParsingTests : IDisposable
         Assert.True(plugin.IsAllowed);
         Assert.Contains(plugin.Fields, f => f is { Label: "Scan target", Value: "C:\\plugins\\code-review" });
         Assert.Equal(
-            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Disable | GovernVerbs.Quarantine | GovernVerbs.Remove,
+            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Disable | GovernVerbs.Quarantine | GovernVerbs.Remove,
             plugin.Verbs);
         Assert.Contains("version: 1.2.0", plugin.MetaLine, StringComparison.Ordinal);
     }

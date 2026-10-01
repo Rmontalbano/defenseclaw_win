@@ -105,6 +105,15 @@
                         </StackPanel>
                     </WrapPanel>
 
+                    <!-- Why Scan is off: the scanner is not installed. -->
+                    <TextBlock Style="{StaticResource DcToneText}"
+                               Tag="Warn"
+                               Margin="{StaticResource DcCardGap}"
+                               TextWrapping="Wrap"
+                               Text="{Binding ScanUnavailableReason}"
+                               Visibility="{Binding HasScanUnavailableReason, Converter={StaticResource BoolToVisibility}}"
+                               AutomationProperties.LiveSetting="Polite" />
+
                     <!-- Add / update an MCP server (mcp set) -->
                     <Border Style="{StaticResource DcCard}"
                             Margin="{StaticResource DcCardGap}"

@@ -24,6 +24,9 @@ public enum GovernVerbs
     Remove = 1 << 8,
     Unset = 1 << 9,
     CopyName = 1 << 10,
+
+    /// <summary><c>&lt;noun&gt; scan [--connector C] -- NAME</c>: runs the scanner and records the result (reviewed first).</summary>
+    Scan = 1 << 11,
 }
 
 /// <summary>What a row calls back into when one of its buttons is pressed. Implemented by the panel view-model.</summary>
@@ -173,6 +176,8 @@ public sealed class GovernRow
     public bool CanRemove => (Verbs & GovernVerbs.Remove) != 0;
 
     public bool CanUnset => (Verbs & GovernVerbs.Unset) != 0;
+
+    public bool CanScan => (Verbs & GovernVerbs.Scan) != 0;
 
     /// <summary>Lower-cased text the panel's filter box matches against.</summary>
     public string SearchText => _searchText ??= string.Join(

@@ -70,7 +70,7 @@ public sealed class GovernPayloadTests : IDisposable
         Assert.Contains(pdf.Fields, f => f is { Label: "Findings", Value: "high 2 · medium 1" });
         Assert.Contains(pdf.Fields, f => f is { Label: "Homepage", Value: "https://example.test/pdf-tools" });
         Assert.Equal(
-            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Disable | GovernVerbs.Quarantine,
+            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Disable | GovernVerbs.Quarantine,
             pdf.Verbs);
     }
 
@@ -121,7 +121,7 @@ public sealed class GovernPayloadTests : IDisposable
         Assert.Equal("Quarantined", removed.StateLabel);
         Assert.Equal("Bad", removed.StateTone);
         Assert.True(removed.IsBlocked);
-        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Restore | GovernVerbs.Unblock, removed.Verbs);
+        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Restore | GovernVerbs.Unblock, removed.Verbs);
         Assert.Contains("source: enforcement", removed.MetaLine, StringComparison.Ordinal);
     }
 
@@ -159,7 +159,7 @@ public sealed class GovernPayloadTests : IDisposable
 
         // A skill that ships with the connector (Codex's .system container, skill_discovery.py:48-90) can be inspected only.
         var bundled = Row(rows, "skill-installer");
-        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName, bundled.Verbs);
+        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan, bundled.Verbs);
     }
 
     // cmd_skill.py:1059-1063: --connector prints one {"connector","skills"} object, even when empty.
@@ -170,7 +170,7 @@ public sealed class GovernPayloadTests : IDisposable
 
         Assert.Equal(new[] { "skill-installer", "team-helper" }, Names(rows));
         Assert.All(rows, r => Assert.Equal("codex", r.Connector));
-        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName, Row(rows, "skill-installer").Verbs);
+        Assert.Equal(GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan, Row(rows, "skill-installer").Verbs);
     }
 
     [Theory]
@@ -236,7 +236,7 @@ public sealed class GovernPayloadTests : IDisposable
         Assert.False(docs.NeedsAttention);
         Assert.Contains(docs.Fields, f => f is { Label: "Transport", Value: "stdio" });
         Assert.Contains(docs.Fields, f => f is { Label: "Command", Value: @"npx -y @example/docs-mcp --root C:\Users\example\docs" });
-        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Unset, docs.Verbs);
+        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Unset, docs.Verbs);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class GovernPayloadTests : IDisposable
         Assert.Equal("HIGH", blocked.ScanLabel);
         Assert.True(blocked.NeedsAttention);
         Assert.Contains(blocked.Fields, f => f is { Label: "URL", Value: "https://mcp.example.test/v1" });
-        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Allow | GovernVerbs.Unblock | GovernVerbs.Unset, blocked.Verbs);
+        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Allow | GovernVerbs.Unblock | GovernVerbs.Unset, blocked.Verbs);
 
         var streaming = Row(rows, "streaming-tools");
         Assert.Contains(streaming.Fields, f => f is { Label: "Transport", Value: "streamable-http" });
@@ -258,7 +258,7 @@ public sealed class GovernPayloadTests : IDisposable
 
         var sse = Row(rows, "sse-server");
         Assert.True(sse.IsAllowed);
-        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Unset, sse.Verbs);
+        Assert.Equal(GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Unblock | GovernVerbs.Unset, sse.Verbs);
     }
 
     [Fact]
@@ -349,7 +349,7 @@ public sealed class GovernPayloadTests : IDisposable
         Assert.Equal("Not scanned", plugin.ScanLabel);
         Assert.False(plugin.IsArtifact);
         Assert.Equal(
-            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Disable | GovernVerbs.Quarantine | GovernVerbs.Remove,
+            GovernVerbs.Info | GovernVerbs.CopyName | GovernVerbs.Scan | GovernVerbs.Block | GovernVerbs.Allow | GovernVerbs.Disable | GovernVerbs.Quarantine | GovernVerbs.Remove,
             plugin.Verbs);
         Assert.Contains("version: 1.4.2", plugin.MetaLine, StringComparison.Ordinal);
         Assert.Contains("enabled: yes", plugin.MetaLine, StringComparison.Ordinal);

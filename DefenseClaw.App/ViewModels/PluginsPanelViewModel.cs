@@ -117,7 +117,7 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
 
         var verbs = artifact
             ? GovernVerbs.Info | GovernVerbs.CopyName
-            : StandardVerbs(state, canDisable: true, canQuarantine: true) | GovernVerbs.Remove;
+            : StandardVerbs(state, canDisable: true, canQuarantine: true) | GovernVerbs.Remove | GovernVerbs.Scan;
 
         return new GovernRow(this)
         {
