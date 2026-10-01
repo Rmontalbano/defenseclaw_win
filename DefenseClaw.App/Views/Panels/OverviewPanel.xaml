@@ -238,29 +238,25 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <HeaderedContentControl Grid.Row="0"
-                                Style="{StaticResource DcPageHeader}"
-                                ctl:DcIcon.Symbol="AppsListDetail24"
-                                ctl:DcIcon.Section="Overview">
-            <HeaderedContentControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" />
-                    <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Description}" />
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="AppsListDetail24"
+                           ctl:DcIcon.Section="Overview"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding LastUpdatedText}">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <!-- AsyncRelayCommand disables itself while it runs, so no IsEnabled plumbing. -->
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Poll the gateway again and re-read the audit counts, enforcement lists, doctor results and configuration. Shortcut F5." />
                 </StackPanel>
-            </HeaderedContentControl.Header>
-            <StackPanel Style="{StaticResource DcActionBar}">
-                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding LastUpdatedText}" />
-                <!-- AsyncRelayCommand disables itself while it runs, so no IsEnabled plumbing. -->
-                <ui:Button Content="Refresh"
-                           Command="{Binding RefreshCommand}"
-                           AutomationProperties.HelpText="Poll the gateway again and re-read the audit counts, enforcement lists, doctor results and configuration. Shortcut F5.">
-                    <ui:Button.Icon>
-                        <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </HeaderedContentControl>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
 
         <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
             <StackPanel>

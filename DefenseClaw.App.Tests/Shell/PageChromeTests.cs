@@ -23,7 +23,7 @@ namespace DefenseClaw.App.Tests.Shell;
 /// <summary>
 /// The page chrome of CUST-208: <see cref="DcPageToolbar"/> (the compact title / actions / search row that replaced the 26 px
 /// title block and the text-labelled buttons) and <see cref="DcSegmented"/> (the single-select filter), as controls and as they
-/// sit on the thirteen panels that use them.
+/// sit on all fourteen panels.
 /// </summary>
 [Collection(UiCollection.Name)]
 public sealed class PageChromeTests
@@ -517,7 +517,7 @@ public sealed class PageChromeTests
 
     // ------------------------------------------------------------------ the panels
 
-    /// <summary>The thirteen panels that open with the toolbar (every one but Overview): view, view-model, and whether the toolbar carries the filter box.</summary>
+    /// <summary>The fourteen panels, all of which open with the toolbar: view, view-model, and whether the toolbar carries the filter box.</summary>
     private static readonly (string View, string ViewModel, bool Search)[] ToolbarPanels =
     {
         ("AlertsPanel", "AlertsPanelViewModel", true),
@@ -533,17 +533,17 @@ public sealed class PageChromeTests
         ("RegistriesPanel", "RegistriesPanelViewModel", false),
         ("SetupPanel", "SetupPanelViewModel", false),
         ("SettingsPanel", "SettingsPanelViewModel", false),
+        ("OverviewPanel", "OverviewPanelViewModel", false),
     };
 
     /// <summary>
-    /// Read from the XAML, so it costs no views and no UI thread: each of the thirteen panels opens with a DcPageToolbar that
+    /// Read from the XAML, so it costs no views and no UI thread: each of the fourteen panels opens with a DcPageToolbar that
     /// names its actions (icon only, so the name and the tooltip are all the label there is), binds only what its view-model
     /// has, and keeps the filter box in the toolbar where it filters the page's main list (AI Discovery and Setup filter cards in
-    /// the middle of a scrolling page, so theirs stays over them). Overview is recomposed in a later phase and keeps its page
-    /// header until then.
+    /// the middle of a scrolling page, so theirs stays over them).
     /// </summary>
     [Fact]
-    public void Every_panel_but_Overview_declares_the_toolbar_with_named_icon_actions_and_bindings_its_view_model_has()
+    public void Every_panel_declares_the_toolbar_with_named_icon_actions_and_bindings_its_view_model_has()
     {
         var panels = Path.Combine(AppDirectory(), "Views", "Panels");
         var problems = new List<string>();
@@ -630,10 +630,6 @@ public sealed class PageChromeTests
 
         Assert.Empty(problems);
 
-        // Overview keeps the old header until it is recomposed.
-        var overview = File.ReadAllText(Path.Combine(panels, "OverviewPanel.xaml"));
-        Assert.Contains("DcPageHeader", overview, StringComparison.Ordinal);
-        Assert.DoesNotContain("DcPageToolbar", overview, StringComparison.Ordinal);
     }
 
     [Fact]
