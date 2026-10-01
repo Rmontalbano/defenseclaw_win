@@ -6,9 +6,9 @@ namespace DefenseClaw.App.Tests.Overview;
 
 /// <summary>
 /// The view-model rebuilds its row collections on the thread that applies a snapshot. With a dispatcher that is the UI thread, and the scanner
-/// lookup (which must never wait there) comes back to it. With no synchronization context (every view-model test that is not on the UI thread) a
-/// continuation would have resumed on a pool thread and rebuilt <c>ScannerRows</c> while the caller was still in <c>Apply</c>, which surfaced as
-/// random <see cref="NullReferenceException"/>s in the Attention and Doctor tests about one run in six on a busy machine.
+/// lookup (which must never wait there) comes back to it. Anywhere else (no synchronization context, or xunit's, which posts to its workers) a
+/// continuation would have resumed on another thread and rebuilt <c>ScannerRows</c> while the caller was still in <c>Apply</c>, which surfaced as
+/// random <see cref="NullReferenceException"/>s in the Attention and Doctor tests and an IndexOutOfRangeException on CI.
 /// </summary>
 public sealed class OverviewThreadingTests
 {
@@ -20,7 +20,7 @@ public sealed class OverviewThreadingTests
 
         await Task.Run(() =>
         {
-            // A plain pool thread: no SynchronizationContext, like an xunit test body.
+            // A plain pool thread: no SynchronizationContext at all.
             Assert.Null(SynchronizationContext.Current);
             var caller = Environment.CurrentManagedThreadId;
             var threads = new List<int>();

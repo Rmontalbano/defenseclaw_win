@@ -915,11 +915,12 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         _scannerPathsProbedAt = DateTimeOffset.UtcNow;
 
-        // With no synchronization context (a test, a tool: there is no dispatcher and no window to keep responsive) there is nothing to
-        // marshal the answer back to, and a continuation would resume on a pool thread and rebuild ScannerRows there while the caller
-        // is still in Apply: a race on the collection. So the answer is taken here, on the calling thread. On the UI thread, where the
-        // lookup must never wait (a dead PATH entry stalls it), it runs on the pool and is applied back on that thread.
-        if (SynchronizationContext.Current is null)
+        // Off the UI thread (a test, a tool: no window to keep responsive) there is no single thread to marshal the answer back to. With
+        // no synchronization context, or one that posts to other threads (xunit's does), a continuation would rebuild ScannerRows on
+        // another thread while the caller is still in Apply: a race on the collection. So the answer is taken here, on the calling
+        // thread. On the UI thread, where the lookup must never wait (a dead PATH entry stalls it), it runs on the pool and is applied
+        // back on that thread.
+        if (SynchronizationContext.Current is not System.Windows.Threading.DispatcherSynchronizationContext)
         {
             _skillScannerPath = paths.FindExecutable("skill-scanner");
             _mcpScannerPath = paths.FindExecutable("mcp-scanner");

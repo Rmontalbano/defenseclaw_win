@@ -523,7 +523,24 @@ public sealed class AlertQueueReaderTests : IDisposable
         }
 
         var reader = new AlertQueueReader(path);
-        _ = await Assert.ThrowsAsync<TimeoutException>(() => reader.ReadAsync(timeout: TimeSpan.FromMilliseconds(1)));
+
+        // The 1 ms timer fires on the thread pool. On a starved CI runner it can fire only after the statement has finished, and then the
+        // read rightly returns its answer. So a read may finish, but one that is stopped must be stopped as a timeout (anything else
+        // escapes and fails the test), and within a few tries one is.
+        var timedOut = false;
+        for (var attempt = 0; attempt < 10 && !timedOut; attempt++)
+        {
+            try
+            {
+                _ = await reader.ReadAsync(timeout: TimeSpan.FromMilliseconds(1));
+            }
+            catch (TimeoutException)
+            {
+                timedOut = true;
+            }
+        }
+
+        Assert.True(timedOut, "ten 1 ms reads of 80k rows all finished before their timeout");
 
         // The same reader, with room, answers: the interrupted connection left nothing behind.
         var result = await reader.ReadAsync(timeout: Timeout.InfiniteTimeSpan);
