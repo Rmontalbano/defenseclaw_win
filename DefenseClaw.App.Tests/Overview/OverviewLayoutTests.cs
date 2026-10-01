@@ -315,7 +315,9 @@ public sealed class OverviewLayoutTests
         UiThread.Run(() =>
         {
             var table = VisualTree.Descendants<ListBox>(scene.Panel).Single(l => AutomationProperties.GetName(l) == "Connectors");
-            Assert.Equal(2, table.Items.Count);
+            // The two configured connectors, then the scene's detected-but-not-configured ones (CUST-210): see OverviewAddConnectorTests.
+            Assert.Equal(2, table.Items.Cast<ConnectorRow>().Count(r => !r.IsUnconfigured));
+            Assert.All(table.Items.Cast<ConnectorRow>().Skip(2), r => Assert.True(r.IsUnconfigured));
             Assert.Equal("Select a row to scope the Overview to that connector.", AutomationProperties.GetHelpText(table));
 
             var headers = VisualTree.Descendants<TextBlock>(scene.Panel).Select(t => t.Text).ToList();

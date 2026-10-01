@@ -124,6 +124,15 @@ public sealed record AgentDiscoveryRow(
     string? BinaryPath,
     string? Error)
 {
+    /// <summary>
+    /// An installed agent DefenseClaw is not set up for, that is offered on Windows: the row's Add (CUST-210). Decided where the row is built
+    /// (<see cref="AiDiscoveryPanelViewModel.AddConnectorCommand"/>), since it depends on the Setup catalog.
+    /// </summary>
+    public bool CanAdd { get; init; }
+
+    /// <summary>The screen-reader name of the Add button.</summary>
+    public string AddAutomationName => $"Add {Name}";
+
     public string StatusDisplay =>
         (Installed, Configured, Active) switch
         {
@@ -611,7 +620,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
         }
     }
 
-    private async Task LoadAgentDiscoveryAsync(CancellationToken cancellationToken)
+    internal async Task LoadAgentDiscoveryAsync(CancellationToken cancellationToken)
     {
         ConnectorDiscovery.Clear();
         var path = Services.Paths.AgentDiscoveryStatePath;
@@ -641,7 +650,13 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase
                         NullIfEmpty(GetString(value, "version")),
                         NullIfEmpty(GetString(value, "config_path")),
                         NullIfEmpty(GetString(value, "binary_path")),
-                        NullIfEmpty(GetString(value, "error"))));
+                        NullIfEmpty(GetString(value, "error")))
+                    {
+                        CanAdd = CanAddConnector(
+                            GetString(value, "name") ?? property.Name,
+                            GetBool(value, "installed"),
+                            GetBool(value, "active")),
+                    });
                 }
             }
 

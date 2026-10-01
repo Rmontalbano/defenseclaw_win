@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DefenseClaw.App.Services.FirstRun;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -45,6 +46,7 @@ public sealed partial class OverviewPanelViewModel
             {
                 // Off in config.yaml, and not running in the gateway either (a config with no ai_discovery section is the gateway's default).
                 var enabled = config.Enabled || _snapshot.Health?.AiDiscovery?.IsRunning == true;
+                SetDetectedConnectors(Array.Empty<string>());
                 SetAgents(
                     DiscoveredAgents.None,
                     enabled
@@ -54,7 +56,14 @@ public sealed partial class OverviewPanelViewModel
             }
 
             var now = DateTimeOffset.UtcNow;
-            var agents = await Task.Run(() => OverviewAgentReader.Parse(File.ReadAllText(path), now), cancellationToken).ConfigureAwait(true);
+            var (agents, detected) = await Task.Run(
+                () =>
+                {
+                    var text = File.ReadAllText(path);
+                    return (OverviewAgentReader.Parse(text, now), ConnectorOnboarding.ParseDetected(text));
+                },
+                cancellationToken).ConfigureAwait(true);
+            SetDetectedConnectors(detected);
             SetAgents(agents, agents.IsEmpty ? "No AI usage detected yet. Try: defenseclaw agent discovery scan" : string.Empty);
         }
         catch (OperationCanceledException)

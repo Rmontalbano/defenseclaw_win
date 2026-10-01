@@ -697,7 +697,7 @@
                         <Grid Margin="6,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" MinWidth="120" />
+                                <ColumnDefinition Width="*" MinWidth="80" />
                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ConnMode" />
                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ConnPack" />
                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ConnSeen" />
@@ -728,7 +728,7 @@
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" MinWidth="120" />
+                                                <ColumnDefinition Width="*" MinWidth="80" />
                                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ConnMode" />
                                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ConnPack" />
                                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ConnSeen" />
@@ -746,7 +746,35 @@
                                                        Tag="Neutral"
                                                        Foreground="{DynamicResource DcTextPrimaryBrush}"
                                                        Text="{Binding DisplayName}" />
-                                            <TextBlock Grid.Column="2" Style="{StaticResource OverviewCell}" Text="{Binding Mode}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Mode}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource OverviewCell}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsUnconfigured}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <!--
+                                                A detected connector DefenseClaw is not configured for: the Mac's "Add" sits in its own Action column, which does not fit
+                                                at the window's 940 DIP minimum beside nine other columns, so here it takes the Mode cell (a connector that is not
+                                                configured has no mode). It opens the review of the observe-mode setup command for that connector.
+                                            -->
+                                            <ui:Button Grid.Column="2"
+                                                       Content="Add"
+                                                       Appearance="Transparent" BorderThickness="0"
+                                                       Foreground="{DynamicResource DcAccentBrush}"
+                                                       HorizontalAlignment="Left"
+                                                       Margin="-6,0,0,0"
+                                                       Padding="6,2,6,2"
+                                                       VerticalAlignment="Center"
+                                                       Command="{Binding DataContext.AddConnectorCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                       CommandParameter="{Binding}"
+                                                       AutomationProperties.Name="{Binding AddAutomationName}"
+                                                       AutomationProperties.HelpText="Opens a review of the setup command. Nothing runs until you confirm."
+                                                       Visibility="{Binding IsUnconfigured, Converter={StaticResource BoolToVisibility}}" />
                                             <TextBlock Grid.Column="3" Style="{StaticResource OverviewCell}" Text="{Binding RulePack}" />
                                             <TextBlock Grid.Column="4" Style="{StaticResource OverviewCell}" Text="{Binding LastActivityShort}" />
                                             <TextBlock Grid.Column="5" Style="{StaticResource OverviewCell}" TextAlignment="Right" Text="{Binding CallsText}" />
@@ -781,6 +809,9 @@
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
                                                             <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsUnconfigured}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

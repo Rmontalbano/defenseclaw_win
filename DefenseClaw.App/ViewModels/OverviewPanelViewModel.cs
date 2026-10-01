@@ -1140,6 +1140,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             });
         }
 
+        // Detected by the AI-discovery scan but not configured: the Mac's "○ not configured" rows with an Add (CUST-210).
+        rows.AddRange(BuildUnconfiguredRows(names));
+
         // Structure is compared, the fields that tick are not: counters move on nearly
         // every poll of a busy box and "last activity 5s ago" is a different string every
         // time, and replacing the row for either would rebuild the whole card. They are
@@ -1629,7 +1632,9 @@ public sealed partial class ConnectorRow : ObservableObject
     public string Friendly { get; init; } = string.Empty;
 
     /// <summary>The table's first column, the Mac's: <c>Claude Code (claudecode)</c>, or just the name when there is no friendly one.</summary>
-    public string DisplayName => Friendly.Length > 0 && !string.Equals(Friendly, Name, StringComparison.Ordinal) ? $"{Friendly} ({Name})" : Name;
+    public string DisplayName => Friendly.Length > 0 && !string.Equals(Friendly, Name, StringComparison.Ordinal)
+        ? IsUnconfigured ? Friendly : $"{Friendly} ({Name})"
+        : Name;
 
     /// <summary>The rule pack the connector runs: the last segment of its <c>rule_pack_dir</c>, or <c>default</c>.</summary>
     public string RulePack { get; init; } = "default";
@@ -1716,7 +1721,9 @@ public sealed partial class ConnectorRow : ObservableObject
         string.Equals(Surface, other.Surface, StringComparison.Ordinal) &&
         string.Equals(Drift, other.Drift, StringComparison.Ordinal) &&
         string.Equals(WarningText, other.WarningText, StringComparison.Ordinal) &&
-        HasWarning == other.HasWarning;
+        HasWarning == other.HasWarning &&
+        IsUnconfigured == other.IsUnconfigured &&
+        string.Equals(AddCaution, other.AddCaution, StringComparison.Ordinal);
 
     /// <summary>Copies the two ticking fields; each setter notifies only if the value moved.</summary>
     internal void RefreshLiveFieldsFrom(ConnectorRow fresh)

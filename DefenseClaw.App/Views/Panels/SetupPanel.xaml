@@ -50,6 +50,11 @@
                                ToolTip="Config editor - edit config.yaml with backup, validation and restore"
                                AutomationProperties.Name="Config editor"
                                AutomationProperties.HelpText="Edit config.yaml with backup, validation and restore." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                               Command="{Binding OpenFirstRunCommand}"
+                               ToolTip="Guided setup - first-run init with a reviewed plan, or add detected agents"
+                               AutomationProperties.Name="Guided setup"
+                               AutomationProperties.HelpText="Opens first-run setup: install state, agent detection, and the exact commands to review before anything runs." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
                                Command="{Binding OpenUpdatesCommand}"
                                ToolTip="Updates &amp; trust - installed vs latest release, signing and provenance status"

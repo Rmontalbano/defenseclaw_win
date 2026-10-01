@@ -1,0 +1,335 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.FirstRun.FirstRunWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+                 xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+                 xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
+                 xmlns:cfg="clr-namespace:DefenseClaw.App.Views.ConfigEditor"
+                 Title="Set up DefenseClaw"
+                 Width="900"
+                 Height="720"
+                 MinWidth="640"
+                 MinHeight="520"
+                 AutomationProperties.Name="Set up DefenseClaw"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterOwner">
+    <!--
+        First-run guided setup (CUST-210): an owned window rather than an overlay in the main window. It opens from two places (the not-initialized banner
+        and the Setup panel), has a form of its own and a longer life than a confirm, and a window keeps MainWindow.xaml out of it; the review that
+        actually runs the commands IS the shared in-window overlay (DiscoverReviewOverlay over DiscoverActionReview), so nothing here runs without
+        the exact argv on screen first. State lines come from the monitor; agent detection is a button, never automatic.
+    -->
+    <ui:FluentWindow.Resources>
+        <wizards:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
+        <cfg:InverseBooleanConverter x:Key="InverseBoolean" />
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Set up DefenseClaw" />
+
+        <ScrollViewer Grid.Row="1"
+                      Padding="24,8,24,16"
+                      IsEnabled="{Binding Review.IsOpen, Converter={StaticResource InverseBoolean}}"
+                      Style="{StaticResource DcPageScroll}"
+                      x:Name="PageScroll">
+            <StackPanel>
+                <!-- Heading -->
+                <TextBlock Style="{StaticResource DcTextSecondary}"
+                           Margin="0,0,0,12"
+                           TextWrapping="Wrap"
+                           Text="{Binding Subtitle}" />
+
+                <!-- State: Runtime / Configuration / Gateway -->
+                <Border Style="{StaticResource DcCardCompact}" Margin="{StaticResource DcCardGap}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ItemsControl Grid.Column="0"
+                                      ItemsSource="{Binding Checks}"
+                                      AutomationProperties.Name="Installation state">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,24,0" VerticalAlignment="Center">
+                                        <ctl:DcStatusGlyph Tone="{Binding Key}" Margin="0,0,8,0" SlotHeight="18" />
+                                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Label}" />
+                                        <TextBlock Style="{StaticResource DcTextSecondary}" Margin="6,0,0,0" Text="{Binding Text}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ui:Button Grid.Column="1"
+                                   Content="Check again"
+                                   Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                   Command="{Binding CheckAgainCommand}"
+                                   AutomationProperties.HelpText="Reads the install state again." />
+                    </Grid>
+                </Border>
+
+                <!-- Not installed: the existing, verified Setup download -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding IsInstalled, Converter={StaticResource InverseBoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="ArrowDownload24" Tint="Amber" Content="Install the DefenseClaw runtime" />
+                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                   TextWrapping="Wrap"
+                                   Text="No defenseclaw command was found on this machine. The Updates window downloads the release's Setup installer, checks its SHA-256 against the release's signed checksums, shows the exact command, and only then runs it. When it has finished, come back here and press Check again." />
+                        <StackPanel Style="{StaticResource DcActionBar}" Margin="0,12,0,0">
+                            <ui:Button Appearance="Primary"
+                                       Content="Open the installer"
+                                       Icon="{ctl:DcSymbolIcon ArrowDownload24}"
+                                       Command="{Binding OpenUpdatesCommand}"
+                                       AutomationProperties.Name="Open the verified Setup installer download" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Agents -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="PlugConnected24" Content="Agent and connectors" />
+
+                        <StackPanel Orientation="Horizontal">
+                            <ui:Button Content="{Binding DetectLabel}"
+                                       Icon="{ctl:DcSymbolIcon Search24}"
+                                       Command="{Binding DetectCommand}"
+                                       AutomationProperties.HelpText="Reads the last AI discovery scan. Runs nothing." />
+                            <ui:ProgressRing Width="20" Height="20" Margin="10,0,0,0" IsIndeterminate="True"
+                                             AutomationProperties.Name="Detecting"
+                                             Visibility="{Binding IsDetecting, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="Detect reads the gateway's last AI discovery scan (ai_discovery_state.json). It executes nothing and never runs on its own." />
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   Margin="0,8,0,0"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Visibility="{Binding HasDetectionNote, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding DetectionNote}" />
+
+                        <!-- Detected: register / enforce -->
+                        <StackPanel Margin="0,10,0,0" Visibility="{Binding HasDetected, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="Register DefenseClaw for" />
+                            <ItemsControl ItemsSource="{Binding Detected}" Margin="0,4,0,0" AutomationProperties.Name="Detected connectors">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,2,0,2">
+                                            <StackPanel Orientation="Horizontal">
+                                                <CheckBox MinWidth="220"
+                                                          Content="{Binding Label}"
+                                                          IsChecked="{Binding IsRegistered, Mode=TwoWay}"
+                                                          AutomationProperties.Name="{Binding Label, StringFormat='Register DefenseClaw for {0}'}" />
+                                                <CheckBox Content="Enforce"
+                                                          IsChecked="{Binding IsAction, Mode=TwoWay}"
+                                                          IsEnabled="{Binding IsRegistered}"
+                                                          AutomationProperties.Name="{Binding Label, StringFormat='Enforce policy on {0}'}"
+                                                          Visibility="{Binding DataContext.IsActionProfile, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVisibility}}" />
+                                            </StackPanel>
+                                            <TextBlock Style="{StaticResource DcToneText}"
+                                                       Tag="Warn"
+                                                       FontSize="12"
+                                                       FontWeight="Normal"
+                                                       Margin="26,0,0,0"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding HasCaution, Converter={StaticResource BoolToVisibility}}"
+                                                       Text="{Binding Caution}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Nothing detected: pick one -->
+                        <StackPanel Margin="0,10,0,0" Visibility="{Binding HasDetected, Converter={StaticResource InverseBoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="Hook connector" />
+                            <ComboBox Width="320"
+                                      HorizontalAlignment="Left"
+                                      Margin="0,4,0,0"
+                                      DisplayMemberPath="Label"
+                                      ItemsSource="{Binding Fallbacks}"
+                                      SelectedItem="{Binding Fallback, Mode=TwoWay}"
+                                      AutomationProperties.Name="Hook connector" />
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Warn"
+                                       FontSize="12"
+                                       FontWeight="Normal"
+                                       Margin="0,4,0,0"
+                                       TextWrapping="Wrap"
+                                       Visibility="{Binding Fallback.HasCaution, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding Fallback.Caution}" />
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource DcToneText}"
+                                   Tag="Warn"
+                                   FontSize="12"
+                                   FontWeight="Normal"
+                                   Margin="0,8,0,0"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Visibility="{Binding HasSelectionProblem, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding SelectionProblem}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Policy -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="ShieldCheckmark24" Content="Policy and enforcement" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Profile" />
+                            <ComboBox Grid.Row="0" Grid.Column="1" Width="320" HorizontalAlignment="Left" Margin="0,2,0,2"
+                                      ItemsSource="{Binding Profiles}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding Profile, Mode=TwoWay}"
+                                      AutomationProperties.Name="Profile" />
+
+                            <TextBlock Grid.Row="1" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Scanner mode" />
+                            <ComboBox Grid.Row="1" Grid.Column="1" Width="320" HorizontalAlignment="Left" Margin="0,2,0,2"
+                                      ItemsSource="{Binding ScannerModes}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding ScannerMode, Mode=TwoWay}"
+                                      AutomationProperties.Name="Scanner mode" />
+
+                            <TextBlock Grid.Row="2" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Hook failure mode" />
+                            <ComboBox Grid.Row="2" Grid.Column="1" Width="320" HorizontalAlignment="Left" Margin="0,2,0,2"
+                                      ItemsSource="{Binding FailModes}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding FailMode, Mode=TwoWay}"
+                                      AutomationProperties.Name="Hook failure mode" />
+
+                            <TextBlock Grid.Row="3" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="LLM judge" />
+                            <ui:ToggleSwitch Grid.Row="3" Grid.Column="1" HorizontalAlignment="Left" Margin="0,2,0,2"
+                                             IsChecked="{Binding LlmJudge, Mode=TwoWay}"
+                                             AutomationProperties.Name="Enable LLM judge"
+                                             AutomationProperties.HelpText="The judge needs an API key in an environment variable. No key is entered or sent here." />
+
+                            <TextBlock Grid.Row="4" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Human approval"
+                                       Visibility="{Binding IsActionProfile, Converter={StaticResource BoolToVisibility}}" />
+                            <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="0,2,0,2"
+                                        Visibility="{Binding IsActionProfile, Converter={StaticResource BoolToVisibility}}">
+                                <ui:ToggleSwitch IsChecked="{Binding HumanApproval, Mode=TwoWay}"
+                                                 AutomationProperties.Name="Require human approval" />
+                                <ComboBox Width="140" Margin="12,0,0,0"
+                                          ItemsSource="{Binding Severities}"
+                                          SelectedItem="{Binding HiltSeverity, Mode=TwoWay}"
+                                          IsEnabled="{Binding HumanApproval}"
+                                          AutomationProperties.Name="Approval minimum severity" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                       Text="Observe never blocks; Action applies only to the connectors marked Enforce. Closed blocks on a hook failure; Open allows and logs." />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Finish -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="Play24" Content="Finish" />
+                        <ui:ToggleSwitch Content="Start the gateway when setup succeeds"
+                                         IsChecked="{Binding StartGateway, Mode=TwoWay}"
+                                         AutomationProperties.Name="Start the gateway when setup succeeds"
+                                         AutomationProperties.HelpText="Adds a separate, reviewed step: defenseclaw-gateway start." />
+                        <ui:ToggleSwitch Content="Verify readiness" Margin="0,6,0,0"
+                                         AutomationProperties.Name="Verify readiness"
+                                         IsChecked="{Binding Verify, Mode=TwoWay}" />
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                   Text="Review and run shows every command first. The gateway start is its own step and only runs when the setup report says setup finished." />
+                    </StackPanel>
+                </Border>
+
+                <!-- What the last run reported -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding HasReport, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel AutomationProperties.LiveSetting="Polite">
+                        <ctl:DcCardHeader Symbol="ClipboardTaskListLtr24" Content="Last setup run" />
+                        <Border Style="{StaticResource DcBadge}" Tag="{Binding ReportKey}" HorizontalAlignment="Left" Margin="0,0,0,6">
+                            <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap" Text="{Binding ReportText}" />
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding ReportRows}" AutomationProperties.Name="Steps that did not pass">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                                        <Border Style="{StaticResource DcBadge}" Tag="{Binding Key}" Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Status}" />
+                                        </Border>
+                                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Name}" />
+                                        <TextBlock Style="{StaticResource DcTextSecondary}" Margin="8,0,0,0" TextWrapping="Wrap" Text="{Binding Detail}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                   Visibility="{Binding HasReportNext, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding ReportNext}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Grid Grid.Row="2" Margin="24,0,24,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ui:Button Grid.Column="0"
+                       Content="Continue without setup"
+                       Command="{Binding CloseCommand}"
+                       AutomationProperties.HelpText="Closes this window. Nothing is changed." />
+            <ui:Button Grid.Column="1"
+                       Margin="8,0,0,0"
+                       Content="Open Activity"
+                       Icon="{ctl:DcSymbolIcon History24}"
+                       Command="{Binding OpenActivityCommand}"
+                       AutomationProperties.HelpText="Every command this window runs is recorded in Activity." />
+            <ui:Button Grid.Column="3"
+                       Appearance="Primary"
+                       Content="Review and run"
+                       Icon="{ctl:DcSymbolIcon Play24}"
+                       Command="{Binding RunCommand}"
+                       AutomationProperties.Name="Review and run setup"
+                       AutomationProperties.HelpText="Shows the exact commands first. Nothing runs until you confirm." />
+        </Grid>
+
+        <!-- The shared review: exact argv, tier, confirm, result. -->
+        <panels:DiscoverReviewOverlay Grid.Row="0" Grid.RowSpan="3" DataContext="{Binding Review}" />
+    </Grid>
+</ui:FluentWindow>

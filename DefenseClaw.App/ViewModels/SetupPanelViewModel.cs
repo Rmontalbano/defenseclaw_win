@@ -120,6 +120,10 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private void OpenConfigEditor() => Views.ConfigEditor.ConfigEditorWindow.Show(Services);
 
+    /// <summary>Opens the first-run guided setup: state, agent detection, a form and a reviewed plan.</summary>
+    [RelayCommand]
+    private void OpenFirstRun() => Views.FirstRun.FirstRunWindow.Show(Services);
+
     /// <summary>Opens the runtime update / release-trust awareness window.</summary>
     [RelayCommand]
     private void OpenUpdates() => Views.Updates.UpdatesWindow.Show(Services);

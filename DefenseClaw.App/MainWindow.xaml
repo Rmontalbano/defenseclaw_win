@@ -233,7 +233,8 @@
             <!--
                 Not-initialized gets its own banner rather than an InfoBar: it has to offer
                 the init command as copyable text. The app shows the command and never runs
-                it - every mutation belongs to the CLI, recorded in Activity.
+                it itself - every mutation belongs to the CLI, recorded in Activity. "Set up DefenseClaw" opens the guided first-run window, which shows
+                the exact commands and runs them only after a confirm.
             -->
             <Border Style="{StaticResource DcCardCompact}"
                     Margin="0,12,0,0"
@@ -245,6 +246,13 @@
                     <TextBlock Style="{StaticResource DcTextSecondary}"
                                Text="{Binding NotInitializedMessage}" />
                     <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                        <ui:Button Margin="0,0,12,0"
+                                   VerticalAlignment="Center"
+                                   Appearance="Primary"
+                                   Content="Set up DefenseClaw"
+                                   Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                   AutomationProperties.HelpText="Opens guided setup. Shows the exact commands first; nothing runs until you confirm."
+                                   Command="{Binding OpenFirstRunCommand}" />
                         <Border Style="{StaticResource DcCodeBlock}" VerticalAlignment="Center">
                             <TextBox Style="{StaticResource DcMonoTextBox}"
                                      AutomationProperties.Name="Initialize command"

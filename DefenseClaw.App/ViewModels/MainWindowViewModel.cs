@@ -219,6 +219,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Opens the first-run guided setup (the not-initialized banner's button). It runs nothing by itself.</summary>
+    [RelayCommand]
+    private void OpenFirstRun() => Views.FirstRun.FirstRunWindow.Show(_services);
+
     [RelayCommand]
     private async Task RefreshAsync()
     {

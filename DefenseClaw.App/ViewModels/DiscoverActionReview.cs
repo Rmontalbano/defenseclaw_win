@@ -13,13 +13,18 @@ namespace DefenseClaw.App.ViewModels;
 /// that happens to spell a read-only verb (<c>registry sync list</c>) cannot downgrade the review.
 /// <see cref="Executable"/> is what <see cref="Argv"/> is handed to: <c>defenseclaw</c> unless the step is a gateway action
 /// (<c>defenseclaw-gateway restart</c>, from the Overview's Quick Actions).
+/// <see cref="Verify"/> is for a command whose exit code is not its result (<c>init --json-summary</c> exits 0 with a failed report): it
+/// reads what the run printed and returns null when it is satisfied, or the reason the step must count as failed, which stops the steps
+/// after it. <see cref="RetainFullOutput"/> keeps the whole transcript for a step whose output <see cref="Verify"/> parses.
 /// </summary>
 public sealed record DiscoverStep(
     IReadOnlyList<string> Argv,
     string Purpose,
     CommandTier MinimumTier = CommandTier.StateChanging,
     TimeSpan? Timeout = null,
-    string Executable = CommandReview.DefaultExecutable);
+    string Executable = CommandReview.DefaultExecutable,
+    Func<CliInvocation, string?>? Verify = null,
+    bool RetainFullOutput = false);
 
 /// <summary>What a reviewed action did, handed to the panel so it can re-read its state.</summary>
 public sealed record DiscoverReviewResult(bool Succeeded, IReadOnlyList<CliInvocation> Invocations);
@@ -271,7 +276,9 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 row.SetStatus("Running…", "Warn");
                 try
                 {
-                    var options = step.Timeout is { } timeout ? CliRunOptions.WithTimeout(timeout) : null;
+                    var options = step.Timeout is { } timeout
+                        ? CliRunOptions.WithTimeout(timeout) with { RetainFullOutput = step.RetainFullOutput }
+                        : step.RetainFullOutput ? CliRunOptions.JsonRead : null;
                     var invocation = await _services.Cli
                         .RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options)
                         .ConfigureAwait(true);
@@ -285,6 +292,13 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     else if (invocation.ExitCode != 0)
                     {
                         row.SetStatus($"Failed (exit {invocation.ExitCode})", "Bad");
+                        succeeded = false;
+                    }
+                    else if (step.Verify?.Invoke(invocation) is { Length: > 0 } problem)
+                    {
+                        // Exit 0 is not success for this step: its own report says it did not finish the job.
+                        row.SetStatus("Reported a problem (exit 0)", "Bad");
+                        output.AppendLine(problem);
                         succeeded = false;
                     }
                     else

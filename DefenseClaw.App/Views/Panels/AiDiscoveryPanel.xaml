@@ -378,6 +378,22 @@
                                     <DataGridTextColumn Width="*" Header="Config path" Binding="{Binding ConfigPath}" />
                                     <DataGridTextColumn Width="*" Header="Binary path" Binding="{Binding BinaryPath}" />
                                     <DataGridTextColumn Width="140" Header="Error" Binding="{Binding Error}" />
+                                    <!-- An installed agent DefenseClaw is not set up for: opens the review of its observe-mode setup command. -->
+                                    <DataGridTemplateColumn Width="80" Header="Action">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ui:Button Content="Add"
+                                                           Appearance="Transparent" BorderThickness="0"
+                                                           Foreground="{DynamicResource DcAccentBrush}"
+                                                           Padding="6,2,6,2"
+                                                           Command="{Binding DataContext.AddConnectorCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                           CommandParameter="{Binding}"
+                                                           AutomationProperties.Name="{Binding AddAutomationName}"
+                                                           AutomationProperties.HelpText="Opens a review of the setup command. Nothing runs until you confirm."
+                                                           Visibility="{Binding CanAdd, Converter={StaticResource BoolToVisibility}}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
                                 </ui:DataGrid.Columns>
                             </ui:DataGrid>
                         </Expander>
