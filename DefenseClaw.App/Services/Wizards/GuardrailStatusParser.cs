@@ -131,8 +131,11 @@ public static partial class GuardrailStatusParser
         {
             var line = lines[i];
 
-            // The table ends at the first blank line or anything that is not an indented data row.
-            if (line.Trim().Length == 0 || !char.IsWhiteSpace(line[0]) || line.TrimStart().StartsWith('!'))
+            // The table ends at the first blank line or anything that is not an indented data row. The summary bullets that
+            // follow a table with no warning ("• fail = ...", "• port: ...") are indented less than its rows are, whatever
+            // glyph the runner decoded the bullet as.
+            if (line.Trim().Length == 0 || !char.IsWhiteSpace(line[0]) || line.TrimStart().StartsWith('!') ||
+                line.Length - line.TrimStart().Length < rule.Length - rule.TrimStart().Length)
             {
                 break;
             }

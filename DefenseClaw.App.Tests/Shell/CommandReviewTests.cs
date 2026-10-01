@@ -284,9 +284,10 @@ public class CommandReviewTests
     [InlineData("setup claude-code --dry-run", false)]
     [InlineData("setup observability list", false)]
     [InlineData("setup observability add x", true)]
-    [InlineData("guardrail enable --yes", false)]
+    [InlineData("guardrail enable --yes", true)] // CUST-222: the guardrail verbs restart too; see GuardrailControlArgvTests
+    [InlineData("guardrail status", false)]
     [InlineData("skill block -- x", false)]
-    public void Only_a_setup_command_that_writes_configuration_restarts_the_gateway(string argv, bool expected) =>
+    public void Only_a_setup_or_guardrail_command_that_writes_configuration_restarts_the_gateway(string argv, bool expected) =>
         Assert.Equal(expected, CommandReview.RestartsGatewayFor(argv.Split(' ')));
 
     [Fact]

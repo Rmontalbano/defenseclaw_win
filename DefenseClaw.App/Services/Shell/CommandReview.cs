@@ -383,6 +383,11 @@ public sealed record CommandReview
     {
         ArgumentNullException.ThrowIfNull(argv);
 
+        if (argv.Count > 0 && string.Equals(argv[0], "guardrail", StringComparison.OrdinalIgnoreCase))
+        {
+            return GuardrailRestartsGateway(argv);
+        }
+
         if (argv.Count == 0 || !string.Equals(argv[0], "setup", StringComparison.OrdinalIgnoreCase))
         {
             return false;
@@ -406,5 +411,98 @@ public sealed record CommandReview
         }
 
         return CommandTiers.Classify(argv) != CommandTier.ReadOnly;
+    }
+
+    /// <summary>Options of the guardrail verbs that take a value, so the value is not mistaken for a positional.</summary>
+    private static readonly HashSet<string> GuardrailValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--connector", "--min-severity", "--timeout",
+    };
+
+    /// <summary>
+    /// <c>guardrail</c> verbs restart the gateway by default (<c>--restart</c> is on) and say so in their own --help. The reads do
+    /// not: <c>status</c>, <c>list-packs</c>, <c>judge list</c>, and <c>fail-mode</c> / <c>hilt</c> / <c>block-message</c> with
+    /// nothing to set. <c>enable</c>, <c>disable</c> and <c>judge add|remove</c> always write; the other three write when given a
+    /// value (a positional, <c>--min-severity</c>, <c>--clear</c>) or <c>--yes</c>, which only a write has. Unknown verbs say yes.
+    /// </summary>
+    private static bool GuardrailRestartsGateway(IReadOnlyList<string> argv)
+    {
+        var terminator = -1;
+        for (var i = 0; i < argv.Count; i++)
+        {
+            if (string.Equals(argv[i], "--", StringComparison.Ordinal))
+            {
+                terminator = i;
+                break;
+            }
+        }
+
+        var options = terminator < 0 ? argv : argv.Take(terminator).ToArray();
+        var afterTerminator = terminator >= 0 && terminator < argv.Count - 1;
+
+        // Only a standalone flag counts, as for setup: "--connector --no-restart" names a connector.
+        for (var i = 1; i < options.Count; i++)
+        {
+            if (string.Equals(options[i], "--no-restart", StringComparison.OrdinalIgnoreCase) && CommandTiers.IsStandaloneFlag(options, i))
+            {
+                return false;
+            }
+
+            if (NonRestartingFlags.Contains(options[i]) && CommandTiers.IsStandaloneFlag(options, i))
+            {
+                return false;
+            }
+        }
+
+        // Positionals: what is left once the options and their values are taken out.
+        var positionals = new List<string>();
+        var hasWriteOption = false;
+        for (var i = 1; i < options.Count; i++)
+        {
+            var token = options[i];
+            if (token.StartsWith('-'))
+            {
+                if (string.Equals(token, "--clear", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(token, "--yes", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(token, "--min-severity", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(token, "--enable", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasWriteOption = true;
+                }
+
+                if (GuardrailValueOptions.Contains(token))
+                {
+                    i++;
+                }
+
+                continue;
+            }
+
+            positionals.Add(token);
+        }
+
+        if (positionals.Count == 0)
+        {
+            return false;
+        }
+
+        switch (positionals[0].ToLowerInvariant())
+        {
+            case "enable":
+            case "disable":
+                return true;
+            case "status":
+            case "list-packs":
+                return false;
+            case "judge":
+                // judge list reads; add / remove write.
+                return positionals.Count > 1 && positionals[1].ToLowerInvariant() is "add" or "remove";
+            case "fail-mode":
+            case "hilt":
+            case "block-message":
+                return positionals.Count > 1 || hasWriteOption || afterTerminator;
+            default:
+                return true;
+        }
     }
 }

@@ -1,0 +1,284 @@
+<UserControl x:Class="DefenseClaw.App.Views.Guardrail.GuardrailControlsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             AutomationProperties.Name="Guardrail controls">
+    <!--
+        HILT, block message and the hook-lane judge gate (CUST-222). Not a panel: GuardrailControlsWindow hosts it, and the Setup
+        tile grid / Overview guardrail tile open that window. Every write goes through the shared review overlay at the bottom
+        (exact argv, tier, gateway restart, a no-restart checkbox); the reads run on open and on F5 / Refresh.
+        Shared styling: Themes\Controls.xaml (Dc*). Nothing here is hard-coded.
+    -->
+    <UserControl.Resources>
+        <Style x:Key="RowName" TargetType="TextBlock" BasedOn="{StaticResource DcBody}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="WarnCaption" TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+            <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24">
+                <!-- Header: scope, refresh, status of the reads. -->
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="Guardrail controls"
+                                   AutomationProperties.HeadingLevel="Level1" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Text="Human-in-the-loop approval, the message shown when an action is blocked, and which hook connectors use the LLM judge. Enable, disable and fail mode are on the Setup panel." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                        <ui:ProgressRing Width="16" Height="16" Margin="0,0,8,0" IsIndeterminate="True"
+                                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource DcStatusText}" Margin="0,0,8,0" VerticalAlignment="Center" Text="{Binding AsOf}" />
+                        <ui:Button Content="Refresh"
+                                   Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                   AutomationProperties.Name="Re-read the guardrail settings (F5)"
+                                   IsEnabled="{Binding CanUse}"
+                                   Command="{Binding RefreshCommand}" />
+                    </StackPanel>
+                </Grid>
+
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            IsClosable="False"
+                            Severity="Error"
+                            Title="The guardrail settings could not be read"
+                            IsOpen="{Binding HasError, Mode=OneWay}"
+                            Message="{Binding Error}" />
+
+                <WrapPanel Style="{StaticResource DcToolbarPanel}"
+                           Margin="0,0,0,8"
+                           Visibility="{Binding HasMultipleConnectors, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Scope" />
+                    <ComboBox Width="220"
+                              AutomationProperties.Name="Scope: which connector HILT and the block message apply to"
+                              ItemsSource="{Binding Scopes}"
+                              SelectedItem="{Binding SelectedScope, Mode=TwoWay}"
+                              IsEnabled="{Binding CanUse}" />
+                    <TextBlock Style="{StaticResource DcCaption}" VerticalAlignment="Center"
+                               Text="The judge gate is per connector in its own list." />
+                </WrapPanel>
+
+                <!-- HILT -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <ctl:DcCardHeader Margin="0,0,10,0" VerticalAlignment="Center"
+                                              AutomationProperties.HeadingLevel="Level2"
+                                              Symbol="ShieldLock24" Section="Govern" Content="Human-in-the-loop (HILT)" />
+                        </StackPanel>
+                        <Border Margin="0,0,0,8" HorizontalAlignment="Left" Style="{StaticResource DcBadge}" Tag="{Binding HiltKey}">
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcStatusGlyph Tone="{Binding HiltKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" Text="{Binding HiltSummary}" />
+                            </StackPanel>
+                        </Border>
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Minimum severity" />
+                            <ComboBox Width="140"
+                                      AutomationProperties.Name="Minimum severity that asks for approval"
+                                      ItemsSource="{Binding MinSeverities}"
+                                      SelectedItem="{Binding SelectedMinSeverity, Mode=TwoWay}"
+                                      IsEnabled="{Binding CanUse}" />
+                            <ui:Button Content="Turn HILT on"
+                                       Icon="{ctl:DcSymbolIcon ShieldLock24}"
+                                       AutomationProperties.Name="Turn human-in-the-loop approval on at the chosen severity"
+                                       IsEnabled="{Binding CanUse}"
+                                       Command="{Binding TurnHiltOnCommand}" />
+                            <ui:Button Content="Turn HILT off"
+                                       Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                       AutomationProperties.Name="Turn human-in-the-loop approval off"
+                                       IsEnabled="{Binding CanUse}"
+                                       Command="{Binding TurnHiltOffCommand}" />
+                        </WrapPanel>
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
+                                   Text="HILT pauses a confirmable action at or above the minimum severity and asks you to approve it. CRITICAL findings always block." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Block message -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Margin="0,0,0,8"
+                                          AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="ChatWarning24" Section="Govern" Content="Block message" />
+                        <TextBlock Style="{StaticResource DcCaption}" Text="In force" />
+                        <TextBlock Margin="0,2,0,8" Style="{StaticResource RowName}" TextWrapping="Wrap"
+                                   AutomationProperties.Name="Block message in force"
+                                   Text="{Binding CurrentBlockMessage}" />
+                        <ui:TextBox MinWidth="320"
+                                 Margin="0,0,0,6"
+                                 AutomationProperties.Name="New block message (one line)"
+                                 PlaceholderText="Blocked by Acme Security: see #sec-help"
+                                 IsEnabled="{Binding CanUse}"
+                                 Text="{Binding MessageText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Style="{StaticResource WarnCaption}" Margin="0,0,0,6"
+                                   Visibility="{Binding HasMessageProblem, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding MessageProblem}" />
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                            <ui:Button Content="Set message"
+                                       Icon="{ctl:DcSymbolIcon Save24}"
+                                       AutomationProperties.Name="Review and set the block message"
+                                       IsEnabled="{Binding CanUse}"
+                                       Command="{Binding SetBlockMessageCommand}" />
+                            <ui:Button Content="Clear"
+                                       Icon="{ctl:DcSymbolIcon ArrowUndo24}"
+                                       AutomationProperties.Name="Review and clear the custom block message"
+                                       ToolTip="Revert to the global message or the built-in default"
+                                       IsEnabled="{Binding CanUse}"
+                                       Command="{Binding ClearBlockMessageCommand}" />
+                        </WrapPanel>
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
+                                   Text="Shown when a block verdict carries no reason of its own. Audit rows and notifications always keep the real reason." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Judge -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Margin="0,0,0,8"
+                                          AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="ShieldSettings24" Section="Govern" Content="LLM judge for hook connectors" />
+                        <Border Margin="0,0,0,8" HorizontalAlignment="Left" Style="{StaticResource DcBadge}" Tag="{Binding JudgeKey}">
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcStatusGlyph Tone="{Binding JudgeKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" Text="{Binding JudgeSummary}" />
+                            </StackPanel>
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding JudgeRows}" IsTabStop="False"
+                                      AutomationProperties.Name="Judge state per connector">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,8" Style="{StaticResource DcSubtleRow}"
+                                            AutomationProperties.Name="{Binding Mode=OneWay}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource RowName}" Text="{Binding Key}" />
+                                                    <Border Margin="10,0,0,0" VerticalAlignment="Center"
+                                                            Style="{StaticResource DcBadge}" Tag="{Binding ToneKey}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding State}" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Margin="0,4,0,0" Style="{StaticResource DcCaption}" TextWrapping="Wrap"
+                                                           Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding Note}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <ui:Button Content="Add"
+                                                           Icon="{ctl:DcSymbolIcon Add24}"
+                                                           AutomationProperties.Name="{Binding Key, StringFormat='Send {0} to the LLM judge'}"
+                                                           Visibility="{Binding CanAdd, Converter={StaticResource BoolToVisibility}}"
+                                                           Command="{Binding DataContext.AddJudgeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           CommandParameter="{Binding Key}" />
+                                                <ui:Button Content="Remove"
+                                                           Icon="{ctl:DcSymbolIcon Delete24}"
+                                                           AutomationProperties.Name="{Binding Key, StringFormat='Stop sending {0} to the LLM judge'}"
+                                                           Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibility}}"
+                                                           Command="{Binding DataContext.RemoveJudgeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           CommandParameter="{Binding Key}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                            <CheckBox Content="Also turn the judge on"
+                                      AutomationProperties.HelpText="Adds --enable: the gate has no effect while the judge is off"
+                                      IsChecked="{Binding AlsoEnableJudge, Mode=TwoWay}" />
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Timeout (s)" />
+                            <TextBox Width="70"
+                                     AutomationProperties.Name="Judge hook timeout in seconds, optional"
+                                     Text="{Binding JudgeTimeoutText, UpdateSourceTrigger=PropertyChanged}" />
+                            <ui:Button Content="Add all hook connectors"
+                                       AutomationProperties.Name="Send every hook connector to the LLM judge"
+                                       IsEnabled="{Binding CanUse}"
+                                       Command="{Binding AddJudgeCommand}"
+                                       CommandParameter="all" />
+                            <ui:Button Content="Remove all"
+                                       AutomationProperties.Name="Turn the hook-lane judge off for every connector"
+                                       IsEnabled="{Binding CanUse}"
+                                       Command="{Binding RemoveJudgeCommand}"
+                                       CommandParameter="all" />
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource WarnCaption}" Margin="0,6,0,0"
+                                   Visibility="{Binding HasTimeoutProblem, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding TimeoutProblem}" />
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
+                                   Text="The judge adds latency and an LLM call to every inspected hook event, so it is opt-in per connector. Proxy-backed connectors are always judged while the judge is on. The timeout is the optional hook-lane cap; the hook scripts allow 10 seconds in all." />
+                    </StackPanel>
+                </Border>
+
+                <CheckBox Margin="0,0,0,8" Content="Show CLI output"
+                          AutomationProperties.HelpText="Shows the verbatim text of the read-only guardrail commands"
+                          IsChecked="{Binding ShowRaw, Mode=TwoWay}" />
+                <Border Margin="0,0,0,8" Style="{StaticResource DcCodeBlock}"
+                        Visibility="{Binding ShowRaw, Converter={StaticResource BoolToVisibility}}">
+                    <TextBox Style="{StaticResource DcMonoTextBox}"
+                             AutomationProperties.Name="Verbatim output of the guardrail read commands"
+                             Text="{Binding Raw, Mode=OneWay}" />
+                </Border>
+
+                <!-- The outcome of the last change. -->
+                <Border Margin="0,0,0,8" Style="{StaticResource DcSubtleRow}"
+                        AutomationProperties.LiveSetting="Polite"
+                        Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource RowName}" Text="{Binding ResultHeading}" />
+                            <Border Margin="10,0,0,0" VerticalAlignment="Center"
+                                    Style="{StaticResource DcBadge}" Tag="{Binding ResultKey}">
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ResultBadge}" />
+                            </Border>
+                        </StackPanel>
+                        <Border Margin="0,8,0,0" Style="{StaticResource DcCodeBlock}">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     AutomationProperties.Name="Output of the last guardrail change"
+                                     Text="{Binding ResultText, Mode=OneWay}" />
+                        </Border>
+                        <ui:Button Margin="0,8,0,0" Content="Dismiss"
+                                   AutomationProperties.Name="Dismiss the result"
+                                   Command="{Binding DismissResultCommand}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- The review every write passes through; Esc dismisses it. -->
+        <Grid Style="{StaticResource DcScrim}"
+              KeyboardNavigation.TabNavigation="Cycle"
+              KeyboardNavigation.ControlTabNavigation="Cycle"
+              Visibility="{Binding IsReviewOpen, Converter={StaticResource BoolToVisibility}}">
+            <Border Margin="24" Style="{StaticResource DcDialogCard}">
+                <shell:CommandReviewControl Review="{Binding Review}"
+                                            ConfirmCommand="{Binding ConfirmCommand}"
+                                            CancelCommand="{Binding CancelReviewCommand}">
+                    <shell:CommandReviewControl.ExtraContent>
+                        <CheckBox Margin="0,4,0,10"
+                                  Content="Restart the gateway after the change"
+                                  IsChecked="{Binding RestartAfter, Mode=TwoWay}"
+                                  AutomationProperties.HelpText="Unchecking adds --no-restart to the command" />
+                    </shell:CommandReviewControl.ExtraContent>
+                </shell:CommandReviewControl>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>
