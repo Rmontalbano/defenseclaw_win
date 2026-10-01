@@ -117,8 +117,8 @@ public sealed partial class AuditPanel : UserControl
             DispatcherPriority.Input,
             new Action(() =>
             {
-                UIElement target = opened ? DetailClose : RowList;
-                _ = target.Focus();
+                UIElement? target = opened ? Inspector.CloseButton : RowList;
+                _ = target?.Focus();
             }));
     }
 }

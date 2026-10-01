@@ -34,8 +34,9 @@ namespace DefenseClaw.App.Views.Panels;
 /// <b>Keyboard.</b> Ctrl+F is <see cref="ApplicationCommands.Find"/>'s own gesture; the panel handles
 /// that command by focusing the filter box, so the shell can also aim it at this page from outside
 /// (<c>ApplicationCommands.Find.Execute(null, page)</c>). Esc clears the filter text when there is
-/// any (a control that handled Esc itself first keeps it: the handler is on the bubbling
-/// <c>KeyDown</c>). The panel has no detail pane or overlay for Esc to close.
+/// any, otherwise closes the inspector (a control that handled Esc itself first keeps it: the handler is on the bubbling
+/// <c>KeyDown</c>). On a narrow panel (<see cref="CompactLayout"/>) the inspector replaces the list, so focus follows it: to
+/// its close button when it opens, back to the list when it closes.
 /// </para>
 /// </summary>
 public sealed partial class LogsPanel : UserControl
@@ -74,16 +75,55 @@ public sealed partial class LogsPanel : UserControl
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && !e.Handled && _viewModel is { FilterText.Length: > 0 } viewModel)
+        if (e.Key != Key.Escape || e.Handled || _viewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        if (viewModel.FilterText.Length > 0)
         {
             viewModel.FilterText = string.Empty;
             e.Handled = true;
         }
+        else if (viewModel.HasSelection)
+        {
+            viewModel.ClearSelectionCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>True while the panel is narrow enough that a selected line's inspector replaces the list instead of sitting beside it.</summary>
+    public bool IsCompact => CompactLayout.GetIsCompact(this);
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LogsPanelViewModel.HasSelection) || !IsCompact || sender is not LogsPanelViewModel viewModel)
+        {
+            return;
+        }
+
+        var opened = viewModel.HasSelection;
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                UIElement? target = opened ? Inspector.CloseButton : LogListBox;
+                _ = target?.Focus();
+            }));
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        if (_viewModel is not null)
+        {
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        }
+
         _viewModel = e.NewValue as LogsPanelViewModel;
+        if (_viewModel is not null)
+        {
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        }
 
         // The shell sets the DataContext before the view is ever shown, so usually this only
         // records it and Loaded does the attaching. A DataContext swapped while on screen

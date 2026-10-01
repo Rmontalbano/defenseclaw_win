@@ -132,8 +132,8 @@ public sealed partial class AlertsPanel : UserControl
             DispatcherPriority.Input,
             new Action(() =>
             {
-                UIElement target = opened ? DetailClose : AlertList;
-                _ = target.Focus();
+                UIElement? target = opened ? Inspector.CloseButton : AlertList;
+                _ = target?.Focus();
             }));
     }
 

@@ -13,11 +13,11 @@
         Keyboard: Ctrl+F focuses the search box (ApplicationCommands.Find, handled in the
         code-behind), Esc closes the detail pane.
 
-        The detail pane exists only while a row is selected. Beside an empty list it was a 258 px
-        card that said "Select a row" while the list's columns truncated to eight characters at the
-        940 px window minimum. With no selection the list takes the whole width; with one, the two
-        split - and on a narrow panel (CompactLayout, under 960 px) the detail takes the whole width
-        instead and the list steps aside until it is closed (Esc, or its own button).
+        The detail is a flush inspector (ctl:DcInspector) that exists only while a row is selected. Beside an empty list it was a
+        258 px card that said "Select a row" while the list's columns truncated to eight characters at the 940 px window
+        minimum. With no selection the list takes the whole width; with one, the list and the 360 px inspector split - and on
+        a narrow panel (CompactLayout, under 960 px) the inspector takes the whole width instead and the list steps aside
+        until it is closed (Esc, or its X).
     -->
     <UserControl.Resources>
         <!-- The time cell: the clock time (the date too when it is not today); its tooltip is the stored timestamp. -->
@@ -51,10 +51,13 @@
 
         <Style x:Key="AuditListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
             <Setter Property="Grid.Column" Value="0" />
-            <Setter Property="Grid.ColumnSpan" Value="3" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
             <Style.Triggers>
+                <!-- With the inspector open the list's right edge meets its divider: square, no border of its own on that side. -->
                 <DataTrigger Binding="{Binding HasSelection}" Value="True">
                     <Setter Property="Grid.ColumnSpan" Value="1" />
+                    <Setter Property="CornerRadius" Value="0" />
+                    <Setter Property="BorderThickness" Value="1,1,0,1" />
                 </DataTrigger>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
@@ -62,24 +65,6 @@
                         <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
                     </MultiDataTrigger.Conditions>
                     <Setter Property="Visibility" Value="Collapsed" />
-                </MultiDataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="AuditDetailCard" TargetType="Border" BasedOn="{StaticResource DcCardCompact}">
-            <Setter Property="Grid.Column" Value="2" />
-            <Setter Property="Visibility" Value="Collapsed" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                    <Setter Property="Visibility" Value="Visible" />
-                </DataTrigger>
-                <MultiDataTrigger>
-                    <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding HasSelection}" Value="True" />
-                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
-                    </MultiDataTrigger.Conditions>
-                    <Setter Property="Grid.Column" Value="0" />
-                    <Setter Property="Grid.ColumnSpan" Value="3" />
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
@@ -203,9 +188,8 @@
         <!-- Rows + detail -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*" MinWidth="360" />
-                <ColumnDefinition Width="{StaticResource DcColumnGap}" />
-                <ColumnDefinition Width="2*" MinWidth="260" />
+                <ColumnDefinition Width="*" MinWidth="360" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <Border x:Name="ListCard" Style="{StaticResource AuditListCard}">
@@ -323,101 +307,65 @@
                 </Grid>
             </Border>
 
-            <!-- Detail pane: present only while a row is selected (AuditDetailCard). -->
-            <Border x:Name="DetailCard" Style="{StaticResource AuditDetailCard}">
-                <Grid>
-                    <!--
-                        A ContentControl still applies its ContentTemplate when Content is null,
-                        so the template's static labels would show over an empty pane. The card is
-                        hidden without a selection, and the ScrollViewer with it - HasSelection is a
-                        plain bool, so the app-level BoolToVisibility converter covers it.
-                    -->
-                    <ScrollViewer Style="{StaticResource DcPageScroll}"
-                                  Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+            <!-- Inspector: opens while a row is selected (ctl:DcInspector); the list takes the whole width otherwise. -->
+            <ctl:DcInspector x:Name="Inspector"
+                             Title="Event details"
+                             IsOpen="{Binding HasSelection}"
+                             CloseCommand="{Binding ClearSelectionCommand}"
+                             CloseAutomationName="Close event details"
+                             AutomationProperties.Name="Event details"
+                             Content="{Binding SelectedRow}">
+                <ctl:DcInspector.Badges>
+                    <ctl:DcSeverityBadge Text="{Binding SelectedRow.Severity}" Tone="{Binding SelectedRow.SeverityKey}" />
+                </ctl:DcInspector.Badges>
+                <ctl:DcInspector.ContentTemplate>
+                    <DataTemplate>
                         <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <ctl:DcCardHeader Grid.Column="0"
-                                           VerticalAlignment="Center"
-                                           Symbol="DocumentText24"
-                                           Section="Observe"
-                                           Content="Event details" />
-                                <ui:Button x:Name="DetailClose"
-                                           Grid.Column="1"
-                                           Appearance="Transparent"
-                                           Command="{Binding ClearSelectionCommand}"
-                                           ToolTip="Close details (Esc)"
-                                           AutomationProperties.Name="Close event details"
-                                           AutomationProperties.HelpText="Closes this pane. Shortcut Esc.">
-                                    <ui:Button.Icon>
-                                        <ctl:DcSymbolIcon Symbol="Dismiss24" />
-                                    </ui:Button.Icon>
-                                </ui:Button>
-                            </Grid>
+                            <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0" Text="{Binding Action}" />
+                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                       Margin="0,6,0,0"
+                                       Text="{Binding Summary}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,4,0,0"
+                                       Text="{Binding TimestampText}" />
 
-                            <ContentControl Content="{Binding SelectedRow}" IsTabStop="False">
-                                <ContentControl.ContentTemplate>
+                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TableSimple24" Section="Observe" Content="Columns" />
+                            <ItemsControl ItemsSource="{Binding Fields}"
+                                          AutomationProperties.Name="Event columns">
+                                <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <ctl:DcSeverityBadge Text="{Binding Severity}" Tone="{Binding SeverityKey}" />
-                                                <TextBlock Style="{StaticResource DcSectionHeader}"
-                                                           Margin="10,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           Text="{Binding Action}" />
-                                            </StackPanel>
-
-                                            <TextBlock Style="{StaticResource DcTextSecondary}"
-                                                       Margin="0,6,0,0"
-                                                       Text="{Binding Summary}" />
-                                            <TextBlock Style="{StaticResource DcCaption}"
-                                                       Margin="0,4,0,0"
-                                                       Text="{Binding TimestampText}" />
-
-                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TableSimple24" Section="Observe" Content="Columns" />
-                                            <ItemsControl ItemsSource="{Binding Fields}"
-                                                          AutomationProperties.Name="Event columns">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Grid Margin="0,0,0,4">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="112" />
-                                                                <ColumnDefinition Width="*" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock Grid.Column="0"
-                                                                       Style="{StaticResource DcMono}"
-                                                                       Margin="0,0,10,0"
-                                                                       Text="{Binding Name}" />
-                                                            <TextBlock Grid.Column="1"
-                                                                       Style="{StaticResource DcCaption}"
-                                                                       Text="{Binding Value}" />
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-
-                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Code24" Section="Observe" Content="structured_json" />
-                                            <Border Style="{StaticResource DcCodeBlock}">
-                                                <ScrollViewer MaxHeight="420"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Auto">
-                                                    <TextBox Style="{StaticResource DcMonoTextBox}"
-                                                             TextWrapping="NoWrap"
-                                                             AutomationProperties.Name="structured_json"
-                                                             Text="{Binding StructuredJson, Mode=OneWay}" />
-                                                </ScrollViewer>
-                                            </Border>
-                                        </StackPanel>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="112" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Style="{StaticResource DcMono}"
+                                                       Margin="0,0,10,0"
+                                                       Text="{Binding Name}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Text="{Binding Value}" />
+                                        </Grid>
                                     </DataTemplate>
-                                </ContentControl.ContentTemplate>
-                            </ContentControl>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Code24" Section="Observe" Content="structured_json" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <ScrollViewer MaxHeight="420"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Auto">
+                                    <TextBox Style="{StaticResource DcMonoTextBox}"
+                                             TextWrapping="NoWrap"
+                                             AutomationProperties.Name="structured_json"
+                                             Text="{Binding StructuredJson, Mode=OneWay}" />
+                                </ScrollViewer>
+                            </Border>
                         </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
+                    </DataTemplate>
+                </ctl:DcInspector.ContentTemplate>
+            </ctl:DcInspector>
         </Grid>
     </Grid>
 </UserControl>

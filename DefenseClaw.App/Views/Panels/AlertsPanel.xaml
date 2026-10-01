@@ -54,10 +54,13 @@
 
         <Style x:Key="AlertListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
             <Setter Property="Grid.Column" Value="0" />
-            <Setter Property="Grid.ColumnSpan" Value="3" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
             <Style.Triggers>
+                <!-- With the inspector open the list's right edge meets its divider: square, no border of its own on that side. -->
                 <DataTrigger Binding="{Binding HasSelection}" Value="True">
                     <Setter Property="Grid.ColumnSpan" Value="1" />
+                    <Setter Property="CornerRadius" Value="0" />
+                    <Setter Property="BorderThickness" Value="1,1,0,1" />
                 </DataTrigger>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
@@ -65,24 +68,6 @@
                         <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
                     </MultiDataTrigger.Conditions>
                     <Setter Property="Visibility" Value="Collapsed" />
-                </MultiDataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="AlertDetailCard" TargetType="Border" BasedOn="{StaticResource DcCardCompact}">
-            <Setter Property="Grid.Column" Value="2" />
-            <Setter Property="Visibility" Value="Collapsed" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding HasSelection}" Value="True">
-                    <Setter Property="Visibility" Value="Visible" />
-                </DataTrigger>
-                <MultiDataTrigger>
-                    <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding HasSelection}" Value="True" />
-                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
-                    </MultiDataTrigger.Conditions>
-                    <Setter Property="Grid.Column" Value="0" />
-                    <Setter Property="Grid.ColumnSpan" Value="3" />
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
@@ -282,9 +267,8 @@
         <!-- List + detail -->
         <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*" MinWidth="360" />
-                <ColumnDefinition Width="{StaticResource DcColumnGap}" />
-                <ColumnDefinition Width="2*" MinWidth="240" />
+                <ColumnDefinition Width="*" MinWidth="360" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <Border x:Name="ListCard" Style="{StaticResource AlertListCard}">
@@ -378,102 +362,68 @@
                 </Grid>
             </Border>
 
-            <!-- Detail pane: present only while an alert is selected (AlertDetailCard). -->
-            <Border x:Name="DetailCard" Style="{StaticResource AlertDetailCard}">
-                <Grid>
-                    <!--
-                        A ContentControl still applies its ContentTemplate when Content is null, so the
-                        template's static labels would sit on top of an empty pane. HasSelection is a
-                        plain bool, so the app-level converter hides the whole pane instead.
-                    -->
-                    <ScrollViewer Style="{StaticResource DcPageScroll}"
-                                  Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+            <!-- Inspector: opens while an alert is selected (ctl:DcInspector); the list takes the whole width otherwise. -->
+            <ctl:DcInspector x:Name="Inspector"
+                             Title="Alert details"
+                             IsOpen="{Binding HasSelection}"
+                             CloseCommand="{Binding ClearSelectionCommand}"
+                             CloseAutomationName="Close alert details"
+                             AutomationProperties.Name="Alert details"
+                             Content="{Binding SelectedAlert}">
+                <ctl:DcInspector.Badges>
+                    <ctl:DcSeverityBadge Text="{Binding SelectedAlert.Severity}" Tone="{Binding SelectedAlert.SeverityKey}" />
+                </ctl:DcInspector.Badges>
+                <ctl:DcInspector.ContentTemplate>
+                    <DataTemplate>
                         <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <ctl:DcCardHeader Grid.Column="0"
-                                           VerticalAlignment="Center"
-                                           Symbol="Alert24"
-                                           Section="Observe"
-                                           Content="Alert details" />
-                                <ui:Button x:Name="DetailClose"
-                                           Grid.Column="1"
-                                           Appearance="Transparent"
-                                           Command="{Binding ClearSelectionCommand}"
-                                           ToolTip="Close details (Esc)"
-                                           AutomationProperties.Name="Close alert details"
-                                           AutomationProperties.HelpText="Closes this pane. Shortcut Esc.">
-                                    <ui:Button.Icon>
-                                        <ctl:DcSymbolIcon Symbol="Dismiss24" />
-                                    </ui:Button.Icon>
-                                </ui:Button>
-                            </Grid>
+                            <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0,0,0,0" Text="{Binding RuleId}" />
 
-                            <ContentControl Content="{Binding SelectedAlert}" IsTabStop="False">
-                                <ContentControl.ContentTemplate>
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       Margin="0,2,0,0"
+                                       Text="{Binding Headline}" />
+                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                       Margin="0,10,0,0"
+                                       Text="{Binding TargetRef}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding TimestampText}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Scanner, StringFormat='scanner: {0}'}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding ConfidenceText, StringFormat='confidence: {0}'}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Tags, StringFormat='tags: {0}'}" />
+
+                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="DocumentSearch24" Section="Observe" Content="Evidence" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         AutomationProperties.Name="Evidence"
+                                         Text="{Binding Evidence, Mode=OneWay}" />
+                            </Border>
+
+                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TagMultiple24" Section="Observe" Content="Attributes" />
+                            <!-- One shared key column: each attribute used to size its own, so the values started at a
+                                 different x on every line. (Same as GovernRowView.) -->
+                            <ItemsControl Grid.IsSharedSizeScope="True"
+                                          ItemsSource="{Binding Fields}"
+                                          AutomationProperties.Name="Alert attributes">
+                                <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <ctl:DcSeverityBadge Text="{Binding Severity}" Tone="{Binding SeverityKey}" />
-                                                <TextBlock Style="{StaticResource DcSectionHeader}"
-                                                           Margin="10,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           Text="{Binding RuleId}" />
-                                            </StackPanel>
-
-                                            <TextBlock Style="{StaticResource DcBody}"
-                                                       Margin="0,10,0,0"
-                                                       Text="{Binding Headline}" />
-                                            <TextBlock Style="{StaticResource DcTextSecondary}"
-                                                       Margin="0,10,0,0"
-                                                       Text="{Binding TargetRef}" />
-                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding TimestampText}" />
-                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Scanner, StringFormat='scanner: {0}'}" />
-                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding ConfidenceText, StringFormat='confidence: {0}'}" />
-                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Tags, StringFormat='tags: {0}'}" />
-
-                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="DocumentSearch24" Section="Observe" Content="Evidence" />
-                                            <Border Style="{StaticResource DcCodeBlock}">
-                                                <TextBox Style="{StaticResource DcMonoTextBox}"
-                                                         AutomationProperties.Name="Evidence"
-                                                         Text="{Binding Evidence, Mode=OneWay}" />
-                                            </Border>
-
-                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TagMultiple24" Section="Observe" Content="Attributes" />
-                                            <!-- One shared key column: each attribute used to size its own, so the values started at a
-                                                 different x on every line. (Same as GovernRowView.) -->
-                                            <ItemsControl Grid.IsSharedSizeScope="True"
-                                                          ItemsSource="{Binding Fields}"
-                                                          AutomationProperties.Name="Alert attributes">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Grid Margin="0,0,0,4">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="AlertFieldKey" />
-                                                                <ColumnDefinition Width="*" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock Grid.Column="0"
-                                                                       Style="{StaticResource DcMono}"
-                                                                       Margin="0,0,10,0"
-                                                                       Text="{Binding Name}" />
-                                                            <TextBlock Grid.Column="1"
-                                                                       Style="{StaticResource DcCaption}"
-                                                                       Text="{Binding Value}" />
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="AlertFieldKey" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Style="{StaticResource DcMono}"
+                                                       Margin="0,0,10,0"
+                                                       Text="{Binding Name}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Style="{StaticResource DcCaption}"
+                                                       Text="{Binding Value}" />
+                                        </Grid>
                                     </DataTemplate>
-                                </ContentControl.ContentTemplate>
-                            </ContentControl>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
+                    </DataTemplate>
+                </ctl:DcInspector.ContentTemplate>
+            </ctl:DcInspector>
         </Grid>
 
         <!--

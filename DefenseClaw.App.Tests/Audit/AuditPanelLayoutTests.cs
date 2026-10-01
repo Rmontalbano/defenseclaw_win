@@ -98,7 +98,7 @@ public class AuditPanelLayoutTests
             Assert.True(scene.DetailCard.ActualWidth >= 600, $"the detail is only {scene.DetailCard.ActualWidth} DIPs wide");
             Assert.False(scene.ListCard.IsVisible, "the list steps aside while the detail is open");
             Assert.Equal(0, Grid.GetColumn(scene.DetailCard));
-            Assert.Equal(3, Grid.GetColumnSpan(scene.DetailCard));
+            Assert.Equal(2, Grid.GetColumnSpan(scene.DetailCard));
 
             scene.Render("audit-940x620-row-selected");
 
@@ -128,10 +128,10 @@ public class AuditPanelLayoutTests
 
             Assert.True(scene.ListCard.IsVisible);
             Assert.True(scene.DetailCard.IsVisible);
-            Assert.Equal(2, Grid.GetColumn(scene.DetailCard));
+            Assert.Equal(1, Grid.GetColumn(scene.DetailCard));
             Assert.Equal(1, Grid.GetColumnSpan(scene.ListCard));
             Assert.True(scene.ListCard.ActualWidth >= 600, $"the list beside the detail is {scene.ListCard.ActualWidth}");
-            Assert.True(scene.DetailCard.ActualWidth >= 380, $"the detail is only {scene.DetailCard.ActualWidth}");
+            Assert.True(scene.DetailCard.ActualWidth >= 320, $"the detail is only {scene.DetailCard.ActualWidth}");
             Assert.True(scene.ListCard.ActualWidth < alone - 300);
 
             scene.Render("audit-1400x900-row-selected");
@@ -253,7 +253,7 @@ public class AuditPanelLayoutTests
 
         public Border ListCard => (Border)Panel.FindName("ListCard");
 
-        public Border DetailCard => (Border)Panel.FindName("DetailCard");
+        public DefenseClaw.App.Views.Controls.DcInspector DetailCard => (DefenseClaw.App.Views.Controls.DcInspector)Panel.FindName("Inspector");
 
         public DataGrid Grid => (DataGrid)Panel.FindName("RowList");
 

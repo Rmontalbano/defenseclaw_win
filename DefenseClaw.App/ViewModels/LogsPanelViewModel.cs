@@ -169,6 +169,18 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase
     /// <summary>Called by the code-behind after the ListView's selection changes.</summary>
     public void UpdateSelection(IEnumerable<LogEntry> selected) => _selectedEntries = selected.ToList();
 
+    /// <summary>The line the inspector shows (the list's SelectedItem, so the first of an extended selection); null closes it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    private LogEntry? _selectedEntry;
+
+    /// <summary>True while a line is selected: the inspector is open.</summary>
+    public bool HasSelection => SelectedEntry is not null;
+
+    /// <summary>The inspector's X and Esc: deselects, which closes the pane.</summary>
+    [RelayCommand]
+    private void ClearSelection() => SelectedEntry = null;
+
     partial void OnActiveSourceChanged(string value)
     {
         ShowRotationNotice = false;
@@ -636,6 +648,9 @@ public sealed partial class ComponentFilterOption : ObservableObject
     public override string ToString() => Name;
 }
 
+/// <summary>One name/value row in the log inspector's grid.</summary>
+public sealed record LogField(string Name, string Value);
+
 /// <summary>One rendered log line: a dimmed component prefix plus the message.</summary>
 public sealed class LogEntry
 {
@@ -648,7 +663,38 @@ public sealed class LogEntry
         Message = line.Message.Length > 0 ? line.Message : line.Raw;
         HasComponent = line.Component is { Length: > 0 };
         ComponentText = HasComponent ? line.Component! : "-";
+        LevelText = line.Level == LogLevel.Unknown ? string.Empty : line.Level.ToString().ToUpperInvariant();
+        TimestampText = line.Timestamp is { } at ? at.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+
+        // The inspector's key/value grid: only what the line actually carries (most lines are "[component] message" and nothing else).
+        var fields = new List<LogField>();
+        if (HasComponent)
+        {
+            fields.Add(new LogField("component", ComponentText));
+        }
+
+        if (LevelText.Length > 0)
+        {
+            fields.Add(new LogField("level", LevelText));
+        }
+
+        if (TimestampText.Length > 0)
+        {
+            fields.Add(new LogField("time", TimestampText));
+        }
+
+        fields.Add(new LogField("line", line.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        Fields = fields;
     }
+
+    /// <summary>The parsed level in capitals; empty for the usual line that has none.</summary>
+    public string LevelText { get; }
+
+    /// <summary>The line's own timestamp (local time); empty when it has none.</summary>
+    public string TimestampText { get; }
+
+    /// <summary>The parsed fields the line carries, for the inspector.</summary>
+    public IReadOnlyList<LogField> Fields { get; }
 
     public long Sequence { get; }
 

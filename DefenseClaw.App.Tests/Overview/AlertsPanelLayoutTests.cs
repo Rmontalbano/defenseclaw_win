@@ -100,9 +100,9 @@ public class AlertsPanelLayoutTests
             scene.Host.Relayout();
 
             Assert.True(scene.ListCard.IsVisible && scene.DetailCard.IsVisible);
-            Assert.Equal(2, Grid.GetColumn(scene.DetailCard));
+            Assert.Equal(1, Grid.GetColumn(scene.DetailCard));
             Assert.True(scene.ListCard.ActualWidth >= 600);
-            Assert.True(scene.DetailCard.ActualWidth >= 380);
+            Assert.True(scene.DetailCard.ActualWidth >= 320);
 
             scene.Render("alerts-1400x900-alert-selected");
         });
@@ -187,7 +187,7 @@ public class AlertsPanelLayoutTests
 
         public Border ListCard => (Border)Panel.FindName("ListCard");
 
-        public Border DetailCard => (Border)Panel.FindName("DetailCard");
+        public DefenseClaw.App.Views.Controls.DcInspector DetailCard => (DefenseClaw.App.Views.Controls.DcInspector)Panel.FindName("Inspector");
 
         public void Render(string name) => RenderTo.Png(Host, name);
 
