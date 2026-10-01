@@ -4,6 +4,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -22,6 +23,13 @@
         gateway banner open. The result card of a read-only command sits at the end of the page and is scrolled into view
         when it opens.
     -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/DefenseClaw.App;component/Views/Panels/Govern/GovernTable.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -73,6 +81,7 @@
                       Focusable="False"
                       AutomationProperties.Name="Plugins page">
             <StackPanel x:Name="PageContent">
+                <StackPanel x:Name="Chrome">
                 <!-- Filter strip: which state, which connector, and the reason the next action records. -->
                 <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
                     <StackPanel Orientation="Horizontal">
@@ -165,6 +174,8 @@
                            Margin="{StaticResource DcCardGap}"
                            Text="{Binding CaptionText}" />
 
+                </StackPanel>
+
                 <!-- Content -->
                 <StackPanel Style="{StaticResource DcEmptyState}"
                             Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
@@ -221,15 +232,59 @@
                     </StackPanel>
                 </Border>
 
-                <ItemsControl AutomationProperties.Name="Plugins"
-                              ItemsSource="{Binding Rows}"
-                              IsTabStop="False">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <govern:GovernRowView />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <!-- The list: a dense table with a height of its own (the rest of the viewport, at least 250), virtualized. Each row's actions
+                     are in its "..." menu (and on right-click); a selected row opens its details under itself. -->
+                <ui:DataGrid x:Name="RowGrid"
+                             Style="{StaticResource DcDataGrid}"
+                             RowStyle="{StaticResource GovernGridRow}"
+                             RowDetailsTemplate="{StaticResource GovernRowDetails}"
+                             RowDetailsVisibilityMode="VisibleWhenSelected"
+                             SelectionMode="Single"
+                             AutomationProperties.Name="Plugins"
+                             ItemsSource="{Binding Rows}"
+                             VirtualizingPanel.ScrollUnit="Pixel"
+                             ctl:DcGridColumns.Fit="True"
+                             panels:NestedScroll.ForwardWheel="True"
+                             Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
+                    <ui:DataGrid.Height>
+                        <MultiBinding Converter="{x:Static govern:FillHeightConverter.Instance}" ConverterParameter="250">
+                            <Binding ElementName="PageScroll" Path="ViewportHeight" />
+                            <Binding ElementName="Chrome" Path="ActualHeight" />
+                        </MultiBinding>
+                    </ui:DataGrid.Height>
+                    <ui:DataGrid.Columns>
+                    <DataGridTemplateColumn Width="1*" MinWidth="110" Header="Status"
+                                            SortMemberPath="StateLabel"
+                                            CellTemplate="{StaticResource GovernStatusCell}" />
+                    <DataGridTextColumn Width="1.6*" MinWidth="100" Header="Name"
+                                        SortMemberPath="DisplayTitle"
+                                        ElementStyle="{StaticResource DcCellText}"
+                                        Binding="{Binding DisplayTitle}" />
+                    <DataGridTextColumn Width="0.7*" MinWidth="56" Header="Version"
+                                        SortMemberPath="Version"
+                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                        Binding="{Binding Version}" />
+                    <DataGridTextColumn Width="1*" MinWidth="64" Header="Origin"
+                                        SortMemberPath="Origin"
+                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                        Binding="{Binding Origin}" />
+                    <DataGridTemplateColumn Width="1.3*" MinWidth="120" Header="Scan"
+                                            SortMemberPath="ScanLabel"
+                                            CellTemplate="{StaticResource GovernScanCell}" />
+                    <DataGridTextColumn Width="1*" MinWidth="76" Header="Connector"
+                                        SortMemberPath="ConnectorLabel"
+                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                        Binding="{Binding ConnectorLabel}" />
+                    <DataGridTextColumn Width="1.3*" MinWidth="80" Header="Source"
+                                        SortMemberPath="SourceText"
+                                        ElementStyle="{StaticResource DcCellTextMono}"
+                                        Binding="{Binding SourceText}" />
+                    <DataGridTemplateColumn Width="32" Header="Actions"
+                                            CanUserSort="False"
+                                            HeaderStyle="{StaticResource DcDataGridActionsHeader}"
+                                            CellTemplate="{StaticResource GovernMenuCell}" />
+                    </ui:DataGrid.Columns>
+                </ui:DataGrid>
 
                 <!-- Entries the CLI lists that are not plugins -->
                 <Expander Margin="0,4,0,0"
@@ -240,15 +295,30 @@
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,0,0,8"
                                    Text="DefenseClaw 0.8.10 treats every folder in Claude Code's plugin store as a plugin. These are shown so nothing the CLI reported is hidden, but they are not plugins: the only action offered is Info." />
-                        <ItemsControl AutomationProperties.Name="Listing artifacts"
-                                      ItemsSource="{Binding ArtifactRows}"
-                                      IsTabStop="False">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <govern:GovernRowView />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <ui:DataGrid Style="{StaticResource DcDataGrid}"
+                                     RowStyle="{StaticResource GovernGridRow}"
+                                     SelectionMode="Single"
+                                     AutomationProperties.Name="Listing artifacts"
+                                     ItemsSource="{Binding ArtifactRows}"
+                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                     ctl:DcGridColumns.Fit="True"
+                                     panels:NestedScroll.ForwardWheel="True">
+                            <ui:DataGrid.Columns>
+                    <DataGridTemplateColumn Width="1*" MinWidth="104" Header="Status" SortMemberPath="StateLabel" CellTemplate="{StaticResource GovernStatusCell}" />
+                    <DataGridTextColumn Width="2*" MinWidth="110" Header="Name"
+                                        SortMemberPath="DisplayTitle"
+                                        ElementStyle="{StaticResource DcCellText}"
+                                        Binding="{Binding DisplayTitle}" />
+                    <DataGridTextColumn Width="1*" MinWidth="84" Header="Connector"
+                                        SortMemberPath="ConnectorLabel"
+                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                        Binding="{Binding ConnectorLabel}" />
+                    <DataGridTemplateColumn Width="32" Header="Actions"
+                                            CanUserSort="False"
+                                            HeaderStyle="{StaticResource DcDataGridActionsHeader}"
+                                            CellTemplate="{StaticResource GovernMenuCell}" />
+                            </ui:DataGrid.Columns>
+                        </ui:DataGrid>
                     </StackPanel>
                 </Expander>
 

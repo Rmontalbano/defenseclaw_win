@@ -452,6 +452,26 @@ public sealed class AlertsTableTests
         });
     }
 
+    [Theory]
+    [InlineData("Default", "Dark", "default-dark", 940, 620)]
+    [InlineData("Default", "Dark", "default-dark", 1400, 900)]
+    [InlineData("Cisco", "Light", "cisco-light", 940, 620)]
+    [InlineData("Cisco", "Light", "cisco-light", 1400, 900)]
+    public void The_kind_column_is_given_the_room_it_needs_and_an_empty_target_does_not_take_more(string styleName, string modeName, string look, int width, int height)
+    {
+        using var fixture = new AppearanceFixture(new AppearanceSettings(Enum.Parse<AppearanceStyle>(styleName), Enum.Parse<AppearanceMode>(modeName)));
+        using var scene = Scene.Open(width, height);
+
+        UiThread.Run(() =>
+        {
+            var kind = scene.Grid.Columns.Single(c => (string)c.Header == "Kind");
+            var target = scene.Grid.Columns.Single(c => (string)c.Header == "Target");
+            Assert.True(kind.ActualWidth >= 130, $"Kind is {kind.ActualWidth:0} DIPs");
+            Assert.True(kind.ActualWidth > target.ActualWidth, $"Kind {kind.ActualWidth:0} DIPs, Target {target.ActualWidth:0}");
+            RenderTo.Png(scene.Host, $"alerts-table-{look}-{width}x{height}");
+        });
+    }
+
     private static DataGridColumnHeader Header(DataGrid grid, string name) =>
         VisualTree.Descendants<DataGridColumnHeader>(grid).First(h => h.Column is not null && (string)h.Column.Header == name);
 

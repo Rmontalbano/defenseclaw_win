@@ -25,6 +25,13 @@
         list keeps a definite height and its own scroller. The result card of a read-only command sits under the list and
         is scrolled into view when it opens.
     -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/DefenseClaw.App;component/Views/Panels/Govern/GovernTable.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -238,40 +245,55 @@
                     </StackPanel>
                 </Border>
 
-                <!-- The list: a height of its own (the rest of the viewport, at least 250), its own virtualizing scroller. -->
-                <ItemsControl AutomationProperties.Name="Skills"
-                              ItemsSource="{Binding Rows}"
-                              VirtualizingPanel.IsVirtualizing="True"
-                              VirtualizingPanel.VirtualizationMode="Standard"
-                              VirtualizingPanel.ScrollUnit="Pixel"
-                              panels:NestedScroll.ForwardWheel="True"
-                              Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
-                    <ItemsControl.Height>
+                <!-- The list: a dense table with a height of its own (the rest of the viewport, at least 250), virtualized. Each row's actions
+                     are in its "..." menu (and on right-click); a selected row opens its details under itself. -->
+                <ui:DataGrid x:Name="RowGrid"
+                             Style="{StaticResource DcDataGrid}"
+                             RowStyle="{StaticResource GovernGridRow}"
+                             RowDetailsTemplate="{StaticResource GovernRowDetails}"
+                             RowDetailsVisibilityMode="VisibleWhenSelected"
+                             SelectionMode="Single"
+                             AutomationProperties.Name="Skills"
+                             ItemsSource="{Binding Rows}"
+                             VirtualizingPanel.ScrollUnit="Pixel"
+                             ctl:DcGridColumns.Fit="True"
+                             panels:NestedScroll.ForwardWheel="True"
+                             Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
+                    <ui:DataGrid.Height>
                         <MultiBinding Converter="{x:Static govern:FillHeightConverter.Instance}" ConverterParameter="250">
                             <Binding ElementName="PageScroll" Path="ViewportHeight" />
                             <Binding ElementName="Chrome" Path="ActualHeight" />
                         </MultiBinding>
-                    </ItemsControl.Height>
-                    <ItemsControl.Template>
-                        <ControlTemplate TargetType="ItemsControl">
-                            <ScrollViewer Style="{StaticResource DcPageScroll}"
-                                          CanContentScroll="True"
-                                          Focusable="False">
-                                <ItemsPresenter />
-                            </ScrollViewer>
-                        </ControlTemplate>
-                    </ItemsControl.Template>
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <VirtualizingStackPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <govern:GovernRowView />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    </ui:DataGrid.Height>
+                    <ui:DataGrid.Columns>
+                        <DataGridTemplateColumn Width="1*" MinWidth="110" Header="Status"
+                                                SortMemberPath="StateLabel"
+                                                CellTemplate="{StaticResource GovernStatusCell}" />
+                        <DataGridTextColumn Width="1.5*" MinWidth="100" Header="Name"
+                                            SortMemberPath="DisplayTitle"
+                                            ElementStyle="{StaticResource DcCellText}"
+                                            Binding="{Binding DisplayTitle}" />
+                        <DataGridTextColumn Width="2.2*" MinWidth="100" Header="Description"
+                                            SortMemberPath="Description"
+                                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                                            Binding="{Binding Description}" />
+                        <DataGridTemplateColumn Width="1.3*" MinWidth="120" Header="Scan"
+                                                SortMemberPath="ScanLabel"
+                                                CellTemplate="{StaticResource GovernScanCell}" />
+                        <DataGridTextColumn Width="1*" MinWidth="76" Header="Connector"
+                                            SortMemberPath="ConnectorLabel"
+                                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                                            Binding="{Binding ConnectorLabel}" />
+                        <DataGridTextColumn Width="1.3*" MinWidth="80" Header="Source"
+                                            SortMemberPath="SourceText"
+                                            ElementStyle="{StaticResource DcCellTextMono}"
+                                            Binding="{Binding SourceText}" />
+                        <DataGridTemplateColumn Width="32" Header="Actions"
+                                                CanUserSort="False"
+                                                HeaderStyle="{StaticResource DcDataGridActionsHeader}"
+                                                CellTemplate="{StaticResource GovernMenuCell}" />
+                    </ui:DataGrid.Columns>
+                </ui:DataGrid>
 
                 <!-- Result of a read-only command (info): under the list, scrolled into view when it opens. -->
                 <govern:GovernOutputCard />

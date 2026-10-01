@@ -1,0 +1,182 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls">
+    <!--
+        Shared pieces of the Govern tables (Skills, MCPs, Plugins, Tools): the row menu, the row style that carries it, the
+        cells every table has (status, scan, row menu button) and the details a selected row opens. DataContext of a row = GovernRow.
+
+        The menu holds every verb the old card's buttons had, each shown only when the row offers it. Nothing here changes
+        anything by itself: a state-changing verb opens the panel's review with the exact command first (GovernRow.ActionCommand),
+        Info and Copy name are the read-only ones. The destructive ones are red (DcDangerMenuItem).
+    -->
+    <ContextMenu x:Key="GovernRowMenu">
+        <MenuItem Header="{Binding InfoLabel}"
+                  Icon="{ctl:DcSymbolIcon Info24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Info"
+                  ToolTip="Read-only: runs immediately and shows the result under the list"
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Show details of {0}'}"
+                  Visibility="{Binding CanInfo, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Scan…"
+                  Icon="{ctl:DcSymbolIcon ScanText24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Scan"
+                  IsEnabled="{Binding ScanEnabled, Mode=OneWay}"
+                  ToolTip="Runs the scanner and records the result. Opens a review of the exact command first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Scan {0}'}"
+                  Visibility="{Binding CanScan, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Copy name"
+                  Icon="{ctl:DcSymbolIcon Copy24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="CopyName"
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Copy name {0}'}" />
+        <Separator />
+        <MenuItem Header="Allow…"
+                  Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Allow"
+                  ToolTip="Opens a review of the exact command first"
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Allow {0}'}"
+                  Visibility="{Binding CanAllow, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Block…"
+                  Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Block"
+                  ToolTip="Opens a review of the exact command first"
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Block {0}'}"
+                  Visibility="{Binding CanBlock, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Unblock…"
+                  Icon="{ctl:DcSymbolIcon LockOpen24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Unblock"
+                  ToolTip="Clears the block/allow decision. Opens a review first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Unblock {0}'}"
+                  Visibility="{Binding CanUnblock, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Enable…"
+                  Icon="{ctl:DcSymbolIcon PlayCircle24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Enable"
+                  ToolTip="Clears the runtime disable. Opens a review first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Enable {0}'}"
+                  Visibility="{Binding CanEnable, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Disable…"
+                  Icon="{ctl:DcSymbolIcon PauseCircle24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Disable"
+                  ToolTip="Runtime-only disable. Opens a review first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Disable {0}'}"
+                  Visibility="{Binding CanDisable, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Restore…"
+                  Icon="{ctl:DcSymbolIcon ArrowUndo24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Restore"
+                  ToolTip="Moves quarantined files back. Opens a review first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Restore {0}'}"
+                  Visibility="{Binding CanRestore, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Quarantine…"
+                  Style="{StaticResource DcDangerMenuItem}"
+                  Icon="{ctl:DcSymbolIcon BoxDismiss24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Quarantine"
+                  ToolTip="Moves the files into quarantine. Destructive: opens a review first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Quarantine {0}'}"
+                  Visibility="{Binding CanQuarantine, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Remove…"
+                  Style="{StaticResource DcDangerMenuItem}"
+                  Icon="{ctl:DcSymbolIcon Delete24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Remove"
+                  ToolTip="Deletes the files. Destructive: opens a review first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Remove {0}'}"
+                  Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibility}}" />
+        <MenuItem Header="Unset…"
+                  Style="{StaticResource DcDangerMenuItem}"
+                  Icon="{ctl:DcSymbolIcon PlugDisconnected24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="Unset"
+                  ToolTip="Removes the server from the connector's config. Destructive: opens a review first."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Remove {0} from the connector config'}"
+                  Visibility="{Binding CanUnset, Converter={StaticResource BoolToVisibility}}" />
+    </ContextMenu>
+
+    <!-- A Govern row: the shared row style plus the menu; a listing artifact (not a real item) is dimmed. -->
+    <Style x:Key="GovernGridRow" TargetType="DataGridRow" BasedOn="{StaticResource DcDataGridRow}">
+        <Setter Property="ContextMenu" Value="{StaticResource GovernRowMenu}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsArtifact}" Value="True">
+                <Setter Property="Opacity" Value="0.8" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- What a selected row opens under itself: the facts the CLI gave and the JSON exactly as it printed it. -->
+    <DataTemplate x:Key="GovernRowDetails">
+        <StackPanel Margin="16,6,12,10">
+            <TextBlock Style="{StaticResource DcCaption}"
+                       Margin="0,0,0,6"
+                       Text="{Binding ArtifactNote}"
+                       Visibility="{Binding HasArtifactNote, Converter={StaticResource BoolToVisibility}}" />
+            <ItemsControl Grid.IsSharedSizeScope="True"
+                          ItemsSource="{Binding Fields}"
+                          Focusable="False"
+                          IsTabStop="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="GovernFieldKey" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="{Binding Label}" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource DcFieldValueInline}" Text="{Binding Value}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Style="{StaticResource DcFieldLabel}"
+                       Margin="0,8,0,4"
+                       Text="Exactly as the CLI printed it" />
+            <Border Style="{StaticResource DcCodeBlock}">
+                <TextBox Style="{StaticResource DcMonoTextBox}"
+                         MaxHeight="140"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         TextWrapping="NoWrap"
+                         Text="{Binding RawJson, Mode=OneWay}"
+                         AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Raw JSON of {0}'}" />
+            </Border>
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- Status: the state as a pill (active, blocked, quarantined, ...). -->
+    <DataTemplate x:Key="GovernStatusCell">
+        <ctl:DcStatePill Text="{Binding StateLabel}"
+                         Tone="{Binding StateTone}"
+                         Visibility="{Binding HasState, Converter={StaticResource BoolToVisibility}}" />
+    </DataTemplate>
+
+    <!-- Scan: the mark and the words; a critical or high result is also written in the danger tone. -->
+    <Style x:Key="GovernScanLabel" TargetType="ctl:DcStatusLabel" BasedOn="{StaticResource {x:Type ctl:DcStatusLabel}}">
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Style.Triggers>
+            <Trigger Property="Tone" Value="Critical">
+                <Setter Property="Foreground" Value="{DynamicResource DcToneCriticalBrush}" />
+            </Trigger>
+            <Trigger Property="Tone" Value="High">
+                <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <DataTemplate x:Key="GovernScanCell">
+        <ctl:DcStatusLabel Style="{StaticResource GovernScanLabel}"
+                           Text="{Binding ScanCellText}"
+                           Tone="{Binding ScanTone}"
+                           Visibility="{Binding HasScan, Converter={StaticResource BoolToVisibility}}" />
+    </DataTemplate>
+
+    <!-- The "..." button: opens the row's menu. -->
+    <DataTemplate x:Key="GovernMenuCell">
+        <ctl:DcRowMenuButton AutomationProperties.HelpText="This row's actions: info, scan, allow, block, enable, disable, remove." />
+    </DataTemplate>
+</ResourceDictionary>

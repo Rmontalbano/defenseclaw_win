@@ -305,8 +305,10 @@ public sealed class GovernScanViewTests
                         .Where(b => System.Windows.Automation.AutomationProperties.GetName(b).StartsWith("Scan", StringComparison.Ordinal))
                         .ToList();
                     Assert.Contains(scan, b => System.Windows.Automation.AutomationProperties.GetName(b) == "Scan all skills…");
-                    Assert.Contains(scan, b => System.Windows.Automation.AutomationProperties.GetName(b) != "Scan all skills…");
-                    Assert.All(scan, b => Assert.Equal(installed, b.IsEnabled));
+                    Assert.Equal(installed, Assert.Single(scan).IsEnabled);
+
+                    // Scan on a row lives in its "..." menu (dense table), enabled by the same rule.
+                    Assert.Equal(installed, RowScanItem(skills.Page!).IsEnabled);
                     RenderTo.Png(skills.Host, $"skills-scan-install-{name}-{(installed ? "scanner-found" : "scanner-missing")}");
 
                     // The same page with the form closed: the rows and their Scan buttons.
@@ -335,15 +337,32 @@ public sealed class GovernScanViewTests
             UiThread.Run(() =>
             {
                 plugins.Host.Relayout();
-                Assert.Contains(
-                    VisualTree.Descendants<Wpf.Ui.Controls.Button>(plugins.Page!),
-                    b => System.Windows.Automation.AutomationProperties.GetName(b).StartsWith("Scan ", StringComparison.Ordinal) && b.IsEnabled);
+                Assert.True(RowScanItem(plugins.Page!).IsEnabled);
                 RenderTo.Png(plugins.Host, $"plugins-scan-{name}");
             });
         }
         finally
         {
             UiThread.Run(plugins.Dispose);
+        }
+    }
+
+    /// <summary>The "Scan…" item of the first scannable row's menu, opened from the row's "..." button and closed again.</summary>
+    private static System.Windows.Controls.MenuItem RowScanItem(System.Windows.FrameworkElement page)
+    {
+        var row = VisualTree.Descendants<System.Windows.Controls.DataGridRow>(page).First(r => r.Item is GovernRow { CanScan: true });
+        var button = VisualTree.Descendants<DefenseClaw.App.Views.Controls.DcRowMenuButton>(row).Single();
+        Assert.True(button.OpenMenu());
+        try
+        {
+            var menu = System.Windows.Controls.ContextMenuService.GetContextMenu(row)!;
+            var item = menu.Items.OfType<System.Windows.Controls.MenuItem>().Single(i => (string)i.Header == "Scan…");
+            Assert.StartsWith("Scan ", System.Windows.Automation.AutomationProperties.GetName(item), StringComparison.Ordinal);
+            return item;
+        }
+        finally
+        {
+            System.Windows.Controls.ContextMenuService.GetContextMenu(row)!.IsOpen = false;
         }
     }
 

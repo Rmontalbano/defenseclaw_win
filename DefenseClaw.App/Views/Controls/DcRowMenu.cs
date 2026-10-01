@@ -132,7 +132,8 @@ public static class DcRowMenu
             return;
         }
 
-        if (ItemsControl.ItemsControlFromItemContainer(row) is DataGrid grid)
+        // A single-selection grid replaces its selection by itself (and refuses SelectedItems changes).
+        if (ItemsControl.ItemsControlFromItemContainer(row) is DataGrid { SelectionMode: DataGridSelectionMode.Extended } grid)
         {
             grid.SelectedItems.Clear();
         }

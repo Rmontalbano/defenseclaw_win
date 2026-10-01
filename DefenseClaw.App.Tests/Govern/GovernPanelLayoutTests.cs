@@ -85,7 +85,7 @@ public class GovernPanelLayoutTests
         UiThread.Run(() =>
         {
             var total = scene.ViewModel.Rows.Count;
-            var realized = VisualTree.Descendants<GovernRowView>(scene.List).Count();
+            var realized = VisualTree.Descendants<System.Windows.Controls.DataGridRow>(scene.List).Count();
             Assert.True(total >= 100);
             Assert.InRange(realized, 1, 40);
 

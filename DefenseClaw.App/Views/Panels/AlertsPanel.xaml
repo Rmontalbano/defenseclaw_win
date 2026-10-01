@@ -291,7 +291,7 @@
                                  SelectionChanged="OnAlertSelectionChanged"
                                  AutomationProperties.Name="Alerts, newest first">
                         <ui:DataGrid.Columns>
-                            <DataGridTextColumn Width="0.9*" MinWidth="96" Header="Time"
+                            <DataGridTextColumn Width="1*" MinWidth="104" Header="Time"
                                                 SortMemberPath="Timestamp"
                                                 ElementStyle="{StaticResource AlertTimeText}"
                                                 Binding="{Binding TableTimeText}" />
@@ -305,15 +305,15 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Width="1.2*" MinWidth="80" Header="Kind"
+                            <DataGridTextColumn Width="2*" MinWidth="130" Header="Kind"
                                                 SortMemberPath="RuleId"
                                                 ElementStyle="{StaticResource DcCellTextQuiet}"
                                                 Binding="{Binding RuleId}" />
-                            <DataGridTextColumn Width="1.2*" MinWidth="80" Header="Action"
+                            <DataGridTextColumn Width="1*" MinWidth="80" Header="Action"
                                                 SortMemberPath="Action"
                                                 ElementStyle="{StaticResource DcCellText}"
                                                 Binding="{Binding Action}" />
-                            <DataGridTextColumn Width="1.8*" MinWidth="80" Header="Target"
+                            <DataGridTextColumn Width="0.9*" MinWidth="64" Header="Target"
                                                 SortMemberPath="TargetRef"
                                                 ElementStyle="{StaticResource DcCellText}"
                                                 Binding="{Binding TargetRef}" />
@@ -398,7 +398,7 @@
 
                             <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TagMultiple24" Section="Observe" Content="Attributes" />
                             <!-- One shared key column: each attribute used to size its own, so the values started at a
-                                 different x on every line. (Same as GovernRowView.) -->
+                                 different x on every line. -->
                             <ItemsControl Grid.IsSharedSizeScope="True"
                                           ItemsSource="{Binding Fields}"
                                           AutomationProperties.Name="Alert attributes">

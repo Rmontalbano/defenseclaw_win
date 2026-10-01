@@ -134,7 +134,21 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     {
         Rows.CollectionChanged += (_, _) => NotifyStateFlags();
         ArtifactRows.CollectionChanged += (_, _) => NotifyStateFlags();
+
+        // The rows' Scan menu item follows the panel's CanScan (idle, scanner present).
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(CanScan))
+            {
+                foreach (var row in _allRows.Concat(Rows))
+                {
+                    row.RefreshScanEnabled();
+                }
+            }
+        };
     }
+
+    bool IGovernRowHost.IsScanAvailable => CanScan;
 
     // ---- What the concrete panel says about itself ---------------------------------------------------------------
 

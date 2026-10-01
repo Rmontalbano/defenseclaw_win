@@ -320,8 +320,8 @@
     <Style TargetType="{x:Type ctl:DcSeverityBadge}">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Padding" Value="9,1,9,1" />
-        <Setter Property="MinWidth" Value="60" />
+        <Setter Property="Padding" Value="10,3,10,3" />
+        <Setter Property="MinWidth" Value="64" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="Template">
@@ -334,6 +334,8 @@
                             SnapsToDevicePixels="True">
                         <TextBlock HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
+                                   LineStackingStrategy="BlockLineHeight"
+                                   LineHeight="16"
                                    FontSize="{TemplateBinding FontSize}"
                                    FontWeight="{TemplateBinding FontWeight}"
                                    Foreground="{TemplateBinding Foreground}"
@@ -354,7 +356,7 @@
                     <Border Style="{DynamicResource DcBadge}"
                             Tag="{TemplateBinding Tone}"
                             CornerRadius="{DynamicResource DcDotRadius}"
-                            Padding="8,2,10,2"
+                            Padding="9,3,11,3"
                             TextElement.Foreground="{DynamicResource DcTextPrimaryBrush}"
                             SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal">
@@ -364,6 +366,8 @@
                                     Height="8"
                                     Margin="0,0,6,0" />
                             <TextBlock VerticalAlignment="Center"
+                                       LineStackingStrategy="BlockLineHeight"
+                                       LineHeight="16"
                                        FontSize="12"
                                        FontWeight="Medium"
                                        Text="{TemplateBinding Word}" />

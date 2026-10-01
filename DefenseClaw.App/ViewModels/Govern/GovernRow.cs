@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 
@@ -33,6 +35,9 @@ public enum GovernVerbs
 public interface IGovernRowHost
 {
     void OnRowAction(GovernRow row, GovernVerbs verb);
+
+    /// <summary>Whether the row menu's Scan item is enabled now (not while another command runs, not with the scanner missing).</summary>
+    bool IsScanAvailable => true;
 }
 
 /// <summary>One label/value pair in a row's details expander.</summary>
@@ -46,7 +51,7 @@ public sealed record GovernField(string Label, string Value);
 /// the values, the row only carries them. Rows are immutable and rebuilt on every refresh.
 /// </para>
 /// </summary>
-public sealed class GovernRow
+public sealed partial class GovernRow : INotifyPropertyChanged
 {
     private readonly IGovernRowHost _host;
     private string? _key;
@@ -127,6 +132,45 @@ public sealed class GovernRow
     public string InfoLabel { get; init; } = "Info";
 
     public ICommand ActionCommand { get; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>Whether the "Scan…" menu item can be used right now; the panel calls <see cref="RefreshScanEnabled"/> when that changes.</summary>
+    public bool ScanEnabled => _host.IsScanAvailable;
+
+    public void RefreshScanEnabled() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScanEnabled)));
+
+    // ---- Table cells (the dense grid): values the columns bind to, read from the details list so no parser changes ----
+
+    private string FieldText(string label) => Fields.FirstOrDefault(f => f.Label == label)?.Value ?? string.Empty;
+
+    public string Version => FieldText("Version");
+
+    public string Origin => FieldText("Origin");
+
+    /// <summary>Where the item came from (a skill's or plugin's <c>source</c>); empty when the CLI did not say.</summary>
+    public string SourceText => FieldText("Source");
+
+    public string Transport => FieldText("Transport");
+
+    /// <summary>A tool rule's scope in words ("connector claudecode", "every connector (fallback)").</summary>
+    public string AppliesText => FieldText("Applies to");
+
+    /// <summary>An MCP server's launch command, or its URL.</summary>
+    public string LaunchText => FieldText("Command").Length > 0 ? FieldText("Command") : FieldText("URL");
+
+    /// <summary>The scan column's words, as the Mac says them: "19 CRITICAL findings" (from "CRITICAL · 19 findings"), "Not scanned".</summary>
+    public string ScanCellText
+    {
+        get
+        {
+            var match = ScanCountPattern().Match(ScanLabel);
+            return match.Success ? $"{match.Groups[2].Value} {match.Groups[1].Value} {match.Groups[3].Value}" : ScanLabel;
+        }
+    }
+
+    [GeneratedRegex(@"^(\w+) · (\d+) (findings?)$")]
+    private static partial Regex ScanCountPattern();
 
     /// <summary>Identity across refreshes. Computed once: the sync pass asks for it many times per refresh.</summary>
     public string Key => _key ??= $"{RuleScope}|{Connector}|{SourceScope}|{Name}";
