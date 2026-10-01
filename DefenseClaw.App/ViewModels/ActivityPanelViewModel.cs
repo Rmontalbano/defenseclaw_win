@@ -93,7 +93,7 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     internal ActivityPanelViewModel(AppServices services, MutationReader mutationReader)
         : base(services)
     {
-        Mutations = new ActivityMutationsViewModel(mutationReader);
+        Mutations = new ActivityMutationsViewModel(mutationReader, scope: Services.ConnectorScope);
         Mutations.PropertyChanged += OnMutationsChanged;
         Services.Cli.InvocationStarted += OnInvocationStarted;
         Services.Cli.InvocationCompleted += OnInvocationCompleted;
@@ -206,6 +206,9 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
             _ = Mutations.LoadAsync();
         }
     }
+
+    /// <summary>The shared connector scope changed: the Mutations already loaded are listed again under it.</summary>
+    protected override void OnConnectorScopeChanged() => Mutations.ReapplyScope();
 
     protected override void OnDeactivated()
     {

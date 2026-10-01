@@ -121,13 +121,15 @@ internal static class ShellCommandRegistry
     /// <param name="showShortcuts">Opens the keyboard-shortcuts overlay.</param>
     /// <param name="appearance">The look controls; null (a test without a service) leaves the appearance commands out.</param>
     /// <param name="curated">The CLI commands read from the CLI's help (see <see cref="CuratedCommandCatalog"/>); null or empty adds none.</param>
+    /// <param name="connectorScope">The shared connector scope; null leaves "Cycle connector scope" out.</param>
     public static IReadOnlyList<ShellCommand> Build(
         PanelCatalog catalog,
         ShellActions actions,
         Action<PanelDescriptor> navigateTo,
         Action showShortcuts,
         IAppearanceControl? appearance = null,
-        IReadOnlyList<CuratedCommand>? curated = null)
+        IReadOnlyList<CuratedCommand>? curated = null,
+        ConnectorScope? connectorScope = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(actions);
@@ -260,6 +262,22 @@ internal static class ShellCommandRegistry
             IsEnabled: true,
             DisabledReason: null,
             Run: actions.ResetSeenAlertHistory));
+
+        if (connectorScope is not null)
+        {
+            commands.Add(new ShellCommand(
+                Id: "app.cycle-connector",
+                Title: "Cycle connector scope",
+                Category: AppCategory,
+                Description: connectorScope.Current is { } scoped
+                    ? $"Every list is narrowed to {scoped}; step to the next connector, then back to all."
+                    : "Narrow every list to the first connector; again for the next, then back to all.",
+                Shortcut: ShellShortcuts.CycleConnectorText,
+                Keywords: "connector scope filter agent claudecode codex all narrow",
+                IsEnabled: connectorScope.CanScope,
+                DisabledReason: "There is only one connector, so there is nothing to choose between.",
+                Run: () => connectorScope.Cycle()));
+        }
 
         commands.Add(new ShellCommand(
             Id: "app.shortcuts",

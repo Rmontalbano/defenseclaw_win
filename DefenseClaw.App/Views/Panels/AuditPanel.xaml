@@ -177,6 +177,9 @@
                            SearchPlaceholder="Search details, event, tool, target…"
                            SearchAutomationName="Search details, event, tool and target"
                            SearchHelpText="Free text over the details, event name, tool and target. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.ConnectorSlot>
+                <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
+            </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowReset24}"

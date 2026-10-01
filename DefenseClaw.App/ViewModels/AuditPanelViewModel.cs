@@ -201,7 +201,73 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     partial void OnSelectedSeverityChanged(SeverityOption value) => Reload();
 
-    partial void OnSelectedConnectorChanged(ConnectorOption value) => Reload();
+    partial void OnSelectedConnectorChanged(ConnectorOption value)
+    {
+        PublishConnectorScope(value);
+        Reload();
+    }
+
+    // ---- The shared connector scope ------------------------------------------------------------------------------------
+    // The scope (Services.ConnectorScope) is the one source of truth for WHICH connector; this panel's combo is that scope plus the
+    // platform-row refinement the Mac's chip has no room for ("+ platform rows", "platform only"). Choosing a connector here sets the
+    // shared scope; a scope change from the chip, Ctrl+Shift+M or Overview picks the matching option (keeping "+ platform rows" if it is
+    // already that connector). "Platform only" belongs to no connector, so it leaves the scope alone and stays until a connector is
+    // chosen. With one connector there is no chip and the scope refuses to narrow: the combo then keeps its own choice.
+
+    private bool _applyingScope;
+
+    private void PublishConnectorScope(ConnectorOption option)
+    {
+        if (_applyingScope || option.PlatformOnly)
+        {
+            return;
+        }
+
+        _ = Services.ConnectorScope.Set(option.Connector);
+    }
+
+    /// <summary>The shared scope changed: select the combo option that says so.</summary>
+    protected override void OnConnectorScopeChanged()
+    {
+        var scope = Services.ConnectorScope.Current;
+        var selected = SelectedConnector;
+        ConnectorOption wanted;
+
+        if (scope is null)
+        {
+            // Reset to All: a named choice follows it back; "platform only" is not a connector and stays.
+            if (selected.PlatformOnly || selected.Connector is null)
+            {
+                return;
+            }
+
+            wanted = Connectors[0];
+        }
+        else if (string.Equals(selected.Connector, scope, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        else
+        {
+            wanted = Connectors.FirstOrDefault(c => !c.IncludeNull && !c.PlatformOnly && string.Equals(c.Connector, scope, StringComparison.OrdinalIgnoreCase))
+                     ?? ConnectorOption.Named(scope);
+            if (!Connectors.Contains(wanted))
+            {
+                // A connector the audit log has no rows for yet is still one the operator can scope to.
+                Connectors.Insert(1, wanted);
+            }
+        }
+
+        _applyingScope = true;
+        try
+        {
+            SelectedConnector = wanted;
+        }
+        finally
+        {
+            _applyingScope = false;
+        }
+    }
 
     partial void OnSelectedRangeChanged(TimeRangeOption value) => Reload();
 
@@ -381,7 +447,12 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
             foreach (var connector in connectors)
             {
-                Connectors.Add(ConnectorOption.Named(connector));
+                // A connector the shared scope already added (before the database was read) is not listed twice.
+                if (!Connectors.Any(c => !c.IncludeNull && string.Equals(c.Connector, connector, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Connectors.Add(ConnectorOption.Named(connector));
+                }
+
                 Connectors.Add(ConnectorOption.WithPlatform(connector));
             }
 

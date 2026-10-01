@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DefenseClaw.App.Services;
 using DefenseClaw.Core.Audit;
 
 namespace DefenseClaw.App.ViewModels;
@@ -31,6 +32,7 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
     private CancellationTokenSource _generation = new();
     private IReadOnlyList<MutationRow> _loaded = Array.Empty<MutationRow>();
     private bool _applyingConnectors;
+    private readonly ConnectorScope? _scope;
 
     [ObservableProperty]
     private MutationRow? _selectedRow;
@@ -65,10 +67,16 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasLoaded;
 
-    public ActivityMutationsViewModel(MutationReader reader, TimeSpan? timeout = null)
+    /// <param name="scope">
+    /// The shared connector scope: a change that names another connector (or none) is not listed while it is narrowed. The tab's own
+    /// <see cref="SelectedConnector"/> narrows further and is no longer in the toolbar (the scope chip is); it stays as this view-model's
+    /// own filter. Null (tests without a shell) means no shared scope.
+    /// </param>
+    internal ActivityMutationsViewModel(MutationReader reader, TimeSpan? timeout = null, ConnectorScope? scope = null)
     {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _timeout = timeout;
+        _scope = scope;
         Connectors.Add(AllConnectors);
     }
 
@@ -160,6 +168,9 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
         }
     }
 
+    /// <summary>The shared connector scope changed: the loaded changes are listed again under it (no new read).</summary>
+    public void ReapplyScope() => ApplyFilters();
+
     /// <summary>Stops a read that is running (the panel left the screen).</summary>
     public void Cancel() => _generation.Cancel();
 
@@ -213,6 +224,7 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
 
         var visible = _loaded
             .Where(row => !scoped || string.Equals(row.Item.Connector, connector, StringComparison.OrdinalIgnoreCase))
+            .Where(row => _scope is null || _scope.Allows(row.Item.Connector))
             .Where(row => row.Matches(search))
             .ToList();
 

@@ -66,7 +66,7 @@ var newest = (await Services.AlertQueue.ReadAsync(newestLimit: 500)).Counts.Newe
 
 ## 4. Connector scope - `ConnectorScope`
 
-**For:** the one "All / one connector" filter every screen shares (the Mac's `connectorFilter`). No UI yet; the chip is a later issue.
+**For:** the one "All / one connector" filter every screen shares (the Mac's `connectorFilter`). Every connector-tagged panel follows it (override `PanelViewModelBase.OnConnectorScopeChanged`, filter with `Allows`); each page toolbar's ConnectorSlot holds `ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}"` (shown with more than one connector); Ctrl+Shift+M cycles it. Audit and the Govern catalogs keep their combos as views of the same scope.
 
 ```csharp
 var rows = allRows.Where(r => Services.ConnectorScope.Allows(r.Connector));          // the predicate; null scope allows everything

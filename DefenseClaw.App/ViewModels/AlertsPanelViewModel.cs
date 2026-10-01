@@ -236,6 +236,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
     /// <summary>Alerts in the loaded list that are not acknowledged - what the toggles and text filter act on.</summary>
     private int _poolCount;
+    private int _scopeHiddenCount;
 
     [ObservableProperty]
     private bool _isReviewOpen;
@@ -406,6 +407,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     }
 
     private void OnAlertCountsChanged(object? sender, AlertCountsChangedEventArgs e) => _ = RefreshQueueAsync();
+
+    /// <summary>The shared connector scope changed: the list, the tiles and the counts are re-derived from the rows already loaded.</summary>
+    protected override void OnConnectorScopeChanged() => ApplyFilters();
 
     /// <summary>
     /// A deep link (<see cref="IAcceptsNavigation"/>): an <see cref="AlertsFilter"/> opens the panel on a severity and above and/or a
@@ -1442,6 +1446,15 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             return;
         }
 
+        if (_scopeHiddenCount > 0 && _poolCount == 0)
+        {
+            EmptyTitle = $"No alerts for {Services.ConnectorScope.Current}";
+            EmptyDetail =
+                $"{_scopeHiddenCount} alert(s) belong to other connectors or to none. " +
+                "Pick All connectors in the toolbar (or press Ctrl+Shift+M) to see them.";
+            return;
+        }
+
         if (_all.Count > 0 && _poolCount == 0)
         {
             // Everything loaded is acknowledged or dismissed: a good outcome, not an error.
@@ -1485,8 +1498,20 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         var pool = _acknowledgedKeys.Count == 0
             ? _all
             : _all.Where(item => !_acknowledgedKeys.Contains(item.Key)).ToList();
-        _poolCount = pool.Count;
         HiddenAcknowledgedCount = _all.Count - pool.Count;
+
+        // The shared connector scope narrows the pool itself, so the tiles and counts describe what the scope leaves (the sidebar badge
+        // does the same through AlertCounts.TallyFor). A row with no connector is not in an agent's view.
+        var scope = Services.ConnectorScope;
+        _scopeHiddenCount = 0;
+        if (scope.IsScoped)
+        {
+            var scoped = pool.Where(item => scope.Allows(item.Connector)).ToList();
+            _scopeHiddenCount = pool.Count - scoped.Count;
+            pool = scoped;
+        }
+
+        _poolCount = pool.Count;
         UpdateSeverityCounts(pool);
 
         IEnumerable<AlertItem> query = pool;
@@ -1748,6 +1773,9 @@ public sealed partial class AlertItem : ObservableObject
 
     public string Source { get; private init; } = string.Empty;
 
+    /// <summary>The connector the finding is attributed to (the audit row's, the queue's, an egress decision's); null for a platform-wide finding or a gateway row, which carries none. What the shared connector scope filters on.</summary>
+    public string? Connector { get; private init; }
+
     public string Tags { get; private init; } = string.Empty;
 
     public string ConfidenceText { get; private init; } = string.Empty;
@@ -1832,6 +1860,7 @@ public sealed partial class AlertItem : ObservableObject
             Evidence = row.StructuredString(GatewayAlert.Keys.EvidenceSummary) ?? string.Empty,
             Scanner = row.StructuredString(GatewayAlert.Keys.Scanner) ?? string.Empty,
             Source = row.Actor ?? row.Source ?? string.Empty,
+            Connector = row.Connector,
             Tags = string.Empty,
             ConfidenceText = string.Empty,
             StructuredText = Pretty(structured),
@@ -1856,6 +1885,7 @@ public sealed partial class AlertItem : ObservableObject
             Action = item.Action,
             TargetRef = item.Target ?? string.Empty,
             Source = item.Connector ?? string.Empty,
+            Connector = item.Connector,
             StructuredText = "{}",
         };
     }
@@ -1874,6 +1904,7 @@ public sealed partial class AlertItem : ObservableObject
         Evidence = Evidence,
         Scanner = Scanner,
         Source = Source,
+        Connector = Connector,
         Tags = Tags,
         ConfidenceText = ConfidenceText,
         StructuredText = StructuredText,

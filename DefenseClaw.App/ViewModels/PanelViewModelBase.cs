@@ -163,11 +163,65 @@ public abstract class PanelViewModelBase : ObservableObject
 
         if (active)
         {
+            Services.ConnectorScope.Changed += OnSharedScopeChanged;
             OnActivated();
+            CatchUpConnectorScope();
         }
         else
         {
+            Services.ConnectorScope.Changed -= OnSharedScopeChanged;
             OnDeactivated();
+        }
+    }
+
+    /// <summary>
+    /// The shared connector scope (<see cref="AppServices.ConnectorScope"/>) changed while this panel is the one on screen, or had
+    /// changed while it was away and the panel has just come back: re-project what it lists (<c>scope.Allows(row.Connector)</c>) or
+    /// re-ask for it. Runs on the UI thread, only when the scope itself differs from the one the panel last saw (a roster change that
+    /// leaves the scope alone is not a change). A panel that filters rows by connector overrides this; the default does nothing.
+    /// </summary>
+    protected virtual void OnConnectorScopeChanged()
+    {
+    }
+
+    /// <summary>The page toolbar's connector chip (one model per panel; the chip hides itself with one connector or none).</summary>
+    public ConnectorScopeViewModel ConnectorChip => _connectorChip ??= new ConnectorScopeViewModel(Services.ConnectorScope);
+
+    private ConnectorScopeViewModel? _connectorChip;
+
+    private string? _scopeSeen;
+
+    private void OnSharedScopeChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            CatchUpConnectorScope();
+        }
+        else
+        {
+            _ = dispatcher.BeginInvoke(CatchUpConnectorScope);
+        }
+    }
+
+    private void CatchUpConnectorScope()
+    {
+        var current = Services.ConnectorScope.Current;
+        if (!IsActive || string.Equals(current, _scopeSeen, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _scopeSeen = current;
+        try
+        {
+            OnConnectorScopeChanged();
+        }
+#pragma warning disable CA1031 // A panel that cannot re-project must not break the scope change for the others.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceError($"panel '{Title}' could not follow the connector scope: {ex}");
         }
     }
 

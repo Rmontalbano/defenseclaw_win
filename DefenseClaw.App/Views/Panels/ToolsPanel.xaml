@@ -60,6 +60,9 @@
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
                                  AutomationProperties.Name="Working" />
             </ctl:DcPageToolbar.Leading>
+            <ctl:DcPageToolbar.ConnectorSlot>
+                <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
+            </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"

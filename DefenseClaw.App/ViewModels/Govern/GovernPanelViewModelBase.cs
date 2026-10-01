@@ -380,6 +380,13 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     partial void OnSelectedConnectorChanged(string? value)
     {
+        // The scope combo and the shared connector scope (the toolbar chip) are one choice: picking here narrows the whole app. Not while the
+        // list is being rebuilt (_scopeReloadEnabled is off) or while following the shared scope (_followingScope).
+        if (_scopeReloadEnabled && !_followingScope && value is not null)
+        {
+            _ = Services.ConnectorScope.Set(ToolbarConnector());
+        }
+
         OnPropertyChanged(nameof(ScopeLabel));
         OnPropertyChanged(nameof(EmptyTitle));
         OnPropertyChanged(nameof(EmptyDetail));
@@ -624,6 +631,42 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     // ---- Connector scope -----------------------------------------------------------------------------------------
 
+    private bool _followingScope;
+
+    /// <summary>
+    /// The shared connector scope changed (chip, Ctrl+Shift+M, an Overview row): the combo follows it, which re-reads the list for that
+    /// connector (or for all of them) like a pick in the combo does. The scope is the one source of truth; with one connector it refuses
+    /// to narrow and the combo keeps its own choice.
+    /// </summary>
+    protected override void OnConnectorScopeChanged()
+    {
+        var scope = Services.ConnectorScope.Current;
+        string wanted;
+        if (scope is null)
+        {
+            wanted = AllConnectorsLabel;
+        }
+        else
+        {
+            wanted = Connectors.FirstOrDefault(c => string.Equals(c, scope, StringComparison.OrdinalIgnoreCase)) ?? scope;
+            if (!Connectors.Contains(wanted))
+            {
+                // A live connector config.yaml does not name is still one the operator can scope to; the list keeps it while it is the scope.
+                Connectors.Add(wanted);
+            }
+        }
+
+        _followingScope = true;
+        try
+        {
+            SelectedConnector = wanted;
+        }
+        finally
+        {
+            _followingScope = false;
+        }
+    }
+
     /// <summary>The toolbar's connector, or null for "All configured connectors" / nothing chosen.</summary>
     protected string? ToolbarConnector() =>
         !string.IsNullOrWhiteSpace(SelectedConnector) && !string.Equals(SelectedConnector, AllConnectorsLabel, StringComparison.Ordinal)
@@ -683,6 +726,8 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         {
             Add(key);
         }
+
+        Add(Services.ConnectorScope.Current);
 
         SyncCollection(Connectors, desired, s => s, static (_, _) => true);
 

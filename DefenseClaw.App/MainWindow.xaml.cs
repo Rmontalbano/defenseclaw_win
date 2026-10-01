@@ -49,6 +49,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
     /// <summary>The app's own settings; what <see cref="OnClosing"/> reads to decide between "hide to the tray" and "exit".</summary>
     private readonly AppSettingsStore _settings;
+    private readonly ConnectorScope _connectorScope;
 
     /// <summary>The inbox for deep links; set by <see cref="Wire"/>, which subscribes this window to it.</summary>
     private ShellNavigation _navigation = null!;
@@ -92,6 +93,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _tray = tray ?? throw new ArgumentNullException(nameof(tray));
         _settings = services.Settings;
+        _connectorScope = services.ConnectorScope;
 
         InitializeComponent();
 
@@ -728,6 +730,12 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             _appearance.ToggleLightDark();
             e.Handled = true;
         }
+        else if (ShellShortcuts.IsCycleConnectorChord(e.Key, modifiers))
+        {
+            // With one connector (or none) there is nothing to step between: the chord does nothing, and says nothing.
+            _ = _connectorScope.Cycle();
+            e.Handled = true;
+        }
         else if (ShellShortcuts.IsSettingsChord(e.Key, modifiers) && _catalog.ById("settings") is { } settings)
         {
             NavigateTo(settings);
@@ -866,7 +874,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     }
 
     private IReadOnlyList<ShellCommand> BuildPaletteCommands() =>
-        ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance, _actions.Curated.Commands);
+        ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance, _actions.Curated.Commands, _connectorScope);
 
     private bool _curatedHooked;
 

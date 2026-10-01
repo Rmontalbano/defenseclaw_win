@@ -85,6 +85,9 @@
                            SearchPlaceholder="Filter log lines…"
                            SearchAutomationName="Filter log lines"
                            SearchHelpText="Shows only lines that contain this text. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.ConnectorSlot>
+                <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
+            </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowSync24}"

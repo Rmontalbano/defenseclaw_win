@@ -120,6 +120,17 @@ internal static class ShellShortcuts
         return null;
     }
 
+    /// <summary>
+    /// Steps the shared connector scope: All, first connector, second, ... All (the Mac's Ctrl-M, which on Windows is Enter and which the
+    /// app does not use). <c>Ctrl+Shift+M</c>: M for "match" is free, types no character, and is clear of the panel chords and of the
+    /// theme (L), help and palette chords.
+    /// </summary>
+    public const string CycleConnectorText = "Ctrl+Shift+M";
+
+    /// <summary>True for exactly Ctrl+Shift+M (see <see cref="CycleConnectorText"/>).</summary>
+    public static bool IsCycleConnectorChord(Key key, ModifierKeys modifiers) =>
+        key == Key.M && modifiers == (ModifierKeys.Control | ModifierKeys.Shift);
+
     /// <summary>True for exactly Ctrl+Shift+L (see <see cref="ToggleThemeText"/>).</summary>
     public static bool IsToggleThemeChord(Key key, ModifierKeys modifiers) =>
         key == Key.L && modifiers == (ModifierKeys.Control | ModifierKeys.Shift);

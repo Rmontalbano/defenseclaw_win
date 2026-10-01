@@ -453,6 +453,7 @@ public sealed partial class AlertItem
             TargetRef = egress.Target,
             Evidence = egress.Reason,
             Source = egress.Connector,
+            Connector = egress.Connector.Length > 0 ? egress.Connector : null,
             Tags = egress.LooksLikeLlm ? "llm-shaped" : string.Empty,
             StructuredText = pretty,
             Fields = fields,

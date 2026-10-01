@@ -676,7 +676,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
 
     private async Task LoadAgentSelectionAsync(CancellationToken cancellationToken)
     {
-        ConnectorSelections.Clear();
+        _selectionsAll.Clear();
         var selectionPath = FindAgentSelectionPath();
 
         try
@@ -696,7 +696,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                 foreach (var property in selections.EnumerateObject())
                 {
                     var value = property.Value;
-                    ConnectorSelections.Add(new AgentSelectionRow(
+                    _selectionsAll.Add(new AgentSelectionRow(
                         GetString(value, "connector") ?? property.Name,
                         NullIfEmpty(GetString(value, "executable")),
                         NullIfEmpty(GetString(value, "raw_version")),
@@ -709,16 +709,43 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             var updatedAt = GetTimestamp(root, "updated_at");
             Sources.Add(new DiscoverySourceInfo(
                 "Connector selection — agent_selection.json",
-                ConnectorSelections.Count == 0
+                _selectionsAll.Count == 0
                     ? "No connector currently selected."
-                    : $"{ConnectorSelections.Count} selection{(ConnectorSelections.Count == 1 ? string.Empty : "s")}: " +
-                      string.Join(", ", ConnectorSelections.Select(s => s.Connector)),
+                    : $"{_selectionsAll.Count} selection{(_selectionsAll.Count == 1 ? string.Empty : "s")}: " +
+                      string.Join(", ", _selectionsAll.Select(s => s.Connector)),
                 updatedAt,
                 Available: true));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             Sources.Add(new DiscoverySourceInfo("Connector selection — agent_selection.json", $"Could not read: {ex.Message}", null, Available: false));
+        }
+        finally
+        {
+            ApplyScopeToSelections();
+        }
+    }
+
+    // The pinned-connector table is connector-tagged data, so the shared connector scope narrows it. The "Connector discovery" table is not
+    // narrowed: it is the roster of what is installed (and the Add buttons), the very list a scope is chosen from.
+    private readonly List<AgentSelectionRow> _selectionsAll = new();
+
+    /// <summary>The shared connector scope changed: the pinned-connector table is listed again under it.</summary>
+    protected override void OnConnectorScopeChanged() => ApplyScopeToSelections();
+
+    private void ApplyScopeToSelections()
+    {
+        var scope = Services.ConnectorScope;
+        var wanted = _selectionsAll.Where(row => scope.Allows(row.Connector)).ToList();
+        if (ConnectorSelections.SequenceEqual(wanted))
+        {
+            return;
+        }
+
+        ConnectorSelections.Clear();
+        foreach (var row in wanted)
+        {
+            ConnectorSelections.Add(row);
         }
     }
 

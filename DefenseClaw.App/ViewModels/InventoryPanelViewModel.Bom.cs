@@ -126,6 +126,73 @@ public sealed partial class InventoryPanelViewModel
         ShowEmptyState = false;
     }
 
+    // The BOM's connector picker and the shared connector scope are one choice (the scope is the source of truth): picking here narrows the
+    // whole app, and a scope change selects it here and re-lists the rows of the last BOM under it.
+
+    private readonly List<InventoryBomRow> _bomAll = new();
+    private bool _followingScope;
+
+    partial void OnSelectedBomConnectorChanged(string? value)
+    {
+        // A null is the combo losing its selection while the list is rebuilt, not a pick.
+        if (_followingScope || value is null)
+        {
+            return;
+        }
+
+        var connector = !string.IsNullOrWhiteSpace(value) && !string.Equals(value, AllConnectorsLabel, StringComparison.Ordinal) ? value : null;
+        _ = Services.ConnectorScope.Set(connector);
+    }
+
+    protected override void OnConnectorScopeChanged() => FollowScope(Services.ConnectorScope.Current);
+
+    private void FollowScope(string? scope)
+    {
+        var wanted = scope is null
+            ? AllConnectorsLabel
+            : BomConnectors.FirstOrDefault(c => string.Equals(c, scope, StringComparison.OrdinalIgnoreCase));
+
+        if (wanted is null)
+        {
+            // A live connector config.yaml does not name is still one the operator can scope to.
+            if (ConnectorNamePattern.IsMatch(scope!))
+            {
+                BomConnectors.Add(scope!);
+                wanted = scope;
+            }
+            else
+            {
+                wanted = AllConnectorsLabel;
+            }
+        }
+
+        _followingScope = true;
+        try
+        {
+            SelectedBomConnector = wanted;
+        }
+        finally
+        {
+            _followingScope = false;
+        }
+
+        ApplyBomScope();
+    }
+
+    /// <summary>The last BOM's connector lines, narrowed to the shared scope (a line is one connector's; All shows every line).</summary>
+    private void ApplyBomScope()
+    {
+        var scope = Services.ConnectorScope;
+        BomRows.Clear();
+        foreach (var row in _bomAll)
+        {
+            if (scope.Allows(row.Connector))
+            {
+                BomRows.Add(row);
+            }
+        }
+    }
+
     /// <summary>The connectors <c>aibom scan --connector</c> can be narrowed to: the ones named in config.yaml.</summary>
     private void BuildBomConnectors()
     {
@@ -139,7 +206,9 @@ public sealed partial class InventoryPanelViewModel
             AddConnector(key);
         }
 
-        SelectedBomConnector = AllConnectorsLabel;
+        AddConnector(Services.ConnectorScope.Current);
+
+        FollowScope(Services.ConnectorScope.Current);
 
         void AddConnector(string? name)
         {
@@ -190,6 +259,7 @@ public sealed partial class InventoryPanelViewModel
     private Task AfterBomAsync(DiscoverReviewResult result, string? connector)
     {
         BomRows.Clear();
+        _bomAll.Clear();
         _lastBomJson = null;
         _lastBomTruncated = false;
         CanSaveBom = false;
@@ -209,10 +279,12 @@ public sealed partial class InventoryPanelViewModel
         {
             foreach (var row in ParseBom(stdout, connector))
             {
-                BomRows.Add(row);
+                _bomAll.Add(row);
             }
 
-            if (BomRows.Count == 0)
+            ApplyBomScope();
+
+            if (_bomAll.Count == 0)
             {
                 // '[]' is what a scan of no connector prints (cmd_aibom.py:111-118): nothing was inventoried.
                 BomStatus = $"AI BOM ran ({stamp}) but listed no connector, so there is nothing to summarize. " +

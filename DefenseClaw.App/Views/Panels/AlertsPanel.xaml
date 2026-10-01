@@ -177,6 +177,9 @@
                            SearchPlaceholder="Filter alerts…"
                            SearchAutomationName="Filter alerts"
                            SearchHelpText="Shows only alerts whose rule, kind, title, action, target, evidence, scanner or tags contain this text. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.ConnectorSlot>
+                <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
+            </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"

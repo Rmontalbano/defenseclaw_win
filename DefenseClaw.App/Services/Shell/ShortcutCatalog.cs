@@ -53,6 +53,7 @@ internal static class ShortcutCatalog
                     new ShortcutRow(ShellShortcuts.DiagnoseText, "Diagnose in background: the read-only doctor, result as a notification"),
                     new ShortcutRow(ShellShortcuts.CopyOutputText, "Copy the last command's output"),
                     new ShortcutRow(ShellShortcuts.ExportOutputText, "Export the last command's output to a file"),
+                    new ShortcutRow(ShellShortcuts.CycleConnectorText, "Step the connector scope: all connectors, then each one in turn (with more than one connector)"),
                     new ShortcutRow(ShellShortcuts.HelpText, "Show this list (also ? outside a text box)"),
                     new ShortcutRow(ShellShortcuts.CloseText, "Close the open overlay, detail pane or dialog"),
                 }),

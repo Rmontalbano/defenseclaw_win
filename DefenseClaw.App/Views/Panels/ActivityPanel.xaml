@@ -216,16 +216,11 @@
                                    ToolTip="Configuration and policy changes recorded in the audit database" />
                 </ctl:DcSegmented>
             </ctl:DcPageToolbar.Leading>
-            <!-- The connector filter, for Mutations once a change names a connector. -->
+            <!-- The shared connector scope: it narrows the Mutations list (the Commands tab is this session's own and has no connector). -->
             <ctl:DcPageToolbar.ConnectorSlot>
-                <StackPanel Orientation="Horizontal"
-                            Visibility="{Binding ShowConnectorFilter, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector" />
-                    <ComboBox Width="150"
-                              ItemsSource="{Binding Mutations.Connectors}"
-                              SelectedItem="{Binding Mutations.SelectedConnector, Mode=TwoWay}"
-                              AutomationProperties.Name="Connector" />
-                </StackPanel>
+                <Grid Visibility="{Binding IsMutationsTab, Converter={StaticResource BoolToVisibility}}">
+                    <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
+                </Grid>
             </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
