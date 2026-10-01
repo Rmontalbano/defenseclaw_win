@@ -26,6 +26,9 @@ internal static class ShellShortcuts
 
     public const string FindText = "Ctrl+F";
 
+    /// <summary>Audit's export (a panel chord, handled by the panel like Find; no shell chord uses Ctrl+E).</summary>
+    public const string AuditExportText = "Ctrl+E";
+
     public const string CloseText = "Esc";
 
     /// <summary>

@@ -24,6 +24,15 @@ public sealed record AuditQuery
     /// <summary>Case-insensitive substring match on <c>action</c>.</summary>
     public string? ActionContains { get; init; }
 
+    /// <summary>Exact <c>run_id</c> match (<c>idx_audit_run_id</c>): every event of one run.</summary>
+    public string? RunId { get; init; }
+
+    /// <summary>
+    /// Case-insensitive substrings, any of which must appear in <c>action</c> or <c>details</c> (the Mac's preset
+    /// <c>actionLike</c>). Combined with the other filters by AND.
+    /// </summary>
+    public IReadOnlyList<string>? ActionAnyOf { get; init; }
+
     /// <summary>Case-insensitive substring match across details/event_name/tool_name/target.</summary>
     public string? SearchText { get; init; }
 

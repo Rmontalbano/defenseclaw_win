@@ -164,6 +164,14 @@ public sealed class AuditReader
     public const int DefaultCommonRowThreshold = 10_000;
 
     /// <summary>
+    /// A run filter walks the retention index (newest first, stopping after the page) when the run's page-th newest row is within
+    /// this many rows of the table's newest, and otherwise seeks <c>idx_audit_run_id</c> and sorts the run. Measured live: the
+    /// newest run holds a big share of the recent table, where the seek-and-sort took 4.7 s and the walk 0.2 ms; a big run that
+    /// ended weeks ago is the opposite (the walk reads hundreds of thousands of rows to reach it, 60 s).
+    /// </summary>
+    public const int DefaultRunWalkBudget = 100_000;
+
+    /// <summary>
     /// The most distinct severity spellings the reader will enumerate. The real table has five (INFO, LOW,
     /// MEDIUM, HIGH, CRITICAL); a database with more than this many is not one the gateway wrote, and the
     /// loose index scan that lists them is not worth trusting, so such a database is read with the original
@@ -175,7 +183,7 @@ public sealed class AuditReader
     /// The raw, trigger-maintained, indexed sort/range column. Compare and order on this
     /// directly — never inside a function — or the index cannot be used.
     /// </summary>
-    private const string RetentionColumn = "e.retention_timestamp_unix_nano";
+    internal const string RetentionColumn = "e.retention_timestamp_unix_nano";
 
     /// <summary>
     /// Nanos derived from the text <c>timestamp</c> column, for a row a trigger somehow
@@ -195,7 +203,7 @@ public sealed class AuditReader
     /// <summary>The id as the keyset cursor compares it: a NULL id (see <see cref="Map"/>) is the empty string.</summary>
     private const string IdKey = "COALESCE(e.id, '')";
 
-    private const string SelectColumns = """
+    internal const string SelectColumns = """
         e.id, e.timestamp, e.action, e.target, e.actor, e.details, e.severity,
         e.structured_json, e.bucket, e.connector, e.event_name, e.agent_name,
         e.tool_name, e.session_id, e.run_id, e.request_id, e.trace_id,
@@ -204,6 +212,7 @@ public sealed class AuditReader
 
     private readonly string _connectionString;
     private readonly int _commonRowThreshold;
+    private readonly int _runWalkBudget;
     private long _pageQueries;
     private long _countQueries;
     private long _spellingFallbacks;
@@ -214,12 +223,18 @@ public sealed class AuditReader
     /// <see cref="DefaultCommonRowThreshold"/>. Tests lower it to exercise both plans on a
     /// handful of rows.
     /// </param>
-    public AuditReader(string databasePath, int commonRowThreshold = DefaultCommonRowThreshold)
+    /// <param name="runWalkBudget">
+    /// How many rows a run filter may walk the retention index past before the run's own index is used instead; see
+    /// <see cref="DefaultRunWalkBudget"/>. Tests lower it.
+    /// </param>
+    public AuditReader(string databasePath, int commonRowThreshold = DefaultCommonRowThreshold, int runWalkBudget = DefaultRunWalkBudget)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(commonRowThreshold, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(runWalkBudget, 1);
         DatabasePath = databasePath;
         _commonRowThreshold = commonRowThreshold;
+        _runWalkBudget = runWalkBudget;
         _connectionString = BuildReadOnlyConnectionString(databasePath);
     }
 
@@ -736,7 +751,8 @@ public sealed class AuditReader
         bool CommonConnector,
         bool CommonBucket,
         IReadOnlyList<string>? PresentSeverities = null,
-        bool CommonSeverity = false);
+        bool CommonSeverity = false,
+        bool CommonRun = false);
 
     private async Task<PlanHints> DetectHintsAsync(
         SqliteConnection connection,
@@ -764,7 +780,10 @@ public sealed class AuditReader
             }
         }
 
-        return new PlanHints(mode, commonConnector, commonBucket, present, commonSeverity);
+        var commonRun = !string.IsNullOrWhiteSpace(query.RunId)
+            && await RunWalkPaysAsync(connection, query.RunId, query.EffectiveLimit, cancellationToken).ConfigureAwait(false);
+
+        return new PlanHints(mode, commonConnector, commonBucket, present, commonSeverity, commonRun);
     }
 
     /// <summary>
@@ -851,6 +870,27 @@ public sealed class AuditReader
         var result = await probe.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is not (null or DBNull) &&
             Convert.ToInt64(result, CultureInfo.InvariantCulture) >= _commonRowThreshold;
+    }
+
+    /// <summary>
+    /// Whether a run filter is better written <c>+e.run_id</c> (walk the retention index, newest first) than as an index seek on
+    /// <c>idx_audit_run_id</c> followed by a sort of the whole run. The run's entries in that index are ordered by rowid, which
+    /// follows insertion and so time, so one backwards read of <paramref name="limit"/> + 1 entries finds the run's
+    /// (limit + 1)-th newest row cheaply: a run with no more than a page of rows is false (the seek is a handful of rows), and
+    /// otherwise the walk pays when that row is within <see cref="DefaultRunWalkBudget"/> rows of the table's newest
+    /// (<c>MAX(rowid)</c>, one index probe). Never more than a few index probes, whatever the table or the run.
+    /// </summary>
+    private async Task<bool> RunWalkPaysAsync(SqliteConnection connection, string runId, int limit, CancellationToken cancellationToken)
+    {
+        await using var probe = connection.CreateCommand();
+        probe.CommandText = """
+            SELECT (SELECT MAX(rowid) FROM audit_events)
+                 - (SELECT rowid FROM audit_events WHERE run_id = $run ORDER BY rowid DESC LIMIT 1 OFFSET $skip)
+            """;
+        probe.Parameters.AddWithValue("$run", runId);
+        probe.Parameters.AddWithValue("$skip", limit);
+        var result = await probe.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is not (null or DBNull) && Convert.ToInt64(result, CultureInfo.InvariantCulture) <= _runWalkBudget;
     }
 
     /// <summary>The bucket names a query filters on: <see cref="AuditQuery.Bucket"/> plus <see cref="AuditQuery.Buckets"/>, blanks dropped.</summary>
@@ -946,6 +986,8 @@ public sealed class AuditReader
             || !string.IsNullOrWhiteSpace(query.Connector)
             || !string.IsNullOrWhiteSpace(query.ActionContains)
             || !string.IsNullOrWhiteSpace(query.SearchText)
+            || !string.IsNullOrWhiteSpace(query.RunId)
+            || query.ActionAnyOf is { Count: > 0 }
             || BucketsOf(query).Count > 0)
         {
             return false;
@@ -1131,6 +1173,26 @@ public sealed class AuditReader
             clauses.Add("e.action LIKE $action ESCAPE '\\'");
         }
 
+        if (!string.IsNullOrWhiteSpace(query.RunId))
+        {
+            command.Parameters.AddWithValue("$run", query.RunId);
+            clauses.Add((hints.CommonRun && walk ? "+e.run_id" : "e.run_id") + " = $run");
+        }
+
+        if (query.ActionAnyOf is { Count: > 0 } anyOf)
+        {
+            // The Audit panel's presets: any of several substrings in the action or the details (the Mac's actionLike).
+            var terms = new List<string>();
+            for (var i = 0; i < anyOf.Count; i++)
+            {
+                var name = $"$any{i.ToString(CultureInfo.InvariantCulture)}";
+                command.Parameters.AddWithValue(name, Like(anyOf[i]));
+                terms.Add($"(e.action LIKE {name} ESCAPE '\\' OR e.details LIKE {name} ESCAPE '\\')");
+            }
+
+            clauses.Add("(" + string.Join(" OR ", terms) + ")");
+        }
+
         if (!string.IsNullOrWhiteSpace(query.SearchText))
         {
             command.Parameters.AddWithValue("$search", Like(query.SearchText));
@@ -1226,7 +1288,7 @@ public sealed class AuditReader
         DateTimeOffset.FromUnixTimeMilliseconds(nanos / 1_000_000L)
             .AddTicks(nanos % 1_000_000L / 100L);
 
-    private static AuditEvent Map(SqliteDataReader reader)
+    internal static AuditEvent Map(SqliteDataReader reader)
     {
         var rawTimestamp = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
         var nanos = reader.IsDBNull(20) ? 0L : reader.GetInt64(20);

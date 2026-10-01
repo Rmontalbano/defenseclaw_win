@@ -27,11 +27,19 @@ namespace DefenseClaw.App.Views.Panels;
 /// </summary>
 public sealed partial class AuditPanel : UserControl
 {
+    /// <summary>Ctrl+E: export the list (see <see cref="AuditPanelViewModel"/>'s <c>ExportCommand</c>). Like Find, it works wherever focus is inside the panel.</summary>
+    public static readonly RoutedUICommand ExportShortcut = new(
+        "Export audit events",
+        nameof(ExportShortcut),
+        typeof(AuditPanel),
+        new InputGestureCollection { new KeyGesture(Key.E, ModifierKeys.Control, "Ctrl+E") });
+
     public AuditPanel()
     {
         InitializeComponent();
 
         _ = CommandBindings.Add(new CommandBinding(ApplicationCommands.Find, OnFind, OnCanFind));
+        _ = CommandBindings.Add(new CommandBinding(ExportShortcut, OnExport, OnCanFind));
         KeyDown += OnKeyDown;
         DataContextChanged += OnDataContextChanged;
     }
@@ -72,6 +80,23 @@ public sealed partial class AuditPanel : UserControl
         if (DataContext is AuditPanelViewModel { ActionRows.Count: > 0 } viewModel)
         {
             viewModel.ShowSameTarget(viewModel.ActionRows[0]);
+        }
+    }
+
+    private void OnShowSameRun(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AuditPanelViewModel { ActionRows.Count: > 0 } viewModel)
+        {
+            viewModel.ShowSameRun(viewModel.ActionRows[0]);
+        }
+    }
+
+    private void OnExport(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (DataContext is AuditPanelViewModel viewModel && viewModel.ExportCommand.CanExecute(null))
+        {
+            viewModel.ExportCommand.Execute(null);
+            e.Handled = true;
         }
     }
 

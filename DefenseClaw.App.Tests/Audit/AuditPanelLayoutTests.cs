@@ -177,6 +177,50 @@ public class AuditPanelLayoutTests
     }
 
     [Fact]
+    public void The_preset_strip_leads_the_filters_sit_behind_an_expander_and_the_inspector_offers_the_correlation_sections()
+    {
+        using var scene = Scene.Open(1400, 900);
+
+        UiThread.Run(() =>
+        {
+            // Five presets in the Mac's order; the chosen one follows the view-model.
+            var presets = VisualTree.Find<DefenseClaw.App.Views.Controls.DcSegmented>(scene.Panel, s => System.Windows.Automation.AutomationProperties.GetName(s) == "Audit view");
+            Assert.NotNull(presets);
+            Assert.Equal(
+                new[] { "All", "Risk", "Blocks", "Scans", "Credentials" },
+                presets!.Items.OfType<DefenseClaw.App.Views.Controls.DcSegment>().Select(s => (string)s.Content).ToArray());
+            Assert.Equal("all", presets.SelectedValue);
+            scene.ViewModel.Accept(new DefenseClaw.App.Services.AuditPreset("scans"));
+            Assert.Equal("scans", presets.SelectedValue);
+            scene.ViewModel.ActivePreset = "all";
+
+            // The old filters are all still there, behind a closed "Filters" expander that counts the ones that are on.
+            var expander = (Expander)scene.Panel.FindName("FiltersExpander");
+            Assert.False(expander.IsExpanded);
+            Assert.DoesNotContain(VisualTree.Descendants<ComboBox>(expander), c => c.IsVisible);
+            scene.Render("audit-1400x900-presets-filters-closed");
+            expander.IsExpanded = true;
+            scene.Host.Relayout();
+            var combos = VisualTree.Descendants<ComboBox>(expander).Select(c => System.Windows.Automation.AutomationProperties.GetName(c)).ToList();
+            Assert.Equal(new[] { "Bucket", "Minimum severity", "Connector", "Time range", "Action, pick to fill the action filter" }, combos);
+            Assert.True(VisualTree.Descendants<ComboBox>(expander).All(c => c.IsVisible));
+            scene.Render("audit-1400x900-presets-filters-open");
+            expander.IsExpanded = false;
+
+            // The inspector: both chips, the run and the related sections, and Ctrl+E is wired to the export.
+            scene.ViewModel.SelectedRow = scene.ViewModel.Rows[0];
+            scene.Host.Relayout();
+            var names = VisualTree.Descendants<FrameworkElement>(scene.DetailCard).Select(e => System.Windows.Automation.AutomationProperties.GetName(e)).ToList();
+            Assert.Contains("Same target", names);
+            Assert.Contains("Same run", names);
+            Assert.Contains("Related events", names);
+            Assert.Contains(scene.Panel.CommandBindings.Cast<System.Windows.Input.CommandBinding>(), b => b.Command == AuditPanel.ExportShortcut);
+            Assert.Contains(AuditPanel.ExportShortcut.InputGestures.OfType<System.Windows.Input.KeyGesture>(), g => g.Key == System.Windows.Input.Key.E && g.Modifiers == System.Windows.Input.ModifierKeys.Control);
+            scene.Render("audit-1400x900-inspector-correlation");
+        });
+    }
+
+    [Fact]
     public void A_header_sorts_the_loaded_rows_and_the_row_menu_copies_and_narrows_to_the_target()
     {
         using var scene = Scene.Open(1400, 900);
@@ -198,7 +242,7 @@ public class AuditPanelLayoutTests
             // The row menu: copy the event, copy its JSON, narrow to its target. Nothing in it changes anything.
             var row = VisualTree.Descendants<DataGridRow>(scene.Grid).First();
             var items = ContextMenuService.GetContextMenu(row)!.Items.OfType<MenuItem>().ToList();
-            Assert.Equal(new[] { "Copy details", "Copy structured JSON", "Show same target" }, items.Select(i => (string)i.Header).ToArray());
+            Assert.Equal(new[] { "Copy details", "Copy structured JSON", "Show same target", "Show same run" }, items.Select(i => (string)i.Header).ToArray());
             Assert.All(items, i => Assert.NotNull(i.Icon));
 
             scene.ViewModel.NoteSelection(new[] { scene.ViewModel.Rows[0], scene.ViewModel.Rows[1] });

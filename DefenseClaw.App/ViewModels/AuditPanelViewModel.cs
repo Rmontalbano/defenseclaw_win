@@ -36,7 +36,7 @@ namespace DefenseClaw.App.ViewModels;
 /// is one load, not seven.
 /// </para>
 /// </summary>
-public sealed partial class AuditPanelViewModel : PanelViewModelBase
+public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
     /// <summary>Rows per keyset page.</summary>
     public const int PageSize = 100;
@@ -209,7 +209,11 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 
     partial void OnSearchTextChanged(string value) => Reload();
 
-    partial void OnSelectedRowChanged(AuditRow? value) => OnPropertyChanged(nameof(HasSelection));
+    partial void OnSelectedRowChanged(AuditRow? value)
+    {
+        OnPropertyChanged(nameof(HasSelection));
+        StartCorrelation(value);
+    }
 
     /// <summary>The action dropdown is a helper that fills the substring box, not a second filter.</summary>
     partial void OnSelectedActionOptionChanged(string value) =>
@@ -286,6 +290,8 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             SelectedActionOption = AnyAction;
             ActionFilter = string.Empty;
             SearchText = string.Empty;
+            ActivePreset = PresetAll;
+            RunFilter = string.Empty;
         }
         finally
         {
@@ -301,6 +307,8 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 
     private void Reload()
     {
+        OnPropertyChanged(nameof(ActiveFilterCount));
+        OnPropertyChanged(nameof(FiltersHeader));
         if (_reloadDeferrals > 0)
         {
             _reloadPending = true;
@@ -446,9 +454,13 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
 
             // A SQL COUNT cannot express the platform-only refinement, so that view reports what is actually on screen
             // rather than a number that would not match it. Every other view counts beside the page, not after it.
-            var totalRead = platformOnly
-                ? null
-                : Services.Audit.CountAsync(query with { After = null, Limit = PageSize }, token);
+            // The preset terms (blocks, scans, credentials) match inside the details text, which no index serves: counting them
+            // scans the whole window (15 s for a day of blocks and over a minute for a week on a 6.7 GB database) while the page
+            // itself, which stops at 100 matches, takes milliseconds. So those views do not count either.
+            var countable = !platformOnly && query.ActionAnyOf is not { Count: > 0 };
+            var totalRead = countable
+                ? Services.Audit.CountAsync(query with { After = null, Limit = PageSize }, token)
+                : null;
 
             await Task.WhenAll(filterOptions, pageRead, totalRead ?? Task.CompletedTask);
 
@@ -488,8 +500,10 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
             HasMore = page.HasMore && !capReached;
 
             ResultSummary = totalRead is null
-                ? $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} platform row(s) loaded · {SelectedRange.Label}"
-                : $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} of " +
+                ? platformOnly
+                    ? $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} platform row(s) loaded · {SelectedRange.Label}"
+                    : $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)}{(HasMore || IsRowCapReached ? "+" : string.Empty)} matching events loaded · {SelectedRange.Label}"
+                :$"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} of " +
                   $"{(await totalRead).ToString("N0", CultureInfo.CurrentCulture)} matching events · {SelectedRange.Label}";
 
             IsEmpty = Rows.Count == 0;
@@ -532,10 +546,12 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase
     private AuditQuery BuildQuery(AuditCursor? after) => new()
     {
         Bucket = string.Equals(SelectedBucket, AnyBucket, StringComparison.Ordinal) ? null : SelectedBucket,
-        MinimumSeverity = SelectedSeverity.Value,
+        MinimumSeverity = PresetMinimumSeverity(ActivePreset, SelectedSeverity.Value),
         Connector = SelectedConnector.Connector,
         IncludeNullConnector = SelectedConnector.IncludeNull,
         ActionContains = string.IsNullOrWhiteSpace(ActionFilter) ? null : ActionFilter.Trim(),
+        ActionAnyOf = PresetActionTerms(ActivePreset),
+        RunId = string.IsNullOrWhiteSpace(RunFilter) ? null : RunFilter.Trim(),
         SearchText = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
         From = SelectedRange.Since is { } window ? DateTimeOffset.UtcNow - window : null,
         Limit = PageSize,
@@ -622,13 +638,16 @@ public sealed class TimeRangeOption
 
     public static TimeRangeOption Day { get; } = new("Last 24 hours", TimeSpan.FromHours(24));
 
+    /// <summary>No lower bound: what "Same run" widens to, since a run can be older than the default window.</summary>
+    public static TimeRangeOption AllTime { get; } = new("All time", null);
+
     public static IReadOnlyList<TimeRangeOption> All { get; } = new[]
     {
         new TimeRangeOption("Last hour", TimeSpan.FromHours(1)),
         Day,
         new TimeRangeOption("Last 7 days", TimeSpan.FromDays(7)),
         new TimeRangeOption("Last 30 days", TimeSpan.FromDays(30)),
-        new TimeRangeOption("All time", null),
+        AllTime,
     };
 
     public string Label { get; }
@@ -656,6 +675,7 @@ public sealed class AuditRow
     private static readonly JsonSerializerOptions PrettyOptions = new() { WriteIndented = true };
 
     private readonly Lazy<string> _structuredJson;
+    private readonly Lazy<IReadOnlyList<DetailPair>> _detailPairs;
 
     public AuditRow(AuditEvent source)
     {
@@ -701,6 +721,12 @@ public sealed class AuditRow
         TraceId = source.TraceId ?? string.Empty;
         BinaryVersion = source.BinaryVersion ?? string.Empty;
         RawTimestamp = source.RawTimestamp;
+        TimestampNanos = source.TimestampNanos > 0
+            ? source.TimestampNanos
+            : source.Timestamp == DateTimeOffset.MinValue ? 0 : (source.Timestamp.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks) * 100L;
+        _detailPairs = new Lazy<IReadOnlyList<DetailPair>>(
+            () => ParseDetailPairs(Details),
+            LazyThreadSafetyMode.ExecutionAndPublication);
         var rawStructured = source.StructuredJsonRaw;
         _structuredJson = new Lazy<string>(() => PrettyJson(rawStructured), LazyThreadSafetyMode.ExecutionAndPublication);
         Fields = BuildFields(source);
@@ -754,6 +780,36 @@ public sealed class AuditRow
     public string BinaryVersion { get; }
 
     public string RawTimestamp { get; }
+
+    /// <summary>The sort key (Unix nanoseconds); the centre of the "same target" correlation window. 0 when the timestamp is unreadable.</summary>
+    internal long TimestampNanos { get; }
+
+    /// <summary>"Same target" has something to match on.</summary>
+    public bool HasTarget => Target.Length > 0;
+
+    /// <summary>"Same run" has something to match on.</summary>
+    public bool HasRun => RunId.Length > 0;
+
+    /// <summary>
+    /// The <c>key=value</c> pairs of <see cref="Details"/> (<c>&lt;redacted len= sha=&gt;</c> placeholders read as "redacted · 29 bytes ·
+    /// sha:..."), or, when the details are prose, only the useful metadata keys found in it. Empty when neither applies. Parsed
+    /// on first read: the inspector is the only reader.
+    /// </summary>
+    public IReadOnlyList<DetailPair> DetailPairs => _detailPairs.Value;
+
+    /// <summary>The inspector shows the "Parsed details" section.</summary>
+    public bool HasDetailPairs => DetailPairs.Count > 0;
+
+    private static IReadOnlyList<DetailPair> ParseDetailPairs(string details)
+    {
+        if (details.Length == 0)
+        {
+            return Array.Empty<DetailPair>();
+        }
+
+        var pairs = StructuredDetailParser.Pairs(details);
+        return pairs.Count > 0 ? pairs : StructuredDetailParser.SafeMetadataPairs(details);
+    }
 
     /// <summary>
     /// Pretty-printed <c>structured_json</c>; the raw text when it will not parse. Computed on first
@@ -841,7 +897,7 @@ public sealed class AuditRow
         }
     }
 
-    private static string KeyFor(AuditSeverity severity) => severity switch
+    internal static string KeyFor(AuditSeverity severity) => severity switch
     {
         AuditSeverity.Critical => "Critical",
         AuditSeverity.High => "High",

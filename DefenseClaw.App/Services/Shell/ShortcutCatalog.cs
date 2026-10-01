@@ -55,7 +55,8 @@ internal static class ShortcutCatalog
                 new[]
                 {
                     new ShortcutRow(ShellShortcuts.FindText, "Focus the panel's search or filter box, where it has one"),
-                    new ShortcutRow("Tab", "Move to the next control; Shift+Tab goes back"),
+                    new ShortcutRow(ShellShortcuts.AuditExportText, "Audit: export the list to a JSON or CSV file"),
+                    new ShortcutRow("Tab","Move to the next control; Shift+Tab goes back"),
                 }),
         };
 
