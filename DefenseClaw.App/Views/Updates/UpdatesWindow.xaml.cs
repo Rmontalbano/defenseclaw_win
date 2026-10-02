@@ -24,8 +24,8 @@ namespace DefenseClaw.App.Views.Updates;
 /// </para>
 /// <para>
 /// This class owns only window concerns: lifetime, single-instance behaviour, and keeping the
-/// resolver console (a virtualized <see cref="System.Windows.Controls.ListBox"/>, see
-/// <c>UpgradeOutputList</c> in the XAML) pinned to its newest line as output streams in.
+/// resolver console (a selectable, copyable <c>DcCommandOutput</c> that follows its newest line unless the
+/// operator pauses auto-scroll).
 /// </para>
 /// <para>
 /// <b>Closing during an upgrade.</b> The installer has no journal, so nothing that closes this
@@ -53,7 +53,6 @@ public sealed partial class UpdatesWindow : FluentWindow
     private static UpdatesWindow? _current;
 
     private readonly UpdatesWindowViewModel _viewModel;
-    private bool _scrollScheduled;
 
     private UpdatesWindow(UpdatesWindowViewModel viewModel)
     {
@@ -64,7 +63,6 @@ public sealed partial class UpdatesWindow : FluentWindow
         AppearanceService.Current?.Attach(this);
         DataContext = viewModel;
 
-        ((INotifyCollectionChanged)_viewModel.Upgrade.Output).CollectionChanged += OnUpgradeOutputChanged;
         _viewModel.Upgrade.PropertyChanged += OnUpgradePropertyChanged;
         PreviewKeyDown += OnWindowPreviewKeyDown;
         Closed += OnClosed;
@@ -147,44 +145,6 @@ public sealed partial class UpdatesWindow : FluentWindow
     }
 
     /// <summary>
-    /// Keeps the console on its newest line while the resolver runs. Honours the pause toggle:
-    /// an operator reading back through a long upgrade should not be yanked to the bottom every
-    /// quarter second. Lines are still collected while paused — only the scrolling stops.
-    /// <para>
-    /// <b>Why the scroll is coalesced.</b> <c>UpgradeSectionViewModel.PullOutput</c> ticks every
-    /// 250ms and can add many lines to <c>Output</c> in one pass, each as its own
-    /// <see cref="NotifyCollectionChangedAction.Add"/>. Scrolling on every individual add would
-    /// mean a full layout pass per line for a bursty resolver run. Instead this defers to the
-    /// dispatcher's background priority so a whole burst settles into a single
-    /// <see cref="System.Windows.Controls.ListBox.ScrollIntoView(object)"/> call — the same
-    /// <c>_scrollScheduled</c> + <see cref="DispatcherPriority.Background"/> coalescing pattern
-    /// <see cref="DefenseClaw.App.Views.Panels.LogsPanel"/> uses for its own append-heavy console.
-    /// </para>
-    /// </summary>
-    private void OnUpgradeOutputChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (e.Action != NotifyCollectionChangedAction.Add || _viewModel.Upgrade.IsOutputPaused || _scrollScheduled)
-        {
-            return;
-        }
-
-        _scrollScheduled = true;
-        _ = Dispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() =>
-            {
-                _scrollScheduled = false;
-
-                // Re-check pause here too: the operator may have paused during the deferred
-                // window between scheduling this callback and it actually running.
-                if (!_viewModel.Upgrade.IsOutputPaused && UpgradeOutputList.Items.Count > 0)
-                {
-                    UpgradeOutputList.ScrollIntoView(UpgradeOutputList.Items[^1]);
-                }
-            }));
-    }
-
-    /// <summary>
     /// Refuses a close while an upgrade run is in flight. Cancels rather than blocks: it returns at
     /// once, shows nothing modal, and leaves the explanation to the banner the XAML pins under the
     /// title bar (<c>NoteCloseRefused</c> makes that banner acknowledge the click). A close that
@@ -210,7 +170,6 @@ public sealed partial class UpdatesWindow : FluentWindow
         Closed -= OnClosed;
         PreviewKeyDown -= OnWindowPreviewKeyDown;
         _viewModel.Upgrade.PropertyChanged -= OnUpgradePropertyChanged;
-        ((INotifyCollectionChanged)_viewModel.Upgrade.Output).CollectionChanged -= OnUpgradeOutputChanged;
         _viewModel.Dispose();
 
         if (ReferenceEquals(_current, this))

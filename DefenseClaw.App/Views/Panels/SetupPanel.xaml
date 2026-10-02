@@ -275,13 +275,11 @@
                                       IsChecked="{Binding ShowGuardrailRaw, Mode=TwoWay}" />
                         </WrapPanel>
 
-                        <Border Margin="0,4,0,0"
-                                Style="{StaticResource DcCodeBlock}"
-                                Visibility="{Binding ShowGuardrailRaw, Converter={StaticResource BoolToVisibility}}">
-                            <TextBox Style="{StaticResource DcMonoTextBox}"
-                                     AutomationProperties.Name="Verbatim output of defenseclaw guardrail status"
-                                     Text="{Binding GuardrailRaw, Mode=OneWay}" />
-                        </Border>
+                        <ctl:DcCommandOutput Margin="0,4,0,0"
+                                             MaxHeight="320"
+                                             OutputName="Verbatim output of defenseclaw guardrail status"
+                                             Visibility="{Binding ShowGuardrailRaw, Converter={StaticResource BoolToVisibility}}"
+                                             Text="{Binding GuardrailRaw, Mode=OneWay}" />
 
                         <!-- The outcome of the last change. -->
                         <Border Margin="0,8,0,0"
@@ -296,11 +294,10 @@
                                         <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding GuardrailResultBadge}" />
                                     </Border>
                                 </StackPanel>
-                                <Border Margin="0,8,0,0" Style="{StaticResource DcCodeBlock}">
-                                    <TextBox Style="{StaticResource DcMonoTextBox}"
-                                             AutomationProperties.Name="Output of the guardrail change"
-                                             Text="{Binding GuardrailResultText, Mode=OneWay}" />
-                                </Border>
+                                <ctl:DcCommandOutput Margin="0,8,0,0"
+                                                     MaxHeight="320"
+                                                     OutputName="Output of the guardrail change"
+                                                     Text="{Binding GuardrailResultText, Mode=OneWay}" />
                                 <ui:Button Margin="0,8,0,0"
                                            HorizontalAlignment="Left"
                                            Appearance="Secondary"

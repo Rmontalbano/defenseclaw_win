@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
+                 xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
                  xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
                  Title="Setup wizard"
                  Width="900"
@@ -37,34 +38,6 @@
         <Style x:Key="FlagText" TargetType="TextBlock" BasedOn="{StaticResource DcBadgeText}">
             <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
             <Setter Property="FontWeight" Value="Normal" />
-        </Style>
-
-        <!-- One line of console output: stderr lines read amber. -->
-        <Style x:Key="OutputLine" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsError}" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <!--
-            The gutter beside a console line: an "!" on a line that came from stderr, so the difference is not the colour alone (a
-            colour-blind reader, a monochrome print, a screenshot). It keeps its width on every other line so the text stays in one
-            column. The row's own automation name is what a screen reader says for a line.
-        -->
-        <Style x:Key="OutputMarker" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
-            <Setter Property="Text" Value="!" />
-            <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Margin" Value="0,0,6,0" />
-            <Setter Property="Visibility" Value="Hidden" />
-            <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsError}" Value="True">
-                    <Setter Property="Visibility" Value="Visible" />
-                    <Setter Property="ToolTip" Value="Error output (stderr)" />
-                </DataTrigger>
-            </Style.Triggers>
         </Style>
     </ui:FluentWindow.Resources>
 
@@ -158,13 +131,24 @@
                                    TextWrapping="Wrap"
                                    Text="{Binding CurrentStep.Guide.Intro}" />
 
-                        <ItemsControl ItemsSource="{Binding CurrentStep.Guide.Cards}" IsTabStop="False">
+                        <ui:Button Margin="0,0,0,8"
+                                   Padding="6,3,6,3"
+                                   HorizontalAlignment="Left"
+                                   Appearance="Transparent"
+                                   BorderThickness="0"
+                                   Foreground="{DynamicResource DcAccentBrush}"
+                                   Content="{Binding CurrentStep.Guide.ToggleAllText}"
+                                   AutomationProperties.Name="{Binding CurrentStep.Guide.ToggleAllAutomationName}"
+                                   Command="{Binding CurrentStep.Guide.ToggleAllCommand}"
+                                   Visibility="{Binding CurrentStep.Guide.HasExpandable, Converter={StaticResource BoolToVisibility}}" />
+
+                        <ItemsControl ItemsSource="{Binding CurrentStep.Guide.Cards}"
+                                      IsTabStop="False"
+                                      MaxWidth="760"
+                                      HorizontalAlignment="Left">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Margin="0,0,0,12"
-                                            MaxWidth="760"
-                                            HorizontalAlignment="Left"
-                                            Style="{StaticResource DcCardCompact}">
+                                    <Border Margin="0,0,0,12" Style="{StaticResource DcCardCompact}">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -218,7 +202,20 @@
                                                        Command="{Binding CheckAgainCommand}"
                                                        Visibility="{Binding RequiresDocker, Converter={StaticResource BoolToVisibility}}" />
 
-                                            <StackPanel Margin="0,10,0,0" Visibility="{Binding HasNeeds, Converter={StaticResource BoolToVisibility}}">
+                                            <!--
+                                                Compact by default: title, flag, switch, summary and any availability or caution bar stay in view (a warning
+                                                or a disabled reason is never folded away); the rest sits behind this Expander, which has the standard
+                                                ExpandCollapse automation pattern and is keyboard operable. Turning the card's switch on opens it.
+                                            -->
+                                            <Expander Margin="0,8,0,0"
+                                                      Padding="0"
+                                                      Header="Details"
+                                                      ToolTip="What you need, what the command will do, and where to get it"
+                                                      AutomationProperties.Name="{Binding DetailsAutomationName}"
+                                                      IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                                      Visibility="{Binding HasDetails, Converter={StaticResource BoolToVisibility}}">
+                                            <StackPanel>
+                                            <StackPanel Margin="0,4,0,0" Visibility="{Binding HasNeeds, Converter={StaticResource BoolToVisibility}}">
                                                 <TextBlock Style="{StaticResource FieldName}" Text="What you need" />
                                                 <ItemsControl ItemsSource="{Binding Needs}" IsTabStop="False">
                                                     <ItemsControl.ItemTemplate>
@@ -274,6 +271,8 @@
                                                        TextWrapping="Wrap"
                                                        Visibility="{Binding HasCliSays, Converter={StaticResource BoolToVisibility}}"
                                                        Text="{Binding CliSays, StringFormat='The CLI says: {0}'}" />
+                                            </StackPanel>
+                                            </Expander>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -625,38 +624,22 @@
                                Style="{StaticResource DcCardTitle}"
                                Text="Output" />
 
-                    <Border Height="220"
-                            Margin="0,0,0,12"
-                            Style="{StaticResource DcCardCompact}">
-                        <Grid>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding Output}" IsTabStop="False">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="1"
-                                                           Style="{StaticResource OutputLine}"
-                                                           AutomationProperties.Name="{Binding Text}"
-                                                           Text="{Binding Text}" />
-                                                <TextBlock Grid.Column="0" Style="{StaticResource OutputMarker}" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                    <!-- Selectable and copyable (DcCommandOutput): the text is what the runner already scrubbed. -->
+                    <Grid Margin="0,0,0,12">
+                        <ctl:DcCommandOutput x:Name="OutputView"
+                                             Height="220"
+                                             FollowTail="True"
+                                             OutputName="Command output"
+                                             Text="{Binding OutputText}" />
 
                             <TextBlock HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        MaxWidth="420"
                                        Style="{StaticResource DcEmptyDetail}"
                                        Visibility="{Binding HasRun, Converter={StaticResource InverseBoolToVisibility}}"
+                                       IsHitTestVisible="False"
                                        Text="Nothing has run yet. Output streams here line by line once you press Execute, and the same invocation appears in the Activity panel." />
-                        </Grid>
-                    </Border>
+                    </Grid>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

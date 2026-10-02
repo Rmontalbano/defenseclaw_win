@@ -345,6 +345,13 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<CliOutputRow> Output { get; } = new();
 
+    /// <summary>
+    /// The same lines as one block of text, for the selectable output box and its Copy button. The runner has already scrubbed
+    /// them; this is what is displayed, so it is also what Copy puts on the clipboard.
+    /// </summary>
+    [ObservableProperty]
+    private string _outputText = string.Empty;
+
     /// <summary>The visible secret fields, for the review page's credential list.</summary>
     public ObservableCollection<WizardFieldViewModel> ReviewCredentials { get; } = new();
 
@@ -745,10 +752,20 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         _outputBuffer.Clear();
         _outputCursor = _invocation.CopyNewLines(_outputCursor, _outputBuffer);
 
+        if (_outputBuffer.Count == 0)
+        {
+            return;
+        }
+
+        var added = new System.Text.StringBuilder();
         foreach (var line in _outputBuffer)
         {
-            Output.Add(new CliOutputRow(line.Text, line.Stream == CliStream.StandardError));
+            var row = new CliOutputRow(line.Text, line.Stream == CliStream.StandardError);
+            Output.Add(row);
+            _ = added.Append(row.DisplayLine).Append('\n');
         }
+
+        OutputText += added.ToString();
     }
 
     private void ApplyResult(CliInvocation invocation, bool preview)
@@ -825,6 +842,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         ExitBadgeKey = "Neutral";
         ResultMessage = string.Empty;
         Output.Clear();
+        OutputText = string.Empty;
         _outputBuffer.Clear();
         _outputCursor = 0;
         _invocation = null;

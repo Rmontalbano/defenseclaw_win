@@ -230,12 +230,11 @@
                 <CheckBox Margin="0,0,0,8" Content="Show CLI output"
                           AutomationProperties.HelpText="Shows the verbatim text of the read-only guardrail commands"
                           IsChecked="{Binding ShowRaw, Mode=TwoWay}" />
-                <Border Margin="0,0,0,8" Style="{StaticResource DcCodeBlock}"
-                        Visibility="{Binding ShowRaw, Converter={StaticResource BoolToVisibility}}">
-                    <TextBox Style="{StaticResource DcMonoTextBox}"
-                             AutomationProperties.Name="Verbatim output of the guardrail read commands"
-                             Text="{Binding Raw, Mode=OneWay}" />
-                </Border>
+                <ctl:DcCommandOutput Margin="0,0,0,8"
+                                     MaxHeight="320"
+                                     OutputName="Verbatim output of the guardrail read commands"
+                                     Visibility="{Binding ShowRaw, Converter={StaticResource BoolToVisibility}}"
+                                     Text="{Binding Raw, Mode=OneWay}" />
 
                 <!-- The outcome of the last change. -->
                 <Border Margin="0,0,0,8" Style="{StaticResource DcSubtleRow}"
@@ -249,11 +248,10 @@
                                 <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ResultBadge}" />
                             </Border>
                         </StackPanel>
-                        <Border Margin="0,8,0,0" Style="{StaticResource DcCodeBlock}">
-                            <TextBox Style="{StaticResource DcMonoTextBox}"
-                                     AutomationProperties.Name="Output of the last guardrail change"
-                                     Text="{Binding ResultText, Mode=OneWay}" />
-                        </Border>
+                        <ctl:DcCommandOutput Margin="0,8,0,0"
+                                             MaxHeight="320"
+                                             OutputName="Output of the last guardrail change"
+                                             Text="{Binding ResultText, Mode=OneWay}" />
                         <ui:Button Margin="0,8,0,0" Content="Dismiss"
                                    AutomationProperties.Name="Dismiss the result"
                                    Command="{Binding DismissResultCommand}" />

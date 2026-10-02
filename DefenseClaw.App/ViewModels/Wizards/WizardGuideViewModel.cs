@@ -26,6 +26,13 @@ public sealed partial class WizardGuideCardViewModel : ObservableObject
     [ObservableProperty]
     private bool _isChecking;
 
+    /// <summary>
+    /// Whether the card's details (what you need, what the command will do, where to get it, what the CLI says) are open. A card
+    /// starts compact; this is per card and lives only as long as the window (nothing is persisted).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isExpanded;
+
     public WizardGuideCardViewModel(WizardGuideCard card, WizardFieldViewModel? field, Action<string>? open = null)
     {
         Card = card ?? throw new ArgumentNullException(nameof(card));
@@ -52,6 +59,11 @@ public sealed partial class WizardGuideCardViewModel : ObservableObject
     public IReadOnlyList<string> Needs => Card.Needs;
 
     public bool HasNeeds => Card.Needs.Count > 0;
+
+    /// <summary>True when there is anything behind the "Details" toggle; a card with nothing to expand has no toggle.</summary>
+    public bool HasDetails => HasNeeds || HasWillDo || HasLinks || HasCliSays;
+
+    public string DetailsAutomationName => Title + " details";
 
     /// <summary>The card's links, each carrying the command that opens it.</summary>
     public IReadOnlyList<WizardGuideLinkItem> LinkItems { get; }
@@ -148,6 +160,8 @@ public sealed partial class WizardGuideCardViewModel : ObservableObject
         Caution = Caution.Trim();
     }
 
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(DetailsAutomationName));
+
     partial void OnIsCheckingChanged(bool value) => OnPropertyChanged(nameof(CanCheckAgain));
 
     partial void OnIsAvailableChanged(bool value) => OnPropertyChanged(nameof(IsUnavailable));
@@ -161,6 +175,13 @@ public sealed partial class WizardGuideCardViewModel : ObservableObject
         if (string.Equals(e.PropertyName, nameof(WizardFieldViewModel.Value), StringComparison.Ordinal))
         {
             OnPropertyChanged(nameof(IsSelected));
+
+            // Choosing a pipeline is when "what the command will do" matters most (local Splunk starts containers), so
+            // turning a card on opens its details. Turning it off leaves the card as the operator had it.
+            if (IsSelected && HasDetails)
+            {
+                IsExpanded = true;
+            }
         }
     }
 
@@ -193,12 +214,48 @@ public sealed partial class WizardGuideCardViewModel : ObservableObject
 public sealed record WizardGuideLinkItem(string Label, string Url, System.Windows.Input.ICommand Open);
 
 /// <summary>The cards of one guide page, and the page's introduction.</summary>
-public sealed class WizardGuideViewModel
+public sealed partial class WizardGuideViewModel : ObservableObject
 {
     public WizardGuideViewModel(WizardGuide guide, IReadOnlyList<WizardGuideCardViewModel> cards)
     {
         Guide = guide ?? throw new ArgumentNullException(nameof(guide));
         Cards = cards ?? throw new ArgumentNullException(nameof(cards));
+        foreach (var card in cards)
+        {
+            card.PropertyChanged += OnCardChanged;
+        }
+    }
+
+    /// <summary>True when at least one card has details to open; the page's "Expand all" link is shown only then.</summary>
+    public bool HasExpandable => Cards.Any(c => c.HasDetails);
+
+    /// <summary>Every card that has details is open.</summary>
+    public bool AllExpanded => HasExpandable && Cards.Where(c => c.HasDetails).All(c => c.IsExpanded);
+
+    /// <summary>The page link's words: what pressing it does next.</summary>
+    public string ToggleAllText => AllExpanded ? "Collapse all" : "Expand all";
+
+    public string ToggleAllAutomationName => AllExpanded ? "Collapse the details of every option" : "Expand the details of every option";
+
+    /// <summary>Opens every card's details, or closes them all when they are all open.</summary>
+    [RelayCommand]
+    private void ToggleAll()
+    {
+        var open = !AllExpanded;
+        foreach (var card in Cards.Where(c => c.HasDetails))
+        {
+            card.IsExpanded = open;
+        }
+    }
+
+    private void OnCardChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(WizardGuideCardViewModel.IsExpanded), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(AllExpanded));
+            OnPropertyChanged(nameof(ToggleAllText));
+            OnPropertyChanged(nameof(ToggleAllAutomationName));
+        }
     }
 
     public WizardGuide Guide { get; }

@@ -39,49 +39,6 @@
     <ui:FluentWindow.Resources>
         <cfg:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
         <cfg:InverseBooleanConverter x:Key="InverseBoolean" />
-
-        <!-- One console line: mono; an stderr line reads amber. Unique to the resolver console. -->
-        <Style x:Key="ConsoleLine" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsError}" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <!--
-            The gutter beside a console line: an "!" on a line that came from stderr, so the difference is not the colour alone (a
-            colour-blind reader, a monochrome print, a screenshot). It keeps its width on every other line so the text stays in one
-            column. The row's own automation name is what a screen reader says for a line.
-        -->
-        <Style x:Key="OutputMarker" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
-            <Setter Property="Text" Value="!" />
-            <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Margin" Value="0,0,6,0" />
-            <Setter Property="Visibility" Value="Hidden" />
-            <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsError}" Value="True">
-                    <Setter Property="Visibility" Value="Visible" />
-                    <Setter Property="ToolTip" Value="Error output (stderr)" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Console list rows: bare content, no selection/hover chrome, and a real name for UI Automation. -->
-        <Style x:Key="ConsoleRow" TargetType="ListBoxItem">
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="IsTabStop" Value="False" />
-            <Setter Property="AutomationProperties.Name" Value="{Binding Text}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                        <ContentPresenter />
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </ui:FluentWindow.Resources>
 
     <Grid>
@@ -561,48 +518,19 @@
                                           IsChecked="{Binding IsOutputPaused, Mode=TwoWay}" />
                             </Grid>
 
-                            <Border Height="260" Style="{StaticResource DcCodeBlock}">
+                            <Border Height="260">
                                 <Grid>
-                                    <!--
-                                        ListBox (not a plain ItemsControl in a ScrollViewer) so the panel gets the
-                                        same VirtualizingPanel realization the Logs panel's console already relies
-                                        on (see LogsPanel.xaml) instead of inflating every line of a long resolver
-                                        run up front. ConsoleRow strips selection/focus/hover chrome back down to a
-                                        bare ContentPresenter so a realized row still renders as exactly the
-                                        TextBlock below, and gives each row its text as its UI Automation name.
-                                    -->
-                                    <ListBox x:Name="UpgradeOutputList"
-                                             Padding="0"
-                                             AutomationProperties.Name="Upgrade output"
-                                             Background="Transparent"
-                                             BorderThickness="0"
-                                             Focusable="False"
-                                             HorizontalContentAlignment="Stretch"
-                                             ItemContainerStyle="{StaticResource ConsoleRow}"
-                                             ItemsSource="{Binding Output}"
-                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                             VirtualizingPanel.IsVirtualizing="True"
-                                             VirtualizingPanel.VirtualizationMode="Recycling">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="1" Style="{StaticResource ConsoleLine}" Text="{Binding Text}" />
-                                                    <TextBlock Grid.Column="0" Style="{StaticResource OutputMarker}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
+                                    <!-- Selectable and copyable; follows the newest line unless auto-scroll is paused. -->
+                                    <ctl:DcCommandOutput FollowTail="{Binding IsFollowingOutput}"
+                                                         OutputName="Upgrade output"
+                                                         Text="{Binding OutputText}" />
 
                                     <TextBlock MaxWidth="420"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Style="{StaticResource DcEmptyDetail}"
                                                Text="No output yet. Anything printed streams here as it arrives, and the same invocation is in the Activity panel — a quiet installer run may print almost nothing."
+                                               IsHitTestVisible="False"
                                                Visibility="{Binding HasOutput, Converter={StaticResource InverseBoolToVisibility}}" />
                                 </Grid>
                             </Border>

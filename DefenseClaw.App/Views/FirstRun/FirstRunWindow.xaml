@@ -281,22 +281,11 @@
                         <Border Style="{StaticResource DcBadge}" Tag="{Binding ReportKey}" HorizontalAlignment="Left" Margin="0,0,0,6">
                             <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap" Text="{Binding ReportText}" />
                         </Border>
-                        <ItemsControl ItemsSource="{Binding ReportRows}" AutomationProperties.Name="Steps that did not pass">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
-                                        <Border Style="{StaticResource DcBadge}" Tag="{Binding Key}" Margin="0,0,8,0">
-                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Status}" />
-                                        </Border>
-                                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Name}" />
-                                        <TextBlock Style="{StaticResource DcTextSecondary}" Margin="8,0,0,0" TextWrapping="Wrap" Text="{Binding Detail}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
-                                   Visibility="{Binding HasReportNext, Converter={StaticResource BoolToVisibility}}"
-                                   Text="{Binding ReportNext}" />
+                        <!-- Selectable and copyable: the steps that did not pass, and what to run next. -->
+                        <ctl:DcCommandOutput MaxHeight="240"
+                                             OutputName="Steps that did not pass"
+                                             Visibility="{Binding HasReportDetail, Converter={StaticResource BoolToVisibility}}"
+                                             Text="{Binding ReportDetailText, Mode=OneWay}" />
                     </StackPanel>
                 </Border>
             </StackPanel>

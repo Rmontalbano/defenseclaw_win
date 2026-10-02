@@ -318,6 +318,18 @@
         </Setter>
     </Style>
 
+    <!--
+        A command's output: DcMonoTextBox, plus a visible caret so the keyboard can select too (Shift+arrows, Ctrl+A, Ctrl+C),
+        its own scrollbars and no undo stack. ctl:DcCommandOutput wraps it with a Copy button; use that for new output areas.
+    -->
+    <Style x:Key="DcOutputBox" TargetType="TextBox" BasedOn="{StaticResource DcMonoTextBox}">
+        <Setter Property="IsReadOnlyCaretVisible" Value="True" />
+        <Setter Property="AcceptsReturn" Value="True" />
+        <Setter Property="IsUndoEnabled" Value="False" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+    </Style>
+
     <Style x:Key="DcFieldLabel" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="TextWrapping" Value="Wrap" />

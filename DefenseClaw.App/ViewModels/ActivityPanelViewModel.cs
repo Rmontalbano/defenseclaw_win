@@ -880,4 +880,10 @@ public sealed record CliOutputRow(string Text, bool IsError)
 {
     /// <summary>The line as a screen reader should say it (a record dumps its members otherwise).</summary>
     public override string ToString() => IsError ? $"error: {Text}" : Text;
+
+    /// <summary>
+    /// The line as a text box shows it: a stderr line starts with "! " (the gutter mark of the list consoles), so the difference
+    /// from stdout survives where there is no colour or gutter - a screen reader, a screenshot, a paste.
+    /// </summary>
+    public string DisplayLine => IsError ? "! " + Text : Text;
 }

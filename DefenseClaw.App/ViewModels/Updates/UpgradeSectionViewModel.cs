@@ -290,6 +290,15 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// <summary>Resolver output, line by line, oldest first.</summary>
     public ObservableCollection<CliOutputRow> Output { get; } = new();
 
+    /// <summary>The same lines as one block (stderr lines start with "! "), for the selectable console and its Copy button; already scrubbed by the runner.</summary>
+    [ObservableProperty]
+    private string _outputText = string.Empty;
+
+    /// <summary>The console follows its newest line unless "Pause auto-scroll" is on.</summary>
+    public bool IsFollowingOutput => !IsOutputPaused;
+
+    partial void OnIsOutputPausedChanged(bool value) => OnPropertyChanged(nameof(IsFollowingOutput));
+
     /// <summary>The binary the confirm overlay names, resolved rather than trusted to PATH.</summary>
     public string PowerShellPath => UpgradeRunner.ResolvePowerShellPath();
 
@@ -785,6 +794,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         _closeRefused = false;
         IsConfirmVisible = false;
         Output.Clear();
+        OutputText = string.Empty;
         _outputBuffer.Clear();
         _outputCursor = 0;
         _invocation = null;
@@ -1094,11 +1104,15 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             return;
         }
 
+        var added = new System.Text.StringBuilder();
         foreach (var line in _outputBuffer)
         {
-            Output.Add(new CliOutputRow(line.Text, line.Stream == CliStream.StandardError));
+            var row = new CliOutputRow(line.Text, line.Stream == CliStream.StandardError);
+            Output.Add(row);
+            _ = added.Append(row.DisplayLine).Append('\n');
         }
 
+        OutputText += added.ToString();
         HasOutput = Output.Count > 0;
     }
 

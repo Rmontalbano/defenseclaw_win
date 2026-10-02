@@ -1,0 +1,50 @@
+<UserControl x:Class="DefenseClaw.App.Views.Controls.DcCommandOutput"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             IsTabStop="False">
+    <!--
+        A command's output the operator can select and copy: a read-only mono TextBox (mouse selection, Shift+arrows, Ctrl+A,
+        Ctrl+C, the right-click menu) in a code block, with a Copy output button in its top-right corner. Text is exactly what
+        the TextBox shows (already scrubbed by the runner; very long output is trimmed to its tail, and the note says so), and
+        Copy puts that and nothing else on the clipboard. See DcCommandOutput.cs.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="TitleText"
+                   Margin="0,0,0,4"
+                   Style="{StaticResource DcCaption}"
+                   Visibility="Collapsed" />
+        <Border x:Name="Block" Grid.Row="1" Style="{StaticResource DcCodeBlock}">
+            <Grid>
+                <TextBox x:Name="Box"
+                         Style="{StaticResource DcOutputBox}"
+                         Margin="0,0,36,0"
+                         panels:NestedScroll.ForwardWheel="True" />
+                <StackPanel HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Orientation="Horizontal">
+                    <TextBlock x:Name="CopiedText"
+                               Margin="0,0,4,0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource DcCaption}"
+                               AutomationProperties.LiveSetting="Polite"
+                               Text="Copied"
+                               Visibility="Collapsed" />
+                    <ui:Button x:Name="CopyButton"
+                               Style="{StaticResource DcToolbarIconButton}"
+                               Margin="0"
+                               ToolTip="Copy output to the clipboard"
+                               AutomationProperties.Name="Copy output"
+                               Icon="{ctl:DcSymbolIcon Copy24}"
+                               Click="OnCopyClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

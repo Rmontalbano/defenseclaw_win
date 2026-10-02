@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              d:DataContext="{d:DesignInstance Type=vm:DiscoverActionReview}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -50,14 +51,10 @@
                                            TextWrapping="Wrap"
                                            Text="{Binding ResultText}" />
                             </Border>
-                            <Border Style="{StaticResource DcCodeBlock}"
-                                    MaxHeight="200"
-                                    Visibility="{Binding HasResultOutput, Converter={StaticResource BoolToVisibility}}">
-                                <TextBox Style="{StaticResource DcMonoTextBox}"
-                                         AutomationProperties.Name="Command output"
-                                         VerticalScrollBarVisibility="Auto"
-                                         Text="{Binding ResultOutput, Mode=OneWay}" />
-                            </Border>
+                            <ctl:DcCommandOutput MaxHeight="200"
+                                                 OutputName="Command output"
+                                                 Visibility="{Binding HasResultOutput, Converter={StaticResource BoolToVisibility}}"
+                                                 Text="{Binding ResultOutput, Mode=OneWay}" />
                         </StackPanel>
                     </StackPanel>
                 </shell:CommandReviewControl.ExtraContent>

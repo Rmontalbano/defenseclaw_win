@@ -216,6 +216,14 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _hasReportNext;
 
+    /// <summary>The report as text for the selectable, copyable box: the steps that did not pass, then what to run next. Empty when there is neither.</summary>
+    [ObservableProperty]
+    private string _reportDetailText = string.Empty;
+
+    public bool HasReportDetail => ReportDetailText.Length > 0;
+
+    partial void OnReportDetailTextChanged(string value) => OnPropertyChanged(nameof(HasReportDetail));
+
     public string DetectLabel => _detectionRequested ? "Detect again" : "Detect installed agents";
 
     public string Subtitle => IsInstalled
@@ -563,6 +571,14 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
         var next = report.NextCommands.Count == 0 ? string.Empty : "Next: " + string.Join(" ; ", report.NextCommands);
         ReportNext = next;
         HasReportNext = next.Length > 0;
+        var detail = new List<string>();
+        detail.AddRange(ReportRows.Select(r => r.Detail.Length == 0 ? $"{r.Status}  {r.Name}" : $"{r.Status}  {r.Name}: {r.Detail}"));
+        if (next.Length > 0)
+        {
+            detail.Add(next);
+        }
+
+        ReportDetailText = string.Join(Environment.NewLine, detail);
         HasReport = true;
     }
 

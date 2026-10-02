@@ -48,8 +48,6 @@ public sealed class StderrMarkerTests
 
     [Theory]
     [InlineData("Views/Panels/ActivityPanel.xaml", "OutputLine")]
-    [InlineData("Views/Updates/UpdatesWindow.xaml", "ConsoleLine")]
-    [InlineData("Views/Wizards/WizardWindow.xaml", "OutputLine")]
     public void Every_console_line_template_has_the_stderr_gutter_beside_the_line(string file, string lineStyle)
     {
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";

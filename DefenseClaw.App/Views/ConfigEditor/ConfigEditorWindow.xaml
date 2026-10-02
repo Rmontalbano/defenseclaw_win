@@ -5,6 +5,7 @@
                  xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
                  xmlns:vmc="clr-namespace:DefenseClaw.App.ViewModels.ConfigEditor"
                  xmlns:vc="clr-namespace:DefenseClaw.App.Views.ConfigEditor"
+                 xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
                  Title="{Binding WindowTitle}"
                  Width="1150"
                  Height="800"
@@ -563,12 +564,16 @@
                            Content="Not now" />
             </StackPanel>
 
+            <!-- The message can be the CLI's own validation text, so it sits in a selectable, copyable box under the banner. -->
             <ui:InfoBar Title="Save problem"
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         IsOpen="{Binding ShowSaveErrorBanner}"
-                        Message="{Binding SaveResultMessage}"
-                        Severity="Error" />
+                        Severity="Error">
+                <ctl:DcCommandOutput MaxHeight="200"
+                                     OutputName="Save problem details"
+                                     Text="{Binding SaveResultMessage, Mode=OneWay}" />
+            </ui:InfoBar>
             <StackPanel Margin="{StaticResource DcCardGap}"
                         Orientation="Horizontal"
                         Visibility="{Binding ShowRestoreAction, Converter={StaticResource BoolToVisibility}}">

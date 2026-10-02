@@ -573,15 +573,11 @@
                             <TextBlock Style="{StaticResource DcCaption}"
                                        Margin="0,6,0,0"
                                        Text="{Binding DiagnosticMessage}" />
-                            <Border Style="{StaticResource DcCodeBlock}"
-                                    Margin="0,6,0,0"
-                                    MaxHeight="180"
-                                    Visibility="{Binding HasDiagnosticOutput, Converter={StaticResource BoolToVisibility}}">
-                                <TextBox Style="{StaticResource DcMonoTextBox}"
-                                         AutomationProperties.Name="Diagnostic output"
-                                         VerticalScrollBarVisibility="Auto"
-                                         Text="{Binding DiagnosticOutput, Mode=OneWay}" />
-                            </Border>
+                            <ctl:DcCommandOutput Margin="0,6,0,0"
+                                                 MaxHeight="180"
+                                                 OutputName="Diagnostic output"
+                                                 Visibility="{Binding HasDiagnosticOutput, Converter={StaticResource BoolToVisibility}}"
+                                                 Text="{Binding DiagnosticOutput, Mode=OneWay}" />
                             <ui:Button Content="View in Activity"
                                        Appearance="Transparent" BorderThickness="0"
                                        Foreground="{DynamicResource DcAccentBrush}"
