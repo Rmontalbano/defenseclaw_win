@@ -163,14 +163,14 @@ public class WizardWindowsPolicyTests
     };
 
     [Fact]
-    public void Splunk_loses_its_docker_flags_and_the_dashboards_subcommand()
+    public void Splunk_keeps_the_local_pipeline_gated_not_hidden_and_loses_the_s3_flags_and_the_dashboards_subcommand()
     {
         var filtered = WizardWindowsPolicy.Filter("splunk", SplunkSteps());
 
         var flags = filtered.SelectMany(s => s.Fields).Select(f => f.Flag).ToArray();
         Assert.Contains("--o11y", flags);
         Assert.Contains("--hec-endpoint", flags);
-        Assert.DoesNotContain("--logs", flags);
+        Assert.Contains("--logs", flags);
         Assert.DoesNotContain("--s3-bucket", flags);
         Assert.DoesNotContain("--terraform-dir", flags);
         Assert.DoesNotContain(filtered, s => s.Id == "dashboards-page");
@@ -270,5 +270,17 @@ public class WizardWindowsPolicyTests
 
         Assert.Null(validate(Values(("o11y", ToggleValues.On))));
         Assert.Null(validate(Values(("subcommand", "verify"))));
+    }
+
+    [Fact]
+    public void Splunk_local_logs_alone_is_a_pipeline_but_only_with_the_license_accepted()
+    {
+        var validate = WizardWindowsPolicy.CrossValidatorFor("splunk")!;
+
+        var refused = validate(Values(("logs", ToggleValues.On)));
+        Assert.Contains("Splunk General Terms", refused!, StringComparison.Ordinal);
+        Assert.Contains("--accept-splunk-license", refused, StringComparison.Ordinal);
+
+        Assert.Null(validate(Values(("logs", ToggleValues.On), ("accept-splunk-license", ToggleValues.On))));
     }
 }

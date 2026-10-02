@@ -167,6 +167,7 @@ public static class SecretRoutes
                 Fields = fields,
                 VisibleWhenFieldId = step.VisibleWhenFieldId,
                 VisibleWhenValues = step.VisibleWhenValues,
+                Guide = step.Guide,
             });
         }
 

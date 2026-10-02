@@ -109,6 +109,7 @@ public static class WizardSyntheticSecrets
                     Fields = remaining,
                     VisibleWhenFieldId = step.VisibleWhenFieldId,
                     VisibleWhenValues = step.VisibleWhenValues,
+                    Guide = step.Guide,
                 });
             }
 

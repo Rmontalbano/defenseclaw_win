@@ -191,10 +191,11 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _resultMessage = string.Empty;
 
-    public WizardViewModel(AppServices services, WizardDefinition definition)
+    public WizardViewModel(AppServices services, WizardDefinition definition, IDockerProbe? dockerProbe = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         ArgumentNullException.ThrowIfNull(definition);
+        _dockerProbe = dockerProbe;
 
         // The catalog's definition is a cache over --help and knows nothing of this machine; the pages
         // start from what config.yaml says now. Applied per open wizard, never to the shared definition.
@@ -211,7 +212,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 _fields.Add(field);
             }
 
-            Steps.Add(new WizardStepViewModel(step, fields));
+            Steps.Add(new WizardStepViewModel(step, fields, BuildGuide(step, fields)));
         }
 
         _timer = new DispatcherTimer { Interval = OutputTick };
@@ -221,6 +222,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         RefreshCredentials();
         SyncPersistState();
         GoTo(0);
+        StartDockerCheck();
 
         if (services.Paths.TryGetKnownExecutable("defenseclaw", out var known))
         {
@@ -228,6 +230,89 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         _ = ResolveExecutablePathAsync();
+    }
+
+    // ------------------------------------------------------------------ guide pages
+
+    private IDockerProbe? _dockerProbe;
+    private CancellationTokenSource? _dockerCts;
+
+    /// <summary>The cards whose option needs Docker; checked once when the wizard opens and again on "Check again".</summary>
+    private IEnumerable<WizardGuideCardViewModel> DockerCards =>
+        Steps.Where(s => s.Guide is not null).SelectMany(s => s.Guide!.Cards).Where(c => c.RequiresDocker);
+
+    private WizardGuideViewModel? BuildGuide(WizardStep step, IReadOnlyList<WizardFieldViewModel> fields)
+    {
+        if (step.Guide is not { } guide)
+        {
+            return null;
+        }
+
+        var cards = guide.Cards
+            .Select(card => new WizardGuideCardViewModel(
+                card,
+                card.IsChoice ? fields.FirstOrDefault(f => string.Equals(f.Id, card.FieldId, StringComparison.Ordinal)) : null)
+            {
+                Recheck = () => StartDockerCheck(),
+            })
+            .ToArray();
+        return new WizardGuideViewModel(guide, cards);
+    }
+
+    /// <summary>
+    /// Looks at Docker (read-only: <see cref="IDockerProbe"/> only asks a running engine to describe itself) and tells the
+    /// cards that need it. Until the answer lands those cards are disabled and say so; a missing or stopped engine keeps
+    /// them off with the reason. Never starts, pulls or runs anything.
+    /// </summary>
+    private void StartDockerCheck()
+    {
+        var cards = DockerCards.ToArray();
+        if (cards.Length == 0 || _disposed)
+        {
+            return;
+        }
+
+        _dockerCts?.Cancel();
+        _dockerCts?.Dispose();
+        _dockerCts = new CancellationTokenSource();
+        var token = _dockerCts.Token;
+        var probe = _dockerProbe ??= DockerProbe.CreateDefault(_services.Paths);
+
+        foreach (var card in cards)
+        {
+            card.BeginChecking();
+        }
+
+        _ = CheckDockerAsync(probe, cards, token);
+    }
+
+    private async Task CheckDockerAsync(IDockerProbe probe, IReadOnlyList<WizardGuideCardViewModel> cards, CancellationToken token)
+    {
+        DockerStatus status;
+        try
+        {
+            status = await probe.ProbeAsync(token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            status = new DockerStatus(DockerState.Unknown, "Docker could not be checked from here (" + ex.Message + "). The command checks it again itself.", Array.Empty<string>());
+        }
+
+        if (_disposed || token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        foreach (var card in cards)
+        {
+            card.ApplyDocker(status);
+        }
+
+        RefreshReview();
     }
 
     private const string ExecutableNotFoundText = "defenseclaw (not found on PATH)";
@@ -482,6 +567,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         _disposed = true;
         _timer.Stop();
+        _dockerCts?.Cancel();
+        _dockerCts?.Dispose();
+        _dockerCts = null;
         _services.Cli.InvocationStarted -= OnInvocationStarted;
 
         try
@@ -846,9 +934,16 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             }
         }
 
-        // Rules that span fields (splunk: pick a pipeline) only make sense once the page's own answers
-        // are individually valid, and are reported in the footer because no single field owns them.
-        if (errors.Count == 0 && Definition.CrossValidator?.Invoke(_values) is { Length: > 0 } crossProblem)
+        // A guide page that offers a choice needs one made: nothing after it makes sense otherwise.
+        if (errors.Count == 0 && CurrentStep.Guide is { HasSelection: false })
+        {
+            errors.Add("Choose at least one option above to continue.");
+        }
+
+        // Rules that span fields (splunk: a pipeline's required fields) can only be judged once every page has had its say, so
+        // they are checked when leaving the last page; the review page checks them again and will not run a command that fails.
+        if (errors.Count == 0 && ReferenceEquals(CurrentStep, VisibleSteps.LastOrDefault()) &&
+            Definition.CrossValidator?.Invoke(_values) is { Length: > 0 } crossProblem)
         {
             errors.Add(crossProblem);
         }

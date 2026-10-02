@@ -111,7 +111,7 @@ public class GalileoKeyTests
 
         // It moved, it was not copied: exactly one field carries the flag, and no page was left empty.
         Assert.Single(definition.AllFields, f => f.Flag == "--persist-api-key");
-        Assert.All(definition.Steps, s => Assert.True(s.Fields.Count > 0 || s.Id.EndsWith("empty", StringComparison.Ordinal)));
+        Assert.All(definition.Steps, s => Assert.True(s.Fields.Count > 0 || s.Guide is not null || s.Id.EndsWith("empty", StringComparison.Ordinal)));
     }
 
     [Fact]

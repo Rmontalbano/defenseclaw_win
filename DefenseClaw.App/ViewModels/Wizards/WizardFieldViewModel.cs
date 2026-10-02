@@ -558,10 +558,11 @@ public sealed partial class WizardStepViewModel : ObservableObject
     [ObservableProperty]
     private bool _isVisible = true;
 
-    public WizardStepViewModel(WizardStep step, IReadOnlyList<WizardFieldViewModel> fields)
+    public WizardStepViewModel(WizardStep step, IReadOnlyList<WizardFieldViewModel> fields, WizardGuideViewModel? guide = null)
     {
         Step = step ?? throw new ArgumentNullException(nameof(step));
         Fields = fields ?? throw new ArgumentNullException(nameof(fields));
+        Guide = guide;
     }
 
     public WizardStep Step { get; }
@@ -576,7 +577,14 @@ public sealed partial class WizardStepViewModel : ObservableObject
     /// The page binds every field and hides the gated ones per item, so a gate flipping on
     /// an earlier page never has to rebuild a collection mid-edit.
     /// </summary>
-    public bool HasFields => Fields.Count > 0;
+    public bool HasFields => Fields.Count > 0 || Guide is not null;
+
+    /// <summary>The cards of a guided first step, or null for an ordinary page. A guide page shows them instead of the field list.</summary>
+    public WizardGuideViewModel? Guide { get; }
+
+    public bool IsGuide => Guide is not null;
+
+    public bool ShowsFields => Guide is null;
 
     public override string ToString() => Title;
 }

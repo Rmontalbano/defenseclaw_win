@@ -137,6 +137,7 @@ internal static class WizardSamples
         steps = WizardWindowsPolicy.Filter("galileo", steps);
         steps = WizardSyntheticSecrets.Add("galileo", steps);
         steps = SecretRoutes.Annotate("galileo", steps);
+        steps = WizardWalkthroughs.Apply("galileo", steps, help ?? GalileoHelp);
 
         return new WizardDefinition
         {
@@ -147,6 +148,106 @@ internal static class WizardSamples
             Steps = steps,
             PlatformStatus = parsed.PlatformStatus,
             IsDetailLoaded = true,
+        };
+    }
+
+    /// <summary>The 0.8.10 <c>setup splunk --help</c> screen, verbatim (only the line endings are normalised).</summary>
+    public static readonly string SplunkHelp = LineEndings.Normalize("""
+        Usage: defenseclaw setup splunk [OPTIONS] [COMMAND] [ARGS]...
+
+          Configure Splunk integration for DefenseClaw.
+
+          Three independent pipelines are available:
+
+            --o11y   Splunk Observability Cloud (traces + metrics via OTLP HTTP)
+                     No local infrastructure needed. Requires a Splunk access token.
+
+            --logs   Local Splunk (Docker, HEC logs + dashboards)
+                     Starts the bundled profile in Splunk Free mode from day 1.
+                     Requires Docker.
+
+            --enterprise
+                     Remote Splunk Enterprise HEC endpoint + token.
+                     No Docker, local bridge, or Splunk-side automation.
+                     Sends one best-effort HEC probe unless --skip-test is set.
+
+          Both can run simultaneously. Without flags, runs an interactive wizard.
+
+        Options:
+          --o11y                          Enable Splunk Observability Cloud (OTLP
+                                          traces + metrics)
+          --logs                          Enable local Splunk via Docker (HEC logs +
+                                          dashboards, Free mode)
+          --s3-export                     Enable local Splunk and start the optional
+                                          S3 exporter sidecar
+          --s3-bucket TEXT                S3 bucket for --s3-export (or set S3_BUCKET)
+          --s3-prefix TEXT                S3 prefix for --s3-export (default:
+                                          agentwatch/defenseclaw)
+          --aws-region TEXT               AWS region for --s3-export (default: us-
+                                          west-2)
+          --enterprise                    Enable remote Splunk Enterprise via HEC
+                                          endpoint + token
+          --realm TEXT                    Splunk O11y realm (e.g. us1, us0, eu0)
+          --access-token TEXT             Splunk O11y access token
+          --hec-endpoint TEXT             Remote Splunk Enterprise HEC endpoint
+          --hec-token TEXT                Remote Splunk Enterprise HEC token
+          --app-name TEXT                 OTEL service name (default: defenseclaw)
+          --index TEXT                    HEC index for --logs/--enterprise (default:
+                                          defenseclaw_local for local, defenseclaw for
+                                          enterprise)
+          --source TEXT                   HEC source for --logs/--enterprise (default:
+                                          defenseclaw)
+          --sourcetype TEXT               HEC sourcetype for --logs/--enterprise
+                                          (default: defenseclaw:json for local, _json
+                                          for enterprise)
+          --traces / --no-traces          Enable/disable trace export (O11y)
+          --metrics / --no-metrics        Enable/disable metrics export (O11y)
+          --logs-export / --no-logs-export
+                                          Enable/disable logs export (O11y)
+          --disable                       Disable Splunk integration(s)
+          --accept-splunk-license         Acknowledge the Splunk General Terms for
+                                          local Splunk enablement
+          --skip-test                     Skip the live HEC probe after remote Splunk
+                                          Enterprise setup
+          --show-credentials              Show the generated HEC token and runtime-
+                                          only Splunk bootstrap secret
+          --refresh-bundle / --no-refresh-bundle
+                                          Before starting local Splunk, refresh
+                                          ~/.defenseclaw/splunk-bridge/ from the
+                                          wheel/repo bundle.  [default: refresh-bundle]
+          --non-interactive               Use flags instead of prompts
+          --help                          Show this message and exit.
+
+        Commands:
+          dashboards  Create/update Splunk Observability Cloud dashboards.
+        """);
+
+    /// <summary>
+    /// The definition the catalog would build for <c>splunk</c> with the 0.8.10 help: group pages, Windows policy, synthetic
+    /// secrets, secret routes, then the walkthrough — the order <c>WizardCatalog.LoadDetailAsync</c> runs them in.
+    /// </summary>
+    public static WizardDefinition Splunk()
+    {
+        var parsed = SetupHelpParser.Parse(SplunkHelp);
+        var subcommands = parsed.Commands.ToDictionary(c => c.Name, c => new ParsedHelp { Summary = c.Summary });
+
+        var steps = WizardStepFactory.BuildGroup(parsed, subcommands);
+        steps = WizardWindowsPolicy.Filter("splunk", steps);
+        steps = WizardSyntheticSecrets.Add("splunk", steps);
+        steps = SecretRoutes.Annotate("splunk", steps);
+        steps = WizardWalkthroughs.Apply("splunk", steps, SplunkHelp);
+
+        return new WizardDefinition
+        {
+            Target = "splunk",
+            Title = "Splunk",
+            Group = WizardGroups.Observability,
+            Description = parsed.Summary,
+            Steps = steps,
+            PlatformStatus = parsed.PlatformStatus,
+            IsDetailLoaded = true,
+            HelpText = SplunkHelp,
+            CrossValidator = WizardWindowsPolicy.CrossValidatorFor("splunk"),
         };
     }
 

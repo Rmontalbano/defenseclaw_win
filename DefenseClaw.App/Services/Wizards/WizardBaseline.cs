@@ -205,6 +205,7 @@ public static class WizardBaseline
                 Fields = fields,
                 VisibleWhenFieldId = step.VisibleWhenFieldId,
                 VisibleWhenValues = step.VisibleWhenValues,
+                Guide = step.Guide,
             });
         }
 

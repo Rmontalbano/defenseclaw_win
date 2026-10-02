@@ -23,21 +23,21 @@ public static class WizardWindowsPolicy
     };
 
     /// <summary>
-    /// <c>setup splunk</c>: the local Splunk pipeline (<c>--logs</c>, S3 exporter, credentials, bundle
-    /// refresh) needs Docker with the Hyper-V backend, and <c>dashboards</c> needs Terraform plus a
-    /// Splunk O11y API token. The Observability Cloud and Enterprise (HEC) pipelines are plain HTTPS and
-    /// stay.
+    /// <c>setup splunk</c>. The installed CLI has a native Windows controller for the local pipeline
+    /// (<c>--logs</c>, <c>local_splunk.py</c>: argv-only Docker Compose, no bash or WSL), so <c>--logs</c>, its
+    /// license acceptance and <c>--refresh-bundle</c> are <b>offered, gated</b> on a read-only Docker probe
+    /// (<see cref="IDockerProbe"/>) rather than hidden. Still suppressed: the S3 exporter (its AWS credentials are read
+    /// from the environment with no in-app route, so the wizard could not supply them), <c>--show-credentials</c>
+    /// (prints the generated HEC token and a bootstrap secret into the output), and <c>dashboards</c> (Terraform plus a
+    /// Splunk O11y API token, and not a Docker question, so it cannot be gated the same way).
     /// </summary>
     private static readonly IReadOnlySet<string> SplunkSuppressed = new HashSet<string>(StringComparer.Ordinal)
     {
-        "--logs",
         "--s3-export",
         "--s3-bucket",
         "--s3-prefix",
         "--aws-region",
-        "--accept-splunk-license",
         "--show-credentials",
-        "--refresh-bundle",
     };
 
     /// <summary>Command words that name something Windows does not run: sandboxes, OpenClaw, ZeptoClaw and the Docker stacks.</summary>
@@ -134,6 +134,7 @@ public static class WizardWindowsPolicy
                     Fields = choicesTrimmed,
                     VisibleWhenFieldId = step.VisibleWhenFieldId,
                     VisibleWhenValues = step.VisibleWhenValues,
+                    Guide = step.Guide,
                 });
         }
 
@@ -197,17 +198,25 @@ public static class WizardWindowsPolicy
         }
 
         var o11y = IsOn(values["o11y"]);
+        var logs = IsOn(values["logs"]);
         var enterprise = IsOn(values["enterprise"]);
 
-        if (!o11y && !enterprise)
+        if (!o11y && !logs && !enterprise)
         {
-            return "Turn on Splunk Observability Cloud or Splunk Enterprise (HEC). With neither, the command opens an " +
-                   "interactive wizard, which needs a real terminal.";
+            return "Choose at least one pipeline: Splunk Observability Cloud, Local Splunk (Docker) or Splunk Enterprise (HEC). " +
+                   "With none, the command opens an interactive wizard, which needs a real terminal.";
         }
 
         if (enterprise && values["hec-endpoint"].Trim().Length == 0)
         {
             return "HEC endpoint is required for Splunk Enterprise.";
+        }
+
+        // --non-interactive local Splunk refuses to start without the explicit acceptance, and consent is never assumed.
+        if (logs && !IsOn(values["accept-splunk-license"]))
+        {
+            return "Accept the Splunk General Terms (the switch on the Local Splunk page) to enable local Splunk. " +
+                   "The command refuses to run without --accept-splunk-license.";
         }
 
         return null;

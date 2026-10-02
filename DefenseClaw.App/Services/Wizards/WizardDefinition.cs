@@ -263,6 +263,12 @@ public sealed class WizardStep
     public string? VisibleWhenFieldId { get; init; }
 
     public IReadOnlyList<string> VisibleWhenValues { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Set on a guided first step: the cards the page shows (and, for a choice card, the switch it turns on, which is one of
+    /// <see cref="Fields"/>). A guide page renders the cards instead of the field list.
+    /// </summary>
+    public WizardGuide? Guide { get; init; }
 }
 
 /// <summary>The answers collected so far, keyed by <see cref="WizardField.Id"/>.</summary>
@@ -502,12 +508,17 @@ public sealed class WizardDefinition
             return true;
         }
 
-        var actual = values[gateFieldId];
-        for (var i = 0; i < gateValues.Count; i++)
+        // "a|b" is any-of: visible when ANY of those fields holds one of the values (splunk's index/source/sourcetype
+        // belong to both the local and the enterprise pipeline).
+        foreach (var id in gateFieldId.Split('|'))
         {
-            if (string.Equals(gateValues[i], actual, StringComparison.Ordinal))
+            var actual = values[id];
+            for (var i = 0; i < gateValues.Count; i++)
             {
-                return true;
+                if (string.Equals(gateValues[i], actual, StringComparison.Ordinal))
+                {
+                    return true;
+                }
             }
         }
 

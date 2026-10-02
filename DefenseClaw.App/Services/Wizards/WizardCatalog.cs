@@ -401,6 +401,10 @@ public sealed class WizardCatalog
         steps = WizardSyntheticSecrets.Add(target, steps);
         steps = SecretRoutes.Annotate(target, steps);
 
+        // Last, because it regroups pages: splunk's flat flag list becomes a guided first step plus one page per pipeline,
+        // and galileo gets its "what you need" page. Built from the same fields, so argv and secret routes are unchanged.
+        steps = WizardWalkthroughs.Apply(target, steps, result.Text);
+
         // The per-target help is authoritative for certification; the summary hint from the
         // top-level screen was only ever a stand-in until this landed. For a target that is not
         // a connector the parser reports NotApplicable rather than Certified (see

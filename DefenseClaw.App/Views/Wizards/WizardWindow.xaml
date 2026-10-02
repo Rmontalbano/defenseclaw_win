@@ -145,8 +145,145 @@
                                Visibility="{Binding HasBaselineNote, Converter={StaticResource BoolToVisibility}}"
                                Text="{Binding BaselineNote}" />
 
+                    <!--
+                        Guided first step (splunk, galileo): what each option sends, what to have in hand, where to get it and what the
+                        command will do. A choice card is the wizard's own switch for that pipeline, so picking it only answers a field;
+                        nothing is run from here.
+                    -->
+                    <StackPanel Visibility="{Binding CurrentStep.IsGuide, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Margin="{StaticResource DcCardGap}"
+                                   MaxWidth="760"
+                                   HorizontalAlignment="Left"
+                                   Style="{StaticResource DcBody}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding CurrentStep.Guide.Intro}" />
+
+                        <ItemsControl ItemsSource="{Binding CurrentStep.Guide.Cards}" IsTabStop="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,12"
+                                            MaxWidth="760"
+                                            HorizontalAlignment="Left"
+                                            Style="{StaticResource DcCardCompact}">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource DcCardTitle}"
+                                                               VerticalAlignment="Center"
+                                                               AutomationProperties.HeadingLevel="Level2"
+                                                               Text="{Binding Title}" />
+                                                    <Border Margin="8,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource DcChip}"
+                                                            Visibility="{Binding IsChoice, Converter={StaticResource BoolToVisibility}}">
+                                                        <TextBlock Style="{StaticResource FlagText}" Text="{Binding FlagDisplay}" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <ui:ToggleSwitch Grid.Column="1"
+                                                                 VerticalAlignment="Center"
+                                                                 AutomationProperties.Name="{Binding AutomationName}"
+                                                                 IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                 IsEnabled="{Binding IsAvailable}"
+                                                                 Visibility="{Binding IsChoice, Converter={StaticResource BoolToVisibility}}" />
+                                            </Grid>
+
+                                            <TextBlock Margin="0,6,0,0"
+                                                       Style="{StaticResource DcBody}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding Summary}" />
+
+                                            <!-- Why it cannot be chosen (Docker missing or stopped), or the caution when it can. -->
+                                            <ui:InfoBar Margin="0,8,0,0"
+                                                        IsClosable="False"
+                                                        Severity="Warning"
+                                                        Title="Not available right now"
+                                                        IsOpen="{Binding HasUnavailableReason, Mode=OneWay}"
+                                                        Message="{Binding UnavailableReason}" />
+                                            <ui:InfoBar Margin="0,8,0,0"
+                                                        IsClosable="False"
+                                                        Severity="Informational"
+                                                        Title="Before you choose this"
+                                                        IsOpen="{Binding HasCaution, Mode=OneWay}"
+                                                        Message="{Binding Caution}" />
+                                            <ui:Button Margin="0,8,0,0"
+                                                       HorizontalAlignment="Left"
+                                                       Appearance="Secondary"
+                                                       Content="Check for Docker again"
+                                                       ToolTip="Look again with the read-only docker info command. Nothing is started."
+                                                       IsEnabled="{Binding CanCheckAgain}"
+                                                       Command="{Binding CheckAgainCommand}"
+                                                       Visibility="{Binding RequiresDocker, Converter={StaticResource BoolToVisibility}}" />
+
+                                            <StackPanel Margin="0,10,0,0" Visibility="{Binding HasNeeds, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource FieldName}" Text="What you need" />
+                                                <ItemsControl ItemsSource="{Binding Needs}" IsTabStop="False">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,3,0,0">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="16" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Style="{StaticResource DcBody}" Text="•" />
+                                                                <TextBlock Grid.Column="1"
+                                                                           Style="{StaticResource DcBody}"
+                                                                           TextWrapping="Wrap"
+                                                                           Text="{Binding}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+
+                                            <StackPanel Margin="0,10,0,0" Visibility="{Binding HasWillDo, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource FieldName}" Text="What the command will do" />
+                                                <TextBlock Margin="0,3,0,0"
+                                                           Style="{StaticResource DcBody}"
+                                                           TextWrapping="Wrap"
+                                                           Text="{Binding WillDo}" />
+                                            </StackPanel>
+
+                                            <StackPanel Margin="0,10,0,0" Visibility="{Binding HasLinks, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource FieldName}" Text="Where to get it" />
+                                                <ItemsControl ItemsSource="{Binding LinkItems}" IsTabStop="False">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <ui:Button Margin="0,6,8,0"
+                                                                       Appearance="Secondary"
+                                                                       Content="{Binding Label}"
+                                                                       AutomationProperties.Name="{Binding Label, StringFormat='Open in your browser: {0}'}"
+                                                                       ToolTip="{Binding Url}"
+                                                                       Command="{Binding Open}"
+                                                                       CommandParameter="{Binding Url}" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+
+                                            <TextBlock Margin="0,10,0,0"
+                                                       Style="{StaticResource DcCaption}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding HasCliSays, Converter={StaticResource BoolToVisibility}}"
+                                                       Text="{Binding CliSays, StringFormat='The CLI says: {0}'}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
                     <ItemsControl ItemsSource="{Binding CurrentStep.Fields}"
-                                  IsTabStop="False">
+                                  IsTabStop="False"
+                                  Visibility="{Binding CurrentStep.ShowsFields, Converter={StaticResource BoolToVisibility}}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="{StaticResource DcSectionGap}"
