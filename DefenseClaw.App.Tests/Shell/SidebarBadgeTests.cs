@@ -116,7 +116,7 @@ public sealed class SidebarBadgeViewModelTests : IDisposable
 
     private static async Task WaitUntilAsync(Func<bool> condition, string what)
     {
-        var deadline = Environment.TickCount64 + 30_000;
+        var deadline = Environment.TickCount64 + 120_000; // a wait, not a bound: CI runners have run up to ~25x slower than a desktop
         while (!condition())
         {
             Assert.True(Environment.TickCount64 < deadline, "Timed out waiting for: " + what);
