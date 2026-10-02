@@ -306,15 +306,20 @@ public static class DcGridColumns
         }
 
         // One DIP short of the viewport, so rounding cannot leave a one-pixel sideways scroll bar.
+        var available = Math.Floor(scroll.ViewportWidth) - 1;
         var widths = Views.Panels.ColumnSizing.Distribute(
-            Math.Floor(scroll.ViewportWidth) - 1,
+            available,
             grid.Columns.Select(c => state[c].Weight).ToArray(),
             grid.Columns.Select(c => state[c].Minimum).ToArray(),
             GetLeadingColumns(grid));
 
+        // A column within half a DIP of its target is left alone (no relayout for nothing) - unless the columns as they stand add up
+        // to more than the room: eight columns each up to half a DIP over used to beat the one-DIP slack and show a sideways scroll bar.
+        var current = grid.Columns.Sum(c => c.Width.IsAbsolute ? c.Width.Value : double.PositiveInfinity);
+        var overflowing = current > available;
         for (var i = 0; i < grid.Columns.Count; i++)
         {
-            if (!grid.Columns[i].Width.IsAbsolute || Math.Abs(grid.Columns[i].Width.Value - widths[i]) > 0.5)
+            if (overflowing || !grid.Columns[i].Width.IsAbsolute || Math.Abs(grid.Columns[i].Width.Value - widths[i]) > 0.5)
             {
                 grid.Columns[i].Width = new DataGridLength(widths[i]);
             }
