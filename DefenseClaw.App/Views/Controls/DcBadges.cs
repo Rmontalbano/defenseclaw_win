@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace DefenseClaw.App.Views.Controls;
 
 /// <summary>
-/// A severity as a solid capsule (the Mac's <c>SeverityBadge</c>): the tone's own colour as the fill and a label in whichever of
+/// A severity as a solid small-radius rectangle (after the Mac's <c>SeverityBadge</c>, squared off): the tone's own colour as the fill and a label in whichever of
 /// black or white reads better on it, so the badge holds 4.5:1 in every style and mode without a per-style token. The severity
 /// is always spelled out (<see cref="Text"/>); the colour is never the only carrier of the meaning. Info is the one quiet
 /// badge: the neutral tint behind the ordinary text colour, as on the Mac.
@@ -31,7 +31,7 @@ public sealed class DcSeverityBadge : Control
         typeof(DcSeverityBadge),
         new PropertyMetadata(null, (d, _) => ((DcSeverityBadge)d).ApplyTone()));
 
-    /// <summary>The capsule's fill, resolved from the tone (a template binding target; set by <see cref="Tone"/>, not by hand).</summary>
+    /// <summary>The badge's fill, resolved from the tone (a template binding target; set by <see cref="Tone"/>, not by hand).</summary>
     public static readonly DependencyProperty FillProperty = DependencyProperty.Register(
         nameof(Fill),
         typeof(Brush),
