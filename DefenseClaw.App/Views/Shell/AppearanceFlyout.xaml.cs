@@ -136,7 +136,7 @@ public sealed partial class AppearanceFlyout : UserControl
             row.Children.Add(swatch);
             row.Children.Add(label);
 
-            var button = NewRadio("AppearanceStyle", row, $"{AppearanceCatalog.Name(style)} style", AppearanceCatalog.Description(style));
+            var button = NewRadio(StyleGroupName, row, $"{AppearanceCatalog.Name(style)} style", AppearanceCatalog.Description(style));
             button.Tag = swatch;
             var captured = style;
             button.Checked += (_, _) =>
@@ -164,7 +164,7 @@ public sealed partial class AppearanceFlyout : UserControl
             row.Children.Add(name);
             row.Children.Add(description);
 
-            var button = NewRadio("AppearanceMode", row, $"{AppearanceCatalog.Name(mode)} mode", AppearanceCatalog.Description(mode));
+            var button = NewRadio(ModeGroupName, row, $"{AppearanceCatalog.Name(mode)} mode", AppearanceCatalog.Description(mode));
             var captured = mode;
             button.Checked += (_, _) =>
             {
@@ -178,6 +178,16 @@ public sealed partial class AppearanceFlyout : UserControl
             ModeGroup.Children.Add(button);
         }
     }
+
+    // Per instance: WPF scopes a GroupName to the visual root, and elements with no root yet (a flyout before it opens) all share
+    // one scope, so two flyouts with the same names would uncheck each other's radios.
+    private readonly string _groupSuffix = Guid.NewGuid().ToString("N");
+
+    /// <summary>The style radios' group: "AppearanceStyle" plus this flyout's own suffix.</summary>
+    internal string StyleGroupName => "AppearanceStyle-" + _groupSuffix;
+
+    /// <summary>The mode radios' group: "AppearanceMode" plus this flyout's own suffix.</summary>
+    internal string ModeGroupName => "AppearanceMode-" + _groupSuffix;
 
     private static RadioButton NewRadio(string group, object content, string name, string help)
     {

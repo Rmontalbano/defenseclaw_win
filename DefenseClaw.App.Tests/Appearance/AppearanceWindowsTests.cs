@@ -228,8 +228,8 @@ public sealed class AppearanceWindowsTests
         UiThread.Run(() =>
         {
             var radios = Logical<RadioButton>(flyout).ToList();
-            var styles = radios.Where(r => r.GroupName == "AppearanceStyle").ToList();
-            var modes = radios.Where(r => r.GroupName == "AppearanceMode").ToList();
+            var styles = radios.Where(r => r.GroupName == flyout.StyleGroupName).ToList();
+            var modes = radios.Where(r => r.GroupName == flyout.ModeGroupName).ToList();
 
             Assert.Equal(new[] { "Default style", "Linear style", "TUI style", "Cisco style" }, styles.Select(r => System.Windows.Automation.AutomationProperties.GetName(r)).ToArray());
             Assert.Equal(new[] { "System mode", "Light mode", "Dark mode" }, modes.Select(r => System.Windows.Automation.AutomationProperties.GetName(r)).ToArray());
