@@ -1,0 +1,25 @@
+DefenseClaw for Windows
+https://github.com/Rmontalbano/defenseclaw_win
+
+A community Windows companion app for Cisco DefenseClaw
+(https://github.com/cisco-ai-defense/defenseclaw). It is not an official
+Cisco product. Cisco and DefenseClaw are trademarks of Cisco Systems, Inc.
+and/or its affiliates.
+
+This product includes work adapted from the following projects, both
+licensed under the Apache License, Version 2.0:
+
+  DefenseClaw for macOS
+  https://github.com/keitheobrien/defenseclaw_mac
+    Several features follow that app's design and behaviour, and some logic
+    was translated from Swift to C#, including the structured audit-detail
+    parser, the Overview attention rules and doctor reconciliation, the
+    inspector layout policy, connector onboarding, and egress decoding.
+
+  DefenseClaw
+  https://github.com/cisco-ai-defense/defenseclaw
+    Some input validation and display-redaction patterns mirror the
+    DefenseClaw CLI so the app accepts and hides exactly what the CLI does.
+
+The changes are this project's own: the code is a separate C#/WPF
+implementation for Windows.

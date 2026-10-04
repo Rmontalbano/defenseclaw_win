@@ -2,7 +2,7 @@
 
 ## Context
 
-Cisco DefenseClaw 0.8.7 ships natively on Windows (CLI/TUI, gateway, hook runtime, scanners) but has no graphical interface beyond the Setup wizard. The macOS community app [keitheobrien/defenseclaw_mac](https://github.com/keitheobrien/defenseclaw_mac) sets the bar: a native SwiftUI menu-bar companion with verified `defenseclaw tui` feature parity — 13 panels, 22 setup wizards, read-mostly architecture where **all state changes go through the CLI** with exact argv logged. This plan specs the Windows equivalent, tracked in Linear project [Windows DefenseClaw GUI](https://linear.app/remosclaws/project/windows-defenseclaw-gui-6e9330a6d849) (Client Work team). User chose **full parity in one push** (no staged v1).
+Cisco DefenseClaw 0.8.7 ships natively on Windows (CLI/TUI, gateway, hook runtime, scanners) but has no graphical interface beyond the Setup wizard. The macOS community app [keitheobrien/defenseclaw_mac](https://github.com/keitheobrien/defenseclaw_mac) sets the bar: a native SwiftUI menu-bar companion with verified `defenseclaw tui` feature parity — 13 panels, 22 setup wizards, read-mostly architecture where **all state changes go through the CLI** with exact argv logged. This plan specs the Windows equivalent, tracked in Linear project Windows DefenseClaw GUI (Client Work team). User chose **full parity in one push** (no staged v1).
 
 We have a live dev/test environment on this machine: native 0.8.7 at `%LOCALAPPDATA%\Programs\DefenseClaw`, gateway on `127.0.0.1:18970`, `claudecode` connector in observe mode, populated audit DB.
 
@@ -80,7 +80,7 @@ The app's "deep reach" needs are: tray-resident lifecycle (menu-bar analog), fil
 - Create **`defenseclaw_win`** via `gh repo create` (name mirrors the community convention set by `defenseclaw_mac`), **private initially — flip to public when it's demo-ready** (say the word if you want it public from day one).
 - Init git in `C:\Dev\defenseclaw-win`, MIT license (matches the mac app), README modeled on defenseclaw_mac's (what it is, screenshots, data-source table, "all mutations via CLI" principle), `.gitignore` for .NET + `*.user`, and a `docs/` folder holding this spec as `docs/PLAN.md`.
 - **CI (GitHub Actions):** `windows-latest` build + `dotnet test` on PR; on tag, publish self-contained single-exe release with a `checksums.txt` of SHA-256 sums — practicing the provenance stance we've been auditing upstream for.
-- Commit cadence: one commit per build-order step (1–9 above) so the history tracks the spec; link the repo from the Linear project.
+- Commit cadence: one commit per build-order step (1–9 above) so the history tracks the spec.
 
 ## Verification
 
