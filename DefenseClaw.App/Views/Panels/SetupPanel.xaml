@@ -4,7 +4,8 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
-             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell">
+             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels">
     <!--
         The Setup hub. Cards are generated from the CLI's own setup help at runtime, so this
         file describes a card, not a catalogue - adding a setup target upstream needs no edit
@@ -309,6 +310,220 @@
                     </StackPanel>
                 </Border>
 
+                <!--
+                    Readiness checklist: the TUI's rows, each failing one with a Fix. A Fix opens the shared review (the exact argv), a
+                    console window for a command that prompts for a secret, or the Setup wizard; none runs from the press alone.
+                -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ctl:DcCardHeader Grid.Column="0"
+                                              AutomationProperties.HeadingLevel="Level2"
+                                              Symbol="TaskListSquareLtr24"
+                                              Section="Setup"
+                                              Content="Readiness" />
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource DcStatusText}"
+                                       AutomationProperties.LiveSetting="Polite"
+                                       Text="{Binding Readiness.Summary}" />
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding Readiness.Rows}"
+                                      IsTabStop="False"
+                                      AutomationProperties.Name="Readiness checklist">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,6" Style="{StaticResource DcSubtleRow}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0"
+                                                    Width="64"
+                                                    Margin="0,0,12,0"
+                                                    VerticalAlignment="Center"
+                                                    Style="{StaticResource DcBadge}"
+                                                    Tag="{Binding StatusKey}">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                    <ctl:DcStatusGlyph Tone="{Binding StatusKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusText}" />
+                                                </StackPanel>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Style="{StaticResource ChipName}" Text="{Binding Title}" />
+                                                <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding Detail}" />
+                                            </StackPanel>
+                                            <ui:Button Grid.Column="2"
+                                                       Margin="12,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Content="Fix"
+                                                       Icon="{ctl:DcSymbolIcon Wrench24}"
+                                                       Command="{Binding FixCommand}"
+                                                       ToolTip="{Binding FixToolTip}"
+                                                       AutomationProperties.Name="{Binding FixAutomationName}"
+                                                       AutomationProperties.HelpText="{Binding FixToolTip}"
+                                                       Visibility="{Binding HasFix, Converter={StaticResource BoolToVisibility}}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!--
+                    Credentials: `defenseclaw keys list` as JSON, names and set/unset only (the CLI prints no value). Setting a value needs the
+                    CLI's hidden console prompt, which reads the console and not stdin, so Set opens a console window running the exact command.
+                -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <ctl:DcCardHeader Margin="0,0,10,0"
+                                                  VerticalAlignment="Center"
+                                                  AutomationProperties.HeadingLevel="Level2"
+                                                  Symbol="Key24"
+                                                  Section="Setup"
+                                                  Content="Credentials" />
+                                <Border VerticalAlignment="Center"
+                                        Style="{StaticResource DcBadge}"
+                                        Tag="Bad"
+                                        Visibility="{Binding Credentials.HasMissingRequired, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="Bad" ShowDot="False" GlyphSize="12" Gap="5" />
+                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                   AutomationProperties.LiveSetting="Polite"
+                                                   Text="{Binding Credentials.SummaryText}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock VerticalAlignment="Center"
+                                           Style="{StaticResource DcStatusText}"
+                                           Visibility="{Binding Credentials.HasMissingRequired, Converter={StaticResource InverseBoolToVisibility}}"
+                                           Text="{Binding Credentials.SummaryText}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:ProgressRing Width="16"
+                                                 Height="16"
+                                                 Margin="0,0,8,0"
+                                                 IsIndeterminate="True"
+                                                 Visibility="{Binding Credentials.IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding Credentials.AsOf}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                    IsClosable="False"
+                                    Severity="Error"
+                                    Title="The credential list could not be read"
+                                    IsOpen="{Binding Credentials.HasError, Mode=OneWay}"
+                                    Message="{Binding Credentials.Error}" />
+
+                        <TextBlock Margin="0,0,0,8"
+                                   Style="{StaticResource DcCaption}"
+                                   Visibility="{Binding Credentials.ShowNotLoaded, Converter={StaticResource BoolToVisibility}}"
+                                   Text="Not loaded yet. Refresh reads defenseclaw keys list --json." />
+                        <TextBlock Margin="0,0,0,8"
+                                   Style="{StaticResource DcCaption}"
+                                   Visibility="{Binding Credentials.ShowEmpty, Converter={StaticResource BoolToVisibility}}"
+                                   Text="No credentials to report." />
+
+                        <StackPanel Grid.IsSharedSizeScope="True"
+                                    Visibility="{Binding Credentials.HasRows, Converter={StaticResource BoolToVisibility}}">
+                            <Grid Margin="8,0,8,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition SharedSizeGroup="CredEnv" Width="Auto" MinWidth="200" />
+                                    <ColumnDefinition SharedSizeGroup="CredFeature" Width="Auto" MinWidth="140" />
+                                    <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
+                                    <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
+                                    <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
+                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="80" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource DcStatusText}" Text="Env" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource DcStatusText}" Text="Feature" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource DcStatusText}" Text="Requirement" />
+                                <TextBlock Grid.Column="3" Style="{StaticResource DcStatusText}" Text="Source" />
+                                <TextBlock Grid.Column="4" Style="{StaticResource DcStatusText}" Text="Set" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Credentials.Rows}"
+                                          IsTabStop="False"
+                                          AutomationProperties.Name="Credentials, one row per environment variable">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,2"
+                                                Style="{StaticResource DcSubtleRow}"
+                                                ToolTip="{Binding Description}"
+                                                AutomationProperties.Name="{Binding RowAutomationName}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition SharedSizeGroup="CredEnv" Width="Auto" MinWidth="200" />
+                                                    <ColumnDefinition SharedSizeGroup="CredFeature" Width="Auto" MinWidth="140" />
+                                                    <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
+                                                    <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
+                                                    <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
+                                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="80" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextMono}" Text="{Binding EnvName}" />
+                                                <TextBlock Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellText}" Text="{Binding Feature}" />
+                                                <TextBlock Grid.Column="2" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextQuiet}" Text="{Binding Requirement}" />
+                                                <TextBlock Grid.Column="3" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextQuiet}" Text="{Binding Source}" />
+                                                <Border Grid.Column="4" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                        Style="{StaticResource DcBadge}" Tag="{Binding SetKey}">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SetText}" />
+                                                </Border>
+                                                <ui:Button Grid.Column="5"
+                                                           Content="Set…"
+                                                           Command="{Binding SetInTerminalCommand}"
+                                                           ToolTip="{Binding SetCommandText, StringFormat='Opens a console window running {0}; the value is typed there, never here'}"
+                                                           AutomationProperties.Name="{Binding SetAutomationName}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,8,0,0">
+                            <ui:Button Content="Refresh"
+                                       Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                       Command="{Binding Credentials.RefreshCommand}"
+                                       ToolTip="Read defenseclaw keys list --json again"
+                                       AutomationProperties.Name="Refresh the credential list" />
+                            <ui:Button Content="Check"
+                                       Icon="{ctl:DcSymbolIcon CheckmarkCircle24}"
+                                       Command="{Binding Credentials.CheckCommand}"
+                                       ToolTip="Run defenseclaw keys check (read-only): exits non-zero when a required key is missing"
+                                       AutomationProperties.Name="Check required credentials" />
+                            <ui:Button Content="Fill missing…"
+                                       Icon="{ctl:DcSymbolIcon WindowConsole20}"
+                                       Command="{Binding Credentials.OpenFillMissingInTerminalCommand}"
+                                       ToolTip="Opens a console window running defenseclaw keys fill-missing --yes: a hidden prompt for each required key that is unset"
+                                       AutomationProperties.Name="Fill missing credentials in a terminal" />
+                        </WrapPanel>
+
+                        <TextBlock Margin="0,8,0,0"
+                                   Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Visibility="{Binding Credentials.HasNote, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding Credentials.Note}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="Values are never shown or passed through this app. The CLI reads them at a hidden console prompt, so Set and Fill missing open a console window; this list refreshes when you come back." />
+                    </StackPanel>
+                </Border>
+
                 <!-- Filter strip (no card of its own) -->
                 <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
                     <ui:TextBox x:Name="SearchBox"
@@ -541,5 +756,8 @@
                 </shell:CommandReviewControl>
             </Border>
         </Grid>
+
+        <!-- The readiness fixes' review (the shared Discover overlay over the shared review control). Esc closes it. -->
+        <panels:DiscoverReviewOverlay Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Review}" />
     </Grid>
 </UserControl>

@@ -112,7 +112,23 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         // No subscriptions here: OnActivated attaches them and OnDeactivated lets go.
         _catalog = WizardCatalog.Shared(services);
+
+        Review = new DiscoverActionReview(services);
+        Credentials = new CredentialsViewModel(services);
+        Readiness = new ReadinessViewModel(services, Credentials, Review);
+
+        // The credential read feeds the "Required Credentials" row.
+        Credentials.Loaded += (_, _) => Readiness.Rebuild();
     }
+
+    /// <summary>The Credentials card (<c>keys list --json</c>, <c>keys check</c>, the terminal route for <c>keys set</c>).</summary>
+    public CredentialsViewModel Credentials { get; }
+
+    /// <summary>The readiness checklist with a Fix per failing row.</summary>
+    public ReadinessViewModel Readiness { get; }
+
+    /// <summary>The shared review the readiness fixes go through.</summary>
+    public DiscoverActionReview Review { get; }
 
     public override string Title => "Setup";
 
@@ -215,6 +231,14 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
             ApplyFilters();
         }
 
+        // The checklist is in-memory work; the credential read is a CLI call, so only when there is none yet or it has gone stale.
+        Readiness.Rebuild();
+        _ = Readiness.ReloadAsync();
+        if (Credentials.IsStale)
+        {
+            _ = Credentials.RefreshAsync();
+        }
+
         // One read of the guardrail posture when there is none yet or it has gone stale — a CLI call,
         // so never more often than that.
         if (_guardrailLoadedAt is null || DefenseClaw.Core.Time.WallClock.Elapsed(_guardrailLoadedAt.Value) > GuardrailFreshFor)
@@ -299,7 +323,11 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     private async Task RefreshAsync()
     {
         BuildConnectors();
+        Readiness.Rebuild();
+        var credentials = Credentials.RefreshAsync();
+        var doctor = Readiness.ReloadAsync();
         await LoadGuardrailAsync().ConfigureAwait(true);
+        await Task.WhenAll(credentials, doctor).ConfigureAwait(true);
     }
 
     /// <summary>Forgets every cached help screen and re-asks the CLI which setup targets it has.</summary>
@@ -380,7 +408,11 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         });
     }
 
-    private void OnGatewayStateChanged(object? sender, GatewaySnapshotEventArgs e) => BuildConnectors();
+    private void OnGatewayStateChanged(object? sender, GatewaySnapshotEventArgs e)
+    {
+        BuildConnectors();
+        Readiness.Rebuild();
+    }
 
     /// <summary>
     /// The roster the wizards act on: connector names from config.yaml unioned with what
@@ -852,6 +884,10 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
             // read, and re-reading it would only show the same thing while hiding the error.
             if (invocation.ExitCode is 0 && invocation.FailureReason is null)
             {
+                // A change saved with --no-restart is not in effect until the gateway restarts: the checklist says so.
+                Readiness.QueueRestart(GuardrailRestartAfter
+                    ? string.Empty
+                    : "A guardrail change was saved without restarting the gateway; it takes effect at the next restart.");
                 IsGuardrailRunning = false;
                 await LoadGuardrailAsync().ConfigureAwait(true);
             }

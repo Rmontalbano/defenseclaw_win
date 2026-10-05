@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using DefenseClaw.App.ViewModels;
@@ -20,6 +21,38 @@ public sealed partial class SetupPanel : UserControl
     {
         InitializeComponent();
         PreviewKeyDown += OnPreviewKeyDown;
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private Window? _window;
+
+    // Coming back to the window after a console was opened for `keys set` / `fill-missing` re-reads the credential list once
+    // (the view-model does nothing unless a console was opened). Attached only while the panel is on screen; no timer.
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _window = Window.GetWindow(this);
+        if (_window is not null)
+        {
+            _window.Activated += OnWindowActivated;
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_window is not null)
+        {
+            _window.Activated -= OnWindowActivated;
+            _window = null;
+        }
+    }
+
+    private void OnWindowActivated(object? sender, EventArgs e)
+    {
+        if (DataContext is SetupPanelViewModel viewModel)
+        {
+            viewModel.Credentials.NotifyReturned();
+        }
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -35,6 +68,12 @@ public sealed partial class SetupPanel : UserControl
         if (e.Key == Key.Escape && DataContext is SetupPanelViewModel { IsGuardrailReviewOpen: true } viewModel)
         {
             viewModel.CancelGuardrailReviewCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && DataContext is SetupPanelViewModel setup && setup.Review.HandleEscape())
+        {
             e.Handled = true;
         }
     }

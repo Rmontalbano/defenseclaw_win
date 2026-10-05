@@ -627,6 +627,29 @@ public sealed class CliRunner : IDisposable
         RunNamedAsync("defenseclaw-gateway", args, stdinSecret, cancellationToken, options);
 
     /// <summary>
+    /// Records, in <see cref="Activity"/>, a command this app handed to a console window the operator types into (<c>keys set</c> and
+    /// <c>keys fill-missing</c> read a hidden prompt from the console, so they cannot run here). Nothing is started: the entry is born
+    /// finished, has no exit code (the app does not observe the run), and carries <paramref name="note"/> as its only output.
+    /// Only the argv is stored, and it is checked like any run's (a secret on it is refused), so the entry cannot hold a value.
+    /// </summary>
+    public CliInvocation RecordHandOff(string executable, IReadOnlyList<string> argv, string note)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(executable);
+        ArgumentNullException.ThrowIfNull(argv);
+
+        GuardArguments(argv, null, Array.Empty<EnvironmentEntry>());
+
+        var now = DateTimeOffset.UtcNow;
+        var invocation = new CliInvocation(executable, argv.ToArray(), now);
+        invocation.Append(new CliOutputLine(now, CliStream.Notice, note ?? string.Empty));
+        invocation.FinishedAt = now;
+        Record(invocation);
+        InvocationStarted?.Invoke(this, invocation);
+        InvocationCompleted?.Invoke(this, invocation);
+        return invocation;
+    }
+
+    /// <summary>
     /// Resolves <paramref name="executableName"/> through PATH then the install bin dir.
     /// <para>
     /// The resolution happens on a pool thread, inside the returned task: a PATH scan that meets a dead network
