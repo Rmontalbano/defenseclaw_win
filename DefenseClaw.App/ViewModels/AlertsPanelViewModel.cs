@@ -73,7 +73,10 @@ namespace DefenseClaw.App.ViewModels;
 /// its chip looks like.
 /// </para>
 /// <para>
-/// <b>Acknowledge / dismiss.</b> <c>defenseclaw alerts acknowledge|dismiss --severity X</c>
+/// <b>Acknowledge / dismiss.</b> The selection actions (acknowledge selection, dismiss selection, dismiss filtered) name exact ids:
+/// <c>alerts &lt;verb&gt; --id a --id b [--yes]</c>, sorted and unique like the TUI's <c>_alert_id_command_args</c>, in runs of at most
+/// <see cref="IdChunkSize"/> ids, each previewed (<c>--dry-run</c>) and confirmed on its own. Rows with no audit id are skipped and said so.
+/// "Acknowledge / Dismiss by severity" is the other flow: <c>defenseclaw alerts acknowledge|dismiss --severity X</c>
 /// acts on the <i>whole severity class</i> in DefenseClaw, not on the handful of rows this list
 /// loaded, so the panel never runs it blind: the operator picks the action, the panel runs the
 /// same command with <c>--dry-run</c> (which the CLI documents as changing nothing) and shows what
@@ -96,6 +99,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     private const int FallbackLimit = 100;
 
     private readonly List<AlertItem> _all = new();
+
+    /// <summary>The rows the filters leave, before repeats are folded into groups: what "Dismiss filtered" names.</summary>
+    private IReadOnlyList<AlertItem> _filtered = Array.Empty<AlertItem>();
     private readonly DispatcherTimer _clock;
     private int _loadingFallback;
     private DateTimeOffset _lastFallbackLoad = DateTimeOffset.MinValue;
@@ -199,6 +205,44 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     private CancellationTokenSource? _previewCts;
     private int _previewVersion;
     private bool _openingReview;
+
+    /// <summary>Ids per reviewed run. The CLI has no limit of its own; this keeps one command line well inside Windows' 32 K-character cap (an id is a ~36-character guid plus <c>--id </c>).</summary>
+    internal const int IdChunkSize = 200;
+
+    /// <summary>The runs of an id review (selection / filtered), each a sorted, unique list of at most <see cref="IdChunkSize"/> ids; empty for the severity-class review.</summary>
+    private List<List<string>> _idChunks = new();
+
+    private int _chunkIndex;
+
+    /// <summary>Alerts the finished runs of the open id review applied, and whether any run did anything (so closing the dialog early still re-reads the list).</summary>
+    private int _appliedSoFar;
+
+    private bool _anyChunkApplied;
+
+    /// <summary>The ids the open review acts on, in one list (empty for the severity-class review).</summary>
+    private int _reviewIdTotal;
+
+    /// <summary>"selected" or "filtered": what the id review's wording calls its set.</summary>
+    private string _reviewSetName = string.Empty;
+
+    /// <summary>True for the severity-class review (the combo box shows); false for an id review, which names exact alerts.</summary>
+    [ObservableProperty]
+    private bool _isSeverityReview = true;
+
+    /// <summary>The dialog's lead paragraph: what the open review acts on.</summary>
+    [ObservableProperty]
+    private string _reviewIntro = string.Empty;
+
+    /// <summary>"Run 2 of 5" while an id review is split into several reviewed runs; empty otherwise.</summary>
+    [ObservableProperty]
+    private string _chunkText = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasChunkText;
+
+    /// <summary>The caption above the exact command.</summary>
+    [ObservableProperty]
+    private string _commandNote = string.Empty;
 
     /// <summary>
     /// The command the confirm button runs, fixed by the preview that enabled it (and not rebuilt from the dialog at
@@ -516,7 +560,18 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         ArgumentNullException.ThrowIfNull(selected);
         _selectedMany = selected.ToList();
+        NotifySelectionChanged();
+    }
+
+    /// <summary>The readout and the three selection actions follow the table's selection (and the filtered set, which a filter pass changes).</summary>
+    private void NotifySelectionChanged()
+    {
         OpenAcknowledgeSelectionCommand.NotifyCanExecuteChanged();
+        OpenDismissSelectionCommand.NotifyCanExecuteChanged();
+        OpenDismissFilteredCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(SelectionText));
+        OnPropertyChanged(nameof(FilteredText));
+        OnPropertyChanged(nameof(HasActionRows));
     }
 
     /// <summary>The rows a menu action applies to: the table's selection, or the one row the detail pane shows when the view has not reported a selection.</summary>
@@ -540,15 +595,17 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         // Picking another severity in the open dialog is a different command, so it gets its own
         // preview. Setting the default while the dialog is being opened is not a pick.
-        if (!_openingReview && IsReviewOpen && value is not null)
+        if (!_openingReview && IsReviewOpen && IsSeverityReview && value is not null)
         {
             _ = PreviewAsync();
         }
     }
 
+    /// <summary>"Acknowledge by severity…": the whole severity class in DefenseClaw (the CLI's <c>--severity</c> selector), with the CLI's own preview first.</summary>
     [RelayCommand]
     private Task OpenAcknowledgeAsync() => OpenReviewAsync(AcknowledgeVerb);
 
+    /// <summary>"Dismiss by severity…": the whole severity class, as above.</summary>
     [RelayCommand]
     private Task OpenDismissAsync() => OpenReviewAsync(DismissVerb);
 
@@ -558,6 +615,18 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         CancelPreview();
         IsPreviewing = false;
         IsReviewOpen = false;
+        if (_anyChunkApplied)
+        {
+            // An earlier run of a split review already changed alerts: the list and the badge must not keep showing them.
+            _anyChunkApplied = false;
+            _ = ReloadAfterChunkedCancelAsync();
+        }
+    }
+
+    private async Task ReloadAfterChunkedCancelAsync()
+    {
+        await RefreshCountsAsync();
+        await (AfterApply?.Invoke() ?? ReloadAfterDispositionAsync());
     }
 
     [RelayCommand]
@@ -570,10 +639,19 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     private async Task OpenReviewAsync(string verb)
     {
         _reviewVerb = verb;
+        _idChunks = new List<List<string>>();
+        _chunkIndex = 0;
+        _appliedSoFar = 0;
+        _anyChunkApplied = false;
+        ChunkText = string.Empty;
+        HasChunkText = false;
+        IsSeverityReview = true;
+        ReviewIntro = "This applies to the active alerts of the chosen severity in DefenseClaw - the whole class as of the preview - not only the alerts listed here. The preview below is the CLI's own dry run and changes nothing, and the command that runs is limited to what it found.";
+        CommandNote = "This is the exact command that will run. Nothing happens until you confirm. --before is the moment of the preview, so an alert that arrives later is left alone (or, for a short list, --id names each alert). --yes is the CLI's own confirmation for a broad selector.";
         _openingReview = true;
         try
         {
-            ReviewHeading = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismiss alerts" : "Acknowledge alerts";
+            ReviewHeading = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismiss alerts by severity" : "Acknowledge alerts by severity";
             ReviewSeverity = DefaultReviewSeverity();
             SetReviewError(string.Empty);
             IsReviewOpen = true;
@@ -624,9 +702,16 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     /// </summary>
     private async Task PreviewAsync()
     {
-        if (ReviewSeverity is not { } choice)
+        var byIds = !IsSeverityReview && _chunkIndex < _idChunks.Count;
+        SeverityChoice? choice = null;
+        if (!byIds)
         {
-            return;
+            if (ReviewSeverity is not { } picked)
+            {
+                return;
+            }
+
+            choice = picked;
         }
 
         CancelPreview();
@@ -641,8 +726,22 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         // "--before" pins both commands to the alerts that existed now (millisecond precision: a whole second would drop
         // the ones from the last instant).
         var before = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
-        var previewArgv = new[] { "alerts", verb, "--severity", choice.Value, "--before", before, "--dry-run" };
-        var applyArgv = new[] { "alerts", verb, "--severity", choice.Value, "--before", before, "--yes" };
+        string[] previewArgv;
+        string[] applyArgv;
+        if (byIds)
+        {
+            // Exact ids, mirroring the TUI's _alert_id_command_args (sorted, unique, --id repeated, --yes when more than one). The
+            // preview is the same command with --dry-run and without --yes: the CLI stops at the dry run before it would ask.
+            var chunk = _idChunks[_chunkIndex];
+            applyArgv = AlertIdCommandArgs(verb, chunk);
+            previewArgv = AlertIdCommandArgs(verb, chunk, withYes: false).Append("--dry-run").ToArray();
+        }
+        else
+        {
+            previewArgv = new[] { "alerts", verb, "--severity", choice!.Value, "--before", before, "--dry-run" };
+            applyArgv = new[] { "alerts", verb, "--severity", choice.Value, "--before", before, "--yes" };
+        }
+
         _applyArgv = null;
 
         ConfirmCommandText = "defenseclaw " + string.Join(' ', applyArgv);
@@ -652,9 +751,18 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         // Same words and tone as the shared command review, so a tier reads identically everywhere.
         TierText = CommandReview.LabelFor(tier);
         TierKey = CommandReview.ToneFor(tier);
-        ConfirmButtonText = string.Equals(verb, DismissVerb, StringComparison.Ordinal)
-            ? (choice.IsAll ? "Dismiss all alerts" : $"Dismiss all {choice.Value}")
-            : (choice.IsAll ? "Acknowledge all alerts" : $"Acknowledge all {choice.Value}");
+        var dismissing = string.Equals(verb, DismissVerb, StringComparison.Ordinal);
+        if (byIds)
+        {
+            var n = _idChunks[_chunkIndex].Count;
+            ConfirmButtonText = $"{(dismissing ? "Dismiss" : "Acknowledge")} {n.ToString("N0", CultureInfo.CurrentCulture)} {(n == 1 ? "alert" : "alerts")}";
+        }
+        else
+        {
+            ConfirmButtonText = dismissing
+                ? (choice!.IsAll ? "Dismiss all alerts" : $"Dismiss all {choice.Value}")
+                : (choice!.IsAll ? "Acknowledge all alerts" : $"Acknowledge all {choice.Value}");
+        }
 
         IsPreviewing = true;
         PreviewSucceeded = false;
@@ -703,8 +811,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             // Twenty ids or fewer, all of them printed: apply exactly those (the CLI takes --id alone, not with a selector).
             // More than that, only the selector plus the preview's moment can name the set.
             var ids = PreviewedIds(invocation);
-            var exact = matched is > 0 and <= PreviewedIdLimit && ids.Count == matched;
-            if (exact)
+            var exact = byIds || (matched is > 0 and <= PreviewedIdLimit && ids.Count == matched);
+            if (exact && !byIds)
             {
                 applyArgv = new[] { "alerts", verb }
                     .Concat(ids.SelectMany(id => new[] { "--id", id }))
@@ -716,7 +824,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             _applyArgv = applyArgv;
             PreviewMatched = matched;
             PreviewSucceeded = true;
-            PreviewSummary = DescribePreview(matched, choice, verb, exact);
+            PreviewSummary = byIds
+                ? DescribeIdPreview(matched, _idChunks[_chunkIndex].Count, verb)
+                : DescribePreview(matched, choice!, verb, exact);
         }
         catch (CliNotFoundException ex)
         {
@@ -747,7 +857,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     [RelayCommand]
     private async Task ConfirmReviewAsync()
     {
-        if (!CanConfirmReview || ReviewSeverity is not { } choice)
+        if (!CanConfirmReview)
+        {
+            return;
+        }
+
+        var choice = ReviewSeverity;
+        if (IsSeverityReview && choice is null)
         {
             return;
         }
@@ -781,15 +897,45 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
                 return;
             }
 
-            IsReviewOpen = false;
             var output = StreamText(invocation, CliStream.StandardOutput, maxLines: 30);
             var done = output
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .LastOrDefault();
             var result = string.IsNullOrWhiteSpace(done)
-                ? $"Ran 'defenseclaw alerts {verb} --severity {choice.Value}'."
+                ? (IsSeverityReview ? $"Ran 'defenseclaw alerts {verb} --severity {choice!.Value}'." : $"Ran 'defenseclaw alerts {verb}' on {_idChunks[_chunkIndex].Count} alert(s).")
                 : done;
-            ShowActionResult(result + DifferenceNote(output, previewed), isError: false);
+            var note = DifferenceNote(output, previewed);
+
+            if (!IsSeverityReview)
+            {
+                _anyChunkApplied = true;
+                _appliedSoFar += AppliedPattern.Match(output) is { Success: true } a
+                    && int.TryParse(a.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var applied)
+                    ? applied
+                    : previewed;
+
+                if (_chunkIndex + 1 < _idChunks.Count)
+                {
+                    // The next run is reviewed on its own: its own dry run, its own command, its own confirm. The list is re-read when
+                    // the last one is done (or the dialog is closed early).
+                    _chunkIndex++;
+                    SetChunkText();
+                    IsApplying = false;
+                    await PreviewAsync();
+                    return;
+                }
+
+                if (_idChunks.Count > 1)
+                {
+                    result = $"{(string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissed" : "Acknowledged")} {_appliedSoFar} alert(s) in {_idChunks.Count} runs.";
+                    note = string.Empty;
+                }
+
+                _anyChunkApplied = false;
+            }
+
+            IsReviewOpen = false;
+            ShowActionResult(result + note, isError: false);
 
             // The sidebar badge and the tray follow the acknowledge at once, not on the next 30 s tick.
             await RefreshCountsAsync();
@@ -864,6 +1010,50 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         ActionBannerText = message;
         ShowActionSuccess = !isError;
         ShowActionError = isError;
+    }
+
+    /// <summary>
+    /// <c>alerts &lt;verb&gt; --id a --id b ...</c> for exactly these ids: sorted, unique, <c>--yes</c> when there is more than one
+    /// (the CLI asks for its own confirmation for anything but a single id; this app's review is the confirmation). Mirrors the TUI's
+    /// <c>_alert_id_command_args</c> in 0.8.10. <paramref name="withYes"/> is false for the dry-run, which stops before the question.
+    /// </summary>
+    internal static string[] AlertIdCommandArgs(string verb, IEnumerable<string> ids, bool withYes = true)
+    {
+        var sorted = ids.Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToList();
+        var argv = new List<string>(sorted.Count * 2 + 3) { "alerts", verb };
+        foreach (var id in sorted)
+        {
+            argv.Add("--id");
+            argv.Add(id);
+        }
+
+        if (withYes && sorted.Count > 1)
+        {
+            argv.Add("--yes");
+        }
+
+        return argv.ToArray();
+    }
+
+    private void SetChunkText()
+    {
+        ChunkText = _idChunks.Count > 1
+            ? $"Run {_chunkIndex + 1} of {_idChunks.Count} - {_reviewIdTotal.ToString("N0", CultureInfo.CurrentCulture)} alerts in all, {IdChunkSize} at most per command so the command line stays short. Each run is previewed and confirmed on its own."
+            : string.Empty;
+        HasChunkText = ChunkText.Length > 0;
+    }
+
+    private string DescribeIdPreview(int matched, int named, string verb)
+    {
+        var doing = string.Equals(verb, DismissVerb, StringComparison.Ordinal) ? "Dismissing" : "Acknowledging";
+        if (matched == 0)
+        {
+            return $"None of the {named.ToString("N0", CultureInfo.CurrentCulture)} {_reviewSetName} alerts is active any more (already acknowledged or dismissed), so there is nothing to {verb}.";
+        }
+
+        var count = matched.ToString("N0", CultureInfo.CurrentCulture);
+        var gone = matched < named ? $" ({named - matched} of the {named} named are no longer active)" : string.Empty;
+        return $"{count} {_reviewSetName} {(matched == 1 ? "alert matches" : "alerts match")}{gone}. {doing} applies to exactly the {_reviewSetName} alerts named in the command below, and to nothing else.";
     }
 
     private string DescribePreview(int matched, SeverityChoice choice, string verb, bool exactIds)
@@ -1533,6 +1723,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         }
 
         var filtered = query.ToList();
+        _filtered = filtered;
         var rows = CollapseRepeats ? Collapse(filtered) : filtered;
 
         // Merged by alert key, not cleared and refilled: the ListView keeps the containers,
@@ -1562,6 +1753,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         SelectedAlert = selectedKey is null
             ? null
             : Alerts.FirstOrDefault(a => string.Equals(a.Key, selectedKey, StringComparison.Ordinal));
+        NotifySelectionChanged();
     }
 
     /// <summary>Writes each severity chip's count from the un-filtered pool (a chip that is off still says how many it hides).</summary>
@@ -1716,6 +1908,12 @@ public sealed partial class AlertItem : ObservableObject
     /// <summary>Stable identity, used to keep the selection across refreshes.</summary>
     public string Key { get; }
 
+    /// <summary>
+    /// False for a row the source gave no audit id (the key is then a generated one) or a gateway-only <c>gw:</c> id: the CLI's
+    /// <c>--id</c> cannot name it, so acknowledge / dismiss by id skip it (the TUI skips <c>gw:</c> rows the same way).
+    /// </summary>
+    public bool HasAuditId { get; private init; } = true;
+
     public DateTimeOffset Timestamp { get; }
 
     public string TimestampText => Timestamp.ToLocalTime().ToString("MMM d HH:mm:ss", CultureInfo.CurrentCulture);
@@ -1822,6 +2020,7 @@ public sealed partial class AlertItem : ObservableObject
 
         return new AlertItem(alert.Id.Length > 0 ? alert.Id : Guid.NewGuid().ToString("n"), alert.Timestamp)
         {
+            HasAuditId = HasUsableId(alert.Id),
             Severity = Normalize(alert.Severity),
             Kind = KindOf(alert.Action ?? string.Empty, alert.Scanner ?? string.Empty),
             RawTarget = alert.Target ?? string.Empty,
@@ -1850,6 +2049,7 @@ public sealed partial class AlertItem : ObservableObject
 
         return new AlertItem(row.Id, row.Timestamp)
         {
+            HasAuditId = HasUsableId(row.Id),
             Severity = Normalize(row.Severity),
             Kind = KindOf(row.Action, row.StructuredString(GatewayAlert.Keys.Scanner) ?? string.Empty),
             RawTarget = row.Target ?? string.Empty,
@@ -1879,6 +2079,7 @@ public sealed partial class AlertItem : ObservableObject
 
         return new AlertItem(item.Id.Length > 0 ? item.Id : Guid.NewGuid().ToString("n"), item.Timestamp)
         {
+            HasAuditId = HasUsableId(item.Id),
             Severity = item.Severity.ToStoredValue(),
             Kind = KindOf(item.Action, string.Empty),
             RawTarget = item.Target ?? string.Empty,
@@ -1894,6 +2095,7 @@ public sealed partial class AlertItem : ObservableObject
     /// <summary>Copy used as a collapsed group's representative row.</summary>
     public AlertItem CloneForGroup() => new(Key, Timestamp)
     {
+        HasAuditId = HasAuditId,
         Severity = Severity,
         Kind = Kind,
         RawTarget = RawTarget,
@@ -1911,6 +2113,9 @@ public sealed partial class AlertItem : ObservableObject
         StructuredText = StructuredText,
         Fields = Fields,
     };
+
+    private static bool HasUsableId(string? id) =>
+        !string.IsNullOrWhiteSpace(id) && !id.StartsWith("gw:", StringComparison.Ordinal);
 
     public static string KeyFor(string? severity) => severity?.Trim().ToUpperInvariant() switch
     {

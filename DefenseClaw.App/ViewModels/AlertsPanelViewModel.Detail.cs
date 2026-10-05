@@ -207,13 +207,123 @@ public sealed partial class AlertsPanelViewModel
     /// <summary>True while a row is selected: what the toolbar's "Acknowledge selection" waits for (the Mac's disabled-until-selected).</summary>
     public bool HasActionRows => ActionRows.Count > 0;
 
-    /// <summary>Opens the same acknowledge review as the row menu, for the selected rows' worst severity; nothing runs until it is confirmed.</summary>
+    /// <summary>
+    /// The audit ids of the rows a selection action names: the table's selection (a folded group of repeats stands for every repeat it
+    /// folds), sorted and unique, and how many of those rows had no audit id to name (gateway-only rows the CLI's <c>--id</c> cannot take).
+    /// </summary>
+    internal (List<string> Ids, int Skipped) SelectedIds()
+    {
+        var rows = new List<AlertItem>();
+        foreach (var row in ActionRows)
+        {
+            if (CollapseRepeats && row.RepeatCount > 1)
+            {
+                rows.AddRange(_filtered.Where(f => string.Equals(f.GroupKey, row.GroupKey, StringComparison.OrdinalIgnoreCase)));
+            }
+            else
+            {
+                rows.Add(row);
+            }
+        }
+
+        return IdsOf(rows);
+    }
+
+    /// <summary>The ids of every row the filters leave (text, kind, scope, severity), repeats included, and how many had no audit id.</summary>
+    internal (List<string> Ids, int Skipped) FilteredIds() => IdsOf(_filtered);
+
+    private static (List<string> Ids, int Skipped) IdsOf(IEnumerable<AlertItem> rows)
+    {
+        var distinct = rows.DistinctBy(r => r.Key, StringComparer.Ordinal).ToList();
+        var ids = distinct.Where(r => r.HasAuditId).Select(r => r.Key).Order(StringComparer.Ordinal).ToList();
+        return (ids, distinct.Count - ids.Count);
+    }
+
+    /// <summary>The toolbar strip's readout: how many alerts the selection actions would name (and how many cannot be named).</summary>
+    public string SelectionText
+    {
+        get
+        {
+            var (ids, skipped) = SelectedIds();
+            if (ids.Count == 0 && skipped == 0)
+            {
+                return "No alerts selected";
+            }
+
+            var text = $"{ids.Count.ToString("N0", CultureInfo.CurrentCulture)} selected";
+            return skipped > 0 ? $"{text} ({skipped} gateway-only, no audit id)" : text;
+        }
+    }
+
+    /// <summary>What "Dismiss filtered" names: the alerts the filters leave on screen.</summary>
+    public string FilteredText => $"Dismiss filtered ({FilteredIds().Ids.Count.ToString("N0", CultureInfo.CurrentCulture)})";
+
+    private bool HasFiltered => _filtered.Count > 0;
+
+    /// <summary>"Acknowledge selection": exactly the selected alerts, by id, with the CLI's dry run first; nothing runs until it is confirmed.</summary>
     [RelayCommand(CanExecute = nameof(HasActionRows))]
-    private Task OpenAcknowledgeSelectionAsync() => OpenReviewAsync(AcknowledgeVerb);
+    private Task OpenAcknowledgeSelectionAsync() => OpenIdReviewAsync(AcknowledgeVerb, SelectedIds(), "selected");
+
+    /// <summary>"Dismiss selection": exactly the selected alerts, by id.</summary>
+    [RelayCommand(CanExecute = nameof(HasActionRows))]
+    private Task OpenDismissSelectionAsync() => OpenIdReviewAsync(DismissVerb, SelectedIds(), "selected");
+
+    /// <summary>"Dismiss filtered": every alert the filters leave on screen, by id (the TUI's <c>c</c>).</summary>
+    [RelayCommand(CanExecute = nameof(HasFiltered))]
+    private Task OpenDismissFilteredAsync() => OpenIdReviewAsync(DismissVerb, FilteredIds(), "filtered");
+
+    /// <summary>
+    /// Opens the review for an exact set of ids. Nothing to name (an empty set, or only gateway-only rows) is said on the result banner and
+    /// opens nothing; a set above <see cref="IdChunkSize"/> becomes several reviewed runs.
+    /// </summary>
+    private async Task OpenIdReviewAsync(string verb, (List<string> Ids, int Skipped) set, string setName)
+    {
+        var (ids, skipped) = set;
+        if (ids.Count == 0)
+        {
+            ShowActionResult(
+                skipped > 0
+                    ? $"Nothing to {verb}: the {skipped} {setName} alert(s) are gateway-only rows with no audit id for the CLI to name."
+                    : $"No {setName} alerts to {verb}.",
+                isError: true);
+            return;
+        }
+
+        ShowActionSuccess = false;
+        ShowActionError = false;
+        _reviewVerb = verb;
+        _reviewSetName = setName;
+        _reviewIdTotal = ids.Count;
+        _idChunks = ids.Chunk(IdChunkSize).Select(c => c.ToList()).ToList();
+        _chunkIndex = 0;
+        _appliedSoFar = 0;
+        _anyChunkApplied = false;
+
+        var dismissing = string.Equals(verb, DismissVerb, StringComparison.Ordinal);
+        var total = ids.Count.ToString("N0", CultureInfo.CurrentCulture);
+        _openingReview = true;
+        try
+        {
+            IsSeverityReview = false;
+            ReviewHeading = $"{(dismissing ? "Dismiss" : "Acknowledge")} {total} {setName} {(ids.Count == 1 ? "alert" : "alerts")}";
+            ReviewIntro = "This applies to exactly the alerts named in the command below, by id - never to the rest of their severity. The preview below is the CLI's own dry run and changes nothing."
+                + (skipped > 0 ? $" {skipped} {setName} gateway-only row(s) have no audit id and are left out." : string.Empty);
+            CommandNote = "This is the exact command that will run. Nothing happens until you confirm. --yes is the CLI's own confirmation for more than one id; this review is yours.";
+            SetChunkText();
+            SetReviewError(string.Empty);
+            IsReviewOpen = true;
+        }
+        finally
+        {
+            _openingReview = false;
+        }
+
+        await PreviewAsync();
+    }
 
     partial void OnSelectedAlertChanged(AlertItem? value)
     {
-        OpenAcknowledgeSelectionCommand.NotifyCanExecuteChanged();
+        NotifySelectionChanged();
         _ = LoadDetailAsync(value);
     }
 

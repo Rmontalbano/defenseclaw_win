@@ -666,9 +666,9 @@ public sealed class PageChromeTests
                 Assert.Equal("", toolbar.SearchBox.Text);
 
                 // The list starts well above where it did under the 26 px title and the filter card (about 240 DIPs down at this size);
-                // the four severity tiles (CUST-218) take a row of about 80 DIPs between the toolbar and the filter strip.
+                // the four severity tiles (CUST-218) take a row of about 80 DIPs between the toolbar and the filter strip, and the selection strip (CUST-255) one of about 44.
                 var list = (FrameworkElement)page.FindName("ListCard");
-                Assert.InRange(list.TranslatePoint(new Point(0, 0), page).Y, 100, 250);
+                Assert.InRange(list.TranslatePoint(new Point(0, 0), page).Y, 100, 300);
             });
         }
         finally

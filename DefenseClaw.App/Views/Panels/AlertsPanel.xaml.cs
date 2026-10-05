@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using DefenseClaw.App.ViewModels;
@@ -63,7 +64,7 @@ public sealed partial class AlertsPanel : UserControl
     {
         if (DataContext is AlertsPanelViewModel viewModel)
         {
-            viewModel.OpenAcknowledgeCommand.Execute(null);
+            viewModel.OpenAcknowledgeSelectionCommand.Execute(null);
         }
     }
 
@@ -71,9 +72,42 @@ public sealed partial class AlertsPanel : UserControl
     {
         if (DataContext is AlertsPanelViewModel viewModel)
         {
+            viewModel.OpenDismissSelectionCommand.Execute(null);
+        }
+    }
+
+    /// <summary>"By severity…": the menu of the whole-severity-class flow (kept apart from the selection actions so each label says what it does).</summary>
+    private void OnBySeverity(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement button && FindResource("BySeverityMenu") is ContextMenu menu)
+        {
+            menu.PlacementTarget = button;
+            menu.Placement = PlacementMode.Bottom;
+            menu.DataContext = DataContext;
+            menu.IsOpen = true;
+        }
+    }
+
+    private void OnAcknowledgeBySeverity(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AlertsPanelViewModel viewModel)
+        {
+            viewModel.OpenAcknowledgeCommand.Execute(null);
+        }
+    }
+
+    private void OnDismissBySeverity(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AlertsPanelViewModel viewModel)
+        {
             viewModel.OpenDismissCommand.Execute(null);
         }
     }
+
+    /// <summary>Select all: every row the table shows (the table's own selection then reports back through <see cref="OnAlertSelectionChanged"/>).</summary>
+    private void OnSelectAll(object sender, RoutedEventArgs e) => AlertList.SelectAll();
+
+    private void OnClearSelection(object sender, RoutedEventArgs e) => AlertList.UnselectAll();
 
     private void OnCanFind(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = true;
 

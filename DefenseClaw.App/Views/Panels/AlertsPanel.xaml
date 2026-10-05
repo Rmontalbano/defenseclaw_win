@@ -32,23 +32,36 @@
         <!--
             The row menu, shared by every row (right-click, or the "..." button). The row under the pointer is selected first unless it
             is already part of the selection (ctl:DcRowMenu), so the actions apply to what the operator sees selected. Acknowledge and
-            Dismiss open the same review as the toolbar's buttons - they work on a whole severity class, with the CLI's own preview first,
-            starting at the worst severity among the selected rows - so nothing here changes anything by itself.
+            Dismiss name exactly the selected rows by id (the same review as the toolbar's selection buttons), with the CLI's own preview
+            first, so nothing here changes anything by itself. The whole-severity-class flow is the strip's "by severity" buttons.
         -->
+        <!-- The whole-severity-class flow, opened from the strip's "By severity..." button. -->
+        <ContextMenu x:Key="BySeverityMenu">
+            <MenuItem Header="Acknowledge by severity…"
+                      Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                      ToolTip="Acknowledges every active alert of one severity in DefenseClaw. Shows a preview first."
+                      Click="OnAcknowledgeBySeverity" />
+            <MenuItem Header="Dismiss by severity…"
+                      Style="{StaticResource DcDangerMenuItem}"
+                      Icon="{ctl:DcSymbolIcon AlertOff24}"
+                      ToolTip="Dismisses every active alert of one severity from the active list. Shows a preview first."
+                      Click="OnDismissBySeverity" />
+        </ContextMenu>
+
         <ContextMenu x:Key="AlertRowMenu">
             <MenuItem Header="Copy details"
                       Icon="{ctl:DcSymbolIcon Copy24}"
                       InputGestureText="Ctrl+C"
                       Click="OnCopyDetails" />
             <Separator />
-            <MenuItem Header="Acknowledge…"
+            <MenuItem Header="Acknowledge selected…"
                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                      ToolTip="Opens the acknowledge review for the severity of the selected alerts. Shows a preview first."
+                      ToolTip="Opens the acknowledge review for exactly the selected alerts, by id. Shows a preview first."
                       Click="OnAcknowledge" />
-            <MenuItem Header="Dismiss…"
+            <MenuItem Header="Dismiss selected…"
                       Style="{StaticResource DcDangerMenuItem}"
                       Icon="{ctl:DcSymbolIcon AlertOff24}"
-                      ToolTip="Opens the dismiss review for the severity of the selected alerts. Shows a preview first."
+                      ToolTip="Opens the dismiss review for exactly the selected alerts, by id. Shows a preview first."
                       Click="OnDismiss" />
         </ContextMenu>
 
@@ -186,12 +199,17 @@
                                Command="{Binding OpenAcknowledgeSelectionCommand}"
                                ToolTip="Acknowledge selection…"
                                AutomationProperties.Name="Acknowledge selection"
-                               AutomationProperties.HelpText="Available once a row is selected. Acknowledges every active alert of the selected rows' severity (DefenseClaw acts on a whole severity class). Shows a preview of what would match before anything is changed." />
+                               AutomationProperties.HelpText="Available once a row is selected. Acknowledges exactly the selected alerts, by id, and nothing else. Shows a preview of what would match before anything is changed." />
                     <ui:Button Icon="{ctl:DcSymbolIcon AlertOff24}"
-                               Command="{Binding OpenDismissCommand}"
-                               ToolTip="Dismiss…"
-                               AutomationProperties.Name="Dismiss…"
-                               AutomationProperties.HelpText="Dismiss every active alert of one severity from the active list. Shows a preview of what would match before anything is changed." />
+                               Command="{Binding OpenDismissSelectionCommand}"
+                               ToolTip="Dismiss selection…"
+                               AutomationProperties.Name="Dismiss selection"
+                               AutomationProperties.HelpText="Available once a row is selected. Dismisses exactly the selected alerts, by id, from the active list. Shows a preview of what would match before anything is changed." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon FilterDismiss24}"
+                               Command="{Binding OpenDismissFilteredCommand}"
+                               ToolTip="{Binding FilteredText}"
+                               AutomationProperties.Name="Dismiss filtered"
+                               AutomationProperties.HelpText="Dismisses exactly the alerts the filters leave on screen, by id. Shows a preview of what would match before anything is changed." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Refresh (F5)"
@@ -202,8 +220,34 @@
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
 
-        <!-- Result of the last acknowledge / dismiss -->
+        <!-- The selection readout and the actions that are not about the selection; then the result of the last acknowledge / dismiss -->
         <StackPanel Grid.Row="1">
+            <WrapPanel Margin="{StaticResource DcCardGap}">
+                <TextBlock Style="{StaticResource DcBody}"
+                           Margin="0,0,12,0"
+                           VerticalAlignment="Center"
+                           Text="{Binding SelectionText}"
+                           AutomationProperties.Name="Selection"
+                           AutomationProperties.LiveSetting="Polite" />
+                <ui:Button Content="Select all"
+                           Margin="0,0,8,0"
+                           Appearance="Secondary"
+                           Click="OnSelectAll"
+                           ToolTip="Select every row shown"
+                           AutomationProperties.Name="Select all" />
+                <ui:Button Content="Clear selection"
+                           Margin="0,0,8,0"
+                           Appearance="Secondary"
+                           Click="OnClearSelection"
+                           AutomationProperties.Name="Clear selection" />
+                <ui:Button x:Name="BySeverityButton"
+                           Content="By severity…"
+                           Appearance="Secondary"
+                           Click="OnBySeverity"
+                           ToolTip="Acknowledge or dismiss a whole severity class in DefenseClaw, not only what is selected or loaded. Shows a preview first."
+                           AutomationProperties.Name="By severity"
+                           AutomationProperties.HelpText="Opens a menu: Acknowledge by severity or Dismiss by severity. Either acts on every active alert of one severity in DefenseClaw, as of a preview, and shows what would match before anything is changed." />
+            </WrapPanel>
             <ui:InfoBar Margin="{StaticResource DcCardGap}"
                         Severity="Success"
                         IsClosable="True"
@@ -565,8 +609,8 @@
         </Grid>
 
         <!--
-            Review dialog for acknowledge / dismiss. It applies to a WHOLE severity class in DefenseClaw
-            (not only the loaded rows), so it always shows the CLI's own dry-run first and the exact
+            Review dialog for acknowledge / dismiss. By severity it applies to a WHOLE severity class in DefenseClaw
+            (not only the loaded rows); for a selection or the filtered rows it names exact ids. Either way it always shows the CLI's own dry-run first and the exact
             command that will run. The confirm button stays disabled until the preview exited 0 and
             matched something. Focus lands on Cancel, Tab stays inside the dialog, Esc closes it.
         -->
@@ -594,9 +638,15 @@
                     </WrapPanel>
 
                     <TextBlock Style="{StaticResource DcTextSecondary}"
-                               Text="This applies to the active alerts of the chosen severity in DefenseClaw - the whole class as of the preview - not only the alerts listed here. The preview below is the CLI's own dry run and changes nothing, and the command that runs is limited to what it found." />
+                               Text="{Binding ReviewIntro}" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Margin="0,8,0,0"
+                               AutomationProperties.LiveSetting="Polite"
+                               Text="{Binding ChunkText}"
+                               Visibility="{Binding HasChunkText, Converter={StaticResource BoolToVisibility}}" />
 
-                    <StackPanel Style="{StaticResource DcField}" Margin="0,12,0,8">
+                    <StackPanel Style="{StaticResource DcField}" Margin="0,12,0,8"
+                                Visibility="{Binding IsSeverityReview, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Style="{StaticResource DcFieldLabel}" Text="Severity" />
                         <ComboBox x:Name="ReviewSeverityBox"
                                   HorizontalAlignment="Left"
@@ -639,7 +689,7 @@
 
                     <TextBlock Style="{StaticResource DcCaption}"
                                Margin="0,12,0,0"
-                               Text="This is the exact command that will run. Nothing happens until you confirm. --before is the moment of the preview, so an alert that arrives later is left alone (or, for a short list, --id names each alert). --yes is the CLI's own confirmation for a broad selector." />
+                               Text="{Binding CommandNote}" />
                     <Border Style="{StaticResource DcCodeBlock}" Margin="0,6,0,0">
                         <TextBox Style="{StaticResource DcMonoTextBox}"
                                  AutomationProperties.Name="Command that will run"

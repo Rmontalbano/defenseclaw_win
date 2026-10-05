@@ -376,7 +376,7 @@ public sealed class AlertsTableTests
     }
 
     [Fact]
-    public void The_row_menu_has_icons_the_dismiss_item_in_the_danger_tone_and_opens_the_same_review_as_the_toolbar()
+    public void The_row_menu_has_icons_the_dismiss_item_in_the_danger_tone_and_opens_the_same_by_id_review_as_the_toolbar()
     {
         using var scene = Scene.Open(1400, 900);
 
@@ -399,7 +399,7 @@ public sealed class AlertsTableTests
             var menu = ContextMenuService.GetContextMenu(row);
             Assert.NotNull(menu);
             var items = menu!.Items.OfType<MenuItem>().ToList();
-            Assert.Equal(new[] { "Copy details", "Acknowledge…", "Dismiss…" }, items.Select(i => (string)i.Header).ToArray());
+            Assert.Equal(new[] { "Copy details", "Acknowledge selected…", "Dismiss selected…" }, items.Select(i => (string)i.Header).ToArray());
             Assert.All(items, i => Assert.NotNull(i.Icon));
 
             // Only the one that dismisses is in the critical tone.
@@ -407,24 +407,26 @@ public sealed class AlertsTableTests
             Assert.Same(critical, items[2].Foreground);
             Assert.NotSame(critical, items[1].Foreground);
 
-            // Two rows selected, a HIGH and a CRITICAL one: Acknowledge opens on the worse of them - and only previews.
+            // Two rows selected, a HIGH and a CRITICAL one: Acknowledge names exactly those two ids - and only previews.
             var all = scene.Grid.Items.Cast<AlertItem>().ToList();
-            scene.Grid.SelectedItems.Add(all.First(a => a.Severity == "HIGH"));
-            scene.Grid.SelectedItems.Add(all.First(a => a.Severity == "CRITICAL"));
+            var high = all.First(a => a.Severity == "HIGH");
+            var critical2 = all.First(a => a.Severity == "CRITICAL");
+            scene.Grid.SelectedItems.Add(high);
+            scene.Grid.SelectedItems.Add(critical2);
             items[1].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
             Assert.True(scene.ViewModel.IsReviewOpen);
             UiThread.Settle();
             var call = Assert.Single(calls);
-            Assert.Equal(new[] { "alerts", "acknowledge", "--severity", "CRITICAL" }, call.Take(4));
-            Assert.Contains("--dry-run", call);
-            Assert.Equal("Acknowledge alerts", scene.ViewModel.ReviewHeading);
+            var wanted = new[] { high.Key, critical2.Key }.Order(StringComparer.Ordinal).SelectMany(id => new[] { "--id", id });
+            Assert.Equal(new[] { "alerts", "acknowledge" }.Concat(wanted).Append("--dry-run").ToArray(), call);
+            Assert.Equal("Acknowledge 2 selected alerts", scene.ViewModel.ReviewHeading);
 
             // Dismiss goes through the very same review (it is the destructive tier there).
             scene.ViewModel.CancelReviewCommand.Execute(null);
             items[2].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Assert.True(scene.ViewModel.IsReviewOpen);
-            Assert.Equal("Dismiss alerts", scene.ViewModel.ReviewHeading);
+            Assert.Equal("Dismiss 2 selected alerts", scene.ViewModel.ReviewHeading);
             scene.ViewModel.CancelReviewCommand.Execute(null);
         });
     }
