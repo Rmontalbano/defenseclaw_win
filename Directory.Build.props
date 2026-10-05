@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    Dependency vulnerability auditing for every project in the solution.
+
+    NuGetAudit is on by default, but the .NET 9 SDK audits only the packages a project names itself
+    (NuGetAuditMode=direct). The advisory that mattered here arrived transitively: Microsoft.Data.Sqlite
+    10.0.10 pulled in SQLitePCLRaw.lib.e_sqlite3 2.1.11, whose bundled SQLite 3.49.1 carries CVE-2025-6965
+    (GHSA-2m69-gcr7-jv3q), and a direct-only audit never reported it. "all" audits the whole dependency graph.
+
+    NU1901-NU1904 (low through critical) are made errors, so a vulnerable package fails restore and build
+    instead of scrolling past as a warning. DefenseClaw.App does not set TreatWarningsAsErrors; this is what
+    makes the audit bind there too. NU1900 (the advisory feed could not be reached) is left out on purpose:
+    it follows each project's own warning policy rather than being forced to an error here.
+
+    To accept an advisory on purpose, add a <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-..." />
+    item next to a comment that says why and when to revisit it.
+  -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>
