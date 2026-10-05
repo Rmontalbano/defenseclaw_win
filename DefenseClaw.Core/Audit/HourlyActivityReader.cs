@@ -255,6 +255,7 @@ public sealed class HourlyActivityReader
         await using (var hooks = connection.CreateCommand())
         {
             hooks.Transaction = transaction;
+            // nosemgrep: csharp-sqli -- constant: BuildHookSql interpolates only the const IndexName, HookAction and DetailsLimit; $from and $to are bound
             hooks.CommandText = BuildHookSql(shape == Shape.WithDetails);
             Bind(hooks, from, to);
 
@@ -327,6 +328,7 @@ public sealed class HourlyActivityReader
         foreach (var sql in new[] { BuildHookSql(shape == Shape.WithDetails), BuildBlockSql() })
         {
             await using var command = connection.CreateCommand();
+            // nosemgrep: csharp-sqli -- constant: the EXPLAIN prefix and BuildHookSql / BuildBlockSql (const IndexName and HookAction, the fixed BlockActions list); $from and $to are bound
             command.CommandText = "EXPLAIN QUERY PLAN " + sql;
             Bind(command, from, to);
 

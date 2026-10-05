@@ -163,6 +163,7 @@ public sealed class AlertQueueReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: BuildSql picks fixed fragments by whether the database has a column or table (a boolean, never the name itself); $limit is bound
         command.CommandText = BuildSql(schema);
 
         // One past the window, so "there are more" needs no second query.
@@ -213,6 +214,7 @@ public sealed class AlertQueueReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: the EXPLAIN prefix and BuildSql, as annotated above; $limit is bound
         command.CommandText = "EXPLAIN QUERY PLAN " + BuildSql(schema);
         command.Parameters.AddWithValue("$limit", _windowLimit + 1);
 

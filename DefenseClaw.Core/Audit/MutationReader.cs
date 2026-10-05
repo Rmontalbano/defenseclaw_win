@@ -225,6 +225,7 @@ public sealed class MutationReader
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: sql is only ActivitySql or AuditSql (the two callers), which emit literal column names (or NULL when the table lacks one) and a const limit; $limit, $bucket and $authFailure are bound
         command.CommandText = sql;
         _ = command.Parameters.AddWithValue("$limit", limit + 1);
         if (bucket is not null)
@@ -288,6 +289,7 @@ public sealed class MutationReader
     private static async Task ExplainOneAsync(SqliteConnection connection, string sql, string? bucket, List<string> lines, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: the EXPLAIN prefix and ActivitySql / AuditSql, as annotated above; every value is bound
         command.CommandText = "EXPLAIN QUERY PLAN " + sql;
         _ = command.Parameters.AddWithValue("$limit", DefaultLimit + 1);
         if (bucket is not null)

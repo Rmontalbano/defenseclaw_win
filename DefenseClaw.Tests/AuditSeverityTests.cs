@@ -48,6 +48,7 @@ public sealed class AuditSeverityTests : IClassFixture<AuditSeverityFixture>
     {
         using var connection = OpenReadOnly(path);
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test: the reader's pre-optimisation reference statement, built from literals and a bound $from, run read-only on a temp database
         command.CommandText = "SELECT UPPER(e.severity), COUNT(*) FROM audit_events e"
             + (from is null ? string.Empty : " WHERE e.retention_timestamp_unix_nano >= $from")
             + " GROUP BY UPPER(e.severity)";
@@ -91,6 +92,7 @@ public sealed class AuditSeverityTests : IClassFixture<AuditSeverityFixture>
             command.Parameters.AddWithValue("$from", AuditReader.ToUnixNanos(f));
         }
 
+        // nosemgrep: csharp-sqli -- test: the reference statement's WHERE is OldSeverityClause plus a literal bound on $from; every value is a bound parameter
         command.CommandText = "SELECT COUNT(*) FROM audit_events e WHERE " + where;
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
@@ -106,6 +108,7 @@ public sealed class AuditSeverityTests : IClassFixture<AuditSeverityFixture>
             command.Parameters.AddWithValue("$from", AuditReader.ToUnixNanos(f));
         }
 
+        // nosemgrep: csharp-sqli -- test: the reference statement's WHERE is OldSeverityClause plus a literal bound on $from; limit is an int formatted invariantly; every value is a bound parameter
         command.CommandText = "SELECT e.id FROM audit_events e WHERE " + where
             + " ORDER BY e.retention_timestamp_unix_nano DESC, e.id DESC LIMIT " + limit.ToString(CultureInfo.InvariantCulture);
         var ids = new List<string>();
@@ -441,6 +444,7 @@ public sealed class AuditSeverityTests : IClassFixture<AuditSeverityFixture>
     {
         using var connection = OpenReadOnly(_fixture.CanonicalPath);
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test: the EXPLAIN prefix and the reader's own BuildDistinctSql, with column taken from this theory's InlineData literals
         command.CommandText = "EXPLAIN QUERY PLAN " + AuditReader.BuildDistinctSql(column, skipEmpty: column != "severity", limited: false);
 
         var plan = new List<string>();
@@ -631,6 +635,7 @@ public sealed class AuditSeverityTests : IClassFixture<AuditSeverityFixture>
         using var connection = database.OpenWritable();
         using var command = connection.CreateCommand();
         command.CommandText =
+            // nosemgrep: csharp-sqli -- test: the arguments are SQL literal tokens (quoted text or NULL) written by the calling test, so odd stored values can be inserted; temp database
             $"INSERT INTO audit_events (id, timestamp, action, actor, severity, details) VALUES ({id}, {timestamp}, {action}, 'audit_logger', {severity}, {details})";
         _ = command.ExecuteNonQuery();
     }
@@ -846,6 +851,7 @@ public sealed class AuditSeverityFixture : IDisposable
         using var connection = new SqliteConnection(AuditReader.BuildReadOnlyConnectionString(CanonicalPath));
         connection.Open();
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test: the pre-optimisation reference statement, built from literals with $bucket and $from bound, run read-only on a temp database
         command.CommandText = "SELECT UPPER(e.severity), COUNT(*) FROM audit_events e WHERE e.bucket = $bucket"
             + (from is null ? string.Empty : " AND e.retention_timestamp_unix_nano >= $from")
             + " GROUP BY UPPER(e.severity)";
@@ -878,6 +884,7 @@ public sealed class AuditSeverityFixture : IDisposable
             command.Parameters.AddWithValue(names[i], allowed[i]);
         }
 
+        // nosemgrep: csharp-sqli -- test: names are the $s0..$sN placeholders built above from the loop index; severities, $bucket and $from are bound; temp database
         command.CommandText = $"SELECT COUNT(*) FROM audit_events e WHERE UPPER(e.severity) IN ({string.Join(", ", names)}) AND e.bucket = $bucket"
             + (from is null ? string.Empty : " AND e.retention_timestamp_unix_nano >= $from");
         command.Parameters.AddWithValue("$bucket", bucket);

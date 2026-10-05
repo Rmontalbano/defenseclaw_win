@@ -276,6 +276,7 @@ public class InventoryReaderTests : IDisposable
         using var connection = new SqliteConnection($"Data Source={_path}");
         connection.Open();
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database
         command.CommandText = sql;
         command.ExecuteNonQuery();
     }
@@ -646,6 +647,7 @@ public class InventoryScanReaderTests : IDisposable
     private static void RunSql(SqliteConnection connection, string sql)
     {
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database
         command.CommandText = sql;
         command.ExecuteNonQuery();
     }
@@ -721,6 +723,7 @@ public class InventoryScanReaderTests : IDisposable
         private void Run(string sql, params (string Name, object? Value)[] arguments)
         {
             using var command = _connection.CreateCommand();
+            // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database; values go in as parameters
             command.CommandText = sql;
             foreach (var (name, value) in arguments)
             {

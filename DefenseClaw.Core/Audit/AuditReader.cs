@@ -336,6 +336,7 @@ public sealed class AuditReader
         var hints = await DetectHintsAsync(connection, query, AuditQueryShape.Page, cancellationToken).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: BuildPageSql emits fixed text, const columns, ASC/DESC and $-placeholders; every value is a bound parameter
         command.CommandText = BuildPageSql(command, query, hints);
 
         var events = new List<AuditEvent>(limit);
@@ -375,6 +376,7 @@ public sealed class AuditReader
         using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- constant: the only holes are the const SelectColumns and SortKey; the id is the bound $id
         command.CommandText = $"SELECT {SelectColumns}, {SortKey} AS sort_nanos FROM audit_events e WHERE e.id = $id LIMIT 1";
         command.Parameters.AddWithValue("$id", id);
 
@@ -427,6 +429,7 @@ public sealed class AuditReader
             }
 
             command.CommandText =
+                // nosemgrep: csharp-sqli -- allow-list: const columns and the $p0..$pN placeholders built just above from the loop index; the ids are bound parameters
                 $"SELECT {SelectColumns}, {SortKey} AS sort_nanos FROM audit_events e WHERE e.id IN ({string.Join(',', names)})";
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -488,6 +491,7 @@ public sealed class AuditReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: BuildSeverityCountSql builds from the same fixed fragments as BuildPageSql; every value is a bound parameter
         command.CommandText = BuildSeverityCountSql(command, query, hints);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -529,6 +533,7 @@ public sealed class AuditReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: BuildCountSql builds from the same fixed fragments as BuildPageSql; every value is a bound parameter
         command.CommandText = BuildCountSql(command, query, hints);
 
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -677,6 +682,7 @@ public sealed class AuditReader
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: column is a literal at every call site (bucket, connector, action, severity), never input; only the const $limit text varies
         command.CommandText = BuildDistinctSql(column, skipEmpty, limited: limit is not null);
 
         if (limit is { } max)
@@ -864,6 +870,7 @@ public sealed class AuditReader
         }
 
         probe.CommandText =
+            // nosemgrep: csharp-sqli -- allow-list: column is one of three literals (connector, bucket, severity) from DetectHintsAsync; the values are bound $v0..$vN
             $"SELECT COUNT(*) FROM (SELECT 1 FROM audit_events WHERE {column} IN ({string.Join(", ", names)}) LIMIT $limit)";
         probe.Parameters.AddWithValue("$limit", _commonRowThreshold);
 

@@ -62,6 +62,7 @@ public sealed class MutationReaderTests : IDisposable
     {
         using var connection = _database.OpenWritable();
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database
         command.CommandText = sql;
         _ = command.ExecuteNonQuery();
     }

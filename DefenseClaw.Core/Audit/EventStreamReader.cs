@@ -217,6 +217,7 @@ public sealed class EventStreamReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: BuildSql emits literal columns (or NULL when the table lacks one), const limits and the fixed bucket lists; $limit is bound
         command.CommandText = BuildSql(columns, kind, includeTelemetry);
         command.Parameters.AddWithValue("$limit", _limit);
 
@@ -257,6 +258,7 @@ public sealed class EventStreamReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: the EXPLAIN prefix and BuildSql, as annotated above; $limit is bound
         command.CommandText = "EXPLAIN QUERY PLAN " + BuildSql(columns, kind, includeTelemetry);
         command.Parameters.AddWithValue("$limit", _limit);
 

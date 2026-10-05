@@ -1041,6 +1041,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         }
 
         command.CommandText =
+            // nosemgrep: csharp-sqli -- allow-list: names are the @p0..@pN placeholders built just above from the loop index; the ids are bound parameters
             "SELECT alert_id FROM alert_acknowledgement_projection WHERE alert_id IN (" + string.Join(',', names) + ")";
 
         using var reader = command.ExecuteReader();

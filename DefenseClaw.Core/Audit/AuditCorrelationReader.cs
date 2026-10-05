@@ -180,6 +180,7 @@ public sealed class AuditCorrelationReader
         using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- constant: FindingsSql is a const string; $run and $limit are bound
         command.CommandText = FindingsSql;
         command.Parameters.AddWithValue("$run", runId);
         // A scan may hold many findings and one finding is all that is needed from a scan, so ten scans bound the work.
@@ -272,6 +273,7 @@ public sealed class AuditCorrelationReader
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- constant: prefix is the literal "EXPLAIN QUERY PLAN " (its one caller) and the switch yields RunSql or TargetSql, both concatenations of consts; every value is bound
         command.CommandText = prefix + basis switch
         {
             RelatedBasis.Run => RunSql,
@@ -292,6 +294,7 @@ public sealed class AuditCorrelationReader
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- constant: the EXPLAIN prefix and the const FindingsSql; $run and $limit are bound
         command.CommandText = "EXPLAIN QUERY PLAN " + FindingsSql;
         command.Parameters.AddWithValue("$run", "x");
         command.Parameters.AddWithValue("$limit", FindingsLimit);

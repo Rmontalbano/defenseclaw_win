@@ -202,6 +202,7 @@ public sealed class RecentAuditMetricsReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: BuildSql emits fixed text, the const DetailsLimit and the literal columns details / connector (or NULL when the table lacks one); $limit is bound
         command.CommandText = BuildSql(columns);
         command.Parameters.AddWithValue("$limit", _window);
 
@@ -259,6 +260,7 @@ public sealed class RecentAuditMetricsReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: the EXPLAIN prefix and BuildSql, as annotated above; $limit is bound
         command.CommandText = "EXPLAIN QUERY PLAN " + BuildSql(columns);
         command.Parameters.AddWithValue("$limit", _window);
 

@@ -874,6 +874,7 @@ public class AuditReaderTests : IDisposable
     private static void RunSql(SqliteConnection connection, string sql)
     {
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database
         command.CommandText = sql;
         command.ExecuteNonQuery();
     }

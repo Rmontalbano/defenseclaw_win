@@ -171,6 +171,7 @@ public sealed class NetworkEgressReader
 
         await using var command = connection.CreateCommand();
         command.CommandText =
+            // nosemgrep: csharp-sqli -- allow-list: Pick and Clipped emit only the literal column names written here (or NULL when the table lacks the column) and the const PayloadLimit; $limit and $since are bound
             $"""
             SELECT id, timestamp, {Pick("action")}, {Pick("target")}, {Pick("severity")}, {Pick("connector")}, {Pick("source")},
                    {Clipped("details")}, {Clipped("structured_json")}, {Clipped("payload_json")}

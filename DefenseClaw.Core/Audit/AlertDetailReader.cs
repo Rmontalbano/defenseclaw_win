@@ -121,6 +121,7 @@ public sealed class AlertDetailReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: FindingsSql names only its own literal columns (f.<name>, or NULL when the table lacks it) and $s0..$sN placeholders; the scan ids are bound
         command.CommandText = FindingsSql(findings, scanIds.Count);
         for (var i = 0; i < scanIds.Count; i++)
         {
@@ -180,6 +181,7 @@ public sealed class AlertDetailReader
     private static async Task<List<string>> ScanIdsAsync(SqliteConnection connection, string column, string value, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: column is "run_id" or "target" at every call site, never input; the value searched for is the bound $key
         command.CommandText = ScanIdsSql(column);
         command.Parameters.AddWithValue("$key", value);
         command.Parameters.AddWithValue("$scans", ScanLimit);
@@ -336,6 +338,7 @@ public sealed class AlertDetailReader
         SqliteConnection connection, string name, string sql, CancellationToken cancellationToken, List<string> lines, params (string Name, object Value)[] parameters)
     {
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- allow-list: sql is only ever the output of ScanIdsSql, FindingsSql or HistorySql (see ExplainAsync), assembled as annotated above; parameters are bound
         command.CommandText = "EXPLAIN QUERY PLAN " + sql;
         foreach (var (parameter, value) in parameters)
         {

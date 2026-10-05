@@ -139,6 +139,7 @@ internal sealed class FlyoutScene : IDisposable
         }.ToString());
         connection.Open();
         using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database; values go in as parameters
         command.CommandText = sql;
         foreach (var (name, value) in parameters)
         {

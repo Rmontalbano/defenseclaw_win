@@ -248,6 +248,7 @@ public sealed class InventoryReader
         var resolved = await ResolveTableNameAsync(connection, table, cancellationToken).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- quoted identifier: resolved is a name read back from sqlite_master (ResolveTableNameAsync throws for anything else), then Quote()d
         command.CommandText = $"PRAGMA table_info({Quote(resolved)})";
 
         var columns = new List<InventoryColumn>();
@@ -423,6 +424,7 @@ public sealed class InventoryReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- constant: ComponentsRollupSql is a const string; $scan_id is bound
         command.CommandText = ComponentsRollupSql;
         command.Parameters.AddWithValue("$scan_id", scan.ScanId);
 
@@ -483,6 +485,7 @@ public sealed class InventoryReader
 
         await using var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- constant: the EXPLAIN prefix and the const ComponentsRollupSql; $scan_id is bound
         command.CommandText = "EXPLAIN QUERY PLAN " + ComponentsRollupSql;
         command.Parameters.AddWithValue("$scan_id", scanId);
 
@@ -541,6 +544,7 @@ public sealed class InventoryReader
         }
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- quoted identifier: the table and the ORDER BY column are names read back from sqlite_master / PRAGMA table_info (anything else throws), Quote()d; the direction is ASC or DESC; $limit and $offset are bound
         command.CommandText = $"SELECT * FROM {Quote(resolved)}{orderBy} LIMIT $limit OFFSET $offset";
         command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 10_000));
         command.Parameters.AddWithValue("$offset", Math.Max(0, offset));
@@ -599,6 +603,7 @@ public sealed class InventoryReader
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- constant: sql is only ever the const ScanSelect and FullScanSources composed in ChooseScanAsync; nothing is interpolated from data
         command.CommandText = sql;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -630,6 +635,7 @@ public sealed class InventoryReader
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- quoted identifier: table is one of the literals ai_scans, ai_signals or ai_confidence_snapshots at every call site, and is Quote()d anyway
         command.CommandText = $"PRAGMA table_info({Quote(table)})";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -658,6 +664,7 @@ public sealed class InventoryReader
     private static async Task<long?> ScalarAsync(SqliteConnection connection, string sql, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        // nosemgrep: csharp-sqli -- quoted identifier: sql is only built in CountRowsCoreAsync, from a table name resolved against sqlite_master and Quote()d plus the const ExactCountRowLimit
         command.CommandText = sql;
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is null or DBNull ? null : Convert.ToInt64(result, CultureInfo.InvariantCulture);

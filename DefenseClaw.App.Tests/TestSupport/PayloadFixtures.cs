@@ -18,6 +18,18 @@ namespace DefenseClaw.App.Tests.TestSupport;
 /// </summary>
 internal static class PayloadFixtures
 {
-    public static string Read(string fileName) =>
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "CliPayloads", fileName));
+    /// <summary>
+    /// Reads one fixture by its bare file name. A fixture is named, never located: a name with a directory, a drive or
+    /// a <c>..</c> in it would make <see cref="Path.Combine(string[])"/> walk out of <c>Fixtures/CliPayloads</c> (an absolute
+    /// path replaces everything before it), so anything but a plain file name is refused.
+    /// </summary>
+    public static string Read(string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName) || fileName is "." or ".." || Path.GetFileName(fileName) != fileName)
+        {
+            throw new ArgumentException($"'{fileName}' is not a bare fixture file name.", nameof(fileName));
+        }
+
+        return File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "CliPayloads", fileName));
+    }
 }
