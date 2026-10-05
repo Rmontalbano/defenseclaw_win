@@ -248,10 +248,25 @@ public sealed partial class OverviewPanelViewModel
         return parts.Count == 0 ? null : string.Join(" · ", parts);
     }
 
-    private static ServiceState? Service(GatewayHealth health, string key) =>
-        health.AdditionalData is { } extra && extra.TryGetValue(key, out var element) && element.ValueKind == JsonValueKind.Object
-            ? JsonSerializer.Deserialize<ServiceState>(element.GetRawText())
-            : null;
+    private static ServiceState? Service(GatewayHealth health, string key)
+    {
+        if (health.AdditionalData is not { } extra || !extra.TryGetValue(key, out var element) || element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ServiceState>(element.GetRawText());
+        }
+        catch (JsonException)
+        {
+            // Keys the health model does not know stay untyped until here, so a block of the wrong shape ("state": 5, "since": "yesterday")
+            // is first parsed in this method. Treat it as absent: letting it throw would abort Apply before it re-derives the gateway
+            // action, the enforcement cards and the doctor card, and the poll's refresh that follows Apply.
+            return null;
+        }
+    }
 
     private static IEnumerable<JsonElement> Items(JsonElement parent, string name) =>
         parent.TryGetProperty(name, out var list) && list.ValueKind == JsonValueKind.Array
