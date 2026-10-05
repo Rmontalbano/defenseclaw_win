@@ -25,7 +25,7 @@ public sealed record DiagnosticCommand(string Title, string Executable, IReadOnl
 /// </summary>
 public sealed partial class OverviewPanelViewModel
 {
-    /// <summary>The read-only Diagnostics menu, in the Mac's order. Each is held to <see cref="CommandTier.ReadOnly"/> by a test and again when it runs.</summary>
+    /// <summary>The read-only Diagnostics menu, in the Mac's order. Each is on the explicit allow-list of reads (<see cref="CommandReview.MayRunUnreviewed(string, IReadOnlyList{string})"/>) by a test and again when it runs.</summary>
     internal static readonly IReadOnlyList<DiagnosticCommand> DiagnosticCommands = new DiagnosticCommand[]
     {
         new("Validate configuration", CommandReview.DefaultExecutable, new[] { "config", "validate" },
@@ -208,8 +208,10 @@ public sealed partial class OverviewPanelViewModel
     // ---- Diagnostics (read-only) ---------------------------------------------------------------------------------
 
     /// <summary>
-    /// Runs one Diagnostics command. It must classify as read-only (<see cref="CommandTiers"/>), or it refuses rather than run unreviewed;
-    /// the run goes through <see cref="CliRunner"/>, which puts the exact argv, the output and the exit code in the Activity panel.
+    /// Runs one Diagnostics command. It runs straight away only when it is on the explicit allow-list of known reads and still classifies as
+    /// read-only (<see cref="CommandReview.MayRunUnreviewed(string, IReadOnlyList{string})"/> - the classifier alone is a first-verb guess);
+    /// anything else is shown in the review first, like Scan Skills, and runs only when confirmed. The run goes through <see cref="CliRunner"/>,
+    /// which puts the exact argv, the output and the exit code in the Activity panel.
     /// </summary>
     [RelayCommand]
     private async Task RunDiagnosticAsync(DiagnosticCommand? command)
@@ -219,9 +221,14 @@ public sealed partial class OverviewPanelViewModel
             return;
         }
 
-        if (CommandReview.ResolveTier(command.Argv) != CommandTier.ReadOnly)
+        if (!CommandReview.MayRunUnreviewed(command.Executable, command.Argv))
         {
-            ShowDiagnosticMessage(command.Title, "Bad", $"'{command.CommandText}' is no longer classified read-only, so it will not run without a review step.", string.Empty);
+            // Not a command the app knows to be a read, so nothing here runs it on a click. The step's floor is a change, and the classifier can only raise it.
+            Review.Open(
+                $"Run “{command.Title}”?",
+                $"{command.Summary} It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first.",
+                new[] { new DiscoverStep(command.Argv, command.Summary, CommandTier.StateChanging, Executable: command.Executable) },
+                primaryText: "Run command");
             return;
         }
 

@@ -15,9 +15,10 @@
                  WindowCornerPreference="Round"
                  WindowStartupLocation="CenterScreen">
     <!--
-        Reports installed-vs-latest, reads three small sidecar files off the release to describe
-        trust honestly (Authenticode + sigstore + stub-asset sanity), and — in the upgrade card —
-        stages and runs the target release's own upgrade resolver.
+        Reports installed-vs-latest, reads small sidecar files off the release to describe
+        trust honestly (Authenticode status, which sigstore signature files are PUBLISHED - not whether they are
+        valid, which only cosign can say, when the upgrade card runs it - and stub-asset sanity), and — in the
+        upgrade card — stages and runs the target release's Setup installer or its own upgrade resolver.
 
         The upgrade path is the only thing in this window that changes the machine, and it does so
         the way every other mutation in this app does: through CliRunner, with the exact argv on
@@ -75,7 +76,7 @@
                             Margin="{StaticResource DcCardGap}"
                             IsClosable="False"
                             IsOpen="True"
-                            Message="Checking and the trust panel are read-only. The upgrade card can also download the target release's Setup installer (or its upgrade script, on installs where that works), verify the SHA-256 against that release's signed checksums.txt, and run it — as three separate clicks, with the exact command shown in a confirm step first. The run is recorded in the Activity panel like every other command this app issues. Prefer to do it yourself? The copyable commands further down still work."
+                            Message="Checking and the trust panel are read-only. The upgrade card can also download the target release's Setup installer (or its upgrade script, on installs where that works), compare its SHA-256 with that release's checksums.txt (and, when cosign is installed, verify that file's sigstore signature first), and run it — as three separate clicks, with the exact command shown in a confirm step first. The run is recorded in the Activity panel like every other command this app issues. Prefer to do it yourself? The copyable commands further down still work."
                             Severity="Informational" />
 
                 <!-- Version comparison -->
@@ -283,7 +284,7 @@
                 <!--
                     In-app upgrade. Channel picker first — the two channels are not
                     interchangeable, and which one works is decided by the install layout, not by
-                    preference. Then the gated steps: cosign preflight (resolver channel only),
+                    preference. Then the gated steps: cosign preflight (required on the resolver channel, optional on the installer one),
                     download+verify, and a confirm overlay before anything runs.
                 -->
                 <Border Margin="{StaticResource DcCardGap}"
@@ -328,11 +329,10 @@
                         <TextBlock Margin="0,0,0,12" Style="{StaticResource DcCaption}" Text="{Binding ChannelNote}" />
 
                         <!--
-                            Preflight: cosign, which the resolver refuses to run without. Collapsed
-                            on the installer channel — the Setup exe never invokes cosign, so
-                            showing it there would be a gate on nothing.
+                            Preflight: cosign. A hard gate on the resolver channel (the script refuses to run without it); optional on the
+                            installer channel, where it decides whether the signature on checksums.txt is verified. The row's words follow the channel.
                         -->
-                        <Grid Margin="0,0,0,8" Visibility="{Binding IsCosignRelevant, Converter={StaticResource BoolToVisibility}}">
+                        <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />

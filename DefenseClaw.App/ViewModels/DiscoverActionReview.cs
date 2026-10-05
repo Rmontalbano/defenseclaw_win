@@ -157,6 +157,10 @@ public sealed partial class DiscoverActionReview : ObservableObject
     /// <param name="onFinished">Called after the last step ran (or a step failed and the rest were skipped), with what happened.</param>
     /// <param name="onCancelled">Called when the operator dismisses the dialog without running anything.</param>
     /// <param name="primaryText">The confirm button's text; null keeps "Run command" / "Run destructive command".</param>
+    /// <param name="names">
+    /// Names of the items the command acts on that came from outside and that its argv does not carry after a <c>--</c> (a registry entry named before
+    /// the options): the review checks them for unusual characters like it does a target (<see cref="CommandReview.Names"/>).
+    /// </param>
     public void Open(
         string heading,
         string explanation,
@@ -165,7 +169,8 @@ public sealed partial class DiscoverActionReview : ObservableObject
         bool restartsGateway = false,
         string? warning = null,
         string? primaryText = null,
-        Action? onCancelled = null)
+        Action? onCancelled = null,
+        IReadOnlyList<string>? names = null)
     {
         ArgumentNullException.ThrowIfNull(steps);
         if (steps.Count == 0 || IsRunning)
@@ -208,6 +213,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     number: steps.Count > 1 ? i + 1 : 0))
                 .ToArray(),
             Warnings = warnings,
+            Names = names ?? Array.Empty<string>(),
             RestartsGateway = restartsGateway,
             ConfirmLabel = primaryText ?? string.Empty,
         };

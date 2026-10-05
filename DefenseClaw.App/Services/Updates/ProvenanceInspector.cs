@@ -35,12 +35,19 @@ public sealed record ProvenanceReport
 
     public bool ChecksumsCertificatePresent { get; init; }
 
+    /// <summary>True when the release lists <c>checksums.txt.bundle</c>: the certificate, signature and transparency-log entry in one file.</summary>
+    public bool ChecksumsBundlePresent { get; init; }
+
     /// <summary>Line count of checksums.txt, when it was readable. Null otherwise.</summary>
     public int? ChecksumsEntryCount { get; init; }
 
-    /// <summary>True only when the checksums file plus both sigstore sidecars are all present.</summary>
-    public bool SigstoreSigningPresent =>
-        ChecksumsAssetPresent && ChecksumsSignaturePresent && ChecksumsCertificatePresent;
+    /// <summary>
+    /// True when the checksums file and a way to verify it are all <b>published</b>: the bundle, or the signature with its certificate. This says the
+    /// files are on the release - nothing here has checked them. Whether the signature is valid is <see cref="ChecksumsSignatureVerifier"/>'s answer,
+    /// and only cosign can give it.
+    /// </summary>
+    public bool SignatureFilesPublished =>
+        ChecksumsAssetPresent && (ChecksumsBundlePresent || (ChecksumsSignaturePresent && ChecksumsCertificatePresent));
 
     public IReadOnlyList<StubAssetWarning> StubWarnings { get; init; } = [];
 
@@ -56,13 +63,18 @@ public sealed record ProvenanceReport
 /// Reads only the small, known-name sidecar files off a GitHub release — never the
 /// installer, the wheel, or any other binary artifact.
 /// <para>
-/// This exists because the release's signed <c>checksums.txt</c> is not proof the artifacts
+/// This exists because a release's <c>checksums.txt</c> is not proof the artifacts
 /// are real: some 0.8.x releases shipped 133-byte ASCII placeholder stubs under real artifact
-/// names, and those stubs' hashes were faithfully included in the (correctly) signed checksum
-/// file. A valid signature over a broken artifact still looks fine to a hash check that never
+/// names, and those stubs' hashes were faithfully listed in the checksum file. A hash that
+/// matches its entry, even under a valid signature, still looks fine to a check that never
 /// looks at size. So this inspector flags size/name mismatches directly from the asset list
 /// GitHub already returned — no download needed for that part — and only fetches bytes for
-/// three specific small text/JSON sidecars to read their contents.
+/// two specific small sidecars to read their contents.
+/// </para>
+/// <para>
+/// <b>It verifies no signature.</b> It reports which signature files the release <i>publishes</i>
+/// (<see cref="ProvenanceReport.SignatureFilesPublished"/>); that they are valid, and who signed them, is
+/// cosign's answer, asked by <see cref="ChecksumsSignatureVerifier"/> on the bytes the upgrade is about to trust.
 /// </para>
 /// </summary>
 public sealed class ProvenanceInspector : IDisposable
@@ -79,6 +91,7 @@ public sealed class ProvenanceInspector : IDisposable
     public const string ChecksumsAssetName = "checksums.txt";
     public const string ChecksumsSignatureAssetName = ChecksumsAssetName + ".sig";
     public const string ChecksumsCertificateAssetName = ChecksumsAssetName + ".pem";
+    public const string ChecksumsBundleAssetName = ChecksumsAssetName + ".bundle";
 
     /// <summary>Sidecars this inspector will ever request bytes for. Never an installer or archive.</summary>
     private static readonly IReadOnlyList<string> DownloadableSidecarNames =
@@ -104,6 +117,7 @@ public sealed class ProvenanceInspector : IDisposable
         var checksumsAsset = FindAsset(assets, ChecksumsAssetName);
         var sigAsset = FindAsset(assets, ChecksumsSignatureAssetName);
         var pemAsset = FindAsset(assets, ChecksumsCertificateAssetName);
+        var bundleAsset = FindAsset(assets, ChecksumsBundleAssetName);
         var provenanceAsset = FindAsset(assets, ProvenanceAssetName);
 
         var authenticode = AuthenticodeStatus.Unknown;
@@ -160,6 +174,7 @@ public sealed class ProvenanceInspector : IDisposable
             ChecksumsAssetPresent = checksumsAsset is not null,
             ChecksumsSignaturePresent = sigAsset is not null,
             ChecksumsCertificatePresent = pemAsset is not null,
+            ChecksumsBundlePresent = bundleAsset is not null,
             ChecksumsEntryCount = checksumsEntryCount,
             StubWarnings = stubWarnings,
             Assets = assets,
@@ -199,7 +214,7 @@ public sealed class ProvenanceInspector : IDisposable
                 asset.Size,
                 $"{asset.Name} is only {asset.Size} bytes but its name implies a real build artifact. " +
                 "This matches the placeholder-stub pattern seen on some releases: a tiny ASCII file " +
-                "whose hash is still faithfully listed in the (correctly) signed checksums.txt."));
+                "whose hash is still listed in the release's checksums.txt, so a hash comparison alone would pass it."));
         }
 
         return warnings;

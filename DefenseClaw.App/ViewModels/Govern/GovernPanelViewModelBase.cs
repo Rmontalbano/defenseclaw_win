@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Text;
 using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.ViewModels;
@@ -953,7 +954,9 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         var options = new List<string> { "--json" };
         AppendInfoScope(options, row);
         var argv = BuildArgv(Noun, InfoVerb, options, row.Name);
-        var title = $"defenseclaw {Noun} {InfoVerb} — {row.Name}";
+
+        // The card's heading shows the name of an item that came from outside: its control and format characters are spelled out.
+        var title = $"defenseclaw {Noun} {InfoVerb} — {DisplayNames.Visible(row.Name)}";
 
         // Info for a name the CLI would rewrite is info about some other item.
         if (RefuseExpandingTarget(argv))
@@ -1131,7 +1134,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             if (invocation.ExitCode == 0 && invocation.FailureReason is null)
             {
                 succeeded = true;
-                ShowResult("Done", plan.SuccessMessage + " Recorded in Activity.", InfoBarSeverity.Success);
+                ShowResult("Done", DisplayNames.Visible(plan.SuccessMessage) + " Recorded in Activity.", InfoBarSeverity.Success);
             }
             else
             {

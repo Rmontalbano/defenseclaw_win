@@ -30,7 +30,7 @@ A **read-mostly companion** for a local DefenseClaw installation: a system-tray 
 - **WSL coexistence detection** — warns when port 18970 is actually a WSL-side gateway relayed by `wslrelay.exe`
 - **Connector certification badges** — surfaces `not_certified` platform status before setup, not after failure
 - **Fail-mode visibility** — warns when observe mode is paired with fail-closed hooks
-- **Update awareness** — checks GitHub releases, verifies SHA-256 against the signed `checksums.txt`, and reports Authenticode/sigstore provenance status honestly
+- **Update awareness** — checks GitHub releases; when you download an upgrade it compares the file's SHA-256 with the `checksums.txt` of the same release and, if `cosign` is installed, also verifies that file's sigstore signature against the upstream release workflow's identity (a signature cosign rejects stops the upgrade). Without cosign the signature is reported as published but *not verified*, and the SHA-256 comparison only shows the download matches that file. The installer itself is not Authenticode-signed, and the Updates window says so
 
 The in-app upgrade flow supports two channels: the release's Setup installer (recommended on Setup-based installs) and the `defenseclaw-upgrade.ps1` resolver script. The script is known broken on Setup-based installs upstream — it assumes a `.defenseclaw\.venv` POSIX-style layout and fails with "Managed Python not found"; it is byte-identical between 0.8.9 and 0.8.10, so this is not fixed by upgrading.
 

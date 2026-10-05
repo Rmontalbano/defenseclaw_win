@@ -30,8 +30,15 @@ internal sealed record CuratedCommand(
 
     public bool NeedsArguments => RequiredArguments.Count > 0;
 
-    /// <summary>What the review and the tier policy make of it: read-only ones run as they are, the rest are reviewed first.</summary>
-    public CommandTier Tier => CommandReview.ResolveTier(Argv);
+    /// <summary>
+    /// True when the palette may run it with no review: only a command on the explicit allow-list of known reads
+    /// (<see cref="CommandReview.MayRunUnreviewed(IReadOnlyList{string})"/>). A command <see cref="CommandTiers"/> calls read-only by its
+    /// first verb but that is not on the list - <c>plan apply</c>, a verb a newer CLI added - is reviewed like any change.
+    /// </summary>
+    public bool RunsWithoutReview => CommandReview.MayRunUnreviewed(Argv);
+
+    /// <summary>What the review and the tier policy make of it: only an allow-listed read is read-only and runs as it is; everything else is at least a change, and is reviewed first.</summary>
+    public CommandTier Tier => CommandReview.ResolveTier(Argv, RunsWithoutReview ? CommandTier.ReadOnly : CommandTier.StateChanging);
 }
 
 /// <summary>
@@ -55,12 +62,6 @@ internal sealed class CuratedCommandCatalog
 
     /// <summary>Groups nest at most this deep (<c>setup observability add</c> is three nouns).</summary>
     private const int MaxDepth = 3;
-
-    // Word-fragments of a flag that carry a credential. Matched case-insensitively against any "-"-prefixed token.
-    private static readonly string[] SecretFlagFragments =
-    {
-        "--value", "token", "api-key", "apikey", "secret", "password", "passwd", "passphrase", "credential", "bearer", "--key",
-    };
 
     private static readonly char[] ShellMetacharacters = { ';', '&', '|', '<', '>', '`', '$', '(', ')', '%', '"', '\'', '\\', '*', '?', '~', '^', '\n', '\r' };
 
@@ -191,14 +192,21 @@ internal sealed class CuratedCommandCatalog
         }
     }
 
-    /// <summary>A command word is lower-case letters, digits and dashes: anything else in a help line is not a noun to put on an argv.</summary>
+    /// <summary>
+    /// A command word is lower-case letters, digits, dashes and underscores, and starts with a letter or a digit: anything else in a help line
+    /// is not a noun to put on an argv, and a name that starts with <c>-</c> (<c>--help</c>, <c>-x</c>) would be read by the CLI as an
+    /// option, not as a command.
+    /// </summary>
     internal static bool IsPlausibleNoun(string name) =>
-        name.Length > 0 && name.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-' or '_');
+        name.Length > 0 &&
+        name[0] is (>= 'a' and <= 'z') or (>= '0' and <= '9') &&
+        name.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-' or '_');
 
     /// <summary>
-    /// True when <paramref name="argv"/> must not be offered or run: it is empty, any token has a shell metacharacter, or it
-    /// carries a flag that names a credential (<c>--value</c>, <c>--token</c>, <c>--api-key</c> and the like). A palette entry is a
-    /// noun path, so none of these is expected - this is the line that makes sure it stays so.
+    /// True when <paramref name="argv"/> must not be offered or run: it is empty, any token has a shell metacharacter, or any token is an
+    /// option (starts with <c>-</c>) - which covers the flags that carry a credential (<c>--value</c>, <c>--token</c>, <c>--api-key</c> and
+    /// the like) along with every other one. A palette entry is a noun path, so none of these is expected - this is the line that makes
+    /// sure it stays so.
     /// </summary>
     public static bool Refuses(IReadOnlyList<string> argv)
     {
@@ -216,7 +224,8 @@ internal sealed class CuratedCommandCatalog
                 return true;
             }
 
-            if (token.StartsWith('-') && SecretFlagFragments.Any(f => token.Contains(f, StringComparison.OrdinalIgnoreCase)))
+            // Not a noun: an option rides on the command it follows, and a "command" that is one is the CLI's own flag.
+            if (token.StartsWith('-'))
             {
                 return true;
             }

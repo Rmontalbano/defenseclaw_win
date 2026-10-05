@@ -133,6 +133,27 @@ public sealed class WizardCredentials
     }
 
     /// <summary>
+    /// The Windows command interpreter, by absolute path: <c>%SystemRoot%\System32\cmd.exe</c> as Windows itself reports the
+    /// system directory. Never <c>%ComSpec%</c> and never a bare <c>cmd.exe</c> looked up on PATH - this is the console the
+    /// operator types an API key into, so it must not be whatever a variable or a PATH entry says it is.
+    /// </summary>
+    internal static string CommandInterpreterPath() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+
+    /// <summary>
+    /// What <see cref="OpenKeysSetTerminal"/> starts, separate from the start itself so a test can read it without opening a window.
+    /// <paramref name="envName"/> must already have passed <see cref="IsValidName"/>.
+    /// </summary>
+    internal static ProcessStartInfo KeysSetStartInfo(string executable, string envName, string workingDirectory) => new()
+    {
+        FileName = CommandInterpreterPath(),
+        Arguments = $"/d /s /c \"\"{executable}\" keys set {envName} & echo. & pause\"",
+        UseShellExecute = false,
+        CreateNoWindow = false,
+        WorkingDirectory = workingDirectory,
+    };
+
+    /// <summary>
     /// Opens a new console window running <c>defenseclaw keys set NAME</c> and pausing at the end so the
     /// result stays readable. The operator types the value at the CLI's own hidden prompt; it never
     /// passes through this process. Returns null on success, otherwise a sentence for the wizard's
@@ -140,7 +161,8 @@ public sealed class WizardCredentials
     /// <para>
     /// <c>cmd /d /s /c "…"</c> is used on purpose: <c>/s</c> makes the outer quotes unambiguous, so an
     /// install path with spaces survives, and <c>/d</c> skips AutoRun. The variable name is validated
-    /// against <see cref="IsValidName"/> first, so nothing here can be steered into another command.
+    /// against <see cref="IsValidName"/> first, so nothing here can be steered into another command, and the
+    /// interpreter is the system's own <c>cmd.exe</c> (<see cref="CommandInterpreterPath"/>).
     /// </para>
     /// </summary>
     public string? OpenKeysSetTerminal(string? envName)
@@ -158,15 +180,10 @@ public sealed class WizardCredentials
             return "defenseclaw is not on PATH or in the installer's bin directory, so there is nothing to run.";
         }
 
-        var shell = Environment.GetEnvironmentVariable("ComSpec");
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = string.IsNullOrWhiteSpace(shell) ? "cmd.exe" : shell,
-            Arguments = $"/d /s /c \"\"{executable}\" keys set {envName} & echo. & pause\"",
-            UseShellExecute = false,
-            CreateNoWindow = false,
-            WorkingDirectory = _paths.DataDirectoryExists ? _paths.DataDirectory : Environment.CurrentDirectory,
-        };
+        var startInfo = KeysSetStartInfo(
+            executable,
+            envName,
+            _paths.DataDirectoryExists ? _paths.DataDirectory : Environment.CurrentDirectory);
 
         try
         {

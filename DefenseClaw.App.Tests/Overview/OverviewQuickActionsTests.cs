@@ -72,16 +72,71 @@ public sealed class OverviewQuickActionsTests : IDisposable
     }
 
     [Fact]
-    public async Task A_command_that_is_not_read_only_is_refused_and_never_handed_to_the_runner()
+    public async Task A_command_that_is_not_read_only_is_reviewed_and_never_run_by_the_click()
     {
         var vm = Panel();
         var removal = new DiagnosticCommand("Remove", CommandReview.DefaultExecutable, new[] { "skill", "remove", "--", "pdf-tools" }, "Not a diagnostic.");
 
         await vm.RunDiagnosticCommand.ExecuteAsync(removal);
 
-        Assert.Equal("Bad", vm.DiagnosticKey);
-        Assert.Contains("no longer classified read-only", vm.DiagnosticMessage, StringComparison.Ordinal);
+        // The review is up, with the exact argv and the tier the classifier gives it; nothing was started.
+        Assert.True(vm.Review.IsOpen);
+        Assert.False(vm.Review.IsRunning);
+        var review = vm.Review.CommandReview!;
+        Assert.Equal("Run “Remove”?", review.Title);
+        Assert.Contains("is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first", review.Summary, StringComparison.Ordinal);
+        Assert.Equal(new[] { "skill", "remove", "--", "pdf-tools" }, Assert.Single(review.Steps).Argv);
+        Assert.Equal(CommandTier.Destructive, review.Tier);
+        Assert.False(vm.HasDiagnosticMessage);
+        Assert.False(vm.IsDiagnosticRunning);
         Assert.Empty(_scene.Services.Cli.Activity);
+    }
+
+    [Theory]
+    [InlineData("plan", "apply")]
+    [InlineData("validate", "fix")]
+    [InlineData("skill", "list", "purge")]
+    public async Task A_command_the_classifier_calls_read_only_but_that_is_not_on_the_list_is_reviewed_as_a_change_too(params string[] argv)
+    {
+        var vm = Panel();
+        Assert.Equal(CommandTier.ReadOnly, CommandTiers.Classify(argv));
+
+        await vm.RunDiagnosticCommand.ExecuteAsync(new DiagnosticCommand("Guess", CommandReview.DefaultExecutable, argv, "Looks like a read."));
+
+        Assert.True(vm.Review.IsOpen);
+        var review = vm.Review.CommandReview!;
+        Assert.Equal(argv, Assert.Single(review.Steps).Argv);
+        Assert.Equal(CommandTier.StateChanging, review.Tier);
+        Assert.Equal("Changes state", review.TierLabel);
+        Assert.False(vm.HasDiagnosticMessage);
+        Assert.Empty(_scene.Services.Cli.Activity);
+    }
+
+    [Fact]
+    public async Task A_gateway_verb_that_is_not_one_of_the_two_listed_reads_is_reviewed_against_the_gateway_executable()
+    {
+        var vm = Panel();
+
+        await vm.RunDiagnosticCommand.ExecuteAsync(
+            new DiagnosticCommand("Gateway doctor", GatewayControl.Executable, new[] { "doctor" }, "Not a gateway read."));
+
+        Assert.True(vm.Review.IsOpen);
+        var step = Assert.Single(vm.Review.CommandReview!.Steps);
+        Assert.Equal(GatewayControl.Executable, step.Executable);
+        Assert.Equal("defenseclaw-gateway doctor", step.CommandText);
+        Assert.NotEqual(CommandTier.ReadOnly, vm.Review.CommandReview.Tier);
+        Assert.Empty(_scene.Services.Cli.Activity);
+    }
+
+    [Fact]
+    public async Task A_listed_diagnostic_does_not_open_the_review_it_runs()
+    {
+        var vm = Panel();
+
+        await vm.RunDiagnosticCommand.ExecuteAsync(OverviewPanelViewModel.DiagnosticCommands[0]);
+
+        Assert.False(vm.Review.IsOpen);
+        Assert.True(vm.HasDiagnosticMessage);
     }
 
     [Fact]

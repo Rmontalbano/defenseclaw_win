@@ -20,7 +20,7 @@ namespace DefenseClaw.App.Views.Updates;
 /// itself goes through <see cref="DefenseClaw.Core.Cli.CliRunner"/> — same as every other change
 /// this app makes — so the Activity panel records the argv, the streaming output and the exit
 /// code. Nothing runs on its own, and nothing runs that was not first size-checked and
-/// hash-verified against the release's signed checksums.txt.
+/// compared with the release's checksums.txt, whose sigstore signature is verified with cosign when it is installed.
 /// </para>
 /// <para>
 /// This class owns only window concerns: lifetime, single-instance behaviour, and keeping the

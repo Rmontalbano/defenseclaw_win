@@ -1,3 +1,5 @@
+using DefenseClaw.Core.Text;
+
 namespace DefenseClaw.Core.Cli;
 
 public enum CliStream
@@ -497,6 +499,14 @@ public sealed class CliInvocation
     private static long CostOf(CliOutputLine line) =>
         PerLineOverheadBytes + ((long)line.Text.Length * sizeof(char));
 
-    private static string Quote(string value) =>
-        value.Length == 0 || value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
+    /// <summary>
+    /// Display quoting only: an empty or spaced argument gets quotes. A name that came from outside (a skill, a registry entry) is shown with
+    /// its control and format characters spelled out (<c>‮</c>, <c>\n</c>, see <see cref="DisplayNames.Visible"/>), so a row in the
+    /// Activity panel is one line and a right-to-left override cannot make it read as another command. <see cref="Argv"/> itself is untouched.
+    /// </summary>
+    private static string Quote(string value)
+    {
+        var shown = DisplayNames.Visible(value);
+        return shown.Length == 0 || shown.Any(char.IsWhiteSpace) ? $"\"{shown}\"" : shown;
+    }
 }

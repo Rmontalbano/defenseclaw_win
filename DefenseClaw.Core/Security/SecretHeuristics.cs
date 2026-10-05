@@ -320,22 +320,22 @@ public static partial class SecretHeuristics
         return false;
     }
 
-    [GeneratedRegex(@"-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.PrivateKeyHeader, RegexOptions.CultureInvariant)]
     private static partial Regex PrivateKeyPattern();
 
-    [GeneratedRegex(@"https?://hooks\.slack(?:-gov)?\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_-]{8,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(SecretShapes.SlackWebhook, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex SlackWebhookPattern();
 
-    [GeneratedRegex(@"https?://(?:[a-z]+\.)?discord(?:app)?\.com/api/(?:v\d+/)?webhooks/\d+/[A-Za-z0-9_-]{16,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(SecretShapes.DiscordWebhook, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex DiscordWebhookPattern();
 
-    [GeneratedRegex(@"https?://(?:[a-z0-9-]+\.webhook\.office\.com/webhook\w*|outlook\.office(?:365)?\.com/webhook\w*)/[A-Za-z0-9@/_.-]{8,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(SecretShapes.TeamsWebhook, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex TeamsWebhookPattern();
 
-    [GeneratedRegex(@"https?://webexapis\.com/v1/webhooks/incoming/[A-Za-z0-9_-]{8,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(SecretShapes.WebexWebhook, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex WebexWebhookPattern();
 
-    [GeneratedRegex(@"https?://hooks\.zapier\.com/hooks/catch/[A-Za-z0-9/_-]{6,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(SecretShapes.ZapierWebhook, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex ZapierWebhookPattern();
 
     [GeneratedRegex(@"(?<![A-Za-z0-9])bearer\s+(?<token>[A-Za-z0-9._~+/=-]{8,})", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
@@ -344,42 +344,42 @@ public static partial class SecretHeuristics
     // sk-<20+ unbroken characters> (the classic OpenAI shape), or sk-<vendor>-<anything> for the newer keys
     // (sk-proj-…, sk-ant-api03-…, sk-svcacct-…, sk-or-v1-…), with a digit somewhere after the prefix. A slug such as
     // "sk-plugin-with-a-long-name" has no 20-character unbroken run and no vendor word, and a real key is never all letters.
-    [GeneratedRegex(@"(?<![A-Za-z0-9_-])sk-(?=[A-Za-z0-9_-]*[0-9])(?:[A-Za-z0-9_]{20,}|(?:proj|ant|svcacct|admin|or)-[A-Za-z0-9_-]{16,})", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.OpenAiStyleKey, RegexOptions.CultureInvariant)]
     private static partial Regex OpenAiStylePattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])gh[pousr]_[A-Za-z0-9]{30,}", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.GitHubToken, RegexOptions.CultureInvariant)]
     private static partial Regex GitHubTokenPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9_]{20,}", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.GitHubFineGrainedToken, RegexOptions.CultureInvariant)]
     private static partial Regex GitHubFineGrainedPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:xox[abprse]-[A-Za-z0-9-]{10,}|xapp-\d-[A-Za-z0-9-]{10,})", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.SlackToken, RegexOptions.CultureInvariant)]
     private static partial Regex SlackTokenPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Za-z0-9])", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.AwsAccessKeyId, RegexOptions.CultureInvariant)]
     private static partial Regex AwsAccessKeyPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_-])AIza[0-9A-Za-z_-]{35}(?![A-Za-z0-9_-])", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.GoogleApiKey, RegexOptions.CultureInvariant)]
     private static partial Regex GoogleApiKeyPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.JsonWebToken, RegexOptions.CultureInvariant)]
     private static partial Regex JwtPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_-])glpat-[A-Za-z0-9_-]{20,}", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.GitLabToken, RegexOptions.CultureInvariant)]
     private static partial Regex GitLabTokenPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])npm_[A-Za-z0-9]{36}(?![A-Za-z0-9])", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.NpmToken, RegexOptions.CultureInvariant)]
     private static partial Regex NpmTokenPattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])hf_[A-Za-z0-9]{30,}", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.HuggingFaceToken, RegexOptions.CultureInvariant)]
     private static partial Regex HuggingFacePattern();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])[sr]k_live_[A-Za-z0-9]{16,}", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.StripeKey, RegexOptions.CultureInvariant)]
     private static partial Regex StripeKeyPattern();
 
     // scheme://user:password@host — a userinfo with a colon and a non-empty password before the first slash.
     // ssh://git@host:22/x has a user and no password, and http://host:8080/p@q has a slash first: neither matches.
-    [GeneratedRegex(@"[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(SecretShapes.UrlUserInfo, RegexOptions.CultureInvariant)]
     private static partial Regex UrlUserInfoPattern();
 
     // name=value or name: value, anywhere in the text (a KEY=VAL line, ?token=abc&x=1, --api-key=abc, "password": "abc").

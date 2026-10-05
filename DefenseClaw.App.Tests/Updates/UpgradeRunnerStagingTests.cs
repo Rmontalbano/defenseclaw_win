@@ -60,7 +60,7 @@ public sealed class UpgradeRunnerStagingTests : IDisposable
         var script = Bytes(20 * 1024);
         _http.Serve(Script, script).Serve(Checksums, $"{Sha256(script)}  {Script}\n");
 
-        var result = await Runner().DownloadAndVerifyAsync("v0.8.10", checksumsSigstoreSigned: true);
+        var result = await Runner().DownloadAndVerifyAsync("v0.8.10");
 
         Assert.True(result.Succeeded);
         Assert.Equal(UpgradeStagingOutcome.Verified, result.Outcome);
@@ -68,7 +68,10 @@ public sealed class UpgradeRunnerStagingTests : IDisposable
         Assert.Equal(UpgradeChannel.ResolverScript, asset.Channel);
         Assert.Equal(Sha256(script), asset.Sha256);
         Assert.Equal(Sha256(script), asset.ExpectedSha256);
-        Assert.True(asset.ChecksumsSigstoreSigned);
+
+        // The release served no signature files and there is no cosign: the staged record says that, and nothing about a signature being checked.
+        Assert.Equal(ChecksumsSignatureState.NotPublished, asset.ChecksumsSignature.State);
+        Assert.False(asset.ChecksumsSignature.IsVerified);
         Assert.Equal(script.Length, asset.SizeBytes);
         Assert.Equal(Path.Combine(StagingRoot, "v0.8.10", Script), asset.FilePath);
         Assert.Equal(script, await File.ReadAllBytesAsync(asset.FilePath));

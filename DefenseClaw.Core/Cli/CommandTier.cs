@@ -101,6 +101,65 @@ public static class CommandTiers
     };
 
     /// <summary>
+    /// The <c>defenseclaw</c> commands, as noun paths with no flags and no target, that may run with <b>no review step</b>
+    /// when the app picks them (the command palette, the Overview's Diagnostics and doctor). An explicit list on purpose:
+    /// <see cref="Classify"/> decides by the first recognised verb, so a command it calls read-only today can be one that
+    /// changes state tomorrow (<c>plan apply</c> and <c>validate fix</c> are both "read-only" by that rule), and argv that the palette
+    /// reads off the installed CLI's own <c>--help</c> would run unreviewed the moment a new CLI added one. Every entry is a leaf of the
+    /// DefenseClaw 0.8.10 command tree whose help says it lists, shows, checks or validates; <c>CommandTierTreeTests</c> pins this set to
+    /// the reviewed read-only leaves of that tree, so growing it is a decision made in two places, after reading the new command's help.
+    /// Anything not on it goes through a review, whatever <see cref="Classify"/> says.
+    /// </summary>
+    public static IReadOnlyCollection<string> UnreviewedReadPaths => UnreviewedReads;
+
+    private static readonly HashSet<string> UnreviewedReads = new(StringComparer.Ordinal)
+    {
+        "agent components history", "agent components show", "agent confidence policy show", "agent confidence policy validate",
+        "agent discovery status", "agent processes", "agent signatures list", "agent signatures validate",
+        "codeguard status", "config show", "config validate", "doctor",
+        "guardrail judge list", "guardrail status", "keys check", "keys list", "mcp list", "migrations status",
+        "observability plan", "plugin info", "plugin list", "policy list", "policy show", "policy validate",
+        "registry entries", "registry list", "registry show", "skill info", "skill list", "skill search",
+        "status", "tool list", "tool status", "version",
+    };
+
+    /// <summary>
+    /// The <c>defenseclaw-gateway</c> commands the app runs with no review: the two reads on the Overview's Diagnostics menu. The
+    /// gateway's other verbs (start, stop, restart …) are never on this list.
+    /// </summary>
+    public static IReadOnlyCollection<string> UnreviewedGatewayReadPaths => UnreviewedGatewayReads;
+
+    private static readonly HashSet<string> UnreviewedGatewayReads = new(StringComparer.Ordinal)
+    {
+        "status", "provenance show",
+    };
+
+    /// <summary>
+    /// True when <paramref name="argv"/> is exactly one of <see cref="UnreviewedReadPaths"/>: those nouns and nothing else (no flag, no
+    /// target), so <c>doctor --fix</c> and <c>config show --reveal</c> are not on the list even though their verbs are.
+    /// </summary>
+    public static bool IsUnreviewedRead(IReadOnlyList<string> argv) => IsOnList(argv, UnreviewedReads);
+
+    /// <summary>The same for <c>defenseclaw-gateway</c>: exactly one of <see cref="UnreviewedGatewayReadPaths"/>.</summary>
+    public static bool IsUnreviewedGatewayRead(IReadOnlyList<string> argv) => IsOnList(argv, UnreviewedGatewayReads);
+
+    private static bool IsOnList(IReadOnlyList<string> argv, HashSet<string> list)
+    {
+        ArgumentNullException.ThrowIfNull(argv);
+
+        // Token by token, never a joined line: one argument that spells "doctor --fix" is not the path "doctor".
+        foreach (var token in argv)
+        {
+            if (string.IsNullOrEmpty(token) || token.StartsWith('-') || token.Any(char.IsWhiteSpace))
+            {
+                return false;
+            }
+        }
+
+        return argv.Count > 0 && list.Contains(string.Join(' ', argv));
+    }
+
+    /// <summary>
     /// True when <paramref name="argv"/> asks the command to print secret values (any of
     /// <c>--reveal</c>, <c>--show-values</c>, <c>--show-credentials</c> before a <c>--</c>). A review says so in
     /// a warning of its own: the tier alone only says "Changes state".

@@ -27,9 +27,12 @@ namespace DefenseClaw.App.ViewModels.Updates;
 /// never be run down the other.
 /// </para>
 /// <para>
-/// <b>cosign gates one channel only.</b> The resolver shells out to cosign to verify the signed
-/// release contract and refuses without it. The installer does not use cosign at all, so
-/// requiring it there would be a gate on nothing.
+/// <b>cosign gates one channel and serves both.</b> The resolver shells out to cosign to verify the signed
+/// release contract and refuses without it, so there it is a hard gate. On the installer channel it is optional: when
+/// found, this section has it verify the sigstore signature on the release's <c>checksums.txt</c> before the installer is
+/// downloaded (a signature it rejects stops the upgrade); without it the SHA-256 comparison with that same file still
+/// happens and the signature is reported as not verified. Nothing here says "signed" or "verified" about a signature
+/// cosign did not verify.
 /// </para>
 /// <para>
 /// <b>Three separate clicks, never one.</b> Checking, staging and running are distinct user
@@ -112,7 +115,6 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// <summary>True once a run's close has been refused, so the banner can say the click was noticed.</summary>
     private bool _closeRefused;
 
-    private bool _checksumsSigstoreSigned;
     private string? _versionBeforeUpgrade;
 
     /// <summary>The channel the in-flight (or last) run used. The console outlives a channel switch.</summary>
@@ -127,6 +129,12 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     private int _cosignProbeVersion;
 
     private readonly Func<Task<CosignStatus>> _cosignProbe;
+
+    /// <summary>The newest cosign probe: in flight or done. A download waits for it rather than guess that cosign is missing.</summary>
+    private Task<CosignStatus>? _cosignStatusTask;
+
+    /// <summary>The newest cosign answer that arrived, for the texts that depend on the channel.</summary>
+    private CosignStatus? _cosignStatus;
 
     [ObservableProperty]
     private bool _isUpdateAvailable;
@@ -287,6 +295,12 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// </summary>
     public event EventHandler? UpgradeSucceeded;
 
+    /// <summary>
+    /// Raised (on the UI thread) when a download-and-verify has found out what there is to know about the sigstore signature on the release's
+    /// checksums.txt: verified, published but not verified, not published, or rejected. The window's trust panel shows the same words.
+    /// </summary>
+    public event EventHandler<ChecksumsSignatureResult>? SignatureChecked;
+
     /// <summary>Resolver output, line by line, oldest first.</summary>
     public ObservableCollection<CliOutputRow> Output { get; } = new();
 
@@ -338,14 +352,13 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
-    /// Whether the cosign row means anything right now. cosign is a prerequisite of the
-    /// <i>resolver script</i>, which shells out to it to verify the signed release contract. The
-    /// Setup installer never invokes it, so on that channel the row is hidden rather than shown
-    /// as a passed or failed gate it is not.
+    /// Whether cosign is a <b>requirement</b> right now. It is a prerequisite of the <i>resolver script</i>, which shells out to
+    /// it to verify the signed release contract and refuses without it. On the Setup installer channel it is optional - this section runs
+    /// it to verify the signature on checksums.txt when it is there - so the row is shown on both channels, but only here is its absence a failed gate.
     /// </summary>
     public bool IsCosignRelevant => SelectedChannel == UpgradeChannel.ResolverScript;
 
-    /// <summary>The cosign install instructions, suppressed on the channel that does not need them.</summary>
+    /// <summary>The cosign install instructions as a warning bar: only where cosign is required.</summary>
     public bool ShowCosignGuidance => IsCosignRelevant && HasCosignGuidance;
 
     /// <summary>
@@ -368,14 +381,15 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
     /// <summary>What the selected channel will actually do, step by step.</summary>
     public string ResolverPlan => IsInstallerChannel
-        ? "1. The download's SHA-256 is verified against the release's sigstore-signed checksums.txt, with a " +
-          "50 MB floor underneath it — the known-bad 133-byte placeholder stubs have their hashes faithfully " +
-          "listed in that same signed file, so a hash match alone is not enough.\n" +
+        ? "1. The download's SHA-256 is compared with its entry in checksums.txt from the same release, with a " +
+          "50 MB floor underneath it — the known-bad 133-byte placeholder stubs have their hashes listed in that " +
+          "same file, so a hash match alone is not enough. " + SignatureStepSentence + "\n" +
           "2. Runs the Setup exe with /quiet /norestart INSTALLSCOPE=user: it stops the DefenseClaw gateway, " +
-          "installs over the top in user scope, and restarts the gateway.\n" +
+          "installs over the top in user scope, and restarts the gateway. The exe is not Authenticode-signed.\n" +
           "3. %USERPROFILE%\\.defenseclaw — config.yaml, the environment file, audit.db and inventory.db — is " +
           "preserved. Verified live on this machine's 0.8.7 → 0.8.10 upgrade."
-        : "1. Verifies the release's signed contract with cosign — before changing anything on disk.\n" +
+        : "1. The script's SHA-256 is compared with its entry in checksums.txt from the same release. " + SignatureStepSentence + " " +
+          "The script then verifies the release's own signed contract with cosign — before changing anything on disk.\n" +
           "2. Stops the DefenseClaw gateway and opens a two-phase upgrade journal.\n" +
           "3. Replaces the CLI, gateway and scanner binaries, and the Claude Code hook runtime that " +
           "every Claude Code session loads its hooks from.\n" +
@@ -395,21 +409,22 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// <summary>The small print under the Step 1 button.</summary>
     public string StagingStepNote => IsInstallerChannel
         ? $"Reads the release's checksums.txt first — it is a few kilobytes, and a missing entry or a rate " +
-          $"limit is worth finding before a ~270 MB download rather than after. Then streams " +
+          $"limit is worth finding before a ~270 MB download rather than after. When cosign is installed it " +
+          "verifies that file's sigstore signature at this point, and a signature it rejects stops here. Then streams " +
           $"{UpgradeRunner.InstallerAssetName} to disk, hashing as it goes, and keeps it only if it clears the " +
-          "50 MB stub floor and its SHA-256 matches. Nothing on this machine changes."
+          "50 MB stub floor and its SHA-256 matches the checksums.txt entry. Nothing on this machine changes."
         : "Fetches defenseclaw-upgrade.ps1 from the target release, refuses it if it is one of the placeholder " +
           "stubs (under 10 KB — the real resolver is around 216 KB), and compares its SHA-256 with that " +
-          "release's checksums.txt. Nothing is written to disk unless both checks pass, and nothing on this " +
-          "machine changes.";
+          "release's checksums.txt, whose sigstore signature cosign verifies first (a rejected one stops here). " +
+          "Nothing is written to disk unless every check passes, and nothing on this machine changes.";
 
     /// <summary>The small print under the Step 2 button.</summary>
     public string RunStepNote => IsInstallerChannel
         ? "Opens a confirmation showing the exact argv and what the installer will do. The button stays " +
-          "disabled until a verified installer is staged and no other command this app issued is still " +
-          "running. cosign is not required on this channel — the Setup exe does not use it."
+          "disabled until an installer whose SHA-256 matched is staged and no other command this app issued is still " +
+          "running. cosign is optional on this channel: it only decides whether the signature on checksums.txt is verified."
         : "Opens a confirmation showing the exact argv, what the resolver will do, and how it rolls back. The " +
-          "button stays disabled until a verified script is staged, cosign is usable, and no other command " +
+          "button stays disabled until a script whose SHA-256 matched is staged, cosign is usable, and no other command " +
           "this app issued is still running.";
 
     /// <summary>Header over the live console. Named for the channel that produced the output.</summary>
@@ -421,6 +436,26 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     public string ConfirmTitle => IsInstallerChannel
         ? $"Run the {TargetVersion} Setup installer?"
         : $"Run the {TargetVersion} upgrade resolver?";
+
+    /// <summary>
+    /// The sentence the plan says about the signature on checksums.txt: what <i>will</i> be checked before a download, and what <i>was</i> found once
+    /// something is staged. Never "signed" or "verified" for a signature cosign did not verify.
+    /// </summary>
+    private string SignatureStepSentence => _staged?.ChecksumsSignature is { } signature && signature.State != ChecksumsSignatureState.NotChecked
+        ? signature.State switch
+        {
+            ChecksumsSignatureState.Verified =>
+                "cosign verified the sigstore signature on that checksums.txt (signed by the upstream release workflow).",
+            ChecksumsSignatureState.NotPublished =>
+                "The release publishes no sigstore signature for that file, so this is an integrity check only.",
+            ChecksumsSignatureState.NotVerifiedNoCosign =>
+                "That file's sigstore signature was NOT verified (cosign is not installed), so this shows the download matches that file and not that the project signed it.",
+            ChecksumsSignatureState.NotVerifiedUnavailable =>
+                "That file's sigstore signature was NOT verified (its signature files could not be fetched), so this shows the download matches that file and not that the project signed it.",
+            _ =>
+                "That file's sigstore signature was NOT verified (cosign could not check it), so this shows the download matches that file and not that the project signed it.",
+        }
+        : "When cosign is installed, that file's sigstore signature is verified first and a signature it rejects stops the upgrade; without cosign the signature is not verified.";
 
     public string StaleAssumptionsWarning =>
         "This app keeps its old-version assumptions — panel layouts, CLI flags, health fields — until you " +
@@ -534,20 +569,19 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
-    /// Records what the hash comparison is anchored to. The checksums file is only meaningful
-    /// because the release signs it; if the sidecars are missing, the UI says so rather than
-    /// implying a signature that is not there.
+    /// Records what the hash comparison will be anchored to. A checksums file proves something about a download only if it is itself
+    /// trustworthy, and that is what its sigstore signature is for - so this says whether the release publishes one, and nothing
+    /// about whether it is valid: only cosign can say that, once a download is staged (<see cref="ApplyStaging"/>).
     /// </summary>
     public void ApplyProvenance(ProvenanceReport report)
     {
         ArgumentNullException.ThrowIfNull(report);
 
-        _checksumsSigstoreSigned = report.SigstoreSigningPresent;
-        ChecksumsSourceNote = report.SigstoreSigningPresent
-            ? "Compared against checksums.txt from the same release, which ships a sigstore signature (.sig) " +
-              "and certificate (.pem)."
-            : "Compared against checksums.txt from the same release. Its sigstore .sig/.pem sidecars are not " +
-              "present, so the checksum is an integrity check only — not a signed one.";
+        ChecksumsSourceNote = report.SignatureFilesPublished
+            ? "Compared against checksums.txt from the same release. The release publishes a sigstore signature for that file; " +
+              "it is verified with cosign when cosign is installed, and is otherwise reported as not verified."
+            : "Compared against checksums.txt from the same release. The release publishes no complete sigstore signature for " +
+              "that file, so the comparison is an integrity check only.";
     }
 
     /// <summary>
@@ -594,25 +628,64 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         CosignBadgeKey = "Neutral";
         RaiseState();
 
-        var status = await _cosignProbe().ConfigureAwait(true);
+        _cosignStatus = null;
+        var probe = _cosignProbe();
+        _cosignStatusTask = probe;
+        var status = await probe.ConfigureAwait(true);
         if (_disposed || version != _cosignProbeVersion)
         {
             return;
         }
 
+        _cosignStatus = status;
         IsCosignReady = status.IsUsable;
-        CosignDetail = status.Detail;
         CosignGuidance = status.InstallGuidance ?? string.Empty;
         HasCosignGuidance = status.InstallGuidance is { Length: > 0 };
-
-        (CosignLabel, CosignBadgeKey) = status.Availability switch
-        {
-            CosignAvailability.OnPath => ("cosign ready", "Ok"),
-            CosignAvailability.FoundOffPath => ("cosign not on PATH", "Warn"),
-            _ => ("cosign missing", "Bad"),
-        };
+        ApplyCosignTexts();
 
         RaiseState();
+    }
+
+    /// <summary>
+    /// The cosign row's words, which depend on the channel: where cosign is a requirement (the resolver script) it is a gate and "missing" is a
+    /// failure; where it is optional (the Setup installer) it decides only whether the signature on checksums.txt is verified, and "not installed" is
+    /// said as that, with how to fix it. Re-applied on a channel switch.
+    /// </summary>
+    private void ApplyCosignTexts()
+    {
+        if (_cosignStatus is not { } status)
+        {
+            return;
+        }
+
+        if (IsCosignRelevant)
+        {
+            CosignDetail = status.Detail;
+            (CosignLabel, CosignBadgeKey) = status.Availability switch
+            {
+                CosignAvailability.OnPath => ("cosign ready", "Ok"),
+                CosignAvailability.FoundOffPath => ("cosign not on PATH", "Warn"),
+                _ => ("cosign missing", "Bad"),
+            };
+            return;
+        }
+
+        if (status.Availability == CosignAvailability.Missing)
+        {
+            // The same word as on the resolver channel, in the tone of something that is only optional here.
+            CosignLabel = "cosign missing";
+            CosignBadgeKey = "Warn";
+            CosignDetail =
+                "cosign was not found. It is optional on this channel: without it the installer's SHA-256 is compared with checksums.txt from the same " +
+                "release, but that file's sigstore signature is NOT verified. To verify it, install cosign (winget install Sigstore.Cosign) and press Re-check.";
+            return;
+        }
+
+        CosignLabel = "cosign ready";
+        CosignBadgeKey = "Ok";
+        CosignDetail =
+            $"cosign is at {status.Path}. This app runs it to verify the sigstore signature on the release's checksums.txt before the installer is downloaded; " +
+            "a signature it rejects stops the upgrade.";
     }
 
     /// <summary>
@@ -641,16 +714,20 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
         try
         {
+            // The signature on checksums.txt is checked with the cosign the newest probe found, by its absolute path: a probe that is still out is
+            // waited for, because "cosign was not found yet" is not the same answer as "cosign is not installed".
+            var cosignPath = await CosignPathAsync().ConfigureAwait(true);
+
             var result = IsInstallerChannel
                 ? await _runner
                     .DownloadAndVerifyInstallerAsync(
                         TargetVersion,
-                        _checksumsSigstoreSigned,
+                        cosignPath,
                         new DownloadProgressSink(this),
                         _cts.Token)
                     .ConfigureAwait(true)
                 : await _runner
-                    .DownloadAndVerifyAsync(TargetVersion, _checksumsSigstoreSigned, _cts.Token)
+                    .DownloadAndVerifyAsync(TargetVersion, cosignPath, _cts.Token)
                     .ConfigureAwait(true);
 
             ApplyStaging(result);
@@ -664,6 +741,29 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             IsStaging = false;
             HasDownloadProgress = false;
             RaiseState();
+        }
+    }
+
+    /// <summary>
+    /// Where cosign is, from the newest probe (waited for when it is still in flight), or null when there is none. Found-off-PATH counts: the check runs it
+    /// by its absolute path, so the PATH a child would inherit does not matter to it.
+    /// </summary>
+    private async Task<string?> CosignPathAsync()
+    {
+        var probe = _cosignStatusTask;
+        if (probe is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var status = await probe.ConfigureAwait(true);
+            return status.Availability == CosignAvailability.Missing ? null : status.Path;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
     }
 
@@ -976,6 +1076,8 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
                 : string.Empty;
             CommandPreview = string.Empty;
             VerificationBadgeKey = result.Outcome == UpgradeStagingOutcome.RateLimited ? "Neutral" : "Bad";
+            OnPropertyChanged(nameof(ResolverPlan));
+            ReportSignature(result.Signature);
             return;
         }
 
@@ -986,6 +1088,33 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         StagedSizeText = asset.SizeText;
         CommandPreview = UpgradeRunner.DescribeCommand(asset.Channel, asset.FilePath);
         VerificationBadgeKey = "Ok";
+
+        // What the comparison is anchored to, in the words of what was actually found out - and the plan the overlay shows says the same.
+        ChecksumsSourceNote = "Compared against checksums.txt from the same release. " + asset.ChecksumsSignature.State switch
+        {
+            ChecksumsSignatureState.Verified =>
+                "cosign verified that file's sigstore signature: it was signed by the upstream release workflow.",
+            ChecksumsSignatureState.NotPublished =>
+                "The release publishes no sigstore signature for it, so this is an integrity check only.",
+            ChecksumsSignatureState.NotVerifiedNoCosign =>
+                "Its sigstore signature was NOT verified (cosign is not installed): this shows the download matches that file, not that the project signed it.",
+            ChecksumsSignatureState.NotVerifiedCosignUnusable =>
+                "Its sigstore signature was NOT verified (cosign could not check it): this shows the download matches that file, not that the project signed it.",
+            ChecksumsSignatureState.NotVerifiedUnavailable =>
+                "Its sigstore signature was NOT verified (the signature files could not be fetched): this shows the download matches that file, not that the project signed it.",
+            _ => "Its sigstore signature was not checked.",
+        };
+        OnPropertyChanged(nameof(ResolverPlan));
+        ReportSignature(asset.ChecksumsSignature);
+    }
+
+    /// <summary>Tells the window's trust panel what was found out about the signature, in the same words.</summary>
+    internal void ReportSignature(ChecksumsSignatureResult? signature)
+    {
+        if (signature is not null && signature.State != ChecksumsSignatureState.NotChecked)
+        {
+            SignatureChecked?.Invoke(this, signature);
+        }
     }
 
     private void ClearStaging()
@@ -1004,6 +1133,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         DownloadProgressText = string.Empty;
         HasDownloadProgress = false;
         VerificationBadgeKey = "Neutral";
+        OnPropertyChanged(nameof(ResolverPlan));
     }
 
     private void OnUpgradeInvocationStarted(object? sender, CliInvocation invocation) =>
@@ -1167,6 +1297,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// </summary>
     private void RaiseChannelText()
     {
+        ApplyCosignTexts();
         OnPropertyChanged(nameof(IsInstallerChannel));
         OnPropertyChanged(nameof(IsSetupInstallerSelected));
         OnPropertyChanged(nameof(IsResolverScriptSelected));

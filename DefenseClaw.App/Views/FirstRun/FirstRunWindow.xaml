@@ -89,7 +89,7 @@
                         <ctl:DcCardHeader Symbol="ArrowDownload24" Tint="Amber" Content="Install the DefenseClaw runtime" />
                         <TextBlock Style="{StaticResource DcTextSecondary}"
                                    TextWrapping="Wrap"
-                                   Text="No defenseclaw command was found on this machine. The Updates window downloads the release's Setup installer, checks its SHA-256 against the release's signed checksums, shows the exact command, and only then runs it. When it has finished, come back here and press Check again." />
+                                   Text="No defenseclaw command was found on this machine. The Updates window downloads the release's Setup installer, compares its SHA-256 with the release's checksums.txt (and verifies that file's sigstore signature when cosign is installed), shows the exact command, and only then runs it. When it has finished, come back here and press Check again." />
                         <StackPanel Style="{StaticResource DcActionBar}" Margin="0,12,0,0">
                             <ui:Button Appearance="Primary"
                                        Content="Open the installer"

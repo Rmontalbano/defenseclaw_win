@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Security;
+using DefenseClaw.Core.Text;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -145,7 +146,8 @@ public sealed partial class RegistriesPanelViewModel
                 : "No credentials are used."),
             steps,
             result => AfterAddAsync(result, id, syncAfter),
-            primaryText: syncAfter ? "Add and sync" : "Add source");
+            primaryText: syncAfter ? "Add and sync" : "Add source",
+            names: new[] { id });
     }
 
     private async Task AfterAddAsync(DiscoverReviewResult result, string id, bool synced)
@@ -243,7 +245,8 @@ public sealed partial class RegistriesPanelViewModel
             SyncExplanation,
             new[] { SyncStep(source.Id) },
             result => AfterActionAsync(result, $"Synced “{source.Id}”.", $"Sync of “{source.Id}” did not finish."),
-            primaryText: "Sync");
+            primaryText: "Sync",
+            names: new[] { source.Id });
     }
 
     [RelayCommand]
@@ -295,7 +298,8 @@ public sealed partial class RegistriesPanelViewModel
                 result,
                 enable ? $"Enabled “{source.Id}”." : $"Disabled “{source.Id}”.",
                 $"“{source.Id}” was not changed."),
-            primaryText: enable ? "Enable" : "Disable");
+            primaryText: enable ? "Enable" : "Disable",
+            names: new[] { source.Id });
     }
 
     [RelayCommand]
@@ -311,11 +315,12 @@ public sealed partial class RegistriesPanelViewModel
         Review.Open(
             $"Remove “{source.Id}”?",
             "Deletes the source from config.yaml, removes the asset_policy rules it promoted (the ones whose " +
-            "reason is registry:" + source.Id + "), and deletes its cache folder. Skills and MCP servers " +
+            "reason is registry:" + DisplayNames.Visible(source.Id) + "), and deletes its cache folder. Skills and MCP servers " +
             "that were only allowed because of those rules stop being allowed.",
             new[] { new DiscoverStep(argv, "Remove the source, its promoted rules and its cache.", CommandTier.Destructive) },
             result => AfterActionAsync(result, $"Removed “{source.Id}”.", $"“{source.Id}” was not removed."),
-            primaryText: "Remove source");
+            primaryText: "Remove source",
+            names: new[] { source.Id });
     }
 
     // ---- Entry actions -------------------------------------------------------------------------
@@ -364,7 +369,8 @@ public sealed partial class RegistriesPanelViewModel
                 result,
                 approve ? $"Approved “{entry.Name}”." : $"Rejected “{entry.Name}”.",
                 $"“{entry.Name}” was not changed."),
-            primaryText: approve ? "Approve" : "Reject");
+            primaryText: approve ? "Approve" : "Reject",
+            names: new[] { source.Id, entry.Name });
     }
 
     // ---- Registry required (default-deny) ---------------------------------------------------------
@@ -411,7 +417,8 @@ public sealed partial class RegistriesPanelViewModel
         // The CLI edited config.yaml; pick that up now rather than waiting for the file watcher.
         Services.ReloadConfig();
 
-        ActionMessage = result.Succeeded ? success : failure;
+        // The messages name a source or an entry, which came from outside: control and format characters are spelled out.
+        ActionMessage = DisplayNames.Visible(result.Succeeded ? success : failure);
         ActionSeverity = result.Succeeded
             ? Wpf.Ui.Controls.InfoBarSeverity.Success
             : Wpf.Ui.Controls.InfoBarSeverity.Error;

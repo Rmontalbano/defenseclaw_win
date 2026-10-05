@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Text;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -444,8 +445,9 @@ public sealed partial class ActivityRow : ObservableObject
         _runner = runner;
         _notify = notify;
 
-        // Fixed for the life of the row: the tier is a function of the argv alone.
-        var tier = CommandTiers.Classify(invocation.Argv);
+        // Fixed for the life of the row: the tier is a function of the argv alone - except for the app's own signature check, whose argv (verify-blob ...)
+        // is not a DefenseClaw command and would classify as a change when all it does is read.
+        var tier = IsCosignCheck(invocation) ? CommandTier.ReadOnly : CommandTiers.Classify(invocation.Argv);
         // Words and tone come from the shared command review, so a tier reads the same here as in every dialog.
         TierText = CommandReview.LabelFor(tier);
         TierKey = CommandReview.ToneFor(tier);
@@ -465,6 +467,12 @@ public sealed partial class ActivityRow : ObservableObject
     /// <see cref="CliInvocation.CopyNewLines"/>, which takes the invocation's own lock.
     /// </summary>
     public CliInvocation Invocation { get; }
+
+    /// <summary>True for the app's own cosign runs (<c>cosign version</c>, <c>cosign verify-blob …</c>): they read a signature and change nothing.</summary>
+    private static bool IsCosignCheck(CliInvocation invocation) =>
+        string.Equals(Path.GetFileNameWithoutExtension(invocation.Executable), "cosign", StringComparison.OrdinalIgnoreCase) &&
+        invocation.Argv.Count > 0 &&
+        invocation.Argv[0] is "version" or "verify-blob";
 
     public string CommandLine => Invocation.CommandLine;
 
@@ -852,8 +860,12 @@ public sealed partial class ActivityRow : ObservableObject
         return $"{(stem.Length == 0 ? "command" : stem)}-{invocation.StartedAt.ToLocalTime().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.log";
     }
 
-    private static string QuoteForDisplay(string value) =>
-        value.Length == 0 || value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
+    /// <summary>Display quoting for an Activity row: control and format characters in a name are spelled out (<c>‮</c>, <c>\n</c>), so a row is one line and cannot be spoofed by an item's name.</summary>
+    private static string QuoteForDisplay(string value)
+    {
+        var shown = DisplayNames.Visible(value);
+        return shown.Length == 0 || shown.Any(char.IsWhiteSpace) ? $"\"{shown}\"" : shown;
+    }
 
     private static string Relative(DateTimeOffset value)
     {

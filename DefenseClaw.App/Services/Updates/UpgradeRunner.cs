@@ -85,7 +85,10 @@ public sealed record ResolverLayoutStatus
 /// <summary>Why a staging attempt ended the way it did. Only <see cref="Verified"/> stages a file.</summary>
 public enum UpgradeStagingOutcome
 {
-    /// <summary>Downloaded, size-sane, and its SHA-256 matched the release's checksums.txt entry.</summary>
+    /// <summary>
+    /// Downloaded, size-sane, and its SHA-256 matched the release's checksums.txt entry. Whether that file's sigstore signature was also verified is
+    /// <see cref="StagedUpgradeAsset.ChecksumsSignature"/>: this outcome does not say it was.
+    /// </summary>
     Verified = 0,
 
     /// <summary>The download is implausibly small — the 133-byte placeholder-stub pattern.</summary>
@@ -105,6 +108,12 @@ public enum UpgradeStagingOutcome
 
     /// <summary>Everything verified, but the bytes could not be written to the staging directory.</summary>
     WriteFailed,
+
+    /// <summary>
+    /// cosign ran and rejected the sigstore signature on the release's checksums.txt (see <see cref="ChecksumsSignatureVerifier"/>): that file cannot be
+    /// trusted, so nothing is downloaded or staged.
+    /// </summary>
+    SignatureRejected,
 }
 
 /// <summary>
@@ -137,8 +146,11 @@ public sealed record StagedUpgradeAsset
     /// <summary>The entry read out of the release's checksums.txt. Equal to <see cref="Sha256"/>.</summary>
     public required string ExpectedSha256 { get; init; }
 
-    /// <summary>True when the release also carries checksums.txt.sig and checksums.txt.pem.</summary>
-    public bool ChecksumsSigstoreSigned { get; init; }
+    /// <summary>
+    /// What was found out about the sigstore signature on the checksums.txt that <see cref="ExpectedSha256"/> was read from: verified by cosign, published
+    /// and not verified (and why), or not published. <see cref="ExpectedSha256"/> is only as trustworthy as this says.
+    /// </summary>
+    public ChecksumsSignatureResult ChecksumsSignature { get; init; } = ChecksumsSignatureResult.NotChecked;
 
     public DateTimeOffset StagedAt { get; init; }
 
@@ -179,6 +191,9 @@ public sealed record UpgradeStagingResult
     public string? ExpectedSha256 { get; init; }
 
     public long? SizeBytes { get; init; }
+
+    /// <summary>What was found out about the signature on checksums.txt, when the staging got far enough to ask; null before that.</summary>
+    public ChecksumsSignatureResult? Signature { get; init; }
 
     public bool Succeeded => Outcome == UpgradeStagingOutcome.Verified && Asset is not null;
 }
@@ -233,10 +248,16 @@ public sealed record UpgradeRunResult
 /// the downloaded thing cannot check about itself: that it is not one of the 133-byte placeholder
 /// stubs some releases shipped (see <see cref="MinimumPlausibleScriptBytes"/> and
 /// <see cref="MinimumPlausibleInstallerBytes"/>), and that its SHA-256 matches the entry in the
-/// same release's sigstore-signed <c>checksums.txt</c>. Beyond that the two diverge: the
+/// <b>same release's</b> <c>checksums.txt</c>. That second check alone proves only that a download
+/// matches a file served from the same place: whoever can replace the installer (a compromised
+/// release, a TLS-intercepting proxy) replaces the checksum file with it. So when cosign is available
+/// the signature on that <c>checksums.txt</c> is verified too, against the upstream release workflow's
+/// identity (<see cref="ChecksumsSignatureVerifier"/>); a signature cosign rejects stops the upgrade before
+/// anything is downloaded or staged, and one that could not be checked (no cosign, an old one, no signature
+/// files) is recorded as exactly that on <see cref="StagedUpgradeAsset.ChecksumsSignature"/> and shown as
+/// such. Nothing here claims a signature it did not verify. Beyond that the two channels diverge: the
 /// resolver's manifest, artifacts and signatures are its own cosign-backed job, which is why
-/// <see cref="DetectCosign"/> gates <i>that</i> channel and only that one. The installer channel
-/// never shells out to cosign and is not gated on it. The Setup exe is also not Authenticode-signed
+/// <see cref="DetectCosign"/> also <i>gates</i> that channel. The Setup exe is not Authenticode-signed
 /// through 0.8.10 — the window's trust panel reports that; nothing here claims otherwise.
 /// </para>
 /// <para>
@@ -261,8 +282,8 @@ public sealed class UpgradeRunner
 
     /// <summary>
     /// Anything smaller than this is a stub, not a resolver. The real 0.8.9 script is 216,432
-    /// bytes; the known-bad placeholders are 133 bytes — and their hashes are faithfully listed
-    /// in the correctly signed checksums.txt, so a hash check alone would wave them through.
+    /// bytes; the known-bad placeholders are 133 bytes — and their hashes are listed
+    /// in the release's checksums.txt, so a hash check alone would wave them through.
     /// </summary>
     public const long MinimumPlausibleScriptBytes = 10 * 1024;
 
@@ -272,7 +293,7 @@ public sealed class UpgradeRunner
     /// <summary>
     /// Stub floor for the installer. The real 0.8.10 Setup exe is 270,013,440 bytes; the
     /// placeholder stubs are 133. The floor exists precisely because the stubs' hashes <i>do</i>
-    /// appear in the correctly signed checksums.txt, so hash equality alone waves them through.
+    /// appear in the release's checksums.txt, so hash equality alone waves them through.
     /// </summary>
     public const long MinimumPlausibleInstallerBytes = 50L * 1024 * 1024;
 
@@ -289,12 +310,15 @@ public sealed class UpgradeRunner
 
     private readonly CliRunner _cli;
     private readonly HttpClient _http;
+    private readonly ChecksumsSignatureVerifier _verifier;
 
-    public UpgradeRunner(CliRunner cli, HttpClient http, string? stagingRoot = null)
+    /// <param name="verifier">Test seam: checks the signature on checksums.txt. Defaults to cosign through <paramref name="cli"/>, scratch files under <see cref="StagingRoot"/>.</param>
+    public UpgradeRunner(CliRunner cli, HttpClient http, string? stagingRoot = null, ChecksumsSignatureVerifier? verifier = null)
     {
         _cli = cli ?? throw new ArgumentNullException(nameof(cli));
         _http = http ?? throw new ArgumentNullException(nameof(http));
         StagingRoot = stagingRoot ?? DefaultStagingRoot();
+        _verifier = verifier ?? ChecksumsSignatureVerifier.Create(cli, http, StagingRoot);
     }
 
     /// <summary>
@@ -526,17 +550,18 @@ public sealed class UpgradeRunner
     /// <summary>
     /// Fetches the target release's upgrade script, sanity-checks its size, verifies its SHA-256
     /// against the same release's checksums.txt, and only then writes it under
-    /// <see cref="StagingRoot"/>. Nothing reaches disk unverified.
+    /// <see cref="StagingRoot"/>. Nothing reaches disk unverified. When <paramref name="cosignPath"/> is given,
+    /// the signature on that checksums.txt is verified as well, and a signature cosign rejects stops here
+    /// (<see cref="UpgradeStagingOutcome.SignatureRejected"/>).
     /// </summary>
     /// <param name="version">Release tag, e.g. <c>0.8.9</c>.</param>
-    /// <param name="checksumsSigstoreSigned">
-    /// Whether the release also carries checksums.txt.sig/.pem — the caller already knows this
-    /// from <see cref="ProvenanceInspector"/>, and it is recorded on the staged record so the UI
-    /// can say what the hash comparison is actually anchored to.
+    /// <param name="cosignPath">
+    /// Absolute path of a cosign to verify the signature on checksums.txt with; null when there is none. Without one the staged
+    /// record says the signature was not verified (published or not), never that it was.
     /// </param>
     public async Task<UpgradeStagingResult> DownloadAndVerifyAsync(
         string version,
-        bool checksumsSigstoreSigned = false,
+        string? cosignPath = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
@@ -560,8 +585,8 @@ public sealed class UpgradeRunner
                 ErrorMessage =
                     $"{ScriptAssetName} on release {version} is {bytes.Length:N0} bytes; the real resolver is " +
                     $"around 216 KB. This is the placeholder-stub pattern seen on some releases — a tiny file " +
-                    "published under a real asset name, whose hash is still faithfully listed in the correctly " +
-                    "signed checksums.txt. Nothing was written to disk. Check the release page before upgrading.",
+                    "published under a real asset name, whose hash is still listed in the release's " +
+                    "checksums.txt. Nothing was written to disk. Check the release page before upgrading.",
             };
         }
 
@@ -609,9 +634,15 @@ public sealed class UpgradeRunner
                 Summary = $"Aborted: {ChecksumsAssetName} carries no entry for {ScriptAssetName}.",
                 ErrorMessage =
                     $"Release {version} publishes {ChecksumsAssetName}, but it has no line for {ScriptAssetName}, " +
-                    $"so the downloaded bytes (SHA-256 {computed}) cannot be anchored to anything signed. Nothing " +
+                    $"so the downloaded bytes (SHA-256 {computed}) cannot be compared with anything. Nothing " +
                     "was written to disk.",
             };
+        }
+
+        var signature = await _verifier.VerifyAsync(version, checksums, cosignPath, cancellationToken).ConfigureAwait(false);
+        if (signature.BlocksUpgrade)
+        {
+            return SignatureRejected(ScriptAssetName, version, signature, computed, expected, bytes.Length, nothingDownloaded: false);
         }
 
         if (!string.Equals(expected, computed, StringComparison.OrdinalIgnoreCase))
@@ -622,6 +653,7 @@ public sealed class UpgradeRunner
                 ComputedSha256 = computed,
                 ExpectedSha256 = expected,
                 SizeBytes = bytes.Length,
+                Signature = signature,
                 Summary = "Aborted: the download's SHA-256 does not match the release's checksums.txt.",
                 ErrorMessage =
                     $"{ScriptAssetName} downloaded from release {version} hashes to {computed}, but " +
@@ -664,7 +696,7 @@ public sealed class UpgradeRunner
             SizeBytes = bytes.Length,
             Sha256 = computed,
             ExpectedSha256 = expected,
-            ChecksumsSigstoreSigned = checksumsSigstoreSigned,
+            ChecksumsSignature = signature,
             StagedAt = DateTimeOffset.UtcNow,
         };
 
@@ -675,7 +707,8 @@ public sealed class UpgradeRunner
             ComputedSha256 = computed,
             ExpectedSha256 = expected,
             SizeBytes = bytes.Length,
-            Summary = $"Verified: SHA-256 matches release {version}'s {ChecksumsAssetName} entry.",
+            Signature = signature,
+            Summary = VerifiedSummary(version, signature),
         };
     }
 
@@ -686,7 +719,9 @@ public sealed class UpgradeRunner
     /// <b>Order matters.</b> checksums.txt is fetched <i>first</i>. It is a few kilobytes, and if
     /// GitHub is rate-limiting or the release simply has no entry for the installer, that is
     /// discovered in one cheap request rather than after a ~270 MB download that can then only be
-    /// thrown away.
+    /// thrown away. The same goes for its signature: when <paramref name="cosignPath"/> is given, cosign
+    /// verifies the sigstore signature on that checksums.txt <i>before</i> the installer is downloaded, and
+    /// a signature it rejects ends the staging there (<see cref="UpgradeStagingOutcome.SignatureRejected"/>).
     /// </para>
     /// <para>
     /// <b>Nothing is buffered whole.</b> The body streams to
@@ -698,9 +733,9 @@ public sealed class UpgradeRunner
     /// </para>
     /// </summary>
     /// <param name="version">Release tag, e.g. <c>0.8.10</c>.</param>
-    /// <param name="checksumsSigstoreSigned">
-    /// Whether the release also carries checksums.txt.sig/.pem, recorded on the staged record so
-    /// the UI can say what the hash comparison is anchored to.
+    /// <param name="cosignPath">
+    /// Absolute path of a cosign to verify the signature on checksums.txt with; null when there is none. Without one the staged
+    /// record says the signature was not verified (published or not), never that it was.
     /// </param>
     /// <param name="progress">
     /// Bytes read so far and the Content-Length when the server sent one. Raised on the download
@@ -708,7 +743,7 @@ public sealed class UpgradeRunner
     /// </param>
     public async Task<UpgradeStagingResult> DownloadAndVerifyInstallerAsync(
         string version,
-        bool checksumsSigstoreSigned = false,
+        string? cosignPath = null,
         IProgress<(long BytesRead, long? TotalBytes)>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -742,9 +777,16 @@ public sealed class UpgradeRunner
                 Summary = $"Aborted before downloading: {ChecksumsAssetName} carries no entry for {InstallerAssetName}.",
                 ErrorMessage =
                     $"Release {version} publishes {ChecksumsAssetName}, but it has no line for " +
-                    $"{InstallerAssetName}, so a download could not be anchored to anything signed. Nothing was " +
+                    $"{InstallerAssetName}, so a download could not be compared with anything. Nothing was " +
                     "downloaded.",
             };
+        }
+
+        // Before ~270 MB are downloaded against an entry that might be forged.
+        var signature = await _verifier.VerifyAsync(version, checksums, cosignPath, cancellationToken).ConfigureAwait(false);
+        if (signature.BlocksUpgrade)
+        {
+            return SignatureRejected(InstallerAssetName, version, signature, computed: null, expected, sizeBytes: null, nothingDownloaded: true);
         }
 
         string partialPath;
@@ -853,8 +895,8 @@ public sealed class UpgradeRunner
                     ErrorMessage =
                         $"{InstallerAssetName} on release {version} is {totalRead:N0} bytes; the real 0.8.10 " +
                         "installer is 270,013,440 bytes. This is the placeholder-stub pattern seen on some " +
-                        "releases — the known-bad stubs are 133 bytes, and their hashes are still faithfully " +
-                        $"listed in the correctly signed {ChecksumsAssetName}, so a hash check alone would wave " +
+                        "releases — the known-bad stubs are 133 bytes, and their hashes are still listed in " +
+                        $"the release's {ChecksumsAssetName}, so a hash check alone would wave " +
                         "them through. The partial download was deleted. Check the release page before upgrading.",
                 };
             }
@@ -867,6 +909,7 @@ public sealed class UpgradeRunner
                     ComputedSha256 = computed,
                     ExpectedSha256 = expected,
                     SizeBytes = totalRead,
+                    Signature = signature,
                     Summary = "Aborted: the download's SHA-256 does not match the release's checksums.txt.",
                     ErrorMessage =
                         $"{InstallerAssetName} downloaded from release {version} hashes to {computed}, but " +
@@ -907,7 +950,7 @@ public sealed class UpgradeRunner
                 SizeBytes = totalRead,
                 Sha256 = computed,
                 ExpectedSha256 = expected,
-                ChecksumsSigstoreSigned = checksumsSigstoreSigned,
+                ChecksumsSignature = signature,
                 StagedAt = DateTimeOffset.UtcNow,
             };
 
@@ -918,7 +961,8 @@ public sealed class UpgradeRunner
                 ComputedSha256 = computed,
                 ExpectedSha256 = expected,
                 SizeBytes = totalRead,
-                Summary = $"Verified: SHA-256 matches release {version}'s {ChecksumsAssetName} entry.",
+                Signature = signature,
+                Summary = VerifiedSummary(version, signature),
             };
         }
         finally
@@ -931,6 +975,45 @@ public sealed class UpgradeRunner
             }
         }
     }
+
+    /// <summary>The one line shown next to a staged asset: what was compared, and whether the file it was compared with was verified.</summary>
+    private static string VerifiedSummary(string version, ChecksumsSignatureResult signature) =>
+        $"Verified: SHA-256 matches release {version}'s {ChecksumsAssetName} entry; " + signature.State switch
+        {
+            ChecksumsSignatureState.Verified => "cosign verified that file's sigstore signature.",
+            ChecksumsSignatureState.NotPublished => "the release publishes no signature for that file.",
+            ChecksumsSignatureState.NotVerifiedNoCosign => "its sigstore signature was not verified (cosign not installed).",
+            ChecksumsSignatureState.NotVerifiedCosignUnusable => "its sigstore signature was not verified (cosign could not run).",
+            ChecksumsSignatureState.NotVerifiedUnavailable => "its sigstore signature was not verified (the signature files could not be fetched).",
+            _ => "its sigstore signature was not checked.",
+        };
+
+    /// <summary>
+    /// The result for a checksums.txt whose sigstore signature cosign rejected: no staging, and a message that says what that means.
+    /// <paramref name="nothingDownloaded"/> is true when the asset itself had not been fetched yet.
+    /// </summary>
+    private static UpgradeStagingResult SignatureRejected(
+        string assetName,
+        string version,
+        ChecksumsSignatureResult signature,
+        string? computed,
+        string expected,
+        long? sizeBytes,
+        bool nothingDownloaded) =>
+        new()
+        {
+            Outcome = UpgradeStagingOutcome.SignatureRejected,
+            ComputedSha256 = computed,
+            ExpectedSha256 = expected,
+            SizeBytes = sizeBytes,
+            Signature = signature,
+            Summary = $"Aborted: cosign could not verify the sigstore signature on release {version}'s {ChecksumsAssetName}.",
+            ErrorMessage =
+                signature.Detail + " " +
+                (nothingDownloaded
+                    ? $"{assetName} was not downloaded and nothing was written to disk."
+                    : $"{assetName} was downloaded but nothing was written to disk."),
+        };
 
     /// <summary>
     /// Streams a response body to <paramref name="partialPath"/> while hashing it in the same
@@ -1067,6 +1150,15 @@ public sealed class UpgradeRunner
     /// verification of whatever used to be at that path. Re-hashing 270 MB costs roughly a second
     /// — nothing next to the 270 MB download that produced it.
     /// </para>
+    /// <para>
+    /// <b>The file that was hashed is the file that starts.</b> A check made on a path and a launch made on the same
+    /// path are two moments, and anything that can write there can swap the file in between. So the file is opened once,
+    /// without write or delete sharing, hashed through that very handle, and kept open until the process has started
+    /// (<see cref="CliRunOptions.OnProcessStarted"/>: <c>Process.Start</c> returned): for the Setup exe, whose image
+    /// Windows maps during that call, nothing can replace it after the hash and before it runs. For the resolver script
+    /// the interpreter opens the file itself just after it starts, so that window is narrower, not closed. Anything that already
+    /// has the file open for writing makes the run refuse, which is the safe answer.
+    /// </para>
     /// </summary>
     public async Task<UpgradeRunResult> RunAsync(
         StagedUpgradeAsset asset,
@@ -1090,18 +1182,36 @@ public sealed class UpgradeRunner
             };
         }
 
+        // Opened without write or delete sharing, hashed through this handle, and held until the process has started (or this method ends).
+        FileStream? held = null;
+        void Release() => Interlocked.Exchange(ref held, null)?.Dispose();
+
         string actualHash;
         try
         {
-            actualHash = await ComputeFileSha256Async(asset.FilePath, cancellationToken).ConfigureAwait(false);
+            held = new FileStream(
+                asset.FilePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 64 * 1024,
+                useAsync: true);
+            actualHash = Convert.ToHexString(await SHA256.HashDataAsync(held, cancellationToken).ConfigureAwait(false)).ToLowerInvariant();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            Release();
             return new UpgradeRunResult { FailureReason = $"The staged {noun} could not be re-read: {ex.Message}" };
+        }
+        catch (OperationCanceledException)
+        {
+            Release();
+            throw;
         }
 
         if (!string.Equals(actualHash, asset.Sha256, StringComparison.OrdinalIgnoreCase))
         {
+            Release();
             return new UpgradeRunResult
             {
                 FailureReason =
@@ -1151,8 +1261,14 @@ public sealed class UpgradeRunner
             // the app exiting — but UpgradeSectionViewModel passes CancellationToken.None here, so
             // neither closing the Updates window nor disposing its view-model can end the run. Both
             // used to cancel that token, and it was the only remaining way to kill an install midway.
+            // OnProcessStarted lets go of the staged file the moment the child exists; the finally below is for every way it never does.
             var invocation = await _cli
-                .RunExecutableAsync(executable, argv, stdinSecret: null, cancellationToken, CliRunOptions.Installer)
+                .RunExecutableAsync(
+                    executable,
+                    argv,
+                    stdinSecret: null,
+                    cancellationToken,
+                    CliRunOptions.Installer with { OnProcessStarted = Release })
                 .ConfigureAwait(false);
 
             return new UpgradeRunResult
@@ -1169,6 +1285,7 @@ public sealed class UpgradeRunner
         }
         finally
         {
+            Release();
             _cli.InvocationStarted -= OnStarted;
             IsRunning = false;
         }

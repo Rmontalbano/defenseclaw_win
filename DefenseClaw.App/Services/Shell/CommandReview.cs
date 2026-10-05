@@ -1,5 +1,7 @@
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Text;
 
 namespace DefenseClaw.App.Services;
 
@@ -24,6 +26,9 @@ public sealed record CommandReviewWarning(string Title, string Message)
 
     /// <summary>The heading of <see cref="SecretOutput"/>.</summary>
     public const string SecretOutputTitle = "Prints secret values";
+
+    /// <summary>The heading of <see cref="UnusualCharacters"/>.</summary>
+    public const string UnusualCharactersTitle = "Unusual characters in a name";
 
     /// <summary>The bar every command that restarts the live gateway carries.</summary>
     public static CommandReviewWarning GatewayRestart(string? message = null) =>
@@ -54,6 +59,36 @@ public sealed record CommandReviewWarning(string Title, string Message)
             SecretOutputTitle,
             "This command prints secret values the CLI normally masks. The output lands in the Activity panel, in any log you " +
             "export and on the clipboard if you copy it.");
+
+    /// <summary>
+    /// The bar a review carries when a name it acts on - a skill, plugin, MCP server, registry entry or tool, which came from outside - has
+    /// something in it other than printable ASCII: a right-to-left override, a zero-width or control character, a newline, or any
+    /// non-ASCII letter (a homoglyph looks the same as the letter it imitates). The command above shows such a name with its control and
+    /// format characters spelled out (<c>‮</c>); this says what is in it. Null when no name has anything unusual.
+    /// </summary>
+    /// <param name="names">The names the review acts on (what the command line carries after <c>--</c>, and any the surface lists itself).</param>
+    public static CommandReviewWarning? UnusualCharacters(IEnumerable<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+
+        var described = names
+            .Distinct(StringComparer.Ordinal)
+            .Select(DisplayNames.DescribeUnusual)
+            .Where(d => d is not null)
+            .ToArray();
+        if (described.Length == 0)
+        {
+            return null;
+        }
+
+        var lead = described.Length == 1
+            ? $"The name contains unusual characters ({described[0]})."
+            : $"{described.Length} names contain unusual characters ({string.Join("; ", described)}).";
+        return new CommandReviewWarning(
+            UnusualCharactersTitle,
+            lead + " It can look like a different name, so compare it with the command above, where such characters are spelled out. " +
+            "The command that runs is exactly the one shown.");
+    }
 }
 
 /// <summary>
@@ -85,7 +120,10 @@ public sealed partial class CommandReviewStep : ObservableObject
         ArgumentNullException.ThrowIfNull(argv);
         Argv = argv.ToArray();
         Executable = executable;
-        Purpose = purpose;
+
+        // A sentence that names an item ("Approve <entry> from <source>.") is shown on one line with its control and format characters
+        // spelled out, like the command below it. The argv above is what runs, and is not touched.
+        Purpose = DisplayNames.Visible(purpose);
         Number = number;
         Tier = CommandReview.ResolveTier(Argv, floor);
         CommandText = CommandReview.CommandLine(executable, Argv);
@@ -187,10 +225,26 @@ public sealed record CommandReview
     };
 
     private readonly string? _confirmLabel;
+    private readonly string _title = string.Empty;
     private readonly IReadOnlyList<CommandReviewWarning> _warnings = Array.Empty<CommandReviewWarning>();
 
-    /// <summary>What the dialog asks, as a question or a title: "Remove skill “x”?".</summary>
-    public required string Title { get; init; }
+    /// <summary>
+    /// What the dialog asks, as a question or a title: "Remove skill “x”?". One line, whatever it is given: the name of an item inside it came from
+    /// outside, so its control and format characters are spelled out (<see cref="DisplayNames.Visible"/>) - a right-to-left override or a newline in
+    /// a skill's name cannot turn the question into another one.
+    /// </summary>
+    public required string Title
+    {
+        get => _title;
+        init => _title = DisplayNames.Visible(value);
+    }
+
+    /// <summary>
+    /// Names this review acts on that came from outside and that the command line does not carry after a <c>--</c> (a registry entry the CLI takes
+    /// before its options): they are checked for unusual characters like the targets after <c>--</c> are, and the review says so
+    /// (<see cref="CommandReviewWarning.UnusualCharacters"/>). Empty for nearly every review, which acts on at most the targets.
+    /// </summary>
+    public IReadOnlyList<string> Names { get; init; } = Array.Empty<string>();
 
     /// <summary>The commands in run order; a review has at least one.</summary>
     public required IReadOnlyList<CommandReviewStep> Steps { get; init; }
@@ -233,7 +287,46 @@ public sealed record CommandReview
             (derived ??= new()).Add(CommandReviewWarning.SecretOutput());
         }
 
+        if (!supplied.Any(w => w.Title == CommandReviewWarning.UnusualCharactersTitle) &&
+            CommandReviewWarning.UnusualCharacters(TargetsAndNames()) is { } unusual)
+        {
+            (derived ??= new()).Add(unusual);
+        }
+
         return derived is null ? supplied : supplied.Concat(derived).ToArray();
+    }
+
+    /// <summary>
+    /// The names a review is about: every argument after a <c>--</c> in any step (the CLI is told that what follows is a target, an item named by
+    /// something outside this app) and <see cref="Names"/>.
+    /// </summary>
+    private IEnumerable<string> TargetsAndNames()
+    {
+        foreach (var step in Steps)
+        {
+            var terminator = -1;
+            for (var i = 0; i < step.Argv.Count; i++)
+            {
+                if (string.Equals(step.Argv[i], "--", StringComparison.Ordinal))
+                {
+                    terminator = i;
+                    break;
+                }
+            }
+
+            if (terminator >= 0)
+            {
+                for (var i = terminator + 1; i < step.Argv.Count; i++)
+                {
+                    yield return step.Argv[i];
+                }
+            }
+        }
+
+        foreach (var name in Names)
+        {
+            yield return name;
+        }
     }
 
     /// <summary>True when running it bounces the live gateway; adds a badge next to the tier. Pair it with <see cref="CommandReviewWarning.GatewayRestart"/>.</summary>
@@ -341,6 +434,31 @@ public sealed record CommandReview
     /// <summary>The stricter of two tiers: Destructive beats StateChanging beats ReadOnly.</summary>
     public static CommandTier Stricter(CommandTier a, CommandTier b) => a > b ? a : b;
 
+    /// <summary>
+    /// True when the app may run <paramref name="argv"/> on <paramref name="executable"/> with <b>no review step</b>: the argv is on the
+    /// explicit allow-list of known reads (<see cref="CommandTiers.UnreviewedReadPaths"/>, or the gateway's
+    /// <see cref="CommandTiers.UnreviewedGatewayReadPaths"/>) <i>and</i> <see cref="CommandTiers"/> still calls it read-only. The
+    /// classifier alone is never enough: it reads the first verb of the path, so a command it calls read-only (<c>plan apply</c>,
+    /// <c>validate fix</c>, any verb a future CLI adds under a read-only noun) may change state. Used wherever the app picks a command
+    /// to run for the operator without asking: the palette, Background diagnose, the Overview's Diagnostics and doctor.
+    /// </summary>
+    /// <param name="executable">What <paramref name="argv"/> is handed to: <c>defenseclaw</c> or <c>defenseclaw-gateway</c> (anything else is never unreviewed).</param>
+    public static bool MayRunUnreviewed(string executable, IReadOnlyList<string> argv)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(argv);
+
+        var name = Path.GetFileNameWithoutExtension(executable);
+        var listed = string.Equals(name, DefaultExecutable, StringComparison.OrdinalIgnoreCase)
+            ? CommandTiers.IsUnreviewedRead(argv)
+            : string.Equals(name, GatewayControl.Executable, StringComparison.OrdinalIgnoreCase) && CommandTiers.IsUnreviewedGatewayRead(argv);
+
+        return listed && ResolveTier(argv) == CommandTier.ReadOnly;
+    }
+
+    /// <summary><see cref="MayRunUnreviewed(string, IReadOnlyList{string})"/> for the <c>defenseclaw</c> CLI.</summary>
+    public static bool MayRunUnreviewed(IReadOnlyList<string> argv) => MayRunUnreviewed(DefaultExecutable, argv);
+
     /// <summary>The command as an operator reads (and copies) it: the executable, then each argument, quoted for display.</summary>
     public static string CommandLine(string executable, IEnumerable<string> argv)
     {
@@ -359,18 +477,25 @@ public sealed record CommandReview
         return string.IsNullOrEmpty(executable) ? string.Join(' ', argv.Select(PowerShellQuoting.Argument)) : PowerShellQuoting.CommandLine(executable, argv);
     }
 
-    /// <summary>Display quoting only (the runner passes an argument list, no shell is involved): empty or spaced values get quotes.</summary>
+    /// <summary>
+    /// Display quoting only (the runner passes an argument list, no shell is involved): empty or spaced values get quotes. An argument is
+    /// shown with its control and format characters spelled out (<c>‮</c>, <c>\n</c>; <see cref="DisplayNames.Visible"/>) and so on one
+    /// line: a name from outside cannot make the command box read as another command. The argv that runs, and the text the Copy button puts on
+    /// the clipboard (<see cref="ClipboardLine"/>), are not changed.
+    /// </summary>
     public static string Quote(string argument)
     {
         ArgumentNullException.ThrowIfNull(argument);
-        if (argument.Length == 0)
+
+        var shown = DisplayNames.Visible(argument);
+        if (shown.Length == 0)
         {
             return "\"\"";
         }
 
-        return argument.Any(char.IsWhiteSpace)
-            ? "\"" + argument.Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
-            : argument;
+        return shown.Any(char.IsWhiteSpace)
+            ? "\"" + shown.Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
+            : shown;
     }
 
     /// <summary>

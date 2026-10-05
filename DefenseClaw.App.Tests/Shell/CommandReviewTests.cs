@@ -236,7 +236,9 @@ public class CommandReviewTests
     [InlineData("pdf-tools", "pdf-tools")]
     [InlineData("", "\"\"")]
     [InlineData("my skill", "\"my skill\"")]
-    [InlineData("a\tb", "\"a\tb\"")]
+    // A tab is a control character, so it is spelled out (\t) rather than drawn as a gap: nothing is left that could split the argument.
+    [InlineData("a\tb", "a\\tb")]
+    [InlineData("a\tb c", "\"a\\tb c\"")]
     [InlineData("say \"hi\" there", "\"say \\\"hi\\\" there\"")]
     [InlineData("[\"a,b\"]", "[\"a,b\"]")]
     [InlineData("--dangerous", "--dangerous")]

@@ -133,6 +133,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
 
         Upgrade = new UpgradeSectionViewModel(_services, _upgradeRunner);
         Upgrade.UpgradeSucceeded += OnUpgradeSucceeded;
+        Upgrade.SignatureChecked += OnSignatureChecked;
     }
 
     /// <summary>Individual stub-asset warnings for the trust panel's detail list.</summary>
@@ -203,6 +204,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
 
         _disposed = true;
         Upgrade.UpgradeSucceeded -= OnUpgradeSucceeded;
+        Upgrade.SignatureChecked -= OnSignatureChecked;
         Upgrade.Dispose();
         _cts.Cancel();
         _cts.Dispose();
@@ -216,6 +218,22 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     /// local side of the comparison, not GitHub's.
     /// </summary>
     private void OnUpgradeSucceeded(object? sender, EventArgs e) => _ = RunCheckAsync(forceRefresh: false);
+
+    /// <summary>
+    /// A download-and-verify has found out what there is to know about the signature on checksums.txt (verified by cosign, published and not verified,
+    /// not published, or rejected): the trust panel says the same words as the upgrade card, in place of "published, not verified yet".
+    /// </summary>
+    private void OnSignatureChecked(object? sender, ChecksumsSignatureResult result) => ApplySignature(result);
+
+    /// <summary>The trust panel's signature row, in the words of what cosign found (or did not): <see cref="ChecksumsSignatureResult.Label"/> says "verified" only for a verified signature.</summary>
+    internal void ApplySignature(ChecksumsSignatureResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        SigstoreLabel = result.Label;
+        SigstoreBadgeKey = result.BadgeKey;
+        SigstoreDetail = result.Detail;
+    }
 
     private static void CopyToClipboard(string? text)
     {
@@ -342,7 +360,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
               "# (known broken on Setup-based installs — see the upgrade section)"
             : "No defenseclaw-upgrade.ps1 asset was found on this release.";
 
-    private void ApplyProvenance(ProvenanceReport report)
+    internal void ApplyProvenance(ProvenanceReport report)
     {
         Upgrade.ApplyProvenance(report);
 
@@ -360,16 +378,20 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             _ => "Neutral",
         };
 
-        if (report.SigstoreSigningPresent)
+        // What this panel knows without running anything is which signature files the release PUBLISHES. It cannot say the signature is valid:
+        // only cosign can, and that happens when Download & verify runs it (OnSignatureChecked then replaces these words with its answer).
+        if (report.SignatureFilesPublished)
         {
-            SigstoreLabel = "checksums.txt signed with sigstore";
-            SigstoreBadgeKey = "Ok";
+            SigstoreLabel = "signature files published, not verified yet";
+            SigstoreBadgeKey = "Neutral";
             SigstoreDetail =
-                "checksums.txt, its sigstore certificate (.pem) and signature (.sig) are all present on this release.";
+                "checksums.txt and its sigstore signature files " + PublishedSignatureFiles(report) + " are on this release. Nothing here has checked that signature. " +
+                "Download & verify below verifies it with cosign when cosign is installed (and says so here); without cosign it only compares the download's SHA-256 " +
+                "with checksums.txt from the same release, which shows the download matches that file, not that the project signed it.";
         }
         else if (report.ChecksumsAssetPresent)
         {
-            SigstoreLabel = "checksums.txt present, signing incomplete";
+            SigstoreLabel = "checksums.txt present, no signature published";
             SigstoreBadgeKey = "Warn";
             var missing = new List<string>();
             if (!report.ChecksumsCertificatePresent)
@@ -383,7 +405,8 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             }
 
             SigstoreDetail =
-                $"checksums.txt is present, but its {string.Join(" and ", missing)} could not be found among the release assets.";
+                $"checksums.txt is present, but the release lists no checksums.txt.bundle and is missing its {string.Join(" and ", missing)}, so there is no sigstore signature to verify. " +
+                "A SHA-256 comparison against it is an integrity check only.";
         }
         else
         {
@@ -415,6 +438,14 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             HasError = true;
         }
     }
+
+    /// <summary>The signature files the release lists, as text: "(checksums.txt.bundle)" or "(checksums.txt.sig and .pem)".</summary>
+    private static string PublishedSignatureFiles(ProvenanceReport report) =>
+        report.ChecksumsBundlePresent && report.ChecksumsSignaturePresent && report.ChecksumsCertificatePresent
+            ? $"({ProvenanceInspector.ChecksumsBundleAssetName}, .sig and .pem)"
+            : report.ChecksumsBundlePresent
+                ? $"({ProvenanceInspector.ChecksumsBundleAssetName})"
+                : "(.sig and .pem)";
 
     private void ClearProvenance()
     {

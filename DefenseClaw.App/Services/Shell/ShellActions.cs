@@ -152,19 +152,19 @@ internal sealed class ShellActions
     /// <summary>Scan AI components (Ctrl+Shift+A): opens AI Discovery on its reviewed "Run an AI discovery scan?" dialog.</summary>
     public void ScanAiComponents() => OpenPanel("ai-discovery", new AiDiscoveryScan());
 
-    /// <summary>The argv Background diagnose runs: plain <c>doctor</c>, a read by <see cref="CommandTiers"/> (never <c>--fix</c>).</summary>
+    /// <summary>The argv Background diagnose runs: plain <c>doctor</c>, on the allow-list of reads (<see cref="CommandTiers.UnreviewedReadPaths"/>; never <c>--fix</c>).</summary>
     internal static readonly string[] DiagnoseArgv = { "doctor" };
 
     /// <summary>
-    /// Diagnose in Background (Ctrl+Shift+D): <c>defenseclaw doctor</c> without a window or a review, because it is read-only
-    /// (the tier is checked here, so a change to the argv that made it a change would refuse to run), then a toast with the result.
-    /// The run is in the Activity panel like every other. One at a time.
+    /// Diagnose in Background (Ctrl+Shift+D): <c>defenseclaw doctor</c> without a window or a review, because it is on the explicit
+    /// allow-list of read-only commands (checked here, so a change to the argv that took it off the list would refuse to run), then a toast
+    /// with the result. The run is in the Activity panel like every other. One at a time.
     /// </summary>
     public async Task DiagnoseInBackgroundAsync()
     {
-        if (CommandReview.ResolveTier(DiagnoseArgv) != CommandTier.ReadOnly)
+        if (!CommandReview.MayRunUnreviewed(DiagnoseArgv))
         {
-            ShowToast("Diagnose", "Refused: the diagnostic command is not read-only.");
+            ShowToast("Diagnose", "Refused: the diagnostic command is not on the list of read-only commands.");
             return;
         }
 
@@ -285,9 +285,10 @@ internal sealed class ShellActions
 
     /// <summary>
     /// Runs a curated CLI command from the palette. The argv is the noun path the CLI's own help listed (checked again here for
-    /// secret-carrying flags), run through the runner with no shell. A read-only command runs straight away; anything else is
-    /// shown in the review first and runs only once confirmed. A command that cannot run without arguments is copied for the
-    /// operator to complete instead.
+    /// secret-carrying flags), run through the runner with no shell. Only a command on the explicit allow-list of known reads
+    /// (<see cref="CommandTiers.UnreviewedReadPaths"/>) runs straight away; anything else - including a command the tier classifier calls
+    /// read-only by its first verb, such as <c>plan apply</c>, or a verb a newer CLI added - is shown in the review first and runs only
+    /// once confirmed. A command that cannot run without arguments is copied for the operator to complete instead.
     /// </summary>
     public async Task RunCuratedAsync(CuratedCommand command)
     {
@@ -314,14 +315,20 @@ internal sealed class ShellActions
 
         try
         {
-            if (command.Tier != CommandTier.ReadOnly)
+            if (!command.RunsWithoutReview)
             {
                 var restarts = CommandReview.RestartsGatewayFor(command.Argv);
+
+                // The classifier reads the first verb of the path, and calls "plan apply" a read; the review is not allowed to be lower than
+                // a change, and says why a command that sounds harmless is being asked about.
+                var notListed = CommandTiers.Classify(command.Argv) == CommandTier.ReadOnly
+                    ? " It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first."
+                    : string.Empty;
                 var review = new CommandReview
                 {
                     Title = $"Run {command.Title}?",
-                    Summary = command.Summary,
-                    Steps = new[] { new CommandReviewStep(command.Argv, floor: command.Tier) },
+                    Summary = (command.Summary + notListed).Trim(),
+                    Steps = new[] { new CommandReviewStep(command.Argv, floor: CommandReview.Stricter(command.Tier, CommandTier.StateChanging)) },
                     RestartsGateway = restarts,
                     Warnings = restarts ? new[] { CommandReviewWarning.GatewayRestart() } : Array.Empty<CommandReviewWarning>(),
                 };

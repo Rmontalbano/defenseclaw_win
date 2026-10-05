@@ -266,6 +266,15 @@ public sealed record CliRunOptions
     /// already says what it becomes.
     /// </summary>
     public bool RefuseExpandingTargets { get; init; }
+
+    /// <summary>
+    /// Called once, right after the child has been started (<see cref="System.Diagnostics.Process.Start()"/> returned) and before any of its
+    /// output is read: the moment a caller that kept something open for the launch lets go of it. The upgrade holds the staged installer open
+    /// without write or delete sharing from its last hash until here, so the file that was hashed is the file that starts. Not called when
+    /// the child could not be started. It runs on the supervising thread, so it must be quick; whatever it throws is traced and dropped, because
+    /// a callback must never be able to orphan a child that is already running.
+    /// </summary>
+    public Action? OnProcessStarted { get; init; }
 }
 
 /// <summary>
@@ -694,7 +703,7 @@ public sealed class CliRunner : IDisposable
             }
             else
             {
-                await SuperviseAsync(invocation, run, executablePath, args, stdinSecret, environment, cancellationToken, timeout)
+                await SuperviseAsync(invocation, run, executablePath, args, stdinSecret, environment, cancellationToken, timeout, options?.OnProcessStarted)
                     .ConfigureAwait(false);
             }
         }
@@ -927,7 +936,8 @@ public sealed class CliRunner : IDisposable
         SecretValue? stdinSecret,
         IReadOnlyList<EnvironmentEntry> environment,
         CancellationToken callerToken,
-        TimeSpan? timeout)
+        TimeSpan? timeout,
+        Action? onProcessStarted)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -1005,6 +1015,8 @@ public sealed class CliRunner : IDisposable
             {
                 _ = startInfo.Environment.Remove(entry.Name);
             }
+
+            NotifyStarted(onProcessStarted);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
@@ -1061,6 +1073,29 @@ public sealed class CliRunner : IDisposable
                 TryKill(process);
             }
         }
+    }
+
+    /// <summary>
+    /// Tells the caller the child is running (<see cref="CliRunOptions.OnProcessStarted"/>). Nothing it does can fail the run: the child exists
+    /// by now, and a throwing callback must not leave it running with no one supervising it.
+    /// </summary>
+    private static void NotifyStarted(Action? onProcessStarted)
+    {
+        if (onProcessStarted is null)
+        {
+            return;
+        }
+
+#pragma warning disable CA1031 // A caller's callback cannot be allowed to orphan a started process.
+        try
+        {
+            onProcessStarted();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"OnProcessStarted callback failed: {ex.Message}");
+        }
+#pragma warning restore CA1031
     }
 
     /// <summary>

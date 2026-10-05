@@ -97,6 +97,36 @@ public sealed class CommandTierTreeTests
     }
 
     [Fact]
+    public void The_allow_list_of_unreviewed_reads_is_exactly_the_reviewed_read_only_set()
+    {
+        // What may run with no review step is not "whatever the classifier calls read-only" but this list, and growing it is a
+        // decision made twice: here, after reading the new command's help, and in CommandTiers.UnreviewedReadPaths.
+        Assert.Equal(ReadOnlyLeaves.Order(StringComparer.Ordinal), CommandTiers.UnreviewedReadPaths.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Every_unreviewed_read_is_a_real_leaf_of_the_tree_and_the_classifier_agrees_it_is_a_read()
+    {
+        var leafPaths = Leaves.Select(l => l.Path).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var path in CommandTiers.UnreviewedReadPaths)
+        {
+            Assert.Contains(path, leafPaths);
+            var argv = path.Split(' ');
+            Assert.True(CommandTiers.IsUnreviewedRead(argv), path);
+            Assert.Equal(CommandTier.ReadOnly, CommandTiers.Classify(argv));
+        }
+    }
+
+    [Fact]
+    public void No_leaf_outside_the_reviewed_set_is_an_unreviewed_read_not_even_with_a_read_verb_at_the_end()
+    {
+        var offenders = Leaves.Where(l => !ReadOnlyLeaves.Contains(l.Path) && CommandTiers.IsUnreviewedRead(l.Tokens)).Select(l => l.Path).ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
     public void Only_read_verbs_are_ever_read_only()
     {
         foreach (var leaf in Leaves.Where(l => CommandTiers.Classify(l.Tokens) == CommandTier.ReadOnly))

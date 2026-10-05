@@ -351,21 +351,21 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
     /// <summary>
     /// Runs <c>defenseclaw doctor</c> (10-30 s of live probes; it writes only its own results
-    /// cache), then re-reads that cache. The tier comes from <see cref="CommandTiers"/> rather than
-    /// being assumed: plain <c>doctor</c> classifies as read-only, so — like every read-only command
-    /// in the app — it runs with no <see cref="CommandReview"/> in front of it. This panel offers no
+    /// cache), then re-reads that cache. Plain <c>doctor</c> is on the explicit allow-list of known reads
+    /// (<see cref="CommandReview.MayRunUnreviewed(IReadOnlyList{string})"/>: the list <em>and</em> <see cref="CommandTiers"/>
+    /// agree), so it runs with no <see cref="CommandReview"/> in front of it. This panel offers no
     /// other command to run (the fixes on its attention rows are text to copy, never run), so it has no
-    /// review surface of its own; if <c>doctor</c> ever stopped being read-only this action refuses
-    /// rather than silently running an unreviewed state-changing command. <c>doctor --fix</c> is
+    /// review surface of its own; if <c>doctor</c> ever came off the list this action refuses
+    /// rather than silently running an unreviewed command. <c>doctor --fix</c> is
     /// deliberately not offered here.
     /// </summary>
     [RelayCommand]
     private async Task RunDoctorAsync()
     {
         var argv = DoctorArgv;
-        if (CommandTiers.Classify(argv) != CommandTier.ReadOnly)
+        if (!CommandReview.MayRunUnreviewed(argv))
         {
-            SetDoctorRunMessage("Doctor is no longer classified read-only, so it will not run without a review step.");
+            SetDoctorRunMessage("Doctor is not on the list of commands known to be read-only, so it will not run without a review step.");
             return;
         }
 

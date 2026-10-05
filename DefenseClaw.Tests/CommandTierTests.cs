@@ -92,4 +92,78 @@ public sealed class CommandTierTests
     [Fact]
     public void An_empty_argv_is_treated_as_state_changing() =>
         Assert.Equal(CommandTier.StateChanging, CommandTiers.Classify(Array.Empty<string>()));
+
+    // ---- the allow-list of reads that may run with no review step ----
+
+    [Theory]
+    [InlineData("doctor")]
+    [InlineData("status")]
+    [InlineData("version")]
+    [InlineData("config", "validate")]
+    [InlineData("skill", "list")]
+    [InlineData("registry", "entries")]
+    [InlineData("agent", "confidence", "policy", "show")]
+    public void A_listed_read_is_an_unreviewed_read(params string[] argv)
+    {
+        Assert.True(CommandTiers.IsUnreviewedRead(argv));
+        Assert.Equal(CommandTier.ReadOnly, CommandTiers.Classify(argv));
+    }
+
+    [Theory]
+    // The classifier calls both of these read-only, by their first verb; they are not on the list, so they are reviewed.
+    [InlineData("plan", "apply")]
+    [InlineData("validate", "fix")]
+    // A verb a newer CLI might add under a read-only noun: "list" decides for the classifier, the list has no say.
+    [InlineData("skill", "list", "purge")]
+    [InlineData("skill", "show", "everything")]
+    [InlineData("registry", "list-and-apply")]
+    // Anything else on a listed noun, or a longer or shorter path than the listed one.
+    [InlineData("agent", "confidence", "policy")]
+    [InlineData("agent", "confidence")]
+    [InlineData("config")]
+    public void A_command_the_classifier_calls_read_only_is_not_thereby_an_unreviewed_read(params string[] argv)
+    {
+        Assert.False(CommandTiers.IsUnreviewedRead(argv));
+    }
+
+    [Fact]
+    public void The_classifier_really_does_call_plan_apply_and_validate_fix_read_only()
+    {
+        // The reason the list exists. If this ever changes the list is still right; it just stops being the only thing between them and a run.
+        Assert.Equal(CommandTier.ReadOnly, CommandTiers.Classify(["plan", "apply"]));
+        Assert.Equal(CommandTier.ReadOnly, CommandTiers.Classify(["validate", "fix"]));
+    }
+
+    [Theory]
+    [InlineData("doctor", "--fix")]
+    [InlineData("config", "show", "--reveal")]
+    [InlineData("status", "--json")]
+    [InlineData("skill", "list", "--")]
+    [InlineData("skill", "info", "--", "pdf-tools")]
+    [InlineData("--help")]
+    [InlineData("doctor --fix")]
+    [InlineData("config validate")]
+    [InlineData("doctor", "")]
+    public void A_flag_a_target_or_a_token_that_holds_several_words_is_never_an_unreviewed_read(params string[] argv)
+    {
+        Assert.False(CommandTiers.IsUnreviewedRead(argv));
+    }
+
+    [Fact]
+    public void An_empty_argv_is_not_an_unreviewed_read() => Assert.False(CommandTiers.IsUnreviewedRead(Array.Empty<string>()));
+
+    [Fact]
+    public void The_paths_are_matched_exactly_not_by_case_and_not_across_the_two_executables()
+    {
+        Assert.False(CommandTiers.IsUnreviewedRead(["Doctor"]));
+        Assert.False(CommandTiers.IsUnreviewedRead(["DOCTOR"]));
+
+        // The gateway's two reads are its own list: "provenance show" is not a defenseclaw command, and the gateway has no "doctor" here.
+        Assert.True(CommandTiers.IsUnreviewedGatewayRead(["status"]));
+        Assert.True(CommandTiers.IsUnreviewedGatewayRead(["provenance", "show"]));
+        Assert.False(CommandTiers.IsUnreviewedGatewayRead(["doctor"]));
+        Assert.False(CommandTiers.IsUnreviewedGatewayRead(["start"]));
+        Assert.False(CommandTiers.IsUnreviewedGatewayRead(["restart"]));
+        Assert.False(CommandTiers.IsUnreviewedRead(["provenance", "show"]));
+    }
 }
