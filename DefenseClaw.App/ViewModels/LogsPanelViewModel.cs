@@ -494,14 +494,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
 
         // Always the masked text: a file line as it is, an event as its one-line summary (the inspector's Raw box has the JSON).
         var text = string.Join(Environment.NewLine, _selectedEntries.Select(e => e.IsStructured ? $"{e.TimeText} {e.Label} {e.Message}".Trim() : e.Raw));
-        try
-        {
-            Clipboard.SetText(text);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // Another process owns the clipboard; nothing useful to do about it.
-        }
+        _ = Views.Controls.DcClipboard.TrySetText(text);
     }
 
     /// <summary>The log file on screen; null on Verdicts and Events.</summary>

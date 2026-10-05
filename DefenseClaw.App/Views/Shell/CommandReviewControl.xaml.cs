@@ -426,16 +426,8 @@ public partial class CommandReviewControl : UserControl
             return writer(text);
         }
 
-        try
-        {
-            Clipboard.SetText(text);
-            return true;
-        }
-        catch (COMException)
-        {
-            // The clipboard is locked by another process; the command text is selectable in the dialog too.
-            return false;
-        }
+        // A locked clipboard is reported by the status line next to the button; the command text is selectable in the dialog too.
+        return Views.Controls.DcClipboard.TryCopy(text, report: false) != Views.Controls.ClipboardResult.Failed;
     }
 
     /// <summary>

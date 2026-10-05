@@ -837,14 +837,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
             return;
         }
 
-        try
-        {
-            Clipboard.SetText(CommandPreview);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // Another process owns the clipboard; nothing useful to do about it.
-        }
+        _ = Views.Controls.DcClipboard.TrySetText(CommandPreview);
     }
 
     /// <summary>Reveals the staged asset in Explorer — read-only, and the file is right there.</summary>

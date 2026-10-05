@@ -265,14 +265,15 @@ internal sealed class ShellActions
             return;
         }
 
-        try
+        // Say so when another process holds the clipboard, rather than pretend it was copied.
+        switch (Views.Controls.DcClipboard.TryCopy(text, report: false))
         {
-            Clipboard.SetText(text);
-        }
-        catch (System.Runtime.InteropServices.COMException ex)
-        {
-            // Another process holds the clipboard; say so rather than pretend it was copied.
-            ShowToast("Clipboard", $"Could not use the clipboard: {ex.Message}");
+            case Views.Controls.ClipboardResult.Failed:
+                ShowToast("Clipboard", Views.Controls.DcClipboard.FailureText);
+                break;
+            case Views.Controls.ClipboardResult.Truncated:
+                ShowToast("Clipboard", Views.Controls.DcClipboard.TruncatedText);
+                break;
         }
     }
 

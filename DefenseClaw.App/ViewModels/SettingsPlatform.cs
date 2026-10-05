@@ -27,8 +27,8 @@ internal sealed class SettingsPlatform
     /// </summary>
     public Func<string?, string?> PickCliExecutable { get; init; } = PickWithDialog;
 
-    /// <summary>Puts text on the clipboard. May throw <see cref="System.Runtime.InteropServices.ExternalException"/> while another program holds it.</summary>
-    public Action<string> CopyText { get; init; } = text => Clipboard.SetText(text);
+    /// <summary>Puts text on the clipboard (retrying briefly while another program holds it); a failure is reported by <see cref="Views.Controls.DcClipboard"/>, so this never throws.</summary>
+    public Action<string> CopyText { get; init; } = text => Views.Controls.DcClipboard.TrySetText(text);
 
     /// <summary>Shows a file in Explorer (selected, when the flag is set) or opens a folder; false when Explorer could not be started.</summary>
     public Func<string, bool, bool> Reveal { get; init; } = RevealInExplorer;

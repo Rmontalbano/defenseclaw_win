@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -142,20 +144,132 @@ public static class DcRowMenu
     }
 }
 
-/// <summary>The clipboard, without the exception: another process can hold it open, and "Copy" then has nothing useful to say.</summary>
+/// <summary>How a copy ended.</summary>
+public enum ClipboardResult
+{
+    /// <summary>All of the text is on the clipboard.</summary>
+    Copied,
+
+    /// <summary>The text was longer than <see cref="DcClipboard.MaxChars"/>: the start of it is on the clipboard, followed by a note.</summary>
+    Truncated,
+
+    /// <summary>Nothing was copied: another program is holding the clipboard (or it refused the write).</summary>
+    Failed,
+}
+
+/// <summary>
+/// The clipboard, without the exception: another process can hold it open, and "Copy" then has nothing useful to say. Every copy
+/// in the app goes through here, like the TUI's <c>copy_windows_clipboard</c>: a brief retry while the clipboard is busy
+/// (<c>CLIPBRD_E_CANT_OPEN</c>, about half a second), a failure that is reported (<see cref="Notice"/> - the tray's toast in the running
+/// app) instead of swallowed, and a very large payload cut to <see cref="MaxChars"/> with a note instead of freezing the UI.
+/// </summary>
 public static class DcClipboard
 {
-    /// <summary>Puts <paramref name="text"/> on the clipboard; false when it could not (another program is holding it).</summary>
-    public static bool TrySetText(string text)
+    /// <summary>The most characters one copy puts on the clipboard (8 MB as UTF-16; the TUI refuses anything over 16 MiB).</summary>
+    public const int MaxChars = 4_000_000;
+
+    /// <summary>What a failed copy says.</summary>
+    public const string FailureText = "Could not use the clipboard: another program is holding it. Try again.";
+
+    private const int ClipboardCantOpen = unchecked((int)0x800401D0);
+
+    private static readonly TimeSpan RetryWindow = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan RetryInterval = TimeSpan.FromMilliseconds(25);
+
+    /// <summary>
+    /// Told about a copy that failed or was cut short (a sentence for the operator). The running app turns it into a tray toast;
+    /// it is raised on the thread that copied.
+    /// </summary>
+    public static event Action<string>? Notice;
+
+    /// <summary>Test seam: what writes to the clipboard (default: <see cref="Clipboard.SetText(string)"/>). Throws like the real one when it is held.</summary>
+    internal static Action<string>? Writer { get; set; }
+
+    /// <summary>Test seam: what waits between retries (default: <see cref="Thread.Sleep(TimeSpan)"/>).</summary>
+    internal static Action<TimeSpan>? Sleeper { get; set; }
+
+    /// <summary>Puts <paramref name="text"/> on the clipboard; false when it could not (another program is holding it). A failure or a cut is reported through <see cref="Notice"/>.</summary>
+    public static bool TrySetText(string text) => TryCopy(text) != ClipboardResult.Failed;
+
+    /// <summary>
+    /// Copies <paramref name="text"/>, retrying briefly while the clipboard is busy. With <paramref name="report"/> false the caller says
+    /// the outcome itself (it has a status line of its own); otherwise a failure or a cut goes to <see cref="Notice"/>.
+    /// </summary>
+    public static ClipboardResult TryCopy(string text, bool report = true)
     {
-        try
+        ArgumentNullException.ThrowIfNull(text);
+
+        var truncated = text.Length > MaxChars;
+        var payload = truncated ? Truncate(text) : text;
+        var result = WriteWithRetry(payload) ? (truncated ? ClipboardResult.Truncated : ClipboardResult.Copied) : ClipboardResult.Failed;
+        if (report)
         {
-            Clipboard.SetText(text);
-            return true;
+            Report(result);
         }
-        catch (System.Runtime.InteropServices.ExternalException)
+
+        return result;
+    }
+
+    /// <summary>The start of <paramref name="text"/> (<see cref="MaxChars"/> characters, never half a surrogate pair) and a note saying how much was left out.</summary>
+    internal static string Truncate(string text)
+    {
+        if (text.Length <= MaxChars)
         {
-            return false;
+            return text;
+        }
+
+        var keep = MaxChars;
+        if (char.IsHighSurrogate(text[keep - 1]))
+        {
+            keep--;
+        }
+
+        var left = text.Length - keep;
+        return text[..keep] + Environment.NewLine + "[Truncated: " + left.ToString("N0", CultureInfo.CurrentCulture) + " more characters were not copied.]";
+    }
+
+    /// <summary>What a copy that was cut short tells the operator.</summary>
+    public static string TruncatedText => "Copied the first " + MaxChars.ToString("N0", CultureInfo.CurrentCulture) + " characters; the rest was too large for the clipboard.";
+
+    private static void Report(ClipboardResult result)
+    {
+        switch (result)
+        {
+            case ClipboardResult.Failed:
+                Notice?.Invoke(FailureText);
+                break;
+            case ClipboardResult.Truncated:
+                Notice?.Invoke(TruncatedText);
+                break;
+        }
+    }
+
+    private static bool WriteWithRetry(string text)
+    {
+        var write = Writer ?? Clipboard.SetText;
+        var sleep = Sleeper ?? Thread.Sleep;
+        var started = Stopwatch.StartNew();
+        while (true)
+        {
+            try
+            {
+                write(text);
+                return true;
+            }
+            catch (ExternalException ex) when (ex.HResult == ClipboardCantOpen)
+            {
+                // Held open by another process: that is usually over in a moment (a clipboard manager reading what was just copied).
+                if (started.Elapsed >= RetryWindow)
+                {
+                    return false;
+                }
+
+                sleep(RetryInterval);
+            }
+            catch (Exception ex) when (ex is ExternalException or InvalidOperationException)
+            {
+                return false;
+            }
         }
     }
 }

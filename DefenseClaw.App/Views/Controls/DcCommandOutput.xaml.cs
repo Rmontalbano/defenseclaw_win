@@ -116,6 +116,7 @@ public partial class DcCommandOutput : UserControl
             return false;
         }
 
+        var truncated = false;
         try
         {
             if (ClipboardWriter is { } write)
@@ -124,7 +125,13 @@ public partial class DcCommandOutput : UserControl
             }
             else
             {
-                Clipboard.SetText(text);
+                var result = DcClipboard.TryCopy(text, report: false);
+                if (result == ClipboardResult.Failed)
+                {
+                    throw new ExternalException("The clipboard is held by another program.");
+                }
+
+                truncated = result == ClipboardResult.Truncated;
             }
         }
         catch (Exception ex) when (ex is ExternalException or InvalidOperationException)
@@ -135,7 +142,7 @@ public partial class DcCommandOutput : UserControl
             return false;
         }
 
-        CopiedText.Text = "Copied";
+        CopiedText.Text = truncated ? "Copied (shortened)" : "Copied";
         ShowCopiedNote();
         return true;
     }

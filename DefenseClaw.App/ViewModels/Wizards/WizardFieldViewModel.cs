@@ -434,16 +434,10 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     [RelayCommand]
     private void CopyCredential()
     {
-        try
-        {
-            System.Windows.Clipboard.SetText(CredentialCommand);
-            CredentialMessage = "Copied. Paste it into your own terminal.";
-        }
-        catch (ExternalException)
-        {
-            // Another process owns the clipboard; the command is on screen to copy by hand.
-            CredentialMessage = "The clipboard is busy. Select the command above and copy it by hand.";
-        }
+        // The message is this field's own report, so the toast stays quiet.
+        CredentialMessage = Views.Controls.DcClipboard.TryCopy(CredentialCommand, report: false) != Views.Controls.ClipboardResult.Failed
+            ? "Copied. Paste it into your own terminal."
+            : "The clipboard is busy. Select the command above and copy it by hand.";
     }
 
     [RelayCommand]

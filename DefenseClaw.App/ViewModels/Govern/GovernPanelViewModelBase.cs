@@ -1191,14 +1191,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     protected static void CopyToClipboard(string text)
     {
-        try
-        {
-            System.Windows.Clipboard.SetText(text);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // The clipboard is locked by another process; nothing useful to do.
-        }
+        _ = Views.Controls.DcClipboard.TrySetText(text);
     }
 
     // ---- Small helpers for the parsers ---------------------------------------------------------------------------

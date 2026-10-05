@@ -205,14 +205,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        try
-        {
-            Clipboard.SetText(command);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // Another process owns the clipboard; nothing useful to do about it.
-        }
+        _ = Views.Controls.DcClipboard.TrySetText(command);
     }
 
     /// <summary>

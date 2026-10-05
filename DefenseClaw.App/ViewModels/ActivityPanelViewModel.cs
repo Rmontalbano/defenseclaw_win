@@ -736,24 +736,29 @@ public sealed partial class ActivityRow : ObservableObject
 
     private void CopyText(string text, string success)
     {
-        try
+        const string failed = "Could not copy: another program is holding the clipboard. Try again.";
+        if (ClipboardWriter is { } write)
         {
-            if (ClipboardWriter is { } write)
+            try
             {
                 write(text);
+                _notify?.Invoke(success);
             }
-            else
+            catch (System.Runtime.InteropServices.ExternalException)
             {
-                Clipboard.SetText(text);
+                // Another process owns the clipboard; say so rather than pretending it worked.
+                _notify?.Invoke(failed);
             }
 
-            _notify?.Invoke(success);
+            return;
         }
-        catch (System.Runtime.InteropServices.ExternalException)
+
+        _notify?.Invoke(Views.Controls.DcClipboard.TryCopy(text, report: false) switch
         {
-            // Another process owns the clipboard; say so rather than pretending it worked.
-            _notify?.Invoke("Could not copy: another program is holding the clipboard. Try again.");
-        }
+            Views.Controls.ClipboardResult.Failed => failed,
+            Views.Controls.ClipboardResult.Truncated => Views.Controls.DcClipboard.TruncatedText,
+            _ => success,
+        });
     }
 
     /// <summary>

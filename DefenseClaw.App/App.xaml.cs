@@ -127,6 +127,9 @@ public partial class App : Application
         _tray.OpenDashboardRequested += (_, _) => ShowDashboard();
         _tray.ExitRequested += (_, _) => ExitApplication();
 
+        // A copy that failed (another program holds the clipboard) or was cut short says so, wherever it was started from.
+        Views.Controls.DcClipboard.Notice += message => _tray?.Notify("Clipboard", message, NotificationIcon.Warning);
+
         // Autostart launches with --minimized: the tray is the app until the user asks for more,
         // and the dashboard window is not even built until then.
         if (!e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase))

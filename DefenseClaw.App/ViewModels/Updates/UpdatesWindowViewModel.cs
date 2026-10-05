@@ -242,14 +242,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
             return;
         }
 
-        try
-        {
-            Clipboard.SetText(text);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // Another process owns the clipboard; nothing useful to do about it.
-        }
+        _ = Views.Controls.DcClipboard.TrySetText(text);
     }
 
     private async Task RunCheckAsync(bool forceRefresh)
