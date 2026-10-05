@@ -2,7 +2,7 @@
 
 A native Windows desktop companion for [cisco-ai-defense/defenseclaw](https://github.com/cisco-ai-defense/defenseclaw), replicating the `defenseclaw tui` terminal dashboard with WPF (.NET 9, Fluent theme) — the Windows counterpart to [defenseclaw_mac](https://github.com/keitheobrien/defenseclaw_mac).
 
-> **Status:** in active development. Built and live-verified against DefenseClaw 0.8.10 on Windows 11. DefenseClaw 1.0 support is being checked.
+> **Status:** in active development. Built and live-verified against DefenseClaw 0.8.10 on Windows 11.
 >
 > A community project, not an official Cisco product.
 
