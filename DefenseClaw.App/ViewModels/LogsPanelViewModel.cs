@@ -95,6 +95,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFileSource))]
     [NotifyPropertyChangedFor(nameof(IsStructuredSource))]
+    [NotifyPropertyChangedFor(nameof(IsVerdictsSource))]
     [NotifyPropertyChangedFor(nameof(IsEventsSource))]
     [NotifyCanExecuteChangedFor(nameof(ClearCommand))]
     private string _activeSource = GatewaySource;
@@ -189,6 +190,12 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
 
     /// <summary>True on Verdicts and Events, which are read from the database.</summary>
     public bool IsStructuredSource => ActiveSource is VerdictsSource or EventsSource;
+
+    /// <summary>True on Verdicts, which alone has the "Judge responses" button (the TUI's <c>J</c>).</summary>
+    public bool IsVerdictsSource => ActiveSource == VerdictsSource;
+
+    /// <summary>Opens the judge responses window; a test replaces it so no window is made.</summary>
+    internal Action? JudgeHistoryOpener { get; set; }
 
     /// <summary>True on Events, which alone has the telemetry switch.</summary>
     public bool IsEventsSource => ActiveSource == EventsSource;
@@ -481,6 +488,19 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         state.Buffer.Clear();
         state.Components.Clear();
         state.HasComponentless = false;
+    }
+
+    /// <summary>The TUI's <c>J</c> on Verdicts: the retained LLM-judge responses, in a window of their own.</summary>
+    [RelayCommand]
+    private void OpenJudgeHistory()
+    {
+        if (JudgeHistoryOpener is { } opener)
+        {
+            opener();
+            return;
+        }
+
+        Views.JudgeHistory.JudgeHistoryWindow.Open(Services, Application.Current?.MainWindow);
     }
 
     [RelayCommand]

@@ -95,6 +95,12 @@
                                ToolTip="Reload from disk"
                                AutomationProperties.Name="Reload from disk"
                                AutomationProperties.HelpText="Read the stream again: audit.db for Verdicts and Events, the start of the file for a log." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon Gavel24}"
+                               Command="{Binding OpenJudgeHistoryCommand}"
+                               Visibility="{Binding IsVerdictsSource, Converter={StaticResource BoolToVisibility}}"
+                               ToolTip="Show the retained LLM judge responses (judge_bodies.db and the older audit.db table)"
+                               AutomationProperties.Name="Judge responses"
+                               AutomationProperties.HelpText="Open the retained LLM judge responses: verdict, confidence, latency and the redacted raw body." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Broom24}"
                                Command="{Binding ClearCommand}"
                                ToolTip="Clear the buffered lines"

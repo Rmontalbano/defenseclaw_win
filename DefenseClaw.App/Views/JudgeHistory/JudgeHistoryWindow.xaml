@@ -1,0 +1,30 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.JudgeHistory.JudgeHistoryWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:jh="clr-namespace:DefenseClaw.App.Views.JudgeHistory"
+                 Title="Judge responses"
+                 Width="1040"
+                 Height="720"
+                 MinWidth="720"
+                 MinHeight="480"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterScreen"
+                 AutomationProperties.Name="Judge responses">
+    <!--
+        A window around JudgeHistoryView, opened from the Logs toolbar's "Judge responses" button (the TUI's J on Verdicts).
+        One instance at a time: opening it again brings it forward and reads it again. F5 reads again; Esc closes.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="{Binding Title}" ShowMinimize="True" ShowMaximize="True" />
+
+        <jh:JudgeHistoryView x:Name="History" Grid.Row="1" />
+    </Grid>
+</ui:FluentWindow>

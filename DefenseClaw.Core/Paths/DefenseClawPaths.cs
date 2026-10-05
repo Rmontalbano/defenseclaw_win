@@ -202,6 +202,35 @@ public sealed class DefenseClawPaths
 
     public string JudgeBodiesDatabasePath => Path.Combine(DataDirectory, "judge_bodies.db");
 
+    /// <summary>
+    /// A database path as <c>config.yaml</c> names it (<c>observability.local.judge_bodies_path</c>, <c>observability.local.path</c>,
+    /// the older root <c>audit_db</c> / <c>judge_bodies_db</c>), or <paramref name="fallback"/> when the setting is absent or blank. A
+    /// leading <c>~</c> is the user's profile, and a relative path is read against <see cref="DataDirectory"/>, where the CLI keeps its
+    /// files. Resolution only: nothing is opened or created.
+    /// </summary>
+    public string ResolveConfiguredFile(string? configured, string fallback)
+    {
+        var value = configured?.Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            return fallback;
+        }
+
+        if (value == "~" || value.StartsWith("~/", StringComparison.Ordinal) || value.StartsWith("~\\", StringComparison.Ordinal))
+        {
+            value = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), value.Length > 2 ? value[2..] : string.Empty);
+        }
+
+        try
+        {
+            return Path.GetFullPath(value, DataDirectory);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return fallback;
+        }
+    }
+
     public string GatewayLogPath => Path.Combine(DataDirectory, "gateway.log");
 
     public string WatchdogLogPath => Path.Combine(DataDirectory, "watchdog.log");

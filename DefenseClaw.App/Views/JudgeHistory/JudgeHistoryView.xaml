@@ -1,0 +1,163 @@
+<UserControl x:Class="DefenseClaw.App.Views.JudgeHistory.JudgeHistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             AutomationProperties.Name="Judge responses">
+    <!--
+        The TUI's judge history modal as a master / detail window body: the newest retained judge responses on the left (twenty at a
+        time, "Load more" for the next page), the selected one on the right - its fields in the TUI's order, then the raw body in a
+        selectable monospace box with a Copy button. The body has already passed DisplayRedaction (JudgeHistoryItem); this view
+        shows what it is given and nothing else. Read-only: no control here writes anything.
+    -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <Grid Margin="20,4,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:InfoBar Grid.Row="0"
+                    Margin="0,0,0,10"
+                    IsClosable="False"
+                    IsOpen="{Binding ShowError, Mode=OneWay}"
+                    Message="{Binding BannerText}"
+                    Severity="Error"
+                    Title="{Binding BannerTitle}" />
+        <ui:InfoBar Grid.Row="1"
+                    Margin="0,0,0,10"
+                    IsClosable="False"
+                    IsOpen="{Binding ShowGuidance, Mode=OneWay}"
+                    Message="{Binding BannerText}"
+                    Severity="Informational"
+                    Title="{Binding BannerTitle}" />
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" MinWidth="220" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- The list: newest first. -->
+            <Border Grid.Column="0" Style="{StaticResource DcCardFlush}">
+                <ListBox x:Name="ResponseList"
+                         ItemsSource="{Binding Items}"
+                         SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         AutomationProperties.Name="Judge responses, newest first"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                            <Setter Property="Padding" Value="8,6,8,6" />
+                            <Setter Property="MinHeight" Value="0" />
+                            <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource DcToneBar}"
+                                        Width="3"
+                                        Margin="0,1,8,1"
+                                        Tag="{Binding Tone}" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Style="{StaticResource DcMono}"
+                                               Text="{Binding TimeText}"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap" />
+                                    <TextBlock Style="{StaticResource DcCaption}"
+                                               Text="{Binding Summary}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <!-- The detail. -->
+            <Grid Grid.Column="2" DataContext="{Binding SelectedItem}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Margin="0,0,0,10" Style="{StaticResource DcCardCompact}">
+                    <ItemsControl ItemsSource="{Binding Fields}"
+                                  Grid.IsSharedSizeScope="True"
+                                  Focusable="False"
+                                  AutomationProperties.Name="Response fields">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="JudgeFieldLabel" MinWidth="{StaticResource DcFieldKeyMinWidth}" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="{Binding Label}" />
+                                    <TextBox Grid.Column="1"
+                                             Style="{StaticResource DcMonoTextBox}"
+                                             Margin="0,2,0,2"
+                                             Text="{Binding Value, Mode=OneWay}"
+                                             AutomationProperties.Name="{Binding Label}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+                <ctl:DcCommandOutput Grid.Row="1"
+                                     Title="{Binding RawNote}"
+                                     OutputName="Judge response raw body"
+                                     Text="{Binding RawText}" />
+            </Grid>
+
+            <!-- Empty state: no rows and nothing the banner already said. -->
+            <StackPanel Grid.Column="0"
+                        Grid.ColumnSpan="3"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No judge responses persisted yet" />
+                <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyText}" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="3" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource DcStatusText}"
+                       AutomationProperties.LiveSetting="Polite"
+                       Text="{Binding CountText}" />
+            <StackPanel Grid.Column="1" Style="{StaticResource DcActionBar}">
+                <ui:Button Content="Load more"
+                           Command="{Binding LoadMoreCommand}"
+                           Icon="{ctl:DcSymbolIcon ArrowDown24}"
+                           AutomationProperties.Name="Load more judge responses"
+                           ToolTip="Show the next twenty older responses" />
+                <ui:Button Appearance="Secondary"
+                           Content="Refresh"
+                           Command="{Binding RefreshCommand}"
+                           Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                           AutomationProperties.Name="Refresh judge responses"
+                           ToolTip="Read the databases again. Shortcut: F5" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
