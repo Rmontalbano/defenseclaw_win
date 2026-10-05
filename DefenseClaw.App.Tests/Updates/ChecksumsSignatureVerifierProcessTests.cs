@@ -132,6 +132,23 @@ public sealed class ChecksumsSignatureVerifierProcessTests : IDisposable
     }
 
     [Fact]
+    public async Task An_argv_the_runner_refuses_because_it_holds_a_known_secret_is_a_cosign_that_could_not_run_not_an_exception()
+    {
+        InstallFakeCosign();
+        // A value the runner knows is secret, and that the verify command line happens to contain.
+        _services.Cli.RegisterSecret(new DefenseClaw.Core.Config.SecretValue("verify-blob"));
+
+        var result = await VerifyAsync(FakeCosignPath);
+
+        Assert.Equal(ChecksumsSignatureState.NotVerifiedCosignUnusable, result.State);
+        Assert.False(result.BlocksUpgrade);
+        Assert.False(result.IsVerified);
+        Assert.Contains("could not be started", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("contains a secret", result.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("verify-blob", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task No_cosign_at_all_runs_nothing()
     {
         var result = await VerifyAsync(cosignPath: null);

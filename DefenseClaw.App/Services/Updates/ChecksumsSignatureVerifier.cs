@@ -189,15 +189,24 @@ public sealed partial class ChecksumsSignatureVerifier
             async (path, argv, timeout, cancellationToken) =>
             {
                 var started = false;
-                var invocation = await cli
-                    .RunExecutableAsync(
-                        path,
-                        argv,
-                        stdinSecret: null,
-                        cancellationToken,
-                        CliRunOptions.WithTimeout(timeout) with { OnProcessStarted = () => started = true })
-                    .ConfigureAwait(false);
-                return new CosignRun(invocation.ExitCode, invocation.FailureReason, invocation.OutputLines.Select(l => l.Text).ToArray(), started);
+                try
+                {
+                    var invocation = await cli
+                        .RunExecutableAsync(
+                            path,
+                            argv,
+                            stdinSecret: null,
+                            cancellationToken,
+                            CliRunOptions.WithTimeout(timeout) with { OnProcessStarted = () => started = true })
+                        .ConfigureAwait(false);
+                    return new CosignRun(invocation.ExitCode, invocation.FailureReason, invocation.OutputLines.Select(l => l.Text).ToArray(), started);
+                }
+                catch (SecretInArgumentException ex)
+                {
+                    // The runner refuses an argv that carries a secret it knows (a path that happens to contain one): nothing was started, and that is
+                    // a cosign that could not be used, not an exception for a caller that only asked about a signature.
+                    return new CosignRun(null, ex.Message, Array.Empty<string>(), Started: false);
+                }
             });
     }
 

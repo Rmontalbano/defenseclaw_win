@@ -26,11 +26,13 @@ public sealed class WizardCredentialsConsoleTests
     public void The_interpreter_does_not_come_from_COMSPEC()
     {
         var before = Environment.GetEnvironmentVariable("ComSpec");
+        var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "dc-comspec-" + Guid.NewGuid().ToString("n"))).FullName;
         try
         {
-            // An existing program that is not cmd.exe: were the variable read, the start info would name it.
-            var decoy = Path.Combine(Environment.SystemDirectory, "find.exe");
-            Assert.True(File.Exists(decoy));
+            // A working copy of cmd.exe somewhere else (so a test running in parallel that starts a child is not given a broken interpreter for the moment
+            // the variable is changed): were the variable read, the start info would name this one.
+            var decoy = Path.Combine(directory, "cmd.exe");
+            File.Copy(SystemCmd, decoy);
             Environment.SetEnvironmentVariable("ComSpec", decoy);
 
             Assert.Equal(SystemCmd, WizardCredentials.CommandInterpreterPath(), ignoreCase: true);
@@ -42,6 +44,14 @@ public sealed class WizardCredentialsConsoleTests
         finally
         {
             Environment.SetEnvironmentVariable("ComSpec", before);
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A scratch copy of cmd.exe; harmless if it stays.
+            }
         }
     }
 
