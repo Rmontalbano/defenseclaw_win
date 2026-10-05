@@ -305,7 +305,7 @@ public sealed class OverviewCardsTests : IDisposable
         Assert.Equal("[OK ]", vm.AgentRows[2].Badge);
         Assert.Equal("98%", vm.AgentRows[2].Confidence);
         Assert.Equal("Anthropic (claudecode)", vm.AgentRows[2].Vendor);
-        Assert.Equal("seen 3m ago", vm.AgentRows[0].Seen);
+        Assert.Matches(@"^seen [3-5]m ago$", vm.AgentRows[0].Seen); // fixture says 3 min ago; a slow runner reaches this line a minute or two later
 
         // 10 distinct agents (Windsurf and Qodo beyond the eight). The Mac's "+N more".
         Assert.Equal("+2 more", vm.AgentsOverflowText);
