@@ -22,8 +22,8 @@ namespace DefenseClaw.App.ViewModels;
 /// </para>
 /// <para>
 /// <b>Lifecycle of the file streams.</b> <see cref="AppServices.GatewayLog"/> and <see cref="AppServices.WatchdogLog"/> are constructed with
-/// <c>StartAtEnd: true</c> and deliberately not started - this panel owns them. On first load it rewinds each tailer with
-/// <see cref="LogTailer.Reset"/> and drains <see cref="LogTailer.ReadNewLines"/> to seed history, then starts live watching on both so
+/// <c>StartAtEnd: true</c> and deliberately not started - this panel owns them. On first load it seeds each tailer from the
+/// tail of its file with <see cref="LogTailer.SeedFromTail"/> (the last 512 KB / 5,000 lines, as the TUI does), then starts live watching on both so
 /// switching the source is instant. Both <see cref="LogTailer.LinesReceived"/> and <see cref="LogTailer.Truncated"/> fire on a background
 /// thread, so every handler marshals through <see cref="Application.Current"/>'s dispatcher. So do <see cref="LogTailer.TailFaulted"/> and
 /// <see cref="LogTailer.TailRecovered"/>: a tail that hit an error keeps retrying by itself, and while it does the panel says so in a
@@ -64,7 +64,6 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     public static readonly TimeSpan StructuredPollInterval = TimeSpan.FromSeconds(5);
 
     private const int MaxBufferedLines = 5000;
-    private const int MaxSeedIterations = 50;
     private const string NoComponentLabel = "(no component)";
 
     private readonly SourceState _gateway;
@@ -437,9 +436,8 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     }
 
     /// <summary>
-    /// The Mac's "Reload from disk". On Verdicts / Events: a fresh read of the database. On a log file: the buffer is emptied and the tailer
-    /// rewound to the start, so the live tail replays the file (within a poll or two, the newest 5,000 lines come back); a line already in
-    /// flight when it is pressed can appear twice.
+    /// The Mac's "Reload from disk". On Verdicts / Events: a fresh read of the database. On a log file: the buffer is emptied and re-seeded
+    /// from the tail of the file (the newest 5,000 lines, within the last 512 KB); a line already in flight when it is pressed can appear twice.
     /// </summary>
     [RelayCommand]
     private void ReloadFromDisk()
@@ -452,7 +450,8 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         if (ActiveFileState is { } state)
         {
             ClearBuffer(state);
-            state.Tailer.Reset();
+            // One bounded tail read on the UI thread (at most 512 KB); live lines read after it are dispatched behind this call.
+            SeedSource(state);
             RebuildComponentFilters();
             ApplyFilters();
             return;
@@ -517,24 +516,15 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         string.Equals(source, WatchdogSource, StringComparison.Ordinal) ? _watchdog : _gateway;
 
     /// <summary>
-    /// Rewinds the tailer and drains it in bounded batches. Runs on a background thread via <see cref="Task.Run(Action)"/> in
+    /// Seeds the buffer from the tail of the file (the last 512 KB, at most <see cref="MaxBufferedLines"/> lines, as the TUI does) in one
+    /// bounded read and leaves the tailer positioned for the live tail. Runs on a background thread via <see cref="Task.Run(Action)"/> in
     /// <see cref="InitializeAsync"/> - this is the file I/O the panel contract says never belongs in the constructor.
     /// </summary>
     private static void SeedSource(SourceState state)
     {
-        state.Tailer.Reset();
-        for (var i = 0; i < MaxSeedIterations; i++)
+        foreach (var line in state.Tailer.SeedFromTail(LogTailer.DefaultSeedBytes, MaxBufferedLines))
         {
-            var lines = state.Tailer.ReadNewLines();
-            if (lines.Count == 0)
-            {
-                break;
-            }
-
-            foreach (var line in lines)
-            {
-                Append(state, new LogEntry(line, state.StreamName));
-            }
+            Append(state, new LogEntry(line, state.StreamName));
         }
     }
 

@@ -529,4 +529,176 @@ public class LogTailerTests
     {
         Assert.Equal(expected, LogLine.Parse(raw).Level);
     }
+
+    // ---- seeding from the tail (CUST-256) ----
+
+    private static string Numbered(int from, int count) =>
+        string.Concat(Enumerable.Range(from, count).Select(n => $"[api] line {n:D7} padding padding padding\n"));
+
+    private static string Row(int n) => $"[api] line {n:D7} padding padding padding";
+
+    [Fact]
+    public void Seeding_a_large_file_returns_only_the_newest_lines_and_resumes_live_with_no_gap_or_duplicate()
+    {
+        // Scaled down from the 300 MB case: ~3.9 MB, so the 5,000-line cap bites inside the 512 KB window.
+        using var temp = new TempDirectory();
+        const int total = 90_000;
+        var path = temp.Write("gateway.log", Numbered(0, total));
+        using var tailer = new LogTailer(path);
+
+        var lines = tailer.SeedFromTail();
+
+        Assert.Equal(LogTailer.DefaultSeedLines, lines.Count);
+        Assert.Equal(Row(total - 5000), lines[0].Raw);
+        Assert.Equal(Row(total - 1), lines[^1].Raw);
+        Assert.Equal(new FileInfo(path).Length, tailer.Offset);
+        Assert.Empty(tailer.ReadNewLines());
+
+        Append(path, Numbered(total, 3));
+        Assert.Equal(new[] { Row(total), Row(total + 1), Row(total + 2) }, tailer.ReadNewLines().Select(l => l.Raw));
+    }
+
+    [Fact]
+    public void The_byte_window_bounds_the_seed_and_drops_the_line_it_cuts()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", Numbered(0, 2000));
+        using var tailer = new LogTailer(path);
+
+        var lines = tailer.SeedFromTail(maxBytes: 4096, maxLines: 5000);
+
+        Assert.InRange(lines.Count, 1, 4096 / 40);
+        Assert.Equal(Row(1999), lines[^1].Raw);
+        // Whole lines, contiguous up to the end: none cut, none skipped inside the window.
+        var first = int.Parse(lines[0].Raw.AsSpan(11, 7));
+        Assert.Equal(Row(first), lines[0].Raw);
+        Assert.Equal(2000 - first, lines.Count);
+    }
+
+    [Fact]
+    public void A_window_that_opens_exactly_on_a_line_boundary_keeps_that_line()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "aaaa\nbbbb\ncccc\n");
+        using var tailer = new LogTailer(path);
+
+        // 10 bytes is "bbbb\ncccc\n" exactly.
+        Assert.Equal(new[] { "bbbb", "cccc" }, tailer.SeedFromTail(maxBytes: 10).Select(l => l.Raw));
+    }
+
+    [Fact]
+    public void A_window_that_cuts_inside_a_multibyte_character_never_shows_a_broken_first_line()
+    {
+        using var temp = new TempDirectory();
+        // Box-drawing characters are 3 bytes in UTF-8: try every cut position across the lines.
+        var line = "[api] ╔═══╗ ünï 日本語 end";
+        var path = temp.Write("gateway.log", line + "\n" + line + "\n" + line + "\n");
+        var lineBytes = Encoding.UTF8.GetByteCount(line) + 1;
+
+        for (var window = 1; window <= lineBytes * 2 + 3; window++)
+        {
+            using var tailer = new LogTailer(path);
+            var lines = tailer.SeedFromTail(maxBytes: window);
+
+            Assert.All(lines, l => Assert.Equal(line, l.Raw));
+            Assert.Equal(window / lineBytes, lines.Count);
+        }
+    }
+
+    [Fact]
+    public void A_file_smaller_than_the_window_is_read_whole_and_the_bom_is_skipped()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.File("gateway.log");
+        File.WriteAllBytes(path, new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes("[api] one\r\n[api] two\n")).ToArray());
+        using var tailer = new LogTailer(path);
+
+        var lines = tailer.SeedFromTail();
+
+        Assert.Equal(new[] { "[api] one", "[api] two" }, lines.Select(l => l.Raw));
+        Assert.Equal(new FileInfo(path).Length, tailer.Offset);
+    }
+
+    [Fact]
+    public void A_partial_trailing_line_is_held_back_by_the_seed_and_delivered_once_complete()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "one\ntwo\nthr");
+        using var tailer = new LogTailer(path);
+
+        Assert.Equal(new[] { "one", "two" }, tailer.SeedFromTail().Select(l => l.Raw));
+        Assert.Equal(8, tailer.Offset);
+
+        Append(path, "ee\n");
+        Assert.Equal(new[] { "three" }, tailer.ReadNewLines().Select(l => l.Raw));
+    }
+
+    [Fact]
+    public void Seeding_a_missing_or_empty_file_is_empty_and_the_file_is_picked_up_when_it_appears()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.File("gateway.log");
+        using var tailer = new LogTailer(path);
+
+        Assert.Empty(tailer.SeedFromTail());
+        Assert.Equal(0, tailer.Offset);
+
+        File.WriteAllText(path, "");
+        Assert.Empty(tailer.SeedFromTail());
+
+        Append(path, "hello\n");
+        Assert.Equal(new[] { "hello" }, tailer.ReadNewLines().Select(l => l.Raw));
+    }
+
+    [Fact]
+    public void Seeding_works_while_the_writer_holds_the_file_open()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", "one\ntwo\n");
+        using var writer = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        using var tailer = new LogTailer(path);
+
+        Assert.Equal(new[] { "one", "two" }, tailer.SeedFromTail().Select(l => l.Raw));
+    }
+
+    [Fact]
+    public void A_seeded_tailer_still_detects_replacement_and_truncation_and_caps_the_replay()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", Numbered(0, 30_000));
+        using var tailer = new LogTailer(path);
+        var truncations = 0;
+        tailer.Truncated += (_, _) => truncations++;
+        tailer.SeedFromTail();
+
+        // Replaced by a file still longer than the offset: the anchors, not the length, must catch it.
+        File.Delete(path);
+        File.WriteAllText(path, Numbered(500_000, 40_000), new UTF8Encoding(false));
+        Assert.True(new FileInfo(path).Length > tailer.Offset);
+
+        var lines = tailer.ReadNewLines();
+
+        Assert.Equal(1, truncations);
+        // The replay is capped like the seed, not read from byte 0.
+        Assert.Equal(LogTailer.DefaultSeedLines, lines.Count);
+        Assert.Equal(Row(539_999), lines[^1].Raw);
+        Assert.Equal(new FileInfo(path).Length, tailer.Offset);
+
+        File.WriteAllText(path, "short\n", new UTF8Encoding(false));
+        Assert.Equal(new[] { "short" }, tailer.ReadNewLines().Select(l => l.Raw));
+        Assert.Equal(2, truncations);
+    }
+
+    [Fact]
+    public void Seed_work_is_bounded_by_the_window_not_the_file_size()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("gateway.log", Numbered(0, 150_000)); // ~6 MB
+        using var tailer = new LogTailer(path);
+
+        var lines = tailer.SeedFromTail(maxBytes: 64 * 1024, maxLines: 100);
+
+        Assert.Equal(100, lines.Count);
+        Assert.Equal(Row(149_999), lines[^1].Raw);
+    }
 }

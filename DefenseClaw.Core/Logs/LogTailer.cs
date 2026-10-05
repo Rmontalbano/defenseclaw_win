@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using DefenseClaw.Core.IO;
 
 namespace DefenseClaw.Core.Logs;
 
@@ -87,6 +88,11 @@ public sealed class LogTailer : IDisposable
     /// <summary>How many bytes at the start of the file, and just before the offset, are remembered to spot a replaced file.</summary>
     private const int AnchorBytes = 64;
 
+    /// <summary>The TUI's window when it opens a log (<c>panels/logs.py</c>): the last 512 KB, at most 5,000 lines.</summary>
+    public const int DefaultSeedBytes = 512 * 1024;
+
+    public const int DefaultSeedLines = 5000;
+
     private static readonly byte[] Utf8Bom = { 0xEF, 0xBB, 0xBF };
 
     private readonly SemaphoreSlim _signal = new(0, 1);
@@ -151,6 +157,107 @@ public sealed class LogTailer : IDisposable
     }
 
     /// <summary>
+    /// Positions the tailer at the end of the file's newest complete lines and returns them, as the TUI does when it opens a log: only the
+    /// last <paramref name="maxBytes"/> are read and at most <paramref name="maxLines"/> lines kept, so a multi-hundred-MB log costs one
+    /// bounded read, not a replay from byte 0. <see cref="Offset"/> ends at the last full line (a partial trailing line is held back for
+    /// the next read), the identity anchors are captured so rotation detection keeps working, and the live tail continues from there with
+    /// no gap or duplicate. A first line cut by the byte window is dropped, never shown half. Returns an empty list when the file does not
+    /// exist yet or cannot be read right now (the offset is then left alone).
+    /// </summary>
+    public IReadOnlyList<LogLine> SeedFromTail(int maxBytes = DefaultSeedBytes, int maxLines = DefaultSeedLines)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxLines);
+
+        lock (_gate)
+        {
+            var info = new FileInfo(Path);
+            if (!info.Exists)
+            {
+                ForgetIdentity();
+                Offset = 0;
+                return Array.Empty<LogLine>();
+            }
+
+            try
+            {
+                using var stream = SharedFile.Open(Path, FileOptions.None);
+                _createdUtc = info.CreationTimeUtc;
+                return SeedCore(stream, maxBytes, maxLines);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return Array.Empty<LogLine>();
+            }
+        }
+    }
+
+    /// <summary>The seed with the default window, for a caller that already holds the gate.</summary>
+    private IReadOnlyList<LogLine> SeedFromTailLocked()
+    {
+        using var stream = SharedFile.Open(Path, FileOptions.None);
+        return SeedCore(stream, DefaultSeedBytes, DefaultSeedLines);
+    }
+
+    private List<LogLine> SeedCore(FileStream stream, int maxBytes, int maxLines)
+    {
+        var lines = new List<LogLine>();
+        var length = stream.Length;
+        var start = Math.Max(0, length - maxBytes);
+
+        // One byte before the window tells whether the window opens on a line boundary or in the middle of a line.
+        var baseOffset = start > 0 ? start - 1 : 0;
+        var buffer = new byte[(int)(length - baseOffset)];
+        stream.Seek(baseOffset, SeekOrigin.Begin);
+        var read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+
+        var begin = 0;
+        if (start > 0 && buffer.Length > 0 && buffer[0] != (byte)'\n')
+        {
+            // Mid-line (and possibly mid-character; a UTF-8 continuation byte is never '\n'): drop through the first newline.
+            var firstNewline = Array.IndexOf(buffer, (byte)'\n', 0, read);
+            begin = firstNewline < 0 ? read : firstNewline + 1;
+        }
+        else if (start > 0)
+        {
+            begin = 1;
+        }
+
+        var end = read > 0 ? Array.LastIndexOf(buffer, (byte)'\n', read - 1) + 1 : 0;
+        if (end <= begin)
+        {
+            // No complete line in the window. At the top of the file that is just a line the writer has not finished: wait for it.
+            // A single line longer than the window is skipped; the live tail carries on after it.
+            Offset = start > 0 ? baseOffset + read : 0;
+            ForgetIdentity();
+            _createdUtc = new FileInfo(Path).CreationTimeUtc;
+            if (Offset > 0)
+            {
+                CaptureAnchors(stream);
+            }
+
+            return lines;
+        }
+
+        var skip = begin == 0 && start == 0 && _options.Encoding.CodePage == Encoding.UTF8.CodePage && StartsWithBom(buffer, end)
+            ? Utf8Bom.Length
+            : 0;
+        var text = _options.Encoding.GetString(buffer, begin + skip, end - begin - skip);
+        var parts = text.Split('\n');
+        var count = text.EndsWith('\n') ? parts.Length - 1 : parts.Length;
+        for (var i = Math.Max(0, count - maxLines); i < count; i++)
+        {
+            lines.Add(LogLine.Parse(parts[i].TrimEnd('\r'), _sequence++));
+        }
+
+        Offset = baseOffset + end;
+        ForgetIdentity();
+        _createdUtc = new FileInfo(Path).CreationTimeUtc;
+        CaptureAnchors(stream);
+        return lines;
+    }
+
+    /// <summary>
     /// Reads whatever has been appended since the last call. Returns an empty list when
     /// there is nothing new or the file does not exist yet.
     /// </summary>
@@ -195,10 +302,13 @@ public sealed class LogTailer : IDisposable
                 return Array.Empty<LogLine>();
             }
 
-            List<LogLine> lines;
+            IReadOnlyList<LogLine> lines;
             try
             {
-                lines = ReadFrom(info, ref truncated);
+                // A rotation to a file that is already large is replayed from its tail, like the first seed, not from byte 0.
+                lines = truncated && info.Length > DefaultSeedBytes
+                    ? SeedFromTailLocked()
+                    : ReadFrom(info, ref truncated);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -382,6 +492,10 @@ public sealed class LogTailer : IDisposable
             ForgetIdentity();
             _createdUtc = info.CreationTimeUtc;
             truncated = true;
+            if (stream.Length > DefaultSeedBytes)
+            {
+                return SeedCore(stream, DefaultSeedBytes, DefaultSeedLines);
+            }
         }
 
         var startOffset = Offset;

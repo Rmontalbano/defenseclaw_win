@@ -170,6 +170,30 @@ public sealed class LogsPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Seeding_and_reloading_a_log_bigger_than_the_window_show_only_its_newest_lines()
+    {
+        // ~5 MB synthetic log (the real case is hundreds of MB): the seed reads the last 512 KB, not the file.
+        var logPath = _services.Paths.GatewayLogPath;
+        File.WriteAllLines(logPath, Enumerable.Range(0, 120_000).Select(n => $"[api] seeded {n:D7} padding padding padding"));
+
+        var panel = new LogsPanelViewModel(_services);
+        await panel.InitializeAsync();
+
+        Assert.Equal(Cap, panel.BufferedCount);
+        Assert.Equal("[api] seeded 0115000 padding padding padding", panel.DisplayedLines[0].Raw);
+
+        // Reload on the big file: emptied and re-seeded from the tail, one bounded read, newest last.
+        File.AppendAllText(logPath, "[api] seeded 0120000 padding padding padding\n");
+        panel.SetActive(true);
+        panel.ReloadFromDiskCommand.Execute(null);
+
+        Assert.Equal(Cap, panel.BufferedCount);
+        Assert.Equal(Cap, panel.DisplayedLines.Count);
+        Assert.Equal("[api] seeded 0115001 padding padding padding", panel.DisplayedLines[0].Raw);
+        Assert.Equal("[api] seeded 0120000 padding padding padding", panel.DisplayedLines[^1].Raw);
+    }
+
+    [Fact]
     public async Task Clear_empties_the_buffer_and_the_list_and_new_lines_start_over()
     {
         var logPath = _services.Paths.GatewayLogPath;
