@@ -1,0 +1,59 @@
+# Gitleaks configuration for DefenseClaw for Windows.
+#
+# Run it the way CI does (see .github/workflows/security.yml):
+#   gitleaks git . --config .gitleaks.toml --redact --exit-code 1
+# gitleaks also finds this file on its own when it is pointed at the repository root.
+#
+# The default ruleset stays on in full. The only exceptions are the synthetic credentials that the app's own
+# test suites need: this app detects and masks secrets (SecretHeuristics, ConfiguredSecrets, the setup wizards'
+# secret fields), so its tests have to contain strings that look like credentials. None of them is real, and they are
+# allowlisted by BOTH where they are (named test files, never a directory) AND what they look like (a marker the
+# value must start with), so a real secret pasted into one of these files is still reported.
+#
+# A new synthetic fixture needs no entry here if its value starts with `synth` (the convention for new tests) and
+# the file is already listed. Anything else: list the file and the marker below, and say why in the description.
+# Path patterns accept both / and \ so that `gitleaks dir` on Windows agrees with `gitleaks git`.
+
+title = "DefenseClaw for Windows"
+
+[extend]
+useDefault = true
+
+# Fake credentials used as test inputs: the value starts with a marker that no real credential has.
+#   synth...    the "synthetic ..." keys, tokens and values of the configured-secrets, wizard and settings tests
+#   tok-S...    the settings test's `tok-SECRET-...` stand-in
+#   abcdef...   keyboard-order stand-ins (abcdef123456, abcdef0123456789) in the secret-heuristics and warning tests,
+#               including the ones inside example.com / example.test URLs
+#   a1b2c3d4... the alternating stand-in for a hex token
+[[allowlists]]
+description = "Synthetic credentials in the secret-handling test suites (value starts with a synthetic marker)"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = [
+  '''(^|[\\/])DefenseClaw\.Tests[\\/]ConfiguredSecretsTests\.cs$''',
+  '''(^|[\\/])DefenseClaw\.Tests[\\/]SecretHeuristicsTests\.cs$''',
+  '''(^|[\\/])DefenseClaw\.App\.Tests[\\/]Govern[\\/]SecretWarningTests\.cs$''',
+  '''(^|[\\/])DefenseClaw\.App\.Tests[\\/]Settings[\\/]SettingsPanelViewModelTests\.cs$''',
+  '''(^|[\\/])DefenseClaw\.App\.Tests[\\/]Startup[\\/]AppServicesConfiguredSecretsTests\.cs$''',
+  '''(^|[\\/])DefenseClaw\.App\.Tests[\\/]Wizards[\\/]GalileoCardLayoutTests\.cs$''',
+  '''(^|[\\/])DefenseClaw\.App\.Tests[\\/]Wizards[\\/]GalileoKeyTests\.cs$''',
+]
+regexes = [
+  '''^(synth|tok-S|abcdef|a1b2c3d4)''',
+]
+
+# The bare PEM header lines that the secret-heuristics test feeds to the detector (the plain, RSA, OPENSSH and PGP
+# private-key headers). They are header strings only: no key body follows. The default private-key rule matches across
+# several adjacent InlineData lines, because all it needs is one header, 64 characters and another header end.
+# The finding has to start with a header that is closed at once by the string literal's quote, which a key never is.
+[[allowlists]]
+description = "Header-only PEM strings used as inputs to the private-key detector test"
+condition = "AND"
+targetRules = ["private-key"]
+paths = [
+  '''(^|[\\/])DefenseClaw\.Tests[\\/]SecretHeuristicsTests\.cs$''',
+]
+regexTarget = "match"
+regexes = [
+  '''^-----BEGIN [A-Z ]*PRIVATE KEY( BLOCK)?-----"''',
+]

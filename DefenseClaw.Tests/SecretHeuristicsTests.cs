@@ -66,7 +66,7 @@ public class SecretHeuristicsTests
     [InlineData("-----BEGIN PRIVATE KEY-----", "private key")]
     [InlineData("-----BEGIN RSA PRIVATE KEY-----", "private key")]
     [InlineData("-----BEGIN OPENSSH PRIVATE KEY-----", "private key")]
-    [InlineData("-----BEGIN PGP PRIVATE KEY BLOCK-----", "private key")]
+    [InlineData("-----BEGIN PGP PRIVATE KEY BLOCK-----", "private key")] // nosemgrep: detected-pgp-private-key-block -- the bare header string, the detector's test input; no key material follows
     [InlineData("https://user:hunter2@example.com/mcp", "password inside a URL")]
     [InlineData("git+https://ci:s3cr3tvalue@git.example.com/org/repo.git", "password inside a URL")]
     [InlineData(SlackWebhook, "Slack webhook")]

@@ -1,0 +1,13 @@
+# Paths that trufflehog skips, one regular expression per line, matched against the file path inside the repository.
+# Pass this file to any trufflehog run that also lists unverified findings, such as a sweep before publishing:
+#   trufflehog git file://. --exclude-paths .trufflehog-exclude.txt --results=verified,unknown,unverified
+# CI (.github/workflows/security.yml) reports verified findings only, which these two files cannot produce, and passes the same
+# file so that its command and the one above stay alike.
+#
+# Only two test files are listed, and only because of one kind of string: the credential-in-URL examples
+# (https://user:<password>@host/..., with hosts under example.com and example.test, which are reserved for documentation) that
+# the secret-detection tests feed to SecretHeuristics. trufflehog's URI detector reports every such URL, and none of them can
+# be verified, so the findings are always "unverified". None is a real credential or a real host. The other synthetic
+# fixtures are allowlisted for gitleaks in .gitleaks.toml.
+^DefenseClaw\.Tests/SecretHeuristicsTests\.cs$
+^DefenseClaw\.App\.Tests/Govern/SecretWarningTests\.cs$
