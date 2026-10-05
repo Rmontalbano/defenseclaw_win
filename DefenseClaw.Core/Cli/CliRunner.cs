@@ -512,11 +512,25 @@ public sealed class CliRunner : IDisposable
         }
     }
 
+    /// <summary>
+    /// Drops the finished invocations. A run still in flight keeps its entry, as the TUI's Clear keeps the running one:
+    /// without it the run would carry on with no row to show its output, its elapsed time or a Cancel button.
+    /// </summary>
     public void ClearActivity()
     {
         lock (_gate)
         {
-            _activity.Clear();
+            var node = _activity.First;
+            while (node is not null)
+            {
+                var next = node.Next;
+                if (!node.Value.IsRunning)
+                {
+                    _activity.Remove(node);
+                }
+
+                node = next;
+            }
         }
     }
 
@@ -787,7 +801,7 @@ public sealed class CliRunner : IDisposable
         {
             if (victim.CurrentProcess is { } process)
             {
-                TryKill(process);
+                TryKill(process, victim.Job);
             }
         }
 
@@ -871,7 +885,8 @@ public sealed class CliRunner : IDisposable
         run.RequestCancel();
         if (run.CurrentProcess is { } process)
         {
-            _ = Task.Run(() => TryKill(process));
+            var job = run.Job;
+            _ = Task.Run(() => TryKill(process, job));
         }
 
         reason = "Cancel requested — the process tree is being killed.";
@@ -974,6 +989,11 @@ public sealed class CliRunner : IDisposable
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
 
+        // The child and everything it starts go in a kill-on-close job, so they die with this process even when it is
+        // killed outright (see WindowsJob). The upgrade installer is exempt on purpose: it must outlive the app, and a job
+        // would end it. No job (not created, or not assignable) leaves the tree kill below as the only guard.
+        using var job = run.SurvivesShutdown ? null : WindowsJob.TryCreate();
+
         // Both streams complete asynchronously; wait for them so no trailing output is lost.
         var stdoutDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stderrDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1008,6 +1028,10 @@ public sealed class CliRunner : IDisposable
             // call, or a shutdown that began between registration and here.
             stop.Token.ThrowIfCancellationRequested();
             process.Start();
+            if (job is not null && job.TryAssign(process))
+            {
+                run.AttachJob(job);
+            }
 
             // The child has its own copy of the block now. Dropping ours keeps the plaintext from
             // sitting in the start info for the rest of a run that can last half an hour.
@@ -1051,7 +1075,7 @@ public sealed class CliRunner : IDisposable
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             invocation.FailureReason = DescribeStop(ClassifyStop(callerToken, run), timeout, processStarted: true);
-            await KillAndSettleAsync(process, stdoutDone.Task, stderrDone.Task).ConfigureAwait(false);
+            await KillAndSettleAsync(process, run.Job, stdoutDone.Task, stderrDone.Task).ConfigureAwait(false);
             settled = true;
         }
         catch (TimeoutException)
@@ -1070,8 +1094,10 @@ public sealed class CliRunner : IDisposable
             {
                 // An exception nobody here anticipates is on its way out. Whatever it is, it
                 // must not leave the child running with no one left holding a reference to it.
-                TryKill(process);
+                TryKill(process, run.Job);
             }
+
+            run.DetachJob();
         }
     }
 
@@ -1137,9 +1163,9 @@ public sealed class CliRunner : IDisposable
     /// <see cref="KillSettleTimeout"/> in total: a descendant that survived the kill and still
     /// holds the pipes must not turn a stop into another hang.
     /// </summary>
-    private static async Task KillAndSettleAsync(Process process, Task stdoutDone, Task stderrDone)
+    private static async Task KillAndSettleAsync(Process process, WindowsJob? job, Task stdoutDone, Task stderrDone)
     {
-        TryKill(process);
+        TryKill(process, job);
 
         using var settle = new CancellationTokenSource(KillSettleTimeout);
         try
@@ -1432,8 +1458,13 @@ public sealed class CliRunner : IDisposable
     /// moment before <see cref="Shutdown"/> got to it.
     /// </para>
     /// </summary>
-    private static void TryKill(Process process)
+    private static void TryKill(Process process, WindowsJob? job = null)
     {
+        // The job first: one call ends everything in it, including a descendant that appeared after the tree was walked.
+        // The tree walk after it covers what the job cannot - a grandchild started before the child was assigned to the
+        // job - and is the whole kill when there is no job.
+        _ = job?.Terminate();
+
         try
         {
             process.Kill(entireProcessTree: true);
@@ -1451,6 +1482,7 @@ public sealed class CliRunner : IDisposable
     private sealed class InFlightRun
     {
         private Process? _process;
+        private WindowsJob? _job;
         private int _cancelRequested;
 
         /// <summary>
@@ -1494,8 +1526,16 @@ public sealed class CliRunner : IDisposable
         /// <summary>Null before the child is launched and again once the run lets go of it.</summary>
         public Process? CurrentProcess => Volatile.Read(ref _process);
 
+        /// <summary>The kill-on-close job the child runs in, or null (exempt run, or none could be created).</summary>
+        public WindowsJob? Job => Volatile.Read(ref _job);
+
         public void Attach(Process process) => Volatile.Write(ref _process, process);
 
+        public void AttachJob(WindowsJob job) => Volatile.Write(ref _job, job);
+
         public void Detach() => Volatile.Write(ref _process, null);
+
+        /// <summary>Called before the run disposes the job, so a late Cancel or Shutdown does not reach for a closed handle.</summary>
+        public void DetachJob() => Volatile.Write(ref _job, null);
     }
 }

@@ -405,7 +405,13 @@ public sealed class AppServices : IDisposable
     /// such handling: clients read it through <see cref="CurrentToken"/> per request.
     /// </para>
     /// </summary>
-    public void ReloadConfig()
+    public void ReloadConfig() => _ = ReloadConfigCore(raise: true);
+
+    /// <summary>
+    /// <see cref="ReloadConfig"/>, with the <see cref="ConfigReloaded"/> notification optional so the watcher path can hold
+    /// back a repeat banner for a generation that already failed. Returns true when the configuration loaded cleanly.
+    /// </summary>
+    private bool ReloadConfigCore(bool raise)
     {
         GatewayClient? retired = null;
 
@@ -478,7 +484,12 @@ public sealed class AppServices : IDisposable
         // .env or a *_env key may have changed along with the config.
         RegisterConfiguredSecretsWithCli();
 
-        RaiseConfigReloaded();
+        if (raise)
+        {
+            RaiseConfigReloaded();
+        }
+
+        return ConfigLoadError is null;
     }
 
     public void Dispose()
@@ -498,6 +509,7 @@ public sealed class AppServices : IDisposable
         Cli.Dispose();
 
         ConfigWatcher.Changed -= OnConfigChanged;
+        _reloadRetry?.Dispose();
         Settings.Changed -= OnSettingsChanged;
         AlertCounts.Dispose();
         UpdateWatcher.Dispose();
@@ -522,7 +534,55 @@ public sealed class AppServices : IDisposable
     /// the poll timer's thread; <see cref="ReloadConfig"/> is idempotent, which is what
     /// that event's contract requires of its handlers.
     /// </summary>
-    private void OnConfigChanged(object? sender, ConfigChangedEventArgs e) => ReloadConfig();
+    private void OnConfigChanged(object? sender, ConfigChangedEventArgs e) => ReloadForWatcher();
+
+    private readonly ConfigReloadBackoff _reloadBackoff = new();
+    private Timer? _reloadRetry;
+
+    /// <summary>
+    /// The watcher's reload (<see cref="ConfigChangeToken"/> has already waited for the files to settle). A generation that
+    /// fails to load is retried on the TUI's backoff (300 ms doubling to 4 s, a handful of times) rather than on every
+    /// poll, and its banner is raised once: a repeat failure of the same bytes changes nothing the user has not seen. A
+    /// success after a failure raises again, which is what clears the banner.
+    /// </summary>
+    private void ReloadForWatcher()
+    {
+        TimeSpan? retryIn = null;
+        lock (_reloadGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            var key = $"{FileSignature.Capture(Paths.ConfigFilePath)}|{FileSignature.Capture(Paths.EnvFilePath)}";
+            var now = DateTime.UtcNow;
+            if (!_reloadBackoff.ShouldAttempt(key, now))
+            {
+                return;
+            }
+
+            if (ReloadConfigCore(raise: false))
+            {
+                _reloadBackoff.RecordSuccess();
+                RaiseConfigReloaded();
+            }
+            else
+            {
+                retryIn = _reloadBackoff.RecordFailure(key, now, out var first);
+                if (first)
+                {
+                    RaiseConfigReloaded();
+                }
+            }
+
+            if (retryIn is { } delay)
+            {
+                _reloadRetry ??= new Timer(_ => ReloadForWatcher());
+                _ = _reloadRetry.Change(delay, Timeout.InfiniteTimeSpan);
+            }
+        }
+    }
 
     /// <summary>A change to the CLI override reaches the paths at once (see the constructor); nothing else in the settings is this class's.</summary>
     private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e)

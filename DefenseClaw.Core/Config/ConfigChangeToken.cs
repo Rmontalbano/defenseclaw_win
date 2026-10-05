@@ -110,12 +110,19 @@ public sealed class ConfigChangeToken : IDisposable
     private int _checkCount;
     private bool _disposed;
 
-    public ConfigChangeToken(DefenseClawPaths paths, TimeSpan? pollInterval = null)
-        : this(paths?.ConfigFilePath!, paths?.EnvFilePath!, pollInterval)
+    /// <summary>How long a new signature has to hold, across two reads, before it counts as a change.</summary>
+    public static readonly TimeSpan DefaultSettleDelay = TimeSpan.FromMilliseconds(300);
+
+    private readonly TimeSpan _settleDelay;
+    private readonly Timer _settle;
+    private readonly Dictionary<ConfigFileKind, (FileSignature Signature, long SeenAt)> _pending = new();
+
+    public ConfigChangeToken(DefenseClawPaths paths, TimeSpan? pollInterval = null, TimeSpan? settleDelay = null)
+        : this(paths?.ConfigFilePath!, paths?.EnvFilePath!, pollInterval, settleDelay)
     {
     }
 
-    public ConfigChangeToken(string configPath, string envPath, TimeSpan? pollInterval = null)
+    public ConfigChangeToken(string configPath, string envPath, TimeSpan? pollInterval = null, TimeSpan? settleDelay = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(configPath);
         ArgumentException.ThrowIfNullOrEmpty(envPath);
@@ -150,8 +157,11 @@ public sealed class ConfigChangeToken : IDisposable
             _watcher.EnableRaisingEvents = true;
         }
 
+        _settleDelay = settleDelay ?? DefaultSettleDelay;
+        _settle = new Timer(_ => CheckAll(settle: true), null, Timeout.Infinite, Timeout.Infinite);
+
         var interval = pollInterval ?? TimeSpan.FromSeconds(2);
-        _poll = new Timer(_ => CheckAll(), null, interval, interval);
+        _poll = new Timer(_ => CheckAll(settle: true), null, interval, interval);
     }
 
     /// <summary>True once any watched file has changed since construction or the last reset.</summary>
@@ -201,8 +211,11 @@ public sealed class ConfigChangeToken : IDisposable
     /// <summary>Clears <see cref="HasChanged"/> after the caller has reloaded.</summary>
     public void Reset() => HasChanged = false;
 
-    /// <summary>Forces an immediate signature comparison instead of waiting for the poll.</summary>
-    public void Poll() => CheckAll();
+    /// <summary>
+    /// Forces an immediate signature comparison instead of waiting for the poll. Unlike the poll and the watcher it
+    /// does not wait for the new signature to settle: the caller asked to know now.
+    /// </summary>
+    public void Poll() => CheckAll(settle: false);
 
     public void Dispose()
     {
@@ -213,6 +226,7 @@ public sealed class ConfigChangeToken : IDisposable
 
         _disposed = true;
         _poll.Dispose();
+        _settle.Dispose();
         if (_watcher is not null)
         {
             _watcher.EnableRaisingEvents = false;
@@ -231,7 +245,7 @@ public sealed class ConfigChangeToken : IDisposable
     {
         if (Concerns(e))
         {
-            CheckAll();
+            CheckAll(settle: true);
         }
     }
 
@@ -240,7 +254,14 @@ public sealed class ConfigChangeToken : IDisposable
         _watchedNames.Contains(name) ||
         (e is RenamedEventArgs { OldName: { } oldName } && _watchedNames.Contains(oldName));
 
-    private void CheckAll()
+    /// <summary>
+    /// Compares each file with the last signature raised for it. With <paramref name="settle"/>, a different signature
+    /// is only a candidate: it is raised once a later read, at least the settle delay after it was first seen, still
+    /// shows the same signature. An editor that truncates and then writes (or a CLI mid-rewrite) is seen in its
+    /// half-written state first, and that state is never raised - it would parse as an error and flash a banner for a
+    /// file that is about to be fine.
+    /// </summary>
+    private void CheckAll(bool settle)
     {
         if (_disposed)
         {
@@ -257,15 +278,48 @@ public sealed class ConfigChangeToken : IDisposable
                 var current = FileSignature.Capture(path);
                 if (!_signatures.TryGetValue(kind, out var previous) || previous == current)
                 {
+                    _ = _pending.Remove(kind);
                     continue;
                 }
 
+                if (settle)
+                {
+                    var now = System.Diagnostics.Stopwatch.GetTimestamp();
+                    if (!_pending.TryGetValue(kind, out var candidate) || candidate.Signature != current)
+                    {
+                        _pending[kind] = (current, now);
+                        ArmSettle(_settleDelay);
+                        continue;
+                    }
+
+                    var waited = System.Diagnostics.Stopwatch.GetElapsedTime(candidate.SeenAt, now);
+                    if (waited < _settleDelay)
+                    {
+                        // A second event for the same state, too soon to count as the second read.
+                        ArmSettle(_settleDelay - waited);
+                        continue;
+                    }
+                }
+
+                _ = _pending.Remove(kind);
                 _signatures[kind] = current;
                 HasChanged = true;
                 args = new ConfigChangedEventArgs(kind, path);
             }
 
             Raise(args);
+        }
+    }
+
+    private void ArmSettle(TimeSpan due)
+    {
+        try
+        {
+            _ = _settle.Change(due < TimeSpan.FromMilliseconds(1) ? TimeSpan.FromMilliseconds(1) : due, Timeout.InfiniteTimeSpan);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed between the check and here; nothing left to settle.
         }
     }
 
@@ -302,5 +356,63 @@ public sealed class ConfigChangeToken : IDisposable
                 _owner._callbacks.Remove(_callback);
             }
         }
+    }
+}
+
+/// <summary>
+/// Retry policy for reloading a config generation that failed to load, mirroring the TUI watcher (0.8.10
+/// <c>services/config_watch.py</c>): the same bad generation is retried on a doubling delay capped at
+/// <see cref="MaxDelay"/>, and only the first failure of a generation is worth a banner. A new generation (a different
+/// generation key) bypasses the wait. Not thread-safe on its own; the caller serializes.
+/// </summary>
+public sealed class ConfigReloadBackoff
+{
+    public static readonly TimeSpan MaxDelay = TimeSpan.FromSeconds(4);
+
+    /// <summary>Retries stop here for one generation; a file that still fails has not become readable by waiting.</summary>
+    public const int MaxAttempts = 6;
+
+    /// <summary>A retry timer may fire a few milliseconds before its due time; that still counts as due.</summary>
+    private static readonly TimeSpan TimerSlack = TimeSpan.FromMilliseconds(50);
+
+    private readonly TimeSpan _baseDelay;
+    private string? _failedKey;
+    private int _attempts;
+    private DateTime _retryAtUtc;
+
+    public ConfigReloadBackoff(TimeSpan? baseDelay = null)
+    {
+        _baseDelay = baseDelay ?? ConfigChangeToken.DefaultSettleDelay;
+    }
+
+    /// <summary>False while <paramref name="generationKey"/> is the failed generation and its retry time has not come.</summary>
+    public bool ShouldAttempt(string generationKey, DateTime nowUtc) =>
+        !string.Equals(generationKey, _failedKey, StringComparison.Ordinal) || nowUtc + TimerSlack >= _retryAtUtc;
+
+    /// <summary>
+    /// Records a failed load. <paramref name="first"/> is true for the first failure of this generation (show the banner);
+    /// the returned delay is when to try again, or null once the attempts are used up.
+    /// </summary>
+    public TimeSpan? RecordFailure(string generationKey, DateTime nowUtc, out bool first)
+    {
+        first = !string.Equals(generationKey, _failedKey, StringComparison.Ordinal);
+        if (first)
+        {
+            _failedKey = generationKey;
+            _attempts = 0;
+        }
+
+        _attempts++;
+        var delay = TimeSpan.FromTicks(Math.Min(_baseDelay.Ticks << Math.Min(_attempts - 1, 20), MaxDelay.Ticks));
+        _retryAtUtc = nowUtc + delay;
+        return _attempts >= MaxAttempts ? null : delay;
+    }
+
+    /// <summary>A load worked: nothing is pending any more.</summary>
+    public void RecordSuccess()
+    {
+        _failedKey = null;
+        _attempts = 0;
+        _retryAtUtc = default;
     }
 }
