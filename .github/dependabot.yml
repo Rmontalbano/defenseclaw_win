@@ -1,0 +1,23 @@
+# Weekly update pull requests for the two things this repository pins: the GitHub Actions in .github/workflows (each is a full
+# commit SHA with its release in a comment, which Dependabot maintains) and the NuGet packages of the four projects.
+# A new release waits a week before it is proposed; security updates for a known advisory are not delayed by that.
+# Enable "Dependabot security updates" under Settings > Code security to have advisories fixed as soon as one is published.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: nuget
+    directories:
+      - /DefenseClaw.Core
+      - /DefenseClaw.App
+      - /DefenseClaw.Tests
+      - /DefenseClaw.App.Tests
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

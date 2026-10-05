@@ -1,0 +1,72 @@
+name: Security
+
+# Two checks that need no secret and no write token:
+#   secret-scan       gitleaks and trufflehog over the WHOLE git history (a secret deleted from the tip is still in it)
+#   dependency-audit  a restore that fails on any known-vulnerable NuGet package, transitive ones included
+# They run on every push and pull request to main like CI does; the weekly run is what notices a NEW advisory, or a leak
+# pattern the scanners learned since, without anybody pushing.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    env:
+      # The scanners are the pinned release binaries, not a third-party action: the version, and the SHA-256 of the exact archive
+      # it must match (from the release's own checksums file), are both fixed here. A moved tag or a swapped asset fails the check.
+      # To upgrade a scanner: change its version and its SHA-256 together, and run the same command locally first.
+      GITLEAKS_VERSION: '8.30.1'
+      GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'  # gitleaks_8.30.1_linux_x64.tar.gz
+      TRUFFLEHOG_VERSION: '3.97.9'
+      TRUFFLEHOG_SHA256: '40377e6572495412fb9ba0bc21c9401f73b72f1d2afd11b9931bc4a5ed622866'  # trufflehog_3.97.9_linux_amd64.tar.gz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        run: |
+          curl --fail --silent --show-error --location --output gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf gitleaks.tar.gz gitleaks
+      # The default ruleset plus the narrow allowlist for the synthetic test credentials (.gitleaks.toml). --redact keeps any
+      # finding's value out of the log; the exit code is what fails the job.
+      - name: gitleaks
+        run: ./gitleaks git . --config .gitleaks.toml --redact --no-banner --exit-code 1
+      - name: Install trufflehog
+        run: |
+          curl --fail --silent --show-error --location --output trufflehog.tar.gz \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz"
+          echo "${TRUFFLEHOG_SHA256}  trufflehog.tar.gz" | sha256sum --check --strict
+          tar -xzf trufflehog.tar.gz trufflehog
+      # Verified credentials only (trufflehog tries what it finds, so a hit is a live secret, and a network hiccup cannot fail the
+      # job). The exclude file lists the two test files with credential-in-URL examples, which only ever give unverified findings.
+      - name: trufflehog
+        run: ./trufflehog git file://. --exclude-paths .trufflehog-exclude.txt --results=verified --fail --no-update --no-color
+
+  dependency-audit:
+    # CI's restore already fails on a vulnerable package whenever code is pushed; this is the run for the week nobody pushes.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '9.0.x'
+      # NuGetAudit mode "all" with NU1901-NU1904 as errors comes from Directory.Build.props, so this fails on a vulnerable package.
+      - name: Restore
+        run: dotnet restore DefenseClaw.Win.sln
+      - name: List what the audit sees
+        run: dotnet list DefenseClaw.Win.sln package --vulnerable --include-transitive

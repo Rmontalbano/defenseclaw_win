@@ -7,14 +7,25 @@ on:
   pull_request:
     branches: [main]
 
+# Every job gets a read-only token unless it asks for more; only the release job does (below). Nothing in this file reads a
+# repository secret, so a pull request, including one from a fork, runs with a read-only token and no secrets at all.
+permissions:
+  contents: read
+
+# Actions are pinned to a full commit SHA, with the release it stands for in the comment, so a moved or re-pointed tag cannot
+# change what runs here. Dependabot (.github/dependabot.yml) proposes the updates, and a test (RepositoryHardeningTests) fails
+# the build for any `uses:` that is not pinned.
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '9.0.x'
+      # Restore also audits every package, transitive ones included (Directory.Build.props): a known vulnerability fails here.
       - name: Restore
         run: dotnet restore DefenseClaw.Win.sln
       - name: Build
@@ -25,14 +36,21 @@ jobs:
         run: dotnet test DefenseClaw.Win.sln --no-build -c Release --logger "trx"
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Only a version tag pushed to this repository gets here: never a pull request (from a fork or not), never a branch push,
+    # and not a tag pushed in somebody's fork. That keeps the write token and the signing identity below out of reach of any
+    # code that has not been tagged by someone who can push tags here.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !github.event.repository.fork
     needs: build
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: write       # create the release and upload its assets
+      id-token: write       # sign the provenance attestation (Sigstore, keyless: the workflow's own identity)
+      attestations: write   # store the attestation with the repository
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '9.0.x'
       # ReadyToRun (not composite) is switched on by DefenseClaw.App.csproj for exactly this self-contained single-file
@@ -50,10 +68,23 @@ jobs:
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           } | Out-File publish/checksums.txt -Encoding utf8
           Get-Content publish/checksums.txt
+      # A signed statement, from this workflow run, of which commit built these exact files. Verify a download with
+      #   gh attestation verify <file> --repo <owner>/<repo>
+      # (see SECURITY.md). checksums.txt stays in the release as well: it is the plain-text way to check the exe.
+      # GitHub offers attestations for public repositories (a private one needs GitHub Enterprise Cloud), so while the
+      # repository is private this step is skipped instead of failing the release; it applies as soon as it is public.
+      - name: Attest build provenance
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            publish/*.exe
+            publish/checksums.txt
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             publish/*.exe
             publish/checksums.txt
           generate_release_notes: true
+          fail_on_unmatched_files: true
