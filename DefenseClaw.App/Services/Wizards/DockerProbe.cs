@@ -271,7 +271,7 @@ public sealed class DockerProbe : IDockerProbe
                     continue;
                 }
 
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                using var doc = JsonDocument.Parse(DefenseClaw.Core.IO.SharedFile.ReadAllText(path));
                 if (doc.RootElement.ValueKind == JsonValueKind.Object &&
                     doc.RootElement.TryGetProperty("wslEngineEnabled", out var value) &&
                     value.ValueKind is JsonValueKind.True or JsonValueKind.False)

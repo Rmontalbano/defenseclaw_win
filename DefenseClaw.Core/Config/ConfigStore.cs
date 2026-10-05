@@ -50,7 +50,7 @@ public sealed class ConfigStore
                 new Dictionary<string, string>(StringComparer.Ordinal), DateTimeOffset.UtcNow);
         }
 
-        return Parse(File.ReadAllText(path), path);
+        return Parse(DefenseClaw.Core.IO.SharedFile.ReadAllText(path), path);
     }
 
     public async Task<ConfigDocument> LoadAsync(CancellationToken cancellationToken = default)
@@ -62,7 +62,7 @@ public sealed class ConfigStore
                 new Dictionary<string, string>(StringComparer.Ordinal), DateTimeOffset.UtcNow);
         }
 
-        var text = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+        var text = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
         return Parse(text, path);
     }
 

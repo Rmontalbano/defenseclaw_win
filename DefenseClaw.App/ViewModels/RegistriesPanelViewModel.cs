@@ -687,7 +687,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             }
             else
             {
-                var text = await File.ReadAllTextAsync(path).ConfigureAwait(true);
+                var text = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path).ConfigureAwait(true);
                 message = ParseIndex(text, rows);
             }
         }

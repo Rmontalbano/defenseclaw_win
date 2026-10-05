@@ -113,7 +113,7 @@ public sealed class ClaudeSettingsReader
 
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(SettingsPath), ParseOptions);
+            using var document = JsonDocument.Parse(DefenseClaw.Core.IO.SharedFile.ReadAllText(SettingsPath), ParseOptions);
             return new ClaudeSettingsSnapshot
             {
                 Exists = true,

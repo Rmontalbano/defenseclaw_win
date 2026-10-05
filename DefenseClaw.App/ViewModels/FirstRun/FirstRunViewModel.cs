@@ -406,7 +406,7 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
             {
                 try
                 {
-                    found = await Task.Run(() => ConnectorOnboarding.ParseDetected(File.ReadAllText(path)), _lifetime.Token).ConfigureAwait(true);
+                    found = await Task.Run(() => ConnectorOnboarding.ParseDetected(DefenseClaw.Core.IO.SharedFile.ReadAllText(path)), _lifetime.Token).ConfigureAwait(true);
                     note = string.Empty;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

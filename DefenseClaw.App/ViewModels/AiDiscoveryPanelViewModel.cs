@@ -498,7 +498,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         {
             if (File.Exists(path))
             {
-                var raw = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(true);
+                var raw = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(true);
                 using var document = JsonDocument.Parse(raw);
                 var root = document.RootElement;
 
@@ -639,7 +639,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                 return;
             }
 
-            var raw = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(true);
+            var raw = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(true);
             using var document = JsonDocument.Parse(raw);
             var root = document.RootElement;
 
@@ -693,7 +693,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                 return;
             }
 
-            var raw = await File.ReadAllTextAsync(selectionPath, cancellationToken).ConfigureAwait(true);
+            var raw = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(selectionPath, cancellationToken).ConfigureAwait(true);
             using var document = JsonDocument.Parse(raw);
             var root = document.RootElement;
 

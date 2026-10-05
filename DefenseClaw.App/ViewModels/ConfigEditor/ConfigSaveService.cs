@@ -84,7 +84,7 @@ public sealed class ConfigSaveService
     {
         var path = _paths.ConfigFilePath;
         return File.Exists(path)
-            ? await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false)
+            ? await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false)
             : string.Empty;
     }
 
@@ -128,7 +128,7 @@ public sealed class ConfigSaveService
         {
             try
             {
-                var originalBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+                var originalBytes = await DefenseClaw.Core.IO.SharedFile.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
 
                 // The drift check above compared signatures a moment ago; the bytes read here are the ones that are
                 // about to be backed up and then replaced. If they are not the ones the editor loaded, something (the

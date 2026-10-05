@@ -68,7 +68,7 @@ public readonly record struct FileSignature(bool Exists, long Length, DateTime L
 
         try
         {
-            return Hash(File.ReadAllBytes(path));
+            return Hash(DefenseClaw.Core.IO.SharedFile.ReadAllBytes(path));
         }
         catch (IOException)
         {

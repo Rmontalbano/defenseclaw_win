@@ -461,7 +461,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             try
             {
                 rawText = File.Exists(_paths.ConfigFilePath)
-                    ? await File.ReadAllTextAsync(_paths.ConfigFilePath, cancellationToken).ConfigureAwait(true)
+                    ? await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(_paths.ConfigFilePath, cancellationToken).ConfigureAwait(true)
                     : string.Empty;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

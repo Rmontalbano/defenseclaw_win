@@ -59,7 +59,7 @@ public sealed partial class OverviewPanelViewModel
             var (agents, detected) = await Task.Run(
                 () =>
                 {
-                    var text = File.ReadAllText(path);
+                    var text = DefenseClaw.Core.IO.SharedFile.ReadAllText(path);
                     return (OverviewAgentReader.Parse(text, now), OverviewDetectedConnectors.Parse(text));
                 },
                 cancellationToken).ConfigureAwait(true);

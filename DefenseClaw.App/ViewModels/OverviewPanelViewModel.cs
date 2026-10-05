@@ -454,7 +454,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             }
             else
             {
-                var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(true);
+                var json = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(true);
                 _doctorSnapshot = DoctorCacheReader.Parse(json);
                 DoctorReadError = string.Empty;
                 DoctorHasReadError = false;
