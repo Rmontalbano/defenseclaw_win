@@ -7,8 +7,8 @@ using Microsoft.Data.Sqlite;
 namespace DefenseClaw.App.Tests.Overview;
 
 /// <summary>
-/// The Enforcement card (CUST-205): four tiles, each a button into the panel its number comes from. The numbers are the tray flyout's (the newest
-/// 500 audit rows, <see cref="RecentAuditMetricsReader"/>) and the one unacknowledged-findings count (<see cref="AlertCountsService"/>); scoped to
+/// The Enforcement card (CUST-205): four tiles, each a button into the panel its number comes from. The numbers are the TUI's (persisted all-time totals,
+/// <see cref="ConnectorHookTotalsReader"/>) and the one unacknowledged-findings count (<see cref="AlertCountsService"/>); scoped to
 /// a connector they narrow to it and say what the fleet has. Synthetic data only (<see cref="OverviewScene"/>).
 /// </summary>
 [Collection(UiCollection.Name)]
@@ -81,10 +81,10 @@ public sealed class OverviewEnforcementTests : IDisposable
         Assert.Equal(string.Empty, vm.EnforcementUpdatedText);
     }
 
-    // ---- Hook calls and blocks: the newest 500 rows, the tray's reader ----
+    // ---- Hook calls and blocks: all-time totals, the TUI's (CUST-258) ----
 
     [Fact]
-    public async Task Hook_calls_and_blocks_are_the_newest_window_counted_like_the_tray()
+    public async Task Hook_calls_and_blocks_are_the_persisted_totals_with_the_TUIs_captions()
     {
         var vm = Panel();
         _scene.Publish(OverviewScene.Snapshot());
@@ -93,10 +93,10 @@ public sealed class OverviewEnforcementTests : IDisposable
         await vm.RefreshMetricsAsync(force: true, CancellationToken.None);
 
         Assert.Equal("10", vm.HookCallsTile.Value);
-        Assert.Equal("2", vm.BlocksTile.Value);
+        Assert.Equal("1", vm.BlocksTile.Value);
         Assert.Equal("Hook Calls (2 connectors)", vm.HookCallsTile.Title);
-        Assert.Equal("Latest 500 audit events", vm.HookCallsTile.Caption);
-        Assert.Equal("Latest 500 decisions", vm.BlocksTile.Caption);
+        Assert.Equal("recent a9 w0 b1", vm.HookCallsTile.Caption);
+        Assert.Equal("top: (unknown) ×1", vm.BlocksTile.Caption);
 
         // Blue for the count that is neither good nor bad news, red once something was blocked.
         Assert.Equal("Accent", vm.HookCallsTile.ToneKey);
@@ -148,15 +148,47 @@ public sealed class OverviewEnforcementTests : IDisposable
 
         Assert.Equal("2", vm.HookCallsTile.Value);
         Assert.Equal("Hook Calls (hermes)", vm.HookCallsTile.Title);
-        Assert.Equal("fleet 10", vm.HookCallsTile.Caption);
-        Assert.Equal("1", vm.BlocksTile.Value);
+        Assert.Equal("recent a2 w0 b0 · fleet 10", vm.HookCallsTile.Caption);
+        Assert.Equal("0", vm.BlocksTile.Value);
+        Assert.Equal("Neutral", vm.BlocksTile.ToneKey);
         Assert.Equal("Blocks (hermes)", vm.BlocksTile.Title);
-        Assert.Equal("fleet 2", vm.BlocksTile.Caption);
+        Assert.Equal("no blocks yet · fleet 1", vm.BlocksTile.Caption);
 
         Assert.True(_scene.Services.ConnectorScope.Set("claudecode"));
         vm.RenderEnforcementCards();
         Assert.Equal("8", vm.HookCallsTile.Value);
         Assert.Equal("1", vm.BlocksTile.Value);
+    }
+
+    [Fact]
+    public async Task The_totals_go_past_the_old_500_row_window()
+    {
+        // 1,200 hook rows on top of the scene's ten: the old tile would have stopped at 500.
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _scene.Temp.File("audit.db"), Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = "INSERT INTO audit_events (id, timestamp, action, target, actor, details, connector) VALUES ($id, $ts, 'connector-hook', '', 'x', 'action=allow mode=observe', 'claudecode')";
+            var id = insert.Parameters.Add("$id", SqliteType.Text);
+            var ts = insert.Parameters.Add("$ts", SqliteType.Text);
+            for (var i = 0; i < 1200; i++)
+            {
+                id.Value = "bulk-" + i;
+                ts.Value = "2026-01-01T00:00:00." + i.ToString("D7", System.Globalization.CultureInfo.InvariantCulture) + "Z";
+                _ = insert.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+
+        SqliteConnection.ClearAllPools();
+        var vm = Panel();
+        await vm.RefreshMetricsAsync(force: true, CancellationToken.None);
+
+        Assert.Equal(1210.ToString("N0", System.Globalization.CultureInfo.CurrentCulture), vm.HookCallsTile.Value);
+        Assert.StartsWith("recent a499", vm.HookCallsTile.Caption, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -204,13 +236,13 @@ public sealed class OverviewEnforcementTests : IDisposable
 
         Assert.Equal("2", vm.FindingsTile.Value);
         Assert.Equal("High", vm.FindingsTile.ToneKey);
-        Assert.Equal("Unacknowledged", vm.FindingsTile.Caption);
+        Assert.Equal("C0 H1 M1 L0", vm.FindingsTile.Caption);
 
         _scene.Services.ConnectorScope.Set("hermes");
         vm.RenderEnforcementCards();
         Assert.Equal("1", vm.FindingsTile.Value);
         Assert.Equal("Findings (hermes)", vm.FindingsTile.Title);
-        Assert.Equal("fleet 2", vm.FindingsTile.Caption);
+        Assert.Equal("C0 H0 M1 L0 · fleet 2", vm.FindingsTile.Caption);
     }
 
     // ---- Guardrail ----

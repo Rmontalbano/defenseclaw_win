@@ -454,6 +454,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0"
                                                                Style="{StaticResource DcCaption}"
+                                                               TextWrapping="Wrap"
                                                                Text="{Binding Caption}" />
                                                     <ctl:DcSymbolIcon Grid.Column="1"
                                                                       Symbol="ChevronRight16"

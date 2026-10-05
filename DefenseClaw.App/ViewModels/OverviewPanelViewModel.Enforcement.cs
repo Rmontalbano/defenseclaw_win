@@ -16,25 +16,31 @@ namespace DefenseClaw.App.ViewModels;
 /// </summary>
 public sealed partial class OverviewPanelViewModel
 {
-    /// <summary>How often the poll loop re-reads the hook-call and block counts: a few milliseconds of index walk, so far cheaper than <see cref="DataRefreshInterval"/>.</summary>
-    internal static readonly TimeSpan MetricsRefreshInterval = TimeSpan.FromSeconds(15);
+    /// <summary>
+    /// How often the poll loop re-reads the all-time hook-call and block totals. The totals are an index group count plus the rows after a
+    /// watermark (a covering-index walk of ~0.3 s on the 10 GB audit.db), so this is a minute, not the 15 s the 500-row window used to take.
+    /// </summary>
+    internal static readonly TimeSpan MetricsRefreshInterval = TimeSpan.FromSeconds(60);
+
+    /// <summary>How soon the next read follows one that did not finish the first block scan; only until the tally has caught up once.</summary>
+    internal static readonly TimeSpan MetricsCatchUpInterval = TimeSpan.FromSeconds(2);
 
     private static readonly TimeSpan MetricsTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>"Updated just now" until a read is this old; after that the age is spelled out.</summary>
     private static readonly TimeSpan JustNow = TimeSpan.FromSeconds(10);
 
-    /// <summary>The same reader the tray flyout uses, so the two surfaces count the same rows the same way.</summary>
-    private readonly RecentAuditMetricsReader _metricsReader;
+    /// <summary>The TUI's all-time totals (<c>connector_hook_event_stats</c>): hook calls exact, blocks tallied incrementally.</summary>
+    private readonly ConnectorHookTotalsReader _metricsReader;
 
-    private RecentAuditMetrics? _metrics;
+    private ConnectorHookTotals? _metrics;
     private string? _metricsProblem;
     private DateTimeOffset? _metricsAt;
     private MonotonicStamp _metricsStamp = MonotonicStamp.Never;
     private int _metricsReading;
 
     /// <summary>The audit window reader (how many times it has read is what the idle-cost tests hold still).</summary>
-    internal RecentAuditMetricsReader MetricsReader => _metricsReader;
+    internal ConnectorHookTotalsReader MetricsReader => _metricsReader;
 
     /// <summary>The hourly reader; see <see cref="MetricsReader"/>.</summary>
     internal HourlyActivityReader HourlyReader => _hourlyReader;
@@ -111,33 +117,72 @@ public sealed partial class OverviewPanelViewModel
 
         var scope = Services.ConnectorScope.Current;
         var roster = Math.Max(1, Services.ConnectorScope.Connectors.Count);
-        var window = RecentAuditMetricsReader.DefaultWindow.ToString(CultureInfo.InvariantCulture);
 
-        // ---- Hook Calls and Blocks: the newest 500 audit rows, like the Mac and the tray.
+        // ---- Hook Calls and Blocks: persisted all-time totals, as the TUI counts them; the captions read the newest 500 hook rows.
         var hooks = HookCallsTile;
         var blocks = BlocksTile;
-        if (_metrics is { Status: RecentAuditMetricsStatus.Ok } metrics)
+        if (_metrics is { Status: ConnectorHookTotalsStatus.Ok } metrics)
         {
-            var hookValue = scope is null ? metrics.HookCalls : metrics.For(scope).HookCalls;
-            var blockValue = scope is null ? metrics.Blocks : metrics.For(scope).Blocks;
+            var fleet = metrics.Fleet;
+            var counts = scope is null ? fleet : metrics.For(scope);
+            var recent = scope is null ? metrics.Recent : metrics.RecentFor(scope);
+
+            var callParts = new List<string>();
+            if (recent.Total > 0)
+            {
+                callParts.Add($"recent a{recent.Allow} w{recent.Alert} b{recent.Block}");
+                if (recent.TopHook.Length > 0)
+                {
+                    callParts.Add($"top: {Shorten(recent.TopHook, 22)}");
+                }
+            }
+            else if (fleet.Calls == 0)
+            {
+                callParts.Add("no hook calls yet");
+            }
+
+            if (scope is not null)
+            {
+                callParts.Add($"fleet {Count(fleet.Calls)}");
+            }
+
+            var blockParts = new List<string>();
+            if (!metrics.BlocksComplete)
+            {
+                var percent = metrics.HookRows <= 0 ? 0 : (int)Math.Min(99, 100 * metrics.BlocksScanned / metrics.HookRows);
+                blockParts.Add($"counting… {percent}%");
+            }
+            else if (recent.TopBlockedTarget.Length > 0)
+            {
+                blockParts.Add($"top: {Shorten(recent.TopBlockedTarget, 22)} ×{recent.TopBlockedCount}");
+            }
+            else
+            {
+                blockParts.Add(counts.Blocks > 0 ? $"{Count(counts.Blocks)} persisted" : "no blocks yet");
+            }
+
+            if (scope is not null)
+            {
+                blockParts.Add($"fleet {Count(fleet.Blocks)}");
+            }
 
             hooks.Set(
                 scope is null ? $"Hook Calls ({roster} connector{(roster == 1 ? string.Empty : "s")})" : $"Hook Calls ({scope})",
-                Count(hookValue),
+                Count(counts.Calls),
                 "Accent",
-                scope is null ? $"Latest {window} audit events" : $"fleet {Count(metrics.HookCalls)}");
+                string.Join(" · ", callParts));
             blocks.Set(
                 scope is null ? "Blocks" : $"Blocks ({scope})",
-                Count(blockValue),
-                blockValue > 0 ? "Bad" : "Neutral",
-                scope is null ? $"Latest {window} decisions" : $"fleet {Count(metrics.Blocks)}");
+                Count(counts.Blocks) + (metrics.BlocksComplete ? string.Empty : "+"),
+                counts.Blocks > 0 ? "Bad" : "Neutral",
+                string.Join(" · ", blockParts));
         }
         else
         {
-            var caption = _metrics is { Status: RecentAuditMetricsStatus.NoDatabase }
+            var caption = _metrics is { Status: ConnectorHookTotalsStatus.NoDatabase }
                 ? "No audit database yet"
                 : _metricsProblem ?? "Reading audit.db…";
-            var zero = _metrics is { Status: RecentAuditMetricsStatus.NoDatabase } ? "0" : "—";
+            var zero = _metrics is { Status: ConnectorHookTotalsStatus.NoDatabase } ? "0" : "—";
             hooks.Set(scope is null ? $"Hook Calls ({roster} connector{(roster == 1 ? string.Empty : "s")})" : $"Hook Calls ({scope})", zero, "Neutral", caption);
             blocks.Set(scope is null ? "Blocks" : $"Blocks ({scope})", zero, "Neutral", caption);
         }
@@ -150,11 +195,23 @@ public sealed partial class OverviewPanelViewModel
             var counts = service.Current;
             var value = scope is null ? counts.Total : counts.TallyFor(Services.ConnectorScope.Allows).Total;
             var text = Count(value) + (counts.HasMore ? "+" : string.Empty);
+            var tally = scope is null ? counts.Tally : counts.TallyFor(Services.ConnectorScope.Allows);
+            var findingParts = new List<string> { $"C{tally.Critical} H{tally.High} M{tally.Medium} L{tally.Low}" };
+            if (TopFinding(counts, scope) is { } top)
+            {
+                findingParts.Add($"top: {Shorten(top.Target ?? string.Empty, 18)} {top.Severity.ToString()[0]}");
+            }
+
+            if (scope is not null)
+            {
+                findingParts.Add($"fleet {AlertCountPresentation.Compact(counts)}");
+            }
+
             findings.Set(
                 scope is null ? "Findings" : $"Findings ({scope})",
                 text,
                 value > 0 ? "High" : "Neutral",
-                scope is null ? "Unacknowledged" : $"fleet {AlertCountPresentation.Compact(counts)}");
+                string.Join(" · ", findingParts));
         }
         else
         {
@@ -198,6 +255,31 @@ public sealed partial class OverviewPanelViewModel
 
     private static string Count(int value) => value.ToString("N0", CultureInfo.CurrentCulture);
 
+    private static string Count(long value) => value.ToString("N0", CultureInfo.CurrentCulture);
+
+    /// <summary>Cuts <paramref name="text"/> to <paramref name="max"/> characters with an ellipsis, as the TUI's tile details do.</summary>
+    private static string Shorten(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
+
+    /// <summary>The highest-severity queued finding (the newest of equals) in scope: the TUI's "top: target S"; null when none has a target.</summary>
+    private AlertQueueItem? TopFinding(AlertCounts counts, string? scope)
+    {
+        AlertQueueItem? best = null;
+        foreach (var item in counts.Newest)
+        {
+            if (string.IsNullOrWhiteSpace(item.Target) || (scope is not null && !Services.ConnectorScope.Allows(item.Connector)))
+            {
+                continue;
+            }
+
+            if (best is null || item.Severity > best.Severity)
+            {
+                best = item;
+            }
+        }
+
+        return best;
+    }
+
     /// <summary>
     /// Reads the hook-call and block counts when they are due (<see cref="MetricsRefreshInterval"/>), or at once when forced. One read at a
     /// time; a failure keeps the tile honest ("—" and the reason) instead of showing the last number as current. Stoppable: the panel's
@@ -205,7 +287,9 @@ public sealed partial class OverviewPanelViewModel
     /// </summary>
     internal async Task RefreshMetricsAsync(bool force, CancellationToken cancellationToken)
     {
-        if (!force && !_metricsStamp.HasElapsed(MetricsRefreshInterval))
+        // A first block scan that has not caught up yet is read again soon (each read does a bounded slice); once it has, once a minute.
+        var catchingUp = _metrics is { Status: ConnectorHookTotalsStatus.Ok, BlocksComplete: false };
+        if (!force && !_metricsStamp.HasElapsed(catchingUp ? MetricsCatchUpInterval : MetricsRefreshInterval))
         {
             return;
         }
@@ -218,7 +302,11 @@ public sealed partial class OverviewPanelViewModel
         try
         {
             _metricsStamp = MonotonicStamp.Now();
-            _ = RefreshSilentBypassAsync(cancellationToken);
+            if (!catchingUp)
+            {
+                _ = RefreshSilentBypassAsync(cancellationToken);
+            }
+
             _metrics = await _metricsReader.ReadAsync(MetricsTimeout, cancellationToken).ConfigureAwait(true);
             _metricsProblem = null;
             _metricsAt = DateTimeOffset.UtcNow;

@@ -195,7 +195,7 @@ internal sealed class OverviewScene : IDisposable
             _ = insert.ExecuteNonQuery();
         }
 
-        static string Hook(string decision) => $"connector=claudecode result=ok action={decision} raw_action={decision} severity=NONE mode=observe";
+        static string Hook(string decision, string mode = "observe") => $"connector=claudecode result=ok action={decision} raw_action={decision} severity=NONE mode={mode}";
 
         for (var i = 0; i < 4; i++)
         {
@@ -212,7 +212,7 @@ internal sealed class OverviewScene : IDisposable
             Add(hourStart.AddHours(-3).AddMinutes(1 + i), "connector-hook", "claudecode", Hook("allow"));
         }
 
-        Add(hourStart.AddHours(-3).AddMinutes(10), "connector-hook", "claudecode", Hook("block"));
+        Add(hourStart.AddHours(-3).AddMinutes(10), "connector-hook", "claudecode", Hook("block", "action"));
         Add(hourStart.AddHours(-5).AddMinutes(1), "guardrail-block", "hermes", null);
 
         Add(hourStart.AddHours(-2).AddMinutes(1), "scan-finding", "claudecode", null, severity: "HIGH", bucket: "security.finding");

@@ -58,17 +58,19 @@ public sealed class TestAuditDatabase : IDisposable
         string? eventName = null,
         string? toolName = null,
         string? sessionId = null,
-        string actor = "audit_logger")
+        string actor = "audit_logger",
+        long? enforced = null,
+        string target = "")
     {
         using var connection = OpenWritable();
         using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO audit_events
                 (id, timestamp, action, target, actor, details, severity,
-                 structured_json, bucket, connector, event_name, tool_name, session_id)
+                 structured_json, bucket, connector, event_name, tool_name, session_id, enforced)
             VALUES
-                ($id, $timestamp, $action, '', $actor, $details, $severity,
-                 $structured, $bucket, $connector, $eventName, $toolName, $sessionId)
+                ($id, $timestamp, $action, $target, $actor, $details, $severity,
+                 $structured, $bucket, $connector, $eventName, $toolName, $sessionId, $enforced)
             """;
 
         command.Parameters.AddWithValue("$id", id);
@@ -83,6 +85,8 @@ public sealed class TestAuditDatabase : IDisposable
         command.Parameters.AddWithValue("$eventName", (object?)eventName ?? DBNull.Value);
         command.Parameters.AddWithValue("$toolName", (object?)toolName ?? DBNull.Value);
         command.Parameters.AddWithValue("$sessionId", (object?)sessionId ?? DBNull.Value);
+        command.Parameters.AddWithValue("$enforced", (object?)enforced ?? DBNull.Value);
+        command.Parameters.AddWithValue("$target", target);
         command.ExecuteNonQuery();
     }
 
