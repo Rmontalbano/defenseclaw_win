@@ -490,7 +490,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// The table holds every scan ever recorded (millions of rows), so "the signals" always means
     /// one scan's worth, chosen by <see cref="DefenseClaw.Core.Inventory.InventoryReader"/>.
     /// </summary>
-    private async Task<(IReadOnlyList<DiscoverySignalRecord> Signals, DiscoverySourceInfo Source)> LoadSignalsAsync(
+    internal async Task<(IReadOnlyList<DiscoverySignalRecord> Signals, DiscoverySourceInfo Source)> LoadSignalsAsync(
         CancellationToken cancellationToken)
     {
         var path = Services.Paths.AiDiscoveryStatePath;
@@ -507,7 +507,13 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                 {
                     foreach (var property in signalsElement.EnumerateObject())
                     {
-                        signals.Add(MapSignalFromState(property.Value));
+                        // A value that is not an object is not a signal: reading properties off it throws
+                        // InvalidOperationException, which the catch below does not handle and which would leave the
+                        // panel empty with no explanation.
+                        if (property.Value.ValueKind == JsonValueKind.Object)
+                        {
+                            signals.Add(MapSignalFromState(property.Value));
+                        }
                     }
                 }
 

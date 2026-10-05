@@ -38,9 +38,13 @@ public enum CredentialPresence
 /// </summary>
 public sealed class WizardCredentials
 {
-    /// <summary>The shape of an environment variable name the CLI accepts and the shell cannot misread.</summary>
+    /// <summary>
+    /// The shape of an environment variable name the CLI accepts and the shell cannot misread. Anchored with <c>\z</c>, not
+    /// <c>$</c>: in .NET <c>$</c> also matches before a final newline, so <c>"NAME\n"</c> would pass and then be interpolated into
+    /// the <c>cmd /c</c> line <see cref="OpenKeysSetTerminal"/> builds, where a newline ends the command.
+    /// </summary>
     private static readonly Regex NamePattern = new(
-        "^[A-Za-z_][A-Za-z0-9_]*$",
+        @"^[A-Za-z_][A-Za-z0-9_]*\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
 

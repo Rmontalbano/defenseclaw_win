@@ -699,7 +699,12 @@ public sealed class DefenseClawPaths
         return text.Contains('%') ? System.Environment.ExpandEnvironmentVariables(text) : text;
     }
 
-    /// <summary><paramref name="first"/> then whatever of <paramref name="then"/> it lacks, compared ignoring case and trailing separators.</summary>
+    /// <summary>
+    /// <paramref name="first"/> then whatever of <paramref name="then"/> it lacks, compared ignoring case and trailing separators.
+    /// Only fully qualified entries (<c>C:\tools</c>, <c>\\server\share</c>) are kept: a relative one (<c>.</c>, <c>bin</c>,
+    /// <c>..\x</c>) would be resolved against this process's current directory, which is wherever the app happened to be
+    /// started from, so a <c>defenseclaw.exe</c> planted there would be run as the CLI. <c>cmd.exe</c> searches such entries; this app does not.
+    /// </summary>
     private static IReadOnlyList<string> MergeSearchPaths(IEnumerable<string> first, IEnumerable<string> then)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -707,7 +712,7 @@ public sealed class DefenseClawPaths
 
         foreach (var entry in first.Concat(then))
         {
-            if (string.IsNullOrWhiteSpace(entry))
+            if (string.IsNullOrWhiteSpace(entry) || !Path.IsPathFullyQualified(entry))
             {
                 continue;
             }

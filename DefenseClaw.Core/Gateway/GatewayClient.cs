@@ -106,6 +106,15 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         _verifyPeer = verifyPeer;
     }
 
+    /// <summary>
+    /// The handler behind <see cref="Create"/>. <b>No redirects:</b> the token rides the request, and a 3xx from whatever answered
+    /// must not be able to carry it to another address (or downgrade it to another scheme). <b>No proxy:</b> this is a plain-HTTP
+    /// request to this machine, and <see cref="HttpClient.DefaultProxy"/> (HTTP_PROXY / ALL_PROXY, or the system proxy) does not
+    /// exempt loopback - measured: with HTTP_PROXY set, a request for <c>http://127.0.0.1:PORT/</c> goes to the proxy, bearer header
+    /// included, in the clear, and never reaches the gateway.
+    /// </summary>
+    internal static SocketsHttpHandler CreateHandler() => new() { AllowAutoRedirect = false, UseProxy = false };
+
     /// <summary>Builds a client for the loopback sidecar on <paramref name="port"/>.</summary>
     public static GatewayClient Create(
         int port,
@@ -113,9 +122,7 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         TimeSpan? timeout = null,
         Func<PortOwnerTrust>? verifyPeer = null)
     {
-        // No redirects: the token rides the request, and a 3xx from whatever answered must not
-        // be able to carry it to another address (or downgrade it to another scheme).
-        var handler = new SocketsHttpHandler { AllowAutoRedirect = false };
+        var handler = CreateHandler();
         var http = new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = new Uri($"http://127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}/"),
