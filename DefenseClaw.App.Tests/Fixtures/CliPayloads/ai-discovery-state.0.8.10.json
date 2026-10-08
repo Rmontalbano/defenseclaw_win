@@ -1,0 +1,249 @@
+{
+  "version": 2,
+  "updated_at": "2026-10-08T15:27:04.1234567Z",
+  "signals": {
+    "fp-agent-process-1": {
+      "category": "active_process",
+      "confidence": 0.95,
+      "detector": "process",
+      "evidence": [
+        { "type": "process", "match_kind": "exact", "quality": 1, "value_hash": "a1f0c3", "basename": "example-agent.exe" }
+      ],
+      "evidence_hash": "e1a1",
+      "evidence_types": ["process"],
+      "fingerprint": "fp-agent-process-1",
+      "first_seen": "2026-10-08T15:26:10.5000000Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "last_active_at": "2026-10-08T15:27:04.1234567Z",
+      "name": "example-agent-process",
+      "product": "Example Agent",
+      "signal_id": "sig-agent-process-1",
+      "signature_id": "example-agent",
+      "source": "sidecar",
+      "state": "new",
+      "vendor": "Example Corp",
+      "runtime": {
+        "comm": "example-agent.exe",
+        "pid": 4242,
+        "ppid": 1000,
+        "started_at": "2026-10-08T12:15:04Z",
+        "uptime_sec": 11520,
+        "user": "example-user"
+      }
+    },
+    "fp-agent-process-2": {
+      "category": "active_process",
+      "confidence": 0.95,
+      "detector": "process",
+      "evidence": [
+        { "type": "process", "match_kind": "exact", "quality": 1, "value_hash": "b2e1d4", "basename": "example-agent.exe" }
+      ],
+      "evidence_hash": "e1a2",
+      "evidence_types": ["process"],
+      "fingerprint": "fp-agent-process-2",
+      "first_seen": "2026-10-08T14:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "last_active_at": "2026-10-08T15:24:04Z",
+      "name": "example-agent-process",
+      "product": "Example Agent",
+      "signal_id": "sig-agent-process-2",
+      "signature_id": "example-agent",
+      "source": "sidecar",
+      "state": "seen",
+      "vendor": "Example Corp",
+      "runtime": {
+        "comm": "example-agent.exe",
+        "pid": 4300,
+        "ppid": 1000,
+        "started_at": "2026-10-08T15:25:34Z",
+        "uptime_sec": 90,
+        "user": "example-user"
+      }
+    },
+    "fp-agent-config": {
+      "category": "supported_connector",
+      "confidence": 0.9,
+      "detector": "config",
+      "evidence": [
+        { "type": "config_path", "match_kind": "exact", "quality": 1, "value_hash": "c3d2e5", "basename": "settings.json", "path_hash": "9f8e7d" }
+      ],
+      "evidence_hash": "e1a3",
+      "evidence_types": ["config_path"],
+      "fingerprint": "fp-agent-config",
+      "first_seen": "2026-09-01T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "name": "example-agent-config",
+      "product": "Example Agent",
+      "signal_id": "sig-agent-config",
+      "signature_id": "example-agent",
+      "source": "sidecar",
+      "state": "seen",
+      "supported_connector": "exampleagent",
+      "vendor": "Example Corp"
+    },
+    "fp-agent-mcp": {
+      "category": "mcp_server",
+      "confidence": 0.85,
+      "detector": "mcp",
+      "evidence": [
+        { "type": "mcp_server", "match_kind": "substring", "quality": 0.8, "value_hash": "d4e3f6" }
+      ],
+      "evidence_hash": "e1a4",
+      "evidence_types": ["mcp_server"],
+      "fingerprint": "fp-agent-mcp",
+      "first_seen": "2026-09-15T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "name": "example-agent-mcp",
+      "product": "Example Agent",
+      "signal_id": "sig-agent-mcp",
+      "signature_id": "example-agent",
+      "source": "sidecar",
+      "state": "changed",
+      "vendor": "Example Corp"
+    },
+    "fp-sdk": {
+      "category": "package_dependency",
+      "component": { "ecosystem": "pypi", "framework": "Example Python SDK", "name": "example-sdk", "version": "1.4.2" },
+      "confidence": 0.9,
+      "detector": "package_manifest",
+      "evidence": [
+        { "type": "package_manifest", "match_kind": "exact", "quality": 1, "value_hash": "e5f4a7", "basename": "requirements.txt", "path_hash": "1a2b3c" }
+      ],
+      "evidence_hash": "e1a5",
+      "evidence_types": ["package_manifest"],
+      "fingerprint": "fp-sdk",
+      "first_seen": "2026-08-20T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "name": "example-sdk",
+      "product": "Example SDK",
+      "signal_id": "sig-sdk",
+      "signature_id": "example-sdk",
+      "source": "sidecar",
+      "state": "seen",
+      "vendor": "Example Corp",
+      "version": "1.4.2"
+    },
+    "fp-contoso-cli": {
+      "category": "ai_cli",
+      "confidence": 0.7,
+      "detector": "binary",
+      "evidence": [
+        { "type": "binary", "match_kind": "exact", "quality": 1, "value_hash": "f6a5b8", "basename": "contoso.exe" }
+      ],
+      "evidence_hash": "e1a6",
+      "evidence_types": ["binary"],
+      "fingerprint": "fp-contoso-cli",
+      "first_seen": "2026-07-01T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "name": "contoso-cli",
+      "product": "Contoso CLI",
+      "signal_id": "sig-contoso-cli",
+      "signature_id": "contoso-cli",
+      "source": "sidecar",
+      "state": "seen",
+      "vendor": "Contoso Tools"
+    },
+    "fp-legacy-model-signal": {
+      "category": "local_model",
+      "confidence": 0.6,
+      "detector": "model_file",
+      "evidence": [],
+      "evidence_hash": "e1a7",
+      "evidence_types": ["model_file"],
+      "fingerprint": "fp-legacy-model-signal",
+      "first_seen": "2026-07-01T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "name": "legacy-model-signal",
+      "product": "Legacy Model Signal",
+      "signal_id": "sig-legacy-model-signal",
+      "signature_id": "legacy-model",
+      "source": "sidecar",
+      "state": "seen",
+      "vendor": "Local"
+    },
+    "fp-model-llm-a": {
+      "category": "local_model",
+      "confidence": 0.9,
+      "detector": "model_file",
+      "evidence": [
+        { "type": "model_file", "match_kind": "exact", "quality": 1, "value_hash": "0a1b2c", "basename": "example-llm-7b-q4.gguf", "path_hash": "3d4e5f" }
+      ],
+      "evidence_hash": "e1b1",
+      "evidence_types": ["model_file"],
+      "fingerprint": "fp-model-llm-a",
+      "first_seen": "2026-09-01T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "model": { "format": "gguf", "id": "example-llm-7b-q4", "provider": "filesystem", "size_bytes": 4368439296, "status": "installed" },
+      "name": "local-model-artifact",
+      "product": "Local Model Artifact",
+      "signal_id": "sig-model-llm-a",
+      "signature_id": "local-model-artifact",
+      "source": "sidecar",
+      "state": "seen",
+      "vendor": "Local"
+    },
+    "fp-model-llm-b": {
+      "category": "local_model",
+      "confidence": 0.9,
+      "detector": "model_file",
+      "evidence": [
+        { "type": "model_file", "match_kind": "exact", "quality": 1, "value_hash": "0a1b2d", "basename": "Example-LLM-7B-Q4.gguf", "path_hash": "3d4e60" }
+      ],
+      "evidence_hash": "e1b2",
+      "evidence_types": ["model_file"],
+      "fingerprint": "fp-model-llm-b",
+      "first_seen": "2026-09-02T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "model": { "format": "gguf", "id": "Example-LLM-7B-Q4", "provider": "filesystem", "size_bytes": 4368439296, "status": "installed" },
+      "name": "local-model-artifact",
+      "product": "Local Model Artifact",
+      "signal_id": "sig-model-llm-b",
+      "signature_id": "local-model-artifact",
+      "source": "sidecar",
+      "state": "seen",
+      "vendor": "Local"
+    },
+    "fp-model-embed": {
+      "category": "local_model",
+      "confidence": 0.9,
+      "detector": "model_file",
+      "evidence": [
+        { "type": "model_file", "match_kind": "exact", "quality": 1, "value_hash": "0a1b2e", "basename": "tiny-embed.onnx", "path_hash": "3d4e61" }
+      ],
+      "evidence_hash": "e1b3",
+      "evidence_types": ["model_file"],
+      "fingerprint": "fp-model-embed",
+      "first_seen": "2026-10-08T15:26:10Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "model": { "format": "onnx", "id": "tiny-embed", "provider": "filesystem", "size_bytes": 90000000, "status": "installed" },
+      "name": "local-model-artifact",
+      "product": "Local Model Artifact",
+      "signal_id": "sig-model-embed",
+      "signature_id": "local-model-artifact",
+      "source": "sidecar",
+      "state": "new",
+      "vendor": "Local"
+    },
+    "fp-model-voice": {
+      "category": "local_model",
+      "confidence": 0.7,
+      "detector": "model_file",
+      "evidence": [
+        { "type": "model_file", "match_kind": "heuristic", "quality": 0.5, "value_hash": "0a1b2f", "basename": "voice-small.tflite", "path_hash": "3d4e62" }
+      ],
+      "evidence_hash": "e1b4",
+      "evidence_types": ["model_file"],
+      "fingerprint": "fp-model-voice",
+      "first_seen": "2026-09-05T09:00:00Z",
+      "last_seen": "2026-10-08T15:27:04.1234567Z",
+      "model": { "format": "tflite", "id": "voice-small", "provider": "filesystem", "size_bytes": 25000000, "status": "installed" },
+      "name": "local-model-artifact",
+      "product": "Local Model Artifact",
+      "signal_id": "sig-model-voice",
+      "signature_id": "local-model-artifact",
+      "source": "sidecar",
+      "state": "seen",
+      "vendor": "Local"
+    }
+  }
+}

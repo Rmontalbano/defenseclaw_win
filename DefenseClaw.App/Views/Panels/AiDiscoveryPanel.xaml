@@ -8,12 +8,79 @@
              d:DataContext="{d:DesignInstance Type=vm:AiDiscoveryPanelViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             panels:CompactLayout.Below="960">
     <!--
-        Migrated to the shared design system (Themes\DefenseClaw.xaml); no local styles.
-        Order is deliberate: coverage first (what was looked at, and when), then what was found, then
-        the runtime section, then where the data came from.
+        Migrated to the shared design system (Themes\DefenseClaw.xaml); the only local styles are the page's placement beside the
+        inspector and two data templates shared by the cards and the inspector.
+        Order is deliberate: coverage first (what was looked at, and when), then what was found (the latest scan's counts, a Products |
+        Models switch, and the list it picks), then the runtime section, then where the data came from.
+
+        Products are the cards. Models are a table with a flush inspector (ctl:DcInspector) that exists only while a model is selected:
+        with none the page takes the whole width, with one the two split, and on a narrow panel (CompactLayout, under 960 px) the
+        inspector replaces the page until it is closed (Esc, or its X). Everything the data does not carry is left out - the Modality
+        column and filter when no model names a modality, an identity or presence band on a card whose components have none, a runtime
+        line on a signal that has no process - so a DefenseClaw 0.8.10 install gets exactly what its files and database hold.
     -->
+    <UserControl.Resources>
+        <!-- The page: the whole width until a model is selected; then it makes room for the inspector, or, on a narrow panel, steps aside. -->
+        <Style x:Key="AiPageScroll" TargetType="ScrollViewer" BasedOn="{StaticResource DcPageScroll}">
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasModelSelection}" Value="True">
+                    <Setter Property="Grid.ColumnSpan" Value="1" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasModelSelection}" Value="True" />
+                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- One signal as a block: its state, its name and the scanner's confidence, then its detector, model, process and activity lines (those it has). -->
+        <DataTemplate x:Key="DiscoverySignalTemplate">
+            <StackPanel Margin="0,0,0,10">
+                <StackPanel Orientation="Horizontal">
+                    <ctl:DcStatePill Margin="0,0,8,0"
+                                     VerticalAlignment="Center"
+                                     Text="{Binding StateText}"
+                                     Tone="{Binding StateKey}"
+                                     Visibility="{Binding HasState, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Style="{StaticResource DcBody}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               Text="{Binding ConfidenceText}"
+                               Visibility="{Binding HasConfidence, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource DcMono}"
+                           Margin="0,2,0,0"
+                           Text="{Binding DetailText}"
+                           Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- A label and its value (the inspector's facts): one shared key column. -->
+        <DataTemplate x:Key="DiscoveryFactTemplate">
+            <Grid Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="112" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Style="{StaticResource DcCaption}" Margin="0,0,10,0" Text="{Binding Label}" />
+                <TextBlock Grid.Column="1" Style="{StaticResource DcBody}" Text="{Binding Value}" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -44,7 +111,13 @@
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
 
-        <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
+        <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <ScrollViewer x:Name="PageScroll" Style="{StaticResource AiPageScroll}">
             <StackPanel>
                 <ui:InfoBar Margin="{StaticResource DcCardGap}"
                             Title="AI Discovery"
@@ -137,17 +210,100 @@
                 <!-- Components -->
                 <TextBlock Style="{StaticResource DcSectionHeader}" Text="Detected components" />
 
+                <!-- The latest scan, as the TUI's header line: how many are active, and how many new, changed or gone, and the files read.
+                     Only the counts the source has; the note says whose they are and when. -->
+                <ItemsControl Focusable="False"
+                              ItemsSource="{Binding HeaderChips}"
+                              AutomationProperties.Name="Counts from the latest scan"
+                              Visibility="{Binding HasHeader, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource DcBadge}"
+                                    Tag="{Binding ToneKey}"
+                                    Margin="0,0,8,6"
+                                    AutomationProperties.Name="{Binding Text}">
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Text}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,0,0,8"
+                           Text="{Binding HeaderNote}"
+                           Visibility="{Binding HasHeader, Converter={StaticResource BoolToVisibility}}" />
+
                 <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                    <!-- Products are the tools, agents and SDKs found; Models are the local AI models (files on disk, or what a local model server lists). -->
+                    <ctl:DcSegmented x:Name="ViewSwitch"
+                                     SelectedValue="{Binding ActiveView, Mode=TwoWay}"
+                                     AutomationProperties.Name="Discovery view"
+                                     AutomationProperties.HelpText="Products lists the AI tools, agents and SDKs found. Models lists the local AI models found, with their own filters.">
+                        <ctl:DcSegment Value="products"
+                                       Content="Products"
+                                       Count="{Binding ProductCount}"
+                                       ToolTip="AI tools, agents and SDKs" />
+                        <ctl:DcSegment Value="models"
+                                       Content="Models"
+                                       Count="{Binding ModelCount}"
+                                       ToolTip="Local AI models: model files on disk and what a local model server lists" />
+                    </ctl:DcSegmented>
+
                     <ui:TextBox x:Name="SearchBox"
                                 Width="300"
-                                PlaceholderText="Search vendor, product, category…  (Ctrl+F)"
-                                AutomationProperties.Name="Search components"
+                                PlaceholderText="Search products and models…  (Ctrl+F)"
+                                AutomationProperties.Name="Search products and models"
                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                </WrapPanel>
+
+                <!-- Models only. Each filter exists only when the data can answer it (see the view-model); Confidence always can. -->
+                <WrapPanel Margin="0,0,0,4"
+                           Style="{StaticResource DcToolbarPanel}"
+                           Visibility="{Binding IsModelsView, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding HasModalityFilter, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Modality" />
+                        <ComboBox Width="150"
+                                  ItemsSource="{Binding ModalityChoices}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Key"
+                                  SelectedValue="{Binding ModalityFilter, Mode=TwoWay}"
+                                  AutomationProperties.Name="Modality" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Confidence" />
+                        <ComboBox Width="150"
+                                  ItemsSource="{Binding ConfidenceChoices}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Key"
+                                  SelectedValue="{Binding ConfidenceFilter, Mode=TwoWay}"
+                                  ToolTip="The strongest detection score among the model's signals: how sure the scanner was that something matched, not its confidence in the model itself. Every model is listed until you choose a cut."
+                                  AutomationProperties.Name="Confidence" />
+                    </StackPanel>
+
+                    <ui:Button Content="Reset filters"
+                               Appearance="Secondary"
+                               Icon="{ctl:DcSymbolIcon ArrowReset24}"
+                               Command="{Binding ResetModelFiltersCommand}"
+                               Visibility="{Binding HasActiveModelFilters, Converter={StaticResource BoolToVisibility}}"
+                               AutomationProperties.HelpText="Set the modality and confidence filters back to all." />
+
+                    <TextBlock Style="{StaticResource DcResultCaption}"
+                               Margin="0,0,12,8"
+                               VerticalAlignment="Center"
+                               Text="{Binding ModelCaption}"
+                               AutomationProperties.LiveSetting="Polite" />
                 </WrapPanel>
 
                 <ItemsControl ItemsSource="{Binding CardsView}"
                               Focusable="False"
-                              AutomationProperties.Name="Detected AI components">
+                              AutomationProperties.Name="Detected AI components"
+                              Visibility="{Binding IsProductsView, Converter={StaticResource BoolToVisibility}}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <ui:CardExpander Margin="{StaticResource DcCardGap}"
@@ -162,9 +318,16 @@
                                                    Margin="6,0,0,0"
                                                    VerticalAlignment="Center"
                                                    Text="{Binding Product}" />
+                                        <!-- The strongest state among the card's signals: a product with a new process is new. The tooltip counts them. -->
+                                        <ctl:DcStatePill Margin="12,0,0,0"
+                                                         VerticalAlignment="Center"
+                                                         Text="{Binding State}"
+                                                         Tone="{Binding StateKey}"
+                                                         ToolTip="{Binding StateTally}"
+                                                         Visibility="{Binding HasState, Converter={StaticResource BoolToVisibility}}" />
                                         <Border Style="{StaticResource DcBadge}"
                                                 Tag="{Binding ConfidenceKey}"
-                                                Margin="12,0,0,0"
+                                                Margin="8,0,0,0"
                                                 VerticalAlignment="Center">
                                             <TextBlock Style="{StaticResource DcBadgeText}"
                                                        Text="{Binding ConfidenceDisplay, StringFormat='{}{0} confidence'}" />
@@ -200,6 +363,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Style="{StaticResource DcField}">
                                             <TextBlock Style="{StaticResource DcFieldLabel}" Text="First seen" />
@@ -209,7 +373,40 @@
                                             <TextBlock Style="{StaticResource DcFieldLabel}" Text="Last seen" />
                                             <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding LastSeenDisplay}" />
                                         </StackPanel>
+                                        <StackPanel Grid.Column="2"
+                                                    Style="{StaticResource DcField}"
+                                                    Visibility="{Binding HasLastActive, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Last active" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding LastActiveDisplay}" />
+                                        </StackPanel>
                                     </Grid>
+                                    <!-- Only a card whose components have a confidence snapshot: how sure the engine is of what it is and that it is there. -->
+                                    <Grid Visibility="{Binding HasBands, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Style="{StaticResource DcField}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Identity" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding IdentityText}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Style="{StaticResource DcField}">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Presence" />
+                                            <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding PresenceText}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Each signal: its state, name and confidence, then the detector, model, process (pid, user) and activity lines it has. -->
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,4,0,6" Text="Signals" />
+                                    <ItemsControl Focusable="False"
+                                                  ItemsSource="{Binding SignalLines}"
+                                                  ItemTemplate="{StaticResource DiscoverySignalTemplate}"
+                                                  AutomationProperties.Name="Signals" />
+                                    <TextBlock Style="{StaticResource DcCaption}"
+                                               Margin="0,0,0,8"
+                                               Text="{Binding SignalOverflow}"
+                                               Visibility="{Binding HasSignalOverflow, Converter={StaticResource BoolToVisibility}}" />
                                     <TextBlock Style="{StaticResource DcCaption}" Text="{Binding EvidenceSummary}" />
                                 </StackPanel>
                             </ui:CardExpander>
@@ -217,10 +414,65 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- Empty: discovery off / no scan yet / latest scan found nothing -->
+                <!--
+                    The Models table: Model, State, [Modality], Confidence, Status / format, Sources. The bracketed column is turned on by
+                    the code-behind when some model names a modality. It shows only while at least one model passes the search and the
+                    filters (a grid first laid out with no rows keeps the column widths it worked out for none), and it scrolls inside its
+                    own height so the rest of the page stays within reach.
+                -->
+                <Border Style="{StaticResource DcCardFlush}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowModelTable, Converter={StaticResource BoolToVisibility}}">
+                    <ui:DataGrid x:Name="ModelList"
+                                 Style="{StaticResource DcDataGrid}"
+                                 MaxHeight="520"
+                                 ItemsSource="{Binding ModelsView}"
+                                 SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                                 SelectionMode="Single"
+                                 VirtualizingPanel.ScrollUnit="Pixel"
+                                 PreviewMouseWheel="OnModelListWheel"
+                                 AutomationProperties.Name="Local models"
+                                 AutomationProperties.HelpText="The local AI models found. Select one for its details.">
+                        <ui:DataGrid.Columns>
+                            <DataGridTextColumn Width="2.2*" MinWidth="150" Header="Model"
+                                                SortMemberPath="NormalizedId"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding ModelId}" />
+                            <DataGridTemplateColumn Width="1*" MinWidth="86" Header="State" SortMemberPath="StateWeight">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ctl:DcStatePill Margin="0,0,8,0"
+                                                         HorizontalAlignment="Left"
+                                                         Text="{Binding StateText}"
+                                                         Tone="{Binding StateKey}"
+                                                         Visibility="{Binding HasState, Converter={StaticResource BoolToVisibility}}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn x:Name="ModalityColumn" Width="1*" MinWidth="84" Header="Modality"
+                                                SortMemberPath="ModalityDisplay"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding ModalityDisplay}" />
+                            <DataGridTextColumn Width="1*" MinWidth="88" Header="Confidence"
+                                                SortMemberPath="Confidence"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding ConfidenceLabel}" />
+                            <DataGridTextColumn Width="1.4*" MinWidth="110" Header="Status / format"
+                                                SortMemberPath="StatusFormatDisplay"
+                                                ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                Binding="{Binding StatusFormatDisplay}" />
+                            <DataGridTextColumn Width="1.6*" MinWidth="110" Header="Sources"
+                                                SortMemberPath="SourcesDisplay"
+                                                ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                Binding="{Binding SourcesDisplay}" />
+                        </ui:DataGrid.Columns>
+                    </ui:DataGrid>
+                </Border>
+
+                <!-- Empty: discovery off / no scan yet / the latest scan found none (of the view on screen) -->
                 <Border Style="{StaticResource DcCard}"
                         Margin="{StaticResource DcCardGap}"
-                        Visibility="{Binding HasNoComponents, Converter={StaticResource BoolToVisibility}}">
+                        Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Style="{StaticResource DcEmptyState}">
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
@@ -228,14 +480,14 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Empty: the search hides everything -->
+                <!-- Empty: the search or the filters hide everything -->
                 <Border Style="{StaticResource DcCard}"
                         Margin="{StaticResource DcCardGap}"
                         Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Style="{StaticResource DcEmptyState}">
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
-                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No component matches the search" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear or change the search text above." />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding NoMatchTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding NoMatchDetail}" />
                     </StackPanel>
                 </Border>
 
@@ -424,6 +676,45 @@
                 </ui:CardExpander>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Inspector: opens while a model is selected (ctl:DcInspector); the page takes the whole width otherwise. -->
+        <ctl:DcInspector x:Name="ModelInspector"
+                         Title="Model details"
+                         IsOpen="{Binding HasModelSelection}"
+                         CloseCommand="{Binding ClearModelSelectionCommand}"
+                         CloseAutomationName="Close model details"
+                         AutomationProperties.Name="Model details"
+                         Content="{Binding SelectedModel}">
+            <ctl:DcInspector.Badges>
+                <ctl:DcStatePill Text="{Binding SelectedModel.StateText}"
+                                 Tone="{Binding SelectedModel.StateKey}"
+                                 Visibility="{Binding SelectedModel.HasState, Converter={StaticResource BoolToVisibility}}" />
+            </ctl:DcInspector.Badges>
+            <ctl:DcInspector.ContentTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0" Text="{Binding ModelId}" />
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" Text="{Binding Summary}" />
+
+                        <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Info24" Section="Discover" Content="Details" />
+                        <ItemsControl Focusable="False"
+                                      ItemsSource="{Binding Facts}"
+                                      ItemTemplate="{StaticResource DiscoveryFactTemplate}"
+                                      AutomationProperties.Name="Model details" />
+
+                        <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Eye24" Section="Discover" Content="Observations" />
+                        <ItemsControl Focusable="False"
+                                      ItemsSource="{Binding Observations}"
+                                      ItemTemplate="{StaticResource DiscoverySignalTemplate}"
+                                      AutomationProperties.Name="Observations of this model" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Text="{Binding ObservationOverflow}"
+                                   Visibility="{Binding HasObservationOverflow, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ctl:DcInspector.ContentTemplate>
+        </ctl:DcInspector>
+        </Grid>
 
         <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
         <panels:DiscoverReviewOverlay Grid.RowSpan="2" DataContext="{Binding Review}" />

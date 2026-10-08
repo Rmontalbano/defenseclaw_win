@@ -153,7 +153,7 @@ public sealed partial class AiDiscoveryPanelViewModel
 
     public ObservableCollection<RuntimeFindingRow> RuntimeFindings { get; } = new();
 
-    /// <summary>Esc closes the review dialog. True when it consumed the key.</summary>
+    /// <summary>Esc closes the review dialog. True when it consumed the key. (The model inspector closes on the bubbling Esc, so an open drop-down keeps its own.)</summary>
     public bool HandleEscape() => Review.IsOpen && Review.HandleEscape();
 
     // ---- Enable / disable ------------------------------------------------------------------------
@@ -250,7 +250,15 @@ public sealed partial class AiDiscoveryPanelViewModel
             IsLiveLoading = false;
         }
 
+        ApplyLiveStatus(live, problem);
+    }
+
+    /// <summary>The gateway's answer (or why there is none) reaches the coverage card and the line of counts above the lists.</summary>
+    internal void ApplyLiveStatus(LiveDiscoveryStatus? live, string? problem)
+    {
+        _liveStatus = live;
         BuildCoverage(live, problem);
+        RefreshHeader();
         UpdateEmptyState();
     }
 
@@ -483,41 +491,89 @@ public sealed partial class AiDiscoveryPanelViewModel
     };
 
     /// <summary>
-    /// Distinguishes the four reasons the component list can be empty: discovery is off, no scan has been
-    /// recorded, the latest scan found nothing, or the search hides everything.
+    /// Says why the view on screen shows nothing. The Products view can be empty because discovery is off, no scan has been
+    /// recorded, the latest scan found no products (only models, perhaps) or the search hides every card; the Models view for the same
+    /// reasons, or because the filters do.
     /// </summary>
     private void UpdateEmptyState()
     {
-        var total = _allCards.Count;
-        var shown = CardsView.Cast<object>().Count();
+        HasNoComponents = false;
+        HasNoModels = false;
+        ShowModelTable = false;
+        ShowNoMatch = false;
+        EmptyTitle = string.Empty;
+        EmptyDetail = string.Empty;
 
-        HasNoComponents = total == 0;
-        ShowNoMatch = total > 0 && shown == 0;
-
-        if (total != 0)
+        if (IsModelsView)
         {
-            EmptyTitle = string.Empty;
-            EmptyDetail = string.Empty;
+            if (_allModels.Count == 0)
+            {
+                HasNoModels = true;
+                (EmptyTitle, EmptyDetail) = NothingFound(
+                    "No local models identified",
+                    "The latest scan did not identify a local AI model: no model file in the folders it examined and no local model " +
+                    "server listing any. That is not the same as none being installed; the Coverage card above lists exactly what it examined.");
+            }
+            else if (!ModelsView.Cast<object>().Any())
+            {
+                ShowNoMatch = true;
+                NoMatchTitle = "No model matches";
+                var hints = new List<string>();
+                if (!string.IsNullOrWhiteSpace(SearchText))
+                {
+                    hints.Add("clear or change the search text above");
+                }
+
+                if (HasActiveModelFilters)
+                {
+                    hints.Add("reset the filters");
+                }
+
+                NoMatchDetail = hints.Count == 0 ? "Nothing in the list passes the current view." : "To see more, " + string.Join(", or ", hints) + ".";
+            }
+            else
+            {
+                ShowModelTable = true;
+            }
+
             return;
         }
 
+        if (_allCards.Count == 0)
+        {
+            HasNoComponents = true;
+            (EmptyTitle, EmptyDetail) = _allModels.Count > 0
+                ? ("No AI products detected",
+                    $"The latest scan found {Plural(_allModels.Count, "local model")} and no AI products. The models are listed under Models.")
+                : NothingFound(
+                    "Nothing detected in the latest scan",
+                    "The scan ran and found no AI components. That is not the same as nothing having been looked at: " +
+                    "the Coverage card above lists exactly what it examined.");
+        }
+        else if (!CardsView.Cast<object>().Any())
+        {
+            ShowNoMatch = true;
+            NoMatchTitle = "No component matches the search";
+            NoMatchDetail = "Clear or change the search text above.";
+        }
+    }
+
+    /// <summary>The reason for an empty list when the cause is the state of discovery itself: it is off, or it has not written a result; otherwise the caller's words for "it ran and found none".</summary>
+    private (string Title, string Detail) NothingFound(string foundNothingTitle, string foundNothingDetail)
+    {
         if (!IsDiscoveryEnabledInConfig)
         {
-            EmptyTitle = "AI Discovery is turned off";
-            EmptyDetail = "Nothing is being scanned, so there is nothing to list. Turn it on above, then run a scan.";
+            return ("AI Discovery is turned off", "Nothing is being scanned, so there is nothing to list. Turn it on above, then run a scan.");
         }
-        else if (!_signalSourceAvailable)
+
+        if (!_signalSourceAvailable)
         {
-            EmptyTitle = "No scan result on disk yet";
-            EmptyDetail = "AI Discovery is on, but no scan has written a result yet. Run a scan above, or wait for the " +
-                "gateway's next scheduled one.";
+            return (
+                "No scan result on disk yet",
+                "AI Discovery is on, but no scan has written a result yet. Run a scan above, or wait for the gateway's next scheduled one.");
         }
-        else
-        {
-            EmptyTitle = "Nothing detected in the latest scan";
-            EmptyDetail = "The scan ran and found no AI components. That is not the same as nothing having been looked at: " +
-                "the Coverage card above lists exactly what it examined.";
-        }
+
+        return (foundNothingTitle, foundNothingDetail);
     }
 
     // ---- Runtime -------------------------------------------------------------------------------------

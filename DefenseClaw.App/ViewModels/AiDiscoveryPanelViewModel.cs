@@ -21,7 +21,11 @@ namespace DefenseClaw.App.ViewModels;
 /// </summary>
 public sealed record DiscoveryEvidenceItem(string Type, string? Basename, double? Quality, string? MatchKind);
 
-/// <summary>One raw detection: a single detector's single hit for one product.</summary>
+/// <summary>
+/// One raw detection: a single detector's single hit for one product. The positional members are what the panel always showed; the
+/// rest are the parts of the TUI's <c>AIUsageSignal</c> that <c>ai_discovery_state.json</c> and <c>inventory.db</c> carry on a
+/// DefenseClaw 0.8.10 install (see <see cref="DiscoverySignalParser"/>) and are null when the source does not have them.
+/// </summary>
 public sealed record DiscoverySignalRecord(
     string Vendor,
     string Product,
@@ -32,21 +36,158 @@ public sealed record DiscoverySignalRecord(
     string? State,
     DateTimeOffset? FirstSeen,
     DateTimeOffset? LastSeen,
-    IReadOnlyList<DiscoveryEvidenceItem> Evidence);
+    IReadOnlyList<DiscoveryEvidenceItem> Evidence)
+{
+    public string? SignalId { get; init; }
+
+    public string? SignatureId { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? Version { get; init; }
+
+    public DiscoveryComponentRef? Component { get; init; }
+
+    /// <summary>The local model the signal found (a model file, or an entry in a model server's list), when it is one.</summary>
+    public DiscoveryModelInfo? Model { get; init; }
+
+    /// <summary>The process behind a process signal.</summary>
+    public DiscoveryRuntimeInfo? Runtime { get; init; }
+
+    public DateTimeOffset? LastActiveAt { get; init; }
+
+    /// <summary>
+    /// How sure the confidence engine is of what the signal's component is (identity) and that it is there (presence), from the component's
+    /// snapshot in <c>inventory.db</c> (<c>ai_confidence_snapshots</c>, one per component of the latest scan). Neither the state file nor an
+    /// <c>ai_signals</c> row has them, so they are null for a signal with no component, or whose component has no snapshot.
+    /// </summary>
+    public double? IdentityScore { get; init; }
+
+    public string? IdentityBand { get; init; }
+
+    public double? PresenceScore { get; init; }
+
+    public string? PresenceBand { get; init; }
+
+    /// <summary>The TUI's <c>sig_id</c>: the signature id, else the name, else the signal id.</summary>
+    public string DisplayId =>
+        new[] { SignatureId, Name, SignalId }.FirstOrDefault(static candidate => !string.IsNullOrWhiteSpace(candidate))?.Trim() ?? "(unknown)";
+}
 
 /// <summary>
 /// One card: every signal for a given (vendor, product) pair, rolled up. This is the unit
 /// the panel actually shows — a single product can be detected by several independent
 /// detectors (process, config, mcp, package manifest, env var), each contributing its own
-/// confidence and evidence.
+/// confidence and evidence. A card also has a state (the strongest among its signals, so a
+/// product with one new process sorts as new), the identity and presence bands of its
+/// components when the data has them, and the signals themselves with their model and
+/// process lines.
 /// </summary>
 public sealed class DiscoveryComponentCard
 {
+    /// <summary>The TUI lists 50 signals of a row and points at <c>agent usage --detail --json</c> for the rest.</summary>
+    private const int MaxSignalLines = 50;
+
+    private IReadOnlyList<DiscoverySignalLine>? _signalLines;
+
     public required string Vendor { get; init; }
 
     public required string Product { get; init; }
 
     public required IReadOnlyList<DiscoverySignalRecord> Signals { get; init; }
+
+    /// <summary>The moment the "ago" lines count from. Set when the card is built, so a card does not age while it sits on screen.</summary>
+    public DateTimeOffset Now { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>The strongest state among the signals (new before changed before seen before gone), or empty when none has one.</summary>
+    public string State => DiscoveryStates.Strongest(Signals.Select(static s => s.State));
+
+    public bool HasState => State.Length > 0;
+
+    public int StateWeight => DiscoveryStates.Weight(State);
+
+    /// <summary>Tone key for the state pill.</summary>
+    public string StateKey => DiscoveryStates.Tone(State);
+
+    /// <summary>"1 new, 28 seen": how many signals are in each state, strongest first. Empty when no signal has a state.</summary>
+    public string StateTally
+    {
+        get
+        {
+            var counts = Signals
+                .Select(static s => DiscoveryStates.Normalize(s.State))
+                .Where(static state => state.Length > 0)
+                .GroupBy(static state => state)
+                .OrderBy(static group => DiscoveryStates.Weight(group.Key))
+                .Select(static group => $"{group.Count().ToString(CultureInfo.InvariantCulture)} {group.Key}");
+            return string.Join(", ", counts);
+        }
+    }
+
+    /// <summary>"high (85%)": the identity band of the first signal that has one, else empty.</summary>
+    public string IdentityDisplay =>
+        Signals.FirstOrDefault(static s => !string.IsNullOrWhiteSpace(s.IdentityBand)) is { } signal
+            ? DiscoveryFormat.Confidence(signal.IdentityScore, signal.IdentityBand)
+            : string.Empty;
+
+    public string PresenceDisplay =>
+        Signals.FirstOrDefault(static s => !string.IsNullOrWhiteSpace(s.PresenceBand)) is { } signal
+            ? DiscoveryFormat.Confidence(signal.PresenceScore, signal.PresenceBand)
+            : string.Empty;
+
+    public bool HasBands => IdentityDisplay.Length > 0 || PresenceDisplay.Length > 0;
+
+    /// <summary>The identity band for a field, "—" when the card has a presence band and no identity one.</summary>
+    public string IdentityText => IdentityDisplay.Length > 0 ? IdentityDisplay : "—";
+
+    public string PresenceText => PresenceDisplay.Length > 0 ? PresenceDisplay : "—";
+
+    public DateTimeOffset? LastActive => Signals.Select(static s => s.LastActiveAt).OfType<DateTimeOffset>().Cast<DateTimeOffset?>().Max();
+
+    public bool HasLastActive => LastActive is not null;
+
+    public string LastActiveDisplay => LastActive is { } active ? active.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
+
+    /// <summary>The signals as text blocks, new and changed first, at most 50.</summary>
+    public IReadOnlyList<DiscoverySignalLine> SignalLines =>
+        _signalLines ??= Signals
+            .Select((signal, index) => (signal, index))
+            .OrderBy(static pair => DiscoveryStates.Weight(pair.signal.State))
+            .ThenBy(static pair => pair.index)
+            .Take(MaxSignalLines)
+            .Select(pair => DiscoverySignalLine.For(pair.signal, Now, forModel: false))
+            .ToList();
+
+    public bool HasSignalOverflow => Signals.Count > MaxSignalLines;
+
+    public string SignalOverflow => HasSignalOverflow
+        ? $"...and {(Signals.Count - MaxSignalLines).ToString(CultureInfo.InvariantCulture)} more (use `defenseclaw agent usage --detail --json` for the full list)"
+        : string.Empty;
+
+    /// <summary>
+    /// Does the card match a search? The vendor, product, state, categories, detectors, component, version, the models and the bands are
+    /// searched, as the TUI's <c>_apply_filter</c> does for a row.
+    /// </summary>
+    public bool Matches(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return true;
+        }
+
+        var parts = new List<string?> { Vendor, Product, State, IdentityDisplay, PresenceDisplay };
+        foreach (var signal in Signals)
+        {
+            parts.Add(signal.Category);
+            parts.Add(signal.Detector);
+            parts.Add(signal.Version);
+            parts.Add(signal.Component?.Ecosystem);
+            parts.Add(signal.Component?.Name);
+            parts.Add(signal.Model?.Id);
+        }
+
+        return string.Join(' ', parts.Where(static part => !string.IsNullOrEmpty(part))).Contains(query.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
 
     public double MaxConfidence => Signals.Count == 0 ? 0 : Signals.Max(s => s.Confidence ?? 0);
 
@@ -73,7 +214,8 @@ public sealed class DiscoveryComponentCard
         : $"{EvidenceCount} evidence entr{(EvidenceCount == 1 ? "y" : "ies")} — hashed fingerprints only " +
           "(type, quality, match kind); DefenseClaw does not retain literal file paths.";
 
-    public string HeaderDisplay => $"{Vendor} · {Product}  —  {ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
+    public string HeaderDisplay =>
+        $"{Vendor} · {Product}  —  {(HasState ? State + ", " : string.Empty)}{ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
 
     /// <summary>Tone key for the confidence badge: green from 80 %, amber from 50 %, otherwise neutral (a low score is not an alarm).</summary>
     public string ConfidenceKey => MaxConfidence >= 0.8 ? "Ok" : MaxConfidence >= 0.5 ? "Warn" : "Neutral";
@@ -102,6 +244,15 @@ public sealed record DiscoveryScanEvent(
     long? DurationMs,
     string? Result)
 {
+    /// <summary>Files the scan read; a process-list check reads none.</summary>
+    public long? FilesScanned { get; init; }
+
+    /// <summary>
+    /// True for a scan's completion event, which carries the scan's totals. The bucket also holds one event per component the scanner
+    /// found (<c>ai_component.discovered</c>) or lost (<c>ai_component.removed</c>), which carry none of them.
+    /// </summary>
+    public bool IsSummary => SignalsTotal is not null || ActiveSignals is not null;
+
     public string TimestampDisplay => Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
     public string Summary =>
@@ -217,10 +368,12 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     [ObservableProperty]
     private string? _lastRunSummary;
 
+    /// <summary>The Products view has nothing to list at all (see <see cref="EmptyTitle"/> for why).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmpty))]
     private bool _hasNoComponents;
 
-    /// <summary>Components exist but the search box hides all of them.</summary>
+    /// <summary>The view on screen has rows, and the search or the filters hide all of them.</summary>
     [ObservableProperty]
     private bool _showNoMatch;
 
@@ -235,6 +388,8 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     {
         CardsView = CollectionViewSource.GetDefaultView(_allCards);
         CardsView.Filter = FilterCard;
+        ModelsView = CollectionViewSource.GetDefaultView(_allModels);
+        ModelsView.Filter = FilterModel;
         Review = new DiscoverActionReview(services);
 
         // The old code toggled IsRunningDiscover around its own run; the shared review dialog owns the
@@ -254,7 +409,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     public override string Title => "AI Discovery";
 
     public override string Description =>
-        "Discovered agents and AI components, with the confidence, detector and evidence behind each one.";
+        "Discovered agents, AI components and local models, with the state, confidence, detector and evidence behind each one.";
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
 
@@ -401,25 +556,11 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     partial void OnSearchTextChanged(string value)
     {
         CardsView.Refresh();
+        RefreshModels();
         UpdateEmptyState();
     }
 
-    private bool FilterCard(object obj)
-    {
-        if (obj is not DiscoveryComponentCard card)
-        {
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(SearchText))
-        {
-            return true;
-        }
-
-        return Contains(card.Vendor) || Contains(card.Product) || Contains(card.CategoriesDisplay);
-
-        bool Contains(string? value) => value is not null && value.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
-    }
+    private bool FilterCard(object obj) => obj is DiscoveryComponentCard card && card.Matches(SearchText);
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
@@ -432,40 +573,12 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         _loadRunning = true;
         IsLoading = true;
         ErrorMessage = null;
-        Sources.Clear();
 
         try
         {
             try
             {
-                var (signals, signalSource) = await LoadSignalsAsync(cancellationToken).ConfigureAwait(true);
-
-                _allCards.Clear();
-                foreach (var card in BuildCards(signals))
-                {
-                    _allCards.Add(card);
-                }
-
-                CardsView.Refresh();
-                Sources.Add(signalSource);
-                _signalSourceAvailable = signalSource.Available;
-                _signalCacheUpdatedAt = signalSource.LastUpdated;
-
-                _loadedAt = DateTimeOffset.Now;
-                var asOf = _loadedAt.Value.ToString("HH:mm", CultureInfo.InvariantCulture);
-                StatusMessage = _allCards.Count == 0
-                    ? $"No AI components discovered yet · as of {asOf}"
-                    : $"{_allCards.Count} component{(_allCards.Count == 1 ? string.Empty : "s")} from " +
-                      $"{signals.Count} signal{(signals.Count == 1 ? string.Empty : "s")} · as of {asOf}";
-
-                await LoadScanHistoryAsync(cancellationToken).ConfigureAwait(true);
-                await LoadAgentDiscoveryAsync(cancellationToken).ConfigureAwait(true);
-                await LoadAgentSelectionAsync(cancellationToken).ConfigureAwait(true);
-
-                // What is configured comes from the in-memory config (no I/O), so the coverage card is
-                // useful immediately; the gateway's live answer refines it below.
-                BuildCoverage(live: null, liveProblem: null);
-                UpdateEmptyState();
+                await LoadFromDiskAsync(cancellationToken).ConfigureAwait(true);
             }
             finally
             {
@@ -481,6 +594,44 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             _loadRunning = false;
         }
     }
+
+    /// <summary>
+    /// Everything the panel shows that comes from files on this machine: the signals (state file, else inventory.db), their confidence
+    /// bands, the product cards and the model rows built from them, the scan history, the connector tables and the coverage card's
+    /// configured half. It starts no process and makes no request; the gateway's live answers are layered on by <see cref="LoadAsync"/>.
+    /// </summary>
+    internal async Task LoadFromDiskAsync(CancellationToken cancellationToken)
+    {
+        Sources.Clear();
+        _liveStatus = null;
+
+        var (loaded, signalSource) = await LoadSignalsAsync(cancellationToken).ConfigureAwait(true);
+        var (signals, bandsSource) = await ApplyConfidenceBandsAsync(loaded, cancellationToken).ConfigureAwait(true);
+
+        _loadedAt = DateTimeOffset.Now;
+        ApplySignals(signals);
+        Sources.Add(signalSource);
+        if (bandsSource is not null)
+        {
+            Sources.Add(bandsSource);
+        }
+
+        _signalSourceAvailable = signalSource.Available;
+        _signalCacheUpdatedAt = signalSource.LastUpdated;
+
+        await LoadScanHistoryAsync(cancellationToken).ConfigureAwait(true);
+        await LoadAgentDiscoveryAsync(cancellationToken).ConfigureAwait(true);
+        await LoadAgentSelectionAsync(cancellationToken).ConfigureAwait(true);
+
+        // What is configured comes from the in-memory config (no I/O), so the coverage card is
+        // useful immediately; the gateway's live answer refines it below.
+        BuildCoverage(live: null, liveProblem: null);
+        RefreshHeader();
+        UpdateEmptyState();
+    }
+
+    private static string Plural(int count, string noun) =>
+        $"{count.ToString(CultureInfo.InvariantCulture)} {noun}{(count == 1 ? string.Empty : "s")}";
 
     /// <summary>
     /// Primary source: the persisted signal cache (<c>ai_discovery_state.json</c>), which
@@ -512,7 +663,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                         // panel empty with no explanation.
                         if (property.Value.ValueKind == JsonValueKind.Object)
                         {
-                            signals.Add(MapSignalFromState(property.Value));
+                            signals.Add(DiscoverySignalParser.FromState(property.Value));
                         }
                     }
                 }
@@ -565,7 +716,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                         Available: false));
             }
 
-            var signals = latest.Rows.Rows.Select(MapSignalFromDbRow).ToList();
+            var signals = latest.Rows.Rows.Select(DiscoverySignalParser.FromDbRow).ToList();
             var scan = latest.Scan;
             var detail = scan is null
                 ? $"{note} inventory.db has not recorded a scan yet."
@@ -597,12 +748,13 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                 return;
             }
 
+            // The bucket holds a completion event per scan (about one a minute, with the totals) and one event per component
+            // found or lost, which carry no totals: a window of 100 events is read, and the scans among them are the history.
             var events = await Services.Audit.ListAsync(
-                new AuditQuery { Bucket = AuditBucket, Limit = 25 }, cancellationToken).ConfigureAwait(true);
+                new AuditQuery { Bucket = AuditBucket, Limit = 100 }, cancellationToken).ConfigureAwait(true);
 
-            foreach (var evt in events)
-            {
-                ScanHistory.Add(new DiscoveryScanEvent(
+            foreach (var scan in events
+                .Select(static evt => new DiscoveryScanEvent(
                     evt.Timestamp,
                     evt.StructuredString("defenseclaw.ai.discovery.source"),
                     GetLong(evt, "defenseclaw.ai.discovery.signals_total"),
@@ -611,14 +763,21 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                     GetLong(evt, "defenseclaw.ai.discovery.changed_signals"),
                     GetLong(evt, "defenseclaw.ai.discovery.gone_signals"),
                     GetLong(evt, "defenseclaw.ai.discovery.duration_ms"),
-                    evt.StructuredString("defenseclaw.ai.discovery.result")));
+                    evt.StructuredString("defenseclaw.ai.discovery.result"))
+                {
+                    FilesScanned = GetLong(evt, "defenseclaw.ai.discovery.files_scanned"),
+                })
+                .Where(static scan => scan.IsSummary)
+                .Take(25))
+            {
+                ScanHistory.Add(scan);
             }
 
             Sources.Add(new DiscoverySourceInfo(
                 $"Audit trail — {AuditBucket} bucket",
-                $"{events.Count} recent scan event{(events.Count == 1 ? string.Empty : "s")}",
-                events.Count > 0 ? events[0].Timestamp : null,
-                Available: events.Count > 0));
+                $"{ScanHistory.Count} recent scan event{(ScanHistory.Count == 1 ? string.Empty : "s")}",
+                ScanHistory.Count > 0 ? ScanHistory[0].Timestamp : null,
+                Available: ScanHistory.Count > 0));
         }
         catch (Exception ex) when (ex is IOException or SqliteException)
         {
@@ -763,82 +922,22 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     private string FindAgentSelectionPath() =>
         Path.Combine(Path.GetDirectoryName(Services.Paths.AgentDiscoveryStatePath) ?? Services.Paths.DataDirectory, "agent_selection.json");
 
-    private static IEnumerable<DiscoveryComponentCard> BuildCards(IReadOnlyList<DiscoverySignalRecord> signals) =>
+    /// <summary>
+    /// The product cards: the signals that are not an identified local model (those are the Models view's rows), grouped by vendor and
+    /// product. Most actionable state first - a product with a new or changed signal ahead of one that is only seen, and one that is gone
+    /// last - then the strongest detection, then by name.
+    /// </summary>
+    internal static IEnumerable<DiscoveryComponentCard> BuildCards(IReadOnlyList<DiscoverySignalRecord> signals, DateTimeOffset now) =>
         signals
+            .Where(static s => !DiscoveryModelRow.IsModelSignal(s))
             .GroupBy(s => (Vendor: string.IsNullOrWhiteSpace(s.Vendor) ? "(unknown vendor)" : s.Vendor,
                            Product: string.IsNullOrWhiteSpace(s.Product) ? "(unknown product)" : s.Product),
                 StringTupleComparer.Instance)
-            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList() })
-            .OrderByDescending(c => c.MaxConfidence)
+            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList(), Now = now })
+            .OrderBy(c => c.StateWeight)
+            .ThenByDescending(c => c.MaxConfidence)
             .ThenBy(c => c.Vendor, StringComparer.OrdinalIgnoreCase)
             .ThenBy(c => c.Product, StringComparer.OrdinalIgnoreCase);
-
-    private static DiscoverySignalRecord MapSignalFromState(JsonElement element)
-    {
-        var evidence = new List<DiscoveryEvidenceItem>();
-        if (element.TryGetProperty("evidence", out var evidenceArray) && evidenceArray.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in evidenceArray.EnumerateArray())
-            {
-                evidence.Add(new DiscoveryEvidenceItem(
-                    GetString(item, "type") ?? "unknown",
-                    GetString(item, "basename"),
-                    GetDouble(item, "quality"),
-                    GetString(item, "match_kind")));
-            }
-        }
-
-        return new DiscoverySignalRecord(
-            GetString(element, "vendor") ?? string.Empty,
-            GetString(element, "product") ?? string.Empty,
-            GetString(element, "category"),
-            GetString(element, "detector"),
-            GetString(element, "source"),
-            GetDouble(element, "confidence"),
-            GetString(element, "state"),
-            GetTimestamp(element, "first_seen"),
-            GetTimestamp(element, "last_seen"),
-            evidence);
-    }
-
-    private static DiscoverySignalRecord MapSignalFromDbRow(IReadOnlyDictionary<string, object?> row)
-    {
-        var evidence = new List<DiscoveryEvidenceItem>();
-        if (row.TryGetValue("evidence_json", out var raw) && raw is string json && !string.IsNullOrWhiteSpace(json))
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(json);
-                if (document.RootElement.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in document.RootElement.EnumerateArray())
-                    {
-                        evidence.Add(new DiscoveryEvidenceItem(
-                            GetString(item, "type") ?? "unknown",
-                            GetString(item, "basename"),
-                            GetDouble(item, "quality"),
-                            GetString(item, "match_kind")));
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Leave evidence empty rather than fail the whole row over one bad cell.
-            }
-        }
-
-        return new DiscoverySignalRecord(
-            AsString(row, "vendor") ?? string.Empty,
-            AsString(row, "product") ?? string.Empty,
-            AsString(row, "category"),
-            AsString(row, "detector"),
-            null,
-            AsDouble(row, "confidence"),
-            AsString(row, "state"),
-            null,
-            AsTimestamp(row, "last_seen"),
-            evidence);
-    }
 
     private static long? GetLong(AuditEvent evt, string key) =>
         evt.StructuredJson.TryGetValue(key, out var value) &&
@@ -852,11 +951,6 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             ? value.GetString()
             : null;
 
-    private static double? GetDouble(JsonElement element, string property) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
-            ? value.GetDouble()
-            : null;
-
     private static bool GetBool(JsonElement element, string property) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
 
@@ -867,42 +961,6 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             : null;
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
-
-    private static string? AsString(IReadOnlyDictionary<string, object?> row, string key) =>
-        row.TryGetValue(key, out var value) && value is not null ? Convert.ToString(value, CultureInfo.InvariantCulture) : null;
-
-    private static double? AsDouble(IReadOnlyDictionary<string, object?> row, string key) =>
-        row.TryGetValue(key, out var value) && value is not null ? Convert.ToDouble(value, CultureInfo.InvariantCulture) : null;
-
-    private static DateTimeOffset? AsTimestamp(IReadOnlyDictionary<string, object?> row, string key)
-    {
-        if (!row.TryGetValue(key, out var value) || value is null)
-        {
-            return null;
-        }
-
-        var raw = Convert.ToString(value, CultureInfo.InvariantCulture);
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        const DateTimeStyles styles = DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
-        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, styles, out var parsed))
-        {
-            return parsed;
-        }
-
-        var trimmed = raw.Trim();
-        var lastSpace = trimmed.LastIndexOf(' ');
-        if (lastSpace > 0 && trimmed[(lastSpace + 1)..].All(char.IsLetter) &&
-            DateTimeOffset.TryParse(trimmed[..lastSpace], CultureInfo.InvariantCulture, styles, out var withoutZone))
-        {
-            return withoutZone;
-        }
-
-        return null;
-    }
 
     private sealed class StringTupleComparer : IEqualityComparer<(string Vendor, string Product)>
     {
