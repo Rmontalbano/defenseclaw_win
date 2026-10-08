@@ -143,6 +143,9 @@ public sealed class PanelCatalog : INavigationViewPageProvider
                 {
                     // The "Guardrail controls" tile (CUST-222/225): HILT, block message and judge, in their own window.
                     OpenGuardrailControls = () => DefenseClaw.App.Views.Guardrail.GuardrailControlsWindow.Open(s, System.Windows.Application.Current?.MainWindow),
+
+                    // The "Redaction policy" tile (CUST-295): shown only while the runtime has `setup redaction` (RuntimeCapability.RedactionAdvanced).
+                    OpenRedaction = () => DefenseClaw.App.Views.Redaction.RedactionWindow.Open(s, System.Windows.Application.Current?.MainWindow),
                 }),
             new("policies", "Policies", "Configure", SymbolRegular.Gavel24,
                 typeof(PoliciesPanel), s => new PoliciesPanelViewModel(s)),

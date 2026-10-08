@@ -1,0 +1,18 @@
+{
+  "destination": "example-otlp",
+  "routes": [
+    {
+      "action": "drop",
+      "name": "example-route",
+      "selector": {
+        "buckets": [
+          "tool.activity"
+        ],
+        "min_severity": "HIGH"
+      },
+      "signals": [
+        "logs"
+      ]
+    }
+  ]
+}

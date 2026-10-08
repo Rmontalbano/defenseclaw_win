@@ -1,0 +1,16 @@
+{
+  "after_plan_digest": "870724638c736585c5b04a8e537feda3c4d2507102e99a902f06e91f5a515b1e",
+  "applied": false,
+  "backup_path": null,
+  "before_plan_digest": "870724638c736585c5b04a8e537feda3c4d2507102e99a902f06e91f5a515b1e",
+  "changed": true,
+  "changed_legs": 0,
+  "changes": [],
+  "dry_run": true,
+  "locked_profiles": [],
+  "newly_unredacted": 0,
+  "no_longer_unredacted": 0,
+  "restarted": false,
+  "verified_plan_digest": null,
+  "warnings": []
+}

@@ -1,0 +1,260 @@
+{
+  "after_plan_digest": "0a25418e526af6aecde96a135a75b052064c8920eed973fed72f7c386b2c90c9",
+  "applied": false,
+  "backup_path": null,
+  "before_plan_digest": "4edd4f678df4a2e3acbd93f8280e5394a6052d4accbaad1af2436f28bd91722d",
+  "changed": true,
+  "changed_legs": 29,
+  "changes": [
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "agent.lifecycle",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "agent.lifecycle",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "ai.discovery",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "ai.discovery",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "asset.lifecycle",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "asset.lifecycle",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "asset.scan",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "asset.scan",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "compliance.activity",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "compliance.activity",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "diagnostic",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "diagnostic",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "enforcement.action",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "enforcement.action",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "guardrail.evaluation",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "guardrail.evaluation",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "model.io",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "model.io",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "network.egress",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "network.egress",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "platform.health",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "platform.health",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "security.finding",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "security.finding",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "telemetry.ingest",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "telemetry.ingest",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "tool.activity",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "logs"
+    },
+    {
+      "after": "not-delivered",
+      "before": "none",
+      "bucket": "tool.activity",
+      "destination": "example-otlp",
+      "route": "capability-default",
+      "signal": "traces"
+    },
+    {
+      "after": "sensitive",
+      "before": "not-delivered",
+      "bucket": "security.finding",
+      "destination": "example-otlp",
+      "route": "send",
+      "signal": "logs"
+    }
+  ],
+  "dry_run": true,
+  "locked_profiles": [],
+  "newly_unredacted": 0,
+  "no_longer_unredacted": 28,
+  "restarted": false,
+  "verified_plan_digest": null,
+  "warnings": [
+    {
+      "code": "tls_verification_disabled",
+      "path": "observability.destinations[example-otlp].tls",
+      "summary": "destination transport uses an explicitly unsafe TLS mode"
+    },
+    {
+      "code": "private_export_network_allowed",
+      "path": "observability.destinations[example-otlp].network_safety.allow_private_networks",
+      "summary": "destination may connect to loopback or private collector addresses"
+    }
+  ]
+}

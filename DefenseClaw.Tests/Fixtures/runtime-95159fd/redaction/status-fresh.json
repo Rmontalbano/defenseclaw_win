@@ -1,0 +1,156 @@
+{
+  "bucket_catalog_version": 1,
+  "buckets": [
+    {
+      "name": "compliance.activity",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "security.finding",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "guardrail.evaluation",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "enforcement.action",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "model.io",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "tool.activity",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "asset.scan",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "asset.lifecycle",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "network.egress",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "agent.lifecycle",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "ai.discovery",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "telemetry.ingest",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "platform.health",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "diagnostic",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    }
+  ],
+  "config": "C:\\Users\\operator\\.defenseclaw\\config.yaml",
+  "destinations": [
+    {
+      "enabled": true,
+      "generated": true,
+      "kind": "sqlite",
+      "name": "local-sqlite",
+      "policy_form": "implicit_local",
+      "redaction": "unredacted (none)",
+      "redaction_profiles": [
+        "none"
+      ],
+      "signals": [
+        "logs"
+      ]
+    }
+  ],
+  "judge_bodies": {
+    "capture": true,
+    "path": "C:\\Users\\operator\\.defenseclaw\\judge_bodies.db",
+    "redacted": false,
+    "retention_days": 7
+  },
+  "plan_digest": "870724638c736585c5b04a8e537feda3c4d2507102e99a902f06e91f5a515b1e",
+  "warnings": []
+}

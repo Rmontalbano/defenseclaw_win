@@ -1,0 +1,18 @@
+{
+  "built_in": false,
+  "detectors": [
+    "pii"
+  ],
+  "extends": "sensitive",
+  "field_classes": {
+    "content": "detect",
+    "credential": "remove",
+    "error": "detect",
+    "evidence": "detect",
+    "identifier": "preserve",
+    "metadata": "preserve",
+    "path": "hash",
+    "reason": "detect"
+  },
+  "name": "example-profile"
+}

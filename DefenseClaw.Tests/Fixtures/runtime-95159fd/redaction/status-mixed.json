@@ -1,0 +1,200 @@
+{
+  "bucket_catalog_version": 1,
+  "buckets": [
+    {
+      "name": "compliance.activity",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "security.finding",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "guardrail.evaluation",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "enforcement.action",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "model.io",
+      "redaction_profile": "content",
+      "signals": [
+        "logs",
+        "traces"
+      ]
+    },
+    {
+      "name": "tool.activity",
+      "redaction_profile": "none",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "asset.scan",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "asset.lifecycle",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "network.egress",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "agent.lifecycle",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "ai.discovery",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "telemetry.ingest",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "platform.health",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "name": "diagnostic",
+      "redaction_profile": "sensitive",
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    }
+  ],
+  "config": "C:\\Users\\operator\\.defenseclaw\\config.yaml",
+  "destinations": [
+    {
+      "enabled": true,
+      "generated": true,
+      "kind": "sqlite",
+      "name": "local-sqlite",
+      "policy_form": "implicit_local",
+      "redaction": "mixed: content, none, sensitive",
+      "redaction_profiles": [
+        "content",
+        "none",
+        "sensitive"
+      ],
+      "signals": [
+        "logs"
+      ]
+    },
+    {
+      "enabled": true,
+      "generated": false,
+      "kind": "otlp",
+      "name": "example-otlp",
+      "policy_form": "advanced_routes",
+      "redaction": "redacted: sensitive, strict",
+      "redaction_profiles": [
+        "sensitive",
+        "strict"
+      ],
+      "signals": [
+        "logs",
+        "traces",
+        "metrics"
+      ]
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "kind": "otlp",
+      "name": "managed-enterprise-ai-defense",
+      "policy_form": "capability_default",
+      "redaction": "redacted: strict",
+      "redaction_profiles": [
+        "strict"
+      ],
+      "signals": [
+        "logs",
+        "traces"
+      ]
+    }
+  ],
+  "judge_bodies": {
+    "capture": true,
+    "path": "C:\\Users\\operator\\.defenseclaw\\judge_bodies.db",
+    "redacted": false,
+    "retention_days": 7
+  },
+  "plan_digest": "615c444add369a053eab85b7aa95d9762354cd13594ddedcf383d5f01e89f8ed",
+  "warnings": [
+    {
+      "code": "tls_verification_disabled",
+      "path": "observability.destinations[example-otlp].tls",
+      "summary": "destination transport uses an explicitly unsafe TLS mode"
+    },
+    {
+      "code": "private_export_network_allowed",
+      "path": "observability.destinations[example-otlp].network_safety.allow_private_networks",
+      "summary": "destination may connect to loopback or private collector addresses"
+    }
+  ]
+}

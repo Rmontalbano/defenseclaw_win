@@ -1,0 +1,7 @@
+Destination: example-otlp
+  Kind: otlp
+  Generated: no
+  Policy: capability_default
+  Signals: logs, traces, metrics
+  Redaction: unredacted (none)
+  Buckets: compliance.activity, security.finding, guardrail.evaluation, enforcement.action, model.io, tool.activity, asset.scan, asset.lifecycle, network.egress, agent.lifecycle, ai.discovery, telemetry.ingest, platform.health, diagnostic

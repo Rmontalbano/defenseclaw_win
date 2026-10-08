@@ -167,6 +167,37 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [RelayCommand(CanExecute = nameof(HasGuardrailControlsTile))]
     private void OpenGuardrailControlsTile() => _openGuardrailControls?.Invoke();
 
+    /// <summary>
+    /// Where the "Redaction policy" tile goes (the advanced redaction window, CUST-295). Null until the shell wires it, and then the tile is
+    /// not shown. Even wired, it is shown only while the connected runtime has <c>setup redaction</c> (<see cref="HasRedactionTile"/>).
+    /// </summary>
+    public Action? OpenRedaction
+    {
+        get => _openRedaction;
+        set
+        {
+            _openRedaction = value;
+            RaiseRedactionTile();
+        }
+    }
+
+    private Action? _openRedaction;
+
+    /// <summary>The "Redaction policy" tile: wired, and the runtime has the command. Hidden entirely on 0.8.10, which does not.</summary>
+    public bool HasRedactionTile =>
+        _openRedaction is not null && Services.Runtime.Check(DefenseClaw.Core.Runtime.RuntimeCapability.RedactionAdvanced).IsAvailable;
+
+    [RelayCommand(CanExecute = nameof(HasRedactionTile))]
+    private void OpenRedactionTile() => _openRedaction?.Invoke();
+
+    private void RaiseRedactionTile()
+    {
+        OnPropertyChanged(nameof(HasRedactionTile));
+        OpenRedactionTileCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnRuntimeChanged(object? sender, EventArgs e) => RaiseRedactionTile();
+
     /// <summary>Shows these definitions as the tile grid without asking the CLI (tests).</summary>
     internal void ShowCards(IReadOnlyList<WizardDefinition> definitions)
     {
@@ -224,6 +255,10 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         _catalog.DefinitionChanged += OnDefinitionChanged;
         Services.Monitor.StateChanged += OnGatewayStateChanged;
 
+        // Whether the runtime has the redaction editor may have been learned while the panel was away.
+        Services.Runtime.Changed += OnRuntimeChanged;
+        RaiseRedactionTile();
+
         BuildConnectors();
 
         if (SyncCardsWithCatalog())
@@ -251,6 +286,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         _catalog.DefinitionChanged -= OnDefinitionChanged;
         Services.Monitor.StateChanged -= OnGatewayStateChanged;
+        Services.Runtime.Changed -= OnRuntimeChanged;
     }
 
     /// <summary>Replaces the card list with one card per definition.</summary>

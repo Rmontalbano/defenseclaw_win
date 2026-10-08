@@ -1,0 +1,19 @@
+{
+  "built_in": true,
+  "detectors": [
+    "pii",
+    "credentials",
+    "secrets"
+  ],
+  "field_classes": {
+    "content": "remove",
+    "credential": "remove",
+    "error": "remove",
+    "evidence": "remove",
+    "identifier": "preserve",
+    "metadata": "preserve",
+    "path": "remove",
+    "reason": "remove"
+  },
+  "name": "strict"
+}

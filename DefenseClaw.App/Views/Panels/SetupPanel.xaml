@@ -555,32 +555,61 @@
                             IsOpen="{Binding HasLoadError, Mode=OneWay}"
                             Message="{Binding LoadError}" />
 
-                <!-- Guardrail controls (HILT, block message, judge): their own view, wired by the shell; absent until it is. -->
-                <Button Width="233"
-                        Height="92"
-                        Margin="0,0,0,12"
-                        HorizontalAlignment="Left"
-                        Style="{StaticResource DcInteractiveTile}"
-                        Command="{Binding OpenGuardrailControlsTileCommand}"
-                        Visibility="{Binding HasGuardrailControlsTile, Converter={StaticResource BoolToVisibility}}"
-                        AutomationProperties.Name="Guardrail controls"
-                        AutomationProperties.HelpText="Opens the guardrail's human approval, block message and judge settings.">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <ctl:DcSymbolIcon Margin="0,0,8,0"
-                                              Style="{StaticResource DcIconNav}"
-                                              ctl:DcIcon.Section="Setup"
-                                              Symbol="ShieldCheckmark24" />
-                            <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Guardrail controls" />
+                <WrapPanel>
+                    <!-- Guardrail controls (HILT, block message, judge): their own view, wired by the shell; absent until it is. -->
+                    <Button Width="233"
+                            Height="92"
+                            Margin="0,0,12,12"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource DcInteractiveTile}"
+                            Command="{Binding OpenGuardrailControlsTileCommand}"
+                            Visibility="{Binding HasGuardrailControlsTile, Converter={StaticResource BoolToVisibility}}"
+                            AutomationProperties.Name="Guardrail controls"
+                            AutomationProperties.HelpText="Opens the guardrail's human approval, block message and judge settings.">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcSymbolIcon Margin="0,0,8,0"
+                                                  Style="{StaticResource DcIconNav}"
+                                                  ctl:DcIcon.Section="Setup"
+                                                  Symbol="ShieldCheckmark24" />
+                                <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Guardrail controls" />
+                            </StackPanel>
+                            <TextBlock Margin="0,6,0,0"
+                                       MaxHeight="34"
+                                       Style="{StaticResource DcCaption}"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="Wrap"
+                                       Text="Human approval, block message and the judge." />
                         </StackPanel>
-                        <TextBlock Margin="0,6,0,0"
-                                   MaxHeight="34"
-                                   Style="{StaticResource DcCaption}"
-                                   TextTrimming="CharacterEllipsis"
-                                   TextWrapping="Wrap"
-                                   Text="Human approval, block message and the judge." />
-                    </StackPanel>
-                </Button>
+                    </Button>
+
+                    <!-- Redaction policy (CUST-295): the advanced editor of a runtime that has `setup redaction`; hidden entirely on 0.8.10. -->
+                    <Button Width="233"
+                            Height="92"
+                            Margin="0,0,12,12"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource DcInteractiveTile}"
+                            Command="{Binding OpenRedactionTileCommand}"
+                            Visibility="{Binding HasRedactionTile, Converter={StaticResource BoolToVisibility}}"
+                            AutomationProperties.Name="Redaction policy"
+                            AutomationProperties.HelpText="Opens the redaction policy: the profile of each bucket and destination, with every change previewed before it is applied.">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcSymbolIcon Margin="0,0,8,0"
+                                                  Style="{StaticResource DcIconNav}"
+                                                  ctl:DcIcon.Section="Setup"
+                                                  Symbol="EyeOff24" />
+                                <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Redaction policy" />
+                            </StackPanel>
+                            <TextBlock Margin="0,6,0,0"
+                                       MaxHeight="34"
+                                       Style="{StaticResource DcCaption}"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="Wrap"
+                                       Text="What is collected, and how it is redacted." />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
 
                 <!-- Tile grid, grouped -->
                 <ItemsControl ItemsSource="{Binding Groups}" IsTabStop="False">

@@ -1,0 +1,8 @@
+{
+  "profiles": [
+    "none",
+    "sensitive",
+    "content",
+    "strict"
+  ]
+}

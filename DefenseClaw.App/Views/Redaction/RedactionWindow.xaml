@@ -1,0 +1,30 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.Redaction.RedactionWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:rd="clr-namespace:DefenseClaw.App.Views.Redaction"
+                 Title="Redaction policy"
+                 Width="880"
+                 Height="860"
+                 MinWidth="620"
+                 MinHeight="480"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterScreen"
+                 AutomationProperties.Name="Redaction policy">
+    <!--
+        A window around RedactionView, so Setup and Logs can open the redaction editor without a panel of their own (see
+        RedactionWindow.Open). One instance at a time: opening it again brings it forward and reads the policy again.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Redaction policy" ShowMinimize="True" ShowMaximize="True" />
+
+        <rd:RedactionView x:Name="Editor" Grid.Row="1" />
+    </Grid>
+</ui:FluentWindow>

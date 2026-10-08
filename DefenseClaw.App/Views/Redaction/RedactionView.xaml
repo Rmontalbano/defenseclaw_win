@@ -1,0 +1,670 @@
+<UserControl x:Class="DefenseClaw.App.Views.Redaction.RedactionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels.Redaction"
+             AutomationProperties.Name="Redaction policy">
+    <!--
+        The redaction policy window's content (CUST-295): where the runtime's advanced redaction editor lives. Not a panel: RedactionWindow
+        hosts it, and Setup and Logs open that window (only on a runtime that has `setup redaction`).
+
+        Four cards, top to bottom: the current policy (the status: profile per bucket, destinations and their routes), a quick sheet (one
+        profile everywhere), the advanced editor (all 21 operations as forms), and the result of the last run (a readable diff for a preview).
+        Nothing changes configuration from here without the review at the bottom: the shared DiscoverReviewOverlay shows the exact command, what
+        the preview said, whether the gateway restarts, and, when raw content would start to flow, a tick that has to be given.
+
+        Shared styling: Themes\DefenseClaw.xaml (Dc*). Nothing here is hard-coded. Keys: F5 re-reads the policy, Esc closes the review.
+    -->
+    <UserControl.Resources>
+        <Style x:Key="RowName" TargetType="TextBlock" BasedOn="{StaticResource DcBody}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="WarnCaption" TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+            <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
+        </Style>
+        <!-- A field: its label over its control. -->
+        <Style x:Key="Field" TargetType="StackPanel">
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource DcFieldLabel}">
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+        <Style x:Key="Option" TargetType="CheckBox">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Margin" Value="0,0,16,4" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24">
+                <!-- Header: what this is, when it was read, refresh. -->
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Title}"
+                                   AutomationProperties.HeadingLevel="Level1" />
+                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Subtitle}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                                Visibility="{Binding IsSupported, Converter={StaticResource BoolToVisibility}}">
+                        <ui:ProgressRing Width="16" Height="16" Margin="0,0,8,0" IsIndeterminate="True"
+                                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource DcStatusText}" Margin="0,0,8,0" VerticalAlignment="Center" Text="{Binding AsOf}" />
+                        <ui:Button Content="Refresh"
+                                   Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                   AutomationProperties.Name="Read the redaction policy again (F5)"
+                                   IsEnabled="{Binding CanAct}"
+                                   Command="{Binding RefreshCommand}" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Not on this runtime: the one sentence, and nothing else. -->
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            IsClosable="False"
+                            Severity="Warning"
+                            Title="Redaction policy is not available"
+                            IsOpen="{Binding IsUnsupported, Mode=OneWay}"
+                            Message="{Binding UnsupportedMessage}" />
+
+                <StackPanel Visibility="{Binding IsSupported, Converter={StaticResource BoolToVisibility}}">
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                Title="{Binding NoticeTitle}"
+                                Message="{Binding NoticeMessage}"
+                                Severity="{Binding NoticeSeverity}"
+                                IsOpen="{Binding HasNotice, Mode=OneWay}"
+                                IsClosable="True"
+                                AutomationProperties.LiveSetting="Polite" />
+
+                    <!-- ============================================================== The current policy -->
+                    <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Margin="0,0,0,8"
+                                              AutomationProperties.HeadingLevel="Level2"
+                                              Symbol="ShieldLock24" Section="Setup" Content="Current policy" />
+
+                            <ui:InfoBar Margin="0,0,0,8"
+                                        IsClosable="False"
+                                        Severity="Error"
+                                        Title="The redaction policy could not be read"
+                                        IsOpen="{Binding HasStatusError, Mode=OneWay}"
+                                        Message="{Binding StatusError}" />
+
+                            <Border Margin="0,0,0,6" HorizontalAlignment="Left" Style="{StaticResource DcBadge}" Tag="{Binding SummaryTone}"
+                                    AutomationProperties.LiveSetting="Polite">
+                                <StackPanel Orientation="Horizontal">
+                                    <ctl:DcStatusGlyph Tone="{Binding SummaryTone}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                    <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap" Text="{Binding Summary}" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Style="{StaticResource DcCaption}" Text="{Binding PlanText}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,10" Text="{Binding ConfigPathText}" />
+
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Buckets: the profile each group of events is stored and sent with" />
+                            <ItemsControl ItemsSource="{Binding BucketRows}" IsTabStop="False" Margin="0,0,0,10"
+                                          AutomationProperties.Name="Buckets and their profiles">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,8,6" Style="{StaticResource DcSubtleRow}" AutomationProperties.Name="{Binding AutomationName}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource RowName}" TextTrimming="CharacterEllipsis" Text="{Binding Name}" />
+                                                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding SignalsText}" />
+                                                </StackPanel>
+                                                <Border Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                        Style="{StaticResource DcBadge}" Tag="{Binding Tone}">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Profile}" />
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,0,0,4" Text="Destinations and their routes" />
+                            <ItemsControl ItemsSource="{Binding DestinationRows}" IsTabStop="False" Margin="0,0,0,6"
+                                          AutomationProperties.Name="Destinations">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6" Style="{StaticResource DcSubtleRow}" AutomationProperties.Name="{Binding AutomationName}">
+                                            <StackPanel>
+                                                <WrapPanel>
+                                                    <TextBlock Style="{StaticResource RowName}" Margin="0,0,10,0" Text="{Binding Name}" />
+                                                    <Border Margin="0,0,8,0" VerticalAlignment="Center" Style="{StaticResource DcBadge}" Tag="{Binding Tone}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Label}" />
+                                                    </Border>
+                                                    <Border VerticalAlignment="Center" Style="{StaticResource DcChip}"
+                                                            Visibility="{Binding HasLock, Converter={StaticResource BoolToVisibility}}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Lock}" />
+                                                    </Border>
+                                                </WrapPanel>
+                                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Detail}" />
+                                                <ItemsControl ItemsSource="{Binding Routes}" IsTabStop="False" Margin="0,6,0,0"
+                                                              Visibility="{Binding HasRoutes, Converter={StaticResource BoolToVisibility}}"
+                                                              AutomationProperties.Name="Routes, in the order they are tried">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,0,0,2" AutomationProperties.Name="{Binding AutomationName}">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="24" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Position}" />
+                                                                <TextBlock Grid.Column="1" Style="{StaticResource DcMono}" Margin="0,0,10,0" Text="{Binding Name}" />
+                                                                <TextBlock Grid.Column="2" Style="{StaticResource DcCaption}" Text="{Binding Summary}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <TextBlock Style="{StaticResource WarnCaption}" Margin="0,4,0,0"
+                                                           Visibility="{Binding HasRoutesNote, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding RoutesNote}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding WarningRows}" IsTabStop="False" Margin="0,0,0,4"
+                                          AutomationProperties.Name="Warnings in the compiled plan">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource WarnCaption}" Margin="0,0,0,2" Text="{Binding Text}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" Text="{Binding JudgeNote}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ============================================================== Quick apply -->
+                    <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Margin="0,0,0,8"
+                                              AutomationProperties.HeadingLevel="Level2"
+                                              Symbol="ShieldCheckmark24" Section="Setup" Content="Quick apply: one profile everywhere" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8"
+                                       Text="Every bucket and every destination you can configure uses the profile you choose; more specific profiles are removed. You see the difference first, then the exact command." />
+
+                            <ctl:DcSegmented Margin="0,0,0,6" HorizontalAlignment="Left"
+                                             SelectedValue="{Binding QuickProfile, Mode=TwoWay}"
+                                             AutomationProperties.Name="Redaction profile to apply everywhere"
+                                             AutomationProperties.HelpText="none sends everything as recorded; sensitive, content and strict redact progressively more.">
+                                <ctl:DcSegment Value="none" Content="none" ToolTip="No redaction: everything is sent as recorded." />
+                                <ctl:DcSegment Value="sensitive" Content="sensitive" ToolTip="Removes credentials, hashes file paths, and masks PII, credentials and secrets found in content, reasons, evidence and errors." />
+                                <ctl:DcSegment Value="content" Content="content" ToolTip="Like sensitive, but replaces content, reasons, evidence and errors whole." />
+                                <ctl:DcSegment Value="strict" Content="strict" ToolTip="Keeps only metadata and identifiers; removes everything else." />
+                            </ctl:DcSegmented>
+                            <TextBlock Style="{StaticResource DcBody}" Margin="0,0,0,8" Text="{Binding QuickDescription}" />
+
+                            <ui:InfoBar Margin="0,0,0,8"
+                                        IsClosable="False"
+                                        Severity="Warning"
+                                        Title="This stops redacting"
+                                        IsOpen="{Binding IsQuickNone, Mode=OneWay}"
+                                        Message="{Binding QuickNoneWarning}" />
+                            <TextBlock Style="{StaticResource DcToneText}" Tag="Bad" Margin="0,0,0,8"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Assertive"
+                                       Visibility="{Binding QuickArmed, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding QuickArmedText}" />
+
+                            <CheckBox Style="{StaticResource Option}" Content="Restart the gateway after applying"
+                                      AutomationProperties.HelpText="Off by default. The command says --restart or --no-restart; the review spells out what each means."
+                                      IsChecked="{Binding QuickRestart, Mode=TwoWay}" />
+
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                                <ui:Button Content="Preview"
+                                           Icon="{ctl:DcSymbolIcon Eye24}"
+                                           Appearance="Secondary"
+                                           AutomationProperties.Name="Preview the difference, without writing anything"
+                                           IsEnabled="{Binding CanQuickPreview}"
+                                           Command="{Binding PreviewQuickCommand}" />
+                                <ui:Button Content="{Binding QuickApplyLabel}"
+                                           Icon="{ctl:DcSymbolIcon Save24}"
+                                           Appearance="Primary"
+                                           AutomationProperties.Name="Review the command and apply the profile"
+                                           IsEnabled="{Binding CanQuickApply}"
+                                           Command="{Binding ApplyQuickCommand}" />
+                            </WrapPanel>
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="Preview runs:" />
+                            <TextBlock Style="{StaticResource DcMono}" Margin="0,2,0,0" Text="{Binding QuickCommandText}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ============================================================== Advanced -->
+                    <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Margin="0,0,0,8"
+                                              AutomationProperties.HeadingLevel="Level2"
+                                              Symbol="ShieldSettings24" Section="Setup" Content="Advanced: every operation" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8"
+                                       Text="Buckets, defaults, profiles, destinations and ordered routes. A change is previewed (dry run) by default; turn that off to review the command and apply." />
+
+                            <StackPanel Style="{StaticResource Field}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Operation" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Operations}"
+                                          SelectedItem="{Binding SelectedOperation, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Operation">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource DcBody}" Text="{Binding Title}" />
+                                                <TextBlock Style="{StaticResource DcCaption}" Margin="8,0,0,0" VerticalAlignment="Center" Text="{Binding GroupTitle}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" Text="{Binding SelectedOperation.Summary}" />
+                                <TextBlock Style="{StaticResource WarnCaption}" Margin="0,2,0,0"
+                                           Visibility="{Binding Form.HasCaution, Converter={StaticResource BoolToVisibility}}"
+                                           Text="{Binding Form.Caution}" />
+                            </StackPanel>
+
+                            <!-- A profile that is required (apply). -->
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowRequiredProfile, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Profile" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Form.ProfileChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Form.Profile, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Profile to apply" />
+                            </StackPanel>
+
+                            <!-- A profile that may be set (defaults, bucket, send policy, route). -->
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowOptionalProfile, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Profile (optional)" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Form.OptionalProfileChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Form.Profile, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Profile, optional" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,-6,0,10"
+                                       Visibility="{Binding Form.ShowRouteProfileNote, Converter={StaticResource BoolToVisibility}}"
+                                       Text="A profile redacts what a route sends, and only logs and traces carry content: tick a send route with logs or traces to choose one." />
+
+                            <CheckBox Style="{StaticResource Option}" Content="Give the bucket back the default profile"
+                                      Visibility="{Binding Form.ShowInheritProfile, Converter={StaticResource BoolToVisibility}}"
+                                      AutomationProperties.HelpText="Drops this bucket's own profile (--inherit-profile). It cannot be combined with choosing a profile."
+                                      IsChecked="{Binding Form.InheritProfile, Mode=TwoWay}" />
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowBucket, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Bucket" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Form.BucketOptions}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Form.Bucket, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Bucket" />
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowDestination, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Destination" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Form.DestinationChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Form.Destination, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Destination" />
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" Text="{Binding Form.DestinationHint}" />
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowNewRouteName, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="New route name (lower-case letters, digits, - and _)" />
+                                <ui:TextBox Width="320" HorizontalAlignment="Left" PlaceholderText="block-tool-noise"
+                                            Text="{Binding Form.RouteName, UpdateSourceTrigger=PropertyChanged}"
+                                            IsEnabled="{Binding CanAct}"
+                                            AutomationProperties.Name="New route name" />
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowExistingRoute, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Route" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Form.RouteChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Form.RouteName, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Route" />
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" Text="{Binding Form.RouteHint}" />
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowPosition, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="{Binding Form.PositionLabel}" />
+                                <ui:TextBox Width="120" HorizontalAlignment="Left"
+                                            Text="{Binding Form.PositionText, UpdateSourceTrigger=PropertyChanged}"
+                                            IsEnabled="{Binding CanAct}"
+                                            AutomationProperties.Name="Position, counted from 1" />
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowSignals, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Signals" />
+                                <ItemsControl ItemsSource="{Binding Form.SignalChecks}" IsTabStop="False" AutomationProperties.Name="Signals">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Style="{StaticResource Option}" Content="{Binding Value}" IsChecked="{Binding IsChecked, Mode=TwoWay}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowBuckets, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="{Binding Form.BucketsLabel}" />
+                                <CheckBox Style="{StaticResource Option}" Content="All buckets (*)"
+                                          Visibility="{Binding Form.ShowAllBuckets, Converter={StaticResource BoolToVisibility}}"
+                                          IsChecked="{Binding Form.AllBuckets, Mode=TwoWay}" />
+                                <ItemsControl ItemsSource="{Binding Form.BucketChecks}" IsTabStop="False" AutomationProperties.Name="Buckets">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Style="{StaticResource Option}" Content="{Binding Value}"
+                                                      IsChecked="{Binding IsChecked, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowCollect, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Collection" />
+                                <WrapPanel>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,2" Text="Logs" />
+                                        <ComboBox Width="150" ItemsSource="{Binding Form.Collects}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.CollectLogs, Mode=TwoWay}" IsEnabled="{Binding CanAct}" AutomationProperties.Name="Collect logs" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,2" Text="Traces" />
+                                        <ComboBox Width="150" ItemsSource="{Binding Form.Collects}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.CollectTraces, Mode=TwoWay}" IsEnabled="{Binding CanAct}" AutomationProperties.Name="Collect traces" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,2" Text="Metrics" />
+                                        <ComboBox Width="150" ItemsSource="{Binding Form.Collects}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.CollectMetrics, Mode=TwoWay}" IsEnabled="{Binding CanAct}" AutomationProperties.Name="Collect metrics" />
+                                    </StackPanel>
+                                </WrapPanel>
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowProfileName, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="{Binding Form.ProfileNameLabel}" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left" IsEditable="True"
+                                          ItemsSource="{Binding Form.ProfileNames}"
+                                          Text="{Binding Form.ProfileName, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Profile name" />
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowExtends, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Starts from the built-in profile" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Form.ExtendsChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Form.Extends, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Built-in profile this one starts from" />
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowDetectors, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Detector groups (none ticked: keep the profile's)" />
+                                <ItemsControl ItemsSource="{Binding Form.DetectorChecks}" IsTabStop="False" AutomationProperties.Name="Detector groups">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Style="{StaticResource Option}" Content="{Binding Value}" IsChecked="{Binding IsChecked, Mode=TwoWay}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowFieldModes, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="What the profile does to each class of field" />
+                                <ItemsControl ItemsSource="{Binding Form.FieldRows}" IsTabStop="False" AutomationProperties.Name="Field modes">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="110" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Style="{StaticResource DcBody}" VerticalAlignment="Center" Text="{Binding Class}" />
+                                                <ComboBox Grid.Column="1" Width="200"
+                                                          ItemsSource="{x:Static vm:RedactionFieldRow.Modes}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                          SelectedValue="{Binding Mode, Mode=TwoWay}"
+                                                          AutomationProperties.Name="{Binding AutomationName}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <StackPanel Style="{StaticResource Field}" Visibility="{Binding Form.ShowReplaceWith, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Replace it with" />
+                                <ComboBox MinWidth="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding Form.ReplaceChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding Form.ReplaceWith, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanAct}"
+                                          AutomationProperties.Name="Profile that takes over" />
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding Form.ShowRouteFilters, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Style="{StaticResource Field}">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="The route" />
+                                    <ComboBox Width="260" HorizontalAlignment="Left"
+                                              ItemsSource="{Binding Form.RouteActions}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Form.RouteAction, Mode=TwoWay}"
+                                              IsEnabled="{Binding CanAct}"
+                                              AutomationProperties.Name="What the route does with matching events" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource Field}">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Minimum severity" />
+                                    <ComboBox Width="260" HorizontalAlignment="Left"
+                                              ItemsSource="{Binding Form.Severities}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Form.MinSeverity, Mode=TwoWay}"
+                                              IsEnabled="{Binding CanAct}"
+                                              AutomationProperties.Name="Minimum severity it matches" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource Field}">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Event sources (separate several with commas; empty matches any)" />
+                                    <ui:TextBox MinWidth="320" Text="{Binding Form.SourcesText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanAct}"
+                                                AutomationProperties.Name="Event sources it matches" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource Field}">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Connectors" />
+                                    <ui:TextBox MinWidth="320" PlaceholderText="claudecode, codex" Text="{Binding Form.ConnectorsText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanAct}"
+                                                AutomationProperties.Name="Connectors it matches" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource Field}">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Producer actions" />
+                                    <ui:TextBox MinWidth="320" Text="{Binding Form.ProducerActionsText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanAct}"
+                                                AutomationProperties.Name="Producer actions it matches" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource Field}">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Event names" />
+                                    <ui:TextBox MinWidth="320" Text="{Binding Form.EventNamesText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanAct}"
+                                                AutomationProperties.Name="Event names it matches" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- The command, the way to a preview or an apply. -->
+                            <TextBlock Style="{StaticResource WarnCaption}" Margin="0,0,0,6"
+                                       AutomationProperties.LiveSetting="Polite"
+                                       Visibility="{Binding HasProblem, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding Problem}" />
+                            <ctl:DcCommandOutput Margin="0,0,0,8" MaxHeight="130"
+                                                 Title="The command"
+                                                 OutputName="The command the button below runs"
+                                                 Visibility="{Binding HasCommand, Converter={StaticResource BoolToVisibility}}"
+                                                 Text="{Binding CommandText, Mode=OneWay}" />
+
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                                <CheckBox Style="{StaticResource Option}" Content="Preview only (dry run)"
+                                          Visibility="{Binding IsChange, Converter={StaticResource BoolToVisibility}}"
+                                          AutomationProperties.HelpText="On by default. A preview computes what would change and writes nothing; it never restarts the gateway."
+                                          IsChecked="{Binding DryRun, Mode=TwoWay}" />
+                                <CheckBox Style="{StaticResource Option}" Content="Restart the gateway after applying"
+                                          Visibility="{Binding IsChange, Converter={StaticResource BoolToVisibility}}"
+                                          IsEnabled="{Binding RestartEnabled}"
+                                          AutomationProperties.HelpText="Off, and unavailable while previewing. The command says --restart or --no-restart."
+                                          IsChecked="{Binding Restart, Mode=TwoWay}" />
+                            </WrapPanel>
+                            <ui:Button Content="{Binding PrimaryLabel}"
+                                       HorizontalAlignment="Left"
+                                       Appearance="Primary"
+                                       Icon="{ctl:DcSymbolIcon Play24}"
+                                       AutomationProperties.Name="Run the operation, preview it, or review and apply it"
+                                       IsEnabled="{Binding CanRun}"
+                                       Command="{Binding RunCommand}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ============================================================== The result of the last run -->
+                    <Border x:Name="OutcomeCard" Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}"
+                            Visibility="{Binding HasOutcome, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel DataContext="{Binding Outcome}">
+                            <Grid Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource RowName}" Text="{Binding Heading}" AutomationProperties.HeadingLevel="Level2" />
+                                    <Border Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcBadge}" Tag="{Binding Tone}">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Badge}" />
+                                    </Border>
+                                </StackPanel>
+                                <ui:Button Grid.Column="1" Content="Dismiss" Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                           AutomationProperties.Name="Dismiss the result"
+                                           Command="{Binding DataContext.DismissOutcomeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                            </Grid>
+
+                            <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Headline}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,2"
+                                       Visibility="{Binding HasBreakdown, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding Breakdown}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8"
+                                       Visibility="{Binding HasDiff, Converter={StaticResource BoolToVisibility}}"
+                                       Text="A delivery leg is one bucket's logs or traces on their way to one destination. Rows that would change the same way are folded together." />
+
+                            <ItemsControl ItemsSource="{Binding Diff}" IsTabStop="False" Margin="0,0,0,6"
+                                          Visibility="{Binding HasDiff, Converter={StaticResource BoolToVisibility}}"
+                                          AutomationProperties.Name="What changes, one row per destination, route and signal">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6" Style="{StaticResource DcSubtleRow}"
+                                                ToolTip="{Binding BucketsDetail}"
+                                                AutomationProperties.Name="{Binding AutomationName}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource RowName}" TextTrimming="CharacterEllipsis" Text="{Binding Target}" />
+                                                    <TextBlock Style="{StaticResource DcCaption}">
+                                                        <Run Text="{Binding Signal, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding BucketsText, Mode=OneWay}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Margin="12,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Style="{StaticResource DcMono}" Text="{Binding Before}" />
+                                                    <TextBlock Style="{StaticResource DcMono}" Margin="6,0" Text="→" />
+                                                    <TextBlock Style="{StaticResource DcMono}" FontWeight="SemiBold" Text="{Binding After}" />
+                                                </StackPanel>
+                                                <Border Grid.Column="2" VerticalAlignment="Center" Style="{StaticResource DcBadge}" Tag="{Binding Tone}">
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding KindText}" />
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding Facts}" IsTabStop="False" Margin="0,0,0,6"
+                                          Visibility="{Binding HasFacts, Converter={StaticResource BoolToVisibility}}"
+                                          AutomationProperties.Name="Details">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="170" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Label}" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource DcBody}" Text="{Binding Value}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding Notes}" IsTabStop="False"
+                                          Visibility="{Binding HasNotes, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,2" Text="{Binding}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl ItemsSource="{Binding Warnings}" IsTabStop="False" Margin="0,4,0,0"
+                                          Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVisibility}}"
+                                          AutomationProperties.Name="Warnings in the plan">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource WarnCaption}" Margin="0,0,0,2" Text="{Binding Text}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ui:Button Margin="0,10,0,0" HorizontalAlignment="Left" Appearance="Primary"
+                                       Content="Apply this change…"
+                                       Icon="{ctl:DcSymbolIcon Save24}"
+                                       AutomationProperties.Name="Review the command and apply the change just previewed"
+                                       Visibility="{Binding DataContext.CanApplyPreview, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}"
+                                       Command="{Binding DataContext.ApplyPreviewedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+
+                            <CheckBox Margin="0,10,0,4" Style="{StaticResource Option}" Content="Show CLI output"
+                                      Visibility="{Binding HasRaw, Converter={StaticResource BoolToVisibility}}"
+                                      AutomationProperties.HelpText="Shows the verbatim text the command printed"
+                                      IsChecked="{Binding DataContext.ShowRaw, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}" />
+                            <ctl:DcCommandOutput MaxHeight="300"
+                                                 OutputName="Verbatim output of the command"
+                                                 Visibility="{Binding DataContext.ShowOutcomeRaw, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}"
+                                                 Text="{Binding Raw, Mode=OneWay}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,8,0,0" Text="The command that ran:" />
+                            <TextBlock Style="{StaticResource DcMono}" Margin="0,2,0,0" Text="{Binding Command}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- The review every apply passes through; Esc dismisses it. -->
+        <panels:DiscoverReviewOverlay DataContext="{Binding Review}" />
+    </Grid>
+</UserControl>

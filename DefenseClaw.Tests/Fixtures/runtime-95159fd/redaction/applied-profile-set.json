@@ -1,0 +1,27 @@
+{
+  "after_plan_digest": "d494ae426839b90048a219be5405587e4fa075d9d5c7ecc532ca4e301ce61d18",
+  "applied": true,
+  "backup_path": "C:\\Users\\operator\\.defenseclaw\\backups\\config.yaml.before-redaction-1790000000000000607",
+  "before_plan_digest": "d3fd0167aa7dc87f53fb66a5af350de82633fe98a06acbbcf3314398788b133b",
+  "changed": true,
+  "changed_legs": 0,
+  "changes": [],
+  "dry_run": false,
+  "locked_profiles": [],
+  "newly_unredacted": 0,
+  "no_longer_unredacted": 0,
+  "restarted": false,
+  "verified_plan_digest": "d494ae426839b90048a219be5405587e4fa075d9d5c7ecc532ca4e301ce61d18",
+  "warnings": [
+    {
+      "code": "tls_verification_disabled",
+      "path": "observability.destinations[example-otlp].tls",
+      "summary": "destination transport uses an explicitly unsafe TLS mode"
+    },
+    {
+      "code": "private_export_network_allowed",
+      "path": "observability.destinations[example-otlp].network_safety.allow_private_networks",
+      "summary": "destination may connect to loopback or private collector addresses"
+    }
+  ]
+}

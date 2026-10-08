@@ -1,0 +1,19 @@
+{
+  "built_in": true,
+  "detectors": [
+    "pii",
+    "credentials",
+    "secrets"
+  ],
+  "field_classes": {
+    "content": "detect",
+    "credential": "remove",
+    "error": "detect",
+    "evidence": "detect",
+    "identifier": "preserve",
+    "metadata": "preserve",
+    "path": "hash",
+    "reason": "detect"
+  },
+  "name": "sensitive"
+}

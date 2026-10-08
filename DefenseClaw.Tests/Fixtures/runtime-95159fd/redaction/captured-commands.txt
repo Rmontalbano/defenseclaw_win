@@ -1,0 +1,30 @@
+# The commands the Docker capture of DefenseClaw source commit 95159fd ran for `setup redaction` (after `defenseclaw`), one per line:
+#   <name> <TAB> <arguments, split on single spaces>
+# Names of the destination, route and profile are replaced (the capture's own are synthetic container-local ones). Each `dry-*` command
+# was run with `--yes --dry-run --json` and the configuration was unchanged afterwards; the `applied-*` commands were run for real, inside
+# that container, with `--yes --json`. The matching output is in the file of the same name (`dry-bucket-set.json`, ...).
+status	setup redaction status --json
+status-text	setup redaction status
+profile-list	setup redaction profile list --json
+profile-show-sensitive	setup redaction profile show sensitive --json
+profile-show-custom	setup redaction profile show example-profile --json
+route-list	setup redaction route list example-otlp --json
+bucket-list	setup redaction bucket list
+destination-show	setup redaction destination show example-otlp
+dry-apply-everywhere-sensitive	setup redaction apply --scope all-configurable --profile sensitive --yes --dry-run --json
+dry-apply-defaults-strict	setup redaction apply --scope defaults --profile strict --yes --dry-run --json
+dry-bucket-set	setup redaction bucket set model.io --profile content --no-metrics --yes --dry-run --json
+dry-bucket-reset	setup redaction bucket reset model.io --yes --dry-run --json
+dry-defaults-set	setup redaction defaults set --profile sensitive --logs --yes --dry-run --json
+dry-defaults-reset	setup redaction defaults reset --yes --dry-run --json
+dry-destination-send	setup redaction destination send example-otlp --signal logs --bucket security.finding --profile sensitive --yes --dry-run --json
+dry-destination-inherit	setup redaction destination inherit example-otlp --yes --dry-run --json
+dry-profile-set	setup redaction profile set example-profile --extends sensitive --detector pii --field path=hash --yes --dry-run --json
+dry-profile-remove	setup redaction profile remove example-profile --yes --dry-run --json
+dry-route-add	setup redaction route add example-otlp example-route --signal logs --bucket tool.activity --min-severity HIGH --route-action drop --yes --dry-run --json
+dry-route-set	setup redaction route set example-otlp example-route --signal logs --bucket tool.activity --route-action send --profile strict --yes --dry-run --json
+dry-route-move	setup redaction route move example-otlp example-route --position 1 --yes --dry-run --json
+dry-route-remove	setup redaction route remove example-otlp example-route --yes --dry-run --json
+dry-remove-all	setup redaction remove-all --yes --dry-run --json
+applied-route-add	setup redaction route add example-otlp example-route --signal logs --bucket tool.activity --min-severity HIGH --route-action drop --yes --json
+applied-profile-set	setup redaction profile set example-profile --extends sensitive --detector pii --field path=hash --yes --json

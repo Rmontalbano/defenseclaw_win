@@ -101,6 +101,12 @@
                                ToolTip="Show the retained LLM judge responses (judge_bodies.db and the older audit.db table)"
                                AutomationProperties.Name="Judge responses"
                                AutomationProperties.HelpText="Open the retained LLM judge responses: verdict, confidence, latency and the redacted raw body." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon EyeOff24}"
+                               Command="{Binding OpenRedactionCommand}"
+                               Visibility="{Binding HasRedactionEntry, Converter={StaticResource BoolToVisibility}}"
+                               ToolTip="Redaction policy - what is collected and how it is redacted (runtimes with 'setup redaction')"
+                               AutomationProperties.Name="Redaction policy"
+                               AutomationProperties.HelpText="Open the redaction policy: the profile of each bucket and destination, with every change previewed before it is applied." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Broom24}"
                                Command="{Binding ClearCommand}"
                                ToolTip="Clear the buffered lines"

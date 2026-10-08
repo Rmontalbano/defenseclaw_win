@@ -1,0 +1,7 @@
+Destination: local-sqlite
+  Kind: sqlite
+  Generated: yes
+  Policy: implicit_local
+  Signals: logs
+  Redaction: unredacted (none)
+  Buckets: compliance.activity, security.finding, guardrail.evaluation, enforcement.action, model.io, tool.activity, asset.scan, asset.lifecycle, network.egress, agent.lifecycle, ai.discovery, telemetry.ingest, platform.health, diagnostic

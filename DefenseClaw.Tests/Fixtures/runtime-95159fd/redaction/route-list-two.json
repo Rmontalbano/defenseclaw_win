@@ -1,0 +1,37 @@
+{
+  "destination": "example-otlp",
+  "routes": [
+    {
+      "action": "drop",
+      "name": "example-route",
+      "selector": {
+        "buckets": [
+          "tool.activity"
+        ],
+        "min_severity": "HIGH"
+      },
+      "signals": [
+        "logs"
+      ]
+    },
+    {
+      "action": "send",
+      "name": "example-strict-logs",
+      "redaction_profile": "strict",
+      "selector": {
+        "buckets": [
+          "model.io",
+          "tool.activity"
+        ],
+        "connectors": [
+          "claudecode"
+        ],
+        "min_severity": "MEDIUM"
+      },
+      "signals": [
+        "logs",
+        "traces"
+      ]
+    }
+  ]
+}

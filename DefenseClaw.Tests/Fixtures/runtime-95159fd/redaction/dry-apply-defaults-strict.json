@@ -1,0 +1,129 @@
+{
+  "after_plan_digest": "afc9994855d9263910594cbacb21a9924871bb31e2bfd6ce8e6b0625824e0415",
+  "applied": false,
+  "backup_path": null,
+  "before_plan_digest": "870724638c736585c5b04a8e537feda3c4d2507102e99a902f06e91f5a515b1e",
+  "changed": true,
+  "changed_legs": 14,
+  "changes": [
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "agent.lifecycle",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "ai.discovery",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "asset.lifecycle",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "asset.scan",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "compliance.activity",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "diagnostic",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "enforcement.action",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "guardrail.evaluation",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "model.io",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "network.egress",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "platform.health",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "security.finding",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "telemetry.ingest",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "after": "strict",
+      "before": "none",
+      "bucket": "tool.activity",
+      "destination": "local-sqlite",
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    }
+  ],
+  "dry_run": true,
+  "locked_profiles": [],
+  "newly_unredacted": 0,
+  "no_longer_unredacted": 14,
+  "restarted": false,
+  "verified_plan_digest": null,
+  "warnings": []
+}

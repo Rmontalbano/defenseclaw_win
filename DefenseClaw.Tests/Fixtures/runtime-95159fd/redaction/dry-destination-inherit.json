@@ -1,0 +1,27 @@
+{
+  "after_plan_digest": "4edd4f678df4a2e3acbd93f8280e5394a6052d4accbaad1af2436f28bd91722d",
+  "applied": false,
+  "backup_path": null,
+  "before_plan_digest": "4edd4f678df4a2e3acbd93f8280e5394a6052d4accbaad1af2436f28bd91722d",
+  "changed": false,
+  "changed_legs": 0,
+  "changes": [],
+  "dry_run": true,
+  "locked_profiles": [],
+  "newly_unredacted": 0,
+  "no_longer_unredacted": 0,
+  "restarted": false,
+  "verified_plan_digest": null,
+  "warnings": [
+    {
+      "code": "tls_verification_disabled",
+      "path": "observability.destinations[example-otlp].tls",
+      "summary": "destination transport uses an explicitly unsafe TLS mode"
+    },
+    {
+      "code": "private_export_network_allowed",
+      "path": "observability.destinations[example-otlp].network_safety.allow_private_networks",
+      "summary": "destination may connect to loopback or private collector addresses"
+    }
+  ]
+}

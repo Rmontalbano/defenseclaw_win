@@ -197,6 +197,20 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     /// <summary>Opens the judge responses window; a test replaces it so no window is made.</summary>
     internal Action? JudgeHistoryOpener { get; set; }
 
+    /// <summary>Opens the redaction policy window (CUST-295); a test replaces it so no window is made.</summary>
+    internal Action? RedactionOpener { get; set; }
+
+    /// <summary>The "Redaction policy" button: shown only while the connected runtime has <c>setup redaction</c>, hidden entirely on 0.8.10.</summary>
+    public bool HasRedactionEntry => Services.Runtime.Check(DefenseClaw.Core.Runtime.RuntimeCapability.RedactionAdvanced).IsAvailable;
+
+    private void OnRuntimeChanged(object? sender, EventArgs e) => RaiseRedactionEntry();
+
+    private void RaiseRedactionEntry()
+    {
+        OnPropertyChanged(nameof(HasRedactionEntry));
+        OpenRedactionCommand.NotifyCanExecuteChanged();
+    }
+
     /// <summary>True on Events, which alone has the telemetry switch.</summary>
     public bool IsEventsSource => ActiveSource == EventsSource;
 
@@ -261,6 +275,10 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     {
         Services.ConnectorScope.Changed += OnConnectorScopeChanged;
 
+        // The runtime may have been probed (or upgraded) while the panel was away; the redaction button follows it.
+        Services.Runtime.Changed += OnRuntimeChanged;
+        RaiseRedactionEntry();
+
         if (!_seeded)
         {
             return;
@@ -279,6 +297,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     protected override void OnDeactivated()
     {
         Services.ConnectorScope.Changed -= OnConnectorScopeChanged;
+        Services.Runtime.Changed -= OnRuntimeChanged;
         StopStructured();
     }
 
@@ -501,6 +520,19 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         }
 
         Views.JudgeHistory.JudgeHistoryWindow.Open(Services, Application.Current?.MainWindow);
+    }
+
+    /// <summary>The Mac's Logs "Redaction Policy" button: what is collected and how it is redacted, in a window of its own. Not on 0.8.10.</summary>
+    [RelayCommand(CanExecute = nameof(HasRedactionEntry))]
+    private void OpenRedaction()
+    {
+        if (RedactionOpener is { } opener)
+        {
+            opener();
+            return;
+        }
+
+        _ = Views.Redaction.RedactionWindow.Open(Services, Application.Current?.MainWindow);
     }
 
     [RelayCommand]
