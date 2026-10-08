@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.Services.Settings;
+using DefenseClaw.Core.Runtime;
 using DefenseClaw.App.Tests.TestSupport;
 
 namespace DefenseClaw.App.Tests.Settings;
@@ -34,7 +35,17 @@ public sealed class AppSettingsStoreTests : IDisposable
         new NotificationSettings { Critical = false, High = false, Gateway = false, HighWaterUnixNano = 1_780_000_000_123_456_789 },
         new StartupSettings { GatewayAutoStart = true, CloseToTray = false, RememberLastPanel = true, LastPanelId = "ai-discovery" },
         new ConnectionSettings { CliPathOverride = @"C:\Tools\DefenseClaw\defenseclaw.exe" },
-        new UpdateSettings { LastCheckUnix = 1_790_000_000, DismissedVersion = "0.9.1" });
+        new UpdateSettings { LastCheckUnix = 1_790_000_000, DismissedVersion = "0.9.1" },
+        new DeveloperSettings
+        {
+            Enabled = true,
+            Kind = RuntimeKind.Container,
+            CliPath = @"D:\next\bin\defenseclaw.exe",
+            HomeDirectory = @"D:\next\home",
+            GatewayUrl = "http://127.0.0.1:18971",
+            ContainerName = "dc-next-1",
+            HostDataFolder = @"D:\next\data",
+        });
 
     // ------------------------------------------------------------------ defaults
 

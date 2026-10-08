@@ -1,5 +1,6 @@
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.Core.Gateway;
 
@@ -79,7 +80,18 @@ public sealed class GatewayPeerVerifier
     /// the owner up afresh on every call, so a listener swapped after the last poll is caught
     /// on the next authenticated request rather than believed.
     /// </summary>
-    public Func<PortOwnerTrust> ForPort(int port) => () => Classify(_inspector.FindListener(port));
+    public Func<PortOwnerTrust> ForPort(int port)
+    {
+        // Developer runtime selector, container mode: the port is Docker's published loopback port, so its owner is Docker's relay and
+        // never the install directory's gateway. The operator named this exact port as the container's gateway (and the token is the
+        // container's own, read from the data copy they chose), so that port, and only that port, is trusted.
+        if (_paths.Runtime.Kind == RuntimeKind.Container && _paths.Runtime.TryGetGatewayPort(out var selected) && selected == port)
+        {
+            return () => PortOwnerTrust.Gateway;
+        }
+
+        return () => Classify(_inspector.FindListener(port));
+    }
 
     /// <summary>One-line reason a listener is not trusted, for the banner and the alerts note.</summary>
     public string DescribeUntrusted(PortOwner? owner)

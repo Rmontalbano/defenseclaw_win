@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.Core.Cli;
 
@@ -607,6 +608,9 @@ public sealed class CliRunner : IDisposable
         return DefaultTimeout;
     }
 
+    private static bool IsDefenseClawExecutable(string executablePath) =>
+        Path.GetFileNameWithoutExtension(executablePath).ToLowerInvariant() is "defenseclaw" or "defenseclaw-gateway";
+
     private static bool IsToken(string arg, string expected) =>
         string.Equals(arg, expected, StringComparison.OrdinalIgnoreCase);
 
@@ -666,6 +670,12 @@ public sealed class CliRunner : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(executableName);
 
+        // The developer runtime selector's container mode (Settings → Advanced). Off for everyone else: the branch is a property read.
+        if (_paths.Runtime.Kind == RuntimeKind.Container && RuntimeLaunch.RunsInContainer(executableName))
+        {
+            return await RunInContainerAsync(executableName, args, stdinSecret, cancellationToken, options).ConfigureAwait(true);
+        }
+
         // Resumes on the caller's context, as it always did: InvocationStarted is raised from the start of
         // RunExecutableAsync on that thread, and a UI subscriber that adds a row there relies on it.
         // FindExecutableAsync scans on the pool and joins a scan already in flight for the same name.
@@ -673,6 +683,39 @@ public sealed class CliRunner : IDisposable
             ?? throw new CliNotFoundException(executableName, _paths.CandidatesFor(executableName));
 
         return await RunExecutableAsync(path, args, stdinSecret, cancellationToken, options).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="tool"/> inside the selected container: <c>docker exec [-i] [-e NAME…] CONTAINER TOOL ARGS</c>.
+    /// The timeout is worked out from the <i>original</i> argv (a <c>setup</c> wizard keeps its 30 minutes), and environment
+    /// values travel in docker's own environment, named but never valued on its command line (see
+    /// <see cref="RuntimeLaunch.ContainerArguments"/>). Everything else - the guards, Activity, secrets scrubbing - is the ordinary path.
+    /// </summary>
+    private async Task<CliInvocation> RunInContainerAsync(
+        string tool,
+        IReadOnlyList<string> args,
+        SecretValue? stdinSecret,
+        CancellationToken cancellationToken,
+        CliRunOptions? options)
+    {
+        var docker = await _paths.FindExecutableAsync("docker").ConfigureAwait(true)
+            ?? throw new CliNotFoundException("docker", _paths.CandidatesFor("docker"));
+
+        var effective = options ?? CliRunOptions.Default;
+        var timeout = ResolveTimeout(tool, args, effective);
+        var wrapped = RuntimeLaunch.ContainerArguments(
+            _paths.Runtime,
+            tool,
+            args,
+            ResolveEnvironment(effective).Select(e => e.Name),
+            usesStdin: stdinSecret is { IsEmpty: false });
+
+        return await RunExecutableAsync(
+            docker,
+            wrapped,
+            stdinSecret,
+            cancellationToken,
+            effective with { Timeout = timeout ?? System.Threading.Timeout.InfiniteTimeSpan }).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -1008,6 +1051,12 @@ public sealed class CliRunner : IDisposable
         foreach (var entry in environment)
         {
             startInfo.Environment[entry.Name] = entry.Value.Reveal();
+        }
+
+        // A side-by-side CLI (developer runtime selector) keeps its files in its own home, whatever this app's environment says.
+        if (_paths.Runtime is { Kind: RuntimeKind.Cli, HomeDirectory: { } runtimeHome } && IsDefenseClawExecutable(executablePath))
+        {
+            startInfo.Environment[DefenseClawPaths.HomeVariableName] = runtimeHome;
         }
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };

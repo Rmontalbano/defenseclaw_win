@@ -140,6 +140,9 @@ public partial class App : Application
         // Started last, on the UI thread, so StateChanged is raised where the bindings live.
         _services.Monitor.Start();
 
+        // What the connected runtime can do (a probe of --version-json and --help screens, off the UI thread, repeated only when the CLI file changes).
+        _services.Runtime.Start();
+
         // One tray toast per release ("DefenseClaw X is available"; the banner in the dashboard carries the rest). Then the background
         // update check: Start returns at once and the work runs on the pool, after the monitor's first poll, so nothing is added to the launch.
         _services.UpdateWatcher.NewVersionAvailable += (_, e) => _tray?.Notify("DefenseClaw update", e.Text + ". Open the dashboard to review it.", NotificationIcon.Info);

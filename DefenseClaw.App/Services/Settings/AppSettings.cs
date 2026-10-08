@@ -1,4 +1,5 @@
 using DefenseClaw.App.Services.Appearance;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Services.Settings;
 
@@ -17,13 +18,15 @@ namespace DefenseClaw.App.Services.Settings;
 /// <param name="Startup">What the app does when it starts and when its window closes.</param>
 /// <param name="Connection">Where the DefenseClaw CLI is, when it is not where the app would look.</param>
 /// <param name="Updates">What the update check remembers between runs.</param>
+/// <param name="Developer">The developer runtime selector (Settings -> Advanced); off unless a developer turns it on.</param>
 internal sealed record AppSettings(
     AppearanceSettings Appearance,
     MonitoringSettings Monitoring,
     NotificationSettings Notifications,
     StartupSettings Startup,
     ConnectionSettings Connection,
-    UpdateSettings Updates)
+    UpdateSettings Updates,
+    DeveloperSettings Developer)
 {
     /// <summary>A fresh install: every section at its defaults.</summary>
     public static AppSettings Defaults { get; } = new(
@@ -32,7 +35,8 @@ internal sealed record AppSettings(
         new NotificationSettings(),
         new StartupSettings(),
         new ConnectionSettings(),
-        new UpdateSettings());
+        new UpdateSettings(),
+        new DeveloperSettings());
 }
 
 /// <summary>The sections of <see cref="AppSettings"/>, as flags: what <see cref="AppSettingsChangedEventArgs.Sections"/> says changed.</summary>
@@ -46,7 +50,8 @@ internal enum AppSettingsSections
     Startup = 8,
     Connection = 16,
     Updates = 32,
-    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates,
+    Developer = 64,
+    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates | Developer,
 }
 
 /// <summary>Monitoring: how often the gateway's health is polled, and whether polling is paused (the Mac's "pulse interval").</summary>
@@ -138,6 +143,68 @@ internal sealed record UpdateSettings
     public string? NotifiedVersion { get; init; }
 }
 
+/// <summary>
+/// Developer: which DefenseClaw the app drives. <b>Off by default, and off means exactly the installed runtime</b>: with
+/// <see cref="Enabled"/> false every other field is ignored, so a half-filled form can never change what a normal user runs.
+/// The fields are kept when the switch goes off so a developer's second session does not start from blank. A change takes
+/// effect the next time the app starts (the data directory and the gateway client are built once, at launch).
+/// </summary>
+internal sealed record DeveloperSettings
+{
+    private readonly string? _cliPath;
+    private readonly string? _homeDirectory;
+    private readonly string? _gatewayUrl;
+    private readonly string? _containerName;
+    private readonly string? _hostDataFolder;
+
+    /// <summary>The selector is on. Default false.</summary>
+    public bool Enabled { get; init; }
+
+    /// <summary>Which runtime, while <see cref="Enabled"/>. <see cref="RuntimeKind.Installed"/> is the default.</summary>
+    public RuntimeKind Kind { get; init; }
+
+    /// <summary>Full path to the side-by-side <c>defenseclaw.exe</c>.</summary>
+    public string? CliPath { get => _cliPath; init => _cliPath = Clean(value); }
+
+    /// <summary>The <c>DEFENSECLAW_HOME</c> for that CLI.</summary>
+    public string? HomeDirectory { get => _homeDirectory; init => _homeDirectory = Clean(value); }
+
+    /// <summary>The loopback gateway address (a CLI: optional; a container: required).</summary>
+    public string? GatewayUrl { get => _gatewayUrl; init => _gatewayUrl = Clean(value); }
+
+    /// <summary>The Docker container name.</summary>
+    public string? ContainerName { get => _containerName; init => _containerName = Clean(value); }
+
+    /// <summary>The host folder holding a copy of the container's data directory (read-only to the app).</summary>
+    public string? HostDataFolder { get => _hostDataFolder; init => _hostDataFolder = Clean(value); }
+
+    /// <summary>
+    /// The selection these settings ask for: <see cref="RuntimeSelection.Installed"/> unless the selector is on, a non-default
+    /// kind is chosen <b>and</b> the choice is valid. Anything else (off, incomplete, a file that has gone) is the installed
+    /// runtime, so the app always starts.
+    /// </summary>
+    public RuntimeSelection ToSelection()
+    {
+        if (!Enabled)
+        {
+            return RuntimeSelection.Installed;
+        }
+
+        var selection = Raw();
+        return selection.Validate() is null ? selection : RuntimeSelection.Installed;
+    }
+
+    /// <summary>The selection as typed, valid or not (what the Settings form validates and shows).</summary>
+    public RuntimeSelection Raw() => Kind switch
+    {
+        RuntimeKind.Cli => RuntimeSelection.ForCli(CliPath, HomeDirectory, GatewayUrl),
+        RuntimeKind.Container => RuntimeSelection.ForContainer(ContainerName, GatewayUrl, HostDataFolder),
+        _ => RuntimeSelection.Installed,
+    };
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
 /// <summary>What <see cref="AppSettingsStore.Changed"/> reports.</summary>
 internal sealed class AppSettingsChangedEventArgs : EventArgs
 {
@@ -191,6 +258,11 @@ internal sealed class AppSettingsChangedEventArgs : EventArgs
         if (before.Updates != after.Updates)
         {
             sections |= AppSettingsSections.Updates;
+        }
+
+        if (before.Developer != after.Developer)
+        {
+            sections |= AppSettingsSections.Developer;
         }
 
         return sections;

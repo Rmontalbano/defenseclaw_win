@@ -11,6 +11,7 @@ using DefenseClaw.Core.Inventory;
 using DefenseClaw.Core.Logs;
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Core.Runtime;
 using DefenseClaw.Core.Security;
 using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.Services.Updates;
@@ -77,7 +78,8 @@ public sealed class AppServices : IDisposable
         StartupLoad startup,
         string? claudeSettingsPath = null,
         string? settingsPath = null,
-        Func<AppServices, UpdateWatcher>? updateWatcherFactory = null)
+        Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
+        RuntimeProbeRunner? runtimeProbeRunner = null)
     {
         Paths = startup.Paths;
 
@@ -97,9 +99,8 @@ public sealed class AppServices : IDisposable
         PortInspector = new PortOwnerInspector();
         _peerVerifier = new GatewayPeerVerifier(Paths, PortInspector);
 
-        _endpoint = new GatewayEndpoint(
-            _config.Config.Gateway.ApiPort,
-            CreateGatewayClient(_config.Config.Gateway.ApiPort));
+        var apiPort = EffectiveApiPort(_config.Config.Gateway.ApiPort);
+        _endpoint = new GatewayEndpoint(apiPort, CreateGatewayClient(apiPort));
 
         // The detector's own client is only its default for the parameterless overloads; the
         // monitor always hands it the live endpoint's client (see GatewayMonitor.PollAsync), so
@@ -129,9 +130,17 @@ public sealed class AppServices : IDisposable
         // follows the monitor it is handed.
         Settings = AppSettingsStore.ForPath(settingsPath);
 
+        // What the connected runtime can do (Settings -> Advanced selects which one). Idle until Start; every capability is absent until it has answered.
+        Runtime = new RuntimeService(Paths, runtimeProbeRunner);
+
         // "Use this defenseclaw.exe" (Settings → Connection) reaches every CLI lookup through the paths, before anything has looked one
         // up (the monitor and the tray start later) and again whenever the setting changes.
-        Paths.SetCliPathOverride(Settings.Current.Connection.CliPathOverride);
+        // A runtime chosen in Settings -> Advanced has pinned its own CLI already (see RuntimeEnvironment.CreatePaths) and keeps it.
+        if (Paths.Runtime.IsDefault)
+        {
+            Paths.SetCliPathOverride(Settings.Current.Connection.CliPathOverride);
+        }
+
         Settings.Changed += OnSettingsChanged;
 
         Navigation = new ShellNavigation();
@@ -197,6 +206,12 @@ public sealed class AppServices : IDisposable
     /// <c>Settings.Changed</c> announces. See <see cref="Settings.AppSettingsStore"/>.
     /// </summary>
     internal AppSettingsStore Settings { get; }
+
+    /// <summary>
+    /// The connected runtime's identity and capabilities, and the gate panels, palette entries and Setup tiles use before offering
+    /// something only newer runtimes have: <c>services.Runtime.Check(RuntimeCapability.AcpGuard).IsAvailable</c>. See <see cref="RuntimeService"/>.
+    /// </summary>
+    internal RuntimeService Runtime { get; }
 
     /// <summary>The inbox for "show this panel, and tell it this" requests (deep links). See <see cref="ShellNavigation"/>.</summary>
     public ShellNavigation Navigation { get; }
@@ -293,7 +308,7 @@ public sealed class AppServices : IDisposable
     /// <see cref="Initialize"/> does the same reads inline. Idempotent, and a no-op once the
     /// singleton exists. UI thread only, like <see cref="Initialize"/>.
     /// </summary>
-    public static void BeginInitialize() => BeginInitialize(new DefenseClawPaths());
+    public static void BeginInitialize() => BeginInitialize(CreateStartupPaths());
 
     /// <summary>The same, over injected <paramref name="paths"/>; what harnesses use to keep clear of the real data directory.</summary>
     internal static void BeginInitialize(DefenseClawPaths paths)
@@ -310,7 +325,7 @@ public sealed class AppServices : IDisposable
     {
         if (Instance is null)
         {
-            var startup = _pendingStartup ?? BeginLoad(new DefenseClawPaths(), onPoolThread: false);
+            var startup = _pendingStartup ?? BeginLoad(CreateStartupPaths(), onPoolThread: false);
             _pendingStartup = null;
             Instance = new AppServices(startup);
         }
@@ -319,6 +334,28 @@ public sealed class AppServices : IDisposable
     }
 
     private static StartupLoad? _pendingStartup;
+
+    /// <summary>
+    /// The paths the process starts with. For everyone who has not turned the developer runtime selector on (the default) this is
+    /// exactly <c>new DefenseClawPaths()</c>; with it on and a valid choice, the paths follow that runtime (see
+    /// <see cref="RuntimeEnvironment.CreatePaths"/>). Never throws: a settings file that cannot be read is "not on".
+    /// </summary>
+    private static DefenseClawPaths CreateStartupPaths()
+    {
+        RuntimeSelection selection;
+        try
+        {
+            selection = AppSettingsStore.ForPath().Current.Developer.ToSelection();
+        }
+#pragma warning disable CA1031 // Startup has no handler above it; an unreadable settings file means the installed runtime.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            selection = RuntimeSelection.Installed;
+        }
+
+        return RuntimeEnvironment.CreatePaths(selection);
+    }
 
     /// <summary>
     /// Builds the config store and token resolver and reads config.yaml and the token through
@@ -353,7 +390,8 @@ public sealed class AppServices : IDisposable
         string? claudeSettingsPath = null,
         bool readConfigOnPoolThread = false,
         string? settingsPath = null,
-        Func<AppServices, UpdateWatcher>? updateWatcherFactory = null)
+        Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
+        RuntimeProbeRunner? runtimeProbeRunner = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -364,7 +402,9 @@ public sealed class AppServices : IDisposable
         // Likewise the release check would go to GitHub and use the real cache file: an isolated composition's watcher answers "not checked".
         updateWatcherFactory ??= services => new UpdateWatcher(
             services.Settings, services.Monitor, (_, _) => Task.FromResult(UpdateCheckResult.NotCheckedYet));
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory);
+        // Likewise the runtime probes would start the real CLI: an isolated composition's detector answers "unknown" unless a test supplies a runner.
+        runtimeProbeRunner ??= static (_, _) => Task.FromResult(RuntimeProbeOutput.Fail("not probed in an isolated composition"));
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -380,6 +420,13 @@ public sealed class AppServices : IDisposable
     /// A client for <paramref name="port"/> that sends the bearer token only to the DefenseClaw
     /// gateway from the install directory — see <see cref="GatewayPeerVerifier"/>.
     /// </summary>
+    /// <summary>
+    /// The port the gateway client targets: <c>gateway.api_port</c> from config.yaml, unless the developer runtime selector names a
+    /// gateway address (a container publishes its gateway on a different port from the one its config.yaml says).
+    /// </summary>
+    private int EffectiveApiPort(int configured) =>
+        Paths.Runtime.TryGetGatewayPort(out var selected) ? selected : configured;
+
     private GatewayClient CreateGatewayClient(int port) =>
         GatewayClient.Create(port, CurrentToken, verifyPeer: _peerVerifier.ForPort(port));
 
@@ -426,7 +473,7 @@ public sealed class AppServices : IDisposable
                 }
 
                 var state = LoadConfigState(ConfigStore, TokenResolver, lastGood);
-                var port = state.Document.Config.Gateway.ApiPort;
+                var port = EffectiveApiPort(state.Document.Config.Gateway.ApiPort);
 
                 // Built before anything is published, so a failure here (it cannot really
                 // happen — the port getter clamps to 1..65535 — but "cannot" is how this class
@@ -507,6 +554,7 @@ public sealed class AppServices : IDisposable
         // runner and keeps going; everything else in flight is killed, process tree and all.
         // App.OnExit has usually already called Shutdown, in which case this is a no-op.
         Cli.Dispose();
+        Runtime.Dispose();
 
         ConfigWatcher.Changed -= OnConfigChanged;
         _reloadRetry?.Dispose();
@@ -587,7 +635,8 @@ public sealed class AppServices : IDisposable
     /// <summary>A change to the CLI override reaches the paths at once (see the constructor); nothing else in the settings is this class's.</summary>
     private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e)
     {
-        if (e.Affects(AppSettingsSections.Connection) &&
+        if (Paths.Runtime.IsDefault &&
+            e.Affects(AppSettingsSections.Connection) &&
             !string.Equals(e.Previous.Connection.CliPathOverride, e.Current.Connection.CliPathOverride, StringComparison.Ordinal))
         {
             Paths.SetCliPathOverride(e.Current.Connection.CliPathOverride);

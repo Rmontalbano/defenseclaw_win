@@ -94,6 +94,17 @@ public sealed class ConfigSaveService
 
         var path = _paths.ConfigFilePath;
 
+        // A host copy of a container's data folder (developer runtime selector) is read-only: the container owns the real file.
+        if (_paths.DataDirectoryReadOnly)
+        {
+            return new SaveOutcome(
+                false,
+                SaveStage.WriteFailed,
+                "Nothing was saved: this data folder is a read-only copy of a container's. Change the container's configuration with its own CLI.",
+                null,
+                null);
+        }
+
         // 0. The validate step at the end runs a CLI verb without a confirmation, which is only allowed for a
         //    read-only verb by the shared classifier. Checked here, before anything touches disk, so a
         //    classifier change can never leave a half-finished save behind.

@@ -1,0 +1,61 @@
+Usage: defenseclaw guardrail [OPTIONS] COMMAND [ARGS]...
+
+  Control guardrail policy: status, enable/disable, fail-mode, hilt,
+  block-message.
+
+  Quick day-to-day levers that wrap 'defenseclaw setup guardrail' so operators
+  don't have to navigate the full setup flow just to adjust posture.
+  Subcommands:
+
+    status         enabled state + roster (mode/fail/rule-pack/hilt/judge)
+    enable/disable flip enforcement on/off
+    mode           observe (log only) vs action (enforce)
+    block-at       lowest severity a tool call is blocked at
+    alert-at       lowest severity a tool call raises an alert at
+    fail-mode      open vs closed when a hook fails
+    hilt           human-in-the-loop prompting
+    block-message  message shown when an action is blocked
+    list-packs     list rule packs + the dir each connector enforces
+    use-pack       switch the rule pack, globally or for one connector
+    protection     turn opt-in protection packs on/off per scope
+    validate-pack  validate one pack with the authoritative Go loader
+
+  Multi-connector: one gateway enforces N hook connectors. Each policy
+  subcommand takes '--connector X' to scope the change to a single
+  configured peer (e.g. 'guardrail disable --connector codex'); omit it
+  to apply globally. 'guardrail --connector' scopes policy to a peer that
+  'setup' has already configured - it does not add new connectors.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  alert-at                Set the lowest severity at which tool calls raise an
+                          alert.
+  allow-private-upstream  Let the guardrail proxy reach an LLM endpoint on a
+                          private address.
+  block-at                Set the lowest severity at which tool calls are
+                          blocked.
+  block-message           Show or change the custom message shown when an
+                          action is blocked.
+  disable                 Disable the LLM guardrail and run connector
+                          teardown.
+  enable                  Re-enable the LLM guardrail using the existing
+                          config.
+  fail-mode               Show or change the hook failure behavior.
+  hilt                    Show or change the human-in-the-loop (HILT) approval
+                          policy.
+  judge                   Gate which hook connectors forward content to the
+                          LLM judge.
+  list-packs              List the available guardrail rule packs and who
+                          enforces which.
+  mode                    Switch the guardrail between observe (log only) and
+                          action (enforce).
+  protection              Turn the opt-in protection packs on and off,
+                          globally or per connector.
+  status                  Show whether the guardrail is enabled and how each
+                          active connector is set.
+  use-pack                Switch the guardrail rule pack, globally or for one
+                          connector.
+  validate-pack           Validate rule pack PATH without starting or
+                          contacting the gateway.

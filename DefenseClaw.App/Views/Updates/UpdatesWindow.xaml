@@ -136,6 +136,8 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Installed" />
@@ -149,6 +151,12 @@
 
                             <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Assets" />
                             <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource DcFieldValueInline}" Text="{Binding AssetsSummary}" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Runtime" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource DcFieldValueInline}" TextWrapping="Wrap" Text="{Binding RuntimeIdentityText}" />
+
+                            <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Features" />
+                            <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource DcFieldValueInline}" TextWrapping="Wrap" Text="{Binding RuntimeFeaturesText}" />
                         </Grid>
 
                         <ui:InfoBar Title="Rate limited"

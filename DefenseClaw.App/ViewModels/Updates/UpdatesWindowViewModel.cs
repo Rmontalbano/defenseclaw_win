@@ -123,6 +123,14 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     [ObservableProperty]
     private bool _hasSetupAsset;
 
+    /// <summary>Which runtime is connected and what it can do (CUST-291): "defenseclaw-cli 1.0.0 (path)", from the probes, not from the release check.</summary>
+    [ObservableProperty]
+    private string _runtimeIdentityText = "Not detected";
+
+    /// <summary>The newer features the connected runtime has, in a line.</summary>
+    [ObservableProperty]
+    private string _runtimeFeaturesText = "Features unknown until the runtime answers";
+
     public UpdatesWindowViewModel(AppServices services)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
@@ -130,6 +138,9 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         _updateChecker = new UpdateChecker(_services, _http, ownsHttpClient: true);
         _provenanceInspector = new ProvenanceInspector(_http, ownsHttpClient: false);
         _upgradeRunner = new UpgradeRunner(_services.Cli, _http);
+
+        ShowRuntime();
+        _ = RefreshRuntimeAsync();
 
         Upgrade = new UpgradeSectionViewModel(_services, _upgradeRunner);
         Upgrade.UpgradeSucceeded += OnUpgradeSucceeded;
@@ -285,8 +296,31 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         }
     }
 
+    private void ShowRuntime()
+    {
+        var snapshot = _services.Runtime.Current;
+        RuntimeIdentityText = DefenseClaw.Core.Runtime.RuntimeSummary.Identity(snapshot);
+        RuntimeFeaturesText = DefenseClaw.Core.Runtime.RuntimeSummary.Features(snapshot);
+    }
+
+    /// <summary>Re-reads the runtime when the CLI file changed (one stamp otherwise) and shows the answer; never throws.</summary>
+    private async Task RefreshRuntimeAsync()
+    {
+        try
+        {
+            _ = await _services.Runtime.RefreshAsync().ConfigureAwait(true);
+            ShowRuntime();
+        }
+#pragma warning disable CA1031 // The detector turns failures into "unknown"; nothing here may fault the window.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+    }
+
     private void ApplyResult(UpdateCheckResult result)
     {
+        ShowRuntime();
         InstalledVersionText = result.InstalledVersion ?? "unknown";
         LatestVersionText = result.LatestVersion ?? "—";
         ReleaseName = result.ReleaseName ?? string.Empty;

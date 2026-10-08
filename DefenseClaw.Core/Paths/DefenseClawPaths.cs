@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.Core.Paths;
 
@@ -167,8 +168,10 @@ public sealed class DefenseClawPaths
         TimeProvider? timeProvider = null,
         Func<string, string?>? environment = null,
         Func<IEnumerable<string>>? persistedSearchPath = null,
-        IEnumerable<string>? fallbackBinDirectories = null)
+        IEnumerable<string>? fallbackBinDirectories = null,
+        RuntimeSelection? runtime = null)
     {
+        Runtime = runtime ?? RuntimeSelection.Installed;
         var getEnvironment = environment ?? System.Environment.GetEnvironmentVariable;
 
         DataDirectoryOrigin = dataDirectory is null
@@ -192,6 +195,18 @@ public sealed class DefenseClawPaths
     }
 
     public string DataDirectory { get; }
+
+    /// <summary>
+    /// Which runtime the app drives: <see cref="RuntimeSelection.Installed"/> for everyone unless the developer selector (Settings →
+    /// Advanced) says otherwise, in which case <see cref="DataDirectory"/> and the executable lookups already follow it.
+    /// </summary>
+    public RuntimeSelection Runtime { get; }
+
+    /// <summary>
+    /// True when <see cref="DataDirectory"/> is a host copy of a container's data folder: the app reads it and never writes it (the
+    /// container owns the real files, and a write here would be silently lost or, worse, diverge from them).
+    /// </summary>
+    public bool DataDirectoryReadOnly => Runtime.Kind == RuntimeKind.Container;
 
     /// <summary>Where <see cref="DataDirectory"/> came from, for showing the operator which install the app is reading.</summary>
     public DataDirectoryResolution DataDirectoryOrigin { get; }

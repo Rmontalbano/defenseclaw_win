@@ -65,12 +65,14 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         _platform = platform ?? SettingsPlatform.Real;
 
         Files = new ObservableCollection<SettingsPathRow>(BuildFiles());
+        _selectedRuntimeKind = RuntimeKinds[0];
 
         // Everything the constructor shows is already in memory (the settings cache, the resolved config and token, the last snapshots); what
         // touches the registry or the disk waits for the page to come on screen (OnActivated).
         LoadFromSettings();
         ShowGateway();
         ShowUpdates();
+        ShowRuntimeIdentity();
     }
 
     public override string Title => "Settings";
@@ -695,11 +697,16 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         Services.ConfigReloaded += OnConfigReloaded;
         Services.Monitor.StateChanged += OnMonitorStateChanged;
         Services.UpdateWatcher.Changed += OnUpdateWatcherChanged;
+        Services.Runtime.Changed += OnRuntimeChanged;
 
         LoadFromSettings();
         ShowGateway();
         ShowUpdates();
+        ShowRuntimeIdentity();
         _ = RefreshMachineFactsAsync();
+
+        // One stamp of the CLI file when nothing changed; a fresh probe after an upgrade.
+        _ = Services.Runtime.RefreshAsync();
     }
 
     protected override void OnDeactivated()
@@ -708,6 +715,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         Services.ConfigReloaded -= OnConfigReloaded;
         Services.Monitor.StateChanged -= OnMonitorStateChanged;
         Services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
+        Services.Runtime.Changed -= OnRuntimeChanged;
 
         // A slider moved a moment before the page went away is saved, not lost with the timer.
         if (_intervalTimer is { IsEnabled: true })
@@ -779,6 +787,8 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
             AutoStartGateway = settings.Startup.GatewayAutoStart;
             CliOverridePath = settings.Connection.CliPathOverride;
         });
+
+        LoadDeveloperFromSettings();
     }
 
     /// <summary>Saves a change to the settings store, unless the page is only copying the store's values in; a write the file refuses is reported.</summary>

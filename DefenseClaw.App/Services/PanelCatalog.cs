@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Documents;
 using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.Core.Runtime;
 using DefenseClaw.App.Views.Panels;
 using Wpf.Ui.Abstractions;
 using Wpf.Ui.Controls;
@@ -16,13 +17,18 @@ namespace DefenseClaw.App.Services;
 /// <param name="Icon">Sidebar glyph.</param>
 /// <param name="ViewType">The <see cref="FrameworkElement"/> the navigation frame hosts.</param>
 /// <param name="ViewModelFactory">Builds the view-model bound to <paramref name="ViewType"/>.</param>
+/// <param name="Requires">
+/// The runtime capability the panel needs, or null (the default) for a panel 0.8.10 already supports. A panel that requires one is
+/// offered only when the connected runtime has it: see <see cref="PanelCatalog.Gate"/>.
+/// </param>
 public sealed record PanelDescriptor(
     string Id,
     string Title,
     string Group,
     SymbolRegular Icon,
     Type ViewType,
-    Func<AppServices, PanelViewModelBase> ViewModelFactory);
+    Func<AppServices, PanelViewModelBase> ViewModelFactory,
+    RuntimeCapability? Requires = null);
 
 /// <summary>
 /// The single registry of panels, and the bridge between WPF-UI's navigation frame and
@@ -49,6 +55,14 @@ public sealed record PanelDescriptor(
 /// </summary>
 public sealed class PanelCatalog : INavigationViewPageProvider
 {
+    /// <summary>
+    /// Whether <paramref name="panel"/> may be offered right now: open for a panel that requires nothing, and for one whose required
+    /// capability the connected runtime has; closed (with the standard sentence) otherwise, including before the runtime has been probed.
+    /// The command palette uses it today; a panel that sets <see cref="PanelDescriptor.Requires"/> is a one-line change there.
+    /// </summary>
+    internal GateDecision Gate(PanelDescriptor panel) =>
+        RuntimeGate.Check(_services.Runtime.Capabilities, panel.Requires);
+
     /// <summary>Sidebar groups, in display order.</summary>
     public static readonly IReadOnlyList<string> Groups = new[]
     {

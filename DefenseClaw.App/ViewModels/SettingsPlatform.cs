@@ -27,6 +27,9 @@ internal sealed class SettingsPlatform
     /// </summary>
     public Func<string?, string?> PickCliExecutable { get; init; } = PickWithDialog;
 
+    /// <summary>The folder picker (title, folder to start in): the chosen folder, or null when cancelled.</summary>
+    public Func<string, string?, string?> PickFolder { get; init; } = PickFolderWithDialog;
+
     /// <summary>Puts text on the clipboard (retrying briefly while another program holds it); a failure is reported by <see cref="Views.Controls.DcClipboard"/>, so this never throws.</summary>
     public Action<string> CopyText { get; init; } = text => Views.Controls.DcClipboard.TrySetText(text);
 
@@ -39,6 +42,18 @@ internal sealed class SettingsPlatform
 
     /// <summary>Opens the Updates window (or brings it forward).</summary>
     public Action<AppServices> OpenUpdates { get; init; } = services => Views.Updates.UpdatesWindow.Show(services);
+
+    private static string? PickFolderWithDialog(string title, string? startDirectory)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = title, Multiselect = false };
+        if (!string.IsNullOrEmpty(startDirectory) && Directory.Exists(startDirectory))
+        {
+            dialog.InitialDirectory = startDirectory;
+        }
+
+        var owner = Application.Current?.MainWindow;
+        return (owner is null ? dialog.ShowDialog() : dialog.ShowDialog(owner)) == true ? dialog.FolderName : null;
+    }
 
     private static string? PickWithDialog(string? startDirectory)
     {

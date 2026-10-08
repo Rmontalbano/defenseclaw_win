@@ -88,11 +88,11 @@ public sealed class SettingsPanelViewTests : IDisposable
             using var shell = Open(940, 620, out var page);
             var scroller = ScrollerOf(page);
 
-            Assert.True(scroller.ScrollableHeight > 100, $"seven cards fit in {scroller.ViewportHeight} DIPs: nothing scrolls");
+            Assert.True(scroller.ScrollableHeight > 100, $"eight cards fit in {scroller.ViewportHeight} DIPs: nothing scrolls");
             Assert.True(scroller.ExtentWidth <= scroller.ViewportWidth + 0.5, $"content is {scroller.ExtentWidth} wide in a {scroller.ViewportWidth} viewport");
 
             var headers = VisualTree.Descendants<DcCardHeader>(page).Select(h => h.Content as string).ToArray();
-            Assert.Equal(new[] { "Monitoring", "Notifications", "Startup", "Connection", "Files", "defenseclaw CLI", "Updates" }, headers);
+            Assert.Equal(new[] { "Monitoring", "Notifications", "Startup", "Connection", "Files", "defenseclaw CLI", "Updates", "Advanced" }, headers);
 
             RenderTo.Png(shell.Host, "settings-940x620");
         });
@@ -174,12 +174,49 @@ public sealed class SettingsPanelViewTests : IDisposable
 
         UiThread.Run(() =>
         {
-            using var shell = Open(1200, 2400, out var page);
+            using var shell = Open(1200, 3000, out var page);
             var scroller = ScrollerOf(page);
 
-            Assert.True(scroller.ScrollableHeight < 1, $"{scroller.ScrollableHeight} DIPs of the page are still below the fold at 2400 DIPs");
+            Assert.True(scroller.ScrollableHeight < 1, $"{scroller.ScrollableHeight} DIPs of the page are still below the fold at 3000 DIPs");
 
             RenderTo.Png(shell.Host, $"settings-{style}-{mode}-whole-page");
+        });
+    }
+
+    [Fact]
+    public void The_Advanced_card_shows_only_the_fields_of_the_chosen_runtime_and_nothing_while_the_selector_is_off()
+    {
+        UiThread.Run(() =>
+        {
+            using var shell = Open(1200, 3000, out var page);
+            var model = (SettingsPanelViewModel)page.DataContext;
+
+            bool Visible(string name) => VisualTree.Descendants<FrameworkElement>(page)
+                .Any(e => e.IsVisible && System.Windows.Automation.AutomationProperties.GetName(e) == name);
+
+            Assert.False(Visible("Runtime to use"));
+            Assert.False(Visible("Side-by-side defenseclaw.exe path"));
+            Assert.False(Visible("Docker container name"));
+
+            model.DeveloperEnabled = true;
+            model.SelectedRuntimeKind = model.RuntimeKinds[1];
+            shell.Host.Relayout();
+
+            Assert.True(Visible("Runtime to use"));
+            Assert.True(Visible("Side-by-side defenseclaw.exe path"));
+            Assert.True(Visible("DEFENSECLAW_HOME folder"));
+            Assert.True(Visible("Gateway address"));
+            Assert.False(Visible("Docker container name"));
+            RenderTo.Png(shell.Host, "settings-advanced-cli");
+
+            model.SelectedRuntimeKind = model.RuntimeKinds[2];
+            model.RuntimeProblem = "The gateway address must be on this PC.";
+            shell.Host.Relayout();
+
+            Assert.True(Visible("Docker container name"));
+            Assert.True(Visible("Host data folder"));
+            Assert.False(Visible("Side-by-side defenseclaw.exe path"));
+            RenderTo.Png(shell.Host, "settings-advanced-container");
         });
     }
 
@@ -277,8 +314,8 @@ public sealed class SettingsPanelViewTests : IDisposable
             using var shell = Open(940, 620, out var page);
             var switches = VisualTree.Descendants<ToggleSwitch>(page).ToList();
 
-            // Pause, three notifications, start with Windows, close to tray, start the gateway automatically, reopen on the last panel.
-            Assert.Equal(8, switches.Count);
+            // Pause, three notifications, start with Windows, close to tray, start the gateway automatically, reopen on the last panel, a different runtime.
+            Assert.Equal(9, switches.Count);
             var high = switches.Single(s => System.Windows.Automation.AutomationProperties.GetName(s) == "Notify on HIGH findings");
             Assert.False(high.IsChecked);
 

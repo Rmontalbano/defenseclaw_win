@@ -1,0 +1,12 @@
+Usage: defenseclaw config [OPTIONS] COMMAND [ARGS]...
+
+  Inspect and validate DefenseClaw configuration.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  path       Print the filesystem locations DefenseClaw uses.
+  reference  Render a version-matched generated configuration reference.
+  show       Render the resolved configuration (secrets masked).
+  validate   Verify the config file parses and references valid enums.

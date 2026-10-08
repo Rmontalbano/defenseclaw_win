@@ -453,6 +453,41 @@
                         </HeaderedContentControl>
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Runtime identity"
+                                                local:SettingsRow.Caption="What defenseclaw --version-json reports, and which executable answered. Read again whenever the CLI file changes, so an upgrade shows here by itself.">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     Text="{Binding RuntimeIdentityText, Mode=OneWay}"
+                                     AutomationProperties.Name="Runtime identity" />
+                        </HeaderedContentControl>
+
+                        <TextBlock Margin="0,10,0,4" Style="{StaticResource DcCaption}" Text="Features this runtime has" />
+                        <ItemsControl ItemsSource="{Binding RuntimeCapabilityRows}"
+                                      IsTabStop="False"
+                                      AutomationProperties.Name="Runtime capabilities">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:RuntimeCapabilityRow}">
+                                    <Grid Margin="0,2,0,2" ToolTip="{Binding Marker}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Style="{StaticResource DcBody}" Text="{Binding Name}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Style="{StaticResource DcCaption}"
+                                                   Text="{Binding Status}"
+                                                   AutomationProperties.Name="{Binding Name, StringFormat={}{0}: availability}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource RowNote}" Text="{Binding RuntimeCapabilityNotes}" />
+                        <ui:Button Margin="0,8,0,0"
+                                   Content="Check the runtime again"
+                                   Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                   Command="{Binding RecheckRuntimeCommand}"
+                                   AutomationProperties.HelpText="Asks the CLI again which commands it has. Read-only: only --version-json and --help are run." />
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 Header="Status"
                                                 local:SettingsRow.Caption="{Binding UpdateDetail}">
                             <Border Style="{StaticResource DcBadge}"
@@ -483,6 +518,124 @@
                                        Command="{Binding OpenUpdatesCommand}"
                                        AutomationProperties.HelpText="Opens the Updates window, where a newer release is reviewed before anything is installed." />
                         </StackPanel>
+                    </StackPanel>
+                </Border>
+                <!-- Advanced: the developer runtime selector. Off by default; off is the installed runtime, unchanged. -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="Wrench24"
+                                          Section="Setup"
+                                          Content="Advanced" />
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Use a different DefenseClaw runtime"
+                                                local:SettingsRow.Caption="For developers. Off, the app drives the DefenseClaw installed on this PC, as always. On, it can drive a side-by-side install or a Docker container instead. Takes effect the next time the app starts.">
+                            <ui:ToggleSwitch IsChecked="{Binding DeveloperEnabled, Mode=TwoWay}"
+                                             AutomationProperties.Name="Use a different DefenseClaw runtime"
+                                             AutomationProperties.HelpText="Turns the developer runtime selector on or off. Nothing changes until the app restarts." />
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Running now"
+                                                local:SettingsRow.Caption="The runtime this run of the app was started against.">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     Text="{Binding RuntimeInUseText, Mode=OneWay}"
+                                     AutomationProperties.Name="Runtime in use" />
+                        </HeaderedContentControl>
+
+                        <StackPanel Visibility="{Binding DeveloperEnabled, Converter={StaticResource BoolToVisibility}}">
+                            <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                    Header="Runtime">
+                                <ComboBox Width="260"
+                                          ItemsSource="{Binding RuntimeKinds}"
+                                          SelectedItem="{Binding SelectedRuntimeKind, Mode=TwoWay}"
+                                          AutomationProperties.Name="Runtime to use" />
+                            </HeaderedContentControl>
+
+                            <StackPanel Visibility="{Binding ShowCliFields, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Margin="0,6,0,2" Style="{StaticResource DcCaption}" Text="defenseclaw.exe of the side-by-side install" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                PlaceholderText="D:\next\bin\defenseclaw.exe"
+                                                AutomationProperties.Name="Side-by-side defenseclaw.exe path"
+                                                Text="{Binding RuntimeCliPath, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0"
+                                               Content="Browse…"
+                                               Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                               Command="{Binding BrowseRuntimeCliCommand}"
+                                               AutomationProperties.HelpText="Choose the side-by-side defenseclaw.exe." />
+                                </Grid>
+
+                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="DEFENSECLAW_HOME for that install (never the installed runtime's folder)" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                PlaceholderText="D:\next\home"
+                                                AutomationProperties.Name="DEFENSECLAW_HOME folder"
+                                                Text="{Binding RuntimeHomeDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0"
+                                               Content="Browse…"
+                                               Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                               Command="{Binding BrowseRuntimeHomeCommand}"
+                                               AutomationProperties.HelpText="Choose the DEFENSECLAW_HOME folder." />
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding ShowContainerFields, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Margin="0,6,0,2" Style="{StaticResource DcCaption}" Text="Docker container name" />
+                                <ui:TextBox PlaceholderText="dc-next-1"
+                                            AutomationProperties.Name="Docker container name"
+                                            Text="{Binding RuntimeContainerName, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Host folder holding a copy of the container's data directory (the app only reads it)" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                PlaceholderText="D:\next\container-data"
+                                                AutomationProperties.Name="Host data folder"
+                                                Text="{Binding RuntimeHostDataFolder, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0"
+                                               Content="Browse…"
+                                               Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                               Command="{Binding BrowseRuntimeDataFolderCommand}"
+                                               AutomationProperties.HelpText="Choose the host copy of the container's data folder." />
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding ShowRuntimeForm, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Gateway address (this PC only: 127.0.0.1, localhost or [::1]; optional for a CLI, required for a container)" />
+                                <ui:TextBox PlaceholderText="http://127.0.0.1:18971"
+                                            AutomationProperties.Name="Gateway address"
+                                            Text="{Binding RuntimeGatewayUrl, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+
+                            <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                                <ui:Button Content="Apply"
+                                           Icon="{ctl:DcSymbolIcon Checkmark24}"
+                                           Command="{Binding ApplyRuntimeCommand}"
+                                           AutomationProperties.HelpText="Checks the choice and saves it. Takes effect the next time the app starts." />
+                                <ui:Button Margin="8,0,0,0"
+                                           Content="Use the installed runtime"
+                                           Command="{Binding UseInstalledRuntimeCommand}"
+                                           AutomationProperties.HelpText="Turns the selector off and goes back to the installed runtime." />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource ProblemLine}"
+                                       Visibility="{Binding HasRuntimeProblem, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding RuntimeProblem}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding RuntimeMessage}" />
                     </StackPanel>
                 </Border>
             </StackPanel>

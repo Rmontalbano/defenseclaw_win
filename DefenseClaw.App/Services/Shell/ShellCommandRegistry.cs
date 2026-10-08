@@ -1,4 +1,5 @@
 using DefenseClaw.App.Services.Appearance;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Services;
 
@@ -28,19 +29,19 @@ internal static class ShellCommandRegistry
         var commands = new List<ShellCommand>();
         for (var i = 0; i < catalog.SidebarOrder.Count; i++)
         {
-            commands.Add(GoTo(catalog.SidebarOrder[i], ShellShortcuts.PanelChordText(i), navigateTo));
+            commands.Add(GoTo(catalog.SidebarOrder[i], ShellShortcuts.PanelChordText(i), navigateTo, catalog.Gate(catalog.SidebarOrder[i])));
         }
 
         // The footer panel (Settings) is reached by Ctrl+, rather than a number.
         foreach (var panel in catalog.FooterPanels)
         {
-            commands.Add(GoTo(panel, string.Equals(panel.Id, "settings", StringComparison.Ordinal) ? ShellShortcuts.SettingsText : null, navigateTo));
+            commands.Add(GoTo(panel, string.Equals(panel.Id, "settings", StringComparison.Ordinal) ? ShellShortcuts.SettingsText : null, navigateTo, catalog.Gate(panel)));
         }
 
         return commands;
     }
 
-    private static ShellCommand GoTo(PanelDescriptor panel, string? chord, Action<PanelDescriptor> navigateTo) =>
+    private static ShellCommand GoTo(PanelDescriptor panel, string? chord, Action<PanelDescriptor> navigateTo, GateDecision gate) =>
         new(
             Id: $"nav.{panel.Id}",
             Title: $"Go to {panel.Title}",
@@ -48,8 +49,8 @@ internal static class ShellCommandRegistry
             Description: $"{panel.Group} · opens the {panel.Title} panel",
             Shortcut: chord,
             Keywords: $"open navigate {panel.Id} {panel.Group}" + (string.Equals(panel.Id, "settings", StringComparison.Ordinal) ? " preferences options" : string.Empty),
-            IsEnabled: true,
-            DisabledReason: null,
+            IsEnabled: gate.IsAvailable,
+            DisabledReason: gate.Reason,
             Run: () => navigateTo(panel));
 
     /// <summary>

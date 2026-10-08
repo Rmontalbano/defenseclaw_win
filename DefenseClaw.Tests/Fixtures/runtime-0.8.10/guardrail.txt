@@ -1,0 +1,34 @@
+Usage: defenseclaw guardrail [OPTIONS] COMMAND [ARGS]...
+
+  Control guardrail policy: status, enable/disable, fail-mode, hilt, block-
+  message.
+
+  Quick day-to-day levers that wrap ``defenseclaw setup guardrail`` so
+  operators don't have to navigate the full setup flow just to adjust posture.
+  Subcommands:
+
+    status         enabled state + roster (mode/fail/rule-pack/hilt/judge)
+    enable/disable flip enforcement on/off
+    fail-mode      open vs closed when a hook fails
+    hilt           human-in-the-loop prompting
+    block-message  message shown when an action is blocked
+    list-packs     list rule packs + the dir each connector enforces
+
+  Multi-connector: one gateway enforces N hook connectors. Each policy
+  subcommand takes ``--connector X`` to scope the change to a single
+  configured peer (e.g. 'guardrail disable --connector codex'); omit it
+  to apply globally. 'guardrail --connector' scopes policy to a peer that
+  'setup' has already configured — it does not add new connectors.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  block-message  Show or change the custom message shown when an action...
+  disable        Disable the LLM guardrail and run connector teardown.
+  enable         Re-enable the LLM guardrail using the existing config.
+  fail-mode      Show or change the hook fail mode (response-layer...
+  hilt           Show or change the human-in-the-loop (HILT) approval...
+  judge          Gate which hook connectors forward content to the LLM...
+  list-packs     List the available guardrail rule packs and who enforces...
+  status         Show whether the guardrail is enabled and the active...

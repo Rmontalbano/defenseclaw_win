@@ -1,0 +1,52 @@
+Usage: defenseclaw [OPTIONS] COMMAND [ARGS]...
+
+  Enterprise governance layer for AI coding agents.
+
+Options:
+  --version   Show the version and exit.
+  -h, --help  Show this message and exit.
+
+Commands:
+  acp           Inspect and configure the local Agent Client Protocol
+                guard.
+  agent         Inspect locally installed agent surfaces.
+  aibom         AI Bill of Materials — scan the active connector(s)' live
+                inventory.
+  alerts        View and manage security alerts.
+  audit         Audit trail helpers: export, findings and gateway logs.
+  codeguard     CodeGuard native skill/rule asset management.
+  config        Inspect and validate DefenseClaw configuration.
+  doctor        Verify credentials, endpoints, and connectivity.
+  guardrail     Control guardrail policy: status, enable/disable, fail-
+                mode, hilt, block-message.
+  init          Initialize DefenseClaw environment.
+  keys          Inspect and manage DefenseClaw API keys (list, set,
+                remove, check).
+  mcp           Manage MCP servers — list, scan, block, unblock, allow,
+                set, unset.
+  migrate       Bring config and data to this version's schema.
+  observability Inspect canonical observability collection and routing
+                policy.
+  plugin        Manage DefenseClaw plugins — install, list, remove, scan,
+                block, allow, disable, enable, quarantine, restore.
+  policy        Manage DefenseClaw security policies — create, list,
+                show, activate, validate, test, edit.
+  quickstart    Zero-prompt end-to-end setup with safe defaults.
+  registry      Manage external skill / MCP catalog sources.
+  reset         Wipe user state so 'defenseclaw quickstart' starts clean.
+  rollback      Restore the install that the last upgrade replaced.
+  sandbox       Run coding agents in NVIDIA OpenShell sandboxes.
+  settings      Save the DefenseClaw configuration (as the TUI Setup
+                panel does).
+  setup         Configure DefenseClaw components.
+  skill         Manage agent skills — search, install, scan, block,
+                allow, disable, enable, quarantine, restore.
+  status        Show DefenseClaw status.
+  tool          Manage tool-level block/allow lists.
+  tui           Open the interactive DefenseClaw dashboard in this
+                terminal.
+  uninstall     Uninstall DefenseClaw (reversibly by default).
+  upgrade       Upgrade to the latest release (or X.Y.Z) using that
+                release's installer.
+  version       Show DefenseClaw CLI / gateway / plugin versions and flag
+                drift.

@@ -1,0 +1,69 @@
+Usage: defenseclaw setup [OPTIONS] [COMMAND] [ARGS]...
+
+  Configure DefenseClaw components.
+
+  Legacy behavior: Multi-connector:   One gateway enforces N agent-native
+  connectors (codex, claudecode,   hermes, antigravity, omnigent, and others)
+  tracked under guardrail.connectors. Add one   with 'defenseclaw setup
+  <connector>' (choose Add when prompted),   remove with 'defenseclaw setup
+  remove <name>'. Scope policy per peer   with 'defenseclaw guardrail ...
+  --connector X', and inspect the   roster with 'defenseclaw status' /
+  'defenseclaw guardrail status'.   Note: OpenClaw/ZeptoClaw use the proxy
+  path and cannot be multi peers.
+
+  Legacy warning: Batch (no subcommand):   'defenseclaw setup' with no
+  subcommand launches an interactive   active-connector picker (detected
+  connectors pre-checked), then   batch mode / optional judge connector
+  pickers. For scripting, select   connectors with repeatable
+  '-c/--connector', '--detected', and/or   '--all' (e.g. 'defenseclaw setup -c
+  hermes -c codex --mode action').
+
+Options:
+  -c, --connector TEXT      (no subcommand) Configure this hook connector as
+                            part of a batch. Repeatable: `-c hermes -c codex`.
+                            Combine with --detected/--all.
+  --detected                (no subcommand) Add every locally-detected hook
+                            connector to the batch.
+  --all                     (no subcommand) Add every supported hook connector
+                            to the batch.
+  --mode [observe|action]   (no subcommand) Enforcement mode for the batch-
+                            selected connectors.  [default: observe]
+  --restart / --no-restart  (no subcommand) Restart defenseclaw-gateway after
+                            a batch/picker setup.  [default: restart]
+  -y, --yes                 (no subcommand) Skip batch mode/judge prompts (use
+                            defaults).
+  --help                    Show this message and exit.
+
+Commands:
+  antigravity          Antigravity: not_certified on windows.
+  claude-code          Configure DefenseClaw for Claude Code via the hook...
+  codex                Configure DefenseClaw for Codex via the hook bus.
+  copilot              GitHub Copilot CLI: not_certified on windows.
+  cursor               Cursor: not_certified on windows.
+  galileo              Configure Galileo OTLP trace export.
+  gateway              Configure gateway connection for the DefenseClaw...
+  geminicli            Gemini CLI: not_certified on windows.
+  guardrail            Configure the LLM guardrail (routes LLM traffic...
+  hermes               Hermes: not_certified on windows.
+  llm                  Configure the unified top-level ``llm:`` block.
+  local-observability  Run the bundled Prom/Loki/Tempo/Grafana stack on
+                       loopback.
+  mcp-scanner          Configure mcp-scanner analyzers and scan options.
+  migrate-llm          Rewrite config.yaml to the unified v5 LLM shape.
+  notifications        Toggle user-session desktop notifications for...
+  notifications-set    Toggle a single notifications category or source.
+  observability        Configure canonical telemetry destinations.
+  omnigent             OmniGent: unsupported on windows.
+  openclaw             OpenClaw: unsupported on windows.
+  opencode             OpenCode: not_certified on windows.
+  openhands            OpenHands: unsupported on windows.
+  provider             Manage the custom provider overlay...
+  registry             Register an external skill / MCP catalog...
+  remove               Remove a connector from the configured set.
+  rotate-token         Rotate the DEFENSECLAW_GATEWAY_TOKEN.
+  skill-scanner        Configure skill-scanner analyzers, API keys, and...
+  splunk               Configure Splunk integration for DefenseClaw.
+  trusted-paths        Manage directories DefenseClaw trusts for...
+  webhook              Configure Slack/PagerDuty/Webex/generic chat +...
+  windsurf             Windsurf: not_certified on windows.
+  zeptoclaw            ZeptoClaw: unsupported on windows.

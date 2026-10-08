@@ -904,6 +904,9 @@ internal sealed class FakePlatform
 
     public string? PickStart { get; private set; }
 
+    /// <summary>What the folder picker returns; null is "cancelled".</summary>
+    public string? PickedFolder { get; set; }
+
     public string? Copied { get; private set; }
 
     public bool ClipboardBusy { get; set; }
@@ -938,6 +941,7 @@ internal sealed class FakePlatform
             PickStart = start;
             return Picked;
         },
+        PickFolder = (_, _) => PickedFolder,
         CopyText = text =>
         {
             if (ClipboardBusy)

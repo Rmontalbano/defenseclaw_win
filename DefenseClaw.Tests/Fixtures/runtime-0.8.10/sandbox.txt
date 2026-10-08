@@ -1,0 +1,19 @@
+Usage: defenseclaw sandbox [OPTIONS] COMMAND [ARGS]...
+
+  [experimental] Manage openshell-sandbox standalone mode.
+
+  Linux-only. Creates an isolated sandbox environment with Landlock, seccomp,
+  and network namespaces for running OpenClaw agents.
+
+  Requires 'defenseclaw init' to have been run first.
+
+  Commands:
+    init    Create sandbox user, transfer OpenClaw, configure networking
+    setup   Customize sandbox networking, policy, and device pairing
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  init   Initialize openshell-sandbox standalone mode (Linux only).
+  setup  Configure DefenseClaw for openshell-sandbox standalone mode.

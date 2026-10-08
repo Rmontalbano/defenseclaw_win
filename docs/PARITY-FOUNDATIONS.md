@@ -76,3 +76,20 @@ Services.ConnectorScope.Changed += (_, _) => Refilter();                        
 
 - Roster = `GatewaySnapshot.ActiveConnectors` (configured first, then live). The scope **resets to All by itself** when its connector leaves the roster or the roster shrinks to one or none; `Set` refuses a connector not on the roster; `CanScope` (roster > 1) is what shows the chip.
 - An explicit scope is an exact match (ignoring case/padding) and **hides rows with no connector**, like every other Mac screen.
+
+## 5. Runtime detection and gating - `Services.Runtime` / `RuntimeGate`
+
+**For:** showing something only newer DefenseClaw runtimes have (verified against source commit 95159fd, which self-reports 1.0.0) and nothing else. 0.8.10 is the baseline: a feature it already has is never gated.
+
+```csharp
+if (Services.Runtime.Check(RuntimeCapability.AcpGuard).IsAvailable) { /* offer it */ }       // GateDecision: IsAvailable, Reason
+var why = Services.Runtime.Check(RuntimeCapability.Sandbox).Reason;                            // "Requires a compatible DefenseClaw runtime (verified against source commit 95159fd)"
+Services.Runtime.Changed += (_, _) => Rebuild();                                               // UI thread; first answer, upgrade
+new PanelDescriptor(..., Requires: RuntimeCapability.AcpGuard)                                 // palette "Go to" row is disabled with the sentence until it is true
+RuntimeGate.CheckSetupCommand(Services.Runtime.Capabilities, "kiro")                           // setup --help names it
+```
+
+- **Capabilities** (`PolicyModel`, `AcpGuard`, `RedactionAdvanced`, `Sandbox`, `CanonicalSchema8`, `TuiRegistry`) are decided by `RuntimeProbe` from `--version-json` plus the `Commands:` lists of `--help` screens (the Mac's test). Markers are listed by `RuntimeCapabilityCatalog.Marker` and shown in About; each is absent on 0.8.10 and present at the pin. `CanonicalSchema8` also needs version 1.0.0 or later. `TuiRegistry` is the command markers (`setup` lists amp, devin, kiro), not a count of entries.
+- **Fail closed.** Nothing probed yet, a timeout, a missing CLI, garbage output: `Capabilities.Unknown`, every flag false, features hidden. A failure is never read as "empty".
+- **Cache** (`RuntimeDetector`): keyed by the CLI file's path, size and modified time (a container: its name, for a short window). Re-probed when the key moves (an upgrade is noticed by the 30 s background check) or on "Check the runtime again". An unknown answer is retried after 15 s. Probes run `--version-json` and `--help` only (the production runner refuses anything else), each with a 20 s limit and 45 s for the round, and never appear in Activity.
+- **Developer runtime selector** (Settings -> Advanced, `developer.*` in settings.json, off by default; off is byte-for-byte the installed runtime): `Installed`, `Cli` (explicit defenseclaw.exe + `DEFENSECLAW_HOME` + optional loopback gateway address), or `Container` (`docker exec` + published loopback gateway + a read-only host copy of the data folder). It is read once at startup (`AppServices.CreateStartupPaths` -> `RuntimeEnvironment.CreatePaths`), so a change applies on the next launch; an incomplete or invalid choice starts the installed runtime. Container mode runs `defenseclaw` and `defenseclaw-gateway` through `CliRunner.RunNamedAsync` as `docker exec [-i] [-e NAME] CONTAINER TOOL ARGS`: environment values stay in docker's own environment (names only on argv), and the config editor refuses to write the copy (`DefenseClawPaths.DataDirectoryReadOnly`).

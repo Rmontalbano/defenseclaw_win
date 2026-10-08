@@ -1,0 +1,18 @@
+Usage: defenseclaw acp [OPTIONS] COMMAND [ARGS]...
+
+  Inspect and configure the local Agent Client Protocol guard.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  adopt    Find unguarded ACP agents and route them through DefenseClaw.
+  catalog  Print protocol and built-in integration inventory.
+  detect   Report which ACP clients are guarded, unguarded, or unconfigured.
+  refresh  Re-pin the DefenseClaw ACP guard in every editor entry after an
+           upgrade.
+  remove   Remove one DefenseClaw-owned editor entry without touching foreign
+           agents.
+  setup    Install a guarded agent entry into Zed or JetBrains.
+  status   Show configured ACP posture and editor paths.
+  verify   Fail if a managed editor entry or executable digest has drifted.

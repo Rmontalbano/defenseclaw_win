@@ -1,0 +1,54 @@
+Usage: defenseclaw sandbox [OPTIONS] COMMAND [ARGS]...
+
+  Run coding agents in NVIDIA OpenShell sandboxes.
+
+  Run Claude Code, Codex and other hooks-only harnesses inside an NVIDIA
+  OpenShell sandbox: the agent sees only your project folder (on Linux live,
+  with secret files masked, git internals read-only and a snapshot for undo;
+  on macOS, where sandboxes are OpenShell MicroVMs, a copy you pull the
+  changes back from), reaches the web through DefenseClaw's egress proxy, and
+  every tool call still goes through DefenseClaw.
+
+  Start with "defenseclaw sandbox setup", then run "defenseclaw sandbox run
+  claude" in a project folder. Linux, and macOS on Apple silicon, only.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  activity        Show the live activity feed: destinations, blocks, asks,
+                  tool blocks, findings
+  approvals       List the asks waiting for you (doors into your machine or
+                  network)
+  approve         Approve an ask
+  connect         Resume a sandbox: start it if stopped and attach the harness
+  delete          Delete sandboxes with their providers, credentials and
+                  snapshots
+  disable         Stop the harness command from running sandboxed (removes the
+                  shell wrapper)
+  doctor          Check that this machine can run sandboxes
+  enable          Make the harness command run sandboxed (a marked block in
+                  your shell rc)
+  exec            Run a command in a sandbox
+  image           Build, list, prune and remove the harness images
+  legacy-cleanup  Undo a legacy openshell-sandbox (0.0.x) standalone install
+                  (Linux).
+  list            List sandboxes
+  logs            Show the output of a sandbox's detached run
+  pack            Inspect sandbox policy packs
+  policy          Show, explain and adjust the sandbox policy
+  pull            Bring a copy-mode sandbox's work back (3-way apply, a
+                  branch, or a patch)
+  reject          Reject an ask
+  review          Review the session's changes, flagging files that can run
+                  code on this machine
+  run             Run a harness in a sandbox on this folder
+  setup           One-time setup: OpenShell, bind mounts, telemetry,
+                  harnesses, wrappers, images
+  start           Start a stopped sandbox for a new session
+  status          Show the sandbox subsystem, or one sandbox in detail
+  stop            Stop a sandbox (it is kept for start or connect)
+  teardown        Remove every DefenseClaw sandbox, provider, profile, image,
+                  gateway change and wrapper
+  unblock         Lift an egress block for one sandbox or for every sandbox
+  undo            Restore the project folder to its pre-session snapshot

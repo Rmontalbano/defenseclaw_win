@@ -31,8 +31,8 @@
     <!-- The real audit.db DDL (schema and retention triggers only, no data), shared with the Core suite so
          the Audit panel is exercised against the genuine table rather than a hand-copied approximation. -->
     <None Include="..\DefenseClaw.Tests\Fixtures\audit-schema.sql" Link="Fixtures\audit-schema.sql" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The synthetic fixture set derived from DefenseClaw source commit 95159fd, shared with the Core suite (docs/RUNTIME-COMPAT-95159fd.md). -->
-    <None Include="..\DefenseClaw.Tests\Fixtures\runtime-95159fd\**\*" Link="Fixtures\runtime-95159fd\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The fixture sets for 0.8.10 and the pinned newer source (runtime detection CUST-291, compatibility CUST-292; docs/RUNTIME-COMPAT-95159fd.md), shared with the Core suite. -->
+    <None Include="..\DefenseClaw.Tests\Fixtures\runtime-*\**\*" Link="Fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Synthetic payloads shaped like what the 0.8.10 CLI and gateway print; see TestSupport/PayloadFixtures.cs. -->
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

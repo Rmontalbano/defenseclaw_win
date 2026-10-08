@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using DefenseClaw.App.Services.Appearance;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Services.Settings;
 
@@ -27,6 +28,7 @@ internal static class AppSettingsCodec
     public const string StartupKey = "startup";
     public const string ConnectionKey = "connection";
     public const string UpdatesKey = "updates";
+    public const string DeveloperKey = "developer";
 
     /// <summary>Reads every section out of <paramref name="root"/>. Never throws.</summary>
     public static AppSettings Read(JsonObject root)
@@ -39,7 +41,8 @@ internal static class AppSettingsCodec
             ReadNotifications(Section(root, NotificationsKey)),
             ReadStartup(Section(root, StartupKey)),
             ReadConnection(Section(root, ConnectionKey)),
-            ReadUpdates(Section(root, UpdatesKey)));
+            ReadUpdates(Section(root, UpdatesKey)),
+            ReadDeveloper(Section(root, DeveloperKey)));
     }
 
     /// <summary>Writes the given sections of <paramref name="settings"/> into <paramref name="root"/>, leaving every other member as it is.</summary>
@@ -86,6 +89,18 @@ internal static class AppSettingsCodec
             Put(target, "cliPathOverride", settings.Connection.CliPathOverride);
         }
 
+        if ((sections & AppSettingsSections.Developer) != 0)
+        {
+            var target = SectionForWrite(root, DeveloperKey);
+            Put(target, "enabled", settings.Developer.Enabled);
+            Put(target, "kind", ToWire(settings.Developer.Kind));
+            Put(target, "cliPath", settings.Developer.CliPath);
+            Put(target, "homeDirectory", settings.Developer.HomeDirectory);
+            Put(target, "gatewayUrl", settings.Developer.GatewayUrl);
+            Put(target, "containerName", settings.Developer.ContainerName);
+            Put(target, "hostDataFolder", settings.Developer.HostDataFolder);
+        }
+
         if ((sections & AppSettingsSections.Updates) != 0)
         {
             var target = SectionForWrite(root, UpdatesKey);
@@ -96,6 +111,20 @@ internal static class AppSettingsCodec
     }
 
     // ------------------------------------------------------------------ sections
+
+    private static DeveloperSettings ReadDeveloper(JsonObject? section) =>
+        section is null
+            ? new DeveloperSettings()
+            : new DeveloperSettings
+            {
+                Enabled = ReadBool(section["enabled"], false),
+                Kind = ReadEnum(section["kind"], RuntimeKind.Installed),
+                CliPath = ReadString(section["cliPath"]),
+                HomeDirectory = ReadString(section["homeDirectory"]),
+                GatewayUrl = ReadString(section["gatewayUrl"]),
+                ContainerName = ReadString(section["containerName"]),
+                HostDataFolder = ReadString(section["hostDataFolder"]),
+            };
 
     private static AppearanceSettings ReadAppearance(JsonObject? section) =>
         section is null
