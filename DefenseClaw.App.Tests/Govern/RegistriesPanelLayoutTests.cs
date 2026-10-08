@@ -348,6 +348,8 @@ public class RegistriesPanelLayoutTests
                     Fields = new[] { new RegistryFieldRow("id", "corp-skills"), new RegistryFieldRow("kind", "http_yaml") },
                 };
                 ViewModel.CliErrorMessage = null;
+                ViewModel.Trust.MarkComplete(); // the stand-in for a successful read: the actions in these tests are meant to work
+                ViewModel.NotifyTrust();
                 ViewModel.Sources.Add(source);
                 ViewModel.HasSources = true;
                 ViewModel.SelectedSource = source;

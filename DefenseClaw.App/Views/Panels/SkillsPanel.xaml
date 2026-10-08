@@ -66,14 +66,16 @@
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowDownload24}"
                                Command="{Binding ToggleInstallFormCommand}"
-                               IsEnabled="{Binding IsIdle}"
-                               ToolTip="Install skill…"
+                               IsEnabled="{Binding CanChange}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Install skill…'}"
                                AutomationProperties.Name="Install skill…"
                                AutomationProperties.HelpText="Install a ClawHub skill with 'defenseclaw skill install'. You review the command first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ScanText24}"
                                Command="{Binding ScanAllCommand}"
-                               IsEnabled="{Binding CanScan}"
-                               ToolTip="Scan all skills…"
+                               IsEnabled="{Binding CanScanAll}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Scan all skills…'}"
                                AutomationProperties.Name="Scan all skills…"
                                AutomationProperties.HelpText="Runs 'defenseclaw skill scan --all' and records the results. You review the command first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
@@ -188,6 +190,13 @@
                                 Message="{Binding RefreshWarning}"
                                 Severity="Warning"
                                 IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                                IsClosable="False"
+                                AutomationProperties.LiveSetting="Polite" />
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                Title="Incomplete discovery"
+                                Message="{Binding PartialDiscoveryMessage}"
+                                Severity="Warning"
+                                IsOpen="{Binding HasPartialDiscovery, Mode=OneWay}"
                                 IsClosable="False"
                                 AutomationProperties.LiveSetting="Polite" />
 

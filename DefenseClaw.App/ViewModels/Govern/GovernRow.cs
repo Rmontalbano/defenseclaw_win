@@ -36,6 +36,15 @@ public interface IGovernRowHost
 {
     void OnRowAction(GovernRow row, GovernVerbs verb);
 
+    /// <summary>
+    /// Whether the row menu's state-changing items are enabled now: false while the list is partial, failed, still being read or
+    /// old (see <see cref="CatalogTrust"/>). Info and Copy name do not depend on it.
+    /// </summary>
+    bool AreChangesAllowed => true;
+
+    /// <summary>Why <see cref="AreChangesAllowed"/> is false (the items' tooltip); null when it is true.</summary>
+    string? ChangesBlockedReason => null;
+
     /// <summary>Whether the row menu's Scan item is enabled now (not while another command runs, not with the scanner missing).</summary>
     bool IsScanAvailable => true;
 }
@@ -136,9 +145,26 @@ public sealed partial class GovernRow : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>Whether the "Scan…" menu item can be used right now; the panel calls <see cref="RefreshScanEnabled"/> when that changes.</summary>
-    public bool ScanEnabled => _host.IsScanAvailable;
+    public bool ScanEnabled => _host.IsScanAvailable && _host.AreChangesAllowed;
 
     public void RefreshScanEnabled() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScanEnabled)));
+
+    /// <summary>
+    /// Whether the menu's state-changing items (allow, block, enable, disable, quarantine, restore, remove, scan, ...) are usable. Read
+    /// from the panel each time, so a row built before the list went partial or stale is not left offering what it offered.
+    /// </summary>
+    public bool ChangesEnabled => _host.AreChangesAllowed;
+
+    /// <summary>Why <see cref="ChangesEnabled"/> is false; null when it is true. Shown as the disabled items' tooltip.</summary>
+    public string? ChangesBlockedReason => _host.ChangesBlockedReason;
+
+    /// <summary>The panel's trust in its list changed: the change items and the Scan item re-read it.</summary>
+    public void RefreshChangesEnabled()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ChangesEnabled)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ChangesBlockedReason)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScanEnabled)));
+    }
 
     // ---- Table cells (the dense grid): values the columns bind to, read from the details list so no parser changes ----
 

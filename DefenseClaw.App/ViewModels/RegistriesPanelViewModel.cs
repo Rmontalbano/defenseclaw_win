@@ -344,6 +344,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowNotConfigured))]
     [NotifyPropertyChangedFor(nameof(ShowUnavailable))]
     [NotifyPropertyChangedFor(nameof(ShowPolicyCard))]
+    [NotifyPropertyChangedFor(nameof(CanSyncAll))]
     private bool _hasSources;
 
     /// <summary>False until the first read finishes, so the panel does not flash "no sources" while it is still looking.</summary>
@@ -356,6 +357,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     [NotifyPropertyChangedFor(nameof(HasSelectedSource))]
     [NotifyPropertyChangedFor(nameof(HasNoSelectedSource))]
     [NotifyPropertyChangedFor(nameof(ToggleEnabledText))]
+    [NotifyPropertyChangedFor(nameof(CanChangeSelectedSource))]
     private RegistrySourceRow? _selectedSource;
 
     [ObservableProperty]
@@ -421,7 +423,50 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
     public bool HasSelectedEntry => SelectedEntry is not null;
 
-    public bool CanReviewEntry => SelectedEntry is { CanReview: true };
+    public bool CanReviewEntry => SelectedEntry is { CanReview: true } && IsDataTrusted;
+
+    // ---- Catalog safety: may this list authorize a change? ---------------------------------------
+
+    /// <summary>
+    /// What the last read of the sources amounted to. A failed refresh keeps the old rows on screen; they no longer authorize a sync, a
+    /// removal, an approval or a policy switch, and neither does a list that has gone old or has not been read yet (see <see cref="CatalogTrust"/>).
+    /// </summary>
+    public CatalogTrust Trust { get; } = new();
+
+    public bool IsDataTrusted => Trust.IsTrusted;
+
+    /// <summary>Why changes are off (the buttons' tooltip); null while they are on.</summary>
+    public string? DataUntrustedReason => Trust.Reason;
+
+    public bool CanChangeSelectedSource => HasSelectedSource && IsDataTrusted;
+
+    public bool CanSyncAll => HasSources && IsDataTrusted;
+
+    internal void NotifyTrust()
+    {
+        OnPropertyChanged(nameof(IsDataTrusted));
+        OnPropertyChanged(nameof(DataUntrustedReason));
+        OnPropertyChanged(nameof(CanChangeSelectedSource));
+        OnPropertyChanged(nameof(CanSyncAll));
+        OnPropertyChanged(nameof(CanReviewEntry));
+    }
+
+    /// <summary>
+    /// True (and says why in the result bar) when the list may not authorize a change, checked against the clock at the moment the command
+    /// runs. Every command that opens the review calls it first.
+    /// </summary>
+    private bool RefuseUntrustedChange()
+    {
+        if (Trust.Reason is not { } reason)
+        {
+            return false;
+        }
+
+        ActionMessage = reason;
+        ActionSeverity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
+        NotifyTrust();
+        return true;
+    }
 
     public bool HasActionMessage => !string.IsNullOrEmpty(ActionMessage);
 
@@ -495,6 +540,8 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         {
             Trace.TraceError($"Registries catch-up failed: {ex}");
             CliErrorMessage = $"Could not refresh registry sources: {ex.Message}";
+            Trust.MarkFailed(CliErrorMessage);
+            NotifyTrust();
         }
 #pragma warning restore CA1031
     }
@@ -508,6 +555,8 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
         _loadRunning = true;
         IsLoading = true;
+        Trust.MarkPending();
+        NotifyTrust();
         CliErrorMessage = null;
         var previousId = SelectedSource?.Id;
         var rows = new List<RegistrySourceRow>();
@@ -556,6 +605,18 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
             HasSources = Sources.Count > 0;
             _loadedAt = DateTimeOffset.Now;
+
+            // A failed read leaves the previous rows on screen; from here they are information, not authority.
+            if (HasCliError)
+            {
+                Trust.MarkFailed(CliErrorMessage!);
+            }
+            else
+            {
+                Trust.MarkComplete();
+            }
+
+            NotifyTrust();
             var asOf = DateTimeOffset.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
             StatusMessage = HasCliError
                 ? $"Could not read sources · tried {asOf}"

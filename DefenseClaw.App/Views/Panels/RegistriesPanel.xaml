@@ -5,6 +5,7 @@
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
              d:DataContext="{d:DesignInstance Type=vm:RegistriesPanelViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -118,31 +119,36 @@
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon Add24}"
                                Command="{Binding OpenAddFormCommand}"
-                               ToolTip="Add source…"
+                               IsEnabled="{Binding IsDataTrusted}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Add source…'}"
                                AutomationProperties.Name="Add source…"
                                AutomationProperties.HelpText="Register a new registry source. Nothing is fetched until you sync it." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                Command="{Binding SyncSelectedCommand}"
-                               IsEnabled="{Binding HasSelectedSource}"
-                               ToolTip="Sync selected…"
+                               IsEnabled="{Binding CanChangeSelectedSource}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Sync selected…'}"
                                AutomationProperties.Name="Sync selected…"
                                AutomationProperties.HelpText="Fetch, scan and promote the selected source's entries." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowSyncCircle24}"
                                Command="{Binding SyncAllCommand}"
-                               IsEnabled="{Binding HasSources}"
-                               ToolTip="Sync all…"
+                               IsEnabled="{Binding CanSyncAll}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Sync all…'}"
                                AutomationProperties.Name="Sync all…"
                                AutomationProperties.HelpText="Fetch, scan and promote entries from every enabled source." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Power24}"
                                Command="{Binding ToggleSelectedEnabledCommand}"
-                               IsEnabled="{Binding HasSelectedSource}"
+                               IsEnabled="{Binding CanChangeSelectedSource}"
                                ToolTip="{Binding ToggleEnabledText}"
                                AutomationProperties.Name="{Binding ToggleEnabledText}"
                                AutomationProperties.HelpText="Turn the selected source on or off." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Delete24}"
                                Command="{Binding RemoveSelectedCommand}"
-                               IsEnabled="{Binding HasSelectedSource}"
-                               ToolTip="Remove…"
+                               IsEnabled="{Binding CanChangeSelectedSource}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Remove…'}"
                                AutomationProperties.Name="Remove…"
                                AutomationProperties.HelpText="Delete the selected source, the rules it promoted and its cache." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
@@ -170,7 +176,7 @@
                                 Severity="{Binding ActionSeverity}" />
 
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                                Title="Could not read registry sources"
+                                Title="Could not read registry sources; changes are off until a read succeeds"
                                 IsClosable="False"
                                 IsOpen="{Binding HasCliError}"
                                 Message="{Binding CliErrorMessage}"
@@ -197,7 +203,7 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource DcCaption}"
                                        Text="Off by default. When on, a skill or MCP server has to match a rule from a registry to be admitted; anything else falls back to the default action. Turning it on before approving entries blocks everything not already covered." />
-                            <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0">
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,10,0,0" IsEnabled="{Binding IsDataTrusted}">
                                 <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding SkillsRegistryText}" />
                                 <ui:Button Content="Require…"
                                            Icon="{ctl:DcSymbolIcon ShieldLock24}"
@@ -212,7 +218,7 @@
                                            IsEnabled="{Binding SkillsRegistryRequired}"
                                            AutomationProperties.Name="Make the registry optional for skills" />
                             </WrapPanel>
-                            <WrapPanel Style="{StaticResource DcToolbarPanel}">
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}" IsEnabled="{Binding IsDataTrusted}">
                                 <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding McpsRegistryText}" />
                                 <ui:Button Content="Require…"
                                            Icon="{ctl:DcSymbolIcon ShieldLock24}"

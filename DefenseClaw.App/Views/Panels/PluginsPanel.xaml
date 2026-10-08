@@ -64,8 +64,9 @@
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon PuzzleCube24}"
                                Command="{Binding ToggleInstallFormCommand}"
-                               IsEnabled="{Binding IsIdle}"
-                               ToolTip="Install plugin…"
+                               IsEnabled="{Binding CanChange}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Install plugin…'}"
                                AutomationProperties.Name="Install plugin…"
                                AutomationProperties.HelpText="Install from a path, npm, clawhub:// or a URL with 'defenseclaw plugin install'. You review the command first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
@@ -170,6 +171,13 @@
                             Message="{Binding RefreshWarning}"
                             Severity="Warning"
                             IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                            IsClosable="False"
+                            AutomationProperties.LiveSetting="Polite" />
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            Title="Incomplete discovery"
+                            Message="{Binding PartialDiscoveryMessage}"
+                            Severity="Warning"
+                            IsOpen="{Binding HasPartialDiscovery, Mode=OneWay}"
                             IsClosable="False"
                             AutomationProperties.LiveSetting="Polite" />
 

@@ -151,6 +151,84 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     bool IGovernRowHost.IsScanAvailable => CanScan;
 
+    bool IGovernRowHost.AreChangesAllowed => IsDataTrusted;
+
+    string? IGovernRowHost.ChangesBlockedReason => DataUntrustedReason;
+
+    // ---- Catalog safety: may this list authorize a change? -------------------------------------------------------------
+
+    /// <summary>
+    /// What the last read amounted to (complete, partial, failed, old). Every state-changing command of the panel asks it, at the moment it
+    /// is reviewed and again when it is confirmed. Reusable as is by any panel with a list that actions are taken on (Policies).
+    /// </summary>
+    public CatalogTrust Trust { get; internal set; } = new();
+
+    /// <summary>True when the list is a complete, recent read; false while it is partial, failed, being read for the first time or old.</summary>
+    public bool IsDataTrusted => Trust.IsTrusted;
+
+    /// <summary>Why <see cref="IsDataTrusted"/> is false, as a tooltip sentence; null when it is true.</summary>
+    public string? DataUntrustedReason => Trust.Reason;
+
+    /// <summary>What the toolbar's state-changing buttons bind to: nothing running and the list is trusted.</summary>
+    public bool CanChange => IsIdle && IsDataTrusted;
+
+    /// <summary>The bulk Scan button: <see cref="CanScan"/> (idle, scanner present) and a trusted list.</summary>
+    public bool CanScanAll => CanScan && IsDataTrusted;
+
+    /// <summary>True when the last read listed rows but not every source; <see cref="PartialDiscoveryMessage"/> says which.</summary>
+    public bool HasPartialDiscovery => Trust.IsPartial;
+
+    /// <summary>The banner text of a partial read: what it means for the rows, then the CLI's own diagnostics (one per line).</summary>
+    public string PartialDiscoveryMessage => Trust.IsPartial
+        ? "These are the entries the CLI could read; others may be missing. Changes are off until discovery completes.\n"
+          + string.Join('\n', Trust.PartialDiagnostics.Select(DisplayNames.Visible))
+        : string.Empty;
+
+    /// <summary>What the trust looked like when the rows were last told about it; they are re-notified only when it changes.</summary>
+    private (bool Trusted, string? Reason) _trustSeen = (true, null);
+
+    private void NotifyTrust()
+    {
+        OnPropertyChanged(nameof(IsDataTrusted));
+        OnPropertyChanged(nameof(DataUntrustedReason));
+        OnPropertyChanged(nameof(CanChange));
+        OnPropertyChanged(nameof(CanScanAll));
+        OnPropertyChanged(nameof(HasPartialDiscovery));
+        OnPropertyChanged(nameof(PartialDiscoveryMessage));
+
+        var now = (Trust.IsTrusted, Trust.Reason);
+        if (now != _trustSeen)
+        {
+            _trustSeen = now;
+            foreach (var row in _allRows.Concat(Rows).Concat(ArtifactRows))
+            {
+                row.RefreshChangesEnabled();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Refuses (with the reason in the result bar) when the list may not authorize a change; true when the caller must stop. The check is
+    /// made against the clock now, not against what a button looked like when it was drawn.
+    /// </summary>
+    private bool RefuseUntrustedChange()
+    {
+        if (Trust.Reason is not { } reason)
+        {
+            return false;
+        }
+
+        ShowResult("Changes are off", reason, InfoBarSeverity.Warning);
+        NotifyTrust();
+        return true;
+    }
+
+    /// <summary>Test seam: runs a command instead of <c>Services.Cli.RunAsync</c>, so a test feeds exact output and never starts a process.</summary>
+    internal Func<IReadOnlyList<string>, CliRunOptions, Task<CliInvocation>>? RunCli { get; set; }
+
+    private Task<CliInvocation> RunCliAsync(IReadOnlyList<string> argv, CliRunOptions options) =>
+        RunCli is { } run ? run(argv, options) : Services.Cli.RunAsync(argv, options: options);
+
     // ---- What the concrete panel says about itself ---------------------------------------------------------------
 
     /// <summary>The CLI group: <c>skill</c>, <c>mcp</c>, <c>plugin</c> or <c>tool</c>.</summary>
@@ -358,6 +436,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     {
         _scannerFound = found;
         OnPropertyChanged(nameof(CanScan));
+        OnPropertyChanged(nameof(CanScanAll));
         OnPropertyChanged(nameof(ScanUnavailableReason));
         OnPropertyChanged(nameof(HasScanUnavailableReason));
     }
@@ -409,6 +488,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     protected async Task LoadAsync(bool queueIfBusy = false)
     {
         _everRequested = true;
+        Trust.MarkPending();
 
         if (_loadRunning)
         {
@@ -457,7 +537,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         {
             // Machine-parsed: JsonRead lifts the per-invocation retention cap so a long list can't be
             // truncated at the head and fail to parse.
-            invocation = await Services.Cli.RunAsync(argv, options: CliRunOptions.JsonRead).ConfigureAwait(true);
+            invocation = await RunCliAsync(argv, CliRunOptions.JsonRead).ConfigureAwait(true);
         }
         catch (CliNotFoundException ex)
         {
@@ -473,7 +553,11 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             return;
         }
 
-        if (invocation.ExitCode != 0)
+        // Exit != 0 with every readable row on stdout as valid JSON and a known "could not read this source" line on stderr is a
+        // PARTIAL read (the rows are real, the list is not complete): shown with a warning, changes off. Any other non-zero exit
+        // - garbage output, an unknown stderr, a timeout - is a failure, as before.
+        CatalogPartialRead? partial = null;
+        if (invocation.ExitCode != 0 && !CatalogPartialReads.TryClassify(invocation, out partial))
         {
             FailLoad(GovernState.Error, $"'{command}' failed", Summarize(invocation), scopeKey);
             return;
@@ -492,7 +576,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             return;
         }
 
-        var stdout = string.Concat(invocation.OutputLines
+        var stdout = partial?.Stdout ?? string.Concat(invocation.OutputLines
             .Where(l => l.Stream == CliStream.StandardOutput)
             .Select(l => l.Text + "\n"));
 
@@ -507,6 +591,17 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             return;
         }
 
+        // A partial read with nothing in it says nothing about what is installed: not "no entries", an incomplete look.
+        if (partial is not null && rows.Count == 0)
+        {
+            FailLoad(
+                GovernState.Error,
+                "Discovery was incomplete",
+                $"'{command}' could not read every source and found no {NounPlural} in the rest. " + string.Join(' ', partial.Diagnostics.Select(DisplayNames.Visible)),
+                scopeKey);
+            return;
+        }
+
         _allRows.Clear();
         _allRows.AddRange(rows.Where(r => !r.IsArtifact));
         _artifacts.Clear();
@@ -514,6 +609,15 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
         _lastLoadedAt = DateTimeOffset.Now;
         _loadedScopeKey = scopeKey;
+        if (partial is not null)
+        {
+            Trust.MarkPartial(partial.Diagnostics);
+        }
+        else
+        {
+            Trust.MarkComplete();
+        }
+
         RefreshWarning = null;
         ErrorTitle = string.Empty;
         ErrorMessage = string.Empty;
@@ -528,12 +632,16 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     /// </summary>
     private void FailLoad(GovernState failedState, string title, string message, string? scopeKey = null)
     {
+        // Whatever rows stay on screen no longer authorize a change: the list could not be confirmed.
+        Trust.MarkFailed($"{title}: {message}");
+        NotifyTrust();
+
         var haveGoodData = _lastLoadedAt is not null
                            && (scopeKey is null || string.Equals(_loadedScopeKey, scopeKey, StringComparison.Ordinal));
         if (haveGoodData)
         {
             var age = _lastLoadedAt is { } at ? $"as of {at.LocalDateTime:HH:mm}" : "earlier";
-            RefreshWarning = $"{title}: {message} Showing the last good read ({age}).";
+            RefreshWarning = $"{title}: {message} Showing the last good read ({age}); changes are off until the list is read again.";
             return;
         }
 
@@ -628,6 +736,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         OnPropertyChanged(nameof(ScopeLabel));
         OnPropertyChanged(nameof(EmptyTitle));
         OnPropertyChanged(nameof(EmptyDetail));
+        NotifyTrust();
     }
 
     // ---- Connector scope -----------------------------------------------------------------------------------------
@@ -974,7 +1083,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         IsBusy = true;
         try
         {
-            var invocation = await Services.Cli.RunAsync(argv, options: ExactTargetsJson).ConfigureAwait(true);
+            var invocation = await RunCliAsync(argv, ExactTargetsJson).ConfigureAwait(true);
             if (invocation.ExitCode == 0 && invocation.FailureReason is null)
             {
                 var stdout = string.Join('\n', invocation.OutputLines
@@ -1057,7 +1166,9 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     /// <summary>Opens the confirm overlay for <paramref name="plan"/>. Nothing runs until the operator confirms.</summary>
     protected void BeginReview(GovernPlan plan)
     {
-        if (RefuseExpandingTarget(plan.Argv))
+        // Every state-changing command of every Govern panel passes through here: a partial, failed, unfinished or old list
+        // never gets as far as a review, whatever button or menu item asked.
+        if (RefuseUntrustedChange() || RefuseExpandingTarget(plan.Argv))
         {
             return;
         }
@@ -1088,6 +1199,12 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
         if (plan is not null)
         {
+            // The review may have been open while a refresh finished partial or failed: it was authorized by data that is gone.
+            if (RefuseUntrustedChange())
+            {
+                return;
+            }
+
             await RunMutationAsync(plan).ConfigureAwait(true);
         }
     }
@@ -1130,7 +1247,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         try
         {
             var options = plan.Timeout is { } timeout ? ExactTargets with { Timeout = timeout } : ExactTargets;
-            var invocation = await Services.Cli.RunAsync(plan.Argv, options: options).ConfigureAwait(true);
+            var invocation = await RunCliAsync(plan.Argv, options).ConfigureAwait(true);
             if (invocation.ExitCode == 0 && invocation.FailureReason is null)
             {
                 succeeded = true;

@@ -138,20 +138,23 @@
                                 <ui:Button Content="Block"
                                            Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
                                            Command="{Binding ManageBlockCommand}"
-                                           IsEnabled="{Binding IsIdle}"
-                                           ToolTip="Opens a review of the exact command first"
+                                           IsEnabled="{Binding CanChange}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Opens a review of the exact command first'}"
                                            AutomationProperties.Name="Block the named tool" />
                                 <ui:Button Content="Allow"
                                            Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                                            Command="{Binding ManageAllowCommand}"
-                                           IsEnabled="{Binding IsIdle}"
-                                           ToolTip="Opens a review of the exact command first"
+                                           IsEnabled="{Binding CanChange}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Opens a review of the exact command first'}"
                                            AutomationProperties.Name="Allow the named tool" />
                                 <ui:Button Content="Unblock"
                                            Icon="{ctl:DcSymbolIcon LockOpen24}"
                                            Command="{Binding ManageUnblockCommand}"
-                                           IsEnabled="{Binding IsIdle}"
-                                           ToolTip="Removes the rule for this tool. Opens a review first."
+                                           IsEnabled="{Binding CanChange}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Removes the rule for this tool. Opens a review first.'}"
                                            AutomationProperties.Name="Remove the rule of the named tool" />
                             </WrapPanel>
                             <TextBlock Style="{StaticResource DcToneText}"
@@ -176,6 +179,13 @@
                                 Message="{Binding RefreshWarning}"
                                 Severity="Warning"
                                 IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                                IsClosable="False"
+                                AutomationProperties.LiveSetting="Polite" />
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                Title="Incomplete discovery"
+                                Message="{Binding PartialDiscoveryMessage}"
+                                Severity="Warning"
+                                IsOpen="{Binding HasPartialDiscovery, Mode=OneWay}"
                                 IsClosable="False"
                                 AutomationProperties.LiveSetting="Polite" />
 

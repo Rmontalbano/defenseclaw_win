@@ -259,6 +259,7 @@ public sealed class GovernTableTests
                     "Plugins" => "plugin-list.multi-connector.json",
                     _ => "skill-list.multi-connector.json",
                 };
+                ViewModel.Trust.MarkComplete(); // the stand-in for a successful read: the row actions in these tests are meant to work
                 foreach (var row in ViewModel.ParseRows(PayloadFixtures.Read(fixture)))
                 {
                     (row.IsArtifact ? ViewModel.ArtifactRows : ViewModel.Rows).Add(row);

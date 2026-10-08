@@ -371,6 +371,7 @@ public sealed class GovernScanViewTests
         UiThread.WaitFor(() => vm.State != GovernState.Loading, "first read finished");
         UiThread.Run(() =>
         {
+            vm.Trust.MarkComplete(); // the stand-in for a successful read: the Scan actions in these tests are meant to be on
             vm.Rows.Clear();
             foreach (var row in vm.ParseRows(PayloadFixtures.Read(fixture)).Where(r => !r.IsArtifact))
             {

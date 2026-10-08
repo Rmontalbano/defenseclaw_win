@@ -96,6 +96,11 @@ public sealed partial class RegistriesPanelViewModel
     [RelayCommand]
     private void SubmitAdd()
     {
+        if (RefuseUntrustedChange())
+        {
+            return;
+        }
+
         var id = AddId.Trim();
         var url = AddUrl.Trim();
         var authEnv = AddAuthEnv.Trim();
@@ -235,7 +240,7 @@ public sealed partial class RegistriesPanelViewModel
     [RelayCommand]
     private void SyncSelected()
     {
-        if (SelectedSource is not { } source)
+        if (SelectedSource is not { } source || RefuseUntrustedChange())
         {
             return;
         }
@@ -252,6 +257,11 @@ public sealed partial class RegistriesPanelViewModel
     [RelayCommand]
     private void SyncAll()
     {
+        if (RefuseUntrustedChange())
+        {
+            return;
+        }
+
         Review.Open(
             "Sync every enabled registry source?",
             SyncExplanation + " Disabled sources are skipped.",
@@ -280,7 +290,7 @@ public sealed partial class RegistriesPanelViewModel
     [RelayCommand]
     private void ToggleSelectedEnabled()
     {
-        if (SelectedSource is not { } source)
+        if (SelectedSource is not { } source || RefuseUntrustedChange())
         {
             return;
         }
@@ -305,7 +315,7 @@ public sealed partial class RegistriesPanelViewModel
     [RelayCommand]
     private void RemoveSelected()
     {
-        if (SelectedSource is not { } source)
+        if (SelectedSource is not { } source || RefuseUntrustedChange())
         {
             return;
         }
@@ -333,7 +343,7 @@ public sealed partial class RegistriesPanelViewModel
 
     private void ReviewEntry(bool approve)
     {
-        if (SelectedSource is not { } source || SelectedEntry is not { CanReview: true } entry)
+        if (SelectedSource is not { } source || SelectedEntry is not { CanReview: true } entry || RefuseUntrustedChange())
         {
             return;
         }
@@ -380,7 +390,7 @@ public sealed partial class RegistriesPanelViewModel
     private void SetRegistryRequired(string? spec)
     {
         var parts = (spec ?? string.Empty).Split(':');
-        if (parts.Length != 2 || parts[0] is not ("skill" or "mcp") || parts[1] is not ("on" or "off"))
+        if (parts.Length != 2 || parts[0] is not ("skill" or "mcp") || parts[1] is not ("on" or "off") || RefuseUntrustedChange())
         {
             return;
         }
