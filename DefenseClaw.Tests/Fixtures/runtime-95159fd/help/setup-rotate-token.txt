@@ -1,0 +1,27 @@
+Usage: defenseclaw setup rotate-token [OPTIONS]
+
+  Rotate the gateway token and connector-scoped hook credentials.
+
+  Generates distinct 32-byte CSPRNG values, verifies and stops gateway A,
+  durably commits the gateway and scoped sidecars for generation B, then
+  refreshes every affected hook/plugin and verifies gateway B. Any post-stop
+  failure restores the exact credential snapshots and prior ready generation.
+
+  Rotation is global by design: every eligible configured scoped-hook
+  credential and every safely discovered persisted sidecar receive distinct
+  least-privilege replacements in the same transaction. '--connector' remains
+  a presentation hint and never narrows this security boundary.
+
+  Plan B5 / S0.5.
+
+Options:
+  --connector TEXT                Optional presentation hint (rotation covers
+                                  every eligible configured scope and safely
+                                  discovered persisted sidecar).
+  --no-restart                    Deprecated unsafe mode; retained only to
+                                  return a fail-closed migration error.
+  --yes, --non-interactive, --accept-defaults
+                                  Skip the confirmation prompt and rotate
+                                  immediately (--non-interactive and
+                                  --accept-defaults are aliases).
+  -h, --help                      Show this message and exit.

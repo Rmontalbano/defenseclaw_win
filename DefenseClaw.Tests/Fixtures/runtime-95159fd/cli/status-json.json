@@ -1,0 +1,67 @@
+{
+  "environment": "windows",
+  "deployment_mode": "",
+  "data_dir": "C:\\Users\\operator\\.defenseclaw",
+  "config": "C:\\Users\\operator\\.defenseclaw\\config.yaml",
+  "audit_db": "C:\\Users\\operator\\.defenseclaw\\audit.db",
+  "scope": "global user config",
+  "sandbox": {
+    "available": false,
+    "enabled": false,
+    "legacy_standalone": false
+  },
+  "scanners": {
+    "skill-scanner": "installed",
+    "mcp-scanner": "installed",
+    "codeguard": "built-in"
+  },
+  "enforcement": {
+    "blocked_skills": 0,
+    "allowed_skills": 0,
+    "blocked_mcps": 0,
+    "allowed_mcps": 0
+  },
+  "activity": {
+    "total_scans": 0,
+    "active_alerts": 0
+  },
+  "sidecar": {
+    "running": false
+  },
+  "connectors": [],
+  "application_protection": {
+    "state_file": "C:\\Users\\operator\\.defenseclaw\\application_protection_state.json",
+    "enabled": false,
+    "min_confidence": 0.8,
+    "remove_when_gone": false,
+    "gone_after_min": 60,
+    "guardrail_mode": "observe",
+    "asset_policy_mode": "observe",
+    "require_trusted_binary_paths": false,
+    "trusted_binary_prefixes": [],
+    "discovered": [],
+    "active": [],
+    "skipped": [],
+    "last_activation_errors": {}
+  },
+  "semantic_routing": {
+    "configured": false,
+    "mode": "managed",
+    "version": "0.3.0",
+    "port": 8080,
+    "model_count": 0,
+    "runtime_state": "disabled"
+  },
+  "hook_guardian": {
+    "configured": false,
+    "state_file": "C:\\Users\\operator\\.defenseclaw\\hook_guardian_state.json"
+  },
+  "native_otlp_delivery": {
+    "state": "no_evidence",
+    "reason": "ledger_unavailable",
+    "observation_window_hours": 24,
+    "evidence_scope": "bounded",
+    "connectors": [],
+    "event_rows_truncated": false
+  }
+}

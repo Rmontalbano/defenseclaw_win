@@ -1,0 +1,8 @@
+  OK  config file:    C:\Users\operator\.defenseclaw\config.yaml
+  OK  data dir:       C:\Users\operator\.defenseclaw
+  OK  audit DB:       C:\Users\operator\.defenseclaw\audit.db
+  OK  policy dir:     C:\Users\operator\.defenseclaw\policies
+  OK  plugin dir:     C:\Users\operator\.defenseclaw\plugins
+  OK  quarantine dir: C:\Users\operator\.defenseclaw\quarantine
+  -  dotenv:         C:\Users\operator\.defenseclaw\.env
+  OK  device key:     C:\Users\operator\.defenseclaw\device.key

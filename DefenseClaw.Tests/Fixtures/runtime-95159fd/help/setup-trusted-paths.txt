@@ -1,0 +1,19 @@
+Usage: defenseclaw setup trusted-paths [OPTIONS] COMMAND [ARGS]...
+
+  Manage directories DefenseClaw trusts for connector-binary discovery.
+
+  Action-mode setup reads a connector's version by executing its binary, but
+  only when that binary lives under a trusted prefix - a guard against a
+  hostile binary planted on $PATH. Built-in defaults cover system and Homebrew
+  locations; trust additional roots here for bespoke installs. Additions
+  persist to ~/.defenseclaw/config.yaml under
+  ai_discovery.trusted_binary_prefixes.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  add     Trust DIRECTORY for connector-binary discovery (persisted to
+          config.yaml).
+  list    List trusted binary prefixes (built-in defaults + operator-added).
+  remove  Remove an operator-added trusted prefix (never a built-in default).

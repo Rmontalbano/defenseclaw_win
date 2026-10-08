@@ -1,0 +1,5 @@
+  Config: C:\Users\operator\.defenseclaw\config.yaml
+  OK file exists
+  OK syntax OK
+
+  OK config is valid

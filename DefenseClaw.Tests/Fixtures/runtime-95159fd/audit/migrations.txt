@@ -1,0 +1,53 @@
+applying migration 1: initial schema: audit_events, scan_results, findings, actions, egress, snapshots
+applying migration 2: add run_id columns and indexes; migrate old block/allow lists
+applying migration 3: add judge_responses table for retained LLM-judge bodies
+applying migration 4: add trace_id/request_id columns for end-to-end correlation
+applying migration 5: add session_id/agent/policy/destination/tool correlation columns
+applying migration 6: v7: add provenance + agent_id + sidecar_instance_id columns
+applying migration 7: v7: add scan_findings detail table + rule_id/line_number on findings
+applying migration 8: v7: add activity_events table for operator mutations
+applying migration 9: v7: add sink_health table for audit_sink delivery telemetry
+applying migration 10: v7: extend actions, snapshots, network_egress with provenance
+applying migration 11: v7: extend scan_results + findings with provenance + agent identity
+applying migration 12: v7: extend judge_responses with session/policy/tool/agent_instance
+applying migration 13: correlator: enrich scan_findings with axis/capability/fingerprint/endpoint/turn/path
+applying migration 14: audit: add structured_json payload column
+applying migration 15: runtime findings: add confidence + evaluation_id to scan_results/scan_findings
+applying migration 16: watcher: add scanner_fingerprint to target_snapshots for drift-gated rescans
+applying migration 17: multi-connector: add connector + step_idx + enforced + rule_pack_dir columns
+applying migration 18: multi-connector: per-connector column on actions + 3-col unique index
+applying migration 19: agent lifecycle: correlate network egress with connector, agent, execution, user, and tool
+applying migration 20: agent360: correlate network egress with root agent, parent agent, and root session
+applying migration 21: observability v8: add canonical local event-history projection columns
+applying migration 22: judge bodies: normalize timestamps for indexed retention
+applying migration 23: alert acknowledgements: add CAS projection and reconciliation state
+applying migration 24: observability v8: add mandatory SQLite readiness state
+applying migration 25: observability v8: add exact indexed retention instants and scan integrity guards
+applying migration 26: observability v8: retain source-backed finding evidence summaries
+applying migration 27: observability v8: add durable focused correlation ledger
+applying migration 28: quarantine: separate physical provenance from connector enforcement decisions
+applying migration 29: runtime assets: add durable connector session provenance state
+applying migration 30: guardrails: add bounded durable tool-call chain state
+applying migration 31: guardrails: add pending tool-call predecessor lifecycle
+applying migration 32: guardrails: index focused correlation candidate windows
+applying migration 33: privacy: purge pre-cutover audit evidence
+applying migration 34: scan findings: add compact distinct lifecycle projection
+applying migration 35: guardrails: bind bounded chain enforcement to opaque resource lineage
+applying migration 36: guardrails: bind transformed artifact chains to opaque derived lineage
+applying migration 37: guardrails: expand bounded chain catalog to nine result slots
+applying migration 38: guardrails: expand bounded chain catalog to ten result slots
+applying migration 39: guardrails: expand bounded chain catalog to eleven result slots
+applying migration 40: guardrails: expand bounded chain catalog to twelve result slots
+applying migration 41: guardrails: expand bounded chain catalog to thirteen result slots
+applying migration 42: guardrails: widen bounded chain masks and add result slots fourteen through seventeen
+applying migration 43: guardrails: add staged reverse-shell persistence result slot eighteen
+applying migration 44: guardrails: add result slots nineteen and twenty with bounded exact-value lineage
+applying migration 45: guardrails: reserve append-only bounded chain mask capacity
+applying migration 46: guardrails: bind pending SQL value sources to authoritative results
+applying migration 47: guardrails: add result slot twenty-one for bounded SQL value persistence
+applying migration 48: guardrails: add result slot twenty-two for compromised credential authentication
+applying migration 49: guardrails: bind pending credential sources to authoritative results
+applying migration 50: guardrails: add result slot twenty-three for AD CS certificate impersonation
+applying migration 51: guardrails: add result slot twenty-four for S4U ticket secretsdump
+applying migration 52: guardrails: add result slot twenty-five for policy-gated SQLite read-delete
+applying migration 53: guardrails: add result slot twenty-six for exact file-email lineage

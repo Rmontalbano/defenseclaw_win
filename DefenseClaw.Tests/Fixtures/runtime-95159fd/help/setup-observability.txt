@@ -1,0 +1,22 @@
+Usage: defenseclaw setup observability [OPTIONS] COMMAND [ARGS]...
+
+  Configure telemetry destinations.
+
+  Supports Splunk Observability Cloud, Splunk HEC, Splunk Enterprise HEC,
+  Datadog, Honeycomb, New Relic, Grafana Cloud, Galileo, the local
+  observability stack, plus generic OTLP and generic HTTP JSONL adapters
+  ('defenseclaw setup observability add --help' lists the preset ids). For
+  chat/incident notifier webhooks (Slack, PagerDuty, Webex, HMAC-signed), see
+  'defenseclaw setup webhook' - that's a separate 'webhooks[]' list and not a
+  telemetry destination.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  add      Configure a telemetry destination from a <preset>.
+  disable  Disable a destination.
+  enable   Turn a disabled destination back on.
+  list     List configured observability destinations.
+  remove   Delete a destination you added.
+  test     Probe a destination for reachability + auth.

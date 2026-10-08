@@ -166,7 +166,8 @@ public sealed class DefenseClawPaths
         Func<string, bool>? fileExists = null,
         TimeProvider? timeProvider = null,
         Func<string, string?>? environment = null,
-        Func<IEnumerable<string>>? persistedSearchPath = null)
+        Func<IEnumerable<string>>? persistedSearchPath = null,
+        IEnumerable<string>? fallbackBinDirectories = null)
     {
         var getEnvironment = environment ?? System.Environment.GetEnvironmentVariable;
 
@@ -175,6 +176,12 @@ public sealed class DefenseClawPaths
             : new DataDirectoryResolution(dataDirectory, DataDirectorySource.Explicit, null);
         DataDirectory = DataDirectoryOrigin.Path;
         BinDirectory = binDirectory ?? DefaultBinDirectory();
+
+        // The default install layouts besides Setup's are only probed when nothing narrower was asked for: a caller (a test) that names its
+        // own bin directory gets exactly that one unless it also names fallbacks.
+        FallbackBinDirectories = (fallbackBinDirectories ?? (binDirectory is null ? DefaultFallbackBinDirectories(DataDirectory) : []))
+            .Where(directory => !string.IsNullOrWhiteSpace(directory))
+            .ToArray();
 
         _initialSearchPath = MergeSearchPaths(searchPath?.Select(NormalizePathEntry) ?? SplitPathList(getEnvironment("PATH")), []);
         _searchPath = _initialSearchPath;
@@ -191,6 +198,22 @@ public sealed class DefenseClawPaths
 
     /// <summary>Installer bin directory used as the fallback when PATH misses.</summary>
     public string BinDirectory { get; }
+
+    /// <summary>
+    /// Where the other install layout puts the executables, probed after PATH and <see cref="BinDirectory"/>: the PowerShell installer
+    /// (<c>scripts/install.ps1</c> of DefenseClaw source commit 95159fd) publishes <c>defenseclaw.exe</c>, <c>defenseclaw-gateway.exe</c> and
+    /// <c>defenseclaw-hook.exe</c> to <c>%USERPROFILE%\.local\bin</c> and keeps its Python environment in <c>&lt;data dir&gt;\.venv</c>. The
+    /// Setup layout (<see cref="BinDirectory"/>) wins when both exist; this is what finds the CLI when PATH does not yet carry either.
+    /// </summary>
+    public IReadOnlyList<string> FallbackBinDirectories { get; }
+
+    /// <summary>The installer-script layout: <c>~\.local\bin</c>, then the venv's <c>Scripts</c> under <paramref name="dataDirectory"/>.</summary>
+    public static IReadOnlyList<string> DefaultFallbackBinDirectories(string dataDirectory) =>
+        new[]
+        {
+            Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), ".local", "bin"),
+            Path.Combine(dataDirectory, ".venv", "Scripts"),
+        };
 
     public string ConfigFilePath => Path.Combine(DataDirectory, "config.yaml");
 
@@ -601,6 +624,11 @@ public sealed class DefenseClawPaths
         if (!string.IsNullOrWhiteSpace(BinDirectory))
         {
             yield return (BinDirectory, true);
+        }
+
+        foreach (var directory in FallbackBinDirectories)
+        {
+            yield return (directory, true);
         }
     }
 

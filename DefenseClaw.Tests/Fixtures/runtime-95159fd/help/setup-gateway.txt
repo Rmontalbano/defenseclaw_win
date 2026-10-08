@@ -1,0 +1,24 @@
+Usage: defenseclaw setup gateway [OPTIONS]
+
+  Configure gateway connection for the DefenseClaw sidecar.
+
+  By default configures for a local OpenClaw instance (auth token from
+  ~/.defenseclaw/.env when OpenClaw requires it). Use --remote to configure
+  for a remote gateway that requires an auth token, optionally fetched from
+  AWS SSM Parameter Store.
+
+Options:
+  --remote                Configure for a remote OpenClaw gateway (requires
+                          auth token)
+  --host TEXT             Gateway host
+  --port INTEGER          Gateway WebSocket port
+  --api-port INTEGER      Sidecar REST API port
+  --token TEXT            Gateway auth token. Command-line values are visible
+                          to other local users (ps); prefer the env var.  [env
+                          var: DEFENSECLAW_SETUP_GATEWAY_TOKEN]
+  --ssm-param TEXT        AWS SSM parameter name for token
+  --ssm-region TEXT       AWS region for SSM
+  --ssm-profile TEXT      AWS CLI profile for SSM
+  --verify / --no-verify  Run connectivity checks after setup (default: on)
+  --non-interactive       Use flags instead of prompts
+  -h, --help              Show this message and exit.

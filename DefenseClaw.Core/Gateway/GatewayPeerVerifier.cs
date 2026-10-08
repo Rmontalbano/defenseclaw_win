@@ -135,6 +135,16 @@ public sealed class GatewayPeerVerifier
             yield return bin;
         }
 
+        // The installer script's directory (%USERPROFILE%\.local\bin) is the other place a gateway is installed to; see
+        // DefenseClawPaths.FallbackBinDirectories. Named here too, so the gateway it started is trusted whether or not PATH carries it.
+        foreach (var fallback in _paths.FallbackBinDirectories)
+        {
+            if (NormalizeDirectory(fallback) is { } normalized)
+            {
+                yield return normalized;
+            }
+        }
+
         if (_paths.GatewayCliPath is { } resolved && NormalizeDirectory(Path.GetDirectoryName(resolved)) is { } beside)
         {
             yield return beside;

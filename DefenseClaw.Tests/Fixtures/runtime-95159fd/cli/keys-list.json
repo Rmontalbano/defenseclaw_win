@@ -1,0 +1,62 @@
+[
+  {
+    "env_name": "DEFENSECLAW_LLM_KEY",
+    "canonical_env_name": "DEFENSECLAW_LLM_KEY",
+    "feature": "llm.default",
+    "description": "Canonical LLM API key used by the guardrail upstream, LLM judge, MCP/skill/plugin scanners. Override per-component with a component-specific llm.api_key_env.",
+    "requirement": "NOT_USED",
+    "source": "unset",
+    "auto_detected": false,
+    "set": false
+  },
+  {
+    "env_name": "OPENCLAW_GATEWAY_TOKEN",
+    "canonical_env_name": "OPENCLAW_GATEWAY_TOKEN",
+    "feature": "gateway",
+    "description": "Auth token for the OpenClaw gateway; auto-detected from ~/.openclaw/openclaw.json",
+    "requirement": "NOT_USED",
+    "source": "unset",
+    "auto_detected": true,
+    "set": false
+  },
+  {
+    "env_name": "CISCO_AI_DEFENSE_API_KEY",
+    "canonical_env_name": "CISCO_AI_DEFENSE_API_KEY",
+    "feature": "guardrail.remote",
+    "description": "API key for Cisco AI Defense remote scanner (scanner_mode=remote|both)",
+    "requirement": "NOT_USED",
+    "source": "unset",
+    "auto_detected": false,
+    "set": false
+  },
+  {
+    "env_name": "VIRUSTOTAL_API_KEY",
+    "canonical_env_name": "VIRUSTOTAL_API_KEY",
+    "feature": "skill-scanner.virustotal",
+    "description": "VirusTotal API key (skill-scanner --use-virustotal)",
+    "requirement": "NOT_USED",
+    "source": "unset",
+    "auto_detected": false,
+    "set": false
+  },
+  {
+    "env_name": "SPLUNK_ACCESS_TOKEN",
+    "canonical_env_name": "SPLUNK_ACCESS_TOKEN",
+    "feature": "observability.splunk",
+    "description": "Splunk access token (used only when a Splunk observability destination is enabled)",
+    "requirement": "NOT_USED",
+    "source": "unset",
+    "auto_detected": false,
+    "set": false
+  },
+  {
+    "env_name": "GALILEO_API_KEY",
+    "canonical_env_name": "GALILEO_API_KEY",
+    "feature": "observability.galileo",
+    "description": "Galileo API key for OTLP trace export",
+    "requirement": "NOT_USED",
+    "source": "unset",
+    "auto_detected": false,
+    "set": false
+  }
+]

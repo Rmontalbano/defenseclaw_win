@@ -1,0 +1,104 @@
+Usage: defenseclaw setup claude-code [OPTIONS]
+
+  Configure DefenseClaw for Claude Code via the hook bus.
+
+  Alias for the hook-driven path of 'setup guardrail' with '--connector
+  claudecode'. Configures Claude Code in the hook connector set so the TUI,
+  skill scanner, MCP scanner, and plugin scanner read from '~/.claude/' for
+  Claude-scoped surfaces.
+
+  Wires two telemetry channels at gateway boot:
+
+    * Hooks - the exact version-selected Claude Code contract: 28
+              events for >=2.1.154,<2.1.219 or 29 events for
+              >=2.1.219, including observational DirectoryAdded
+    * OTel  - native Claude Code OTel exporter (env-driven) pointing
+              at the gateway's /v1/logs and /v1/metrics
+
+  Default mode is 'observe' (record only); re-running setup keeps the current
+  mode. Pass '--mode action' to provision hook-driven enforcement: the
+  PreToolUse hook returns a deny verdict on policy hits and Claude Code blocks
+  via its native permission flow (including HITL when '--human-approval' is
+  on). No proxy listener binds in either mode - Claude Code talks directly to
+  its native upstream.
+
+Options:
+  -y, --yes, --non-interactive, --accept-defaults
+                                  Skip the confirmation prompt (aliases:
+                                  --non-interactive, --accept-defaults).
+  --restart / --no-restart        Restart defenseclaw-gateway after applying
+                                  changes (needed so the connector's hook
+                                  scripts + OTel env vars are wired).
+                                  [default: restart]
+  --with-local-stack / --no-local-stack
+                                  Also bring up the bundled
+                                  Prom/Loki/Tempo/Grafana stack via
+                                  `defenseclaw setup local-observability up`
+                                  once config is saved.  [default:
+                                  no-local-stack]
+  --mode [observe|action]         Hook policy mode. observe records only;
+                                  action returns a deny verdict from
+                                  PreToolUse on policy hits so Claude Code
+                                  blocks the tool call inside its own
+                                  permission flow. No proxy is involved in
+                                  either mode. Default: observe on first
+                                  setup; a re-run keeps the current mode.
+  --workspace, --workspace-dir TEXT
+                                  Opt into workspace-scoped config for this
+                                  setup. Defaults to global/user config.
+  --replace                       Replace the currently configured
+                                  connector(s) with this one instead of adding
+                                  alongside them. When other connectors are
+                                  configured the default (and the --yes
+                                  default) is to ADD; pass --replace to
+                                  switch.
+  --rule-pack [default|strict|permissive]
+                                  Rule-pack profile for THIS connector. In a
+                                  multi-connector install this writes a
+                                  per-connector override so Claude Code can
+                                  run a different pack than its peers (each
+                                  connector scans against its own pack at
+                                  boot); when it is the only connector it sets
+                                  the global pack, matching `setup guardrail
+                                  --rule-pack`. Omit to leave unchanged
+                                  (inherits the global pack).
+  --rule-pack-dir TEXT            Path to a custom rule-pack directory for
+                                  this connector. Use instead of --rule-pack
+                                  to point at a pack outside the built-in
+                                  presets; same per-connector scoping.
+                                  Mutually exclusive with --rule-pack; pass ""
+                                  to clear an override.
+  --enable-judge / --no-enable-judge
+                                  Enable LLM judge scanning for this connector
+                                  and bump the detection strategy off
+                                  regex_only (action mode only; observe-mode
+                                  connectors are not judged).
+                                  --no-enable-judge opts this connector out of
+                                  a concrete hook-lane gate while leaving the
+                                  global judge switch alone. Configure the
+                                  judge model via `setup guardrail` / `setup
+                                  llm`.
+  --judge-hook-connectors TEXT    Hook-lane judge gate to write
+                                  (guardrail.judge.hook_connectors):
+                                  'all'/'*', 'none', or a comma list of hook
+                                  connectors. When --enable-judge is given
+                                  without this, defaults to this connector.
+  --human-approval / --no-human-approval
+                                  Enable or disable human approval (HILT) for
+                                  this connector (action mode).
+  --hilt-min-severity [high|medium|low|critical]
+                                  Minimum severity that asks for human
+                                  approval for this connector.
+  --block-message TEXT            Custom block message for THIS connector
+                                  (empty = inherit the global/default).
+  --fail-mode [open|closed]       Per-connector hook fail mode: how the hook
+                                  behaves when the gateway answers with an
+                                  error. 'open' allows + logs (recommended);
+                                  'closed' blocks.
+  -h, --help                      Show this message and exit.
+
+  Hook connectors enforce via the agent's PreToolUse deny verdict (no LLM
+  proxy). The judge/HILT/block-message options here write per-connector
+  overrides; openclaw/zeptoclaw use the proxy backend (`setup openclaw
+  --help`) and additionally expose proxy/scanner options that do not apply to
+  hook connectors.

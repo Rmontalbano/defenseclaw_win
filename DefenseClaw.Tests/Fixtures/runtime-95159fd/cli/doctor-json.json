@@ -1,0 +1,421 @@
+{
+  "schema_version": 2,
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "mode": "check",
+  "passive": false,
+  "outcome": "failed",
+  "exit_code": 1,
+  "passed": 16,
+  "failed": 2,
+  "warned": 1,
+  "skipped": 20,
+  "summary": {
+    "passed": 16,
+    "failed": 2,
+    "warned": 1,
+    "skipped": 20
+  },
+  "checks": [
+    {
+      "check_id": "doctor.config.canonical-v8",
+      "section": "configuration",
+      "status": "pass",
+      "label": "Config file",
+      "detail": "C:\\Users\\operator\\.defenseclaw\\config.yaml; canonical schema v8 valid",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.state.audit-db",
+      "section": "configuration",
+      "status": "pass",
+      "label": "Audit database",
+      "detail": "C:\\Users\\operator\\.defenseclaw\\audit.db; SQLite quick_check=ok; required schema present",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.identity.device-key",
+      "section": "configuration",
+      "status": "pass",
+      "label": "Device identity",
+      "detail": "Ed25519 key custody and HMAC-bound provenance are valid",
+      "reason_code": "device-key-provenance-valid",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.component.cli.compatibility",
+      "section": "connectors",
+      "status": "pass",
+      "label": "Component compatibility: cli",
+      "detail": "CLI version is the component compatibility reference; installed=1.0.0",
+      "reason_code": "cli-version-reference",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.component.gateway.compatibility",
+      "section": "connectors",
+      "status": "fail",
+      "label": "Component compatibility: gateway",
+      "detail": "gateway version evidence is unavailable; expected=1.0.0",
+      "reason_code": "component-not-available",
+      "remediation": "defenseclaw upgrade --version 1.0.0",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.component.plugin.compatibility",
+      "section": "connectors",
+      "status": "skip",
+      "label": "Component compatibility: plugin",
+      "detail": "plugin is not required by the active connector set",
+      "reason_code": "component-not-available",
+      "remediation": "Reinstall the OpenClaw plugin from the DefenseClaw 1.0.0 release tarball",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.connectors.connectors.62b76cfd8f",
+      "section": "connectors",
+      "status": "skip",
+      "label": "Connectors",
+      "detail": "no connector configured \u2014 run 'defenseclaw setup <connector>'",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.connectors.connector.residue.7499e665f8",
+      "section": "connectors",
+      "status": "pass",
+      "label": "Connector residue",
+      "detail": "no leftover artifacts from inactive connectors",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.connectors.plugin.registry.policy.54133652c6",
+      "section": "connectors",
+      "status": "pass",
+      "label": "Plugin registry policy",
+      "detail": "no dead-end plugin.registry_required flag set",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.scanners.scanner.skill.scanner.7b1670f0b5",
+      "section": "scanners",
+      "status": "pass",
+      "label": "Scanner: skill-scanner",
+      "detail": "C:\\Users\\operator\\AppData\\Local\\Programs\\DefenseClaw\\bin\\skill-scanner.EXE (skill-scanner.EXE 2.0.4)",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.scanners.scanner.mcp.scanner.4650f97221",
+      "section": "scanners",
+      "status": "pass",
+      "label": "Scanner: mcp-scanner",
+      "detail": "C:\\Users\\operator\\AppData\\Local\\Programs\\DefenseClaw\\bin\\mcp-scanner.EXE",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.scanners.scanner.coverage.plugin.89575f4617",
+      "section": "scanners",
+      "status": "pass",
+      "label": "Scanner coverage (plugin)",
+      "detail": "malicious code patterns; prompt injection attempts; hardcoded secrets; supply-chain risk indicators",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.scanners.scanner.coverage.skill.3f0b3e31ed",
+      "section": "scanners",
+      "status": "pass",
+      "label": "Scanner coverage (skill)",
+      "detail": "prompt injection in SKILL.md; malicious shell / Python invocations; untrusted bundled bins; policy violations",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.scanners.scanner.coverage.mcp.server.e7ca049ea3",
+      "section": "scanners",
+      "status": "pass",
+      "label": "Scanner coverage (MCP server)",
+      "detail": "untrusted command paths; outbound URL allow-listing; tool-name spoofing; auth-token handling",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.sidecar.api.4eeb222c4c",
+      "section": "services",
+      "status": "fail",
+      "label": "Sidecar API",
+      "detail": "the gateway is not running (nothing listens on 127.0.0.1:18970); start it: 'defenseclaw-gateway start' or 'defenseclaw doctor --fix'",
+      "reason_code": "",
+      "remediation": "start it: 'defenseclaw-gateway start' or 'defenseclaw doctor --fix'",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.semantic.routing.dbc848d6a9",
+      "section": "services",
+      "status": "skip",
+      "label": "Semantic routing",
+      "detail": "disabled",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.gateway.token.env.d7d2641c13",
+      "section": "services",
+      "status": "warn",
+      "label": "Gateway token env",
+      "detail": "DEFENSECLAW_GATEWAY_TOKEN is empty and no DEFENSECLAW_GATEWAY_TOKEN fallback is present. Start the gateway (auto-generates a token) or run `defenseclaw keys set DEFENSECLAW_GATEWAY_TOKEN`.",
+      "reason_code": "",
+      "remediation": "Start the gateway (auto-generates a token) or run `defenseclaw keys set DEFENSECLAW_GATEWAY_TOKEN`",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.gateway.pid.identity.218987d837",
+      "section": "services",
+      "status": "skip",
+      "label": "Gateway PID identity",
+      "detail": "needs the gateway, which is not running (see Sidecar API)",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.gateway.listener.owner.c6fab5f7a0",
+      "section": "services",
+      "status": "skip",
+      "label": "Gateway listener owner",
+      "detail": "needs the gateway, which is not running (see Sidecar API)",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.gateway.token.drift.bcb88c6f71",
+      "section": "services",
+      "status": "skip",
+      "label": "Gateway token drift",
+      "detail": "needs the gateway, which is not running (see Sidecar API)",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.gateway.home.56c2c819b8",
+      "section": "services",
+      "status": "skip",
+      "label": "Gateway home",
+      "detail": "needs the gateway, which is not running (see Sidecar API)",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.watchdog.runtime.71e6968033",
+      "section": "services",
+      "status": "skip",
+      "label": "Watchdog runtime",
+      "detail": "stopped with the gateway; 'defenseclaw-gateway start' starts both",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.watchdog.last.known.state.64b227023f",
+      "section": "services",
+      "status": "skip",
+      "label": "Watchdog last-known state",
+      "detail": "watchdog is not running",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.services.guardrail.proxy.36a615d548",
+      "section": "services",
+      "status": "skip",
+      "label": "Guardrail proxy",
+      "detail": "disabled",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.credentials.llm.api.key.05fafd1ca8",
+      "section": "credentials",
+      "status": "skip",
+      "label": "LLM API key",
+      "detail": "guardrail disabled",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.credentials.llm.reachable.c24a0ce2f6",
+      "section": "credentials",
+      "status": "skip",
+      "label": "LLM reachable",
+      "detail": "guardrail disabled",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.credentials.llm.judge.calls.06020ab747",
+      "section": "credentials",
+      "status": "skip",
+      "label": "LLM judge calls",
+      "detail": "judge disabled",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.credentials.regional.provider.d6c0535b50",
+      "section": "credentials",
+      "status": "skip",
+      "label": "Regional provider",
+      "detail": "guardrail disabled",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.credentials.custom.provider.overlay.a61bf0f5c9",
+      "section": "credentials",
+      "status": "skip",
+      "label": "Custom-provider overlay",
+      "detail": "no overlay configured",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.credentials.cisco.ai.defense.033e9e5054",
+      "section": "credentials",
+      "status": "skip",
+      "label": "Cisco AI Defense",
+      "detail": "not configured for remote scanning",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.credentials.virustotal.api.f370ac91ff",
+      "section": "credentials",
+      "status": "skip",
+      "label": "VirusTotal API",
+      "detail": "not enabled",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.observability.local.sqlite.11922384fb",
+      "section": "observability",
+      "status": "pass",
+      "label": "Local SQLite",
+      "detail": "retention=7 days; path=C:\\Users\\operator\\.defenseclaw\\audit.db",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.observability.judge.body.store.e606cfc3aa",
+      "section": "observability",
+      "status": "pass",
+      "label": "Judge-body store",
+      "detail": "capture=enabled (raw judge text, not redacted; turn off with guardrail.retain_judge_bodies: false); retention=7 days; path=C:\\Users\\operator\\.defenseclaw\\judge_bodies.db",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.observability.destination.local.sqlite.47d338bfeb",
+      "section": "observability",
+      "status": "pass",
+      "label": "Destination: local-sqlite",
+      "detail": "kind=sqlite; signals=logs; policy=implicit_local; buckets=14; redaction=unredacted (none); limits=not-applicable; target=C:\\Users\\operator\\.defenseclaw\\audit.db",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.observability.bucket.catalog.5f043b0bde",
+      "section": "observability",
+      "status": "pass",
+      "label": "Bucket catalog",
+      "detail": "version=1; collected=14/14",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.observability.connector.export.custody.795406202d",
+      "section": "observability",
+      "status": "skip",
+      "label": "Connector export custody",
+      "detail": "unavailable (ledger_unavailable); correlation remains active for received telemetry",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.webhooks.webhooks.ed07499490",
+      "section": "webhooks",
+      "status": "skip",
+      "label": "Webhooks",
+      "detail": "no webhooks configured",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.sandbox.platform",
+      "section": "sandbox",
+      "status": "skip",
+      "label": "Sandboxes",
+      "detail": "OpenShell sandboxes run on Linux and macOS only; Windows and WSL2 are not supported",
+      "reason_code": "sandbox-platform-unsupported",
+      "remediation": "",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "doctor.check.security.overrides.security.overrides.aba69fad3d",
+      "section": "security-overrides",
+      "status": "pass",
+      "label": "Security overrides",
+      "detail": "none active",
+      "reason_code": "",
+      "remediation": "",
+      "duration_ms": 0
+    }
+  ],
+  "repair_summary": {
+    "planned": 0,
+    "applied": 0,
+    "failed": 0,
+    "blocked": 0,
+    "manual": 0,
+    "noop": 0,
+    "declined": 0,
+    "requires_confirmation": 0
+  },
+  "repairs": []
+}

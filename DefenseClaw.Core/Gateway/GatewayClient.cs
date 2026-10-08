@@ -54,7 +54,7 @@ public interface IGatewayClient
 /// </summary>
 public sealed class GatewayClient : IGatewayClient, IDisposable
 {
-    /// <summary>Mutating requests additionally require this header; any value is accepted.</summary>
+    /// <summary>Mutating requests require this header (any non-empty value); this client sends it on every request, reads included.</summary>
     public const string ClientHeaderName = "X-DefenseClaw-Client";
 
     public const string DefaultClientHeaderValue = "defenseclaw-win";
@@ -177,6 +177,12 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        // Every request names this client. The gateway's CSRF gate (internal/gateway/api.go apiCSRFProtect, at DefenseClaw source commit
+        // 95159fd) rejects a mutating request without a non-empty X-DefenseClaw-Client and lets GET through without it, so this client - which
+        // only ever GETs - works either way; sending it always means a gate that is tightened to cover reads does not break the app, and the
+        // gateway ignores a header it does not look at (any value is accepted: it is a presence check). /health is sent it too: harmless.
+        request.Headers.TryAddWithoutValidation(ClientHeaderName, DefaultClientHeaderValue);
 
         if (requiresAuth)
         {

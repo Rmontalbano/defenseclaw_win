@@ -108,7 +108,66 @@ public static partial class GuardrailStatusParser
             }
         }
 
+        if (rows.Count == 0)
+        {
+            ReadBlocks(lines, rows);
+        }
+
         return new GuardrailStatus(enabled, rows, warnings, port, text.Trim());
+    }
+
+    /// <summary>The block layout's field names, as the table headers spell them.</summary>
+    private static readonly IReadOnlyDictionary<string, string> BlockHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["key"] = "Key",
+        ["state"] = "State",
+        ["mode"] = "Mode",
+        ["fail"] = "Fail",
+        ["rule-pack"] = "Rule pack",
+        ["block/alert"] = "Block/alert",
+        ["hilt"] = "HILT",
+        ["scan"] = "Scan",
+        ["judge"] = "Judge",
+    };
+
+    [GeneratedRegex(@"^\s+-\s+(?<label>\S.*?)\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex BlockTitlePattern();
+
+    [GeneratedRegex(@"^\s+(?<name>[a-z][a-z/\-]*):\s*(?<value>.*?)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex BlockFieldPattern();
+
+    /// <summary>
+    /// The layout newer CLIs fall back to when the roster table would be wider than the terminal: one block per connector,
+    /// <c>- Claude Code</c> then indented <c>key:</c> / <c>state:</c> / <c>mode:</c> ... lines (DefenseClaw source commit 95159fd,
+    /// <c>_render_connector_blocks</c>). Read into the same rows the table gives, under the table's header spellings, so a roster does not
+    /// vanish because a terminal was narrow or a connector name long. A block without a <c>key:</c> line is not a connector and is skipped.
+    /// </summary>
+    private static void ReadBlocks(string[] lines, List<GuardrailConnectorRow> rows)
+    {
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (BlockTitlePattern().Match(lines[i]) is not { Success: true } title)
+            {
+                continue;
+            }
+
+            var columns = new List<KeyValuePair<string, string>> { new("Connector", title.Groups["label"].Value) };
+            var j = i + 1;
+            for (; j < lines.Length && BlockFieldPattern().Match(lines[j]) is { Success: true } field; j++)
+            {
+                if (BlockHeaders.TryGetValue(field.Groups["name"].Value, out var header))
+                {
+                    columns.Add(new KeyValuePair<string, string>(header, field.Groups["value"].Value));
+                }
+            }
+
+            if (columns.Any(c => c.Key == "Key"))
+            {
+                rows.Add(new GuardrailConnectorRow(columns));
+            }
+
+            i = Math.Max(i, j - 1);
+        }
     }
 
     private static void ReadTable(string[] lines, int ruleIndex, List<GuardrailConnectorRow> rows)

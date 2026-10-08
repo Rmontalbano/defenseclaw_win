@@ -1,0 +1,32 @@
+Usage: defenseclaw setup redaction [OPTIONS] [COMMAND] [ARGS]...
+
+  Choose what telemetry DefenseClaw collects and how it is redacted.
+
+  Redaction is set per bucket (a group of events) and per destination with a
+  profile. Built-in profiles:
+
+    none       no redaction: everything is sent as recorded (the default)
+    sensitive  removes credentials, hashes file paths, and masks PII,
+               credentials and secrets found in content, reasons,
+               evidence and errors
+    content    like sensitive, but replaces content, reasons, evidence
+               and errors whole
+    strict     keeps only metadata and identifiers; removes everything else
+
+  With no subcommand it starts an interactive editor. 'status' shows what is
+  in effect now.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  apply        Apply one redaction profile everywhere, or as the global
+               default.
+  bucket       Manage per-bucket collection and redaction overrides.
+  defaults     Manage the global bucket baseline.
+  destination  Manage destination-level concise policy.
+  profile      Inspect and manage custom redaction profiles.
+  remove-all   Remove redaction from every configurable log and trace
+               projection.
+  route        Manage first-match destination routes.
+  status       Show effective bucket and destination redaction policy.

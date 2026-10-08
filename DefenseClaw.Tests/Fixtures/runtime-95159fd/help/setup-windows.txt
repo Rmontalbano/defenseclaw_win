@@ -1,0 +1,99 @@
+# cmd: defenseclaw.exe setup --help
+# rc: 0
+# --- stdout ---
+Usage: defenseclaw setup [OPTIONS] [COMMAND] [ARGS]...
+
+  Configure DefenseClaw components.
+
+  Run 'defenseclaw setup <connector>' to add an agent connector, or one of the
+  subcommands below for guardrails, observability, keys and more.
+
+  Multi-connector:
+    One gateway enforces several agent-native connectors (codex, claudecode,
+    hermes, antigravity, omnigent and others), listed under
+    guardrail.connectors.
+      Add one:       defenseclaw setup <connector>  (choose Add when asked)
+      Remove one:    defenseclaw setup remove <name>
+      Scope policy:  defenseclaw guardrail ... --connector <name>
+      See them all:  defenseclaw status, defenseclaw guardrail status
+    OpenClaw and ZeptoClaw use the proxy path, so they can't be added this way.
+
+  With no subcommand:
+    'defenseclaw setup' opens a connector picker (detected connectors are
+    pre-checked), then asks for the mode and an optional judge connector.
+    For scripts, pick connectors with -c/--connector (repeatable),
+    --detected or --all, for example:
+      defenseclaw setup -c hermes -c codex --mode action
+    Use --add-detected --yes to add newly installed connectors in observe
+    mode without changing the existing connectors or their modes.
+
+Options:
+  -c, --connector TEXT      (no subcommand) Configure this hook connector as
+                            part of a batch. Repeatable: `-c hermes -c codex`.
+                            Combine with --detected/--all.
+  --detected                (no subcommand) Add every locally-detected hook
+                            connector to the batch.
+  --add-detected            (no subcommand) Add newly detected hook connectors
+                            without removing or changing existing connectors.
+                            New connectors use --mode.
+  --all                     (no subcommand) Add every supported hook connector
+                            to the batch.
+  --mode [observe|action]   (no subcommand) Enforcement mode for the
+                            batch-selected connectors.  [default: observe]
+  --restart / --no-restart  (no subcommand) Restart defenseclaw-gateway after
+                            a batch/picker setup.  [default: restart]
+  -y, --yes                 (no subcommand) Skip batch mode/judge prompts (use
+                            defaults).
+  -h, --help                Show this message and exit.
+
+Commands:
+  acp                  Find unguarded ACP agents and route them through
+                       DefenseClaw.
+  amp                  Configure DefenseClaw for Amp.
+  antigravity          Configure DefenseClaw for Antigravity.
+  claude-code          Configure DefenseClaw for Claude Code via the hook bus.
+  codex                Configure DefenseClaw for Codex via the hook bus.
+  copilot              Configure DefenseClaw for GitHub Copilot CLI.
+  cursor               Configure DefenseClaw for Cursor.
+  devin                Configure DefenseClaw for Devin.
+  galileo              Configure Galileo OTLP trace export.
+  gateway              Configure gateway connection for the DefenseClaw
+                       sidecar.
+  guardrail            Configure the LLM guardrail that inspects your agent's
+                       prompts and responses.
+  hermes               Configure DefenseClaw for Hermes.
+  kiro                 Configure DefenseClaw for Kiro.
+  llm                  Configure the unified top-level 'llm:' block.
+  local-observability  Run the bundled Prom/Loki/Tempo/Grafana stack on
+                       loopback.
+  mcp-scanner          Configure mcp-scanner analyzers and scan options.
+  migrate-llm          Rewrite config.yaml to the unified v5 LLM shape.
+  notifications        Toggle user-session desktop notifications for blocks
+                       and HITL approvals.
+  notifications-set    Toggle a single notifications category or source.
+  observability        Configure telemetry destinations.
+  omnigent             Configure DefenseClaw for OmniGent.
+  openclaw             OpenClaw: unsupported on windows.
+  opencode             Configure DefenseClaw for OpenCode.
+  openhands            OpenHands: unsupported on windows.
+  provider             Manage the custom provider overlay
+                       (~/.defenseclaw/custom-providers.json).
+  redaction            Choose what telemetry DefenseClaw collects and how it
+                       is redacted.
+  registry             Register an external skill / MCP catalog (interactive
+                       wizard).
+  remove               Remove a connector from the configured set.
+  rotate-token         Rotate the gateway token and connector-scoped hook
+                       credentials.
+  routing              Configure semantic model routing.
+  skill-scanner        Configure skill-scanner analyzers, API keys, and
+                       policy.
+  splunk               Configure Splunk integration for DefenseClaw.
+  trusted-paths        Manage directories DefenseClaw trusts for
+                       connector-binary discovery.
+  webhook              Configure Slack/PagerDuty/Webex/generic chat + incident
+                       webhooks.
+  zeptoclaw            ZeptoClaw: unsupported on windows.
+
+# --- stderr ---
+

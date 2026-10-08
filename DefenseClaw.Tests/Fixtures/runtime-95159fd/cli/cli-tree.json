@@ -1,0 +1,10537 @@
+{
+ "cli": "defenseclaw 1.0.0 (source commit 95159fd)",
+ "commands": [
+  {
+   "path": "acp",
+   "group": true,
+   "help": "Inspect and configure the local Agent Client Protocol guard.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "acp adopt",
+   "group": false,
+   "help": "Find unguarded ACP agents and route them through DefenseClaw.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--client"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--guard-binary"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--activate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json-output",
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "acp catalog",
+   "group": false,
+   "help": "Print protocol and built-in integration inventory.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "acp detect",
+   "group": false,
+   "help": "Report which ACP clients are guarded, unguarded, or unconfigured.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json-output",
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "acp refresh",
+   "group": false,
+   "help": "Re-pin the DefenseClaw ACP guard in every editor entry after an upgrade.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--from-sha256"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "acp remove",
+   "group": false,
+   "help": "Remove one DefenseClaw-owned editor entry without touching foreign agents.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--client"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--agent"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--managed"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--runtime-data-dir"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "acp setup",
+   "group": false,
+   "help": "Install a guarded agent entry into Zed or JetBrains.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--client"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--agent"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--guard-binary"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--agent-binary"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--activate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--managed"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--runtime-data-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--token-file"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json-output",
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "acp status",
+   "group": false,
+   "help": "Show configured ACP posture and editor paths.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--runtime-data-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json-output",
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "acp verify",
+   "group": false,
+   "help": "Fail if a managed editor entry or executable digest has drifted.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--client"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--agent"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--runtime-data-dir"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent",
+   "group": true,
+   "help": "Inspect locally installed agent surfaces.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent components",
+   "group": true,
+   "help": "Show the deduped AI components/SDK rollup with versions, install counts, and confidence.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--refresh"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--ecosystem"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--min-identity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--min-presence"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--limit"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent components history",
+   "group": false,
+   "help": "Print the confidence trend (last N scans) for one component.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--ecosystem"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--limit"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent components show",
+   "group": false,
+   "help": "Print every place one component was detected.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--ecosystem"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent confidence",
+   "group": true,
+   "help": "Inspect and tune the AI confidence engine.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent confidence explain",
+   "group": false,
+   "help": "Print the per-evidence confidence breakdown for one component.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--ecosystem"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent confidence policy",
+   "group": true,
+   "help": "Inspect and validate the confidence policy YAML.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent confidence policy default",
+   "group": false,
+   "help": "Print the embedded default policy (a starting point for an override file).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent confidence policy show",
+   "group": false,
+   "help": "Print the active confidence policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent confidence policy validate",
+   "group": false,
+   "help": "Dry-run a candidate policy file against the sidecar's loader.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discover",
+   "group": false,
+   "help": "Run local agent discovery and optionally emit OTel telemetry.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--refresh"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-cache"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--emit-otel",
+      "--no-emit-otel"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--require-otel"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery",
+   "group": true,
+   "help": "Toggle and inspect the sidecar AI discovery service.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent discovery disable",
+   "group": false,
+   "help": "Disable the sidecar AI discovery service.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent discovery enable",
+   "group": false,
+   "help": "Turn on AI discovery in the gateway (sidecar).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scan-roots"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scan-interval-min"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--process-interval-s"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--max-files-per-scan"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--max-file-bytes"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--include-shell-history",
+      "--no-include-shell-history"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--include-package-manifests",
+      "--no-include-package-manifests"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--include-env-var-names",
+      "--no-include-env-var-names"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--include-network-domains",
+      "--no-include-network-domains"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--lookup-model-provenance-online",
+      "--no-lookup-model-provenance-online"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--allow-workspace-signatures",
+      "--no-allow-workspace-signatures"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--store-raw-local-paths",
+      "--no-store-raw-local-paths"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--enable-host-plane",
+      "--no-enable-host-plane"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan",
+      "--no-scan"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery runtime",
+   "group": true,
+   "help": "Inspect the AI discovery runtime planes.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent discovery runtime disable",
+   "group": false,
+   "help": "Turn off the runtime planes. Recorded findings are preserved.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent discovery runtime enable",
+   "group": false,
+   "help": "Turn on the runtime planes.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--enable-host-plane",
+      "--no-enable-host-plane"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dns-capture",
+      "--no-dns-capture"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--poll-interval-s"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--min-risk-to-report"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent discovery runtime findings",
+   "group": false,
+   "help": "List scored runtime findings.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--refresh"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--limit"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery runtime permissions",
+   "group": false,
+   "help": "What each runtime plane needs, and how to grant it.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--os"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--grant"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--revert"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent discovery runtime scan",
+   "group": false,
+   "help": "Poll the runtime planes immediately.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery runtime selftest",
+   "group": false,
+   "help": "Report what this host's planes can and cannot see, and why.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery runtime status",
+   "group": false,
+   "help": "Show what the runtime planes can and cannot see right now.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery scan",
+   "group": false,
+   "help": "Run one AI discovery scan now through the running gateway (sidecar).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery setup",
+   "group": false,
+   "help": "Walk an interactive wizard for AI discovery settings.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan",
+      "--no-scan"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent discovery status",
+   "group": false,
+   "help": "Show AI discovery settings from config.yaml next to the running gateway's.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent processes",
+   "group": false,
+   "help": "List AI processes the sidecar currently observes (PID, user, uptime).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--refresh"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--limit"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "agent signatures",
+   "group": true,
+   "help": "Manage AI discovery signature packs.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent signatures disable",
+   "group": false,
+   "help": "Disable one signature id in ai_discovery.disabled_signature_ids.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent signatures enable",
+   "group": false,
+   "help": "Re-enable one signature id previously disabled in config.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "agent signatures install",
+   "group": false,
+   "help": "Install a validated pack into the managed signature-pack directory.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent signatures list",
+   "group": false,
+   "help": "List the merged AI discovery signature catalog.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--include-disabled"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent signatures validate",
+   "group": false,
+   "help": "Validate a signature pack without installing it.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "agent usage",
+   "group": false,
+   "help": "Show continuous AI visibility from the running sidecar.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--refresh"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--detail"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--state"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--category"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--product"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--component"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--show-gone"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--by-detector"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--limit"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--wide"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--gateway-host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-token-env"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "aibom",
+   "group": true,
+   "help": "AI Bill of Materials \u2014 scan the active connector(s)' live inventory.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "aibom scan",
+   "group": false,
+   "help": "Index a live install (skills, plugins, MCP, agents, tools, models, memory).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--summary"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--only"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "alerts",
+   "group": true,
+   "help": "View and manage security alerts.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "-n",
+      "--limit"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--show"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--tui"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "alerts acknowledge",
+   "group": false,
+   "help": "Mark alerts as acknowledged (seen by an operator).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--target"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--since"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--before"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "-y",
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "alerts dismiss",
+   "group": false,
+   "help": "Dismiss alerts so they no longer show in the active alert list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--target"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--since"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--before"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "-y",
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "audit",
+   "group": true,
+   "help": "Audit trail helpers: export, findings and gateway logs.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "audit export",
+   "group": false,
+   "help": "Export the audit log as JSONL (runs 'defenseclaw-gateway audit export').",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "audit findings",
+   "group": false,
+   "help": "Report distinct current scan findings (runs 'defenseclaw-gateway audit findings').",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "audit log-activity",
+   "group": false,
+   "help": "Record a config change from a JSON payload as an audit event (internal).",
+   "hidden": true,
+   "options": [
+    {
+     "names": [
+      "--payload-file"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "audit logs",
+   "group": false,
+   "help": "Show the newest lines of the gateway or watchdog log (as the TUI Logs panel does).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "-n",
+      "--lines"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--grep"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "codeguard",
+   "group": true,
+   "help": "CodeGuard native skill/rule asset management.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "codeguard install",
+   "group": false,
+   "help": "Install a native CodeGuard skill or rule asset.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--target"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "codeguard install-skill",
+   "group": false,
+   "help": "Backward-compatible alias for 'codeguard install --target skill'.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "codeguard status",
+   "group": false,
+   "help": "Show whether a native CodeGuard asset is installed.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--target"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "config",
+   "group": true,
+   "help": "Inspect and validate DefenseClaw configuration.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "config get",
+   "group": false,
+   "help": "Print one configuration value (secrets masked).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--format"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "config path",
+   "group": false,
+   "help": "Print the filesystem locations DefenseClaw uses.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "config reference",
+   "group": false,
+   "help": "Print the configuration reference for this version.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--format"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--output"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "config show",
+   "group": false,
+   "help": "Show the configuration with secrets masked.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--format"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--effective"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--provenance"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--section"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reveal"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "config validate",
+   "group": false,
+   "help": "Verify the config file parses and references valid enums.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--quiet"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "doctor",
+   "group": false,
+   "help": "Verify credentials, endpoints, and connectivity.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json-output",
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--fix"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--fix-id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--passive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail",
+   "group": true,
+   "help": "Control guardrail policy: status, enable/disable, fail-mode, hilt, block-message.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "guardrail alert-at",
+   "group": false,
+   "help": "Set the lowest severity at which tool calls raise an alert.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail allow-private-upstream",
+   "group": false,
+   "help": "Let the guardrail proxy reach an LLM endpoint on a private address.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--remove"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail block-at",
+   "group": false,
+   "help": "Set the lowest severity at which tool calls are blocked.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail block-message",
+   "group": false,
+   "help": "Show or change the custom message shown when an action is blocked.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--clear"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail disable",
+   "group": false,
+   "help": "Disable the LLM guardrail and run connector teardown.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "guardrail enable",
+   "group": false,
+   "help": "Re-enable the LLM guardrail using the existing config.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "guardrail fail-mode",
+   "group": false,
+   "help": "Show or change the hook failure behavior.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "guardrail hilt",
+   "group": false,
+   "help": "Show or change the human-in-the-loop (HILT) approval policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail judge",
+   "group": true,
+   "help": "Gate which hook connectors forward content to the LLM judge.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "guardrail judge add",
+   "group": false,
+   "help": "Opt CONNECTOR into the hook-lane LLM judge ('all' = every hook connector).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail judge list",
+   "group": false,
+   "help": "Show the hook-lane gate and the effective per-connector judge state.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "guardrail judge remove",
+   "group": false,
+   "help": "Opt CONNECTOR out of the hook-lane LLM judge ('all' turns the lane off).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail list-packs",
+   "group": false,
+   "help": "List the available guardrail rule packs and who enforces which.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail mode",
+   "group": false,
+   "help": "Switch the guardrail between observe (log only) and action (enforce).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--clear"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail protection",
+   "group": true,
+   "help": "Turn the opt-in protection packs on and off, globally or per connector.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "guardrail protection disable",
+   "group": false,
+   "help": "Turn opt-in protection pack NAME off, globally or for one connector.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail protection enable",
+   "group": false,
+   "help": "Turn opt-in protection pack NAME on, globally or for one connector.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--no-validate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail protection list",
+   "group": false,
+   "help": "List the opt-in protection packs and which scopes have them on.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail status",
+   "group": false,
+   "help": "Show whether the guardrail is enabled and how each active connector is set.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail use-pack",
+   "group": false,
+   "help": "Switch the guardrail rule pack, globally or for one connector.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--clear"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-validate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "guardrail validate-pack",
+   "group": false,
+   "help": "Validate rule pack PATH without starting or contacting the gateway.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "init",
+   "group": false,
+   "help": "Initialize DefenseClaw environment.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--skip-install"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--enable-guardrail"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sandbox"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rescan-agents"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--native-setup-copilot"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--observe-all"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--action-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scanner-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--with-judge",
+      "--no-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-provider"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-api-key"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-base-url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-api-key"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--start-gateway",
+      "--no-start-gateway"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verify",
+      "--no-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json-summary"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verbose"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "keys",
+   "group": true,
+   "help": "Inspect and manage DefenseClaw API keys (list, set, remove, check).",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "keys check",
+   "group": false,
+   "help": "Exit 0 when all REQUIRED keys are set, non-zero otherwise.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "keys fill-missing",
+   "group": false,
+   "help": "Interactively prompt for every REQUIRED-but-unset credential.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "keys list",
+   "group": false,
+   "help": "List every credential DefenseClaw knows about.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--show-values"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--missing-only"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "keys remove",
+   "group": false,
+   "help": "Remove a credential from '~/.defenseclaw/.env'.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "keys set",
+   "group": false,
+   "help": "Set a credential and persist it to '~/.defenseclaw/.env'.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--value"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--value-stdin"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "mcp",
+   "group": true,
+   "help": "Manage MCP servers \u2014 list, scan, block, unblock, allow, set, unset.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "mcp allow",
+   "group": false,
+   "help": "Allow an MCP server (by name or URL).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "mcp block",
+   "group": false,
+   "help": "Block an MCP server (by name or URL).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "mcp list",
+   "group": false,
+   "help": "List MCP servers for every configured connector.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "mcp scan",
+   "group": false,
+   "help": "Scan an MCP server by name or URL.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--analyzers"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scan-prompts"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan-resources"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan-instructions"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--all"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--allow-private"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "mcp set",
+   "group": false,
+   "help": "Add or update an MCP server in the configured connector(s)' MCP config.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--command"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--args"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--transport"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--skip-scan"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--allow-private"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--force-untrusted-command"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "mcp unblock",
+   "group": false,
+   "help": "Remove an MCP server's block or allow entry.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "mcp unset",
+   "group": false,
+   "help": "Remove an MCP server from connector config.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "migrate",
+   "group": false,
+   "help": "Bring config and data to this version's schema.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--check"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--from-version"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--data-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--openclaw-home"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--gateway-binary"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "observability",
+   "group": true,
+   "help": "Inspect canonical observability collection and routing policy.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "observability destination",
+   "group": true,
+   "help": "Test one configured destination.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "observability destination test",
+   "group": false,
+   "help": "Test exactly NAME without ordinary collection, routing, or fan-out.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--write-probe"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "observability plan",
+   "group": false,
+   "help": "Render collection and first-route outcomes from the compiled Go plan.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--bucket"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--signal"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--event-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--format"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin",
+   "group": true,
+   "help": "Manage DefenseClaw plugins \u2014 install, list, remove, scan, block, allow, disable, enable, quarantine, restore.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "plugin allow",
+   "group": false,
+   "help": "Add a plugin to the install allow list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin block",
+   "group": false,
+   "help": "Add a plugin to the install block list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin disable",
+   "group": false,
+   "help": "Disable a plugin at runtime.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin enable",
+   "group": false,
+   "help": "Enable a previously disabled plugin.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin info",
+   "group": false,
+   "help": "Show detailed information about a plugin.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin install",
+   "group": false,
+   "help": "Install a plugin from a local path, npm registry, clawhub, or URL.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--action"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin list",
+   "group": false,
+   "help": "List installed plugins with scan severity.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin quarantine",
+   "group": false,
+   "help": "Quarantine a plugin's files to the quarantine area.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin remove",
+   "group": false,
+   "help": "Remove an installed plugin.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin restore",
+   "group": false,
+   "help": "Restore a quarantined plugin to its original location.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--path"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin scan",
+   "group": false,
+   "help": "Scan a plugin directory for security issues.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--policy"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--all"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--use-llm",
+      "--no-llm"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--llm-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-provider"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-consensus-runs"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-meta",
+      "--no-meta"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--include-self"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--lenient"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "plugin unblock",
+   "group": false,
+   "help": "Remove plugin enforcement state without adding an allow entry.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "policy",
+   "group": true,
+   "help": "Manage DefenseClaw security policies \u2014 create, list, show, activate, validate, test, edit.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "policy activate",
+   "group": false,
+   "help": "Activate a policy \u2014 makes it the policy DefenseClaw enforces.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reload",
+      "--no-reload"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy create",
+   "group": false,
+   "help": "Create a new security policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--description",
+      "-d"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--from-preset"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scan-on-install",
+      "--no-scan-on-install"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--allow-list-bypass",
+      "--no-allow-list-bypass"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--critical-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--high-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--medium-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--low-action"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "policy delete",
+   "group": false,
+   "help": "Delete a custom policy, or your edited copy of a built-in.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy edit",
+   "group": true,
+   "help": "Edit policy sections (guardrail, firewall, scanner, actions).",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "policy edit actions",
+   "group": false,
+   "help": "Edit severity actions for the global policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--severity",
+      "-s"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--runtime"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--file"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--install"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--policy-name",
+      "-p"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reload",
+      "--no-reload"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy edit firewall",
+   "group": false,
+   "help": "Edit egress firewall rules (domains, ports, blocked destinations).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--default-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--add-domain"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--remove-domain"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--add-blocked"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--remove-blocked"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--add-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--remove-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--policy-name",
+      "-p"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reload",
+      "--no-reload"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy edit guardrail",
+   "group": false,
+   "help": "Edit guardrail thresholds, patterns, and severity mappings.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--block-threshold"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--alert-threshold"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-trust-level"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--add-pattern"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--remove-pattern"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--set-severity-mapping"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--policy-name",
+      "-p"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reload",
+      "--no-reload"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy edit scanner",
+   "group": false,
+   "help": "Edit per-scanner-type severity overrides.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--type"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--severity",
+      "-s"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--runtime"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--file"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--install"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--remove"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--policy-name",
+      "-p"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reload",
+      "--no-reload"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy list",
+   "group": false,
+   "help": "List all available policies (built-in and custom).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy show",
+   "group": false,
+   "help": "Show details of a policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy test",
+   "group": false,
+   "help": "Run OPA Rego unit tests.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--rego-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "-v",
+      "--verbose"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "policy validate",
+   "group": false,
+   "help": "Check the policy rule files (Rego modules and data.json) for errors.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--rego-dir"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "quickstart",
+   "group": false,
+   "help": "Zero-prompt end-to-end setup with safe defaults.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scanner"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--with-judge",
+      "--no-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector",
+      "--agent"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--skip-gateway"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json-summary",
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry",
+   "group": true,
+   "help": "Manage external skill / MCP catalog sources.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "registry add",
+   "group": false,
+   "help": "Register a new registry source.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--kind"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--content"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--auth-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enabled",
+      "--disabled"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--auto-sync"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sync-interval-hours"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry approve",
+   "group": false,
+   "help": "Mark an entry approved. Approved entries promote even if the",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--type"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--repromote",
+      "--no-repromote"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry edit",
+   "group": false,
+   "help": "Update an existing source. Only the flags you pass are changed.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--kind"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--content"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--auth-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--clear-auth-env"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--enabled",
+      "--disabled"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--auto-sync"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sync-interval-hours"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry entries",
+   "group": false,
+   "help": "Show cached entries for a source. Run after 'registry sync'.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--type"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--status"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--approved"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rejected"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry list",
+   "group": false,
+   "help": "List configured registry sources.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry reject",
+   "group": false,
+   "help": "Mark an entry rejected. Rejected entries are NEVER promoted.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--type"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--repromote",
+      "--no-repromote"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry remove",
+   "group": false,
+   "help": "Delete a source and (by default) drop its on-disk cache.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--keep-cache"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive",
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry require",
+   "group": false,
+   "help": "Toggle 'asset_policy.<type>.registry_required'.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--type"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enabled",
+      "--disabled"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enforce",
+      "--no-enforce"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry show",
+   "group": false,
+   "help": "Pretty-print a single source plus a quick verdict summary.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry sync",
+   "group": false,
+   "help": "Fetch, scan, and promote entries from one or more sources.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--all"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--include-disabled"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan",
+      "--no-scan"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan-stdio"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--allow-private"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-promote"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry test",
+   "group": false,
+   "help": "Dry-run a source: fetch + parse the manifest, no cache writes.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--allow-private"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--show-entries",
+      "-e"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--limit"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "registry wizard",
+   "group": false,
+   "help": "Interactive add+sync flow for first-run discoverability.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "reset",
+   "group": false,
+   "help": "Wipe user state so 'defenseclaw quickstart' starts clean.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--skip-sandbox-teardown"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "rollback",
+   "group": false,
+   "help": "Restore the install that the last upgrade replaced.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox",
+   "group": true,
+   "help": "Run coding agents in NVIDIA OpenShell sandboxes.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "sandbox activity",
+   "group": false,
+   "help": "Show the live activity feed: destinations, blocks, asks, tool blocks, findings.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sandbox"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--follow",
+      "-f"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--since"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox approvals",
+   "group": false,
+   "help": "List the asks waiting for you (doors into your machine or network).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sandbox"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--watch"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox approve",
+   "group": false,
+   "help": "Approve an ask.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--always"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox connect",
+   "group": false,
+   "help": "Resume a sandbox: start it if stopped and attach the harness.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--shell"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--refresh"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rm"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--prompt",
+      "-p"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox delete",
+   "group": false,
+   "help": "Delete sandboxes with their providers, credentials and snapshots.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--keep-snapshot"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox disable",
+   "group": false,
+   "help": "Stop the harness command from running sandboxed (removes the shell wrapper).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--shell"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rc"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox doctor",
+   "group": false,
+   "help": "Check that this machine can run sandboxes.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--fix"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox enable",
+   "group": false,
+   "help": "Make the harness command run sandboxed (a marked block in your shell rc).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--shell"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rc"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox exec",
+   "group": false,
+   "help": "Run a command in a sandbox.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--workdir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--tty"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-tty"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox image",
+   "group": true,
+   "help": "Build, list, prune and remove the harness images.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "sandbox image build",
+   "group": false,
+   "help": "Build and hook-verify harness images (default: the configured harnesses).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verbose"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox image list",
+   "group": false,
+   "help": "List the harness images.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox image prune",
+   "group": false,
+   "help": "Remove superseded harness images.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox image rm",
+   "group": false,
+   "help": "Remove the harnesses' images (on a Mac also their MicroVM disks).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox legacy-cleanup",
+   "group": false,
+   "help": "Undo a legacy openshell-sandbox (0.0.x) standalone install (Linux).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--remove-user"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--remove-binary"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox list",
+   "group": false,
+   "help": "List sandboxes.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox logs",
+   "group": false,
+   "help": "Show the output of a sandbox's detached run.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--follow",
+      "-f"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--lines",
+      "-n"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox pack",
+   "group": true,
+   "help": "Inspect sandbox policy packs.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "sandbox pack list",
+   "group": false,
+   "help": "List the built-in and custom packs with their sha256 digests.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox pack show",
+   "group": false,
+   "help": "Print a pack and its sha256 digest (for openshell.admin.required_pack_digest).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox pack validate",
+   "group": false,
+   "help": "Validate a pack file strictly.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "sandbox policy",
+   "group": true,
+   "help": "Show, explain and adjust the sandbox policy.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "sandbox policy allow",
+   "group": false,
+   "help": "Add hosts to openshell.egress.allow (used by the balanced and strict profiles).",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "sandbox policy block",
+   "group": false,
+   "help": "Add hosts to openshell.egress.block.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "sandbox policy explain",
+   "group": false,
+   "help": "Show every resolved setting and where it comes from (pack, config, flag, organization).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sandbox"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--harness"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--copy"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--safe"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--unmask"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox policy show",
+   "group": false,
+   "help": "Show the effective sandbox policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sandbox"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--harness"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--copy"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--safe"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--unmask"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox policy suggest",
+   "group": false,
+   "help": "Suggest an egress allowlist from the destinations sandboxes reached.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--sandbox"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox pull",
+   "group": false,
+   "help": "Bring a copy-mode sandbox's work back (3-way apply, a branch, or a patch).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--apply"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--branch"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--branch-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--patch-out"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--accept-sensitive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox reject",
+   "group": false,
+   "help": "Reject an ask.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--always"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "sandbox review",
+   "group": false,
+   "help": "Review the session's changes, flagging files that can run code on this machine.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--diff"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox run",
+   "group": false,
+   "help": "Run a harness in a sandbox on this folder.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--copy"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--safe"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--context"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--unmask"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--host-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--credential"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--github-write"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-mcp"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--detach",
+      "-d"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rm"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--keep"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--prompt",
+      "-p"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--no-snapshot"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-build"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--new"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--refresh"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--cpu"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--memory"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox setup",
+   "group": false,
+   "help": "One-time setup: OpenShell, bind mounts, telemetry, harnesses, wrappers, images.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--install-openshell"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-mounts"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--wrappers"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-wrappers"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--harness"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--upstream-telemetry"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--skip-images"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart-gateway"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox start",
+   "group": false,
+   "help": "Start a stopped sandbox for a new session.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--no-snapshot"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--new-snapshot"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox status",
+   "group": false,
+   "help": "Show the sandbox subsystem, or one sandbox in detail.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox stop",
+   "group": false,
+   "help": "Stop a sandbox (it is kept for start or connect).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox teardown",
+   "group": false,
+   "help": "Remove every DefenseClaw sandbox, provider, profile, image, gateway change and wrapper.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--keep-images"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox unblock",
+   "group": false,
+   "help": "Lift an egress block for one sandbox or for every sandbox.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--sandbox"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--always"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "sandbox undo",
+   "group": false,
+   "help": "Restore the project folder to its pre-session snapshot.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--output",
+      "-o"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--preview"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--keep-refs"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "settings",
+   "group": true,
+   "help": "Save the DefenseClaw configuration (as the TUI Setup panel does).",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "settings save",
+   "group": false,
+   "help": "Write the current resolved configuration to disk and record an activity event.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup",
+   "group": true,
+   "help": "Configure DefenseClaw components.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector",
+      "-c"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detected"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--add-detected"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--all"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup acp",
+   "group": false,
+   "help": "Find unguarded ACP agents and route them through DefenseClaw.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--client"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--guard-binary"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--activate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json-output",
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup amp",
+   "group": false,
+   "help": "Configure DefenseClaw for Amp via its synchronous policy plugin.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup antigravity",
+   "group": false,
+   "help": "Configure DefenseClaw for Antigravity via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup claude-code",
+   "group": false,
+   "help": "Configure DefenseClaw for Claude Code via the hook bus.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup codex",
+   "group": false,
+   "help": "Configure DefenseClaw for Codex via the hook bus.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup copilot",
+   "group": false,
+   "help": "Configure DefenseClaw for GitHub Copilot CLI via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup cursor",
+   "group": false,
+   "help": "Configure DefenseClaw for Cursor via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup devin",
+   "group": false,
+   "help": "Configure DefenseClaw for Devin via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup galileo",
+   "group": true,
+   "help": "Configure Galileo OTLP trace export.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--deployment"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--project"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--logstream"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--console-url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--trace-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--persist-api-key"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--disabled"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup galileo disable",
+   "group": false,
+   "help": "Disable Galileo without deleting its configuration.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup galileo enable",
+   "group": false,
+   "help": "Enable the Galileo destination.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup galileo remove",
+   "group": false,
+   "help": "Remove the Galileo destination; the shared API key is preserved.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup galileo status",
+   "group": false,
+   "help": "Show the configured Galileo destination without secret values.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup galileo test",
+   "group": false,
+   "help": "Emit and acknowledge a content-free trace through Galileo.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup gateway",
+   "group": false,
+   "help": "Configure gateway connection for the DefenseClaw sidecar.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--remote"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--api-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--token"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--ssm-param"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--ssm-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--ssm-profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--verify",
+      "--no-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup guardrail",
+   "group": false,
+   "help": "Configure the LLM guardrail that inspects your agent's prompts and responses.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--disable"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector",
+      "--agent"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scanner-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-timeout-ms"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detection-strategy"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detection-strategy-prompt"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detection-strategy-completion"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detection-strategy-tool-call"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-api-base"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-provider"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-instance-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-role"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--inherit-from"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--inherit-llm",
+      "--no-inherit-llm"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-access-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-secret-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-session-token-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-profile-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-inference-profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-bedrock-deployment"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-vertex-project-id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-vertex-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-vertex-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-vertex-service-account-json-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-azure-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-azure-api-version"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-azure-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-azure-deployment-alias"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-tls-ca-cert-file"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-insecure-skip-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verify",
+      "--no-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive",
+      "--accept-defaults",
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup hermes",
+   "group": false,
+   "help": "Configure DefenseClaw for Hermes via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup kiro",
+   "group": false,
+   "help": "Configure DefenseClaw for Kiro via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup llm",
+   "group": false,
+   "help": "Configure the unified top-level 'llm:' block.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--show"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--provider"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--api-key"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--base-url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--max-retries"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--instance-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--inherit-from"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--inherit",
+      "--no-inherit"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--role"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-access-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-secret-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-session-token-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-profile-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-inference-profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-deployment"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-project-id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-service-account-json-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-api-version"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-deployment-alias"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--tls-ca-cert-file"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--insecure-skip-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--ping",
+      "--no-ping"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup local-observability",
+   "group": true,
+   "help": "Drive the bundled local observability stack.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup local-observability down",
+   "group": false,
+   "help": "Stop the stack (volumes preserved).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--disable-config"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup local-observability env",
+   "group": false,
+   "help": "Print environment values that point a gateway at the local collector.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup local-observability logs",
+   "group": false,
+   "help": "Tail logs from the running stack.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--service"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--follow",
+      "--no-follow"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup local-observability reset",
+   "group": false,
+   "help": "Stop the stack and drop all persisted metric / log / trace volumes.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup local-observability status",
+   "group": false,
+   "help": "Show compose ps and per-service readiness probes.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup local-observability up",
+   "group": false,
+   "help": "Start the stack, wait for readiness, and wire the gateway config.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--no-wait"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--password",
+      "--no-password"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-config"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--signals"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--service-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--refresh-bundle",
+      "--no-refresh-bundle"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--refresh-config",
+      "--no-refresh-config"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup local-observability url",
+   "group": false,
+   "help": "Print the Grafana / Prometheus / Tempo / Loki URLs.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup mcp-scanner",
+   "group": false,
+   "help": "Configure mcp-scanner analyzers and scan options.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--analyzers"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-provider"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--api-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--api-timeout-ms"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scan-prompts",
+      "--no-scan-prompts"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan-resources",
+      "--no-scan-resources"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--scan-instructions",
+      "--no-scan-instructions"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verify",
+      "--no-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup migrate-llm",
+   "group": false,
+   "help": "Rewrite config.yaml to the unified v5 LLM shape.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-backup"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup notifications",
+   "group": false,
+   "help": "Toggle user-session desktop notifications for blocks and HITL approvals.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup notifications-set",
+   "group": false,
+   "help": "Toggle a single notifications category or source.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup observability",
+   "group": true,
+   "help": "Configure telemetry destinations.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup observability add",
+   "group": false,
+   "help": "Configure a telemetry destination from a <preset>.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--signals"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--token"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enabled",
+      "--disabled"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--realm"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--site"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--dataset"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--protocol"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--project"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--logstream"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--host"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--index"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--sourcetype"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--method"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--url-path"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--verify-tls",
+      "--no-verify-tls"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--allow-private-networks"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--plaintext"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--environment"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup observability disable",
+   "group": false,
+   "help": "Disable a destination.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup observability enable",
+   "group": false,
+   "help": "Turn a disabled destination back on.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup observability list",
+   "group": false,
+   "help": "List configured observability destinations.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup observability remove",
+   "group": false,
+   "help": "Delete a destination you added.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup observability test",
+   "group": false,
+   "help": "Probe a destination for reachability + auth.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--write-probe"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup omnigent",
+   "group": false,
+   "help": "Configure DefenseClaw for OmniGent via its custom policy API.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup openclaw",
+   "group": false,
+   "help": "Configure DefenseClaw guardrail for OpenClaw.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scanner-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-timeout-ms"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detection-strategy"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-api-base"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verify",
+      "--no-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup opencode",
+   "group": false,
+   "help": "Configure DefenseClaw for OpenCode via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup openhands",
+   "group": false,
+   "help": "Configure DefenseClaw for OpenHands via its agent lifecycle hooks.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--with-local-stack",
+      "--no-local-stack"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--workspace",
+      "--workspace-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enable-judge",
+      "--no-enable-judge"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--judge-hook-connectors"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--fail-mode"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup provider",
+   "group": true,
+   "help": "Manage the custom provider overlay (~/.defenseclaw/custom-providers.json).",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup provider add",
+   "group": false,
+   "help": "Add a provider entry to the operator overlay.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--domain"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--env-key"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile-id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--ollama-port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--base-provider-type"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--base-url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--allowed-request"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--available-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--request-path-override"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--ca-cert-file"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--insecure-skip-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--bedrock-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-access-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-secret-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-session-token-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-profile-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-inference-profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bedrock-deployment"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-project-id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--vertex-service-account-json-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-api-version"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-auth-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--azure-deployment-alias"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--no-reload"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup provider list",
+   "group": false,
+   "help": "Print the live merged registry, with a labeled disk fallback.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup provider remove",
+   "group": false,
+   "help": "Remove an entry from the operator overlay.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--no-reload"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup provider show",
+   "group": false,
+   "help": "Print the merged registry as reported by the live sidecar",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction",
+   "group": true,
+   "help": "Choose what telemetry DefenseClaw collects and how it is redacted.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction apply",
+   "group": false,
+   "help": "Apply one redaction profile everywhere, or as the global default.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--scope"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction bucket",
+   "group": true,
+   "help": "Manage per-bucket collection and redaction overrides.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction bucket list",
+   "group": false,
+   "help": "List effective catalog-v1 bucket policies.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction bucket reset",
+   "group": false,
+   "help": "Reset one bucket to the global/catalog baseline.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction bucket set",
+   "group": false,
+   "help": "Set selected fields on one catalog bucket.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--inherit-profile"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--logs",
+      "--no-logs"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--traces",
+      "--no-traces"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--metrics",
+      "--no-metrics"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction defaults",
+   "group": true,
+   "help": "Manage the global bucket baseline.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction defaults reset",
+   "group": false,
+   "help": "Reset global collection and profile values to catalog defaults.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction defaults set",
+   "group": false,
+   "help": "Set selected global profile or collection defaults.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--logs",
+      "--no-logs"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--traces",
+      "--no-traces"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--metrics",
+      "--no-metrics"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction destination",
+   "group": true,
+   "help": "Manage destination-level concise policy.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction destination inherit",
+   "group": false,
+   "help": "Remove explicit send/routes and restore capability-default policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction destination send",
+   "group": false,
+   "help": "Replace destination routing with one concise send policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--signal"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bucket"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction destination show",
+   "group": false,
+   "help": "Show one destination's effective redaction policy.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction profile",
+   "group": true,
+   "help": "Inspect and manage custom redaction profiles.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction profile list",
+   "group": false,
+   "help": "List built-in and custom profiles with what each one does.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction profile remove",
+   "group": false,
+   "help": "Remove an unreferenced custom profile or replace references atomically.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--replace-with"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction profile set",
+   "group": false,
+   "help": "Create or update one custom redaction profile.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--extends"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--field"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction profile show",
+   "group": false,
+   "help": "Show a compiled profile's detectors and field-class modes.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction remove-all",
+   "group": false,
+   "help": "Remove redaction from every configurable log and trace projection.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction route",
+   "group": true,
+   "help": "Manage first-match destination routes.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup redaction route add",
+   "group": false,
+   "help": "Add one advanced route at a one-based position or at the end.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--position"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--signal"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bucket"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--producer-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--event-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--route-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction route list",
+   "group": false,
+   "help": "List source-authored routes in evaluation order.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction route move",
+   "group": false,
+   "help": "Move a route to a one-based first-match position.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--position"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction route remove",
+   "group": false,
+   "help": "Remove one source-authored route.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction route set",
+   "group": false,
+   "help": "Replace one named route while preserving its current position.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--signal"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--bucket"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--producer-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--event-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--route-action"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--profile"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup redaction status",
+   "group": false,
+   "help": "Show effective bucket and destination redaction policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup registry",
+   "group": false,
+   "help": "Register an external skill / MCP catalog (interactive wizard).",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup remove",
+   "group": false,
+   "help": "Remove a connector from the configured set.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup rotate-token",
+   "group": false,
+   "help": "Rotate the gateway token and connector-scoped hook credentials.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup routing",
+   "group": false,
+   "help": "Configure semantic model routing.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--enable"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--disable"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--status"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes",
+      "-y",
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup skill-scanner",
+   "group": false,
+   "help": "Configure skill-scanner analyzers, API keys, and policy.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--use-llm",
+      "--no-use-llm"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--use-behavioral",
+      "--no-use-behavioral"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--enable-meta",
+      "--no-enable-meta"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--use-trigger",
+      "--no-use-trigger"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--use-virustotal",
+      "--no-use-virustotal"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--use-aidefense",
+      "--no-use-aidefense"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--llm-provider"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--llm-consensus-runs"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--policy"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--lenient",
+      "--no-lenient"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verify",
+      "--no-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup splunk",
+   "group": true,
+   "help": "Configure Splunk integration for DefenseClaw.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--o11y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--logs"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--s3-export"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--s3-bucket"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--s3-prefix"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--aws-region"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enterprise"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--realm"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--access-token"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--hec-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--hec-token"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--app-name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--index"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--sourcetype"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--traces",
+      "--no-traces"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--metrics",
+      "--no-metrics"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--logs-export",
+      "--no-logs-export"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--disable"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--accept-splunk-license"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--skip-test"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--show-credentials"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--refresh-bundle",
+      "--no-refresh-bundle"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup splunk dashboards",
+   "group": true,
+   "help": "Create or update DefenseClaw Splunk Observability Cloud dashboards.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup splunk dashboards apply",
+   "group": false,
+   "help": "Create or update the O11y dashboards.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--api-url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--o11y-api-token"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--name-prefix"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--with-detectors",
+      "--dashboards-only"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--enable-detectors"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--detector-notification"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--work-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--state"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--terraform-bin"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--plugin-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--skip-init"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--skip-validate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup splunk dashboards destroy",
+   "group": false,
+   "help": "Destroy O11y objects managed by the selected Terraform state.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--api-url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--o11y-api-token"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--name-prefix"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--with-detectors",
+      "--dashboards-only"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--enable-detectors"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--detector-notification"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--work-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--state"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--terraform-bin"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--plugin-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--skip-init"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--skip-validate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup splunk dashboards plan",
+   "group": false,
+   "help": "Show Terraform changes for the O11y dashboard bundle.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--api-url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--o11y-api-token"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--name-prefix"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--with-detectors",
+      "--dashboards-only"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--enable-detectors"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--detector-notification"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--work-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--state"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--terraform-bin"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--plugin-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--skip-init"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--skip-validate"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup trusted-paths",
+   "group": true,
+   "help": "Manage directories DefenseClaw trusts for connector-binary discovery.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup trusted-paths add",
+   "group": false,
+   "help": "Trust DIRECTORY for connector-binary discovery (persisted to config.yaml).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup trusted-paths list",
+   "group": false,
+   "help": "List trusted binary prefixes (built-in defaults + operator-added).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup trusted-paths remove",
+   "group": false,
+   "help": "Remove an operator-added trusted prefix (never a built-in default).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup webhook",
+   "group": true,
+   "help": "Configure Slack/PagerDuty/Webex/generic chat + incident webhooks.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "setup webhook add",
+   "group": false,
+   "help": "Create or update a webhook notifier.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--name"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--url"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--secret-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--room-id"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--events"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--timeout-seconds"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cooldown-seconds"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--enabled",
+      "--disabled"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup webhook disable",
+   "group": false,
+   "help": "Disable a webhook (preserves the entry).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup webhook enable",
+   "group": false,
+   "help": "Enable a webhook.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup webhook list",
+   "group": false,
+   "help": "List configured webhooks (secrets are referenced, never printed).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup webhook remove",
+   "group": false,
+   "help": "Delete a webhook entry.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup webhook show",
+   "group": false,
+   "help": "Pretty-print a single webhook entry (secret values never printed).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "setup webhook test",
+   "group": false,
+   "help": "Dispatch a synthetic event through a configured webhook.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--timeout"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "setup zeptoclaw",
+   "group": false,
+   "help": "Configure DefenseClaw guardrail for ZeptoClaw.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--non-interactive",
+      "--accept-defaults"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--scanner-mode"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-endpoint"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--cisco-timeout-ms"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--port"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--block-message"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--detection-strategy"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--rule-pack-dir"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-model"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-api-base"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--judge-api-key-env"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--human-approval",
+      "--no-human-approval"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--hilt-min-severity"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--restart",
+      "--no-restart"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--verify",
+      "--no-verify"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--replace"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "skill",
+   "group": true,
+   "help": "Manage agent skills \u2014 search, install, scan, block, allow, disable, enable, quarantine, restore.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "skill allow",
+   "group": false,
+   "help": "Add a skill to the install allow list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill block",
+   "group": false,
+   "help": "Add a skill to the install block list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill disable",
+   "group": false,
+   "help": "Disable a skill at runtime.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill enable",
+   "group": false,
+   "help": "Enable a previously disabled skill.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill info",
+   "group": false,
+   "help": "Show detailed information about a skill.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill install",
+   "group": false,
+   "help": "Install and scan a ClawHub skill for configured connector skill dirs.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--force"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--action"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill list",
+   "group": false,
+   "help": "List skills with their latest scan severity.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill quarantine",
+   "group": false,
+   "help": "Quarantine a skill's files to the quarantine area.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill restore",
+   "group": false,
+   "help": "Restore a quarantined skill to its original location.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--path"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "skill scan",
+   "group": false,
+   "help": "Scan configured skills, or scan one skill by name, path, URL, or 'all'.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--path"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--remote"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--all"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--action"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--use-llm",
+      "--no-use-llm"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "skill search",
+   "group": false,
+   "help": "Search the ClawHub skill registry (not local connector skills).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--allow-remote-fetch"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "skill unblock",
+   "group": false,
+   "help": "Remove a skill's logical enforcement state.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "status",
+   "group": false,
+   "help": "Show DefenseClaw status.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "tool",
+   "group": true,
+   "help": "Manage tool-level block/allow lists.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "tool allow",
+   "group": false,
+   "help": "Add a tool to the allow list (skip the scan gate).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "tool block",
+   "group": false,
+   "help": "Add a tool to the block list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--reason"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "tool list",
+   "group": false,
+   "help": "List tools in the block/allow list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--blocked"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--allowed"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "tool status",
+   "group": false,
+   "help": "Show the block/allow status of a tool.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "tool unblock",
+   "group": false,
+   "help": "Remove a tool from the block/allow list.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--connector"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--source"
+     ],
+     "flag": false
+    }
+   ]
+  },
+  {
+   "path": "tui",
+   "group": false,
+   "help": "Open the interactive DefenseClaw dashboard in this terminal.",
+   "hidden": false,
+   "options": []
+  },
+  {
+   "path": "uninstall",
+   "group": false,
+   "help": "Uninstall DefenseClaw (reversibly by default).",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--all"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--binaries"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--keep-openclaw"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--skip-sandbox-teardown"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--dry-run"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--yes"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "upgrade",
+   "group": false,
+   "help": "Upgrade to the latest release (or X.Y.Z) using that release's installer.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--version"
+     ],
+     "flag": false
+    },
+    {
+     "names": [
+      "--yes",
+      "-y"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--recover-corrupt-audit"
+     ],
+     "flag": true
+    }
+   ]
+  },
+  {
+   "path": "version",
+   "group": false,
+   "help": "Show DefenseClaw CLI / gateway / plugin versions and flag drift.",
+   "hidden": false,
+   "options": [
+    {
+     "names": [
+      "--json"
+     ],
+     "flag": true
+    },
+    {
+     "names": [
+      "--no-drift-exit"
+     ],
+     "flag": true
+    }
+   ]
+  }
+ ]
+}

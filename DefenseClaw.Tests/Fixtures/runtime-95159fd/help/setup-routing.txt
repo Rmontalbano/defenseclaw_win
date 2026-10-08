@@ -1,0 +1,21 @@
+Usage: defenseclaw setup routing [OPTIONS]
+
+  Configure semantic model routing.
+
+  In managed mode, the gateway owns a minimal vLLM Semantic Router Docker
+  container. Set routing.remote.endpoint to use an operator-managed router
+  instead. Model aliases and decisions live under routing: in config.yaml.
+
+  Examples:
+    defenseclaw setup routing --enable
+    defenseclaw setup routing --disable
+    defenseclaw setup routing --status
+
+Options:
+  --enable                        Enable semantic model routing.
+  --disable                       Disable semantic model routing.
+  --status                        Show routing status.
+  -y, --yes, --non-interactive, --accept-defaults
+                                  Accepted for compatibility; this command is
+                                  non-interactive.
+  -h, --help                      Show this message and exit.

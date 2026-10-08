@@ -1,0 +1,55 @@
+claw:
+  mode: claudecode
+gateway:
+  api_bind: 127.0.0.1
+  api_port: 18970
+  token_env: DEFENSECLAW_GATEWAY_TOKEN
+  token: ''
+  watchdog:
+    enabled: true
+    interval: 30
+guardrail:
+  enabled: true
+  connector: claudecode
+  scanner_mode: local
+  mode: observe
+  hook_fail_mode: open
+  detection_strategy_completion: regex_judge
+  connectors:
+    claudecode:
+      mode: observe
+      hook_fail_mode: open
+      block_at: HIGH
+      alert_at: MEDIUM
+      enabled: true
+      hilt:
+        enabled: false
+        min_severity: HIGH
+    codex:
+      mode: action
+      hook_fail_mode: closed
+      block_message: Blocked by policy.
+      rule_pack_dir: C:\Users\operator\.defenseclaw\policies\guardrail\strict
+cisco_ai_defense:
+  api_key_env: CISCO_AI_DEFENSE_API_KEY
+llm:
+  api_key_env: DEFENSECLAW_LLM_KEY
+ai_discovery:
+  enabled: true
+  mode: enhanced
+  scan_interval_min: 5
+  process_interval_s: 60
+  scan_roots:
+  - '~'
+  include_user_email: false
+  lookup_model_provenance_online: false
+  runtime:
+    enabled: false
+    planes: []
+observability:
+  local:
+    path: C:\Users\operator\.defenseclaw\audit.db
+    judge_bodies_path: C:\Users\operator\.defenseclaw\judge_bodies.db
+    retention_days: 7
+  destinations: []
+config_version: 8

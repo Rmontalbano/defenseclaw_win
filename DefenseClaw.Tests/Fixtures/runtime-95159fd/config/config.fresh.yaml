@@ -1,0 +1,13 @@
+cisco_ai_defense:
+  api_key_env: CISCO_AI_DEFENSE_API_KEY
+claw:
+  mode: ''
+gateway:
+  api_port: 18970
+  token_env: DEFENSECLAW_GATEWAY_TOKEN
+guardrail:
+  scanner_mode: local
+llm:
+  api_key_env: DEFENSECLAW_LLM_KEY
+config_version: 8
+observability: {}

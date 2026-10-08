@@ -14,7 +14,20 @@ public sealed class TestAuditDatabase : IDisposable
 {
     private readonly TempDirectory _directory;
 
+    /// <summary>
+    /// When set to a fixture path under <c>Fixtures</c> (for example <c>runtime-95159fd/audit/audit-schema.sql</c>), every
+    /// database this class builds uses that DDL instead of the 0.8.10 one, so the whole Core suite can be run once against another
+    /// runtime's schema (<c>DEFENSECLAW_TEST_AUDIT_SCHEMA=... dotnet test</c>). Unset in CI: the default is the 0.8.10 schema.
+    /// </summary>
+    public const string SchemaOverrideVariable = "DEFENSECLAW_TEST_AUDIT_SCHEMA";
+
     public TestAuditDatabase()
+        : this(Environment.GetEnvironmentVariable(SchemaOverrideVariable) is { Length: > 0 } over ? over : FixtureFiles.AuditSchema)
+    {
+    }
+
+    /// <param name="schemaFixture">The DDL to build the database from, relative to the <c>Fixtures</c> directory.</param>
+    public TestAuditDatabase(string schemaFixture)
     {
         _directory = new TempDirectory("dcw-audit");
         Path = _directory.File("audit.db");
@@ -24,7 +37,7 @@ public sealed class TestAuditDatabase : IDisposable
 
         // SQLite's own tokenizer splits the statements, so the multi-statement trigger
         // bodies in the DDL survive intact.
-        command.CommandText = FixtureFiles.ReadText(FixtureFiles.AuditSchema);
+        command.CommandText = FixtureFiles.ReadText(schemaFixture);
         command.ExecuteNonQuery();
     }
 

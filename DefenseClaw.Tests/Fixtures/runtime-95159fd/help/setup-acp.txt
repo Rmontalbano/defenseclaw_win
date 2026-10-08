@@ -1,0 +1,25 @@
+Usage: defenseclaw setup adopt [OPTIONS]
+
+  Find unguarded ACP agents and route them through DefenseClaw.
+
+  Adoption reuses `acp setup` for every pair it finds, so the transactional
+  write, executable resolution, digest pinning and contract lock are identical
+  to configuring the pair by hand. It then points the entry the operator
+  already had at the guard, keeping that entry's key and `env`, so the
+  familiar picker entry stops reaching the agent unmediated instead of sitting
+  beside a guarded duplicate as a silent bypass.
+
+Options:
+  --client [jetbrains|zed]        Limit to one client.
+  --profile TEXT                  ACP policy profile (acp.profiles) the guard
+                                  enforces.  [default: default]
+  --guard-binary TEXT             DefenseClaw ACP guard executable the editor
+                                  entry starts.  [default: defenseclaw-acp]
+  --activate                      Enable action mode; adoption otherwise
+                                  observes only.
+  --yes, --non-interactive, --accept-defaults
+                                  Adopt without the confirmation prompt
+                                  (--non-interactive and --accept-defaults are
+                                  aliases).
+  --json-output, --json           Print the result as JSON.
+  -h, --help                      Show this message and exit.

@@ -1,0 +1,10 @@
+  DefenseClaw versions
+
+  COMPONENT  VERSION     STATUS   ORIGIN
+  ---------  ----------  -------  ----------------------------------------
+  cli        1.0.0       ok       defenseclaw (python)
+  gateway    1.0.0       ok       C:\Users\operator\AppData\Local\Programs\DefenseClaw\bin\defenseclaw-gateway.exe
+                                  -> (commit=95159fd, built=2030-01-15)
+  plugin     (not used)  skipped  OpenClaw is not a configured connector
+
+  OK All components in sync.

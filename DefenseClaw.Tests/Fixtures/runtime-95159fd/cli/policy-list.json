@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "active": "default",
+  "policies": [
+    {
+      "name": "default",
+      "description": "Balanced security policy for standard deployments",
+      "builtin": true,
+      "active": true,
+      "path": "C:\\Users\\operator\\AppData\\Local\\Programs\\DefenseClaw\\runtime\\defenseclaw\\_data/policies/default.yaml",
+      "block_at": "CRITICAL",
+      "alert_at": "MEDIUM+",
+      "install_block_at": "HIGH+",
+      "firewall_default": "deny",
+      "hilt": false,
+      "scanner_overrides": 4,
+      "adds_webhooks": false,
+      "sets_cisco": false,
+      "edited": false
+    },
+    {
+      "name": "permissive",
+      "description": "Permissive policy for development and testing",
+      "builtin": true,
+      "active": false,
+      "path": "C:\\Users\\operator\\AppData\\Local\\Programs\\DefenseClaw\\runtime\\defenseclaw\\_data/policies/permissive.yaml",
+      "block_at": "CRITICAL",
+      "alert_at": "HIGH+",
+      "install_block_at": "CRITICAL",
+      "firewall_default": "allow",
+      "hilt": null,
+      "scanner_overrides": 0,
+      "adds_webhooks": false,
+      "sets_cisco": false,
+      "edited": false
+    },
+    {
+      "name": "strict",
+      "description": "Maximum security policy for high-risk environments",
+      "builtin": true,
+      "active": false,
+      "path": "C:\\Users\\operator\\AppData\\Local\\Programs\\DefenseClaw\\runtime\\defenseclaw\\_data/policies/strict.yaml",
+      "block_at": "MEDIUM+",
+      "alert_at": "LOW+",
+      "install_block_at": "MEDIUM+",
+      "firewall_default": "deny",
+      "hilt": null,
+      "scanner_overrides": 4,
+      "adds_webhooks": false,
+      "sets_cisco": false,
+      "edited": false
+    }
+  ]
+}

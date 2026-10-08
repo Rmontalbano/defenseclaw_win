@@ -1,0 +1,95 @@
+Usage: defenseclaw setup cursor [OPTIONS]
+
+  Configure DefenseClaw for Cursor via its agent lifecycle hooks.
+
+  Configures this connector in the hook connector set so CLI/TUI scanners read
+  that agent's documented local surfaces. Default mode is observe on first
+  setup; a re-run keeps the current mode. Action may enable agent-native
+  blocking/approval verdicts with --mode action on supported events. No proxy
+  is involved in either mode.
+
+  Cursor scope: DefenseClaw owns only the user hook. Enterprise, Team, and
+  Project hooks have higher precedence. DefenseClaw cannot safely detect an
+  actual higher-priority conflict, so none is inferred. Action uses the
+  documented event-native deny response; native human approval is unsupported.
+
+Options:
+  -y, --yes, --non-interactive, --accept-defaults
+                                  Skip the confirmation prompt (aliases:
+                                  --non-interactive, --accept-defaults).
+  --restart / --no-restart        Restart defenseclaw-gateway after applying
+                                  changes (needed so the connector's runtime
+                                  artifacts and telemetry are wired).
+                                  [default: restart]
+  --with-local-stack / --no-local-stack
+                                  Also bring up the bundled
+                                  Prom/Loki/Tempo/Grafana stack via
+                                  `defenseclaw setup local-observability up`
+                                  once config is saved.  [default:
+                                  no-local-stack]
+  --mode [observe|action]         Lifecycle policy mode. observe records only;
+                                  action requests the connector's native
+                                  blocking or approval verdict on supported
+                                  events. Cursor action uses event-native deny
+                                  and does not enable human approval. Default:
+                                  observe on first setup; a re-run keeps the
+                                  current mode.
+  --workspace, --workspace-dir TEXT
+                                  Opt into workspace-scoped config for this
+                                  setup. Defaults to global/user config.
+  --replace                       Replace the currently configured
+                                  connector(s) with this one instead of adding
+                                  alongside them. When other connectors are
+                                  configured the default (and the --yes
+                                  default) is to ADD; pass --replace to
+                                  switch.
+  --rule-pack [default|strict|permissive]
+                                  Rule-pack profile for THIS connector. In a
+                                  multi-connector install this writes a
+                                  per-connector override so Cursor can run a
+                                  different pack than its peers (each
+                                  connector scans against its own pack at
+                                  boot); when it is the only connector it sets
+                                  the global pack, matching `setup guardrail
+                                  --rule-pack`. Omit to leave unchanged
+                                  (inherits the global pack).
+  --rule-pack-dir TEXT            Path to a custom rule-pack directory for
+                                  this connector. Use instead of --rule-pack
+                                  to point at a pack outside the built-in
+                                  presets; same per-connector scoping.
+                                  Mutually exclusive with --rule-pack; pass ""
+                                  to clear an override.
+  --enable-judge / --no-enable-judge
+                                  Enable LLM judge scanning for this connector
+                                  and bump the detection strategy off
+                                  regex_only (action mode only; observe-mode
+                                  connectors are not judged).
+                                  --no-enable-judge opts this connector out of
+                                  a concrete hook-lane gate while leaving the
+                                  global judge switch alone. Configure the
+                                  judge model via `setup guardrail` / `setup
+                                  llm`.
+  --judge-hook-connectors TEXT    Hook-lane judge gate to write
+                                  (guardrail.judge.hook_connectors):
+                                  'all'/'*', 'none', or a comma list of hook
+                                  connectors. When --enable-judge is given
+                                  without this, defaults to this connector.
+  --human-approval / --no-human-approval
+                                  Enable or disable human approval (HILT) for
+                                  this connector (action mode).
+  --hilt-min-severity [high|medium|low|critical]
+                                  Minimum severity that asks for human
+                                  approval for this connector.
+  --block-message TEXT            Custom block message for THIS connector
+                                  (empty = inherit the global/default).
+  --fail-mode [open|closed]       Per-connector hook fail mode: how the hook
+                                  behaves when the gateway answers with an
+                                  error. 'open' allows + logs (recommended);
+                                  'closed' blocks.
+  -h, --help                      Show this message and exit.
+
+  Hook and policy connectors enforce through agent-native lifecycle verdicts
+  (no LLM proxy). The judge/HILT/block-message options here write
+  per-connector overrides; openclaw/zeptoclaw use the proxy backend (`setup
+  openclaw --help`) and additionally expose proxy/scanner options that do not
+  apply to hook connectors.

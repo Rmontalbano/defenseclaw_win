@@ -1,0 +1,606 @@
+{
+  "basis": "canonical_go_compiled_routes",
+  "config_version": 8,
+  "connector_export_custody": {
+    "event_rows_truncated": false,
+    "instances": [],
+    "last_unattributed_authentication_failure": "",
+    "observation_window_hours": 24,
+    "reason": "",
+    "state": "available",
+    "unattributed_authentication_failures": 0
+  },
+  "delivery": [],
+  "network_validation": "offline_syntax_and_literal_policy_only",
+  "plan_digest": "9a00b320fd5da3ca54327fdf91e8ef9e04e2c88a57308c8540b73bdbdc313259",
+  "rows": [
+    {
+      "bucket": "compliance.activity",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "compliance.activity",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "compliance.activity",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "security.finding",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "security.finding",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "security.finding",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "guardrail.evaluation",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "guardrail.evaluation",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "guardrail.evaluation",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "enforcement.action",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "enforcement.action",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "enforcement.action",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "model.io",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "model.io",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "model.io",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "tool.activity",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "tool.activity",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "tool.activity",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "asset.scan",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "asset.scan",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "asset.scan",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "asset.lifecycle",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "asset.lifecycle",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "asset.lifecycle",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "network.egress",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "network.egress",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "network.egress",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "agent.lifecycle",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "agent.lifecycle",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "agent.lifecycle",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "ai.discovery",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "ai.discovery",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "ai.discovery",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "telemetry.ingest",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "telemetry.ingest",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "telemetry.ingest",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "platform.health",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "platform.health",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "platform.health",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    },
+    {
+      "bucket": "diagnostic",
+      "collected": true,
+      "decision": "send",
+      "destination": "local-sqlite",
+      "redaction_profile": "none",
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": "all-collected-logs-and-mandatory-floor",
+      "signal": "logs"
+    },
+    {
+      "bucket": "diagnostic",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "traces"
+    },
+    {
+      "bucket": "diagnostic",
+      "collected": true,
+      "decision": "signal_not_selected",
+      "destination": "local-sqlite",
+      "redaction_profile": null,
+      "reload_applicability": {
+        "collection": "live_reloadable",
+        "routing": "live_reloadable",
+        "transport": "restart_required"
+      },
+      "route": null,
+      "signal": "metrics"
+    }
+  ]
+}

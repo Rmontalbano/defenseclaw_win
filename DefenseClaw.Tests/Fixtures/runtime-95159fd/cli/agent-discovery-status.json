@@ -1,0 +1,43 @@
+{
+  "comparison": {
+    "checked_fields": [
+      "enabled",
+      "lookup_model_provenance_online"
+    ],
+    "drift_fields": [],
+    "unverified_fields": [
+      "mode",
+      "scan_interval_min",
+      "process_interval_s",
+      "scan_roots",
+      "include_shell_history",
+      "include_package_manifests",
+      "include_env_var_names",
+      "include_network_domains"
+    ]
+  },
+  "drift": false,
+  "live": {
+    "enabled": false,
+    "error": "",
+    "lookup_model_provenance_online": false,
+    "reachable": true,
+    "summary": {
+      "result": "disabled"
+    }
+  },
+  "on_disk": {
+    "enabled": false,
+    "include_env_var_names": true,
+    "include_network_domains": true,
+    "include_package_manifests": true,
+    "include_shell_history": true,
+    "lookup_model_provenance_online": false,
+    "mode": "enhanced",
+    "process_interval_s": 60,
+    "scan_interval_min": 5,
+    "scan_roots": [
+      "~"
+    ]
+  }
+}

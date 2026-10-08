@@ -1,0 +1,7 @@
+
+  Guardrail status
+  ----------------
+  * enabled:    no
+  * connectors: (none configured)
+    No connector configured - run 'defenseclaw setup <connector>' to enable enforcement.
+

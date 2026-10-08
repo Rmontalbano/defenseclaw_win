@@ -254,7 +254,7 @@ public sealed partial class AiDiscoveryPanelViewModel
         UpdateEmptyState();
     }
 
-    private static LiveDiscoveryStatus? ParseLiveStatus(string stdout, out string? problem)
+    internal static LiveDiscoveryStatus? ParseLiveStatus(string stdout, out string? problem)
     {
         problem = null;
 

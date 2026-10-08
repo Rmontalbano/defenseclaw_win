@@ -1,0 +1,30 @@
+Usage: defenseclaw setup local-observability [OPTIONS] [COMMAND] [ARGS]...
+
+  Drive the bundled local observability stack.
+
+  Runs a local Prometheus, Loki, Tempo and Grafana stack with Docker Compose
+  on loopback and points this gateway at it. Subcommands:
+
+    up       Start the stack, wait for readiness, wire config.yaml
+    down     Stop containers, keep volumes
+    reset    Stop + wipe all metric / log / trace data volumes
+    status   Show compose ps + per-service readiness probes
+    logs     Tail logs for one or all services
+    url      Print the Grafana / Prometheus / Tempo / Loki URLs
+    env      Print OTEL_* variables that point a process at the stack
+
+  Running it without a subcommand is the same as 'up'. The stack needs Docker
+  with Compose v2.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  down    Stop the stack (volumes preserved).
+  env     Print environment values that point a gateway at the local
+          collector.
+  logs    Tail logs from the running stack.
+  reset   Stop the stack and drop all persisted metric / log / trace volumes.
+  status  Show compose ps and per-service readiness probes.
+  up      Start the stack, wait for readiness, and wire the gateway config.
+  url     Print the Grafana / Prometheus / Tempo / Loki URLs.

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "policy": {
+    "name": "default",
+    "description": "Balanced security policy for standard deployments",
+    "builtin": true,
+    "active": true,
+    "path": "C:\\Users\\operator\\AppData\\Local\\Programs\\DefenseClaw\\runtime\\defenseclaw\\_data/policies/default.yaml",
+    "block_at": "CRITICAL",
+    "alert_at": "MEDIUM+",
+    "install_block_at": "HIGH+",
+    "firewall_default": "deny",
+    "hilt": false,
+    "scanner_overrides": 4,
+    "adds_webhooks": false,
+    "sets_cisco": false,
+    "edited": false
+  }
+}
