@@ -53,6 +53,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
     /// <summary>The inbox for deep links; set by <see cref="Wire"/>, which subscribes this window to it.</summary>
     private ShellNavigation _navigation = null!;
+
+    /// <summary>What the app knows about the connected runtime; set by <see cref="Wire"/>, which subscribes this window to its changes.</summary>
+    private RuntimeService _runtime = null!;
     private readonly CommandPaletteViewModel _paletteViewModel = new();
 
     /// <summary>The look controls, or null when the app was built without them (only a test host is).</summary>
@@ -182,6 +185,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         services.Navigation.PaletteRequested += OnPaletteRequested;
         _navigation = services.Navigation;
 
+        // The palette's CLI rows are the connected runtime's TUI registry: an open palette follows the runtime's first answer and any change.
+        services.Runtime.Changed += OnRuntimeChanged;
+        _runtime = services.Runtime;
+
         // What Settings asks of the tray (its "Reset seen-alert history" button): the same call the command palette's entry makes.
         _catalog.Hooks.ResetSeenAlertHistory = _tray.ResetSeenAlertHistoryAsync;
 
@@ -211,6 +218,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             services.Navigation.Requested -= OnNavigationRequested;
             _settings.Changed -= OnSettingsChanged;
             services.Navigation.PaletteRequested -= OnPaletteRequested;
+            services.Runtime.Changed -= OnRuntimeChanged;
             _catalog.PanelFaulted -= OnPanelFaulted;
             if (_appearance is not null)
             {
@@ -442,6 +450,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _navigation.Requested -= OnNavigationRequested;
         _settings.Changed -= OnSettingsChanged;
         _navigation.PaletteRequested -= OnPaletteRequested;
+        _runtime.Changed -= OnRuntimeChanged;
         _viewModel.Dispose();
         base.OnClosing(e);
     }
@@ -866,38 +875,33 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         CloseShortcuts(restoreFocus: false);
         RememberFocus();
 
-        // Built fresh on every open: toggle titles and the gateway controls' availability are read now.
-        _paletteViewModel.Load(BuildPaletteCommands());
-        StartCuratedCommands();
+        // Built fresh on every open: toggle titles, the gateway controls' availability and the CLI rows (the connected runtime's TUI registry) are read now.
+        var (hiddenNote, hiddenDetail) = _actions.HiddenCommands;
+        _paletteViewModel.Load(BuildPaletteCommands(), hiddenNote, hiddenDetail);
         _viewModel.IsPaletteOpen = true;
         Palette.FocusSearch();
     }
 
     private IReadOnlyList<ShellCommand> BuildPaletteCommands() =>
-        ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance, _actions.Curated.Commands, _connectorScope);
-
-    private bool _curatedHooked;
+        ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance, _actions.CliCommands, _connectorScope);
 
     /// <summary>
-    /// Starts reading the CLI's command list from its help (once; later opens find it cached) and, when it arrives while the palette
-    /// is open, swaps the rows in without touching what was typed.
+    /// The runtime answered (the first probe) or changed its answer (an upgrade): which TUI registry the CLI rows come from follows it, so
+    /// an open palette swaps the rows in without touching what was typed. A closed one reads them when it opens.
     /// </summary>
-    private void StartCuratedCommands()
+    private void OnRuntimeChanged(object? sender, EventArgs e)
     {
-        var curated = _actions.Curated;
-        if (!_curatedHooked)
+        if (!Dispatcher.CheckAccess())
         {
-            _curatedHooked = true;
-            curated.Changed += (_, _) => _ = Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (_viewModel.IsPaletteOpen)
-                {
-                    _paletteViewModel.Reload(BuildPaletteCommands());
-                }
-            }));
+            _ = Dispatcher.BeginInvoke(new Action(() => OnRuntimeChanged(sender, e)));
+            return;
         }
 
-        _ = curated.EnsureLoaded();
+        if (_viewModel.IsPaletteOpen)
+        {
+            var (hiddenNote, hiddenDetail) = _actions.HiddenCommands;
+            _paletteViewModel.Reload(BuildPaletteCommands(), hiddenNote, hiddenDetail);
+        }
     }
 
     private void ClosePalette(bool restoreFocus = true)

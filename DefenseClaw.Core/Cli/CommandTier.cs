@@ -104,8 +104,9 @@ public static class CommandTiers
     /// The <c>defenseclaw</c> commands, as noun paths with no flags and no target, that may run with <b>no review step</b>
     /// when the app picks them (the command palette, the Overview's Diagnostics and doctor). An explicit list on purpose:
     /// <see cref="Classify"/> decides by the first recognised verb, so a command it calls read-only today can be one that
-    /// changes state tomorrow (<c>plan apply</c> and <c>validate fix</c> are both "read-only" by that rule), and argv that the palette
-    /// reads off the installed CLI's own <c>--help</c> would run unreviewed the moment a new CLI added one. Every entry is a leaf of the
+    /// changes state tomorrow (<c>plan apply</c> and <c>validate fix</c> are both "read-only" by that rule), and the palette's argv comes from
+    /// a TUI command registry (<see cref="TuiRegistryCatalogues"/>) that a newer runtime extends and a regeneration can change, so it
+    /// would run unreviewed the moment one added one. Every entry is a leaf of the
     /// DefenseClaw 0.8.10 command tree whose help says it lists, shows, checks or validates; <c>CommandTierTreeTests</c> pins this set to
     /// the reviewed read-only leaves of that tree, so growing it is a decision made in two places, after reading the new command's help.
     /// Anything not on it goes through a review, whatever <see cref="Classify"/> says.

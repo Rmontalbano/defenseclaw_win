@@ -121,7 +121,7 @@ internal static class ShellCommandRegistry
     /// <param name="navigateTo">Selects a panel in the sidebar.</param>
     /// <param name="showShortcuts">Opens the keyboard-shortcuts overlay.</param>
     /// <param name="appearance">The look controls; null (a test without a service) leaves the appearance commands out.</param>
-    /// <param name="curated">The CLI commands read from the CLI's help (see <see cref="CuratedCommandCatalog"/>); null or empty adds none.</param>
+    /// <param name="curated">The CLI commands of the connected runtime's TUI registry (see <see cref="CuratedCommandCatalog"/>); null or empty adds none.</param>
     /// <param name="connectorScope">The shared connector scope; null leaves "Cycle connector scope" out.</param>
     public static IReadOnlyList<ShellCommand> Build(
         PanelCatalog catalog,
@@ -324,9 +324,10 @@ internal static class ShellCommandRegistry
     }
 
     /// <summary>
-    /// One palette row per curated CLI command: category chip, the CLI's one-line description, the argv as its preview, Copy and Run.
+    /// One palette row per curated CLI command: category chip, the TUI's one-line description, the argv as its preview, Copy and Run.
     /// Enter / Run goes through <see cref="ShellActions.RunCuratedAsync"/> (read-only runs, everything else is reviewed first).
-    /// An entry whose argv <see cref="CuratedCommandCatalog.Refuses"/> is left out.
+    /// An entry whose argv <see cref="CuratedCommandCatalog.Refuses"/> is left out. Searchable by the TUI's name, the command line and
+    /// the words of the description; the gateway's start, stop and restart are enabled by the same rule as the Gateway rows above them.
     /// </summary>
     internal static List<ShellCommand> BuildCliCommands(IReadOnlyList<CuratedCommand> curated, ShellActions actions)
     {
@@ -342,18 +343,24 @@ internal static class ShellCommandRegistry
             }
 
             var captured = command;
+            var (allowed, reason) = command.LifecycleAction is { } lifecycle
+                ? GatewayControl.Availability(lifecycle, actions.Snapshot)
+                : (true, null);
+
             rows.Add(new ShellCommand(
                 Id: command.Id,
                 Title: command.Title,
                 Category: command.Category,
                 Description: command.Summary,
                 Shortcut: null,
-                Keywords: "cli command " + string.Join(' ', command.Argv),
-                IsEnabled: true,
-                DisabledReason: null,
+                Keywords: $"cli command {command.CommandLineText} {command.Summary}",
+                IsEnabled: allowed,
+                DisabledReason: reason,
                 Run: () => _ = actions.RunCuratedAsync(captured),
                 Cli: command,
-                Copy: () => actions.CopyCurated(captured)));
+                Copy: () => actions.CopyCurated(captured),
+                RunWith: command.Form is null ? null : argument => _ = actions.RunCuratedAsync(captured, argument),
+                CopyWith: command.Form is null ? null : argument => actions.CopyCurated(captured, argument)));
         }
 
         return rows;

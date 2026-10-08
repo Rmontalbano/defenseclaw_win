@@ -19,6 +19,8 @@ namespace DefenseClaw.App.Services;
 /// <param name="Run">What Enter does. Only ever a named app action, a navigation, or a curated CLI command (reviewed unless read-only).</param>
 /// <param name="Cli">The curated CLI command this row stands for, when it is one: the detail pane shows its argv and Copy / Run.</param>
 /// <param name="Copy">Puts the row's command line on the clipboard (a curated CLI row).</param>
+/// <param name="RunWith">Runs a CLI row that takes one typed value (<see cref="CuratedCommand.Form"/>) with that value, which the palette has already checked.</param>
+/// <param name="CopyWith">Puts the row's command line with that value on the clipboard.</param>
 internal sealed record ShellCommand(
     string Id,
     string Title,
@@ -30,21 +32,53 @@ internal sealed record ShellCommand(
     string? DisabledReason,
     Action Run,
     CuratedCommand? Cli = null,
-    Action? Copy = null);
+    Action? Copy = null,
+    Action<string>? RunWith = null,
+    Action<string>? CopyWith = null);
 
 /// <summary>
 /// A palette row: the command plus what a screen reader is told. <see cref="ToString"/> is the
 /// spoken sentence because the list's item container has no other text to announce — without
 /// it a screen reader reads the record's type name.
+/// <para>
+/// A CLI row that takes one value (a skill name, a URL, a path) also holds what the operator typed for it in the detail pane
+/// (<see cref="ArgumentText"/>): that is the only state a row has, and a row lives only as long as the list it is in.
+/// </para>
 /// </summary>
-internal sealed class PaletteItem
+internal sealed partial class PaletteItem : ObservableObject
 {
     public PaletteItem(ShellCommand command)
     {
         Command = command;
+        Form = command.Cli?.Form is { } form && command.RunWith is not null ? form : null;
     }
 
     public ShellCommand Command { get; }
+
+    /// <summary>The form that takes this row's one value, or null when the row takes none (or the value is too much for a form: it is copied to complete).</summary>
+    public ArgumentForm? Form { get; }
+
+    public bool HasArgumentForm => Form is not null;
+
+    /// <summary>What the operator has typed for the value.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ArgvPreview))]
+    [NotifyPropertyChangedFor(nameof(ArgumentProblem))]
+    private string _argumentText = string.Empty;
+
+    /// <summary>True once the operator tried to run with a value the form refused; the sentence shows until the text changes.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ArgumentProblem))]
+    private bool _argumentRefused;
+
+    partial void OnArgumentTextChanged(string value) => ArgumentRefused = false;
+
+    /// <summary>Why the typed value was refused, or empty.</summary>
+    public string ArgumentProblem => ArgumentRefused && Form?.Check(ArgumentText, out _) is { } problem ? problem : string.Empty;
+
+    public string ArgumentPlaceholder => Form?.Placeholder ?? string.Empty;
+
+    public string ArgumentAutomationName => Form is null ? string.Empty : $"Value for {Command.Title}: {Form.Label}";
 
     public string Title => Command.Title;
 
@@ -59,8 +93,8 @@ internal sealed class PaletteItem
     /// <summary>True for a curated CLI row; the detail pane shows only for those.</summary>
     public bool IsCli => Command.Cli is not null;
 
-    /// <summary>The command as it will run (argv preview), for a CLI row.</summary>
-    public string ArgvPreview => Command.Cli?.Title ?? string.Empty;
+    /// <summary>The command as it will run (argv preview), for a CLI row; with the typed value on it while the row takes one.</summary>
+    public string ArgvPreview => Command.Cli is { } cli ? (Form is null ? cli.CommandLineText : cli.CommandLineWith(ArgumentText)) : string.Empty;
 
     /// <summary>"Read-only" / "Changes state" / "Destructive", for a CLI row.</summary>
     public string TierLabel => Command.Cli is { } cli ? CommandReview.LabelFor(cli.Tier) : string.Empty;
@@ -69,12 +103,20 @@ internal sealed class PaletteItem
     public string RunNote => Command.Cli switch
     {
         null => string.Empty,
-        { NeedsArguments: true } cli => $"Needs {string.Join(", ", cli.RequiredArguments)}: Run copies the command for you to complete.",
+        { NeedsTerminal: true } cli => "Needs a terminal: it asks questions or reads a hidden prompt. Run copies the command for you to paste into one" +
+            (cli.NeedsArguments ? $", then add {string.Join(", ", cli.RequiredArguments)}." : "."),
+        { NeedsArguments: true } cli when Form is null => $"Needs {string.Join(", ", cli.RequiredArguments)}: Run copies the command for you to complete.",
+        { NeedsArguments: true } => "Type the value above, then Run. You review the exact command before it runs.",
         { Tier: DefenseClaw.Core.Cli.CommandTier.ReadOnly } => "Read-only: runs straight away and shows in Activity.",
         _ => "You review the exact command before it runs.",
     };
 
-    public string RunLabel => Command.Cli is { NeedsArguments: true } ? "Copy to complete" : "Run";
+    public string RunLabel => Command.Cli switch
+    {
+        { NeedsTerminal: true } => "Copy to run in a terminal",
+        { NeedsArguments: true } when Form is null => "Copy to complete",
+        _ => "Run",
+    };
 
     /// <summary>The line under the title: the description, or why the command is unavailable.</summary>
     public string DetailLine => Command.IsEnabled
@@ -131,6 +173,17 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
     [ObservableProperty]
     private string _statusLine = string.Empty;
 
+    /// <summary>
+    /// "21 hidden on Windows": how many entries of the TUI command registry the runtime does not run here, so the count above is not
+    /// read as the whole registry. Empty when none is hidden.
+    /// </summary>
+    [ObservableProperty]
+    private string _hiddenNote = string.Empty;
+
+    /// <summary>The note's tooltip: how many entries for each reason, in the runtime's own words.</summary>
+    [ObservableProperty]
+    private string _hiddenDetail = string.Empty;
+
     public ObservableCollection<PaletteItem> Results { get; } = new();
 
     /// <summary>The selected row when it is a curated CLI command (the detail pane's subject); null otherwise.</summary>
@@ -145,10 +198,21 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
     /// <summary>Raised when the palette should close (Esc, or after a command was chosen).</summary>
     public event EventHandler? CloseRequested;
 
+    /// <summary>
+    /// Raised when the chosen row needs its value first (nothing typed yet, or a value the form refused): the palette stays open and the view
+    /// puts the caret in the box.
+    /// </summary>
+    public event EventHandler? ArgumentRequested;
+
     /// <summary>Swaps in a fresh command list and clears the search.</summary>
-    public void Load(IReadOnlyList<ShellCommand> commands)
+    /// <param name="commands">Every row.</param>
+    /// <param name="hiddenNote">What to say about the registry entries left out (<see cref="HiddenNote"/>).</param>
+    /// <param name="hiddenDetail">The note's tooltip.</param>
+    public void Load(IReadOnlyList<ShellCommand> commands, string hiddenNote = "", string hiddenDetail = "")
     {
         _all = commands ?? throw new ArgumentNullException(nameof(commands));
+        HiddenNote = hiddenNote ?? string.Empty;
+        HiddenDetail = hiddenDetail ?? string.Empty;
 
         if (Query.Length == 0)
         {
@@ -161,26 +225,44 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Swaps the command list for a newer one without clearing the search (the curated CLI commands arrive after the palette
-    /// is already open). The selection stays on the same command when it is still there.
+    /// Swaps the command list for a newer one without clearing the search (the runtime answered while the palette was already open, and
+    /// with it the registry the CLI rows come from). The selection stays on the same command when it is still there.
     /// </summary>
-    public void Reload(IReadOnlyList<ShellCommand> commands)
+    public void Reload(IReadOnlyList<ShellCommand> commands, string hiddenNote = "", string hiddenDetail = "")
     {
         var keep = Selected?.Command.Id;
+        var typed = Selected?.ArgumentText ?? string.Empty;
         _all = commands ?? throw new ArgumentNullException(nameof(commands));
+        HiddenNote = hiddenNote ?? string.Empty;
+        HiddenDetail = hiddenDetail ?? string.Empty;
         Refilter();
         if (keep is not null && Results.FirstOrDefault(i => i.IsEnabled && i.Command.Id == keep) is { } same)
         {
             Selected = same;
+
+            // A value half typed for the selected row is still wanted when the rows are swapped under it.
+            if (same.HasArgumentForm && typed.Length > 0)
+            {
+                same.ArgumentText = typed;
+            }
         }
     }
 
-    /// <summary>Copies the selected CLI row's command (the detail pane's Copy button); false when the row has no command.</summary>
+    /// <summary>
+    /// Copies the selected CLI row's command (the detail pane's Copy button) - with the value typed for it when the row takes one and the
+    /// form accepts what is there; false when the row has no command.
+    /// </summary>
     public bool CopySelected()
     {
-        if (Selected?.Command.Copy is not { } copy)
+        if (Selected is not { Command.Copy: { } copy } item)
         {
             return false;
+        }
+
+        if (item.Form is { } form && item.Command.CopyWith is { } copyWith && form.Check(item.ArgumentText, out var value) is null)
+        {
+            copyWith(value);
+            return true;
         }
 
         copy();
@@ -230,7 +312,11 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
     /// <summary>Runs the selected row if it is available; returns whether anything was chosen.</summary>
     public bool ChooseSelected() => Choose(Selected);
 
-    /// <summary>Runs <paramref name="item"/> if it is available (the mouse path).</summary>
+    /// <summary>
+    /// Runs <paramref name="item"/> if it is available (the mouse path). A row that takes one typed value does not run without it: the
+    /// first Enter (or click) asks for the value - <see cref="ArgumentRequested"/>, palette still open - and the next, with a value the
+    /// form accepts, runs the row with exactly that value. A refused value runs nothing and says why.
+    /// </summary>
     public bool Choose(PaletteItem? item)
     {
         if (item is null || !item.IsEnabled)
@@ -238,7 +324,27 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
             return false;
         }
 
-        CommandChosen?.Invoke(this, item.Command);
+        var command = item.Command;
+        if (item.Form is { } form)
+        {
+            if (string.IsNullOrWhiteSpace(item.ArgumentText))
+            {
+                ArgumentRequested?.Invoke(this, EventArgs.Empty);
+                return true;
+            }
+
+            if (form.Check(item.ArgumentText, out var value) is not null)
+            {
+                item.ArgumentRefused = true;
+                ArgumentRequested?.Invoke(this, EventArgs.Empty);
+                return true;
+            }
+
+            var runWith = command.RunWith!;
+            command = command with { Run = () => runWith(value) };
+        }
+
+        CommandChosen?.Invoke(this, command);
         CloseRequested?.Invoke(this, EventArgs.Empty);
         return true;
     }
@@ -305,6 +411,14 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
             .ToList();
     }
 
+    /// <summary>
+    /// What a CLI row's match is worth less than the same match on a panel or an app action. The TUI's names for its commands (<c>skill</c>,
+    /// <c>setup</c>, <c>alerts</c>, <c>doctor</c>) are also what the panels are called, and typing one should find where it goes before the
+    /// command that has the same name: a CLI row that matches from the front of its name is as good as a panel or action that matches
+    /// at a word, and a tie keeps the registry order, which has the panels first.
+    /// </summary>
+    private const int CliPenalty = 20;
+
     private static int Score(ShellCommand command, string[] terms)
     {
         var total = 0;
@@ -337,7 +451,7 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
                 return -1;
             }
 
-            total += score;
+            total += command.Cli is null ? score : Math.Max(1, score - CliPenalty);
         }
 
         return total;

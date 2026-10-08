@@ -10,6 +10,7 @@ nothing here starts work until something asks.
 | Navigation requests | `Services.Navigation`, `RequestNavigation(...)` on `PanelViewModelBase` | `Services/Shell/NavigationRequest.cs`, `PanelCatalog` |
 | Alert counts | `Services.AlertCounts` (kept fresh) / `Services.AlertQueue` (raw reader) | `Core/Audit/AlertQueueReader.cs`, `AlertCounts.cs`, `Services/AlertCountsService.cs` |
 | Connector scope | `Services.ConnectorScope` | `Services/ConnectorScope.cs` |
+| TUI command catalogue | `ShellActions.CliCatalogue`, `TuiRegistryCatalogues.For(...)` | `Core/Cli/TuiRegistry*.cs`, `Services/Shell/CuratedCliCommands.cs`, `tools/gen-tui-registry.py` |
 
 ## 1. Settings store - `AppSettingsStore`
 
@@ -93,3 +94,20 @@ RuntimeGate.CheckSetupCommand(Services.Runtime.Capabilities, "kiro")            
 - **Fail closed.** Nothing probed yet, a timeout, a missing CLI, garbage output: `Capabilities.Unknown`, every flag false, features hidden. A failure is never read as "empty".
 - **Cache** (`RuntimeDetector`): keyed by the CLI file's path, size and modified time (a container: its name, for a short window). Re-probed when the key moves (an upgrade is noticed by the 30 s background check) or on "Check the runtime again". An unknown answer is retried after 15 s. Probes run `--version-json` and `--help` only (the production runner refuses anything else), each with a 20 s limit and 45 s for the round, and never appear in Activity.
 - **Developer runtime selector** (Settings -> Advanced, `developer.*` in settings.json, off by default; off is byte-for-byte the installed runtime): `Installed`, `Cli` (explicit defenseclaw.exe + `DEFENSECLAW_HOME` + optional loopback gateway address), or `Container` (`docker exec` + published loopback gateway + a read-only host copy of the data folder). It is read once at startup (`AppServices.CreateStartupPaths` -> `RuntimeEnvironment.CreatePaths`), so a change applies on the next launch; an incomplete or invalid choice starts the installed runtime. Container mode runs `defenseclaw` and `defenseclaw-gateway` through `CliRunner.RunNamedAsync` as `docker exec [-i] [-e NAME] CONTAINER TOOL ARGS`: environment values stay in docker's own environment (names only on argv), and the config editor refuses to write the copy (`DefenseClawPaths.DataDirectoryReadOnly`).
+
+## 6. TUI command catalogue - `TuiRegistryCatalogues` / `CuratedCommandCatalog`
+
+**For:** the command palette's CLI rows (the Mac sheet's "all 253 current TUI entries"): one row per entry of the connected runtime's own TUI command registry (`defenseclaw/tui/registry_data.py`: name, binary, argv, description, category, needs-argument flag, hint), with the TUI's names, so `scan skill --all`, `skills` and `skill list` are three rows for the commands operators already know.
+
+```csharp
+var catalogue = actions.CliCatalogue;                                  // ShellActions: 0.8.10's registry, or the pinned source's once the runtime shows RuntimeCapability.TuiRegistry
+var offered = catalogue.Commands; var note = catalogue.HiddenNote;     // what Windows runs / "21 hidden on Windows"
+var all = TuiRegistryCatalogues.For(Services.Runtime.Capabilities).Entries;   // every entry, each with its WindowsUnavailable reason or null
+```
+
+- **Generated, checked in.** `tools/gen-tui-registry.py` reads both registries (the installed 0.8.10 and the pinned source commit) as data with `ast` - nothing of DefenseClaw is imported or run - and writes `Core/Cli/TuiRegistryData.Generated.cs`: the entries plus, in its header, which runtime and file each came from (version or commit, path in the package, SHA-256 with LF endings, entry counts). `--check` compares without writing. The counts are 231 (0.8.10) and 253 (pin); a refresh that adds an entry, an option or a read-only command fails a test until someone has read what it does (`TuiRegistryCatalogueTests`).
+- **Which registry.** Follows `Services.Runtime`: `TuiRegistry` present gives the pin's, everything else (0.8.10, a runtime that has not answered, one that failed to) gives 0.8.10's, which is never gated. The palette rebuilds in place when the answer changes.
+- **Hidden on Windows.** Each runtime's own platform table decides (`setup <connector>` unless supported or preview; the sandbox group; the local stack controller): 232 of the pin's 253 are offered (its own `build_registry("windows")`), 210 of 0.8.10's 231 (the 0.8.10 CLI refuses the same things there). The palette says how many it hid and, in the note's tooltip, why, in the runtime's words.
+- **Tiers and review.** Every row has a tier from `CommandTiers` (unknown is a change). Only a bare read on the allow-list (`CommandTiers.UnreviewedReadPaths`, plus the gateway's `status` and `provenance show`) runs without a review; a read with an option or a typed value on it, and everything else, is shown in `CommandReview` first. Options on an argv are limited to `TuiRegistryCatalogues.ReviewedFlags`; the gateway is never run bare.
+- **Arguments.** A hint that is one word (`<skill-name>`) or one choice (`<observe|action>`) opens a box in the detail pane: Enter asks for the value, a second Enter reviews `... -- <value>` (a name the CLI would rewrite, such as `~`, is refused first). A hint with more in it, and anything that asks questions at a prompt (`keys set`, bare `setup`, the registry's "interactive" commands), is copied for a terminal instead. `start`, `stop` and `restart` of the gateway go the tray's way.
+- **Ids** are `cli.` plus the TUI name with its spaces as dots (`cli.skill.list`), stable across catalogues, so a remembered "last command" can find its row again.

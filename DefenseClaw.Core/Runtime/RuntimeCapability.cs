@@ -22,7 +22,10 @@ public enum RuntimeCapability
     /// <summary>Configuration schema 8, the canonical observability configuration.</summary>
     CanonicalSchema8,
 
-    /// <summary>The larger command registry: the connectors and runtime planes added since 0.8.10 (232 entries on Windows at the pin, against 231).</summary>
+    /// <summary>
+    /// The larger TUI command registry: the connectors and runtime planes added since 0.8.10 (253 entries at the pin, 232 of them run on
+    /// Windows, against 0.8.10's 231 and 210). It is what chooses the command palette's catalogue (<see cref="Cli.TuiRegistryCatalogues.For"/>).
+    /// </summary>
     TuiRegistry,
 }
 

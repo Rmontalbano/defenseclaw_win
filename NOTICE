@@ -20,6 +20,10 @@ licensed under the Apache License, Version 2.0:
   https://github.com/cisco-ai-defense/defenseclaw
     Some input validation and display-redaction patterns mirror the
     DefenseClaw CLI so the app accepts and hides exactly what the CLI does.
+    The command palette's command catalogue is generated from DefenseClaw's
+    TUI command registry (tui/registry_data.py: names, arguments and
+    descriptions of its commands, and each runtime's Windows platform table),
+    by tools/gen-tui-registry.py.
 
 The changes are this project's own: the code is a separate C#/WPF
 implementation for Windows.

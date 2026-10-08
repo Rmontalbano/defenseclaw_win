@@ -1,238 +1,274 @@
-using System.Diagnostics;
-using DefenseClaw.App.Services.Wizards;
+using System.Text.RegularExpressions;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Services;
 
 /// <summary>
-/// One CLI command the palette offers (the Mac's "230 commands" sheet): the noun path as an argv list, a category, and what
-/// the CLI's own help says it does. There is no flag in it, so there is nothing a secret could ride on.
+/// The one value the palette asks for when a registry entry needs an argument it can take safely: a name, URL or path, or one word from a
+/// fixed set. It is read off the TUI's hint (<c>&lt;skill-name&gt;</c>, <c>&lt;observe|action&gt;</c>); a hint with more in it (a flag to
+/// add, a list of options) is not a form and the entry is copied for the operator to finish instead.
 /// </summary>
-/// <param name="Argv">The nouns, e.g. <c>agent</c>, <c>discovery</c>, <c>scan</c>. Never a shell line.</param>
+/// <param name="Label">What is asked for (<c>skill-name</c>); for a choice, "one of observe, action".</param>
+/// <param name="Choices">The words allowed, or empty for free text.</param>
+internal sealed partial record ArgumentForm(string Label, IReadOnlyList<string> Choices)
+{
+    /// <summary>The longest value taken. A name, URL or path is far shorter; anything longer is a mistake or a paste of something else.</summary>
+    public const int MaxLength = 512;
+
+    public bool IsChoice => Choices.Count > 0;
+
+    /// <summary>The empty box's hint: the word's name, or "observe or action" / "HIGH, MEDIUM or LOW" for a choice.</summary>
+    public string Placeholder => !IsChoice
+        ? Label
+        : Choices.Count == 1 ? Choices[0] : string.Join(", ", Choices.Take(Choices.Count - 1)) + " or " + Choices[^1];
+
+    /// <summary>The form for a TUI hint, or null when the hint is anything but one <c>&lt;word&gt;</c> or one <c>&lt;a|b|c&gt;</c>.</summary>
+    public static ArgumentForm? Parse(string? hint)
+    {
+        if (string.IsNullOrWhiteSpace(hint) || SingleWord().Match(hint.Trim()) is not { Success: true } match)
+        {
+            return null;
+        }
+
+        var words = match.Groups["words"].Value.Split('|');
+        return words.Length == 1 ? new ArgumentForm(words[0], Array.Empty<string>()) : new ArgumentForm("one of " + string.Join(", ", words), words);
+    }
+
+    /// <summary>
+    /// Null when <paramref name="text"/> is a value the form accepts, with <paramref name="value"/> set to what goes on the command line
+    /// (trimmed; a choice in the spelling the command knows). Otherwise the sentence that says what is wrong.
+    /// </summary>
+    public string? Check(string? text, out string value)
+    {
+        value = string.Empty;
+
+        var trimmed = (text ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+        {
+            return IsChoice ? $"Type {Placeholder}." : $"Type the {Label}.";
+        }
+
+        if (trimmed.Length > MaxLength)
+        {
+            return $"That is longer than {MaxLength} characters.";
+        }
+
+        if (trimmed.Any(char.IsControl))
+        {
+            return "Line breaks and other control characters cannot go on a command line.";
+        }
+
+        if (IsChoice)
+        {
+            var match = Choices.FirstOrDefault(c => string.Equals(c, trimmed, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                return $"Use {Placeholder}.";
+            }
+
+            value = match;
+            return null;
+        }
+
+        value = trimmed;
+        return null;
+    }
+
+    [GeneratedRegex(@"^<(?<words>[A-Za-z][A-Za-z0-9_.-]*(?:\|[A-Za-z][A-Za-z0-9_.-]*)*)>$")]
+    private static partial Regex SingleWord();
+}
+
+/// <summary>
+/// One CLI command the palette offers: an entry of the connected runtime's TUI command registry (the Mac's command sheet, "all 253
+/// current TUI entries"), as the argv the TUI itself would run, a category and the TUI's own one-line description. The argv carries the
+/// few fixed options the registry gives it (<c>--yes</c>, <c>--json</c> ...; <see cref="TuiRegistryCatalogues.ReviewedFlags"/>) and
+/// nothing an operator typed, so there is nothing a secret could ride on; a value the operator types is added after a <c>--</c> and is
+/// always reviewed.
+/// </summary>
+/// <param name="Argv">The arguments without the executable, e.g. <c>agent</c>, <c>discovery</c>, <c>scan</c>. Never a shell line.</param>
 /// <param name="Category">One of <see cref="CuratedCommandCatalog.Categories"/>.</param>
-/// <param name="Summary">The first help sentence.</param>
+/// <param name="Summary">The first help sentence, or the TUI's description.</param>
 /// <param name="Usage">The usage line, kept to say what an unrunnable command still needs.</param>
-/// <param name="RequiredArguments">Names of the positional arguments it cannot run without; empty when it runs as it stands.</param>
+/// <param name="RequiredArguments">What it cannot run without, in the words it is asked for; empty when it runs as it stands.</param>
+/// <param name="Executable"><c>defenseclaw</c>, or <c>defenseclaw-gateway</c> for the gateway's own verbs.</param>
+/// <param name="TuiName">The registry's name for it (<c>scan skill --all</c>); null for a command that did not come from a registry.</param>
+/// <param name="ArgumentHint">The registry's hint for what it needs (<c>&lt;skill-name&gt;</c>); empty when nothing.</param>
 internal sealed record CuratedCommand(
     IReadOnlyList<string> Argv,
     string Category,
     string Summary,
     string Usage,
-    IReadOnlyList<string> RequiredArguments)
+    IReadOnlyList<string> RequiredArguments,
+    string Executable = CommandReview.DefaultExecutable,
+    string? TuiName = null,
+    string ArgumentHint = "")
 {
-    public string Id => "cli." + string.Join('.', Argv);
+    /// <summary>
+    /// Argv (the whole line, joined) that read a hidden prompt or a menu from the console, which a window without one cannot answer: the
+    /// bare <c>setup</c> is the connector picker, <c>keys set</c> and <c>keys fill-missing</c> use <c>getpass</c>. A registry description that says
+    /// "interactive" joins them (<see cref="NeedsTerminal"/>).
+    /// </summary>
+    private static readonly HashSet<string> NeedTheConsole = new(StringComparer.Ordinal) { "setup", "keys set", "keys fill-missing --yes" };
 
-    /// <summary>The command as it reads, e.g. <c>defenseclaw agent discovery scan</c>.</summary>
-    public string Title => CommandReview.CommandLine(CommandReview.DefaultExecutable, Argv);
+    /// <summary>
+    /// Stable across runs and across catalogues - what a remembered "last command" can store: <c>cli.</c> and the registry's name with its
+    /// spaces as dots (<c>cli.skill.list</c>). A command that came from no registry is named by its argv.
+    /// </summary>
+    public string Id => "cli." + (TuiName is { Length: > 0 } name ? name.Replace(' ', '.') : string.Join('.', Argv));
+
+    /// <summary>What the palette row says: the registry's name for it, or the command line when it has none.</summary>
+    public string Title => TuiName ?? CommandLineText;
+
+    /// <summary>The command as it reads, e.g. <c>defenseclaw agent discovery scan</c>: the review's title, the detail pane's preview.</summary>
+    public string CommandLineText => CommandReview.CommandLine(Executable, Argv);
 
     /// <summary>The same command as text to paste into PowerShell (every argument one literal string).</summary>
-    public string ClipboardText => CommandReview.ClipboardLine(CommandReview.DefaultExecutable, Argv);
+    public string ClipboardText => CommandReview.ClipboardLine(Executable, Argv);
 
     public bool NeedsArguments => RequiredArguments.Count > 0;
 
     /// <summary>
-    /// True when the palette may run it with no review: only a command on the explicit allow-list of known reads
-    /// (<see cref="CommandReview.MayRunUnreviewed(IReadOnlyList{string})"/>). A command <see cref="CommandTiers"/> calls read-only by its
-    /// first verb but that is not on the list - <c>plan apply</c>, a verb a newer CLI added - is reviewed like any change.
+    /// True when it has to be run in a console of the operator's own: the registry calls it interactive, or it is one of the commands the
+    /// CLI answers with a prompt. The app has no console to give it - stdin is closed, so the CLI would stop at its first question - so
+    /// Run copies the command instead.
     /// </summary>
-    public bool RunsWithoutReview => CommandReview.MayRunUnreviewed(Argv);
+    public bool NeedsTerminal =>
+        string.Equals(Executable, CommandReview.DefaultExecutable, StringComparison.Ordinal) &&
+        (NeedTheConsole.Contains(string.Join(' ', Argv)) || Summary.Contains("interactive", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The small form that takes its argument, or null: it needs none, needs a console, or needs more than one plain value.</summary>
+    public ArgumentForm? Form => NeedsArguments && !NeedsTerminal ? ArgumentForm.Parse(ArgumentHint) : null;
+
+    /// <summary>
+    /// The gateway verb this row stands for when it is one of the three lifecycle verbs. They run through the same path as the tray's and the
+    /// palette's Gateway rows (availability, the review, "a stop is the operator's word" so nothing starts it again, the toast), not as a bare
+    /// command.
+    /// </summary>
+    public GatewayAction? LifecycleAction =>
+        string.Equals(Executable, GatewayControl.Executable, StringComparison.Ordinal) && Argv.Count == 1
+            ? Argv[0] switch
+            {
+                "start" => GatewayAction.Start,
+                "stop" => GatewayAction.Stop,
+                "restart" => GatewayAction.Restart,
+                _ => null,
+            }
+            : null;
+
+    /// <summary>
+    /// True when the palette may run it with no review: only a command with nothing to add, on the explicit allow-list of known reads
+    /// (<see cref="CommandReview.MayRunUnreviewed(string, IReadOnlyList{string})"/>). A command <see cref="CommandTiers"/> calls read-only by
+    /// its first verb but that is not on the list - <c>plan apply</c>, a verb a newer CLI added, <c>skill info</c> once a name is on it - is
+    /// reviewed like any change.
+    /// </summary>
+    public bool RunsWithoutReview => !NeedsArguments && CommandReview.MayRunUnreviewed(Executable, Argv);
 
     /// <summary>What the review and the tier policy make of it: only an allow-listed read is read-only and runs as it is; everything else is at least a change, and is reviewed first.</summary>
     public CommandTier Tier => CommandReview.ResolveTier(Argv, RunsWithoutReview ? CommandTier.ReadOnly : CommandTier.StateChanging);
+
+    /// <summary>The argv with the operator's value added as a target: after <c>--</c>, so nothing typed can be read as an option.</summary>
+    public IReadOnlyList<string> ArgvWith(string argument) => Argv.Append("--").Append(argument).ToArray();
+
+    /// <summary>The command as it reads with a value (or the form's placeholder, <c>&lt;skill-name&gt;</c>, when none is typed yet).</summary>
+    public string CommandLineWith(string? argument) =>
+        Form is null
+            ? CommandLineText
+            : CommandReview.CommandLine(Executable, Argv.Append("--").Append(string.IsNullOrWhiteSpace(argument) ? ArgumentHint : argument.Trim()));
+
+    /// <summary>The same with a value, as PowerShell text.</summary>
+    public string ClipboardTextWith(string argument) => CommandReview.ClipboardLine(Executable, ArgvWith(argument));
+
+    /// <summary>The palette row for a TUI registry entry.</summary>
+    public static CuratedCommand FromRegistry(TuiRegistryEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return new CuratedCommand(
+            entry.Argv,
+            CuratedCommandCatalog.CategoryOf(entry.Category),
+            entry.Description,
+            string.Empty,
+            entry.NeedsArgument ? new[] { entry.ArgumentHint } : Array.Empty<string>(),
+            entry.Executable,
+            entry.Name,
+            entry.ArgumentHint);
+    }
 }
 
 /// <summary>
-/// The palette's curated CLI commands, read from the installed CLI's own <c>--help</c> screens rather than typed in by hand
-/// (so a new CLI shows its new commands, and a removed one stops being offered). Walks <c>defenseclaw --help</c>, then each
-/// group's help, to leaf commands, through <see cref="SetupHelpProbe"/> (so the screens are cached on disk per CLI build, like the
-/// Setup hub's). Only <c>--help</c> is ever run, and no command is run to learn about it.
-/// <para>
-/// What is kept: a command the Windows policy does not hide (<see cref="WizardWindowsPolicy.HidesCommand"/>: sandbox, OpenClaw,
-/// ZeptoClaw, Docker), that the CLI does not itself call unsupported here, and whose argv passes <see cref="Refuses"/>. Capability
-/// gating is the probe's: no CLI on this machine, no commands.
-/// </para>
+/// The palette's CLI commands for one runtime: its TUI command registry (<see cref="TuiRegistryCatalogues"/>, generated by
+/// <c>tools/gen-tui-registry.py</c>), minus what the runtime itself does not run on Windows. Which registry follows what the connected
+/// runtime reported about itself (<see cref="TuiRegistryCatalogues.For"/>): the installed 0.8.10's 231 entries until a runtime shows it has the
+/// larger one. Nothing is read from the CLI, so nothing is run to build it; <see cref="HiddenNote"/> says how many entries Windows does not offer.
 /// </summary>
 internal sealed class CuratedCommandCatalog
 {
-    /// <summary>The Mac sheet's categories (Sandbox is never populated here: the policy hides it).</summary>
-    public static readonly IReadOnlyList<string> Categories = new[]
+    private static readonly string[] CategoryOrder =
     {
         "Daemon", "Enforce", "Info", "Install", "Other", "Policy", "Sandbox", "Scan", "Setup",
     };
 
-    /// <summary>Groups nest at most this deep (<c>setup observability add</c> is three nouns).</summary>
-    private const int MaxDepth = 3;
+    /// <summary>The Mac sheet's categories, which are the registry's own (Sandbox is never populated here: the runtime does not run sandboxes on Windows).</summary>
+    public static readonly IReadOnlyList<string> Categories = CategoryOrder;
 
-    private static readonly char[] ShellMetacharacters = { ';', '&', '|', '<', '>', '`', '$', '(', ')', '%', '"', '\'', '\\', '*', '?', '~', '^', '\n', '\r' };
+    private static readonly CuratedCommandCatalog BaselineCommands = new(TuiRegistryCatalogues.Baseline);
+    private static readonly CuratedCommandCatalog ExtendedCommands = new(TuiRegistryCatalogues.Extended);
 
-    private readonly SetupHelpProbe _probe;
-    private readonly object _gate = new();
-    private Task? _load;
-    private IReadOnlyList<CuratedCommand> _commands = Array.Empty<CuratedCommand>();
+    private readonly Dictionary<string, CuratedCommand> _byId;
 
-    public CuratedCommandCatalog(SetupHelpProbe probe)
+    public CuratedCommandCatalog(TuiRegistryCatalogue source)
     {
-        _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+        Source = source ?? throw new ArgumentNullException(nameof(source));
+
+        Commands = source.OnWindows
+            .Select(CuratedCommand.FromRegistry)
+            .OrderBy(c => Array.IndexOf(CategoryOrder, c.Category))
+            .ThenBy(c => c.Title, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        _byId = Commands.ToDictionary(c => c.Id, StringComparer.Ordinal);
     }
 
-    /// <summary>The commands found so far (empty until <see cref="EnsureLoaded"/> finishes, and when the CLI cannot be read).</summary>
-    public IReadOnlyList<CuratedCommand> Commands
+    /// <summary>The catalogue for a runtime with these capabilities (see <see cref="TuiRegistryCatalogues.For"/>).</summary>
+    public static CuratedCommandCatalog For(RuntimeCapabilities? capabilities) =>
+        ReferenceEquals(TuiRegistryCatalogues.For(capabilities), TuiRegistryCatalogues.Extended) ? ExtendedCommands : BaselineCommands;
+
+    /// <summary>The registry these commands are read from.</summary>
+    public TuiRegistryCatalogue Source { get; }
+
+    /// <summary>What Windows runs: Mac-sheet category order, then by name.</summary>
+    public IReadOnlyList<CuratedCommand> Commands { get; }
+
+    /// <summary>How many entries the registry has that the runtime does not run on Windows.</summary>
+    public int HiddenCount => Source.HiddenOnWindows.Count;
+
+    /// <summary>"21 hidden on Windows", or empty when none is.</summary>
+    public string HiddenNote => HiddenCount == 0 ? string.Empty : $"{HiddenCount} hidden on Windows";
+
+    /// <summary>One line per reason: how many entries and the runtime's own words. For the note's tooltip.</summary>
+    public string HiddenDetail => HiddenCount == 0
+        ? string.Empty
+        : "Not offered on Windows, because the runtime does not run them here:" + string.Concat(Source.HiddenReasons.Select(
+            r => Environment.NewLine + $"{r.Count} {(r.Count == 1 ? "command" : "commands")}: {r.Reason}"));
+
+    /// <summary>The command with this id (<see cref="CuratedCommand.Id"/>), or null: it is not in this catalogue, or Windows does not run it.</summary>
+    public CuratedCommand? Find(string id) => id is not null && _byId.TryGetValue(id, out var command) ? command : null;
+
+    /// <summary>The Mac sheet's category for a registry category ("scan" is "Scan"); anything the sheet has no heading for is "Other".</summary>
+    internal static string CategoryOf(string registryCategory)
     {
-        get
-        {
-            lock (_gate)
-            {
-                return _commands;
-            }
-        }
-    }
-
-    /// <summary>Null until the walk ends; otherwise why it found nothing (the CLI could not be run).</summary>
-    public string? LoadError { get; private set; }
-
-    /// <summary>Raised (off the UI thread) when the walk finished and <see cref="Commands"/> changed.</summary>
-    public event EventHandler? Changed;
-
-    /// <summary>Starts the walk once, in the background, and returns it. Never faults; a second call joins the first.</summary>
-    public Task EnsureLoaded()
-    {
-        lock (_gate)
-        {
-            return _load ??= Task.Run(LoadAsync);
-        }
-    }
-
-    private async Task LoadAsync()
-    {
-        try
-        {
-            var root = await _probe.CliHelpAsync(Array.Empty<string>()).ConfigureAwait(false);
-            if (!root.Succeeded)
-            {
-                LoadError = root.Error;
-                return;
-            }
-
-            var found = new List<CuratedCommand>();
-            await WalkAsync(Array.Empty<string>(), root.Text, found).ConfigureAwait(false);
-
-            lock (_gate)
-            {
-                _commands = found
-                    .OrderBy(c => Categories.ToList().IndexOf(c.Category))
-                    .ThenBy(c => c.Title, StringComparer.Ordinal)
-                    .ToList();
-            }
-
-            LoadError = null;
-            Changed?.Invoke(this, EventArgs.Empty);
-        }
-#pragma warning disable CA1031 // A palette extra must never fault the app; the entries just stay empty.
-        catch (Exception ex)
-        {
-            LoadError = ex.Message;
-            Trace.TraceWarning($"Curated CLI command discovery failed: {ex.Message}");
-        }
-#pragma warning restore CA1031
-    }
-
-    private async Task WalkAsync(IReadOnlyList<string> path, string helpText, List<CuratedCommand> found)
-    {
-        var parsed = SetupHelpParser.Parse(helpText, Math.Max(path.Count - 1, 0));
-
-        var tasks = new List<Task>();
-        foreach (var child in parsed.Commands)
-        {
-            var childPath = path.Append(child.Name).ToArray();
-            if (!IsPlausibleNoun(child.Name) || WizardWindowsPolicy.HidesCommand(childPath, child.Summary))
-            {
-                continue;
-            }
-
-            tasks.Add(VisitAsync(childPath, child.Summary, found));
-        }
-
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-    }
-
-    private async Task VisitAsync(string[] path, string summary, List<CuratedCommand> found)
-    {
-        var help = await _probe.CliHelpAsync(path).ConfigureAwait(false);
-        if (!help.Succeeded)
-        {
-            return;
-        }
-
-        var parsed = SetupHelpParser.Parse(help.Text, path.Length - 1);
-        if (parsed.Commands.Count > 0 && path.Length < MaxDepth)
-        {
-            await WalkAsync(path, help.Text, found).ConfigureAwait(false);
-            return;
-        }
-
-        // A group at the depth limit is not a command: it would only print its own help.
-        if (parsed.Commands.Count > 0 || parsed.PlatformStatus == PlatformStatus.Unsupported)
-        {
-            return;
-        }
-
-        var entry = new CuratedCommand(
-            path,
-            CategoryFor(path),
-            parsed.Summary.Length > 0 ? parsed.Summary : summary,
-            parsed.Usage,
-            parsed.Positionals.Where(p => p.IsRequired).Select(p => p.Name).ToArray());
-
-        if (!Refuses(entry.Argv))
-        {
-            lock (found)
-            {
-                found.Add(entry);
-            }
-        }
+        var heading = registryCategory.Length == 0 ? registryCategory : char.ToUpperInvariant(registryCategory[0]) + registryCategory[1..];
+        return Categories.Contains(heading) ? heading : "Other";
     }
 
     /// <summary>
-    /// A command word is lower-case letters, digits, dashes and underscores, and starts with a letter or a digit: anything else in a help line
-    /// is not a noun to put on an argv, and a name that starts with <c>-</c> (<c>--help</c>, <c>-x</c>) would be read by the CLI as an
-    /// option, not as a command.
+    /// True when <paramref name="argv"/> must not be offered or run: it is empty, any token has a shell metacharacter or a space, or any token is
+    /// an option that is not one of <see cref="TuiRegistryCatalogues.ReviewedFlags"/> - which keeps out the flags that carry a credential
+    /// (<c>--value</c>, <c>--token</c>, <c>--api-key</c> and the like) along with every other one nobody has read. A palette entry is a noun path with the
+    /// few options the registry gives it, so none of these is expected - this is the line that makes sure it stays so.
     /// </summary>
-    internal static bool IsPlausibleNoun(string name) =>
-        name.Length > 0 &&
-        name[0] is (>= 'a' and <= 'z') or (>= '0' and <= '9') &&
-        name.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-' or '_');
-
-    /// <summary>
-    /// True when <paramref name="argv"/> must not be offered or run: it is empty, any token has a shell metacharacter, or any token is an
-    /// option (starts with <c>-</c>) - which covers the flags that carry a credential (<c>--value</c>, <c>--token</c>, <c>--api-key</c> and
-    /// the like) along with every other one. A palette entry is a noun path, so none of these is expected - this is the line that makes
-    /// sure it stays so.
-    /// </summary>
-    public static bool Refuses(IReadOnlyList<string> argv)
-    {
-        ArgumentNullException.ThrowIfNull(argv);
-
-        if (argv.Count == 0)
-        {
-            return true;
-        }
-
-        foreach (var token in argv)
-        {
-            if (token.Length == 0 || token.IndexOfAny(ShellMetacharacters) >= 0 || token.Any(char.IsWhiteSpace))
-            {
-                return true;
-            }
-
-            // Not a noun: an option rides on the command it follows, and a "command" that is one is the CLI's own flag.
-            if (token.StartsWith('-'))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public static bool Refuses(IReadOnlyList<string> argv) => TuiRegistryCatalogues.ArgvProblem(argv) is not null;
 
     /// <summary>
     /// Splits a command line into an argv list with no shell: whitespace separates, nothing else is interpreted. Null when the
@@ -252,27 +288,5 @@ internal sealed class CuratedCommandCatalog
         }
 
         return Refuses(tokens) ? null : tokens;
-    }
-
-    /// <summary>The Mac sheet's category for a command, from its nouns.</summary>
-    internal static string CategoryFor(IReadOnlyList<string> path)
-    {
-        if (path.Any(n => n.Contains("scan", StringComparison.OrdinalIgnoreCase)) && !string.Equals(path[0], "setup", StringComparison.Ordinal))
-        {
-            return "Scan";
-        }
-
-        return path[0] switch
-        {
-            "setup" or "quickstart" or "init" => "Setup",
-            "scan" or "scanner" or "aibom" or "inventory" => "Scan",
-            "policy" or "guardrail" or "rules" => "Policy",
-            "alerts" or "block" or "allow" or "enforce" or "quarantine" or "skill" or "mcp" or "plugin" => "Enforce",
-            "install" or "upgrade" or "uninstall" or "update" => "Install",
-            "gateway" or "daemon" or "sidecar" or "start" or "stop" or "restart" => "Daemon",
-            "status" or "doctor" or "version" or "list" or "show" or "logs" or "audit" or "keys" or "config" or "agent" => "Info",
-            "sandbox" => "Sandbox",
-            _ => "Other",
-        };
     }
 }

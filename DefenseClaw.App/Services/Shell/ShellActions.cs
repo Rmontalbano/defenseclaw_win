@@ -2,9 +2,9 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
-using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.App.Views.Shell;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Install;
 
 namespace DefenseClaw.App.Services;
 
@@ -108,7 +108,6 @@ internal sealed class ShellActions
 
     // ---- The Mac's Monitor / Commands menus (CUST-224) ----
 
-    private CuratedCommandCatalog? _curated;
     private int _diagnosing;
     private int _curatedRunning;
 
@@ -124,11 +123,36 @@ internal sealed class ShellActions
     /// <summary>Test seam: shows a review and says whether the operator confirmed it (default: the gateway-action dialog window).</summary>
     internal Func<CommandReview, bool>? Confirmer { get; set; }
 
-    /// <summary>Test seam: the curated-commands catalog (default: one over the shared Setup catalog's help probe).</summary>
-    internal CuratedCommandCatalog Curated
+    /// <summary>Test seam: runs the gateway's start, stop or restart a registry row stands for (default: the tray's, which reviews and toasts).</summary>
+    internal Func<GatewayAction, Task>? GatewayActionRunner { get; set; }
+
+    /// <summary>
+    /// The CLI commands the palette offers for the runtime the app is connected to: that runtime's TUI command registry, minus what it
+    /// does not run on Windows. Chosen from what the runtime has reported about itself (<see cref="CuratedCommandCatalog.For"/>), so it
+    /// is the installed 0.8.10's until a runtime shows it has the larger registry, and it changes when the answer does. Nothing is run to
+    /// build it.
+    /// </summary>
+    public CuratedCommandCatalog CliCatalogue => CuratedCommandCatalog.For(_services.Runtime.Capabilities);
+
+    /// <summary>
+    /// What <see cref="CliCatalogue"/> puts in the palette: empty while DefenseClaw is not installed on this machine (there is no CLI to
+    /// run them with, so the palette lists none, as it never listed a CLI it could not read), the catalogue's commands otherwise.
+    /// </summary>
+    public IReadOnlyList<CuratedCommand> CliCommands =>
+        OffersCliCommands(Snapshot) ? CliCatalogue.Commands : Array.Empty<CuratedCommand>();
+
+    /// <summary>The note and tooltip for the registry entries Windows does not run - empty when no commands are listed or none is hidden.</summary>
+    public (string Note, string Detail) HiddenCommands =>
+        OffersCliCommands(Snapshot) ? (CliCatalogue.HiddenNote, CliCatalogue.HiddenDetail) : (string.Empty, string.Empty);
+
+    /// <summary>
+    /// True unless DefenseClaw is known not to be installed (still checking is not "not installed": the commands are there to see as the
+    /// window opens, and a run that finds no CLI says so).
+    /// </summary>
+    internal static bool OffersCliCommands(GatewaySnapshot snapshot)
     {
-        get => _curated ??= new CuratedCommandCatalog(WizardCatalog.Shared(_services).Probe);
-        set => _curated = value;
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return snapshot.Install != InstallState.NotInstalled;
     }
 
     private void ShowToast(string title, string message)
@@ -277,21 +301,30 @@ internal sealed class ShellActions
         }
     }
 
-    /// <summary>Copies a curated command as text that is safe to paste into PowerShell.</summary>
-    public void CopyCurated(CuratedCommand command)
+    /// <summary>Copies a curated command as text that is safe to paste into PowerShell - with the value the operator typed for it, when there is one.</summary>
+    public void CopyCurated(CuratedCommand command, string? argument = null)
     {
         ArgumentNullException.ThrowIfNull(command);
-        WriteClipboard(command.ClipboardText);
+        WriteClipboard(argument is null ? command.ClipboardText : command.ClipboardTextWith(argument));
     }
 
     /// <summary>
-    /// Runs a curated CLI command from the palette. The argv is the noun path the CLI's own help listed (checked again here for
-    /// secret-carrying flags), run through the runner with no shell. Only a command on the explicit allow-list of known reads
-    /// (<see cref="CommandTiers.UnreviewedReadPaths"/>) runs straight away; anything else - including a command the tier classifier calls
-    /// read-only by its first verb, such as <c>plan apply</c>, or a verb a newer CLI added - is shown in the review first and runs only
-    /// once confirmed. A command that cannot run without arguments is copied for the operator to complete instead.
+    /// Runs a curated CLI command from the palette: an entry of the connected runtime's TUI registry, as the argv the TUI itself runs
+    /// (checked again here against the reviewed options), run through the runner with no shell. Only a command on the explicit allow-list
+    /// of known reads (<see cref="CommandTiers.UnreviewedReadPaths"/>, or the gateway's two) runs straight away; anything else - including a
+    /// command the tier classifier calls read-only by its first verb, such as <c>plan apply</c>, or a verb a newer CLI added - is shown in the
+    /// review first and runs only once confirmed.
+    /// <para>
+    /// Three kinds of entry are not simply run. The gateway's <c>start</c>, <c>stop</c> and <c>restart</c> go the way the tray's and the
+    /// palette's Gateway rows go (<see cref="RunGatewayActionAsync"/>). A command that has to be answered at a prompt is copied for a
+    /// terminal. A command that needs a value is run with the one <paramref name="argument"/> its form took, added after <c>--</c> (a name that
+    /// the CLI would rewrite - <c>a*</c>, <c>%X%</c>, a leading <c>~</c> - is refused before any review), or copied for the operator to complete
+    /// when it needs more than a form takes.
+    /// </para>
     /// </summary>
-    public async Task RunCuratedAsync(CuratedCommand command)
+    /// <param name="command">The row to run.</param>
+    /// <param name="argument">The value typed for a command that takes one; null for every other.</param>
+    public async Task RunCuratedAsync(CuratedCommand command, string? argument = null)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -301,11 +334,45 @@ internal sealed class ShellActions
             return;
         }
 
-        if (command.NeedsArguments)
+        if (command.LifecycleAction is { } lifecycle)
+        {
+            await (GatewayActionRunner is { } runLifecycle ? runLifecycle(lifecycle) : RunGatewayActionAsync(lifecycle)).ConfigureAwait(true);
+            return;
+        }
+
+        if (command.NeedsTerminal)
         {
             CopyCurated(command);
-            ShowToast(command.Title, $"Needs {string.Join(", ", command.RequiredArguments)}. Copied the command for you to complete in a terminal.");
+            ShowToast(
+                command.Title,
+                "It asks questions at a prompt, which needs a terminal. Copied the command for you to paste into one" +
+                (command.NeedsArguments ? $", then add {string.Join(", ", command.RequiredArguments)}." : "."));
             return;
+        }
+
+        var argv = command.Argv;
+        if (command.NeedsArguments)
+        {
+            if (command.Form is not { } form || argument is null)
+            {
+                CopyCurated(command);
+                ShowToast(command.Title, $"Needs {string.Join(", ", command.RequiredArguments)}. Copied the command for you to complete in a terminal.");
+                return;
+            }
+
+            if (form.Check(argument, out var value) is { } problem)
+            {
+                ShowToast(command.Title, problem);
+                return;
+            }
+
+            argv = command.ArgvWith(value);
+            if (ArgvHazards.AppliesTo(command.Executable) &&
+                ArgvHazards.FindChangedTargets(argv, CliWorkingDirectory.DefaultPath) is { Count: > 0 } changes)
+            {
+                ShowToast(command.Title, ArgumentExpansionException.BuildMessage(changes));
+                return;
+            }
         }
 
         if (Interlocked.Exchange(ref _curatedRunning, 1) == 1)
@@ -316,20 +383,26 @@ internal sealed class ShellActions
 
         try
         {
-            if (!command.RunsWithoutReview)
+            // Judged on the argv that will run: a command with a value on it is never one of the listed bare reads.
+            if (!CommandReview.MayRunUnreviewed(command.Executable, argv))
             {
-                var restarts = CommandReview.RestartsGatewayFor(command.Argv);
+                // The setup and guardrail verbs restart the gateway by rule; a registry description that says the command restarts it
+                // (agent discovery enable ... "save config, restart, and scan") is the TUI's own word for the same consequence.
+                var restarts = ArgvHazards.AppliesTo(command.Executable) &&
+                               (CommandReview.RestartsGatewayFor(argv) || command.Summary.Contains("restart", StringComparison.OrdinalIgnoreCase));
 
                 // The classifier reads the first verb of the path, and calls "plan apply" a read; the review is not allowed to be lower than
                 // a change, and says why a command that sounds harmless is being asked about.
-                var notListed = CommandTiers.Classify(command.Argv) == CommandTier.ReadOnly
-                    ? " It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first."
+                var notListed = CommandReview.ResolveTier(argv) == CommandTier.ReadOnly
+                    ? command.NeedsArguments
+                        ? " It names something you typed, so it is reviewed first, even where the command alone is on DefenseClaw for Windows' list of read-only commands."
+                        : " It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first."
                     : string.Empty;
                 var review = new CommandReview
                 {
-                    Title = $"Run {command.Title}?",
+                    Title = $"Run {CommandReview.CommandLine(command.Executable, argv)}?",
                     Summary = (command.Summary + notListed).Trim(),
-                    Steps = new[] { new CommandReviewStep(command.Argv, floor: CommandReview.Stricter(command.Tier, CommandTier.StateChanging)) },
+                    Steps = new[] { new CommandReviewStep(argv, floor: CommandReview.Stricter(command.Tier, CommandTier.StateChanging), executable: command.Executable) },
                     RestartsGateway = restarts,
                     Warnings = restarts ? new[] { CommandReviewWarning.GatewayRestart() } : Array.Empty<CommandReviewWarning>(),
                 };
@@ -341,7 +414,11 @@ internal sealed class ShellActions
                 }
             }
 
-            var invocation = await _services.Cli.RunAsync(command.Argv).ConfigureAwait(true);
+            // A value typed here is a target like the Govern panels': the runner refuses to run it if the CLI would rewrite it after the review.
+            var options = command.NeedsArguments ? ExactTargets : null;
+            var invocation = string.Equals(command.Executable, GatewayControl.Executable, StringComparison.Ordinal)
+                ? await _services.Cli.RunGatewayAsync(argv, options: options).ConfigureAwait(true)
+                : await _services.Cli.RunAsync(argv, options: options).ConfigureAwait(true);
             ShowToast(
                 command.Title,
                 invocation.ExitCode == 0
@@ -361,6 +438,8 @@ internal sealed class ShellActions
             _ = Interlocked.Exchange(ref _curatedRunning, 0);
         }
     }
+
+    private static readonly CliRunOptions ExactTargets = new() { RefuseExpandingTargets = true };
 
     /// <summary>Forgets which findings have been announced, so what is outstanding is announced once more (see <see cref="TrayIconService.ResetSeenAlertHistoryAsync"/>).</summary>
     public void ResetSeenAlertHistory() => _ = _tray.ResetSeenAlertHistoryAsync();

@@ -44,6 +44,7 @@ public partial class CommandPaletteControl : UserControl
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.ArgumentRequested -= OnArgumentRequested;
         }
 
         _viewModel = e.NewValue as CommandPaletteViewModel;
@@ -51,8 +52,24 @@ public partial class CommandPaletteControl : UserControl
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.ArgumentRequested += OnArgumentRequested;
         }
     }
+
+    /// <summary>
+    /// The chosen row needs its value (none typed yet, or one the form refused): the palette stays open and the caret goes to the box, with
+    /// what is there selected so typing replaces it. After layout, because the box only shows once the row it belongs to is the selected one.
+    /// </summary>
+    private void OnArgumentRequested(object? sender, EventArgs e) =>
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            if (ArgumentBox.IsVisible)
+            {
+                _ = ArgumentBox.Focus();
+                _ = Keyboard.Focus(ArgumentBox);
+                ArgumentBox.SelectAll();
+            }
+        }));
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {

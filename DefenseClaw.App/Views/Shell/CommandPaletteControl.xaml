@@ -201,6 +201,30 @@
                                  TextAlignment="Left"
                                  AutomationProperties.Name="Command that will run"
                                  Text="{Binding ArgvPreview, Mode=OneWay}" />
+                        <!-- The one value a command takes (a skill name, a URL, a path), for the rows whose hint is a single word. Enter here runs it. -->
+                        <ui:TextBox x:Name="ArgumentBox"
+                                    Margin="0,8,0,0"
+                                    Visibility="{Binding HasArgumentForm, Converter={StaticResource BoolToVisibility}}"
+                                    PlaceholderText="{Binding ArgumentPlaceholder}"
+                                    Text="{Binding ArgumentText, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="{Binding ArgumentAutomationName}"
+                                    AutomationProperties.HelpText="Type the value, then press Enter to review the command." />
+                        <TextBlock Margin="0,4,0,0"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Tag="Warn"
+                                   Text="{Binding ArgumentProblem}"
+                                   AutomationProperties.LiveSetting="Polite">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource DcToneText}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ArgumentProblem}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,6,0,0"
                                    TextWrapping="Wrap"
@@ -222,11 +246,37 @@
                 </Border>
 
                 <Grid Grid.Row="3" Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+
+                    <!--
+                        How many entries of the TUI command registry the runtime does not run on Windows ("21 hidden on Windows"), so the count
+                        is not read as the whole registry; the tooltip (and the help text, for a screen reader) says why, in the runtime's words.
+                    -->
+                    <TextBlock Grid.Row="1"
+                               Grid.ColumnSpan="3"
+                               Margin="0,6,0,0"
+                               Text="{Binding HiddenNote}"
+                               ToolTip="{Binding HiddenDetail}"
+                               AutomationProperties.Name="{Binding HiddenNote}"
+                               AutomationProperties.HelpText="{Binding HiddenDetail}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HiddenNote}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
 
                     <TextBlock x:Name="StatusText"
                                Grid.Column="0"

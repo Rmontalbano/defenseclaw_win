@@ -1,17 +1,15 @@
 using System.Runtime.CompilerServices;
 using DefenseClaw.App.Services;
-using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.Core.Cli;
-using DefenseClaw.Core.Paths;
 
 namespace DefenseClaw.App.Tests.Shell;
 
 /// <summary>
 /// What may run with no review step is an explicit allow-list of known reads, not "whatever <see cref="CommandTiers"/> calls
 /// read-only": the classifier reads the first verb of the path, so <c>plan apply</c> and <c>validate fix</c> are reads to it, and the palette's
-/// argv comes off the installed CLI's own help, so a verb a newer CLI adds would run unreviewed. Nothing here starts a process: the
+/// argv comes from a TUI registry that a newer runtime's version of can add to. Nothing here starts a process: the
 /// runner is the isolated one (no CLI on its PATH), and the review is a test seam.
 /// </summary>
 public sealed class UnreviewedAllowListTests : IDisposable
@@ -184,85 +182,30 @@ public sealed class UnreviewedAllowListTests : IDisposable
         Assert.False(CommandReview.MayRunUnreviewed(@"C:\evil\powershell.exe", new[] { "status" }));
     }
 
-    // ---------------------------------------------------------------------------------- nouns that are really options
+    // ---------------------------------------------------------------------------------- options on a palette argv
 
     [Theory]
-    [InlineData("--help")]
     [InlineData("-x")]
-    [InlineData("-")]
-    [InlineData("--")]
     [InlineData("--version")]
-    [InlineData("-doctor")]
-    [InlineData("")]
-    [InlineData("Doctor")]
-    [InlineData("a b")]
-    [InlineData("a;b")]
-    public void A_name_that_starts_with_a_dash_or_is_not_a_plain_word_is_not_a_noun(string name) =>
-        Assert.False(CuratedCommandCatalog.IsPlausibleNoun(name));
-
-    [Theory]
-    [InlineData("doctor")]
-    [InlineData("rotate-token")]
-    [InlineData("v2")]
-    [InlineData("list_all")]
-    [InlineData("3d")]
-    public void An_ordinary_command_word_is_a_noun(string name) =>
-        Assert.True(CuratedCommandCatalog.IsPlausibleNoun(name));
-
-    [Theory]
-    [InlineData("--help")]
-    [InlineData("-x")]
-    [InlineData("--json")]
-    [InlineData("--yes")]
-    public void An_argv_with_any_option_in_it_is_refused(string option)
+    [InlineData("--reveal")]
+    [InlineData("--show-credentials")]
+    [InlineData("--token")]
+    [InlineData("--frobnicate")]
+    public void An_argv_with_an_option_nobody_reviewed_is_refused(string option)
     {
         Assert.True(CuratedCommandCatalog.Refuses(new[] { "doctor", option }));
         Assert.True(CuratedCommandCatalog.Refuses(new[] { option }));
         Assert.False(CuratedCommandCatalog.Refuses(new[] { "doctor" }));
     }
 
-    private const string RootWithOptionLikeCommands = """
-        Usage: defenseclaw [OPTIONS] COMMAND [ARGS]...
-
-          DefenseClaw CLI.
-
-        Options:
-          --help  Show this message and exit.
-
-        Commands:
-          --evil  Looks like an option.
-          -x      Also an option.
-          doctor  Check the install.
-        """;
-
-    [Fact]
-    public async Task A_help_line_that_names_an_option_as_a_command_is_never_walked_or_offered()
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("--json")]
+    [InlineData("--yes")]
+    [InlineData("--fix")]
+    public void An_option_the_TUI_registry_uses_and_that_was_reviewed_is_not_refused(string option)
     {
-        var asked = new List<string>();
-        Task<HelpProbeResult> Help(string executable, IReadOnlyList<string> path, CancellationToken cancellationToken)
-        {
-            var key = string.Join(' ', path);
-            lock (asked)
-            {
-                asked.Add(key);
-            }
-
-            return Task.FromResult(key == SetupHelpProbe.RootMarker
-                ? new HelpProbeResult(LineEndings.Normalize(RootWithOptionLikeCommands), null)
-                : key == SetupHelpProbe.RootMarker + " doctor"
-                    ? new HelpProbeResult(LineEndings.Normalize("Usage: defenseclaw doctor [OPTIONS]\n\n  Check the install.\n\nOptions:\n  --help  Show this message and exit.\n"), null)
-                    : new HelpProbeResult(string.Empty, "defenseclaw exited 2."));
-        }
-
-        var paths = new DefenseClawPaths(binDirectory: @"C:\fake\bin", searchPath: Array.Empty<string>(), fileExists: _ => true);
-        var catalog = new CuratedCommandCatalog(new SetupHelpProbe(paths, diskCache: null, Help));
-
-        await catalog.EnsureLoaded();
-
-        Assert.Equal(new[] { "defenseclaw doctor" }, catalog.Commands.Select(c => c.Title).ToArray());
-        lock (asked)
-        {
-            Assert.DoesNotContain(asked, key => key.Contains("--evil", StringComparison.Ordinal) || key.Contains("-x", StringComparison.Ordinal));
-        }
+        Assert.False(CuratedCommandCatalog.Refuses(new[] { "doctor", option }));
+        Assert.Contains(option, TuiRegistryCatalogues.ReviewedFlags);
     }
 }
