@@ -32,6 +32,17 @@
                                         CancelCommand="{Binding DismissCommand}">
                 <shell:CommandReviewControl.ExtraContent>
                     <StackPanel>
+                        <!--
+                            A change that reduces protection asks for this tick before the confirm button works (DiscoverActionReview.Open's
+                            acknowledgement). Hidden for every other review; gone once the commands run.
+                        -->
+                        <CheckBox Margin="0,4,0,10"
+                                  IsChecked="{Binding IsAcknowledged, Mode=TwoWay}"
+                                  AutomationProperties.Name="Acknowledge before running"
+                                  Visibility="{Binding ShowAcknowledgement, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock TextWrapping="Wrap" Text="{Binding AcknowledgementText}" />
+                        </CheckBox>
+
                         <ui:ProgressRing Width="24"
                                          Height="24"
                                          HorizontalAlignment="Left"

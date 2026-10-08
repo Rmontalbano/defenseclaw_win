@@ -23,7 +23,7 @@ namespace DefenseClaw.App.Tests.Shell;
 /// <summary>
 /// The page chrome of CUST-208: <see cref="DcPageToolbar"/> (the compact title / actions / search row that replaced the 26 px
 /// title block and the text-labelled buttons) and <see cref="DcSegmented"/> (the single-select filter), as controls and as they
-/// sit on all fourteen panels.
+/// sit on all fifteen panels.
 /// </summary>
 [Collection(UiCollection.Name)]
 public sealed class PageChromeTests
@@ -521,7 +521,7 @@ public sealed class PageChromeTests
 
     // ------------------------------------------------------------------ the panels
 
-    /// <summary>The fourteen panels, all of which open with the toolbar: view, view-model, and whether the toolbar carries the filter box.</summary>
+    /// <summary>The fifteen panels, all of which open with the toolbar: view, view-model, and whether the toolbar carries the filter box.</summary>
     private static readonly (string View, string ViewModel, bool Search)[] ToolbarPanels =
     {
         ("AlertsPanel", "AlertsPanelViewModel", true),
@@ -536,12 +536,13 @@ public sealed class PageChromeTests
         ("AiDiscoveryPanel", "AiDiscoveryPanelViewModel", false),
         ("RegistriesPanel", "RegistriesPanelViewModel", false),
         ("SetupPanel", "SetupPanelViewModel", false),
+        ("PoliciesPanel", "PoliciesPanelViewModel", true),
         ("SettingsPanel", "SettingsPanelViewModel", false),
         ("OverviewPanel", "OverviewPanelViewModel", false),
     };
 
     /// <summary>
-    /// Read from the XAML, so it costs no views and no UI thread: each of the fourteen panels opens with a DcPageToolbar that
+    /// Read from the XAML, so it costs no views and no UI thread: each of the fifteen panels opens with a DcPageToolbar that
     /// names its actions (icon only, so the name and the tooltip are all the label there is), binds only what its view-model
     /// has, and keeps the filter box in the toolbar where it filters the page's main list (AI Discovery and Setup filter cards in
     /// the middle of a scrolling page, so theirs stays over them).

@@ -6,17 +6,17 @@ namespace DefenseClaw.App.Services;
 /// The shell's keyboard map, in one place so the key handler, the sidebar tooltips, the command
 /// palette and the shortcuts overlay can never disagree about which chord does what.
 /// <para>
-/// <b>Panels.</b> The 13 panels are numbered in sidebar order: <c>Ctrl+1</c> … <c>Ctrl+9</c> are
-/// panels 1-9, <c>Ctrl+0</c> is panel 10, and <c>Ctrl+Shift+1</c> … <c>Ctrl+Shift+3</c> are panels
-/// 11-13. (A plain <c>Ctrl+digit</c> never types a character, so it is safe inside text boxes; the
+/// <b>Panels.</b> The 14 panels are numbered in sidebar order: <c>Ctrl+1</c> … <c>Ctrl+9</c> are
+/// panels 1-9, <c>Ctrl+0</c> is panel 10, and <c>Ctrl+Shift+1</c> … <c>Ctrl+Shift+4</c> are panels
+/// 11-14. (A plain <c>Ctrl+digit</c> never types a character, so it is safe inside text boxes; the
 /// shifted set follows the macOS companion's Cmd-Shift-N convention for the overflow.) A panel
-/// past the 13th simply has no shortcut and is reached through the sidebar or the palette.
+/// past the 14th simply has no shortcut and is reached through the sidebar or the palette.
 /// </para>
 /// </summary>
 internal static class ShellShortcuts
 {
-    /// <summary>How many panels have a number chord (10 plain + 3 shifted).</summary>
-    public const int NumberedPanels = 13;
+    /// <summary>How many panels have a number chord (10 plain + 4 shifted).</summary>
+    public const int NumberedPanels = 14;
 
     public const string PaletteText = "Ctrl+K";
 
@@ -112,7 +112,7 @@ internal static class ShellShortcuts
             return digit == 0 ? 9 : digit.Value - 1;
         }
 
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && digit is >= 1 and <= 3)
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && digit is >= 1 and <= 4)
         {
             return 9 + digit.Value;
         }

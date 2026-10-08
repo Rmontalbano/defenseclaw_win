@@ -11,13 +11,13 @@ public sealed class ShellShortcutsTests : IDisposable
         "overview", "alerts", "logs", "audit", "activity",
         "skills", "mcps", "plugins", "tools",
         "inventory", "ai-discovery", "registries",
-        "setup",
+        "setup", "policies",
     };
 
     private static readonly string[] ChordTexts =
     {
         "Ctrl+1", "Ctrl+2", "Ctrl+3", "Ctrl+4", "Ctrl+5", "Ctrl+6", "Ctrl+7", "Ctrl+8", "Ctrl+9", "Ctrl+0",
-        "Ctrl+Shift+1", "Ctrl+Shift+2", "Ctrl+Shift+3",
+        "Ctrl+Shift+1", "Ctrl+Shift+2", "Ctrl+Shift+3", "Ctrl+Shift+4",
     };
 
     private readonly TempDirectory _temp = new();
@@ -39,14 +39,14 @@ public sealed class ShellShortcutsTests : IDisposable
     // ------------------------------------------------------------------ the chord table
 
     [Fact]
-    public void Thirteen_panels_are_numbered()
+    public void Fourteen_panels_are_numbered()
     {
-        Assert.Equal(13, ShellShortcuts.NumberedPanels);
+        Assert.Equal(14, ShellShortcuts.NumberedPanels);
         Assert.Equal(ShellShortcuts.NumberedPanels, ChordTexts.Length);
     }
 
     [Fact]
-    public void Chord_text_counts_ctrl_1_to_9_then_ctrl_0_then_ctrl_shift_1_to_3()
+    public void Chord_text_counts_ctrl_1_to_9_then_ctrl_0_then_ctrl_shift_1_to_4()
     {
         for (var i = 0; i < ChordTexts.Length; i++)
         {
@@ -56,10 +56,10 @@ public sealed class ShellShortcutsTests : IDisposable
 
     [Theory]
     [InlineData(-1)]
-    [InlineData(13)]
     [InlineData(14)]
+    [InlineData(15)]
     [InlineData(int.MaxValue)]
-    public void A_panel_past_the_thirteenth_has_no_chord(int index)
+    public void A_panel_past_the_fourteenth_has_no_chord(int index)
     {
         Assert.Null(ShellShortcuts.PanelChordText(index));
     }
@@ -85,7 +85,8 @@ public sealed class ShellShortcutsTests : IDisposable
     [InlineData(1, 10)]
     [InlineData(2, 11)]
     [InlineData(3, 12)]
-    public void Ctrl_shift_and_1_to_3_select_the_overflow_panels(int digit, int expectedIndex)
+    [InlineData(4, 13)]
+    public void Ctrl_shift_and_1_to_4_select_the_overflow_panels(int digit, int expectedIndex)
     {
         var modifiers = ModifierKeys.Control | ModifierKeys.Shift;
 
@@ -95,8 +96,8 @@ public sealed class ShellShortcutsTests : IDisposable
 
     [Theory]
     [InlineData(0)]
-    [InlineData(4)]
     [InlineData(5)]
+    [InlineData(6)]
     [InlineData(9)]
     public void Ctrl_shift_with_any_other_digit_is_not_a_panel_chord(int digit)
     {
@@ -156,7 +157,7 @@ public sealed class ShellShortcutsTests : IDisposable
     // ------------------------------------------------------------------ the chords against the real sidebar
 
     [Fact]
-    public void All_thirteen_panels_are_in_the_sidebar_in_the_order_the_chords_count()
+    public void All_fourteen_panels_are_in_the_sidebar_in_the_order_the_chords_count()
     {
         var catalog = new PanelCatalog(_services);
 
@@ -185,6 +186,7 @@ public sealed class ShellShortcutsTests : IDisposable
         Assert.Equal("ai-discovery", byChord["Ctrl+Shift+1"]);
         Assert.Equal("registries", byChord["Ctrl+Shift+2"]);
         Assert.Equal("setup", byChord["Ctrl+Shift+3"]);
+        Assert.Equal("policies", byChord["Ctrl+Shift+4"]);
     }
 
     [Fact]
@@ -194,12 +196,12 @@ public sealed class ShellShortcutsTests : IDisposable
 
         Assert.Equal(new[] { "Monitor", "Govern", "Discover", "Configure" }, PanelCatalog.Groups.ToArray());
         Assert.Equal(
-            new[] { "Monitor", "Monitor", "Monitor", "Monitor", "Monitor", "Govern", "Govern", "Govern", "Govern", "Discover", "Discover", "Discover", "Configure" },
+            new[] { "Monitor", "Monitor", "Monitor", "Monitor", "Monitor", "Govern", "Govern", "Govern", "Govern", "Discover", "Discover", "Discover", "Configure", "Configure" },
             catalog.SidebarOrder.Select(p => p.Group).ToArray());
-        Assert.Equal(14, catalog.Panels.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(15, catalog.Panels.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("overview", catalog.Default.Id);
 
-        // Settings is the fourteenth: pinned below the groups, in no group, and outside the numbered order (Ctrl+, reaches it).
+        // Settings is the fifteenth: pinned below the groups, in no group, and outside the numbered order (Ctrl+, reaches it).
         Assert.Equal(new[] { "settings" }, catalog.FooterPanels.Select(p => p.Id).ToArray());
         Assert.DoesNotContain(catalog.SidebarOrder, p => p.Id == "settings");
         Assert.Equal(PanelCatalog.FooterGroup, catalog.ById("settings")!.Group);
@@ -221,7 +223,7 @@ public sealed class ShellShortcutsTests : IDisposable
 
         var model = ShortcutCatalog.Build(catalog);
 
-        Assert.Equal(13, model.Panels.Rows.Count);
+        Assert.Equal(14, model.Panels.Rows.Count);
         Assert.Equal(ChordTexts, model.Panels.Rows.Select(r => r.Keys).ToArray());
         Assert.Equal(catalog.SidebarOrder.Select(p => p.Title).ToArray(), model.Panels.Rows.Select(r => r.Description).ToArray());
         Assert.Equal(new[] { "Ctrl", "Shift", "1" }, model.Panels.Rows[10].Parts);
@@ -236,8 +238,8 @@ public sealed class ShellShortcutsTests : IDisposable
 
         var commands = ShellCommandRegistry.BuildPanelCommands(catalog, panel => navigated.Add(panel.Id));
 
-        // The thirteen numbered panels in sidebar order, then Settings with its own chord.
-        Assert.Equal(14, commands.Count);
+        // The fourteen numbered panels in sidebar order, then Settings with its own chord.
+        Assert.Equal(15, commands.Count);
         Assert.Equal(
             catalog.SidebarOrder.Select(p => "nav." + p.Id).Append("nav.settings").ToArray(),
             commands.Select(c => c.Id).ToArray());
@@ -250,7 +252,7 @@ public sealed class ShellShortcutsTests : IDisposable
         });
 
         commands[11].Run();
-        commands[13].Run();
+        commands[14].Run();
         Assert.Equal(new[] { "registries", "settings" }, navigated);
     }
 

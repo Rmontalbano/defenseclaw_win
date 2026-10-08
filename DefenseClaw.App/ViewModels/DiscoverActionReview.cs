@@ -104,15 +104,18 @@ public sealed partial class DiscoverActionReview : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConfirming))]
+    [NotifyPropertyChangedFor(nameof(ShowAcknowledgement))]
     private bool _isOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConfirming))]
+    [NotifyPropertyChangedFor(nameof(ShowAcknowledgement))]
     [NotifyPropertyChangedFor(nameof(Phase))]
     private bool _isRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConfirming))]
+    [NotifyPropertyChangedFor(nameof(ShowAcknowledgement))]
     [NotifyPropertyChangedFor(nameof(Phase))]
     private bool _isFinished;
 
@@ -131,8 +134,35 @@ public sealed partial class DiscoverActionReview : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasResultOutput))]
     private string? _resultOutput;
 
+    /// <summary>
+    /// The sentence the operator must tick before the confirm button works ("I understand this reduces protection"); null or empty
+    /// when the review needs no acknowledgement. Set by <see cref="Open"/>, cleared each time it opens.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RequiresAcknowledgement))]
+    [NotifyPropertyChangedFor(nameof(ShowAcknowledgement))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private string? _acknowledgementText;
+
+    /// <summary>True once the operator ticked the acknowledgement; reset every time the review opens.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    private bool _isAcknowledged;
+
+    /// <summary>The review asks for an explicit acknowledgement before it will run (a change that reduces protection).</summary>
+    public bool RequiresAcknowledgement => !string.IsNullOrWhiteSpace(AcknowledgementText);
+
     /// <summary>The dialog is up and waiting for a decision.</summary>
     public bool IsConfirming => IsOpen && !IsRunning && !IsFinished;
+
+    /// <summary>The checkbox is drawn: the review asks for the acknowledgement and is still waiting for a decision.</summary>
+    public bool ShowAcknowledgement => RequiresAcknowledgement && IsConfirming;
+
+    /// <summary>Confirm is live: nothing is waiting on an acknowledgement the operator has not given.</summary>
+    private bool CanConfirm => !RequiresAcknowledgement || IsAcknowledged;
+
+    /// <summary>Test seam: runs a step instead of <c>Services.Cli.RunNamedAsync</c>, so a test sees the exact argv and never starts a process.</summary>
+    internal Func<string, IReadOnlyList<string>, CliRunOptions?, Task<CliInvocation>>? RunStep { get; set; }
 
     /// <summary>Which buttons the shared control offers: Cancel and confirm, none while running, then Close.</summary>
     public CommandReviewPhase Phase => IsRunning
@@ -161,6 +191,10 @@ public sealed partial class DiscoverActionReview : ObservableObject
     /// Names of the items the command acts on that came from outside and that its argv does not carry after a <c>--</c> (a registry entry named before
     /// the options): the review checks them for unusual characters like it does a target (<see cref="CommandReview.Names"/>).
     /// </param>
+    /// <param name="extraWarnings">Warning bars to show after the ones this builds (a change that reduces protection lists what it weakens).</param>
+    /// <param name="acknowledgement">
+    /// A sentence the operator must tick before the confirm button works. Null (the common case) shows no checkbox.
+    /// </param>
     public void Open(
         string heading,
         string explanation,
@@ -170,7 +204,9 @@ public sealed partial class DiscoverActionReview : ObservableObject
         string? warning = null,
         string? primaryText = null,
         Action? onCancelled = null,
-        IReadOnlyList<string>? names = null)
+        IReadOnlyList<string>? names = null,
+        IReadOnlyList<CommandReviewWarning>? extraWarnings = null,
+        string? acknowledgement = null)
     {
         ArgumentNullException.ThrowIfNull(steps);
         if (steps.Count == 0 || IsRunning)
@@ -192,6 +228,11 @@ public sealed partial class DiscoverActionReview : ObservableObject
             warnings.Add(new CommandReviewWarning("Before you continue", warning));
         }
 
+        if (extraWarnings is not null)
+        {
+            warnings.AddRange(extraWarnings);
+        }
+
         _onFinished = onFinished;
         _onCancelled = onCancelled;
 
@@ -200,6 +241,8 @@ public sealed partial class DiscoverActionReview : ObservableObject
         ResultKey = "Neutral";
         IsFinished = false;
         IsRunning = false;
+        IsAcknowledged = false;
+        AcknowledgementText = string.IsNullOrWhiteSpace(acknowledgement) ? null : acknowledgement;
         CommandReview = new CommandReview
         {
             Title = heading,
@@ -251,10 +294,11 @@ public sealed partial class DiscoverActionReview : ObservableObject
         return true;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanConfirm))]
     private async Task ConfirmAsync()
     {
-        if (!IsConfirming || CommandReview is not { } review)
+        // The button is off until the acknowledgement is ticked, but a command can be invoked without the button: ask again here.
+        if (!IsConfirming || !CanConfirm || CommandReview is not { } review)
         {
             return;
         }
@@ -285,8 +329,9 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     var options = step.Timeout is { } timeout
                         ? CliRunOptions.WithTimeout(timeout) with { RetainFullOutput = step.RetainFullOutput }
                         : step.RetainFullOutput ? CliRunOptions.JsonRead : null;
-                    var invocation = await _services.Cli
-                        .RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options)
+                    var invocation = await (RunStep is { } run
+                            ? run(step.Executable, step.Argv, options)
+                            : _services.Cli.RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options))
                         .ConfigureAwait(true);
                     invocations.Add(invocation);
 

@@ -1,0 +1,544 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.PoliciesPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             d:DataContext="{d:DesignInstance Type=vm:PoliciesPanelViewModel}"
+             mc:Ignorable="d"
+             panels:CompactLayout.Below="960">
+    <!--
+        Policies panel (CUST-281) on the 0.8.10 `defenseclaw policy` commands.
+
+        A dense table (active marker, name, built-in / custom, description) with the selected policy's `policy show` in a flush
+        inspector (ctl:DcInspector) beside it. Validate and Run tests only read and print into a copyable output box under the table.
+        Activate, Edit, Delete and Create never run from here: each opens the shared review dialog (DiscoverReviewOverlay) with the
+        exact command, and a switch that reduces protection asks for a tick first. While the list is a failed, partial or old read
+        the buttons that change something are off, with the reason as their tooltip (CatalogTrust).
+
+        Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the review / form / output / detail in that order.
+    -->
+    <Grid Style="{StaticResource DcPage}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="Gavel24"
+                           ctl:DcIcon.Section="Setup"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding CaptionText}"
+                           HasSearch="True"
+                           SearchText="{Binding SearchText}"
+                           SearchDelay="250"
+                           SearchWidth="240"
+                           SearchPlaceholder="Filter policies…"
+                           SearchAutomationName="Filter policies"
+                           SearchHelpText="Matches name, description and kind. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon Add24}"
+                               Command="{Binding CreateCommand}"
+                               IsEnabled="{Binding CanCreate}"
+                               ToolTip="{Binding CreateTip}"
+                               AutomationProperties.Name="Create policy"
+                               AutomationProperties.HelpText="Create a custom policy. The command is shown for review first." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ClipboardCheckmark24}"
+                               Command="{Binding ValidateCommand}"
+                               IsEnabled="{Binding CanRunReads}"
+                               ToolTip="Validate the Rego modules and data.json (read-only)"
+                               AutomationProperties.Name="Validate"
+                               AutomationProperties.HelpText="Run policy validate. It only reads; its output appears under the table." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon PlayCircle24}"
+                               Command="{Binding RunTestsCommand}"
+                               IsEnabled="{Binding CanRunReads}"
+                               ToolTip="Run the OPA Rego unit tests (read-only)"
+                               AutomationProperties.Name="Run tests"
+                               AutomationProperties.HelpText="Run policy test, which runs opa test on the bundled Rego. Its output appears under the table." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Read the policies again. Shortcut F5." />
+                </StackPanel>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
+
+        <!-- Banners: the result of the last action, and why the rows on screen may not authorize a change. -->
+        <StackPanel Grid.Row="1">
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="{Binding NoticeTitle}"
+                        Message="{Binding NoticeMessage}"
+                        Severity="{Binding NoticeSeverity}"
+                        IsOpen="{Binding HasNotice, Mode=OneWay}"
+                        IsClosable="True"
+                        AutomationProperties.LiveSetting="Polite" />
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="Showing an older read"
+                        Message="{Binding RefreshWarning}"
+                        Severity="Warning"
+                        IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                        IsClosable="False"
+                        AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="360" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="ListCard" Grid.Column="0">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+                        <Setter Property="Grid.ColumnSpan" Value="2" />
+                        <Style.Triggers>
+                            <!-- With the inspector open the list's right edge meets its divider. -->
+                            <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                <Setter Property="Grid.ColumnSpan" Value="1" />
+                                <Setter Property="CornerRadius" Value="0" />
+                                <Setter Property="BorderThickness" Value="1,1,0,1" />
+                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasSelection}" Value="True" />
+                                    <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <ui:DataGrid x:Name="RowList"
+                                 Grid.Row="0"
+                                 Style="{StaticResource DcDataGrid}"
+                                 RowStyle="{StaticResource DcDataGridRow}"
+                                 ItemsSource="{Binding Rows}"
+                                 SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                                 SelectionMode="Single"
+                                 ctl:DcGridColumns.Fit="True"
+                                 AutomationProperties.Name="Policies"
+                                 Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}">
+                        <ui:DataGrid.Columns>
+                            <DataGridTemplateColumn Width="0.7*" MinWidth="76" Header="Active" SortMemberPath="ActiveText">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ctl:DcStatusLabel Text="{Binding ActiveText}" Tone="{Binding ActiveTone}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Width="1.4*" MinWidth="100" Header="Name"
+                                                SortMemberPath="Name"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding Name}" />
+                            <DataGridTemplateColumn Width="0.8*" MinWidth="84" Header="Kind" SortMemberPath="Kind">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ctl:DcStatePill Text="{Binding Kind}" Tone="{Binding KindTone}" Margin="0,0,8,0" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Width="3*" MinWidth="120" Header="Description"
+                                                SortMemberPath="Description"
+                                                ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                Binding="{Binding Description}" />
+                        </ui:DataGrid.Columns>
+                    </ui:DataGrid>
+
+                    <StackPanel Grid.Row="0"
+                                Style="{StaticResource DcEmptyState}"
+                                Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
+                        <ui:ProgressRing Width="32" Height="32" IsIndeterminate="True" AutomationProperties.Name="Reading policies" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading policies from the CLI…" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0"
+                                Style="{StaticResource DcEmptyState}"
+                                MaxWidth="460"
+                                Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Gavel24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No policies found" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="defenseclaw policy list printed no policies. Create one with the + button." />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0"
+                                Style="{StaticResource DcEmptyState}"
+                                MaxWidth="460"
+                                Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldDismiss24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                        <ui:Button Margin="0,12,0,0"
+                                   Content="Try again"
+                                   Appearance="Secondary"
+                                   Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                   Command="{Binding RefreshCommand}" />
+                    </StackPanel>
+
+                    <!-- Output of Validate / Run tests: selectable, copyable, with a line that explains what it usually means. -->
+                    <Border Grid.Row="1"
+                            Padding="12,8,12,10"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{DynamicResource DcBorderBrush}"
+                            Visibility="{Binding HasOutput, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Style="{StaticResource DcBadge}" Tag="{Binding OutputTone}" Margin="0,0,8,0">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding OutputTitle}" />
+                                    </Border>
+                                </StackPanel>
+                                <ui:Button Grid.Column="1"
+                                           Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                           Appearance="Transparent"
+                                           Command="{Binding CloseOutputCommand}"
+                                           ToolTip="Close the output"
+                                           AutomationProperties.Name="Close output" />
+                            </Grid>
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Warn"
+                                       Margin="0,0,0,6"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding OutputNote}"
+                                       Visibility="{Binding HasOutputNote, Converter={StaticResource BoolToVisibility}}" />
+                            <ctl:DcCommandOutput MaxHeight="180"
+                                                 OutputName="Policy command output"
+                                                 Text="{Binding OutputText, Mode=OneWay}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Inspector: opens while a row is selected. -->
+            <ctl:DcInspector x:Name="Inspector"
+                             Grid.Column="1"
+                             Title="Policy details"
+                             IsOpen="{Binding HasSelection}"
+                             CloseCommand="{Binding ClearSelectionCommand}"
+                             CloseAutomationName="Close policy details"
+                             AutomationProperties.Name="Policy details"
+                             Content="{Binding}">
+                <ctl:DcInspector.Badges>
+                    <StackPanel Orientation="Horizontal">
+                        <ctl:DcStatePill Text="{Binding SelectedRow.Kind}" Tone="{Binding SelectedRow.KindTone}" Margin="0,0,6,0" />
+                        <ctl:DcStatePill Text="{Binding SelectedRow.ActiveText}" Tone="{Binding SelectedRow.ActiveTone}"
+                                         Visibility="{Binding SelectedRow.IsActive, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                </ctl:DcInspector.Badges>
+                <ctl:DcInspector.ContentTemplate>
+                    <DataTemplate>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0" Text="{Binding SelectedRow.Name}" />
+                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                       Margin="0,6,0,0"
+                                       Text="{Binding SelectedRow.Description}" />
+
+                            <WrapPanel Margin="0,10,0,0">
+                                <ui:Button Margin="0,0,8,4"
+                                           Appearance="Primary"
+                                           Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                           Content="Activate"
+                                           Command="{Binding ActivateCommand}"
+                                           IsEnabled="{Binding CanActivate}"
+                                           ToolTip="{Binding ActivateTip}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           AutomationProperties.Name="Activate policy"
+                                           AutomationProperties.HelpText="Validate, then review what activating this policy changes before it is applied." />
+                                <ui:Button Margin="0,0,8,4"
+                                           Appearance="Secondary"
+                                           Icon="{ctl:DcSymbolIcon DocumentEdit24}"
+                                           Content="Edit"
+                                           Command="{Binding EditCommand}"
+                                           IsEnabled="{Binding CanEdit}"
+                                           ToolTip="{Binding EditTip}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           AutomationProperties.Name="Edit policy" />
+                                <ui:Button Margin="0,0,8,4"
+                                           Appearance="Secondary"
+                                           Icon="{ctl:DcSymbolIcon Delete24}"
+                                           Content="Delete"
+                                           Command="{Binding DeleteCommand}"
+                                           IsEnabled="{Binding CanDelete}"
+                                           ToolTip="{Binding DeleteTip}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           AutomationProperties.Name="Delete policy" />
+                                <ui:Button Margin="0,0,8,4"
+                                           Appearance="Secondary"
+                                           Icon="{ctl:DcSymbolIcon Copy24}"
+                                           Content="Copy name"
+                                           Command="{Binding CopyNameCommand}"
+                                           AutomationProperties.Name="Copy policy name" />
+                            </WrapPanel>
+
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="{Binding ValidationTone}"
+                                       FontSize="12"
+                                       Margin="0,2,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ValidationText}"
+                                       AutomationProperties.LiveSetting="Polite" />
+
+                            <ui:ProgressRing Width="20" Height="20" Margin="0,10,0,0" HorizontalAlignment="Left" IsIndeterminate="True"
+                                             AutomationProperties.Name="Reading the policy"
+                                             Visibility="{Binding IsDetailLoading, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Bad"
+                                       FontSize="12"
+                                       Margin="0,10,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding DetailError}"
+                                       Visibility="{Binding HasDetailError, Converter={StaticResource BoolToVisibility}}" />
+
+                            <ItemsControl ItemsSource="{Binding DetailSections}" AutomationProperties.Name="Policy sections">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,12,0,0">
+                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,0,0,4" Text="{Binding Title}" />
+                                            <ItemsControl ItemsSource="{Binding Lines}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,0,0,3">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="132" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Style="{StaticResource DcFieldLabel}" Margin="0,0,10,0" Text="{Binding Label}" />
+                                                            <TextBlock Grid.Column="1" Style="{StaticResource DcMono}" TextWrapping="Wrap" Text="{Binding Value}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Expander Header="Raw policy show output" Margin="0,12,0,0" AutomationProperties.Name="Raw policy show output"
+                                      Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcCommandOutput MaxHeight="220" OutputName="policy show output" Text="{Binding DetailRawText, Mode=OneWay}" />
+                            </Expander>
+                        </StackPanel>
+                    </DataTemplate>
+                </ctl:DcInspector.ContentTemplate>
+            </ctl:DcInspector>
+        </Grid>
+
+        <!-- Create / edit form. Collects values only; "Review" hands the command to the review dialog below. -->
+        <Grid Grid.RowSpan="3"
+              Style="{StaticResource DcScrim}"
+              KeyboardNavigation.TabNavigation="Cycle"
+              KeyboardNavigation.ControlTabNavigation="Cycle"
+              Visibility="{Binding Form.IsOpen, Converter={StaticResource BoolToVisibility}}">
+            <Border Style="{StaticResource DcDialogCard}" MaxHeight="620" Margin="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource DcSectionHeader}" Text="{Binding Form.Heading}" AutomationProperties.HeadingLevel="Level2" />
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <!-- Create -->
+                            <StackPanel Visibility="{Binding Form.IsCreate, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Style="{StaticResource DcField}">
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Name" />
+                                    <ui:TextBox PlaceholderText="my-policy" Text="{Binding Form.Name, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Policy name" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource DcField}">
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Description (optional)" />
+                                    <ui:TextBox Text="{Binding Form.Description, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Policy description" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource DcField}">
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Start from a built-in preset" />
+                                    <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.PresetChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Form.Preset}" AutomationProperties.Name="Preset" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource DcField}">
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Scan on install" />
+                                    <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.SwitchChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Form.ScanOnInstall}" AutomationProperties.Name="Scan on install" />
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource DcField}">
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Allow-listed items skip the scan" />
+                                    <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.SwitchChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Form.AllowListBypass}" AutomationProperties.Name="Allow-listed items skip the scan" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,4,0,4" Text="Action for findings (block quarantines and blocks install; warn and allow only report)" />
+                                <WrapPanel>
+                                    <StackPanel Margin="0,0,12,8">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="CRITICAL" />
+                                        <ComboBox Width="120" ItemsSource="{x:Static vm:PolicyFormViewModel.LevelChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.CriticalAction}" AutomationProperties.Name="Action for CRITICAL findings" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,8">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="HIGH" />
+                                        <ComboBox Width="120" ItemsSource="{x:Static vm:PolicyFormViewModel.LevelChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.HighAction}" AutomationProperties.Name="Action for HIGH findings" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,8">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="MEDIUM" />
+                                        <ComboBox Width="120" ItemsSource="{x:Static vm:PolicyFormViewModel.LevelChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.MediumAction}" AutomationProperties.Name="Action for MEDIUM findings" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,8">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="LOW" />
+                                        <ComboBox Width="120" ItemsSource="{x:Static vm:PolicyFormViewModel.LevelChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.LowAction}" AutomationProperties.Name="Action for LOW findings" />
+                                    </StackPanel>
+                                </WrapPanel>
+                            </StackPanel>
+
+                            <!-- Edit -->
+                            <StackPanel Visibility="{Binding Form.IsEdit, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8" Text="{Binding Form.TargetNote}" />
+                                <ctl:DcSegmented Margin="0,0,0,10"
+                                                 SelectedValue="{Binding Form.Section, Mode=TwoWay}"
+                                                 AutomationProperties.Name="Section to edit">
+                                    <ctl:DcSegment Value="actions" Content="Actions" ToolTip="Install, file and runtime action of one severity" />
+                                    <ctl:DcSegment Value="scanner" Content="Scanner" ToolTip="Per-scanner override of one severity" />
+                                    <ctl:DcSegment Value="guardrail" Content="Guardrail" ToolTip="Thresholds, trust level, patterns and severity mappings" />
+                                    <ctl:DcSegment Value="firewall" Content="Firewall" ToolTip="Default action, domains, blocked destinations and ports" />
+                                </ctl:DcSegmented>
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,8" Text="Leave a field (unchanged) or empty to leave that value alone." />
+
+                                <StackPanel Visibility="{Binding Form.IsScannerSection, Converter={StaticResource BoolToVisibility}}" Style="{StaticResource DcField}">
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Scanner type" />
+                                    <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.ScannerChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Form.ScannerType}" AutomationProperties.Name="Scanner type" />
+                                </StackPanel>
+                                <StackPanel Visibility="{Binding Form.ShowSeverity, Converter={StaticResource BoolToVisibility}}" Style="{StaticResource DcField}">
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Severity" />
+                                    <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.SeverityChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding Form.Severity}" AutomationProperties.Name="Severity" />
+                                </StackPanel>
+                                <CheckBox Margin="0,0,0,8" Content="Remove this override (revert to the global action)"
+                                          Visibility="{Binding Form.IsScannerSection, Converter={StaticResource BoolToVisibility}}"
+                                          IsChecked="{Binding Form.RemoveOverride}" AutomationProperties.Name="Remove the override" />
+                                <StackPanel Visibility="{Binding Form.ShowActionFields, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Runtime (disable: the item cannot run)" />
+                                        <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.RuntimeChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.Runtime}" AutomationProperties.Name="Runtime action" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="File (quarantine: move it aside)" />
+                                        <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.FileChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.File}" AutomationProperties.Name="File action" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Install" />
+                                        <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.InstallChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.Install}" AutomationProperties.Name="Install action" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding Form.IsGuardrailSection, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Block threshold (findings at or above this rank are blocked)" />
+                                        <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.ThresholdChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.BlockThreshold}" AutomationProperties.Name="Block threshold" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Alert threshold" />
+                                        <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.ThresholdChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.AlertThreshold}" AutomationProperties.Name="Alert threshold" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Cisco trust level" />
+                                        <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.TrustChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.TrustLevel}" AutomationProperties.Name="Cisco trust level" />
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Add a pattern (category, then the pattern)" />
+                                    <Grid Margin="0,2,0,8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <ui:TextBox PlaceholderText="category" Margin="0,0,8,0" Text="{Binding Form.AddPatternCategory, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Category of the pattern to add" />
+                                        <ui:TextBox Grid.Column="1" PlaceholderText="pattern" Text="{Binding Form.AddPattern, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Pattern to add" />
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Remove a pattern (category, then the pattern)" />
+                                    <Grid Margin="0,2,0,8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <ui:TextBox PlaceholderText="category" Margin="0,0,8,0" Text="{Binding Form.RemovePatternCategory, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Category of the pattern to remove" />
+                                        <ui:TextBox Grid.Column="1" PlaceholderText="pattern" Text="{Binding Form.RemovePattern, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Pattern to remove" />
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Set a severity mapping (category, then severity)" />
+                                    <Grid Margin="0,2,0,8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <ui:TextBox PlaceholderText="category" Margin="0,0,8,0" Text="{Binding Form.MappingCategory, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Category of the severity mapping" />
+                                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:PolicyFormViewModel.SeverityChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.MappingSeverity}" AutomationProperties.Name="Severity of the mapping" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding Form.IsFirewallSection, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Default action" />
+                                        <ComboBox ItemsSource="{x:Static vm:PolicyFormViewModel.FirewallActionChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding Form.DefaultAction}" AutomationProperties.Name="Firewall default action" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Allow a domain" />
+                                        <ui:TextBox Text="{Binding Form.AddDomain, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Domain to allow" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Stop allowing a domain" />
+                                        <ui:TextBox Text="{Binding Form.RemoveDomain, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Domain to remove" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Block a destination (IP or host)" />
+                                        <ui:TextBox Text="{Binding Form.AddBlocked, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Destination to block" />
+                                    </StackPanel>
+                                    <StackPanel Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Unblock a destination" />
+                                        <ui:TextBox Text="{Binding Form.RemoveBlocked, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Destination to unblock" />
+                                    </StackPanel>
+                                    <WrapPanel>
+                                        <StackPanel Margin="0,0,12,8">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Allow a port" />
+                                            <ui:TextBox Width="110" Text="{Binding Form.AddPort, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Port to allow" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,8">
+                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="Stop allowing a port" />
+                                            <ui:TextBox Width="110" Text="{Binding Form.RemovePort, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Port to remove" />
+                                        </StackPanel>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <TextBlock Style="{StaticResource DcToneText}" Tag="Bad" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
+                                       Text="{Binding Form.Error}" AutomationProperties.LiveSetting="Assertive" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                        <ui:Button Content="Cancel" Margin="0,0,8,0" Command="{Binding CancelFormCommand}" AutomationProperties.Name="Cancel the form" />
+                        <ui:Button Content="{Binding Form.SubmitLabel}" Appearance="Primary" Command="{Binding SubmitFormCommand}" AutomationProperties.Name="Review the command" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
+        <panels:DiscoverReviewOverlay Grid.RowSpan="3" DataContext="{Binding Review}" />
+    </Grid>
+</UserControl>
