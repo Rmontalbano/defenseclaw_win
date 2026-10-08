@@ -520,6 +520,49 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+                <!-- Audit archive: a copy of an earlier DefenseClaw's audit.db the Audit panel can show, read-only (CUST-299). -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="DatabaseSearch24"
+                                          Section="Observe"
+                                          Content="Audit archive" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="An upgrade purges the old audit history. If you kept a copy of the old audit.db outside the DefenseClaw folder, choose it here and the Audit panel gets a Live | Archive switch. The file is only ever read (opened read-only, nothing is written beside it)." />
+                        <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Archived audit database (optional)" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Grid.Column="0"
+                                        PlaceholderText="C:\Users\you\DefenseClaw-archive\audit-2026-10-08.db"
+                                        AutomationProperties.Name="Archived audit database path"
+                                        Text="{Binding ArchivePathText, UpdateSourceTrigger=PropertyChanged}" />
+                            <ui:Button Grid.Column="1" Margin="8,0,0,0"
+                                       Content="Browse…"
+                                       Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                       Command="{Binding BrowseArchiveCommand}"
+                                       AutomationProperties.HelpText="Choose the archived audit.db." />
+                        </Grid>
+                        <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                            <ui:Button Content="Apply"
+                                       Icon="{ctl:DcSymbolIcon Checkmark24}"
+                                       Command="{Binding ApplyArchiveCommand}"
+                                       AutomationProperties.HelpText="Checks that the file exists, is a DefenseClaw audit database and is outside the live DefenseClaw folder, then saves it." />
+                            <ui:Button Margin="8,0,0,0"
+                                       Content="Clear"
+                                       Command="{Binding ClearArchiveCommand}"
+                                       AutomationProperties.HelpText="Stops using the archive. The file itself is left alone." />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource ProblemLine}"
+                                   Visibility="{Binding HasArchiveProblem, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding ArchiveProblem}" />
+                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding ArchiveMessage}" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Advanced: the developer runtime selector. Off by default; off is the installed runtime, unchanged. -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>

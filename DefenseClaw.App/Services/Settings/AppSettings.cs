@@ -19,6 +19,7 @@ namespace DefenseClaw.App.Services.Settings;
 /// <param name="Connection">Where the DefenseClaw CLI is, when it is not where the app would look.</param>
 /// <param name="Updates">What the update check remembers between runs.</param>
 /// <param name="Developer">The developer runtime selector (Settings -> Advanced); off unless a developer turns it on.</param>
+/// <param name="Archive">The optional archived audit database the Audit panel can show beside the live one (CUST-299).</param>
 internal sealed record AppSettings(
     AppearanceSettings Appearance,
     MonitoringSettings Monitoring,
@@ -26,7 +27,8 @@ internal sealed record AppSettings(
     StartupSettings Startup,
     ConnectionSettings Connection,
     UpdateSettings Updates,
-    DeveloperSettings Developer)
+    DeveloperSettings Developer,
+    ArchiveSettings Archive)
 {
     /// <summary>A fresh install: every section at its defaults.</summary>
     public static AppSettings Defaults { get; } = new(
@@ -36,7 +38,8 @@ internal sealed record AppSettings(
         new StartupSettings(),
         new ConnectionSettings(),
         new UpdateSettings(),
-        new DeveloperSettings());
+        new DeveloperSettings(),
+        new ArchiveSettings());
 }
 
 /// <summary>The sections of <see cref="AppSettings"/>, as flags: what <see cref="AppSettingsChangedEventArgs.Sections"/> says changed.</summary>
@@ -51,7 +54,8 @@ internal enum AppSettingsSections
     Connection = 16,
     Updates = 32,
     Developer = 64,
-    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates | Developer,
+    Archive = 128,
+    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates | Developer | Archive,
 }
 
 /// <summary>Monitoring: how often the gateway's health is polled, and whether polling is paused (the Mac's "pulse interval").</summary>
@@ -205,6 +209,24 @@ internal sealed record DeveloperSettings
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
+/// <summary>
+/// Archive: where the archived audit database is (CUST-299), a copy of an earlier DefenseClaw's <c>audit.db</c> kept outside the
+/// live data folder. Null (the default) means there is none and the Audit panel shows no Live | Archive switch. The form validates
+/// before it saves (<see cref="Core.Audit.AuditArchive"/>), and the panel checks again each time it opens the archive: a file that
+/// has since moved or been damaged is an error state in the panel, not a crash.
+/// </summary>
+internal sealed record ArchiveSettings
+{
+    private readonly string? _path;
+
+    /// <summary>Full path to the archived <c>audit.db</c>; a blank value is null.</summary>
+    public string? Path
+    {
+        get => _path;
+        init => _path = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+}
+
 /// <summary>What <see cref="AppSettingsStore.Changed"/> reports.</summary>
 internal sealed class AppSettingsChangedEventArgs : EventArgs
 {
@@ -263,6 +285,11 @@ internal sealed class AppSettingsChangedEventArgs : EventArgs
         if (before.Developer != after.Developer)
         {
             sections |= AppSettingsSections.Developer;
+        }
+
+        if (before.Archive != after.Archive)
+        {
+            sections |= AppSettingsSections.Archive;
         }
 
         return sections;

@@ -56,14 +56,20 @@ public sealed class AuditCorrelationReader
 
     private readonly string _connectionString;
 
-    public AuditCorrelationReader(string databasePath)
+    public AuditCorrelationReader(string databasePath, bool immutable = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         DatabasePath = databasePath;
-        _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
+        IsImmutable = immutable;
+        _connectionString = immutable
+            ? AuditReader.BuildImmutableConnectionString(databasePath)
+            : AuditReader.BuildReadOnlyConnectionString(databasePath);
     }
 
     public string DatabasePath { get; }
+
+    /// <summary>True over an archived copy; see <see cref="AuditReader.BuildImmutableConnectionString"/>.</summary>
+    public bool IsImmutable { get; }
 
     /// <summary>
     /// Up to <see cref="RelatedLimit"/> other events related to the one given: those of its run when it has one,

@@ -227,18 +227,26 @@ public sealed class AuditReader
     /// How many rows a run filter may walk the retention index past before the run's own index is used instead; see
     /// <see cref="DefaultRunWalkBudget"/>. Tests lower it.
     /// </param>
-    public AuditReader(string databasePath, int commonRowThreshold = DefaultCommonRowThreshold, int runWalkBudget = DefaultRunWalkBudget)
+    public AuditReader(string databasePath, int commonRowThreshold = DefaultCommonRowThreshold, int runWalkBudget = DefaultRunWalkBudget, bool immutable = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(commonRowThreshold, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(runWalkBudget, 1);
         DatabasePath = databasePath;
+        IsImmutable = immutable;
         _commonRowThreshold = commonRowThreshold;
         _runWalkBudget = runWalkBudget;
-        _connectionString = BuildReadOnlyConnectionString(databasePath);
+        _connectionString = immutable ? BuildImmutableConnectionString(databasePath) : BuildReadOnlyConnectionString(databasePath);
     }
 
     public string DatabasePath { get; }
+
+    /// <summary>
+    /// True for a reader over an archived copy (<see cref="BuildImmutableConnectionString"/>): the file is opened
+    /// <c>mode=ro&amp;immutable=1</c>, so SQLite takes no locks and never looks for, creates or writes a <c>-wal</c>,
+    /// <c>-shm</c> or <c>-journal</c> next to it.
+    /// </summary>
+    public bool IsImmutable { get; }
 
     public bool Exists => File.Exists(DatabasePath);
 
@@ -309,6 +317,25 @@ public sealed class AuditReader
             Mode = SqliteOpenMode.ReadOnly,
             DefaultTimeout = BusyTimeoutSeconds,
         }.ToString();
+
+    /// <summary>
+    /// The connection string for an archived database: the path as a <c>file:</c> URI with <c>mode=ro&amp;immutable=1</c>.
+    /// <c>immutable=1</c> tells SQLite the file cannot change, so it takes no locks and does not look for a hot journal or a
+    /// <c>-wal</c>: nothing is ever created next to the archive, not even the empty <c>-shm</c> a plain read-only open of
+    /// a WAL database makes. Pooling is off so no connection keeps the file open after a query. Only for a file nothing writes.
+    /// </summary>
+    public static string BuildImmutableConnectionString(string databasePath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(databasePath);
+        var uri = new Uri(Path.GetFullPath(databasePath)).AbsoluteUri + "?mode=ro&immutable=1";
+        return new SqliteConnectionStringBuilder
+        {
+            DataSource = uri,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false,
+            DefaultTimeout = BusyTimeoutSeconds,
+        }.ToString();
+    }
 
     /// <summary>
     /// Fetches one keyset page. Never uses OFFSET.

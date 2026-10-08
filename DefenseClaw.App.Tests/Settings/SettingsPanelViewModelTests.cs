@@ -907,6 +907,11 @@ internal sealed class FakePlatform
     /// <summary>What the folder picker returns; null is "cancelled".</summary>
     public string? PickedFolder { get; set; }
 
+    /// <summary>What the archive picker returns; null is "cancelled".</summary>
+    public string? PickedArchive { get; set; }
+
+    public string? ArchivePickStart { get; private set; }
+
     public string? Copied { get; private set; }
 
     public bool ClipboardBusy { get; set; }
@@ -942,6 +947,11 @@ internal sealed class FakePlatform
             return Picked;
         },
         PickFolder = (_, _) => PickedFolder,
+        PickArchiveDatabase = start =>
+        {
+            ArchivePickStart = start;
+            return PickedArchive;
+        },
         CopyText = text =>
         {
             if (ClipboardBusy)

@@ -16,10 +16,12 @@ internal static class AuditTestDatabase
     /// default 24-hour window. <paramref name="connectorFor"/> maps a row index to its connector (null =
     /// a platform row).
     /// </summary>
-    public static void Create(string path, int rows, Func<int, string?>? connectorFor = null, string? structuredJson = null)
+    public static void Create(string path, int rows, Func<int, string?>? connectorFor = null, string? structuredJson = null, DateTimeOffset? newest = null, string? idPrefix = null)
     {
         var schema = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "audit-schema.sql"));
-        var now = DateTimeOffset.UtcNow;
+
+        // "newest" dates the first row (one second before it) instead of now: an archive's history is old.
+        var now = newest ?? DateTimeOffset.UtcNow;
 
         using (var connection = Open(path))
         {
@@ -45,7 +47,7 @@ internal static class AuditTestDatabase
 
             for (var i = 0; i < rows; i++)
             {
-                id.Value = "evt-" + i.ToString("D6", CultureInfo.InvariantCulture);
+                id.Value = (idPrefix ?? "evt-") + i.ToString("D6", CultureInfo.InvariantCulture);
                 timestamp.Value = (now - TimeSpan.FromSeconds(i + 1)).UtcDateTime
                     .ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture) + "Z";
                 details.Value = "synthetic event " + i.ToString(CultureInfo.InvariantCulture);

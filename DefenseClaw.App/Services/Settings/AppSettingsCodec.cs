@@ -29,6 +29,7 @@ internal static class AppSettingsCodec
     public const string ConnectionKey = "connection";
     public const string UpdatesKey = "updates";
     public const string DeveloperKey = "developer";
+    public const string ArchiveKey = "archive";
 
     /// <summary>Reads every section out of <paramref name="root"/>. Never throws.</summary>
     public static AppSettings Read(JsonObject root)
@@ -42,7 +43,8 @@ internal static class AppSettingsCodec
             ReadStartup(Section(root, StartupKey)),
             ReadConnection(Section(root, ConnectionKey)),
             ReadUpdates(Section(root, UpdatesKey)),
-            ReadDeveloper(Section(root, DeveloperKey)));
+            ReadDeveloper(Section(root, DeveloperKey)),
+            ReadArchive(Section(root, ArchiveKey)));
     }
 
     /// <summary>Writes the given sections of <paramref name="settings"/> into <paramref name="root"/>, leaving every other member as it is.</summary>
@@ -101,6 +103,12 @@ internal static class AppSettingsCodec
             Put(target, "hostDataFolder", settings.Developer.HostDataFolder);
         }
 
+        if ((sections & AppSettingsSections.Archive) != 0)
+        {
+            var target = SectionForWrite(root, ArchiveKey);
+            Put(target, "path", settings.Archive.Path);
+        }
+
         if ((sections & AppSettingsSections.Updates) != 0)
         {
             var target = SectionForWrite(root, UpdatesKey);
@@ -125,6 +133,11 @@ internal static class AppSettingsCodec
                 ContainerName = ReadString(section["containerName"]),
                 HostDataFolder = ReadString(section["hostDataFolder"]),
             };
+
+    private static ArchiveSettings ReadArchive(JsonObject? section) =>
+        section is null
+            ? new ArchiveSettings()
+            : new ArchiveSettings { Path = ReadString(section["path"]) };
 
     private static AppearanceSettings ReadAppearance(JsonObject? section) =>
         section is null

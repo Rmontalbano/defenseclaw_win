@@ -789,6 +789,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         });
 
         LoadDeveloperFromSettings();
+        LoadArchiveFromSettings();
     }
 
     /// <summary>Saves a change to the settings store, unless the page is only copying the store's values in; a write the file refuses is reported.</summary>

@@ -45,7 +45,8 @@ public sealed class AppSettingsStoreTests : IDisposable
             GatewayUrl = "http://127.0.0.1:18971",
             ContainerName = "dc-next-1",
             HostDataFolder = @"D:\next\data",
-        });
+        },
+        new ArchiveSettings { Path = @"D:\archive\audit-before-upgrade.db" });
 
     // ------------------------------------------------------------------ defaults
 
@@ -115,6 +116,27 @@ public sealed class AppSettingsStoreTests : IDisposable
         var reloaded = Fresh(path).Current;
         Assert.Equal(changed, reloaded.Monitoring);
         Assert.Equal(AppSettings.Defaults with { Monitoring = changed }, reloaded);
+    }
+
+    [Fact]
+    public void The_archive_path_round_trips_alone_is_trimmed_and_defaults_to_none()
+    {
+        var path = NewPath();
+        Assert.Null(Fresh(path).Current.Archive.Path);
+
+        _ = Fresh(path).Update(s => s with { Archive = new ArchiveSettings { Path = "  D:\\archive\\audit.db  " } });
+
+        Assert.Equal(@"D:\archive\audit.db", Fresh(path).Current.Archive.Path);
+        Assert.Equal(@"D:\archive\audit.db", (string?)ReadJson(path)["archive"]!["path"]);
+
+        // Clearing removes the member rather than writing null.
+        _ = Fresh(path).Update(s => s with { Archive = new ArchiveSettings() });
+        Assert.Null(Fresh(path).Current.Archive.Path);
+        Assert.Null(ReadJson(path)["archive"]!["path"]);
+
+        // A hand-edited file with the wrong type for the path reads as "none".
+        WriteFile(path, """{ "archive": { "path": 7 } }""");
+        Assert.Null(Fresh(path).Current.Archive.Path);
     }
 
     [Fact]

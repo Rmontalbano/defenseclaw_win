@@ -88,7 +88,7 @@ public sealed partial class AuditPanelViewModel
         (string.Equals(SelectedBucket, AnyBucket, StringComparison.Ordinal) ? 0 : 1)
         + (SelectedSeverity == SeverityOption.Any ? 0 : 1)
         + (ReferenceEquals(SelectedConnector, ConnectorOption.All) ? 0 : 1)
-        + (SelectedRange == TimeRangeOption.Day ? 0 : 1)
+        + (SelectedRange == DefaultRange ? 0 : 1)
         + (string.IsNullOrWhiteSpace(ActionFilter) ? 0 : 1);
 
     public string FiltersHeader => ActiveFilterCount > 0 ? $"Filters ({ActiveFilterCount.ToString(CultureInfo.InvariantCulture)})" : "Filters";
@@ -142,6 +142,8 @@ public sealed partial class AuditPanelViewModel
 
         BatchFilterChanges(() =>
         {
+            // The links come from live counts (Overview's Blocks tile), so they mean the live log.
+            SourceKey = SourceLive;
             ActivePreset = name;
             SearchText = string.Empty;
             RunFilter = string.Empty;
@@ -206,10 +208,18 @@ public sealed partial class AuditPanelViewModel
     [RelayCommand]
     private void ClearRunFilter() => RunFilter = string.Empty;
 
-    private AuditCorrelationReader Correlation =>
-        _correlationReader is { } reader && string.Equals(reader.DatabasePath, Services.Audit.DatabasePath, StringComparison.Ordinal)
-            ? reader
-            : _correlationReader = new AuditCorrelationReader(Services.Audit.DatabasePath);
+    private AuditCorrelationReader Correlation
+    {
+        get
+        {
+            var source = ActiveReader ?? Services.Audit;
+            return _correlationReader is { } reader
+                   && reader.IsImmutable == source.IsImmutable
+                   && string.Equals(reader.DatabasePath, source.DatabasePath, StringComparison.Ordinal)
+                ? reader
+                : _correlationReader = new AuditCorrelationReader(source.DatabasePath, source.IsImmutable);
+        }
+    }
 
     /// <summary>
     /// The selected event changed: drop what the inspector listed for the last one (cancelling its queries, a running statement
@@ -237,7 +247,7 @@ public sealed partial class AuditPanelViewModel
         FindingsNote = string.Empty;
         IsCorrelating = false;
 
-        if (row is null || !Services.Audit.Exists)
+        if (row is null || ActiveReader is not { Exists: true })
         {
             return;
         }
@@ -363,9 +373,11 @@ public sealed partial class AuditPanelViewModel
 
     private async Task ExportCoreAsync()
     {
-        if (!Services.Audit.Exists)
+        if (ActiveReader is not { Exists: true } reader)
         {
-            ExportNote = "There is no audit database to export from yet.";
+            ExportNote = IsArchive
+                ? "There is no readable archive to export from."
+                : "There is no audit database to export from yet.";
             return;
         }
 
@@ -385,10 +397,10 @@ public sealed partial class AuditPanelViewModel
         {
             var query = BuildQuery(null) with { Limit = ExportCap };
             var platformOnly = SelectedConnector.PlatformOnly;
-            var pageRead = Services.Audit.QueryAsync(query, token);
+            var pageRead = reader.QueryAsync(query, token);
             var totalRead = platformOnly || query.ActionAnyOf is { Count: > 0 }
                 ? null
-                : Services.Audit.CountAsync(query with { After = null, Limit = PageSize }, token);
+                : reader.CountAsync(query with { After = null, Limit = PageSize }, token);
             await Task.WhenAll(pageRead, totalRead ?? Task.CompletedTask);
 
             var page = await pageRead;

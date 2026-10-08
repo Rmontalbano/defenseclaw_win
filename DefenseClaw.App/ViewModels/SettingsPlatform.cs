@@ -27,6 +27,9 @@ internal sealed class SettingsPlatform
     /// </summary>
     public Func<string?, string?> PickCliExecutable { get; init; } = PickWithDialog;
 
+    /// <summary>The file picker for the archived <c>audit.db</c> (CUST-299): the folder to start in (or null), the chosen path (or null when cancelled).</summary>
+    public Func<string?, string?> PickArchiveDatabase { get; init; } = PickArchiveWithDialog;
+
     /// <summary>The folder picker (title, folder to start in): the chosen folder, or null when cancelled.</summary>
     public Func<string, string?, string?> PickFolder { get; init; } = PickFolderWithDialog;
 
@@ -53,6 +56,27 @@ internal sealed class SettingsPlatform
 
         var owner = Application.Current?.MainWindow;
         return (owner is null ? dialog.ShowDialog() : dialog.ShowDialog(owner)) == true ? dialog.FolderName : null;
+    }
+
+    private static string? PickArchiveWithDialog(string? startDirectory)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the archived audit database",
+            Filter = "SQLite databases (*.db;*.sqlite)|*.db;*.sqlite|All files (*.*)|*.*",
+            CheckFileExists = true,
+            CheckPathExists = true,
+            Multiselect = false,
+            ReadOnlyChecked = true,
+        };
+
+        if (!string.IsNullOrEmpty(startDirectory) && Directory.Exists(startDirectory))
+        {
+            dialog.InitialDirectory = startDirectory;
+        }
+
+        var owner = Application.Current?.MainWindow;
+        return (owner is null ? dialog.ShowDialog() : dialog.ShowDialog(owner)) == true ? dialog.FileName : null;
     }
 
     private static string? PickWithDialog(string? startDirectory)

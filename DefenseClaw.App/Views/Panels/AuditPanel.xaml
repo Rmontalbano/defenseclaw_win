@@ -206,8 +206,37 @@
         <!-- Filter strip (no card of its own). Bucket is read from the database, so it can be long: a combo box, not a segmented
              control. The caption under it is the result count (in the toolbar) and what cannot be read. -->
         <StackPanel Grid.Row="1">
+            <!-- The archive on screen (Live | Archive below): what it is, or why it cannot be shown. Read-only: nothing in this panel changes the file. -->
+            <ui:InfoBar x:Name="ArchiveBannerBar"
+                        Margin="{StaticResource DcCardGap}"
+                        Severity="Informational"
+                        IsClosable="False"
+                        Title="{Binding ArchiveBanner}"
+                        Message="This is a read-only copy of an earlier DefenseClaw audit database. Switch to Live for current events."
+                        IsOpen="{Binding ShowArchiveBanner, Mode=OneWay}"
+                        AutomationProperties.LiveSetting="Polite" />
+            <ui:InfoBar x:Name="ArchiveProblemBar"
+                        Margin="{StaticResource DcCardGap}"
+                        Severity="Error"
+                        IsClosable="False"
+                        Title="The archive could not be shown"
+                        Message="{Binding ArchiveProblem}"
+                        IsOpen="{Binding ShowArchiveProblem, Mode=OneWay}"
+                        AutomationProperties.LiveSetting="Polite" />
+
             <!-- The Mac's "Audit View": five presets, then the run chip while a run is filtered, then what cannot be read. -->
             <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                <!-- Which database: shown while Settings names an archive (or the archive is on screen, so the way back stays). -->
+                <ctl:DcSegmented x:Name="SourceSwitch"
+                                 Margin="0,0,12,8"
+                                 SelectedValue="{Binding SourceKey, Mode=TwoWay}"
+                                 Visibility="{Binding ShowSourceSwitch, Converter={StaticResource BoolToVisibility}}"
+                                 AutomationProperties.Name="Audit source"
+                                 AutomationProperties.HelpText="Live shows the current audit log. Archive shows the read-only audit database kept from before an upgrade, set in Settings.">
+                    <ctl:DcSegment Value="live" Content="Live" ToolTip="The current audit log" />
+                    <ctl:DcSegment Value="archive" Content="Archive" ToolTip="The archived audit database from before the upgrade (read-only)" />
+                </ctl:DcSegmented>
+
                 <ctl:DcSegmented Margin="0,0,12,8"
                                  SelectedValue="{Binding ActivePreset, Mode=TwoWay}"
                                  AutomationProperties.Name="Audit view"

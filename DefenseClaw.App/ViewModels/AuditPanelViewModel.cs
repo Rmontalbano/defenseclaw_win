@@ -184,17 +184,23 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        RefreshArchiveSetting();
         if (!Services.Audit.Exists)
         {
-            IsEmpty = true;
-            EmptyTitle = "No audit database yet";
-            EmptyDetail = $"{Services.Paths.AuditDatabasePath} appears after DefenseClaw records its first event.";
-            ResultSummary = string.Empty;
+            ShowNoLiveDatabase();
             return;
         }
 
         // The filter lists load inside LoadAsync, the first time it finds the database.
         await LoadAsync(append: false, cancellationToken);
+    }
+
+    private void ShowNoLiveDatabase()
+    {
+        IsEmpty = true;
+        EmptyTitle = "No audit database yet";
+        EmptyDetail = $"{Services.Paths.AuditDatabasePath} appears after DefenseClaw records its first event.";
+        ResultSummary = string.Empty;
     }
 
     partial void OnSelectedBucketChanged(string value) => Reload();
@@ -286,7 +292,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         ActionFilter = string.Equals(value, AnyAction, StringComparison.Ordinal) ? string.Empty : value;
 
     [RelayCommand]
-    private Task RefreshAsync() => LoadAsync(append: false, CancellationToken.None);
+    private Task RefreshAsync() => IsArchive ? LastLoad = EnterArchiveAsync() : LoadAsync(append: false, CancellationToken.None);
 
     [RelayCommand]
     private Task LoadMoreAsync() => LoadAsync(append: true, CancellationToken.None);
@@ -352,7 +358,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             SelectedBucket = AnyBucket;
             SelectedSeverity = SeverityOption.Any;
             SelectedConnector = Connectors[0];
-            SelectedRange = TimeRangeOption.Day;
+            SelectedRange = DefaultRange;
             SelectedActionOption = AnyAction;
             ActionFilter = string.Empty;
             SearchText = string.Empty;
@@ -427,14 +433,14 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         }
     }
 
-    private async Task LoadFilterOptionsAsync(CancellationToken cancellationToken)
+    private async Task LoadFilterOptionsAsync(AuditReader reader, CancellationToken cancellationToken)
     {
         try
         {
             // Three loose index scans (a millisecond each), started together rather than one after the other.
-            var bucketsRead = Services.Audit.ListBucketsAsync(cancellationToken);
-            var connectorsRead = Services.Audit.ListConnectorsAsync(cancellationToken);
-            var actionsRead = Services.Audit.ListActionsAsync(cancellationToken);
+            var bucketsRead = reader.ListBucketsAsync(cancellationToken);
+            var connectorsRead = reader.ListConnectorsAsync(cancellationToken);
+            var actionsRead = reader.ListActionsAsync(cancellationToken);
             await Task.WhenAll(bucketsRead, connectorsRead, actionsRead);
             var buckets = await bucketsRead;
             var connectors = await connectorsRead;
@@ -477,8 +483,20 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     private async Task LoadAsync(bool append, CancellationToken cancellationToken)
     {
-        if (!Services.Audit.Exists)
+        // The reader of the source on screen. An archive that failed its check has none: that is its error state, already shown.
+        var reader = ActiveReader;
+        if (reader is null)
         {
+            return;
+        }
+
+        if (!reader.Exists)
+        {
+            if (IsArchive)
+            {
+                ShowArchiveError("The archive file is no longer there.");
+            }
+
             return;
         }
 
@@ -517,11 +535,11 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             // note a failed read sets is cleared by a successful query below, as before. They are read beside
             // the page and its count, not ahead of them: the first Audit visit used to sit through three
             // serial DISTINCT scans before the first row was requested.
-            Task filterOptions = _filterOptionsLoaded ? Task.CompletedTask : LoadFilterOptionsAsync(token);
+            Task filterOptions = _filterOptionsLoaded ? Task.CompletedTask : LoadFilterOptionsAsync(reader, token);
 
             var query = BuildQuery(append ? _cursor : null);
             var platformOnly = SelectedConnector.PlatformOnly;
-            var pageRead = Services.Audit.QueryAsync(query, token);
+            var pageRead = reader.QueryAsync(query, token);
 
             // A SQL COUNT cannot express the platform-only refinement, so that view reports what is actually on screen
             // rather than a number that would not match it. Every other view counts beside the page, not after it.
@@ -530,7 +548,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             // itself, which stops at 100 matches, takes milliseconds. So those views do not count either.
             var countable = !platformOnly && query.ActionAnyOf is not { Count: > 0 };
             var totalRead = countable
-                ? Services.Audit.CountAsync(query with { After = null, Limit = PageSize }, token)
+                ? reader.CountAsync(query with { After = null, Limit = PageSize }, token)
                 : null;
 
             await Task.WhenAll(filterOptions, pageRead, totalRead ?? Task.CompletedTask);
@@ -596,10 +614,21 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 #pragma warning disable CA1031 // The DB is owned by the gateway; a busy file must degrade, not crash.
         catch (Exception ex) when (ex is SqliteException or IOException or InvalidOperationException)
         {
-            StatusNote = $"audit.db could not be read: {ex.Message}";
-            IsEmpty = Rows.Count == 0;
-            EmptyTitle = "Audit database unavailable";
-            EmptyDetail = ex.Message;
+            if (IsArchive)
+            {
+                // A failure for a source the operator has since left is not the archive's to report.
+                if (IsCurrentGeneration(generation))
+                {
+                    ShowArchiveError(AuditArchive.Describe(ex));
+                }
+            }
+            else
+            {
+                StatusNote = $"audit.db could not be read: {ex.Message}";
+                IsEmpty = Rows.Count == 0;
+                EmptyTitle = "Audit database unavailable";
+                EmptyDetail = ex.Message;
+            }
         }
 #pragma warning restore CA1031
         finally
