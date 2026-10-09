@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using DefenseClaw.Core.Inventory;
+using DefenseClaw.Core.Text;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -12,9 +13,9 @@ namespace DefenseClaw.App.ViewModels;
 /// <para>
 /// <b>Where each state can be seen.</b> <c>ai_discovery_state.json</c> and <c>inventory.db</c> only ever hold the signals still present
 /// (new, changed, seen): the scanner drops a <c>gone</c> signal when it writes either file, so a gone signal exists only in the
-/// gateway's report of the scan that noticed it (<c>GET /api/v1/ai-usage</c>), which this panel does not read (CUST-310). So a gone count
-/// can come only from a scan summary, and no card or model row is gone until that report is read; the ordering and the pill handle every
-/// state anyway.
+/// gateway's report of the scan that noticed it (<c>GET /api/v1/ai-usage</c>). The panel reads that report (CUST-310) only to add the
+/// model fields a newer runtime sends to the signals the files list, so it takes no gone signal from it: a gone count can come only from
+/// a scan summary, and no card or model row is gone; the ordering and the pill handle every state anyway.
 /// </para>
 /// </summary>
 public static class DiscoveryStates
@@ -116,10 +117,17 @@ public sealed record DiscoveryComponentRef(string Ecosystem, string Name, string
 
 /// <summary>
 /// The <c>model</c> block of a signal: an AI model the scanner found on disk (<c>model_file</c>) or listed by a local model server
-/// (<c>model_api</c>, <c>model_runtime</c>). It is the fields DefenseClaw 0.8.10's own <c>AIUsageModel</c> reads. Model ids live here and
-/// not in the product, because they are user-controlled and unbounded. A field the scanner did not report is empty (text), 0 (size) or
-/// false (pinned) - never made up. A newer runtime adds an owner, a relevance, a discovery confidence and a lineage to the block; they are
-/// not read here (CUST-310), so a payload that has them is shown for what 0.8.10 would have shown of it.
+/// (<c>model_api</c>, <c>model_runtime</c>). The positional members are the fields DefenseClaw 0.8.10's own <c>AIUsageModel</c> reads. Model
+/// ids live here and not in the product, because they are user-controlled and unbounded. A field the scanner did not report is empty
+/// (text), 0 (size) or false (pinned) - never made up.
+/// <para>
+/// The four <c>init</c> members are what a newer runtime adds to the block (<c>LocalModelInfo</c> in its
+/// <c>internal/inventory/ai_discovery.go</c>, DefenseClaw source commit 95159fd): the application the model belongs to, how central it
+/// is to that application, how sure the scanner is of it, and its lineage. 0.8.10 sends none of them (its own reader does not know them,
+/// and its gateway binary has no such member names), so on 0.8.10 they stay empty and null, which is what keeps its view as it was: a
+/// column or a filter built on one appears only when some model carries it. The state file, <c>inventory.db</c> and the gateway's
+/// <c>GET /api/v1/ai-usage</c> all carry the same block, and all are read the same way.
+/// </para>
 /// </summary>
 /// <param name="Id">The model's name; a block with none is not a model this panel can list.</param>
 /// <param name="Status"><c>installed</c> or <c>loaded</c>.</param>
@@ -135,6 +143,28 @@ public sealed record DiscoveryModelInfo(
     long SizeBytes,
     bool Pinned)
 {
+    /// <summary>The application the model belongs to (<c>owner_application</c>), when the scanner could attribute it. Empty when it did not.</summary>
+    public string OwnerApplication { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How central the model is to its owner (<c>relevance</c>): <c>primary</c>, <c>supporting</c>, <c>embedded</c> or <c>unknown</c>, as the
+    /// scanner worded it. Empty when the runtime reports none; see <see cref="DiscoveryRelevance"/> for the classes.
+    /// </summary>
+    public string Relevance { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How sure the scanner is that this is a model worth listing (<c>discovery_confidence</c>), 0..1. Null when the runtime did not say:
+    /// that is not zero, and a model server's listing of its models carries none by design. An explicit 0 is 0.
+    /// </summary>
+    public double? DiscoveryConfidence { get; init; }
+
+    /// <summary>The model's lineage (<c>provenance</c>); null when the runtime sent none.</summary>
+    public DiscoveryModelProvenance? Provenance { get; init; }
+
+    /// <summary>True when the block carries any of what the Mac's recommended scope acts on (<c>hasModelClassificationMetadata</c>): a discovery confidence, an owner or a relevance.</summary>
+    public bool HasClassification =>
+        DiscoveryConfidence is not null || OwnerApplication.Trim().Length > 0 || Relevance.Trim().Length > 0;
+
     /// <summary>
     /// The TUI's <c>model: id=... status=... format=...</c> line: only the fields the block has, in the TUI's order. The size is in
     /// words (<c>1.5 GiB</c>) where the TUI prints the byte count.
@@ -155,11 +185,18 @@ public sealed record DiscoveryModelInfo(
         Add("provider", Provider);
         Add("recipe", Recipe);
         Add("modality", Modality);
+        Add("relevance", Relevance);
+        Add("owner", OwnerApplication);
         Add("device", Device);
         Add("size", DiscoveryFormat.Bytes(SizeBytes));
         if (Pinned)
         {
             parts.Add("pinned=true");
+        }
+
+        if (DiscoveryConfidence is { } confidence)
+        {
+            parts.Add("discovery_confidence=" + DiscoveryFormat.Percent(confidence).ToString(CultureInfo.InvariantCulture) + "%");
         }
 
         return string.Join(' ', parts);
@@ -283,26 +320,38 @@ internal static class DiscoveryFormat
 }
 
 /// <summary>
-/// Reads one signal from the two places the app finds them: a member of <c>ai_discovery_state.json</c>'s <c>signals</c> object, or a
-/// row of <c>inventory.db</c>'s <c>ai_signals</c>. Both are read as tolerantly as the TUI's <c>AIUsageSignal.from_mapping</c>: a value
-/// of the wrong type is a missing value, never an exception, and a block the scanner did not send (<c>model</c>, <c>runtime</c>,
-/// <c>component</c>) is null.
+/// Reads one signal from the three places the app finds them: a member of <c>ai_discovery_state.json</c>'s <c>signals</c> object, a
+/// row of <c>inventory.db</c>'s <c>ai_signals</c>, or an element of the <c>signals</c> array of the gateway's <c>GET /api/v1/ai-usage</c>
+/// (the same signal the state file keeps, without its stored extras). All are read as tolerantly as the TUI's
+/// <c>AIUsageSignal.from_mapping</c>: a value of the wrong type is a missing value, never an exception, and a block the scanner did not
+/// send (<c>model</c>, <c>runtime</c>, <c>component</c>) is null.
 /// <para>
 /// <b>What each source carries</b> (checked 2026-10-08 against a live 0.8.10 install and its installed TUI source): the state file has
 /// every field below; <c>inventory.db</c> has the ids, the component columns, <c>last_active_at</c> and the <c>model_json</c> /
 /// <c>runtime_json</c> blocks, but no <c>first_seen</c>, <c>source</c> or <c>version</c>. Neither has a <c>gone</c> signal (the scanner
 /// drops those when it writes either file) or identity and presence scores: <c>inventory.db</c> has them per component, in
-/// <c>ai_confidence_snapshots</c> (see <c>AiDiscoveryPanelViewModel.ApplyConfidenceBandsAsync</c>), and the gateway's
-/// <c>GET /api/v1/ai-usage</c> answer has them per signal, which this panel does not read (CUST-310). The <c>model</c> block is read as
-/// 0.8.10's <c>AIUsageModel</c> reads it; the fields a newer runtime adds to it (<c>owner_application</c>, <c>relevance</c>,
-/// <c>discovery_confidence</c>, <c>provenance</c>) are left alone (CUST-310).
+/// <c>ai_confidence_snapshots</c> (see <c>AiDiscoveryPanelViewModel.ApplyConfidenceBandsAsync</c>), and the gateway's answer has them
+/// per signal. This panel takes neither the gone signals nor the per-signal scores from the gateway's answer (see
+/// <see cref="DiscoveryUsageOverlay"/>: it adds the model fields below to the signals the files list, and nothing else).
+/// </para>
+/// <para>
+/// <b>The model block</b> is read for what 0.8.10's <c>AIUsageModel</c> reads, plus what a newer runtime adds to it: <c>owner_application</c>,
+/// <c>relevance</c>, <c>discovery_confidence</c> and <c>provenance</c>, taken when the block has them and left empty when it does not -
+/// never filled in, and never taken from a version number. Text among them that names a place on this machine is withheld unless the
+/// runtime says its store keeps raw local paths (<see cref="DiscoveryReadOptions"/>).
 /// </para>
 /// </summary>
 internal static class DiscoverySignalParser
 {
+    /// <summary>A lineage lists at most eight base models (<c>maxModelBaseModels</c> in the runtime); a ninth is not read.</summary>
+    private const int MaxBaseModels = 8;
+
+    /// <summary>The longest text kept of an owner or a lineage field: the runtime's own longest, a model id (<c>maxLocalModelIDBytes</c>).</summary>
+    private const int PinTextLimit = 512;
+
     // ---- the state file --------------------------------------------------------------------------------------
 
-    public static DiscoverySignalRecord FromState(JsonElement element)
+    public static DiscoverySignalRecord FromState(JsonElement element, DiscoveryReadOptions options = default)
     {
         var evidence = new List<DiscoveryEvidenceItem>();
         if (element.TryGetProperty("evidence", out var evidenceArray) && evidenceArray.ValueKind == JsonValueKind.Array)
@@ -334,7 +383,7 @@ internal static class DiscoverySignalParser
             Name = Text(element, "name"),
             Version = Text(element, "version"),
             Component = ParseComponent(Object(element, "component")),
-            Model = ParseModel(Object(element, "model")),
+            Model = ParseModel(Object(element, "model"), options),
             Runtime = ParseRuntime(Object(element, "runtime")),
             LastActiveAt = Time(Text(element, "last_active_at")),
         };
@@ -342,7 +391,7 @@ internal static class DiscoverySignalParser
 
     // ---- inventory.db ------------------------------------------------------------------------------------------
 
-    public static DiscoverySignalRecord FromDbRow(IReadOnlyDictionary<string, object?> row)
+    public static DiscoverySignalRecord FromDbRow(IReadOnlyDictionary<string, object?> row, DiscoveryReadOptions options = default)
     {
         var evidence = new List<DiscoveryEvidenceItem>();
         if (Cell(row, "evidence_json") is { Length: > 0 } evidenceJson && TryParse(evidenceJson, out var evidenceDocument))
@@ -390,7 +439,7 @@ internal static class DiscoverySignalParser
             Name = Cell(row, "name"),
             Version = component?.Version is { Length: > 0 } version ? version : null,
             Component = component,
-            Model = Block(Cell(row, "model_json"), ParseModel),
+            Model = Block(Cell(row, "model_json"), element => ParseModel(element, options)),
             Runtime = Block(Cell(row, "runtime_json"), ParseRuntime),
             LastActiveAt = Time(Cell(row, "last_active_at")),
         };
@@ -399,7 +448,7 @@ internal static class DiscoverySignalParser
     // ---- blocks ----------------------------------------------------------------------------------------------
 
     /// <summary>The <c>model</c> block, or null when there is none (an absent, empty or non-object block).</summary>
-    public static DiscoveryModelInfo? ParseModel(JsonElement element)
+    public static DiscoveryModelInfo? ParseModel(JsonElement element, DiscoveryReadOptions options = default)
     {
         if (!IsPopulatedObject(element))
         {
@@ -415,8 +464,61 @@ internal static class DiscoverySignalParser
             Text(element, "modality") ?? string.Empty,
             Text(element, "device") ?? string.Empty,
             NonNegativeLong(element, "size_bytes"),
-            Flag(element, "pinned") == true);
+            Flag(element, "pinned") == true)
+        {
+            OwnerApplication = PinText(Text(element, "owner_application"), options),
+            Relevance = PinText(Text(element, "relevance"), options),
+            DiscoveryConfidence = UnitScore(element, "discovery_confidence"),
+            Provenance = ParseProvenance(Object(element, "provenance"), options),
+        };
     }
+
+    /// <summary>
+    /// The <c>provenance</c> block of a model, or null when there is none. Country is the two-letter code or nothing; a base model that is
+    /// not a string is dropped, a single string stands for a list of one; <c>quantized</c> and <c>distilled</c> are true, false or - when
+    /// the runtime did not say or said something else - unknown.
+    /// </summary>
+    public static DiscoveryModelProvenance? ParseProvenance(JsonElement element, DiscoveryReadOptions options = default)
+    {
+        if (!IsPopulatedObject(element))
+        {
+            return null;
+        }
+
+        var baseModels = new List<string>();
+        if (element.TryGetProperty("base_models", out var bases))
+        {
+            if (bases.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in bases.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String && baseModels.Count < MaxBaseModels
+                        && PinText(item.GetString()?.Trim(), options) is { Length: > 0 } baseModel
+                        && !baseModels.Contains(baseModel, StringComparer.OrdinalIgnoreCase))
+                    {
+                        baseModels.Add(baseModel);
+                    }
+                }
+            }
+            else if (bases.ValueKind == JsonValueKind.String && PinText(bases.GetString()?.Trim(), options) is { Length: > 0 } single)
+            {
+                baseModels.Add(single);
+            }
+        }
+
+        return new DiscoveryModelProvenance(
+            PinText(Text(element, "publisher"), options),
+            DiscoveryCountries.Normalize(Text(element, "country_code")),
+            PinText(Text(element, "root_model"), options),
+            baseModels,
+            Flag(element, "quantized"),
+            PinText(Text(element, "quantization"), options),
+            Flag(element, "distilled"),
+            PinText(Text(element, "derivation"), options),
+            PinText(Text(element, "source"), options),
+            PinText(Text(element, "confidence"), options));
+    }
+
 
     /// <summary>The <c>runtime</c> block of a process signal, or null when there is none.</summary>
     public static DiscoveryRuntimeInfo? ParseRuntime(JsonElement element)
@@ -458,6 +560,17 @@ internal static class DiscoverySignalParser
             ? value
             : default;
 
+    /// <summary>
+    /// A text the runtime wrote into the model fields a newer build adds (owner, relevance, lineage), made safe to show: a value that names
+    /// a local path is withheld (<see cref="DiscoveryPaths"/>), the rest is cut to the longest the runtime writes (512, a model id) and its
+    /// control and bidirectional characters are spelled out so it stays on one line and reads in the order it was written.
+    /// </summary>
+    private static string PinText(string? value, DiscoveryReadOptions options)
+    {
+        var guarded = DiscoveryPaths.Guard(value, options);
+        return DisplayNames.Visible(guarded.Length > PinTextLimit ? guarded[..PinTextLimit] : guarded);
+    }
+
     private static string? Text(JsonElement parent, string name)
     {
         if (parent.ValueKind != JsonValueKind.Object || !parent.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
@@ -484,6 +597,13 @@ internal static class DiscoverySignalParser
             _ => null,
         };
     }
+
+    /// <summary>
+    /// An optional score on 0..1: the fraction the runtime writes or, from a build that wrote a whole percent, that percent (above 1, so 86
+    /// is 0.86); null when it is absent, not a number, or a boolean. An explicit 0 stays 0 - it is a score, not the lack of one.
+    /// </summary>
+    private static double? UnitScore(JsonElement parent, string name) =>
+        Number(parent, name) is { } value ? DiscoveryFormat.Clamp01(value > 1 ? value / 100 : value) : null;
 
     private static long NonNegativeLong(JsonElement parent, string name)
     {

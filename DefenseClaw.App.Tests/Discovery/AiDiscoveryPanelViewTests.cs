@@ -183,7 +183,7 @@ public sealed class AiDiscoveryPanelViewTests
     }
 
     [Fact]
-    public void A_payload_that_names_modalities_gets_the_modality_column_and_picker_and_lists_every_model()
+    public void A_payload_that_classifies_its_models_gets_the_owner_modality_and_relevance_columns_the_pickers_and_the_switch()
     {
         using var scene = DiscoveryScene.Open("ai-discovery-state.95159fd.json", DiscoveryScene.DiscoveryOn);
 
@@ -195,19 +195,34 @@ public sealed class AiDiscoveryPanelViewTests
                 scene.ViewModel.ActiveView = AiDiscoveryPanelViewModel.ModelsViewKey;
                 host.Relayout();
 
-                // All six models, with the one column this payload adds to what 0.8.10 shows. No owner or relevance column: a newer
-                // runtime's fields are not read (CUST-310).
+                // The recommended models, with the three columns this payload adds to what 0.8.10 shows.
                 var grid = Named<System.Windows.Controls.DataGrid>(view, "Local models");
-                Assert.Equal(6, grid.Items.Count);
+                Assert.Equal(3, grid.Items.Count);
                 Assert.Equal(
-                    new[] { "Model", "State", "Modality", "Confidence", "Status / format", "Sources" },
+                    new[] { "Model", "State", "Owners", "Modality", "Relevance", "Confidence", "Status / format", "Sources" },
                     VisibleHeaders(grid));
 
                 var combos = VisualTree.Descendants<ComboBox>(view).Where(c => c.IsVisible).Select(AutomationProperties.GetName).ToArray();
-                Assert.Equal(new[] { "Modality", "Confidence" }, combos);
-                Assert.DoesNotContain(VisualTree.Descendants<CheckBox>(view), c => c.IsVisible && AutomationProperties.GetName(c) == "Show all models");
+                Assert.Equal(new[] { "Modality", "Relevance", "Confidence" }, combos);
 
-                // Choosing a modality narrows the table and says so; Reset puts every model back.
+                // The switch is offered, off, and the note says what the recommended view kept off the list.
+                var showAll = Assert.Single(VisualTree.Descendants<CheckBox>(view), c => c.IsVisible && AutomationProperties.GetName(c) == "Show all models");
+                Assert.False(showAll.IsChecked);
+                Assert.Contains(
+                    VisualTree.Descendants<TextBlock>(view),
+                    t => t.IsVisible && t.Text == "3 models hidden by the recommended view. Turn on Show all models to list them.");
+
+                // The line of counts is the TUI's, from the signals the file lists; this file's gateway has not been asked.
+                Assert.DoesNotContain(Named<ItemsControl>(view, "Counts from the latest scan").Items.OfType<DiscoveryHeaderChip>(), c => c.IsDiagnostic);
+
+                // Turning it on lists every model and takes the note away.
+                showAll.IsChecked = true;
+                host.Relayout();
+                Assert.Equal(6, grid.Items.Count);
+                Assert.True(scene.ViewModel.ShowAllModels);
+                Assert.DoesNotContain(VisualTree.Descendants<TextBlock>(view), t => t.IsVisible && t.Text.Contains("hidden by the recommended view", StringComparison.Ordinal));
+
+                // Choosing a modality narrows the table and says so; Reset puts the recommended view back.
                 scene.ViewModel.ModalityFilter = "speech";
                 host.Relayout();
                 _ = Assert.Single(grid.Items);
@@ -218,7 +233,137 @@ public sealed class AiDiscoveryPanelViewTests
 
                 scene.ViewModel.ResetModelFiltersCommand.Execute(null);
                 host.Relayout();
-                Assert.Equal(6, grid.Items.Count);
+                Assert.Equal(3, grid.Items.Count);
+                Assert.False(showAll.IsChecked);
+            }
+        });
+    }
+
+    [Fact]
+    public void A_gateway_report_that_classifies_the_models_reaches_the_table_the_line_of_counts_and_the_inspectors_provenance()
+    {
+        // The files of a runtime that does not send owner, relevance, confidence or lineage; the gateway's report has them.
+        using var scene = DiscoveryScene.Open(
+            null,
+            DiscoveryScene.DiscoveryOn,
+            temp => temp.WriteFile("ai_discovery_state.json", DiscoveryData.StateFileOf(DiscoveryData.Rest(DiscoveryData.ReportPopulated), withNewerModelFields: false)));
+
+        scene.OnUi(() =>
+        {
+            var (view, host) = Show(scene, width: 1500, height: 1500);
+            using (host)
+            {
+                var vm = scene.ViewModel;
+                vm.ActiveView = AiDiscoveryPanelViewModel.ModelsViewKey;
+                host.Relayout();
+
+                // Before the report: the 0.8.10 table, every model, no switch.
+                var grid = Named<System.Windows.Controls.DataGrid>(view, "Local models");
+                Assert.Equal(9, grid.Items.Count);
+                Assert.Equal(new[] { "Model", "State", "Modality", "Confidence", "Status / format", "Sources" }, VisibleHeaders(grid));
+                Assert.DoesNotContain(VisualTree.Descendants<CheckBox>(view), c => c.IsVisible && AutomationProperties.GetName(c) == "Show all models");
+
+                vm.ApplyUsage(AiUsageReader.ParseText(DiscoveryData.Rest(DiscoveryData.ReportPopulated)));
+                host.Relayout();
+
+                // After it: the recommended models, the columns and pickers the report's members make possible, the switch and its note.
+                Assert.Equal(4, grid.Items.Count);
+                Assert.Equal(
+                    new[] { "Model", "State", "Owners", "Modality", "Relevance", "Confidence", "Status / format", "Sources" },
+                    VisibleHeaders(grid));
+                var combos = VisualTree.Descendants<ComboBox>(view).Where(c => c.IsVisible).Select(AutomationProperties.GetName).ToArray();
+                Assert.Equal(new[] { "Modality", "Relevance", "Confidence" }, combos);
+                Assert.Single(VisualTree.Descendants<CheckBox>(view), c => c.IsVisible && AutomationProperties.GetName(c) == "Show all models");
+                Assert.Contains(
+                    VisualTree.Descendants<TextBlock>(view),
+                    t => t.IsVisible && t.Text == "5 models hidden by the recommended view. Turn on Show all models to list them.");
+
+                // The TUI's last header part, after the counts, with what it means for a tooltip.
+                var chips = Named<ItemsControl>(view, "Counts from the latest scan").Items.OfType<DiscoveryHeaderChip>().ToArray();
+                Assert.Equal("model-lookup=offline", chips[^1].Text);
+                Assert.Equal(new[] { "12 active", "3 new", "model-lookup=offline" }, chips.Select(c => c.Text).ToArray());
+
+                // The columns share the width: no sideways scroll bar.
+                var inner = VisualTree.Descendants<ScrollViewer>(grid).First();
+                Assert.True(inner.ScrollableWidth < 1, $"the table scrolls sideways by {inner.ScrollableWidth}");
+
+                // A row says who owns the model, how central it is, how sure the scanner is, and where the signals came from.
+                var rows = VisualTree.Descendants<DataGridRow>(grid).ToArray();
+                var chatTexts = VisualTree.Descendants<TextBlock>(rows[0]).Where(t => t.IsVisible).Select(t => t.Text).ToArray();
+                Assert.Contains("Example-Chat-3B-Q4", chatTexts);
+                Assert.Contains("Example Notes", chatTexts);
+                Assert.Contains("Primary", chatTexts);
+                Assert.Contains("95%", chatTexts);
+                Assert.Contains("model_file, model_runtime", chatTexts);
+                var listedTexts = VisualTree.Descendants<TextBlock>(rows.Single(r => r.Item is DiscoveryModelRow { ModelId: "llama-lite-8b" })).Where(t => t.IsVisible).Select(t => t.Text).ToArray();
+                Assert.Contains("API", listedTexts);
+                Assert.Contains("—", listedTexts);
+
+                FinishSlides(view, host);
+                RenderTo.Png(host, "ai-discovery-models-classified");
+
+                // The inspector gains the lineage under a heading of its own, and the closed page gives the width back.
+                var inspector = VisualTree.Descendants<DcInspector>(view).Single();
+                vm.SelectedModel = vm.ModelsView.Cast<DiscoveryModelRow>().Single(m => m.ModelId == "Example-Chat-3B-Q4");
+                host.Relayout();
+                Settled(inspector);
+                var texts = VisualTree.Descendants<TextBlock>(inspector).Where(t => t.IsVisible).Select(t => t.Text).ToArray();
+                Assert.Contains("Provenance", texts);
+                Assert.Contains("Publisher", texts);
+                Assert.Contains("Example Labs", texts);
+                Assert.Contains("United States (US)", texts);
+                Assert.Contains("catalog_exact", texts);
+                Assert.Contains("Discovery confidence", texts);
+                Assert.Contains("95%", texts);
+                Assert.Contains("Owners", texts);
+
+                FinishSlides(view, host);
+                RenderTo.Png(host, "ai-discovery-models-classified-inspector");
+
+                // A model whose runtime gave no lineage has no Provenance heading to show.
+                vm.SelectedModel = vm.ModelsView.Cast<DiscoveryModelRow>().Single(m => m.ModelId == "speech-tiny");
+                host.Relayout();
+                Assert.Contains("Provenance", VisualTree.Descendants<TextBlock>(inspector).Where(t => t.IsVisible).Select(t => t.Text));
+                vm.ShowAllModels = true;
+                vm.SelectedModel = vm.ModelsView.Cast<DiscoveryModelRow>().Single(m => m.ModelId == "browser-spellcheck");
+                host.Relayout();
+                Assert.DoesNotContain("Provenance", VisualTree.Descendants<TextBlock>(inspector).Where(t => t.IsVisible).Select(t => t.Text));
+            }
+        });
+    }
+
+    [Fact]
+    public void A_0_8_10_gateway_that_answers_leaves_the_models_view_as_it_was_with_nothing_added_to_the_table_or_the_filters()
+    {
+        using var scene = DiscoveryScene.Open("ai-discovery-state.0.8.10.json", DiscoveryScene.DiscoveryOn);
+
+        scene.OnUi(() =>
+        {
+            var (view, host) = Show(scene);
+            using (host)
+            {
+                var vm = scene.ViewModel;
+                vm.ActiveView = AiDiscoveryPanelViewModel.ModelsViewKey;
+                host.Relayout();
+
+                vm.ApplyUsage(AiUsageReader.ParseText(DiscoveryData.ReportOf0810(DiscoveryData.State0810())));
+                host.Relayout();
+
+                var grid = Named<System.Windows.Controls.DataGrid>(view, "Local models");
+                Assert.Equal(3, grid.Items.Count);
+                Assert.Equal(new[] { "Model", "State", "Confidence", "Status / format", "Sources" }, VisibleHeaders(grid));
+                var combos = VisualTree.Descendants<ComboBox>(view).Where(c => c.IsVisible).Select(AutomationProperties.GetName).ToArray();
+                Assert.Equal(new[] { "Confidence" }, combos);
+                Assert.DoesNotContain(VisualTree.Descendants<CheckBox>(view), c => c.IsVisible && AutomationProperties.GetName(c) == "Show all models");
+                Assert.DoesNotContain(VisualTree.Descendants<TextBlock>(view), t => t.IsVisible && t.Text.Contains("hidden by the recommended view", StringComparison.Ordinal));
+
+                // The line of counts is the one it was: counts only, no diagnostic the 0.8.10 gateway does not send.
+                var chips = Named<ItemsControl>(view, "Counts from the latest scan").Items.OfType<DiscoveryHeaderChip>().ToArray();
+                Assert.Equal(new[] { "11 active", "2 new", "1 changed" }, chips.Select(c => c.Text).ToArray());
+
+                // The confidence of a model is still what the scanner's strongest match said, worded as such.
+                var rows = VisualTree.Descendants<DataGridRow>(grid).ToArray();
+                Assert.Contains("90% signal", VisualTree.Descendants<TextBlock>(rows[0]).Where(t => t.IsVisible).Select(t => t.Text));
             }
         });
     }
@@ -259,10 +404,23 @@ public sealed class AiDiscoveryPanelViewTests
                 Assert.Contains("llamacpp", texts);
                 Assert.Contains(texts, t => t.StartsWith("model: id=example-chat-3b-q4 status=loaded", StringComparison.Ordinal));
 
-                // What a newer runtime adds to a model (owner, relevance, lineage) is not in the details: it is not read.
-                Assert.DoesNotContain("Lineage", texts);
-                Assert.DoesNotContain("Owner", texts);
-                Assert.DoesNotContain("Relevance", texts);
+                // What a newer runtime adds to a model is in its details (CUST-310): the owner, the relevance, the discovery confidence, and
+                // the lineage under a heading of its own.
+                Assert.Contains("Owners", texts);
+                Assert.Contains("Example Notes", texts);
+                Assert.Contains("Relevance", texts);
+                Assert.Contains("Primary", texts);
+                Assert.Contains("Discovery confidence", texts);
+                Assert.Contains("93%", texts);
+                Assert.Contains("Provenance", texts);
+                Assert.Contains("Publisher", texts);
+                Assert.Contains("Example Labs", texts);
+                Assert.Contains("United States (US)", texts);
+                Assert.Contains("Root model", texts);
+                Assert.Contains("example-labs/chat-3b", texts);
+                Assert.Contains("quantized · Q4_K_M", texts);
+                Assert.Contains("catalog_exact", texts);
+                Assert.Contains("Lineage confidence", texts);
 
                 // The pill beside the title is the model's state.
                 Assert.Equal("new", VisualTree.Descendants<DcStatePill>(inspector).First(p => p.IsVisible).Word);

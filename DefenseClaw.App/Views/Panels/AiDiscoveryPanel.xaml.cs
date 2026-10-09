@@ -17,8 +17,9 @@ namespace DefenseClaw.App.Views.Panels;
 /// then, on the bubbling <c>KeyDown</c>, the model inspector - a drop-down or a text box that used Esc itself keeps it.
 /// </para>
 /// <para>
-/// <b>Models table columns.</b> Modality is declared in the XAML and shown here, only while some model names one
-/// (<see cref="AiDiscoveryPanelViewModel.HasModalityFilter"/>): a column the data cannot fill is not offered empty.
+/// <b>Models table columns.</b> Modality, Owners and Relevance are declared in the XAML and shown here, only while some model has one
+/// (<see cref="AiDiscoveryPanelViewModel.HasModalityFilter"/>, <see cref="AiDiscoveryPanelViewModel.HasOwnerData"/>,
+/// <see cref="AiDiscoveryPanelViewModel.HasRelevanceFilter"/>): a column the data cannot fill is not offered empty.
 /// </para>
 /// <para>
 /// <b>Focus in the compact layout.</b> On a narrow panel (<see cref="CompactLayout"/>) selecting a model swaps the page for the
@@ -120,6 +121,8 @@ public partial class AiDiscoveryPanel : UserControl
         switch (e.PropertyName)
         {
             case nameof(AiDiscoveryPanelViewModel.HasModalityFilter):
+            case nameof(AiDiscoveryPanelViewModel.HasOwnerData):
+            case nameof(AiDiscoveryPanelViewModel.HasRelevanceFilter):
                 ApplyColumns();
                 break;
 
@@ -136,7 +139,7 @@ public partial class AiDiscoveryPanel : UserControl
         }
     }
 
-    /// <summary>Shows the optional column of the models table (Modality) when some model has a value for it, and hides it otherwise.</summary>
+    /// <summary>Shows the optional columns of the models table (Owners, Modality, Relevance) when some model has a value for them, and hides each otherwise.</summary>
     private void ApplyColumns()
     {
         if (DataContext is not AiDiscoveryPanelViewModel viewModel)
@@ -144,7 +147,9 @@ public partial class AiDiscoveryPanel : UserControl
             return;
         }
 
+        OwnersColumn.Visibility = viewModel.HasOwnerData ? Visibility.Visible : Visibility.Collapsed;
         ModalityColumn.Visibility = viewModel.HasModalityFilter ? Visibility.Visible : Visibility.Collapsed;
+        RelevanceColumn.Visibility = viewModel.HasRelevanceFilter ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject root)

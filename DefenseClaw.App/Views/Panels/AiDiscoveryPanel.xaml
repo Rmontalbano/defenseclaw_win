@@ -18,9 +18,10 @@
 
         Products are the cards. Models are a table with a flush inspector (ctl:DcInspector) that exists only while a model is selected:
         with none the page takes the whole width, with one the two split, and on a narrow panel (CompactLayout, under 960 px) the
-        inspector replaces the page until it is closed (Esc, or its X). Everything the data does not carry is left out - the Modality
-        column and filter when no model names a modality, an identity or presence band on a card whose components have none, a runtime
-        line on a signal that has no process - so a DefenseClaw 0.8.10 install gets exactly what its files and database hold.
+        inspector replaces the page until it is closed (Esc, or its X). Everything the data does not carry is left out - the Modality,
+        Relevance and Owners columns and the filters on them when no model has one, the Show all models switch when the runtime does not
+        classify its models, the Provenance block of a model with no lineage, an identity or presence band on a card whose components have
+        none, a runtime line on a signal that has no process - so a DefenseClaw 0.8.10 install gets exactly what its files and database hold.
     -->
     <UserControl.Resources>
         <!-- The page: the whole width until a model is selected; then it makes room for the inspector, or, on a narrow panel, steps aside. -->
@@ -223,10 +224,14 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
+                            <!-- A count, or a key=value diagnostic of the TUI's header (model-lookup=offline), which says what it means when hovered. -->
                             <Border Style="{StaticResource DcBadge}"
                                     Tag="{Binding ToneKey}"
                                     Margin="0,0,8,6"
-                                    AutomationProperties.Name="{Binding Text}">
+                                    ToolTip="{Binding Description}"
+                                    ToolTipService.IsEnabled="{Binding HasDescription}"
+                                    AutomationProperties.Name="{Binding Text}"
+                                    AutomationProperties.HelpText="{Binding Description}">
                                 <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Text}" />
                             </Border>
                         </DataTemplate>
@@ -235,7 +240,7 @@
                 <TextBlock Style="{StaticResource DcCaption}"
                            Margin="0,0,0,8"
                            Text="{Binding HeaderNote}"
-                           Visibility="{Binding HasHeader, Converter={StaticResource BoolToVisibility}}" />
+                           Visibility="{Binding HasHeaderNote, Converter={StaticResource BoolToVisibility}}" />
 
                 <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
                     <!-- Products are the tools, agents and SDKs found; Models are the local AI models (files on disk, or what a local model server lists). -->
@@ -260,45 +265,76 @@
                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                 </WrapPanel>
 
-                <!-- Models only. Each filter exists only when the data can answer it (see the view-model); Confidence always can. -->
-                <WrapPanel Margin="0,0,0,4"
-                           Style="{StaticResource DcToolbarPanel}"
-                           Visibility="{Binding IsModelsView, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel Orientation="Horizontal"
-                                Visibility="{Binding HasModalityFilter, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Modality" />
-                        <ComboBox Width="150"
-                                  ItemsSource="{Binding ModalityChoices}"
-                                  DisplayMemberPath="Label"
-                                  SelectedValuePath="Key"
-                                  SelectedValue="{Binding ModalityFilter, Mode=TwoWay}"
-                                  AutomationProperties.Name="Modality" />
-                    </StackPanel>
+                <!--
+                    Models only. Each filter exists only when the data can answer it (see the view-model): Show all models when the runtime
+                    classifies its models (the recommended view is the default there), Modality and Relevance when some model names one;
+                    Confidence always can. The note under the row says how many models the recommended view kept off the list.
+                -->
+                <StackPanel Visibility="{Binding IsModelsView, Converter={StaticResource BoolToVisibility}}">
+                    <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
+                        <CheckBox Content="Show all models"
+                                  Margin="0,0,16,8"
+                                  VerticalAlignment="Center"
+                                  IsChecked="{Binding ShowAllModels}"
+                                  Visibility="{Binding HasRecommendedScope, Converter={StaticResource BoolToVisibility}}"
+                                  ToolTip="Off lists the recommended models: at least 80% confident, and primary, or a supporting speech, audio, vision or embedding model that an application owns. A model a local model server listed with no confidence of its own is always listed. Choosing a Modality or Relevance lifts the primary / supporting rule."
+                                  AutomationProperties.Name="Show all models"
+                                  AutomationProperties.HelpText="Also list the models the recommended view hides: low-confidence, embedded and unowned supporting ones." />
 
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Confidence" />
-                        <ComboBox Width="150"
-                                  ItemsSource="{Binding ConfidenceChoices}"
-                                  DisplayMemberPath="Label"
-                                  SelectedValuePath="Key"
-                                  SelectedValue="{Binding ConfidenceFilter, Mode=TwoWay}"
-                                  ToolTip="The strongest detection score among the model's signals: how sure the scanner was that something matched, not its confidence in the model itself. Every model is listed until you choose a cut."
-                                  AutomationProperties.Name="Confidence" />
-                    </StackPanel>
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding HasModalityFilter, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Modality" />
+                            <ComboBox Width="150"
+                                      ItemsSource="{Binding ModalityChoices}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Key"
+                                      SelectedValue="{Binding ModalityFilter, Mode=TwoWay}"
+                                      AutomationProperties.Name="Modality" />
+                        </StackPanel>
 
-                    <ui:Button Content="Reset filters"
-                               Appearance="Secondary"
-                               Icon="{ctl:DcSymbolIcon ArrowReset24}"
-                               Command="{Binding ResetModelFiltersCommand}"
-                               Visibility="{Binding HasActiveModelFilters, Converter={StaticResource BoolToVisibility}}"
-                               AutomationProperties.HelpText="Set the modality and confidence filters back to all." />
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding HasRelevanceFilter, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Relevance" />
+                            <ComboBox Width="150"
+                                      ItemsSource="{Binding RelevanceChoices}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Key"
+                                      SelectedValue="{Binding RelevanceFilter, Mode=TwoWay}"
+                                      ToolTip="How central the model is to the application that owns it, as the scanner classified it."
+                                      AutomationProperties.Name="Relevance" />
+                        </StackPanel>
 
-                    <TextBlock Style="{StaticResource DcResultCaption}"
-                               Margin="0,0,12,8"
-                               VerticalAlignment="Center"
-                               Text="{Binding ModelCaption}"
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Confidence" />
+                            <ComboBox Width="150"
+                                      ItemsSource="{Binding ConfidenceChoices}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Key"
+                                      SelectedValue="{Binding ConfidenceFilter, Mode=TwoWay}"
+                                      ToolTip="{Binding ConfidenceFilterHelp}"
+                                      AutomationProperties.Name="Confidence" />
+                        </StackPanel>
+
+                        <ui:Button Content="Reset filters"
+                                   Appearance="Secondary"
+                                   Icon="{ctl:DcSymbolIcon ArrowReset24}"
+                                   Command="{Binding ResetModelFiltersCommand}"
+                                   Visibility="{Binding HasActiveModelFilters, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.HelpText="{Binding ResetFiltersHelp}" />
+
+                        <TextBlock Style="{StaticResource DcResultCaption}"
+                                   Margin="0,0,12,8"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding ModelCaption}"
+                                   AutomationProperties.LiveSetting="Polite" />
+                    </WrapPanel>
+
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Margin="0,0,0,8"
+                               Text="{Binding ModelScopeNote}"
+                               Visibility="{Binding HasModelScopeNote, Converter={StaticResource BoolToVisibility}}"
                                AutomationProperties.LiveSetting="Polite" />
-                </WrapPanel>
+                </StackPanel>
 
                 <ItemsControl ItemsSource="{Binding CardsView}"
                               Focusable="False"
@@ -415,10 +451,11 @@
                 </ItemsControl>
 
                 <!--
-                    The Models table: Model, State, [Modality], Confidence, Status / format, Sources. The bracketed column is turned on by
-                    the code-behind when some model names a modality. It shows only while at least one model passes the search and the
-                    filters (a grid first laid out with no rows keeps the column widths it worked out for none), and it scrolls inside its
-                    own height so the rest of the page stays within reach.
+                    The Models table: Model, State, [Owners], [Modality], [Relevance], Confidence, Status / format, Sources. The bracketed
+                    columns are turned on by the code-behind when some model carries what they show (an owner, a modality, a relevance): a
+                    DefenseClaw 0.8.10 install, whose models carry none, gets the columns it always had. It shows only while at least one
+                    model passes the search and the filters (a grid first laid out with no rows keeps the column widths it worked out for
+                    none), and it scrolls inside its own height so the rest of the page stays within reach.
                 -->
                 <Border Style="{StaticResource DcCardFlush}"
                         Margin="{StaticResource DcCardGap}"
@@ -449,12 +486,20 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
+                            <DataGridTextColumn x:Name="OwnersColumn" Width="1.3*" MinWidth="96" Header="Owners" Visibility="Collapsed"
+                                                SortMemberPath="OwnersDisplay"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding OwnersDisplay}" />
                             <DataGridTextColumn x:Name="ModalityColumn" Width="1*" MinWidth="84" Header="Modality"
                                                 SortMemberPath="ModalityDisplay"
                                                 ElementStyle="{StaticResource DcCellText}"
                                                 Binding="{Binding ModalityDisplay}" />
+                            <DataGridTextColumn x:Name="RelevanceColumn" Width="1*" MinWidth="90" Header="Relevance" Visibility="Collapsed"
+                                                SortMemberPath="RelevanceRank"
+                                                ElementStyle="{StaticResource DcCellText}"
+                                                Binding="{Binding RelevanceDisplay}" />
                             <DataGridTextColumn Width="1*" MinWidth="88" Header="Confidence"
-                                                SortMemberPath="Confidence"
+                                                SortMemberPath="EffectiveDiscoveryConfidence"
                                                 ElementStyle="{StaticResource DcCellText}"
                                                 Binding="{Binding ConfidenceLabel}" />
                             <DataGridTextColumn Width="1.4*" MinWidth="110" Header="Status / format"
@@ -701,6 +746,15 @@
                                       ItemsSource="{Binding Facts}"
                                       ItemTemplate="{StaticResource DiscoveryFactTemplate}"
                                       AutomationProperties.Name="Model details" />
+
+                        <!-- Where the model comes from, only when the runtime says: publisher, country, root and base models, derivation, source. -->
+                        <StackPanel Visibility="{Binding HasProvenance, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="BranchFork24" Section="Discover" Content="Provenance" />
+                            <ItemsControl Focusable="False"
+                                          ItemsSource="{Binding ProvenanceFacts}"
+                                          ItemTemplate="{StaticResource DiscoveryFactTemplate}"
+                                          AutomationProperties.Name="Model provenance" />
+                        </StackPanel>
 
                         <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Eye24" Section="Discover" Content="Observations" />
                         <ItemsControl Focusable="False"

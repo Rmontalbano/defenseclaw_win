@@ -165,7 +165,7 @@ public sealed class AiDiscoveryPanelDataTests
     // ------------------------------------------------------------------------------------------ an upstream-shaped payload
 
     [Fact]
-    public void A_newer_runtimes_payload_is_read_for_what_0_8_10_carries_and_every_model_is_listed()
+    public void A_newer_runtimes_payload_lists_the_recommended_models_and_the_pickers_and_the_switch_reach_the_rest()
     {
         using var scene = DiscoveryScene.Open(State95159fd, DiscoveryScene.DiscoveryOn);
 
@@ -176,34 +176,44 @@ public sealed class AiDiscoveryPanelDataTests
             Assert.Equal(new[] { "Example JS SDK", "Example Notes" }, Products(vm));
             Assert.Equal(6, vm.ModelCount);
 
-            // Nothing is hidden by default: the owner, relevance and discovery confidence the Mac's recommended scope would act on are
-            // not read here (CUST-310), so the model it would hide - the embedded spell checker, the one rated under 80% by the newer
-            // runtime - is listed with the rest. The new news first, then by name.
+            // This payload classifies its models (owner, relevance, discovery confidence), so the Mac's recommended scope applies: the
+            // embedded spell checker, the one rated under 80% and the one nobody classified are kept off the list, with a note saying so.
+            // The new news first, then by name.
+            Assert.True(vm.HasRecommendedScope);
+            Assert.Equal(new[] { "example-chat-3b-q4", "server-listed-model", "speech-tiny" }, Models(vm));
+            Assert.Equal("3 of 6", vm.ModelCaption);
+            Assert.Equal("3 models hidden by the recommended view. Turn on Show all models to list them.", vm.ModelScopeNote);
+            Assert.False(vm.HasActiveModelFilters);
+
+            // This payload names modalities, owners and relevances, so those columns and pickers exist.
+            Assert.True(vm.HasModalityFilter);
+            Assert.True(vm.HasOwnerData);
+            Assert.True(vm.HasRelevanceFilter);
+
+            vm.ShowAllModels = true;
             Assert.Equal(
                 new[] { "example-chat-3b-q4", "browser-spellcheck", "server-listed-model", "speech-tiny", "uncertain-model", "unclassified-artifact" },
                 Models(vm));
             Assert.Equal("6 of 6", vm.ModelCaption);
-            Assert.False(vm.HasActiveModelFilters);
 
-            // This payload names modalities, so the Modality column and picker exist.
-            Assert.True(vm.HasModalityFilter);
             vm.ModalityFilter = "speech";
             Assert.Equal(new[] { "speech-tiny" }, Models(vm));
 
             vm.ModalityFilter = "generative";
             Assert.Equal(new[] { "example-chat-3b-q4", "browser-spellcheck", "server-listed-model", "uncertain-model" }, Models(vm));
 
-            // The Confidence picker cuts the detection score: the model the newer runtime rates at 79% has a 85% signal and stays high.
+            // The Confidence picker cuts the number the column shows: the model the newer runtime rates at 79% is under 80%, though its
+            // detection score is 85%, and a model the server listed with no confidence of its own is cut by its detection score (20%).
             vm.ModalityFilter = "all";
             vm.ConfidenceFilter = "low";
-            Assert.Equal(new[] { "server-listed-model" }, Models(vm));
+            Assert.Equal(new[] { "server-listed-model", "uncertain-model" }, Models(vm));
             vm.ConfidenceFilter = "high";
-            Assert.Contains("uncertain-model", Models(vm));
+            Assert.Equal(new[] { "example-chat-3b-q4", "browser-spellcheck", "speech-tiny", "unclassified-artifact" }, Models(vm));
         });
     }
 
     [Fact]
-    public void A_newer_runtimes_card_and_model_show_the_process_and_model_lines_and_none_of_the_fields_that_are_not_read()
+    public void A_newer_runtimes_card_and_model_show_the_process_and_model_lines_and_the_cards_take_no_band_from_a_state_file()
     {
         using var scene = DiscoveryScene.Open(State95159fd, DiscoveryScene.DiscoveryOn);
 

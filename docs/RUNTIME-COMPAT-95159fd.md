@@ -20,7 +20,7 @@ exactly that gap.
 |---|---|---|
 | `cli/` | `version-json`, `gateway-version-json`, `version.txt`, `status-json`, `status-json.connectors` (*), `doctor-json`, `doctor-cache` (*), `keys-list`, `policy-list`, `policy-show-default`, `observability-plan`, `guardrail-status` (json and text), `guardrail-list-packs`, `guardrail-protection-list`, `config-show-guardrail` (each also as `.connectors` (*)), `agent-discovery-*`, `agent-discovery-runtime-permissions.windows.synthetic` (*), `alerts`, `mcp-list`, `skill-list`, `plugin-list`, `tool-list`, `aibom-scan`, `config-path`, `config-validate`, `cli-tree` (*) | CLI output of a fresh install |
 | `policy-model/` | `phase2-model.json`, `tool-chains.json` | the runtime's own model document (its catalog read and the rows it rendered from it) and its built-in chain catalog |
-| `rest/` | `health`, `status`, `alerts`, `guardrail-config`, `enforce-blocked/-allowed`, `mcps`, `skills-not-connected`, `tools-catalog-not-connected`, `ai-usage-runtime` (the disabled answer), `ai-usage-runtime.populated.synthetic` (*), `ai-usage-runtime.degraded.synthetic` (*), `ai-usage-runtime.planes-ab.synthetic` (*), `unauthorized` | the gateway's GET routes |
+| `rest/` | `health`, `status`, `alerts`, `guardrail-config`, `enforce-blocked/-allowed`, `mcps`, `skills-not-connected`, `tools-catalog-not-connected`, `ai-usage` (the disabled answer), `ai-usage.populated.synthetic` (*), `ai-usage-runtime` (the disabled answer), `ai-usage-runtime.populated.synthetic` (*), `ai-usage-runtime.degraded.synthetic` (*), `ai-usage-runtime.planes-ab.synthetic` (*), `unauthorized` | the gateway's GET routes |
 | `help/` | `setup`, `setup-windows`, and the pages of `claude-code`, `cursor`, `codex`, `guardrail`, `observability`, `redaction`, `acp`, `gateway`, `trusted-paths`, `rotate-token`, `routing`, `local-observability` | `--help` screens |
 | `audit/` | `audit-schema.sql` (the database's own `.schema`, 38 tables, 53 migrations), `judge-bodies-schema.sql`, `migrations.txt` | the schema only, no rows |
 | `config/` | `config.fresh.yaml`, `config.connectors.yaml` (*) | a fresh `config.yaml`; the second is written from the Go config structs |
@@ -38,6 +38,17 @@ and `internal/sensor/service.go` (`degradedReasonsFor`, `planeHealth`), the seve
 invented (`EXAMPLE\operator`, `203.0.113.10`, `*.example`); the one credential-looking flag in a command line is the placeholder `synthetic-synthetic`, there to prove it is masked.
 `agent-discovery.txt` and `agent-discovery-runtime.txt` at the root of the set are the two help screens the Runtime capability is decided from, laid out the way `root.txt` was
 (Click's layout over each command's help text in the tree); `runtime-0.8.10/agent-discovery.txt` is the installed 0.8.10's own `agent discovery --help`.
+`rest/ai-usage.json` (CUST-310) is the Docker capture of `GET /api/v1/ai-usage` for a service that is off, byte for byte (line endings aside); `rest/ai-usage.populated.synthetic.json`
+is **synthetic, not a capture** - no populated report exists from a Windows run, so it is written by hand from the emitting code: the four members and their order from `handleAIUsage`
+(`internal/gateway/ai_usage.go:37-71`), every signal member from `AISignal`, the model block from `LocalModelInfo` and its lineage from `LocalModelProvenance`
+(`internal/inventory/ai_discovery.go:276-424`), the summary from `AIDiscoverySummary` (`:448-468`), the detectors' own values (`model_file`, `model_api`, `model_runtime`; a loaded model is
+`model_runtime`, an installed one listed by a server `model_api`; a model file carries an owner, a modality, a relevance and a discovery confidence, a server's listing none of those,
+`ai_model_files.go:2158-2197`, `ai_model_api.go:494-499,1033-1224,1364-1421`), and the sort of the signals (`sortAISignals`, `ai_discovery.go:4854`). Thirteen signals: two products with the per-signal scores the answer adds, ten
+local models of every kind the panel has a rule for (see `AiUsageFixtureTests`), and one gone model, which the state file would not carry. Names, applications, models and hashes are
+invented (`Example Notes`, `example-labs/chat-3b`, ids and digests made of zeros and a counter, 2030-01-15); there is no path in it, as in a real answer, where the gateway clears
+`raw_path` from every evidence row (`SanitizeEvidenceForWire`) whatever `ai_discovery.store_raw_local_paths` says. Because nothing can compare the file with a live answer, a test holds every
+value in it to the rules the same source applies to a report it is given (`ValidateSanitizedAIDiscoveryReport`, `validateLocalModelProvenance`): the allowed categories, statuses,
+relevances, provenance sources and confidences, the seven countries of the publisher catalog, a derivation that agrees with its flags, digests of 64 hex digits, no separator in a basename.
 
 The audit database is **not a copied database**. `RuntimeFixtures.CreateAuditDatabase()` builds one at test time from `audit-schema.sql`,
 adds `schema_version` rows 1..53, and the tests insert a few synthetic rows written the way that source's event-history writer writes them.
@@ -58,6 +69,7 @@ adds `schema_version` rows 1..53, and the tests insert a few synthetic rows writ
 | Command classifier (review tiers) | Compatible; the new commands were reviewed. One 0.8.10 read verb is gone. |
 | Fixed argv built by the app | Compatible: all 47 still name a command and options that exist. |
 | Runtime planes (`agent discovery runtime`, `GET /api/v1/ai-usage/runtime`) | **New panel** (CUST-309), offered only when `agent discovery --help` lists `runtime` and `agent discovery runtime --help` lists `status`, `scan`, `findings`, `permissions`. Reads the route; runs only `scan`, `enable` and `disable` (each reviewed) and `permissions --json` (read-only, never `--grant`). Synthetic fixtures only (see above). |
+| AI Discovery models: owner, relevance, discovery confidence, lineage (`GET /api/v1/ai-usage`) | **Added**, shown by presence (CUST-310): Owners, Relevance and Confidence columns, the Mac's recommended / all scope, an inspector Provenance block and the `model-lookup=` chip. 0.8.10's data and fixtures are untouched and give the panel they always gave. See below. |
 
 ### Gateway HTTP client
 
@@ -218,8 +230,54 @@ way. A folder the CLI would rewrite (`%VAR%`, `~`, wildcards expand in every arg
 refresh that failed (the last good rows stay, labelled), a read older than its window, or a `config.yaml` / `.env` that changed since the read (checked
 again at the moment of the request) turns every change off with the reason as the button's tooltip. Reads stay on.
 
+### AI Discovery models: owner, relevance, confidence, lineage (CUST-310)
+
+**What the pin adds.** The model block of a local-model signal (`LocalModelInfo`, `internal/inventory/ai_discovery.go:282-303`) gains four members:
+`owner_application`, `relevance` (`primary`, `supporting`, `embedded`, `unknown`), `discovery_confidence` (a pointer: absent is "not reported", an explicit 0 is a score)
+and `provenance` (`publisher`, `country_code`, `root_model`, `base_models`, tri-state `quantized` and `distilled`, `quantization`, `derivation`, `source`, `confidence`), and
+`GET /api/v1/ai-usage` answers with `lookup_model_provenance_online` beside `enabled`, `summary` and `signals`. The state file (`aiStoredSignal` embeds `AISignal`) and
+`inventory.db` (`model_json` is `json.Marshal(sig.Model)`, `store.go:595-600`) carry the same block, so the app reads it from all three; the route also carries per-signal identity and
+presence scores, evidence rows without raw paths, and the gone signals of the scan that noticed them.
+
+**0.8.10 carries none of it.** Learned from code, never from the live gateway. 0.8.10's own readers of the route (`commands/cmd_agent.py:283-300` and `:1307-1334`, `gateway.py:247`, and the
+TUI's `AIUsageModel.from_mapping`) take the model members `id`, `status`, `format`, `provider`, `recipe`, `modality`, `device`, `size_bytes` and `pinned` and nothing else, and the snapshot's
+`enabled`, `summary` and `signals`; and the installed `defenseclaw-gateway.exe`, searched as text and never run, contains none of the JSON names `owner_application`,
+`discovery_confidence`, `lookup_model_provenance_online`, `country_code`, `root_model`, `base_models`, `quantization` or `distilled` (the six hits of the word `relevance` are the LLM-provider SDK's
+rerank score). So the route of a 0.8.10 gateway does not carry these fields, nothing of them is shown for it, and its view is unchanged - which the tests prove with an answer built from the
+0.8.10 state fixture the way its code builds one (`DiscoveryData.ReportOf0810`: evidence off the wire, scores on the component's signal, no new member, no `lookup_model_provenance_online`).
+
+**The gate is the payload.** There is no marker for it in a help screen, so it is not a `RuntimeCapability`: a column, a filter or a chip exists only when some model carries what it shows
+(the Mac has no probe for this panel either: what it shows depends on the payload). The gateway's per-signal scores and gone signals, which a 0.8.10 gateway sends too, are **not** taken from the route: the files stay the
+list (cards, rows, states, evidence), and the route only fills in the four members for the signal with the same id and the same model, so a report adds no product, no model and no gone row.
+
+**Reading.** One authenticated `GET /api/v1/ai-usage` per load of the panel (first visit, Refresh, a finished action, a stale return; never on a timer), through the gateway client the other
+routes use (bearer token, `X-DefenseClaw-Client`, only to a verified gateway process), and **bounded** (`GatewayClient.GetBoundedJsonAsync`): at most 4 MiB (the Mac's limit; an announced
+length over it is refused before a byte is read, a chunked body is dropped as it passes it), the client's timeout over the body as well as the headers, and at most 8,192 signals parsed. Every way
+the read can end is a state of the Sources card (off, unreachable, token refused, not connected, no route, too large, not a report, failed) and never of the page; a failed read takes back what
+an earlier one added. `ReadUsage` is the seam tests use, so none opens a socket.
+
+**The recommended / all scope** is the Mac's `AIModelDiscoveryFilter`, case for case (`AiDiscoveryModelFilterTests`): with "Show all models" off a model is listed when it is at least 80%
+confident (its reported discovery confidence; else, for a model no model server listed, its strongest detection score) and is primary, or is a supporting speech, audio, vision or embedding
+model that an application owns; a model a local model server listed with no confidence of its own is always listed; choosing a Modality or a Relevance lifts the primary / supporting rule (the
+80% floor stays, as in the Mac's code) and applies the choice as asked. **A legacy snapshot is forced to show-all:** when no model carries a confidence, an owner or a relevance - every model
+0.8.10 reports - there is nothing to separate a primary model from an embedded artifact, so nothing is hidden and the switch is not offered. The Windows panel's own 80% Confidence picker stays and
+composes with the scope; it cuts the number the column shows. The column says "93%" for a model's own confidence, "API" for a server's listing that has none (only where the runtime classifies
+its models: a 0.8.10 view of a server-listed model has always said "NN% signal" and still does) and "NN% signal" for the score of a match.
+
+**Columns, inspector and diagnostic.** The table gains Owners and Relevance when some model has one (Modality already worked that way); rows are merged across detectors on the case-folded, trimmed
+model id; the inspector gains Owners, Relevance, Discovery confidence and a Provenance block (publisher, country as name and code - the Windows font has no flag glyphs - root model or "ambiguous (N)",
+base models, derivation, quantized and distilled only when the runtime said, source, lineage confidence); the line of counts gains the TUI's last header part, `model-lookup=online` or `offline`,
+only when an enabled gateway said so (a gateway that does not send the member is neither).
+
+**Raw local paths.** The panel never reads `raw_path` or `raw_paths`. A value of the newer text fields (owner, publisher, root and base model, quantization, derivation, source) that looks like a local
+path - a drive path, a UNC or backslashed path, `file:`, `~/`, `/x`, `%VAR%/x` - is shown as "(local path hidden)" unless config.yaml says `ai_discovery.store_raw_local_paths: true`, the runtime's own
+switch for keeping them, and those values are also cut to 512 characters and have their control and bidirectional characters spelled out.
+
 ## Not verified
 
+- A populated `GET /api/v1/ai-usage` from a Windows run, and the recommended view against a running pinned runtime: `ai-usage.populated.synthetic.json` is built from the emitting code and held
+  to that source's own validation rules, not compared with an answer. The online lookup being on (`lookup_model_provenance_online: true`) was never observed. The 0.8.10 gateway's answer was
+  learned from its Python consumers and a text search of its binary, not from an answer of its own.
 - The model panel against a running pinned runtime. Everything above is built on the fixtures: the single-connector scenario is the Phase 2 capture;
   the two-connector scenario is synthetic. `guardrail protection enable|disable`, `use-pack`, `hilt`, `block-at|alert-at` and `policy edit guardrail`
   were never run (the app never starts the pinned runtime; its commands restart a gateway). The posture composition was not cross-checked against a
@@ -242,6 +300,9 @@ dotnet test DefenseClaw.App.Tests -c Release --filter "FullyQualifiedName~Runtim
 # the Policies model (Core model and readers, then the panel)
 dotnet test DefenseClaw.Tests -c Release --filter "FullyQualifiedName~PolicyModel|FullyQualifiedName~PolicyLevels|FullyQualifiedName~PolicyCatalogRead|FullyQualifiedName~PolicyAction"
 dotnet test DefenseClaw.App.Tests -c Release --filter "FullyQualifiedName~Policies"
+# AI Discovery models: the bounded read, the fixtures, then the filter, the fields, the report and the panel (CUST-310)
+dotnet test DefenseClaw.Tests -c Release --filter "FullyQualifiedName~GatewayClientBoundedReadTests|FullyQualifiedName~AiUsageFixtureTests"
+dotnet test DefenseClaw.App.Tests -c Release --filter "FullyQualifiedName~Discovery"
 # whole Core suite against the 53-migration audit schema
 DEFENSECLAW_TEST_AUDIT_SCHEMA=runtime-95159fd/audit/audit-schema.sql dotnet test DefenseClaw.Tests -c Release
 ```

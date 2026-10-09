@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Text.Json;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.Core.Gateway;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.Tests.Discovery;
@@ -87,6 +89,22 @@ internal sealed class DiscoveryScene : IDisposable
         Task? load = null;
         UiThread.Run(() => load = ViewModel.LoadFromDiskAsync(CancellationToken.None));
         UiThread.WaitFor(() => load!.IsCompleted, "a second disk phase of the AI Discovery load");
+        load!.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Asks the gateway for its AI usage report the way a load does - but of <paramref name="answer"/>, a script, so no request is made - and
+    /// returns when the view-model has taken the answer.
+    /// </summary>
+    public void LoadUsage(Func<GatewayResult<JsonDocument>> answer)
+    {
+        Task? load = null;
+        UiThread.Run(() =>
+        {
+            ViewModel.ReadUsage = _ => Task.FromResult(answer());
+            load = ViewModel.LoadUsageAsync(CancellationToken.None);
+        });
+        UiThread.WaitFor(() => load!.IsCompleted, "the gateway's AI usage report");
         load!.GetAwaiter().GetResult();
     }
 

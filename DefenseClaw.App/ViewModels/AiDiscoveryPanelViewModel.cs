@@ -585,8 +585,9 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                 IsLoading = false;
             }
 
-            // The live parts cost a CLI process and a REST call; they run together, after the cards are up.
-            await Task.WhenAll(LoadLiveStatusAsync(cancellationToken), LoadRuntimeAsync(cancellationToken))
+            // The live parts cost a CLI process and two REST calls (the runtime section, and the gateway's AI usage report, which adds the
+            // newer model fields to what the files list); they run together, after the cards are up.
+            await Task.WhenAll(LoadLiveStatusAsync(cancellationToken), LoadRuntimeAsync(cancellationToken), LoadUsageAsync(cancellationToken))
                 .ConfigureAwait(true);
         }
         finally
@@ -645,6 +646,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         CancellationToken cancellationToken)
     {
         var path = Services.Paths.AiDiscoveryStatePath;
+        var options = ReadOptions;
         try
         {
             if (File.Exists(path))
@@ -663,7 +665,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                         // panel empty with no explanation.
                         if (property.Value.ValueKind == JsonValueKind.Object)
                         {
-                            signals.Add(DiscoverySignalParser.FromState(property.Value));
+                            signals.Add(DiscoverySignalParser.FromState(property.Value, options));
                         }
                     }
                 }
@@ -716,7 +718,8 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
                         Available: false));
             }
 
-            var signals = latest.Rows.Rows.Select(DiscoverySignalParser.FromDbRow).ToList();
+            var options = ReadOptions;
+            var signals = latest.Rows.Rows.Select(row => DiscoverySignalParser.FromDbRow(row, options)).ToList();
             var scan = latest.Scan;
             var detail = scan is null
                 ? $"{note} inventory.db has not recorded a scan yet."

@@ -11,9 +11,9 @@ namespace DefenseClaw.App.Tests.Discovery;
 /// Synthetic data only. Two payload shapes are fed through it: a DefenseClaw 0.8.10 state file (<c>ai-discovery-state.0.8.10.json</c>:
 /// every key the live file has, checked key by key against one on 2026-10-08) and one in the shape of upstream source commit 95159fd
 /// (<c>ai-discovery-state.95159fd.json</c>: the model fields <c>owner_application</c>, <c>relevance</c>, <c>discovery_confidence</c> and
-/// <c>provenance</c> that 0.8.10 does not send, from <c>internal/inventory/ai_discovery.go</c>). The panel reads what 0.8.10 carries; the
-/// newer fields are CUST-310, so the second file proves that a newer runtime's file reads, and shows exactly what 0.8.10 would have shown
-/// of it - nothing invented, nothing of the new fields.
+/// <c>provenance</c> that 0.8.10 does not send, from <c>internal/inventory/ai_discovery.go</c>). The panel reads what 0.8.10 carries, and
+/// the newer fields too where a payload has them (CUST-310; see <c>AiDiscoveryModelFieldsTests</c> and <c>AiDiscoveryModelFilterTests</c> for
+/// those), so the first file proves that a 0.8.10 install is shown exactly what it always was - nothing invented, nothing of the new fields.
 /// </summary>
 public sealed class AiDiscoveryModelTests
 {
@@ -165,22 +165,36 @@ public sealed class AiDiscoveryModelTests
     }
 
     [Fact]
-    public void A_newer_runtimes_state_file_reads_for_what_0_8_10_reads_of_it_and_the_new_fields_are_left_alone()
+    public void A_newer_runtimes_state_file_reads_for_what_0_8_10_reads_of_it_and_for_the_members_it_adds()
     {
         var signals = FromFixture("ai-discovery-state.95159fd.json");
 
-        // The model block's 0.8.10 fields are read; owner_application, relevance, discovery_confidence and provenance are CUST-310's.
+        // The model block's 0.8.10 fields are read, and so are owner_application, relevance, discovery_confidence and provenance (CUST-310).
         var chat = signals.Single(s => s.SignalId == "sig-chat-api").Model!;
-        Assert.Equal(new DiscoveryModelInfo("example-chat-3b-q4", "loaded", "gguf", "example-server", "llamacpp", "text", "gpu", 2_000_000_000, true), chat);
+        Assert.Equal(
+            new DiscoveryModelInfo("example-chat-3b-q4", "loaded", "gguf", "example-server", "llamacpp", "text", "gpu", 2_000_000_000, true)
+            {
+                OwnerApplication = "Example Notes",
+                Relevance = "primary",
+                DiscoveryConfidence = 0.93,
+                Provenance = chat.Provenance,
+            },
+            chat);
+        Assert.Equal("Example Labs", chat.Provenance!.Publisher);
+        Assert.Equal("US", chat.Provenance.CountryCode);
+        Assert.Equal(new[] { "example-labs/chat-3b" }, chat.Provenance.BaseModels);
+        Assert.Equal("quantized · Q4_K_M", chat.Provenance.DerivationDisplay);
 
         // The process block of the newer build also lists other instances; they are not read, and the rest of it is.
         var app = signals.Single(s => s.SignalId == "sig-desktop-app");
         Assert.Equal(new DiscoveryRuntimeInfo(5150, 3600, "example-user", "ExampleNotes.exe"), app.Runtime);
 
-        // A model block with nothing but the 0.8.10 fields reads the same way.
+        // A model block with nothing but the 0.8.10 fields reads the same way, and has none of the new ones: nothing is made up.
         var unclassified = signals.Single(s => s.SignalId == "sig-unclassified").Model!;
         Assert.Equal(string.Empty, unclassified.Modality);
         Assert.Equal(12_345, unclassified.SizeBytes);
+        Assert.False(unclassified.HasClassification);
+        Assert.Null(unclassified.Provenance);
 
         var component = signals.Single(s => s.SignalId == "sig-sdk");
         Assert.Equal(new DiscoveryComponentRef("npm", "@example/sdk", "2.0.1", "Example JS SDK"), component.Component);
@@ -616,16 +630,29 @@ public sealed class AiDiscoveryModelTests
         Assert.Contains("Pinned", richLabels);
         Assert.Equal("Generative", rich.Facts.Single(f => f.Label == "Modality").Value);
 
-        // ...and what a newer runtime adds is not (CUST-310): no owner, relevance, discovery confidence or lineage anywhere.
-        Assert.DoesNotContain(richLabels, label => label is "Owner" or "Relevance" or "Publisher" or "Country" or "Root model" or "Derivation" or "Confidence");
+        // ...and so is what a newer runtime adds (CUST-310), in its own rows: the owner, the relevance, the discovery confidence, and the
+        // lineage in a block of its own.
+        Assert.Contains("Owners", richLabels);
+        Assert.Contains("Relevance", richLabels);
+        Assert.Contains("Discovery confidence", richLabels);
+        Assert.Equal("Example Notes", rich.Facts.Single(f => f.Label == "Owners").Value);
+        Assert.Equal("Primary", rich.Facts.Single(f => f.Label == "Relevance").Value);
+        Assert.Equal("93%", rich.Facts.Single(f => f.Label == "Discovery confidence").Value);
+        Assert.DoesNotContain(richLabels, label => label is "Publisher" or "Country" or "Root model" or "Derivation");
+        Assert.Equal(
+            new[] { "Publisher", "Country", "Root model", "Base models", "Derivation", "Quantized", "Distilled", "Source", "Lineage confidence" },
+            rich.ProvenanceFacts.Select(f => f.Label).ToArray());
+
         var model = rich.Observations.Select(o => o.DetailText).First(detail => detail.Contains("model:", StringComparison.Ordinal));
         Assert.Contains(
-            "model: id=example-chat-3b-q4 status=loaded format=gguf provider=example-server recipe=llamacpp modality=text device=gpu size=1.9 GiB pinned=true",
+            "model: id=example-chat-3b-q4 status=loaded format=gguf provider=example-server recipe=llamacpp modality=text relevance=primary owner=Example Notes device=gpu size=1.9 GiB pinned=true discovery_confidence=93%",
             model,
             StringComparison.Ordinal);
-        Assert.DoesNotContain("owner", model, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("relevance", model, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("discovery_confidence", model, StringComparison.OrdinalIgnoreCase);
+
+        // A model without any of it gets none of those rows, whichever runtime wrote its file.
+        var bare = DiscoveryModelRow.Build(FromFixture("ai-discovery-state.95159fd.json"), Now).Single(r => r.ModelId == "unclassified-artifact");
+        Assert.DoesNotContain(bare.Facts.Select(f => f.Label), label => label is "Owners" or "Relevance" or "Discovery confidence");
+        Assert.False(bare.HasProvenance);
     }
 
     [Fact]

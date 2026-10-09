@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway.Models;
@@ -173,7 +174,24 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
     public Task<GatewayResult<JsonDocument>> GetRawJsonAsync(string path, bool requiresAuth = true, CancellationToken cancellationToken = default) =>
         GetAsync<JsonDocument>(path, requiresAuth, cancellationToken);
 
-    private async Task<GatewayResult<T>> GetAsync<T>(string path, bool requiresAuth, CancellationToken cancellationToken)
+    /// <summary>
+    /// <see cref="GetRawJsonAsync"/> for an answer that grows with what the machine holds (the AI usage report lists every signal of the
+    /// last scan): the body is read as it arrives and the read stops at <paramref name="maxBytes"/>. An answer that says it is longer
+    /// (<c>Content-Length</c>) is not read at all, and one that turns out longer is dropped; both end as <see cref="GatewayStatus.Error"/>
+    /// naming the limit, never as a half-read document. The read has the client's timeout too: <see cref="HttpClient.Timeout"/> ends
+    /// with the headers when the body is streamed, so the body gets the same budget on its own.
+    /// </summary>
+    public Task<GatewayResult<JsonDocument>> GetBoundedJsonAsync(string path, int maxBytes, bool requiresAuth = true, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxBytes, 1);
+        return GetAsync<JsonDocument>(path, requiresAuth, cancellationToken, maxBytes);
+    }
+
+    /// <summary>The <see cref="GatewayResult{T}.ErrorMessage"/> of an answer longer than the limit a bounded read was given.</summary>
+    public static string TooLargeMessage(int maxBytes) =>
+        "the gateway's answer is larger than " + maxBytes.ToString(CultureInfo.InvariantCulture) + " bytes, so it was not read";
+
+    private async Task<GatewayResult<T>> GetAsync<T>(string path, bool requiresAuth, CancellationToken cancellationToken, int? maxBodyBytes = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -215,7 +233,11 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken)
+            // A bounded read takes the headers first and streams the body itself (ReadBoundedAsync); an unbounded one lets HttpClient buffer it.
+            response = await _http.SendAsync(
+                    request,
+                    maxBodyBytes is null ? HttpCompletionOption.ResponseContentRead : HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
@@ -240,15 +262,77 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
             string body;
             try
             {
-                body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                if (maxBodyBytes is { } limit)
+                {
+                    if (await ReadBoundedAsync(response, limit, cancellationToken).ConfigureAwait(false) is not { } bounded)
+                    {
+                        return GatewayResult<T>.Error(TooLargeMessage(limit), (int)response.StatusCode);
+                    }
+
+                    body = bounded;
+                }
+                else
+                {
+                    body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (HttpRequestException ex)
             {
                 return GatewayResult<T>.Unreachable(Describe(ex));
             }
+            catch (IOException ex)
+            {
+                // The connection dropped while the body was streaming (only a bounded read streams it itself).
+                return GatewayResult<T>.Unreachable($"gateway unreachable: {ex.Message}");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return GatewayResult<T>.Unreachable("gateway timed out while sending its answer");
+            }
 
             return Interpret<T>(response.StatusCode, body);
         }
+    }
+
+    /// <summary>
+    /// The body as text, or null when it is longer than <paramref name="maxBytes"/>: an announced length over the limit is refused before a
+    /// byte is read, and an unannounced (chunked) body is dropped the moment it passes it. Time-boxed to the client's timeout.
+    /// </summary>
+    private async Task<string?> ReadBoundedAsync(HttpResponseMessage response, int maxBytes, CancellationToken cancellationToken)
+    {
+        var declared = response.Content.Headers.ContentLength;
+        if (declared > maxBytes)
+        {
+            return null;
+        }
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (_http.Timeout != Timeout.InfiniteTimeSpan)
+        {
+            budget.CancelAfter(_http.Timeout);
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
+        using var buffer = new MemoryStream((int)Math.Min(declared ?? 16 * 1024, maxBytes));
+        var chunk = new byte[16 * 1024];
+        while (true)
+        {
+            var read = await stream.ReadAsync(chunk.AsMemory(), budget.Token).ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            if (buffer.Length + read > maxBytes)
+            {
+                return null;
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        var text = Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        return text.Length > 0 && text[0] == '\uFEFF' ? text[1..] : text;
     }
 
     public const string PeerRefusedMessage =

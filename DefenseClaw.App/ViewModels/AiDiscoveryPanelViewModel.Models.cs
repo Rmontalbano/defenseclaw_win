@@ -1,17 +1,28 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DefenseClaw.Core.Gateway;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.ViewModels;
 
-/// <summary>One count of the line above the lists: "222 active", "2 new".</summary>
+/// <summary>One count of the line above the lists: "222 active", "2 new"; or one of its diagnostics, as the TUI words them: "model-lookup=offline".</summary>
 public sealed record DiscoveryHeaderChip(string Label, string Value, string ToneKey)
 {
-    public string Text => $"{Value} {Label}";
+    /// <summary>A <c>key=value</c> diagnostic of the TUI's header line rather than a count.</summary>
+    public bool IsDiagnostic { get; init; }
+
+    /// <summary>What the chip says in a sentence when it is hovered; empty for a count.</summary>
+    public string Description { get; init; } = string.Empty;
+
+    public bool HasDescription => Description.Length > 0;
+
+    public string Text => IsDiagnostic ? $"{Label}={Value}" : $"{Value} {Label}";
 
     public override string ToString() => Text;
 }
@@ -132,11 +143,17 @@ public sealed record DiscoveryHeaderCounts(
 /// "Local Model Artifact", with a signal per file, which is what the Models view replaces with a row per model.
 /// </para>
 /// <para>
-/// <b>Filters.</b> Each exists only when the data can answer it: Modality when some model names one; Confidence always, since every
-/// signal has a detection score. Nothing is hidden until the operator picks something: the Mac's "recommended" default (hide the models
-/// under 80% and the ones that are not primary) needs the model-level confidence and relevance a newer runtime sends, and the Mac itself
-/// lists everything for data that has neither, as 0.8.10's has not. Those fields, and the identity and presence of every signal, belong to
-/// CUST-310.
+/// <b>Filters.</b> Each exists only when the data can answer it: Modality and Relevance, and the Owners column, when some model names
+/// one; Confidence always, since every signal has a detection score. A runtime that classifies its models (a newer one sends an owner, a
+/// relevance and a discovery confidence for each) gets the Mac's <b>recommended</b> default - "Show all models" off lists the models worth
+/// a look: at least 80% confident, and primary or owned and of a kind that matters (<see cref="DiscoveryModelFilter"/>) - and says how many
+/// it hid. A runtime that does not (every model a 0.8.10 install reports) gets no such scope, and nothing is hidden until the operator
+/// picks something, as the Mac itself lists everything for data that has neither.
+/// </para>
+/// <para>
+/// <b>The gateway's report.</b> <c>GET /api/v1/ai-usage</c> is read with every load, once, alongside the files
+/// (<see cref="LoadUsageAsync"/>). It adds the newer model members to the signals the files list and says whether the running gateway looks
+/// model lineage up online (the <c>model-lookup=</c> chip); it adds no row. See <see cref="DiscoveryUsageOverlay"/>.
 /// </para>
 /// </summary>
 public sealed partial class AiDiscoveryPanelViewModel
@@ -149,11 +166,23 @@ public sealed partial class AiDiscoveryPanelViewModel
 
     private readonly List<DiscoveryModelRow> _allModels = new();
 
+    /// <summary>The signals the files list, before the gateway's report adds to their model blocks; every list is rebuilt from them.</summary>
+    private IReadOnlyList<DiscoverySignalRecord> _fileSignals = Array.Empty<DiscoverySignalRecord>();
+
     /// <summary>The signals the lists are built from, kept for the counts taken from the signals themselves.</summary>
     private IReadOnlyList<DiscoverySignalRecord> _signals = Array.Empty<DiscoverySignalRecord>();
 
     private LiveDiscoveryStatus? _liveStatus;
     private DiscoveryModelFilter _modelFilter = new();
+
+    /// <summary>The gateway's last usable report; null while it has not answered, after a failed read, and for a gateway that has AI discovery off.</summary>
+    private AiUsageSnapshot? _usage;
+
+    /// <summary>The Sources row that says what the last read of the gateway's report did.</summary>
+    private DiscoverySourceInfo? _usageSource;
+
+    /// <summary>How many models the recommended scope alone keeps off the list (they pass the search and the pickers, not the scope).</summary>
+    private int _hiddenByScope;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsProductsView), nameof(IsModelsView))]
@@ -168,6 +197,39 @@ public sealed partial class AiDiscoveryPanelViewModel
     /// <summary>Some model names a modality, so there is a Modality column and filter.</summary>
     [ObservableProperty]
     private bool _hasModalityFilter;
+
+    /// <summary>Some model names a relevance (primary, supporting, embedded), so there is a Relevance column and filter.</summary>
+    [ObservableProperty]
+    private bool _hasRelevanceFilter;
+
+    /// <summary>Some model names the application that owns it, so there is an Owners column.</summary>
+    [ObservableProperty]
+    private bool _hasOwnerData;
+
+    /// <summary>
+    /// The runtime classifies its models (some carries an owner, a relevance or a discovery confidence), so the recommended scope applies and
+    /// "Show all models" is offered. False for a snapshot that cannot be narrowed - every model a 0.8.10 install reports - which has no
+    /// such switch.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConfidenceFilterHelp), nameof(ResetFiltersHelp))]
+    private bool _hasRecommendedScope;
+
+    /// <summary>"Show all models": the recommended scope is lifted. Off is the Mac's default.</summary>
+    [ObservableProperty]
+    private bool _showAllModels;
+
+    [ObservableProperty]
+    private string _relevanceFilter = AllChoice;
+
+    /// <summary>"3 models hidden by the recommended view..." - empty when the scope hides nothing from the list the pickers and the search leave.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasModelScopeNote))]
+    private string _modelScopeNote = string.Empty;
+
+    /// <summary>The line of counts above the lists has counts to explain (its note says whose they are); a diagnostic alone has none.</summary>
+    [ObservableProperty]
+    private bool _hasHeaderNote;
 
     /// <summary>The Models view has nothing to list at all (see <see cref="EmptyTitle"/> for why).</summary>
     [ObservableProperty]
@@ -213,6 +275,21 @@ public sealed partial class AiDiscoveryPanelViewModel
 
     public bool HasModelSelection => SelectedModel is not null;
 
+    public bool HasModelScopeNote => ModelScopeNote.Length > 0;
+
+    /// <summary>
+    /// What the Confidence picker's tooltip says. For a runtime that does not classify its models it is the words 0.8.10's panel has always
+    /// had; where the column can show a model's own confidence it says which number the cut is made on.
+    /// </summary>
+    public string ConfidenceFilterHelp => HasRecommendedScope
+        ? "The number the Confidence column shows: the model's own discovery confidence when the runtime reports one, otherwise the strongest detection score among its signals (how sure the scanner was that something matched, not its confidence in the model). Every model is listed until you choose a cut."
+        : "The strongest detection score among the model's signals: how sure the scanner was that something matched, not its confidence in the model itself. Every model is listed until you choose a cut.";
+
+    /// <summary>The screen-reader help of Reset filters: with the recommended view on offer, resetting also puts the list back to it.</summary>
+    public string ResetFiltersHelp => HasRecommendedScope
+        ? "Set the filters back to all and the list back to the recommended models."
+        : "Set the modality and confidence filters back to all.";
+
     /// <summary>The view on screen has nothing at all to list: one empty-state card says why.</summary>
     public bool ShowEmpty => HasNoComponents || HasNoModels;
 
@@ -228,6 +305,15 @@ public sealed partial class AiDiscoveryPanelViewModel
         new("vision", "Vision"),
         new("embedding", "Embedding"),
         new("audio", "Audio"),
+        new("unknown", "Unknown"),
+    };
+
+    public IReadOnlyList<DiscoveryFilterChoice> RelevanceChoices { get; } = new DiscoveryFilterChoice[]
+    {
+        new(AllChoice, "All relevance"),
+        new("primary", "Primary"),
+        new("supporting", "Supporting"),
+        new("embedded", "Embedded"),
         new("unknown", "Unknown"),
     };
 
@@ -247,25 +333,41 @@ public sealed partial class AiDiscoveryPanelViewModel
 
     partial void OnModalityFilterChanged(string value) => RefreshModels();
 
+    partial void OnRelevanceFilterChanged(string value) => RefreshModels();
+
     partial void OnConfidenceFilterChanged(string value) => RefreshModels();
+
+    partial void OnShowAllModelsChanged(bool value) => RefreshModels();
 
     /// <summary>Closes the model inspector (its X, Esc).</summary>
     [RelayCommand]
     private void ClearModelSelection() => SelectedModel = null;
 
-    /// <summary>Puts the modality and confidence pickers back to "all".</summary>
+    /// <summary>Puts the pickers back to "all" and the scope back to the recommended models.</summary>
     [RelayCommand]
     private void ResetModelFilters()
     {
         ModalityFilter = AllChoice;
+        RelevanceFilter = AllChoice;
         ConfidenceFilter = AnyConfidence;
+        ShowAllModels = false;
+    }
+
+    /// <summary>
+    /// Takes the signals the files list, adds what the gateway's last report says about their models (nothing, until it has answered) and
+    /// builds the lists from the result.
+    /// </summary>
+    private void ApplySignals(IReadOnlyList<DiscoverySignalRecord> files)
+    {
+        _fileSignals = files;
+        RebuildLists(_usage is { } usage ? DiscoveryUsageOverlay.Apply(files, usage.Signals).Signals : files);
     }
 
     /// <summary>
     /// Builds everything the lists show from <paramref name="signals"/>: the product cards, the model rows, the counts on the switch and
     /// the line under the page title.
     /// </summary>
-    private void ApplySignals(IReadOnlyList<DiscoverySignalRecord> signals)
+    private void RebuildLists(IReadOnlyList<DiscoverySignalRecord> signals)
     {
         var now = DateTimeOffset.UtcNow;
         _signals = signals;
@@ -288,8 +390,8 @@ public sealed partial class AiDiscoveryPanelViewModel
     }
 
     /// <summary>
-    /// Replaces the model rows. The chosen model stays chosen when it is still there; the modality picker, once no model names a modality,
-    /// goes back to "all" rather than keep hiding rows from a control that is gone.
+    /// Replaces the model rows. The chosen model stays chosen when it is still there; the modality and relevance pickers, once no model
+    /// names a modality or a relevance, go back to "all" rather than keep hiding rows from a control that is gone.
     /// </summary>
     internal void SetModels(IReadOnlyList<DiscoveryModelRow> rows)
     {
@@ -305,6 +407,15 @@ public sealed partial class AiDiscoveryPanelViewModel
             ModalityFilter = AllChoice;
         }
 
+        HasRelevanceFilter = _allModels.Any(static row => row.HasRelevanceData);
+        if (!HasRelevanceFilter)
+        {
+            RelevanceFilter = AllChoice;
+        }
+
+        HasOwnerData = _allModels.Any(static row => row.HasOwnerData);
+        HasRecommendedScope = _allModels.Count > 0 && !DiscoveryModelFilter.IsLegacySnapshot(_allModels);
+
         ModelCount = _allModels.Count;
         RefreshModels();
 
@@ -319,8 +430,10 @@ public sealed partial class AiDiscoveryPanelViewModel
     /// <summary>Applies the pickers and the search to the model rows and re-words everything that says how many there are.</summary>
     private void RefreshModels()
     {
+        // The recommended scope is the default; a snapshot that cannot be narrowed (a legacy one) lists everything whatever the switch says.
         _modelFilter = new DiscoveryModelFilter
         {
+            RecommendedOnly = !ShowAllModels,
             Modality = ModalityFilter switch
             {
                 "generative" => DiscoveryModality.Generative,
@@ -331,19 +444,37 @@ public sealed partial class AiDiscoveryPanelViewModel
                 "unknown" => DiscoveryModality.Unknown,
                 _ => null,
             },
+            Relevance = RelevanceFilter switch
+            {
+                "primary" => DiscoveryRelevance.Primary,
+                "supporting" => DiscoveryRelevance.Supporting,
+                "embedded" => DiscoveryRelevance.Embedded,
+                "unknown" => DiscoveryRelevance.Unknown,
+                _ => null,
+            },
             Confidence = ConfidenceFilter switch
             {
                 "high" => DiscoveryConfidenceBand.High,
                 "low" => DiscoveryConfidenceBand.Low,
                 _ => DiscoveryConfidenceBand.Any,
             },
-        };
+        }.PreservingLegacySnapshot(_allModels);
 
-        HasActiveModelFilters = ModalityFilter != AllChoice || ConfidenceFilter != AnyConfidence;
+        HasActiveModelFilters = ModalityFilter != AllChoice || RelevanceFilter != AllChoice || ConfidenceFilter != AnyConfidence
+            || (HasRecommendedScope && ShowAllModels);
         ModelsView.Refresh();
 
         var shown = ModelsView.Cast<DiscoveryModelRow>().Count();
         ModelCaption = $"{shown.ToString(CultureInfo.InvariantCulture)} of {_allModels.Count.ToString(CultureInfo.InvariantCulture)}";
+
+        // Said apart from the count, so the operator can tell "the search found nothing" from "the recommended view kept it off".
+        var unscoped = _modelFilter with { RecommendedOnly = false };
+        _hiddenByScope = _modelFilter.RecommendedOnly
+            ? _allModels.Count(row => row.Matches(SearchText) && unscoped.Includes(row) && !_modelFilter.Includes(row))
+            : 0;
+        ModelScopeNote = _hiddenByScope == 0
+            ? string.Empty
+            : $"{Plural(_hiddenByScope, "model")} hidden by the recommended view. Turn on Show all models to list {(_hiddenByScope == 1 ? "it" : "them")}.";
 
         if (SelectedModel is { } selected && !FilterModel(selected))
         {
@@ -369,8 +500,23 @@ public sealed partial class AiDiscoveryPanelViewModel
             HeaderChips.Add(chip);
         }
 
+        HasHeaderNote = HeaderChips.Count > 0;
+        HeaderNote = HasHeaderNote ? counts.Note : string.Empty;
+
+        // The TUI's last header part: whether the running gateway looks model lineage up online. Shown only when the gateway said so - a
+        // gateway that does not send the member (0.8.10) is neither online nor offline, and a service that is off has no such setting.
+        if (_usage is { Enabled: true, LookupModelProvenanceOnline: { } lookup })
+        {
+            HeaderChips.Add(new DiscoveryHeaderChip("model-lookup", lookup ? "online" : "offline", "Neutral")
+            {
+                IsDiagnostic = true,
+                Description = lookup
+                    ? "Online model lookup is on: the gateway may look up the model cards of the Hugging Face repositories it finds in local model metadata."
+                    : "Online model lookup is off (the default): a model's lineage comes from the runtime's built-in publisher catalogue and the model's own metadata only.",
+            });
+        }
+
         HasHeader = HeaderChips.Count > 0;
-        HeaderNote = HasHeader ? counts.Note : string.Empty;
     }
 
     private DiscoveryHeaderCounts ChooseHeaderCounts()
@@ -392,8 +538,8 @@ public sealed partial class AiDiscoveryPanelViewModel
 
     /// <summary>
     /// Gives each signal with a component the identity and presence bands of that component. Neither the state file nor <c>ai_signals</c>
-    /// has them per signal: the gateway works them out when it answers <c>/api/v1/ai-usage</c>, which this panel does not read (CUST-310).
-    /// What <c>inventory.db</c> has is the same engine's result for the latest scan, one snapshot per component
+    /// has them per signal: the gateway works them out when it answers <c>/api/v1/ai-usage</c>, which this panel reads for the newer model
+    /// fields only (CUST-310), so it takes no band from it. What <c>inventory.db</c> has is the same engine's result for the latest scan, one snapshot per component
     /// (<c>ai_confidence_snapshots</c>), which is what the Inventory panel shows; a signal gets the band of its component's snapshot. On a
     /// live 0.8.10 install that is three components of two hundred signals, so most cards have none, and say none. Nothing is read when no
     /// signal has a component, and a database that cannot answer leaves the cards without bands and says so under Sources.
@@ -479,5 +625,122 @@ public sealed partial class AiDiscoveryPanelViewModel
                 return null;
             }
         }
+    }
+
+    // ---- the gateway's report ------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// What the gateway answers to <c>GET /api/v1/ai-usage</c>, as a script for a test: no socket opens when it is set. Left null, the
+    /// panel asks the real gateway through its client (<see cref="DefenseClaw.Core.Gateway.GatewayClient.GetBoundedJsonAsync"/>).
+    /// </summary>
+    internal Func<CancellationToken, Task<GatewayResult<JsonDocument>>>? ReadUsage { get; set; }
+
+    /// <summary>How the signal readers treat a value that names a place on this machine: withheld, unless the runtime says it keeps raw local paths.</summary>
+    private DiscoveryReadOptions ReadOptions => new(Services.Config.Config.AiDiscovery.StoreRawLocalPaths);
+
+    /// <summary>
+    /// Asks the gateway for its AI usage report (a plain authenticated GET, bounded in size and time, nothing written) and gives the
+    /// answer to <see cref="ApplyUsage"/>. Any failure is a state of the Sources card, never of the page: the files list what they list.
+    /// </summary>
+    internal async Task LoadUsageAsync(CancellationToken cancellationToken)
+    {
+        AiUsageRead read;
+        try
+        {
+            var result = ReadUsage is { } script
+                ? await script(cancellationToken).ConfigureAwait(true)
+                : await Services.Gateway.GetBoundedJsonAsync(AiUsageReader.Route, AiUsageReader.MaxBytes, requiresAuth: true, cancellationToken).ConfigureAwait(true);
+
+            // Parsing is linear in the answer and runs off the UI thread; the document is disposed with it.
+            var options = ReadOptions;
+            read = await Task.Run(
+                () =>
+                {
+                    try
+                    {
+                        return AiUsageReader.FromGateway(result, options);
+                    }
+                    finally
+                    {
+                        result.Value?.Dispose();
+                    }
+                },
+                CancellationToken.None).ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // The gateway's report is supplementary; any failure to read it becomes its own state, never the page's.
+        catch (Exception ex)
+        {
+            Trace.TraceError($"AI usage read failed: {ex}");
+            read = new AiUsageRead(AiUsageReadStatus.Failed, null, "The read failed unexpectedly (" + ex.GetType().Name + ").");
+        }
+#pragma warning restore CA1031
+
+        ApplyUsage(read);
+    }
+
+    /// <summary>
+    /// Takes the gateway's report: a usable one (the service is on) adds the newer model members to the signals the files list and
+    /// switches the <c>model-lookup=</c> chip on; anything else - off, unreachable, refused, too large, not a report - leaves the files'
+    /// lists as they are and says why under Sources. The previous report never outlives a read that failed: a gateway that stopped answering
+    /// is not believed about its models.
+    /// </summary>
+    internal void ApplyUsage(AiUsageRead read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+
+        _usage = read.Snapshot is { Enabled: true } snapshot ? snapshot : null;
+
+        var (signals, enriched) = _usage is { } usage ? DiscoveryUsageOverlay.Apply(_fileSignals, usage.Signals) : (_fileSignals, 0);
+
+        // A report that changes nothing leaves the lists alone (an expanded card stays expanded); one that adds, or stops adding, rebuilds them.
+        if (!ReferenceEquals(signals, _signals))
+        {
+            RebuildLists(signals);
+        }
+
+        if (_usageSource is not null)
+        {
+            _ = Sources.Remove(_usageSource);
+        }
+
+        _usageSource = DescribeUsage(read, enriched);
+        Sources.Add(_usageSource);
+        RefreshHeader();
+    }
+
+    private static DiscoverySourceInfo DescribeUsage(AiUsageRead read, int enriched)
+    {
+        const string label = "Gateway — GET /api/v1/ai-usage";
+
+        if (read.Snapshot is not { } snapshot)
+        {
+            return new DiscoverySourceInfo(label, read.Message, null, Available: false);
+        }
+
+        if (!snapshot.Enabled)
+        {
+            return new DiscoverySourceInfo(label, "The gateway reports AI discovery off, so it has nothing to add to the files.", snapshot.ScannedAt, Available: true);
+        }
+
+        var detail = new List<string> { $"{Plural(snapshot.Signals.Count, "signal")} read from the gateway." };
+        detail.Add(enriched == 0
+            ? "No model gained anything from it: the files already say all it does."
+            : $"{Plural(enriched, "model signal")} gained an owner, relevance, confidence or lineage from it.");
+        if (snapshot.LookupModelProvenanceOnline is { } lookup)
+        {
+            detail.Add($"Online model lookup is {(lookup ? "on" : "off")}.");
+        }
+
+        if (snapshot.SignalsNotRead > 0)
+        {
+            detail.Add($"{Plural(snapshot.SignalsNotRead, "signal")} past the limit of {AiUsageReader.MaxSignals.ToString("N0", CultureInfo.InvariantCulture)} were not read.");
+        }
+
+        if (snapshot.UnreadableEntries > 0)
+        {
+            detail.Add($"{snapshot.UnreadableEntries.ToString(CultureInfo.InvariantCulture)} entr{(snapshot.UnreadableEntries == 1 ? "y" : "ies")} that {(snapshot.UnreadableEntries == 1 ? "was" : "were")} not a signal {(snapshot.UnreadableEntries == 1 ? "was" : "were")} skipped.");
+        }
+
+        return new DiscoverySourceInfo(label, string.Join(' ', detail), snapshot.ScannedAt, Available: true);
     }
 }

@@ -529,6 +529,11 @@ public sealed partial class AiDiscoveryPanelViewModel
                     hints.Add("reset the filters");
                 }
 
+                if (_hiddenByScope > 0)
+                {
+                    hints.Add("turn on Show all models");
+                }
+
                 NoMatchDetail = hints.Count == 0 ? "Nothing in the list passes the current view." : "To see more, " + string.Join(", or ", hints) + ".";
             }
             else

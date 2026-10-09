@@ -1,0 +1,444 @@
+{
+  "enabled": true,
+  "lookup_model_provenance_online": false,
+  "signals": [
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000101",
+      "signal_id": "ai-0000000000000101",
+      "signature_id": "example-agent",
+      "name": "Example Agent",
+      "vendor": "Example Corp",
+      "product": "Example Agent",
+      "category": "active_process",
+      "confidence": 0.95,
+      "state": "new",
+      "detector": "process",
+      "source": "sidecar",
+      "evidence_types": ["process"],
+      "first_seen": "2030-01-15T10:04:30.123456789Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "last_active_at": "2030-01-15T10:04:30.123456789Z",
+      "runtime": {"pid": 4242, "ppid": 1000, "started_at": "2030-01-15T07:12:30Z", "uptime_sec": 11520, "user": "operator", "comm": "example-agent.exe"},
+      "identity_score": 0.9,
+      "identity_band": "high",
+      "presence_score": 0.97,
+      "presence_band": "very_high",
+      "evidence": [
+        {"type": "process", "basename": "example-agent.exe", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a01", "quality": 1, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000201",
+      "signal_id": "ai-0000000000000201",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "seen",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "workspace_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000b01",
+      "model": {
+        "id": "Example-Chat-3B-Q4",
+        "status": "installed",
+        "format": "gguf",
+        "provider": "filesystem",
+        "modality": "generative",
+        "size_bytes": 2000000000,
+        "owner_application": "Example Notes",
+        "relevance": "primary",
+        "discovery_confidence": 0.95,
+        "provenance": {
+          "publisher": "Example Labs",
+          "country_code": "US",
+          "root_model": "example-labs/chat-3b",
+          "base_models": ["example-labs/chat-3b"],
+          "quantized": true,
+          "quantization": "Q4_K_M",
+          "distilled": false,
+          "derivation": "quantized",
+          "source": "catalog_exact",
+          "confidence": "high"
+        }
+      },
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "example-chat-3b-q4.gguf", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c01", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a02", "workspace_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000b01", "quality": 0.95, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000202",
+      "signal_id": "ai-0000000000000202",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "seen",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "workspace_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000b01",
+      "model": {
+        "id": "speech-tiny",
+        "status": "installed",
+        "format": "onnx",
+        "provider": "filesystem",
+        "modality": "speech",
+        "size_bytes": 75000000,
+        "owner_application": "Example Notes",
+        "relevance": "supporting",
+        "discovery_confidence": 0.92,
+        "provenance": {
+          "publisher": "Example Speech Co",
+          "country_code": "FR",
+          "root_model": "example-speech/tiny",
+          "base_models": ["example-speech/tiny"],
+          "quantized": false,
+          "distilled": false,
+          "source": "catalog_family",
+          "confidence": "low"
+        }
+      },
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "speech-tiny.onnx", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c02", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a03", "workspace_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000b01", "quality": 0.9, "match_kind": "heuristic"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000203",
+      "signal_id": "ai-0000000000000203",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "seen",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "model": {
+        "id": "browser-spellcheck",
+        "status": "installed",
+        "format": "bin",
+        "provider": "filesystem",
+        "modality": "generative",
+        "size_bytes": 4000000,
+        "owner_application": "Example Browser",
+        "relevance": "embedded",
+        "discovery_confidence": 0.96
+      },
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "spellcheck.bin", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c03", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a04", "quality": 0.8, "match_kind": "heuristic"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000204",
+      "signal_id": "ai-0000000000000204",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.85,
+      "state": "seen",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "model": {
+        "id": "uncertain-model",
+        "status": "installed",
+        "format": "gguf",
+        "provider": "filesystem",
+        "modality": "generative",
+        "size_bytes": 1000000,
+        "owner_application": "Example Notes",
+        "relevance": "primary",
+        "discovery_confidence": 0.79
+      },
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "uncertain-model.gguf", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c04", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a05", "quality": 0.84, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000205",
+      "signal_id": "ai-0000000000000205",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.8,
+      "state": "seen",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "model": {
+        "id": "unclassified-artifact",
+        "status": "installed",
+        "format": "bin",
+        "provider": "filesystem",
+        "modality": "unknown",
+        "size_bytes": 12345,
+        "relevance": "unknown",
+        "discovery_confidence": 0.8
+      },
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "weights.bin", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c05", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a06", "quality": 0.8, "match_kind": "heuristic"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000206",
+      "signal_id": "ai-0000000000000206",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "seen",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "model": {
+        "id": "supporting-chat-1b",
+        "status": "installed",
+        "format": "gguf",
+        "provider": "filesystem",
+        "modality": "generative",
+        "size_bytes": 800000000,
+        "owner_application": "Example Notes",
+        "relevance": "supporting",
+        "discovery_confidence": 0.9
+      },
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "supporting-chat-1b.gguf", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c06", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a07", "quality": 0.95, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000207",
+      "signal_id": "ai-0000000000000207",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "seen",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "model": {
+        "id": "ownerless-speech",
+        "status": "installed",
+        "format": "onnx",
+        "provider": "filesystem",
+        "modality": "speech",
+        "size_bytes": 30000000,
+        "relevance": "supporting",
+        "discovery_confidence": 0.91
+      },
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "ownerless-speech.onnx", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c07", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a08", "quality": 0.8, "match_kind": "heuristic"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000208",
+      "signal_id": "ai-0000000000000208",
+      "signature_id": "local-model-artifact",
+      "name": "Local Model Artifact",
+      "vendor": "Local",
+      "product": "Local Model Artifact",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "new",
+      "detector": "model_file",
+      "source": "sidecar",
+      "evidence_types": ["model_file"],
+      "model": {
+        "id": "merged-model-q8",
+        "status": "installed",
+        "format": "safetensors",
+        "provider": "filesystem",
+        "modality": "generative",
+        "size_bytes": 3200000000,
+        "owner_application": "Example Studio",
+        "relevance": "primary",
+        "discovery_confidence": 0.88,
+        "provenance": {
+          "publisher": "Example Org",
+          "base_models": ["org-a/base-a", "org-b/base-b"],
+          "quantized": true,
+          "quantization": "Q8_0",
+          "distilled": true,
+          "derivation": "distilled+quantized",
+          "source": "mixed",
+          "confidence": "medium"
+        }
+      },
+      "first_seen": "2030-01-15T10:04:30.123456789Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_file", "basename": "merged-model-q8.safetensors", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c08", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a09", "quality": 0.95, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000211",
+      "signal_id": "ai-0000000000000211",
+      "signature_id": "ollama",
+      "name": "Ollama",
+      "vendor": "Ollama",
+      "product": "Ollama",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "new",
+      "detector": "model_runtime",
+      "source": "sidecar",
+      "evidence_types": ["model_runtime"],
+      "model": {
+        "id": "example-chat-3b-q4",
+        "status": "loaded",
+        "format": "gguf",
+        "provider": "ollama",
+        "modality": "text",
+        "device": "gpu",
+        "provenance": {
+          "publisher": "Example Labs",
+          "quantized": true,
+          "quantization": "Q4_K_M",
+          "derivation": "quantized",
+          "source": "model_id",
+          "confidence": "low"
+        }
+      },
+      "runtime": {"pid": 5150},
+      "first_seen": "2030-01-15T10:04:30.123456789Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "last_active_at": "2030-01-15T10:04:00Z",
+      "evidence": [
+        {"type": "model_runtime", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a10", "quality": 1, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000212",
+      "signal_id": "ai-0000000000000212",
+      "signature_id": "ollama",
+      "name": "Ollama",
+      "vendor": "Ollama",
+      "product": "Ollama",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "seen",
+      "detector": "model_api",
+      "source": "sidecar",
+      "evidence_types": ["model_api"],
+      "model": {
+        "id": "llama-lite-8b",
+        "status": "installed",
+        "format": "gguf",
+        "provider": "ollama",
+        "size_bytes": 4700000000,
+        "provenance": {
+          "publisher": "Example Labs",
+          "quantized": true,
+          "quantization": "Q4_0",
+          "derivation": "quantized",
+          "source": "ollama_metadata",
+          "confidence": "medium"
+        }
+      },
+      "first_seen": "2030-01-10T08:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_api", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a11", "quality": 1, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000213",
+      "signal_id": "ai-0000000000000213",
+      "signature_id": "ollama",
+      "name": "Ollama",
+      "vendor": "Ollama",
+      "product": "Ollama",
+      "category": "local_model",
+      "confidence": 0.9,
+      "state": "gone",
+      "detector": "model_api",
+      "source": "sidecar",
+      "evidence_types": ["model_api"],
+      "model": {
+        "id": "retired-model",
+        "status": "installed",
+        "format": "gguf",
+        "provider": "ollama",
+        "size_bytes": 1500000000
+      },
+      "first_seen": "2030-01-05T08:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "evidence": [
+        {"type": "model_api", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a12", "quality": 1, "match_kind": "exact"}
+      ]
+    },
+    {
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000301",
+      "signal_id": "ai-0000000000000301",
+      "signature_id": "example-sdk",
+      "name": "Example SDK",
+      "vendor": "Example Corp",
+      "product": "Example Python SDK",
+      "category": "package_dependency",
+      "confidence": 0.9,
+      "state": "seen",
+      "detector": "package_manifest",
+      "source": "sidecar",
+      "evidence_types": ["package_manifest"],
+      "workspace_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000b02",
+      "version": "1.4.2",
+      "component": {"ecosystem": "pypi", "name": "example-sdk", "version": "1.4.2", "framework": "Example Python SDK"},
+      "first_seen": "2030-01-02T09:00:00Z",
+      "last_seen": "2030-01-15T10:04:30.123456789Z",
+      "last_active_at": "2030-01-15T10:04:30.123456789Z",
+      "identity_score": 0.86,
+      "identity_band": "high",
+      "presence_score": 0.31,
+      "presence_band": "low",
+      "evidence": [
+        {"type": "package_manifest", "basename": "requirements.txt", "path_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000c09", "value_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000a13", "workspace_hash": "hmac-sha256:0000000000000000000000000000000000000000000000000000000000000b02", "quality": 1, "match_kind": "exact"}
+      ]
+    }
+  ],
+  "summary": {
+    "scan_id": "00000000-0000-4000-8000-000000000301",
+    "scanned_at": "2030-01-15T10:04:30.123456789Z",
+    "duration_ms": 842,
+    "privacy_mode": "enhanced",
+    "source": "scheduled",
+    "result": "ok",
+    "total_signals": 13,
+    "active_signals": 12,
+    "new_signals": 3,
+    "changed_signals": 0,
+    "gone_signals": 1,
+    "files_scanned": 1204,
+    "dedupe_suppressed": 0,
+    "errors": 0,
+    "detector_durations_ms": {"model_api": 12, "model_file": 310, "model_runtime": 9, "package_manifest": 120, "process": 4}
+  }
+}
