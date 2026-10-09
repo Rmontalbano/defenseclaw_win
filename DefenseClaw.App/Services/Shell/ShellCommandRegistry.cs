@@ -329,6 +329,18 @@ internal static class ShellCommandRegistry
             DisabledReason: null,
             Run: showShortcuts));
 
+        // The Mac's Help menu entry (CUST-325, A13): the docs address is shown here and opened in the default browser, nothing is fetched.
+        commands.Add(new ShellCommand(
+            Id: "app.docs",
+            Title: "Open DefenseClaw docs",
+            Category: AppCategory,
+            Description: "Opens " + ShellActions.DocsUrl + " in your default browser.",
+            Shortcut: null,
+            Keywords: "help documentation docs manual guide online",
+            IsEnabled: true,
+            DisabledReason: null,
+            Run: actions.OpenDocs));
+
         if (appearance is not null)
         {
             commands.AddRange(BuildAppearanceCommands(appearance));

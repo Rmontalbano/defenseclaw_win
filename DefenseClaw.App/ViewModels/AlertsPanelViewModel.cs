@@ -166,6 +166,12 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     /// <summary>True while a block of severity toggles is being set at once (see <see cref="SetSeverityFloor"/>): the list is filtered once afterwards, not once per toggle.</summary>
     private bool _settingToggles;
 
+    /// <summary>
+    /// Stream-only rows (no audit id, so the CLI cannot acknowledge or dismiss them) hidden with "Hide until relaunch", by
+    /// <see cref="AlertItem.HideKey"/>. Memory only: nothing is written, so a new panel (a relaunch) lists them again. UI thread only.
+    /// </summary>
+    private readonly HashSet<string> _hiddenUntilRelaunch = new(StringComparer.Ordinal);
+
     [ObservableProperty]
     private string _filterText = string.Empty;
 
@@ -174,7 +180,16 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyCanExecuteChangedFor(nameof(HideUntilRelaunchCommand))]
     private AlertItem? _selectedAlert;
+
+    /// <summary>How many loaded stream-only rows are hidden until relaunch and not listed (the note above the list says so).</summary>
+    [ObservableProperty]
+    private int _hiddenUntilRelaunchCount;
+
+    /// <summary>True while the hidden stream-only rows are listed again (the "Show hidden" toggle).</summary>
+    [ObservableProperty]
+    private bool _showHiddenUntilRelaunch;
 
     [ObservableProperty]
     private string _sourceNote = "Waiting for the first alert poll…";
@@ -444,6 +459,12 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
     public bool HasHiddenAcknowledged => HiddenAcknowledgedCount > 0;
 
+    public bool HasHiddenUntilRelaunch => HiddenUntilRelaunchCount > 0;
+
+    public string HiddenUntilRelaunchText => HiddenUntilRelaunchCount.ToString(CultureInfo.CurrentCulture) + " hidden until relaunch";
+
+    public string ShowHiddenText => ShowHiddenUntilRelaunch ? "Hide hidden rows" : "Show hidden";
+
     public override async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         // The gateway's list first, so the panel has something to show at once; the queue replaces it when it has been read.
@@ -627,6 +648,42 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     private void ClearSelection() => SelectedAlert = null;
 
     partial void OnHiddenAcknowledgedCountChanged(int value) => OnPropertyChanged(nameof(HasHiddenAcknowledged));
+
+    partial void OnHiddenUntilRelaunchCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasHiddenUntilRelaunch));
+        OnPropertyChanged(nameof(HiddenUntilRelaunchText));
+    }
+
+    partial void OnShowHiddenUntilRelaunchChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowHiddenText));
+        ApplyFilters();
+    }
+
+    /// <summary>
+    /// "Hide until relaunch" for the selected row, which must be one the CLI cannot name (no audit id). Changes nothing on disk or in
+    /// DefenseClaw, so it is not a state change and is not gated by the installation: it stays available on a read-only installation.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanHideUntilRelaunch))]
+    private void HideUntilRelaunch()
+    {
+        if (SelectedAlert is not { } alert)
+        {
+            return;
+        }
+
+        _hiddenUntilRelaunch.Add(alert.HideKey);
+        ApplyFilters();
+    }
+
+    private bool CanHideUntilRelaunch() =>
+        SelectedAlert is { HasAuditId: false } alert && !_hiddenUntilRelaunch.Contains(alert.HideKey);
+
+    [RelayCommand]
+    private void ToggleShowHiddenUntilRelaunch() => ShowHiddenUntilRelaunch = !ShowHiddenUntilRelaunch;
+
+    private bool IsHiddenUntilRelaunch(AlertItem item) => !item.HasAuditId && _hiddenUntilRelaunch.Contains(item.HideKey);
 
     partial void OnReviewSeverityChanged(SeverityChoice? value)
     {
@@ -1797,6 +1854,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             : _all.Where(item => !_acknowledgedKeys.Contains(item.Key)).ToList();
         HiddenAcknowledgedCount = _all.Count - pool.Count;
 
+        // Stream-only rows the operator hid until relaunch leave the pool too, unless "Show hidden" lists them again. Counted, not silent.
+        HiddenUntilRelaunchCount = _hiddenUntilRelaunch.Count == 0 ? 0 : _all.Count(IsHiddenUntilRelaunch);
+        if (!ShowHiddenUntilRelaunch && HiddenUntilRelaunchCount > 0)
+        {
+            pool = pool.Where(item => !IsHiddenUntilRelaunch(item)).ToList();
+        }
+
         // The shared connector scope narrows the pool itself, so the tiles and counts describe what the scope leaves (the sidebar badge
         // does the same through AlertCounts.TallyFor). A row with no connector is not in an agent's view.
         var scope = Services.ConnectorScope;
@@ -1860,6 +1924,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             ? null
             : Alerts.FirstOrDefault(a => string.Equals(a.Key, selectedKey, StringComparison.Ordinal));
         NotifySelectionChanged();
+        HideUntilRelaunchCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>Writes each severity chip's count from the un-filtered pool (a chip that is off still says how many it hides).</summary>
@@ -2019,6 +2084,12 @@ public sealed partial class AlertItem : ObservableObject
     /// <c>--id</c> cannot name it, so acknowledge / dismiss by id skip it (the TUI skips <c>gw:</c> rows the same way).
     /// </summary>
     public bool HasAuditId { get; private init; } = true;
+
+    /// <summary>
+    /// What "Hide until relaunch" remembers a row by. A row with no id gets a fresh <see cref="Key"/> on every projection (see
+    /// <c>ProjectGatewayAlerts</c>), so the key cannot be the memory; the row's own content, which the gateway repeats unchanged, can.
+    /// </summary>
+    public string HideKey => string.Join("|", Timestamp.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture), Severity, Kind, RawTarget, RuleId, Headline);
 
     public DateTimeOffset Timestamp { get; }
 

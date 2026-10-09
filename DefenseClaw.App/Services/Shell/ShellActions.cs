@@ -116,6 +116,32 @@ internal sealed class ShellActions
 
     public void ToggleAutostart() => _ = _tray.ToggleAutostart();
 
+    /// <summary>The DefenseClaw docs the Mac's Help menu opens (<c>CommandGroup(replacing: .help)</c> in its app). Shown, never fetched.</summary>
+    internal const string DocsUrl = "https://cisco-ai-defense.github.io/defenseclaw/docs/";
+
+    /// <summary>Test seam: opens a URL (default: the shell, which hands it to the default browser).</summary>
+    internal Action<string>? UrlOpener { get; set; }
+
+    /// <summary>Opens the DefenseClaw docs in the default browser. The app does not fetch the page itself.</summary>
+    public void OpenDocs()
+    {
+        if (UrlOpener is { } open)
+        {
+            open(DocsUrl);
+            return;
+        }
+
+        try
+        {
+            _ = Process.Start(new ProcessStartInfo(DocsUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // No default browser on this machine: say where the docs are, so the operator can copy the address.
+            ShowToast("Help", "No browser opened. The docs are at " + DocsUrl);
+        }
+    }
+
     // ---- The Mac's Monitor / Commands menus (CUST-224) ----
 
     private int _diagnosing;

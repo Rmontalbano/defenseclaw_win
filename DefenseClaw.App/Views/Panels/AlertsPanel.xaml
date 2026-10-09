@@ -257,6 +257,25 @@
                            ToolTip="Acknowledge or dismiss a whole severity class in DefenseClaw, not only what is selected or loaded. Shows a preview first."
                            AutomationProperties.Name="By severity"
                            AutomationProperties.HelpText="Opens a menu: Acknowledge by severity or Dismiss by severity. Either acts on every active alert of one severity in DefenseClaw, as of a preview, and shows what would match before anything is changed." />
+                <ui:Button Content="Hide until relaunch"
+                           Margin="0,0,8,0"
+                           Appearance="Secondary"
+                           Command="{Binding HideUntilRelaunchCommand}"
+                           ToolTip="Hides the selected row until DefenseClaw restarts. Only for rows with no audit id, which acknowledge and dismiss cannot name. Changes nothing on disk."
+                           AutomationProperties.Name="Hide until relaunch"
+                           AutomationProperties.HelpText="Available once a row with no audit id is selected. Hides it in this window only; nothing is written, so it is listed again after a restart." />
+                <TextBlock Style="{StaticResource DcBody}"
+                           Margin="0,0,8,0"
+                           VerticalAlignment="Center"
+                           Text="{Binding HiddenUntilRelaunchText}"
+                           Visibility="{Binding HasHiddenUntilRelaunch, Converter={StaticResource BoolToVisibility}}"
+                           AutomationProperties.Name="Hidden until relaunch" />
+                <ui:Button Content="{Binding ShowHiddenText}"
+                           Margin="0,0,8,0"
+                           Appearance="Secondary"
+                           Command="{Binding ToggleShowHiddenUntilRelaunchCommand}"
+                           Visibility="{Binding HasHiddenUntilRelaunch, Converter={StaticResource BoolToVisibility}}"
+                           AutomationProperties.Name="Show hidden" />
             </WrapPanel>
             <ui:InfoBar Margin="{StaticResource DcCardGap}"
                         Severity="Success"
