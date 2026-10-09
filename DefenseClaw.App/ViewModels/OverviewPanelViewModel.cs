@@ -276,6 +276,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         await RefreshHourlyAsync(cancellationToken).ConfigureAwait(true);
         await RefreshAgentsAsync(cancellationToken).ConfigureAwait(true);
         await RefreshStatusAsync(forceStatus, cancellationToken).ConfigureAwait(true);
+
+        // The compiled observability plan has its own age limit (and is read again when config.yaml changes), so this is a comparison unless it is due.
+        await RefreshObservabilityPlanAsync(forceStatus, cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -303,6 +306,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         Apply(Services.Monitor.Current);
         ApplyScope();
         RefreshDataIfDue();
+
+        // A config.yaml change while the panel was away: the plan on screen was compiled from the old one (a comparison unless it is stale).
+        _ = RefreshObservabilityPlanAsync(force: false, ActiveToken);
 
         // One file read per activation: a doctor run from a terminal (or the TUI) while the panel
         // was away rewrote the cache, and this is the only time it is picked up without a Refresh.
@@ -587,7 +593,13 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// can be merged directly. Only attached while active; a reload that lands while the
     /// panel is away is picked up by the catch-up in <see cref="OnActivated"/>.
     /// </summary>
-    private void OnConfigReloaded(object? sender, EventArgs e) => Apply(Services.Monitor.Current);
+    private void OnConfigReloaded(object? sender, EventArgs e)
+    {
+        Apply(Services.Monitor.Current);
+
+        // The observability plan is compiled from config.yaml: the reader sees the new document and runs the command again.
+        _ = RefreshObservabilityPlanAsync(force: false, ActiveToken);
+    }
 
     private void OnPollCompleted(object? sender, GatewaySnapshotEventArgs e)
     {

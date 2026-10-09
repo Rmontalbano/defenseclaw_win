@@ -2,6 +2,7 @@ using System.Text.Json;
 using DefenseClaw.App.Services.Guardrail;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.Core.AiRuntime;
+using DefenseClaw.Core.Observability;
 
 namespace DefenseClaw.App.Tests.Runtime;
 
@@ -86,6 +87,7 @@ public sealed class ArgvContractTests
         {
             // read through the app's own panels
             string.Join('\u001f', OverviewPanelViewModel.StatusArgv),
+            string.Join('\u001f', ObservabilityPlanReader.Argv),
             string.Join('\u001f', CredentialsViewModel.ListArgv),
             string.Join('\u001f', OverviewPanelViewModel.DoctorArgv),
             string.Join('\u001f', new[] { "doctor", "--fix", "--dry-run" }),

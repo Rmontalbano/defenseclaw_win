@@ -3,6 +3,7 @@ using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.ViewModels.ConfigEditor;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Observability;
 
 namespace DefenseClaw.App.Tests.Shell;
 
@@ -32,6 +33,14 @@ public sealed class UnreviewedCommandSurfaceTests
 
         Assert.Equal("defenseclaw doctor", vm.DoctorCommandText);
         Assert.Equal(CommandReview.CommandLine(CommandReview.DefaultExecutable, OverviewPanelViewModel.DoctorArgv), vm.DoctorCommandText);
+    }
+
+    [Fact]
+    public void The_overview_observability_card_reads_the_plan_with_a_command_that_is_read_only()
+    {
+        Assert.Equal(new[] { "observability", "plan", "--format", "json" }, ObservabilityPlanReader.Argv);
+        Assert.Equal(CommandTier.ReadOnly, CommandReview.ResolveTier(ObservabilityPlanReader.Argv.ToArray()));
+        Assert.NotEqual(CommandTier.ReadOnly, CommandReview.ResolveTier(new[] { "observability", "destination", "test", "example", "--write-probe" }));
     }
 
     [Fact]

@@ -245,6 +245,9 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(("Guardrail", GuardrailText(config), "Neutral"));
         }
 
+        // v8 has no global redaction switch: each route carries a profile, so this is the TUI's aggregate ("per-route · unredacted"), from the plan.
+        rows.Add(("Redaction" + suffix, RedactionSummary, "Neutral"));
+
         rows.Add(("Deployment mode" + suffix, _status.DeploymentMode is { Length: > 0 } deployment ? deployment : "not set", "Neutral"));
 
         if (_status.Environment is { Length: > 0 } environment)

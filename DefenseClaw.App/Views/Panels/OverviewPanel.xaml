@@ -857,9 +857,25 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 6. Observability destinations, and the gateway's event-history failure when it reports one. -->
+                <!--
+                    6. Observability destinations, and the gateway's event-history failure when it reports one. With the compiled plan (CUST-272) the card is the
+                    TUI's: the Local SQLite line, a Policy column, and under each destination a line of facts (buckets, redaction, queue, limits, last result,
+                    endpoint host); without it, the table /health alone gives, and a note saying why.
+                -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel Grid.IsSharedSizeScope="True">
+                        <StackPanel.Resources>
+                            <!-- A fact's value: one line in the primary colour, the tone's colour for a warning; the full text is the tooltip. -->
+                            <Style x:Key="ObservabilityFactValue" TargetType="TextBlock" BasedOn="{StaticResource DcToneText}">
+                                <Setter Property="FontSize" Value="12" />
+                                <Setter Property="FontWeight" Value="Normal" />
+                                <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+                                <Setter Property="TextWrapping" Value="NoWrap" />
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                <Setter Property="MaxWidth" Value="520" />
+                            </Style>
+                        </StackPanel.Resources>
+
                         <ctl:DcCardHeader Symbol="Rss24" Section="Observe" Content="Observability destinations" />
 
                         <ui:InfoBar Margin="0,0,0,8"
@@ -868,6 +884,20 @@
                                     Title="Event history is failing"
                                     IsOpen="{Binding HasEventHistoryFailure}"
                                     Message="{Binding EventHistoryFailure}" />
+
+                        <!-- Local SQLite: the store the gateway always writes. Retention and the files are config.yaml's; the controller is the gateway's word. -->
+                        <StackPanel Margin="6,0,0,10"
+                                    Visibility="{Binding HasLocalStorage, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       FontSize="{DynamicResource DcFontSize}"
+                                       FontWeight="Normal"
+                                       TextWrapping="Wrap"
+                                       Tag="{Binding LocalStorageToneKey}"
+                                       Text="{Binding LocalStorageSummary}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,2,0,0"
+                                       Text="{Binding LocalStoragePaths}" />
+                        </StackPanel>
 
                         <TextBlock Text="{Binding ObservabilityEmptyText}">
                             <TextBlock.Style>
@@ -889,6 +919,7 @@
                                     <ColumnDefinition Width="*" MinWidth="120" />
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="ObsTarget" />
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="ObsKind" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ObsPolicy" />
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="ObsState" />
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="ObsSignals" />
                                 </Grid.ColumnDefinitions>
@@ -896,19 +927,28 @@
                                 <TextBlock Grid.Column="1" Style="{StaticResource OverviewColumnHead}" Text="Name" />
                                 <TextBlock Grid.Column="2" Style="{StaticResource OverviewColumnHead}" Text="Target" />
                                 <TextBlock Grid.Column="3" Style="{StaticResource OverviewColumnHead}" Text="Kind" />
-                                <TextBlock Grid.Column="4" Style="{StaticResource OverviewColumnHead}" Text="State" />
-                                <TextBlock Grid.Column="5" Style="{StaticResource OverviewColumnHead}" Text="Signals" />
+                                <TextBlock Grid.Column="4"
+                                           Style="{StaticResource OverviewColumnHead}"
+                                           Text="Policy"
+                                           Visibility="{Binding HasObservabilityPlan, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Grid.Column="5" Style="{StaticResource OverviewColumnHead}" Text="State" />
+                                <TextBlock Grid.Column="6" Style="{StaticResource OverviewColumnHead}" Text="Signals" />
                             </Grid>
                             <ItemsControl ItemsSource="{Binding ObservabilityRows}"
                                           AutomationProperties.Name="Observability destinations">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="6,0,0,6" ToolTip="{Binding Detail}">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" MinWidth="120" />
                                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ObsTarget" />
                                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ObsKind" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ObsPolicy" />
                                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ObsState" />
                                                 <ColumnDefinition Width="Auto" SharedSizeGroup="ObsSignals" />
                                             </Grid.ColumnDefinitions>
@@ -923,13 +963,57 @@
                                                        Text="{Binding Name}" />
                                             <TextBlock Grid.Column="2" Style="{StaticResource OverviewCell}" Text="{Binding Target}" />
                                             <TextBlock Grid.Column="3" Style="{StaticResource OverviewCell}" Text="{Binding Kind}" />
-                                            <TextBlock Grid.Column="4" Style="{StaticResource OverviewCell}" Tag="{Binding StateKey}" Text="{Binding State}" />
-                                            <TextBlock Grid.Column="5" Style="{StaticResource OverviewCell}" Margin="0" Text="{Binding Signals}" />
+                                            <TextBlock Grid.Column="4"
+                                                       Style="{StaticResource OverviewCell}"
+                                                       Text="{Binding Policy}"
+                                                       Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibility}}" />
+                                            <TextBlock Grid.Column="5" Style="{StaticResource OverviewCell}" Tag="{Binding StateKey}" Text="{Binding State}" />
+                                            <TextBlock Grid.Column="6" Style="{StaticResource OverviewCell}" Margin="0" Text="{Binding Signals}" />
+
+                                            <!-- What the plan and the gateway say about the destination, a fact at a time; one that has nothing to say is not drawn. -->
+                                            <ItemsControl Grid.Row="1"
+                                                          Grid.Column="1"
+                                                          Grid.ColumnSpan="6"
+                                                          Margin="0,2,0,0"
+                                                          Focusable="False"
+                                                          IsTabStop="False"
+                                                          ItemsSource="{Binding Facts}"
+                                                          Visibility="{Binding HasFacts, Converter={StaticResource BoolToVisibility}}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                                       Margin="0,0,5,0"
+                                                                       TextWrapping="NoWrap"
+                                                                       Text="{Binding Label}" />
+                                                            <TextBlock Style="{StaticResource ObservabilityFactValue}"
+                                                                       Tag="{Binding ToneKey}"
+                                                                       ToolTip="{Binding Value}"
+                                                                       Text="{Binding Value}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
+
+                        <!-- Where the plan columns come from, or why there are none (the card then shows what the gateway reports). -->
+                        <TextBlock Margin="6,6,0,0"
+                                   Style="{StaticResource DcToneText}"
+                                   FontSize="12"
+                                   FontWeight="Normal"
+                                   TextWrapping="Wrap"
+                                   Tag="{Binding ObservabilityNoteToneKey}"
+                                   Text="{Binding ObservabilityNote}"
+                                   Visibility="{Binding HasObservabilityNote, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
                 </Border>
 

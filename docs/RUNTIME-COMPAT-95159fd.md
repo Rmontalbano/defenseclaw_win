@@ -110,8 +110,18 @@ Other REST facts, all parsed correctly:
   one block per connector (`- Claude Code`, then `key:`, `state:`, `mode:`, `fail:` ...). The table is read by the dashed rule so the extra column is
   harmless, but the block layout produced no rows (the Setup hub fell back to the raw text). **`GuardrailStatusParser` now reads the block layout
   too.** `guardrail status --json` now exists; the app does not use it.
-- `policy list/show --json`, `observability plan --json`, `agent discovery status --json`: no app reader depends on them except
+- `policy list/show --json`, `agent discovery status --json`: no app reader depends on them except
   `agent discovery status` (parsed by the AI Discovery panel; a fresh install reports the service off).
+- `observability plan --format json` (CUST-272): the Overview's Observability card reads it (`ObservabilityPlanReader`, one run on a pool thread, 30 s limit,
+  reused for 5 minutes). Its emitter (`commands/cmd_observability.py`) is the same code in 0.8.10 and at the pin and prints the same document -
+  `{basis, config_version, plan_digest, network_validation, delivery[], connector_export_custody, rows[]}`, a row per `(bucket, signal, destination)` with the
+  compiled plan's decision - so one parser reads both by presence. The pin differs only in `observability destination test` (a `result:` line and the
+  network-path note) and a note under the custody table, neither of which the app reads. The document names destinations and never addresses: the
+  address, the retention window, the local files and the judge-body setting come from `config.yaml`, and what each destination is doing from `/health`.
+  Fixtures: `cli/observability-plan.json` (the capture, one local store) and `runtime-0.8.10/cli/observability-plan.destinations.synthetic.json`
+  (**synthetic, not a capture**: the emitter's own plan functions, copied unchanged into a scratch script and fed an invented effective plan - the local store,
+  an OTLP destination that takes everything, a Splunk one with advanced routes whose severity-constrained route the plan cannot settle, a disabled
+  HTTP one, and a metrics-only Prometheus one - with `example.test` names and a digest of zeros).
 - Removed: `migrations status` (replaced by `migrate --check`). The app never runs it; it is still in the read-only allow-list (harmless: a command that
   does not exist cannot run).
 
