@@ -1,0 +1,34 @@
+Usage: defenseclaw setup notifications-set [OPTIONS] {asset_policy|block_enfor
+                                           ced|block_would_block|guardrail|hit
+                                           l_approval|hook|sources.asset_polic
+                                           y|sources.guardrail|sources.hook}
+                                           {on|off}
+
+  Toggle a single notifications category or source.
+
+  ``slot`` is one of the dotted paths below; ``value`` is ``on`` or ``off``.
+  The master switch (``notifications.enabled``) is left alone — use
+  ``defenseclaw setup notifications on/off`` for that.
+
+  Categories (event types):
+    block_enforced       Real blocks (default: on).
+    block_would_block    Observe-mode would-block / would-ask toasts (default: off).
+    hitl_approval        Human-in-the-loop prompts (default: on).
+
+  Sources (subsystem of origin):
+    sources.hook         Per-tool hooks (claude_code / codex / ...).
+    sources.guardrail    Guardrail verdicts.
+    sources.asset_policy Skill / MCP allow-list blocks.
+
+  Examples:
+    defenseclaw setup notifications-set sources.hook off
+    defenseclaw setup notifications-set hitl_approval on --no-restart
+    defenseclaw setup notifications-set guardrail off  # short form
+
+Options:
+  --restart / --no-restart  Restart defenseclaw-gateway after the toggle. The
+                            notifier dispatcher reads its filters at sidecar
+                            boot, so a flip without restart leaves the running
+                            process on the previous filter set.  [default:
+                            restart]
+  --help                    Show this message and exit.

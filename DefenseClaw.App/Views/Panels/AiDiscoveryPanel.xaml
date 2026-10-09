@@ -191,6 +191,11 @@
                                       IsChecked="{Binding RestartOnToggle}"
                                       ToolTip="On: turning discovery on or off also restarts the gateway so it takes effect. Off: only config.yaml changes; it applies at the next restart."
                                       AutomationProperties.HelpText="Applies to turning AI Discovery on or off." />
+                            <ui:Button Content="Tune…"
+                                       Icon="{ctl:DcSymbolIcon Options24}"
+                                       Command="{Binding OpenTuningCommand}"
+                                       ToolTip="Mode, cadence, scope and sources of AI Discovery. Shows the exact command first; nothing runs until you confirm."
+                                       AutomationProperties.HelpText="Opens the AI Discovery tuning dialog: mode, scan cadence, folders and sources." />
                             <ui:Button Content="Re-detect agents…"
                                        Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding RefreshConnectorsCommand}"
@@ -779,5 +784,8 @@
 
         <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
         <panels:DiscoverReviewOverlay Grid.RowSpan="2" DataContext="{Binding Review}" />
+
+        <!-- AI Discovery tuning dialog (CUST-271): carries its own review overlay -->
+        <panels:AiDiscoveryTuningDialog Grid.RowSpan="2" DataContext="{Binding Tuning}" />
     </Grid>
 </UserControl>

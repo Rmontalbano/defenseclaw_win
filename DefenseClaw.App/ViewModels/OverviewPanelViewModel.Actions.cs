@@ -226,11 +226,11 @@ public sealed partial class OverviewPanelViewModel
     /// <summary>What "Scan AI discovery" runs: one immediate scan, asked of the running gateway (<c>POST /api/v1/ai-usage/scan</c>).</summary>
     internal static readonly string[] ScanAiDiscoveryArgv = { "agent", "discovery", "scan" };
 
-    /// <summary>What the notifications button runs while they are off. <c>setup notifications</c> takes <c>on | off | status</c>; with one of them it asks nothing.</summary>
-    internal static readonly string[] NotificationsOnArgv = { "setup", "notifications", "on" };
+    /// <summary>What the notifications button runs while they are off. <c>setup notifications</c> takes <c>on | off | status</c>; with one of them it asks nothing. The review is <see cref="NotificationSwitch"/>'s, shared with the Setup hub's notification routing dialog (CUST-271).</summary>
+    internal static readonly string[] NotificationsOnArgv = NotificationSwitch.OnArgv;
 
     /// <summary>What the notifications button runs while they are on.</summary>
-    internal static readonly string[] NotificationsOffArgv = { "setup", "notifications", "off" };
+    internal static readonly string[] NotificationsOffArgv = NotificationSwitch.OffArgv;
 
     /// <summary>What "Fill missing keys" hands to a console: the same argv the Setup panel's Credentials card and the readiness checklist use.</summary>
     internal static readonly string[] FillMissingKeysArgv = CredentialsViewModel.FillMissingArgv;
@@ -415,25 +415,8 @@ public sealed partial class OverviewPanelViewModel
     /// reads it once at start. These are the runtime's own desktop notifications; this app's tray alerts have their own settings, and the review says so.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanToggleNotifications))]
-    private void ToggleNotifications()
-    {
-        var turnOn = !NotificationsAreOn();
-        Review.Open(
-            turnOn ? "Turn desktop notifications on?" : "Turn desktop notifications off?",
-            $"Sets notifications.enabled to {(turnOn ? "true" : "false")} in config.yaml and restarts the gateway, whose notification dispatcher reads it once when it starts. " +
-            "These are DefenseClaw's own desktop notifications for blocked tool calls and pending approvals. " +
-            "The alerts this app shows from the tray are a separate setting (Settings, Notifications) and do not change.",
-            new[]
-            {
-                new DiscoverStep(
-                    NotificationsArgv(turnOn),
-                    turnOn ? "Turn the runtime's desktop notifications on." : "Turn the runtime's desktop notifications off.",
-                    CommandTier.StateChanging),
-            },
-            onFinished: _ => AfterQuickActionAsync(refreshAgents: false),
-            restartsGateway: true,
-            primaryText: turnOn ? "Turn on" : "Turn off");
-    }
+    private void ToggleNotifications() =>
+        NotificationSwitch.Open(Review, !NotificationsAreOn(), onFinished: _ => AfterQuickActionAsync(refreshAgents: false));
 
     /// <summary>
     /// Fill missing keys: <c>keys fill-missing --yes</c> reads each value at a hidden console prompt (<c>getpass</c>, which reads the console and not

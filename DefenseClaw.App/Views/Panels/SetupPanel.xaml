@@ -209,6 +209,14 @@
                         </ItemsControl>
 
                         <TextBlock Style="{StaticResource DcCaption}" Text="{Binding ConnectorNote}" />
+
+                        <ui:Button Margin="0,8,0,0"
+                                   HorizontalAlignment="Left"
+                                   Content="Set up several…"
+                                   Icon="{ctl:DcSymbolIcon PlugConnected24}"
+                                   Command="{Binding OpenBatchCommand}"
+                                   ToolTip="Configure more than one connector in a single reviewed command (setup --yes --connector ... --mode ...)."
+                                   AutomationProperties.HelpText="Opens a dialog that sets up several connectors at once. Shows the exact command first." />
                     </StackPanel>
                 </Border>
 
@@ -747,6 +755,7 @@
                                                     <Grid.RowDefinitions>
                                                         <RowDefinition Height="Auto" />
                                                         <RowDefinition Height="*" />
+                                                        <RowDefinition Height="Auto" />
                                                     </Grid.RowDefinitions>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto" />
@@ -778,15 +787,38 @@
                                                                        ShowDot="False"
                                                                        GlyphSize="14"
                                                                        Visibility="{Binding ShowTileBadge, Converter={StaticResource BoolToVisibility}}" />
+                                                    <!-- One line of the blurb when the tile also carries a state line (CUST-271): the tile stays 233 x 92. -->
                                                     <TextBlock Grid.Row="1"
                                                                Grid.Column="0"
                                                                Grid.ColumnSpan="3"
                                                                Margin="0,6,0,0"
-                                                               Style="{StaticResource DcCaption}"
                                                                TextTrimming="CharacterEllipsis"
                                                                TextWrapping="Wrap"
-                                                               MaxHeight="34"
-                                                               Text="{Binding TileBlurb}" />
+                                                               Text="{Binding TileBlurb}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                                                                <Setter Property="MaxHeight" Value="34" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasStateLine}" Value="True">
+                                                                        <Setter Property="MaxHeight" Value="16" />
+                                                                        <Setter Property="TextWrapping" Value="NoWrap" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <!-- What config.yaml says about this card's subject today. -->
+                                                    <TextBlock Grid.Row="2"
+                                                               Grid.Column="0"
+                                                               Grid.ColumnSpan="3"
+                                                               Margin="0,2,0,0"
+                                                               FontWeight="SemiBold"
+                                                               Style="{StaticResource DcCaption}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               TextWrapping="NoWrap"
+                                                               AutomationProperties.Name="{Binding StateDetail}"
+                                                               Text="{Binding StateLine}"
+                                                               Visibility="{Binding HasStateLine, Converter={StaticResource BoolToVisibility}}" />
                                                 </Grid>
                                             </Button>
                                         </DataTemplate>
@@ -875,5 +907,11 @@
 
         <!-- The readiness fixes' review (the shared Discover overlay over the shared review control). Esc closes it. -->
         <panels:DiscoverReviewOverlay Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Review}" />
+
+        <!-- Notification routing (CUST-271): the Notifications tiles' dialog, with a review of its own on top of it. -->
+        <panels:NotificationRoutingDialog Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Routing}" />
+
+        <!-- Connector batch (CUST-271): the roster card's "Set up several…" dialog, with a review of its own. -->
+        <panels:ConnectorBatchDialog Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Batch}" />
     </Grid>
 </UserControl>

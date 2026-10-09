@@ -3,6 +3,7 @@ using DefenseClaw.App.Services.Guardrail;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.Core.AiRuntime;
 using DefenseClaw.Core.Observability;
+using DefenseClaw.Core.Setup;
 
 namespace DefenseClaw.App.Tests.Runtime;
 
@@ -182,6 +183,58 @@ public sealed class ArgvContractTests
 
         Assert.Null(Check(argv, Tree0810));
     }
+
+    /// <summary>
+    /// What the Setup dialogs of CUST-271 run - one notification slot, the AI Discovery tuning enable and disable with every flag, and the connector
+    /// batch with every flag (and the generated remove wizard's --force). Each must be a command of both trees, with options both have.
+    /// </summary>
+    public static TheoryData<string> Cust271Argvs
+    {
+        get
+        {
+            var all = AiDiscoverySettings.Defaults with
+            {
+                Enabled = true,
+                Mode = "passive",
+                ScanIntervalMin = 7,
+                ProcessIntervalS = 30,
+                ScanRoots = new[] { "~/a", "~/b" },
+                MaxFilesPerScan = 500,
+                MaxFileBytes = 8192,
+                IncludeShellHistory = false,
+                IncludePackageManifests = false,
+                IncludeEnvVarNames = false,
+                IncludeNetworkDomains = false,
+                AllowWorkspaceSignatures = true,
+                StoreRawLocalPaths = true,
+            };
+            var before = AiDiscoverySettings.Defaults with { Enabled = true };
+            var changes = AiDiscoveryTuning.Diff(before, all);
+            var data = new TheoryData<string>
+            {
+                string.Join('\u001f', NotificationRouting.Argv(new NotificationChange(NotificationRouting.Slots[0], false, true), noRestart: false)),
+                string.Join('\u001f', NotificationRouting.Argv(new NotificationChange(NotificationRouting.Slots[4], true, false), noRestart: true)),
+                string.Join('\u001f', AiDiscoveryTuning.Argv(before, all, changes, new TuningRollout(Restart: false, ScanAfter: false))!),
+                string.Join('\u001f', AiDiscoveryTuning.Argv(before, all, changes, new TuningRollout(Restart: true, ScanAfter: false))!),
+                string.Join('\u001f', AiDiscoveryTuning.Argv(before, before with { Enabled = false }, Array.Empty<TuningChange>(), new TuningRollout(Restart: false))!),
+                string.Join('\u001f', ConnectorBatch.Argv(new[] { "codex", "claudecode" }, BatchExtra.None, "action", restart: false)!),
+                string.Join('\u001f', ConnectorBatch.Argv(new[] { "codex" }, BatchExtra.Detected, "observe", restart: true)!),
+                string.Join('\u001f', ConnectorBatch.Argv(Array.Empty<string>(), BatchExtra.All, "observe", restart: true)!),
+                string.Join('\u001f', new[] { "setup", "remove", "codex", "--force", "--yes", "--no-restart" }),
+            };
+            return data;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Cust271Argvs))]
+    public void The_setup_dialog_argv_are_commands_of_0_8_10_with_options_it_has(string packed) =>
+        Assert.Null(Check(packed.Split('\u001f'), Tree0810));
+
+    [Theory]
+    [MemberData(nameof(Cust271Argvs))]
+    public void The_setup_dialog_argv_are_commands_of_the_newer_cli_with_options_it_has(string packed) =>
+        Assert.Null(Check(packed.Split('\u001f')));
 
     [Fact]
     public void The_checker_notices_a_renamed_flag_and_a_removed_command()

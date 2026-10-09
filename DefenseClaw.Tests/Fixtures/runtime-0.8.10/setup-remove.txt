@@ -1,0 +1,22 @@
+Usage: defenseclaw setup remove [OPTIONS] CONNECTOR
+
+  Remove a connector from the configured set.
+
+  The inverse of ``defenseclaw setup <connector>``: drops CONNECTOR from
+  ``guardrail.connectors`` and, after a restart, lets the gateway tear down
+  its hooks via set-difference reconciliation.
+
+  Removing the last remaining connector is refused unless ``--force`` is given
+  (which fully unconfigures enforcement). To take DefenseClaw off the machine
+  entirely, use ``defenseclaw uninstall``.
+
+Options:
+  --restart / --no-restart  Restart defenseclaw-gateway after removing the
+                            connector so its hooks are torn down via boot-time
+                            reconciliation.  [default: restart]
+  --force                   Allow removing the LAST remaining connector, fully
+                            unconfiguring DefenseClaw enforcement (it stays
+                            installed). Use `defenseclaw uninstall` to remove
+                            DefenseClaw entirely.
+  -y, --yes                 Skip the confirmation prompt (non-interactive).
+  --help                    Show this message and exit.

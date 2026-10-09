@@ -126,6 +126,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         Review = new DiscoverActionReview(services);
         Credentials = new CredentialsViewModel(services);
         Readiness = new ReadinessViewModel(services, Credentials, Review);
+        Routing = new NotificationRoutingViewModel(services);
+        Batch = new ConnectorBatchViewModel(services, applied: _ => RefreshAsync());
 
         // The credential read feeds the "Required Credentials" row.
         Credentials.Loaded += (_, _) => Readiness.Rebuild();
@@ -139,6 +141,19 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
     /// <summary>The shared review the readiness fixes go through.</summary>
     public DiscoverActionReview Review { get; }
+
+    /// <summary>
+    /// The notification routing dialog (CUST-271): the Notifications and Notification categories tiles open it instead of a one-slot wizard.
+    /// It is an overlay on this page with a review of its own, so several changes run as one reviewed plan.
+    /// </summary>
+    public NotificationRoutingViewModel Routing { get; }
+
+    /// <summary>The connector batch dialog (CUST-271): several connectors in one reviewed <c>setup --yes --connector ...</c>, opened from the roster card.</summary>
+    public ConnectorBatchViewModel Batch { get; }
+
+    /// <summary>"Set up several…": opens the batch dialog on what config.yaml says now.</summary>
+    [RelayCommand]
+    private void OpenBatch() => Batch.Open();
 
     public override string Title => "Setup";
 
@@ -289,6 +304,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         Services.Monitor.StateChanged += OnGatewayStateChanged;
         _localStack.Changed += OnProbeAnswerChanged;
         _terraform.Changed += OnProbeAnswerChanged;
+        Services.ConfigReloaded += OnConfigReloaded;
 
         // Whether the runtime has the redaction editor may have been learned while the panel was away.
         Services.Runtime.Changed += OnRuntimeChanged;
@@ -299,6 +315,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         RefreshRestartBanner();
 
         BuildConnectors();
+        RefreshCardStates();
 
         // Either may have moved while the panel was off screen: the cards behind the catalog, and the Docker and Terraform answers that gate
         // the stack's card and the dashboards' card.
@@ -339,6 +356,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         Services.RestartQueue.Changed -= OnRestartQueueChanged;
         _localStack.Changed -= OnProbeAnswerChanged;
         _terraform.Changed -= OnProbeAnswerChanged;
+        Services.ConfigReloaded -= OnConfigReloaded;
     }
 
     /// <summary>
@@ -368,8 +386,23 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         // A card that needs Docker or Terraform starts from what is known now: the held answer, or "Checking for …" before the first.
         card.ApplyDocker(_localStack.Decision);
         card.ApplyTerraform(_terraform.Decision);
+        card.ApplyState(WizardCardStates.For(card.Target, definition.Group, Services.Config));
         _all.Add(card);
     }
+
+    /// <summary>
+    /// Draws every card's state line again from config.yaml as the app holds it (CUST-271). Nothing runs: the lines are read from the file, so
+    /// this is called when the hub comes on screen and whenever the file is read again.
+    /// </summary>
+    private void RefreshCardStates()
+    {
+        foreach (var card in _all)
+        {
+            _ = card.ApplyState(WizardCardStates.For(card.Target, card.Definition.Group, Services.Config));
+        }
+    }
+
+    private void OnConfigReloaded(object? sender, EventArgs e) => RefreshCardStates();
 
     /// <summary>
     /// Gates every card that needs Docker (the local observability stack's) on the shared Docker look. Returns true when a card's
@@ -476,6 +509,13 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         if (ResourceFor(card) is { } resource && _openResourceEditor is { } openEditor)
         {
             openEditor(resource);
+            return;
+        }
+
+        // The notification tiles open the routing dialog (CUST-271): the master switch and every category in one reviewed run.
+        if (NotificationRoutingViewModel.Handles(card.Target))
+        {
+            Routing.Open();
             return;
         }
 
@@ -1340,13 +1380,41 @@ public sealed partial class WizardCardViewModel : ObservableObject
     /// <summary>The command this card runs, shown small on the card so nothing is a surprise.</summary>
     public string CommandHint => "defenseclaw setup " + Target;
 
+    private CardState? _state;
+
+    /// <summary>What config.yaml says about this card's subject today (<c>Guardrail on · observe</c>), or empty (CUST-271).</summary>
+    public string StateLine => _state?.Text ?? string.Empty;
+
+    /// <summary>The longer form of <see cref="StateLine"/>, for the tooltip and the screen reader.</summary>
+    public string StateDetail => _state?.Detail ?? string.Empty;
+
+    /// <summary>The tile shows a state line: the target has one and the card can be opened here.</summary>
+    public bool HasStateLine => _state is not null && IsAvailable;
+
+    /// <summary>Takes in the card's state line (null: none). Returns true when it changed.</summary>
+    internal bool ApplyState(CardState? state)
+    {
+        if (Equals(_state, state))
+        {
+            return false;
+        }
+
+        _state = state;
+        OnPropertyChanged(nameof(StateLine));
+        OnPropertyChanged(nameof(StateDetail));
+        OnPropertyChanged(nameof(HasStateLine));
+        OnPropertyChanged(nameof(TileToolTip));
+        OnPropertyChanged(nameof(AutomationName));
+        return true;
+    }
+
     public bool IsAvailable => UnavailableReason.Length == 0;
 
     public bool HasUnavailableReason => UnavailableReason.Length > 0;
 
     /// <summary>The name a screen reader announces for the card.</summary>
     public string AutomationName => IsAvailable
-        ? $"{Title} setup. {Badge}."
+        ? $"{Title} setup. {Badge}." + (HasStateLine ? " " + StateDetail : string.Empty)
         : $"{Title} setup, not available on this machine. {UnavailableReason}";
 
     /// <summary>The name of the card's button: "Configure Claude Code" — the bare word alone says nothing in a list of cards.</summary>
@@ -1361,7 +1429,11 @@ public sealed partial class WizardCardViewModel : ObservableObject
     /// missing (the Splunk dashboards') rules out right now: Docker coming up, or Terraform being installed, would not make it runnable. A wizard
     /// this platform does not offer at all, or that the installed CLI has no command for, says that.
     /// </summary>
-    public string TileToolTip => OpensEditor && IsAvailable
+    public string TileToolTip => HasStateLine && BaseToolTip.StartsWith(CommandHint, StringComparison.Ordinal)
+        ? CommandHint + Environment.NewLine + StateDetail + BaseToolTip[CommandHint.Length..] // the state under the command; a reason or a note stays last
+        : BaseToolTip;
+
+    private string BaseToolTip => OpensEditor && IsAvailable
         ? CommandHint + Environment.NewLine + "Opens the list; Add opens the wizard." +
           (InstallationBlockedReason is { } readOnly ? " Changes are off: " + readOnly : string.Empty)
         : InstallationBlockedReason is { } blocked && (IsAvailable || UnavailableOnlyForLook)

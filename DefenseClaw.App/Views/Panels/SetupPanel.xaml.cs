@@ -72,7 +72,7 @@ public sealed partial class SetupPanel : UserControl
             return;
         }
 
-        if (e.Key == Key.Escape && DataContext is SetupPanelViewModel setup && setup.Review.HandleEscape())
+        if (e.Key == Key.Escape && DataContext is SetupPanelViewModel setup && (setup.Review.HandleEscape() || setup.Routing.HandleEscape() || setup.Batch.HandleEscape()))
         {
             e.Handled = true;
         }

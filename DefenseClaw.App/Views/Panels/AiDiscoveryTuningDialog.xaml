@@ -1,0 +1,258 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.AiDiscoveryTuningDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             d:DataContext="{d:DesignInstance Type=vm:AiDiscoveryTuningViewModel}"
+             mc:Ignorable="d"
+             IsTabStop="False"
+             Focusable="False">
+    <!--
+        AI Discovery tuning (CUST-271): mode, cadence, scope and sources over `agent discovery enable`. The form starts from config.yaml; only what
+        changed is sent, and the command that results is shown here (CommandPreview) and again in the review before anything runs. DataContext is an
+        AiDiscoveryTuningViewModel (the AI Discovery panel binds it: DataContext="{Binding Tuning}").
+    -->
+    <UserControl.Resources>
+        <!-- A number or a list of folders: its name, a word when it has moved, the box, what it does, and what is wrong with it. -->
+        <DataTemplate x:Key="FieldTemplate" DataType="{x:Type vm:TuningField}">
+            <StackPanel Margin="0,0,0,10">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" VerticalAlignment="Center" Text="{Binding Label}" />
+                    <Border Style="{StaticResource DcBadge}" Tag="Warn" Margin="8,0,0,0" VerticalAlignment="Center"
+                            Visibility="{Binding IsChanged, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ChangeText}" />
+                    </Border>
+                </StackPanel>
+                <TextBox Margin="0,4,0,0"
+                         AcceptsReturn="{Binding IsMultiLine}"
+                         TextWrapping="NoWrap"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding IsAvailable}"
+                         AutomationProperties.Name="{Binding Label}"
+                         AutomationProperties.HelpText="{Binding Help}" />
+                <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Help}" />
+                <TextBlock Style="{StaticResource DcCaption}" Foreground="{DynamicResource DcDangerBrush}"
+                           Text="{Binding Problem}"
+                           Visibility="{Binding HasProblem, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcCaption}" Text="{Binding UnavailableText}"
+                           Visibility="{Binding IsUnavailable, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="SwitchTemplate" DataType="{x:Type vm:TuningSwitch}">
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" VerticalAlignment="Center" Text="{Binding Label}" />
+                        <Border Style="{StaticResource DcBadge}" Tag="Warn" Margin="8,0,0,0" VerticalAlignment="Center"
+                                Visibility="{Binding IsChanged, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ChangeText}" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Help}" />
+                    <TextBlock Style="{StaticResource DcCaption}" Text="{Binding UnavailableText}"
+                               Visibility="{Binding IsUnavailable, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center"
+                                 IsChecked="{Binding IsOn, Mode=TwoWay}"
+                                 IsEnabled="{Binding IsAvailable}"
+                                 AutomationProperties.Name="{Binding AutomationName}" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid x:Name="Scrim"
+              Style="{StaticResource DcScrim}"
+              KeyboardNavigation.TabNavigation="Cycle"
+              KeyboardNavigation.ControlTabNavigation="Cycle"
+              Visibility="{Binding IsOpen, Converter={StaticResource BoolToVisibility}}">
+            <Border Style="{StaticResource DcDialogCard}"
+                    MaxWidth="640"
+                    MaxHeight="760"
+                    Margin="24"
+                    AutomationProperties.Name="Tune AI Discovery">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DcSectionHeader}"
+                                       AutomationProperties.HeadingLevel="Level1"
+                                       Text="{Binding Title}" />
+                            <ui:ProgressRing Width="16" Height="16" Margin="10,0,0,0" IsIndeterminate="True"
+                                             AutomationProperties.Name="Checking this DefenseClaw's options"
+                                             Visibility="{Binding IsChecking, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource DcBody}" Text="{Binding Subtitle}" />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False">
+                        <StackPanel Margin="0,0,8,0">
+                            <ui:InfoBar Margin="0,0,0,10" IsClosable="False" Severity="Warning"
+                                        Title="State-changing actions disabled"
+                                        IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
+                                        Message="{Binding InstallationBlockedReason, Mode=OneWay}" />
+                            <ui:InfoBar Margin="0,0,0,10" IsClosable="False" Severity="Error"
+                                        Title="config.yaml could not be read"
+                                        IsOpen="{Binding HasConfigProblem, Mode=OneWay}"
+                                        Message="{Binding ConfigProblem, Mode=OneWay}" />
+                            <ui:InfoBar Margin="0,0,0,10" IsClosable="False" Severity="Warning"
+                                        Title="These settings may be out of date"
+                                        IsOpen="{Binding IsStale, Mode=OneWay}"
+                                        Message="{Binding StaleReason, Mode=OneWay}" />
+                            <ui:InfoBar Margin="0,0,0,10" IsClosable="False" Severity="Warning"
+                                        Title="This DefenseClaw's options could not be checked"
+                                        IsOpen="{Binding HasHelpProblem, Mode=OneWay}"
+                                        Message="{Binding HelpProblem, Mode=OneWay}" />
+
+                            <!-- On or off. -->
+                            <Border Style="{StaticResource DcSubtleRow}" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold"
+                                                       AutomationProperties.LiveSetting="Polite"
+                                                       Text="{Binding EnabledText}" />
+                                            <Border Style="{StaticResource DcBadge}" Tag="Warn" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                    Visibility="{Binding HasEnabledChange, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding EnabledChangeText}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding StateLine}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding TuningOffNote}"
+                                                   Visibility="{Binding ShowTuningOffNote, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center"
+                                                     IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                                     IsEnabled="{Binding CanToggleEnabled}"
+                                                     AutomationProperties.Name="{Binding EnabledText}" />
+                                </Grid>
+                            </Border>
+
+                            <StackPanel IsEnabled="{Binding CanEdit}">
+                                <StackPanel IsEnabled="{Binding TuningActive}">
+                                    <ctl:DcCardHeader Margin="0,0,0,8" AutomationProperties.HeadingLevel="Level2"
+                                                      Symbol="Settings24" Section="Setup" Content="Mode and cadence" />
+                                    <StackPanel Margin="0,0,0,10">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" VerticalAlignment="Center" Text="Mode" />
+                                            <Border Style="{StaticResource DcBadge}" Tag="Warn" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                    Visibility="{Binding HasModeChange, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ModeChangeText}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="200"
+                                                  ItemsSource="{Binding Modes}"
+                                                  SelectedItem="{Binding Mode, Mode=TwoWay}"
+                                                  AutomationProperties.Name="Discovery mode" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding ModeNote}" />
+                                    </StackPanel>
+                                    <ContentControl Content="{Binding ScanInterval}" ContentTemplate="{StaticResource FieldTemplate}" IsTabStop="False" />
+                                    <ContentControl Content="{Binding ProcessInterval}" ContentTemplate="{StaticResource FieldTemplate}" IsTabStop="False" />
+
+                                    <ctl:DcCardHeader Margin="0,6,0,8" AutomationProperties.HeadingLevel="Level2"
+                                                      Symbol="Folder24" Section="Setup" Content="Scope" />
+                                    <ContentControl Content="{Binding ScanRoots}" ContentTemplate="{StaticResource FieldTemplate}" IsTabStop="False" />
+                                    <ContentControl Content="{Binding MaxFiles}" ContentTemplate="{StaticResource FieldTemplate}" IsTabStop="False" />
+                                    <ContentControl Content="{Binding MaxBytes}" ContentTemplate="{StaticResource FieldTemplate}" IsTabStop="False" />
+
+                                    <ctl:DcCardHeader Margin="0,6,0,8" AutomationProperties.HeadingLevel="Level2"
+                                                      Symbol="Search24" Section="Setup" Content="Sources" />
+                                    <ItemsControl ItemsSource="{Binding SourceSwitches}" ItemTemplate="{StaticResource SwitchTemplate}"
+                                                  IsTabStop="False" AutomationProperties.Name="What discovery looks at" />
+
+                                    <ctl:DcCardHeader Margin="0,6,0,8" AutomationProperties.HeadingLevel="Level2"
+                                                      Symbol="LockClosed24" Section="Setup" Content="Privacy" />
+                                    <ItemsControl ItemsSource="{Binding PrivacySwitches}" ItemTemplate="{StaticResource SwitchTemplate}"
+                                                  IsTabStop="False" AutomationProperties.Name="Privacy options" />
+                                </StackPanel>
+
+                                <CheckBox Margin="0,4,0,2" Content="Restart the gateway after the change"
+                                          IsEnabled="{Binding CanSkipRestart}"
+                                          IsChecked="{Binding RestartAfter, Mode=TwoWay}"
+                                          AutomationProperties.HelpText="Unchecking adds --no-restart" />
+                                <CheckBox Margin="0,2,0,2" Content="Ask for a scan with the new settings"
+                                          IsEnabled="{Binding CanChooseScan}"
+                                          IsChecked="{Binding ScanAfter, Mode=TwoWay}"
+                                          AutomationProperties.HelpText="Unchecking adds --no-scan" />
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="28,0,0,10" Text="{Binding RestartNote}" />
+                            </StackPanel>
+
+                            <Border Style="{StaticResource DcSubtleRow}" Margin="0,4,0,0"
+                                    AutomationProperties.LiveSetting="Polite"
+                                    Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource DcBadge}" Tag="{Binding ResultKey}" HorizontalAlignment="Left">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap" Text="{Binding ResultText}" />
+                                    </Border>
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Top" Content="Dismiss"
+                                               Command="{Binding DismissResultCommand}"
+                                               AutomationProperties.Name="Dismiss the result" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                        <TextBlock Style="{StaticResource DcCardTitle}" AutomationProperties.LiveSetting="Polite" Text="{Binding Summary}" />
+                        <ItemsControl ItemsSource="{Binding ChangeLines}" IsTabStop="False" AutomationProperties.Name="Changes to apply">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource DcCaption}" Margin="8,0,0,0" Text="{Binding}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" FontFamily="Consolas" TextWrapping="Wrap"
+                                   AutomationProperties.Name="The command that would run"
+                                   Text="{Binding CommandPreview}"
+                                   Visibility="{Binding HasCommandPreview, Converter={StaticResource BoolToVisibility}}" />
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <ui:Button Grid.Column="0" Content="Refresh" Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                       Command="{Binding RefreshCommand}"
+                                       ToolTip="Reads config.yaml and this DefenseClaw's options again and starts the form from what the file says."
+                                       AutomationProperties.Name="Read config.yaml again" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <ui:Button Margin="0,0,8,0" Content="Close" Command="{Binding CloseCommand}" ToolTip="Esc"
+                                           AutomationProperties.Name="Close the tuning dialog" />
+                                <ui:Button Appearance="Primary" Content="Review changes…" Icon="{ctl:DcSymbolIcon Play24}"
+                                           Command="{Binding ReviewChangesCommand}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding ReviewTip}"
+                                           AutomationProperties.HelpText="{Binding ReviewTip}" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <panels:DiscoverReviewOverlay DataContext="{Binding Review}" />
+    </Grid>
+</UserControl>

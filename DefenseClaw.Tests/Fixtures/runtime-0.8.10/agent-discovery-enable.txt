@@ -1,0 +1,69 @@
+Usage: defenseclaw agent discovery enable [OPTIONS]
+
+  Enable the sidecar AI discovery service.
+
+  Sets ``ai_discovery.enabled = true`` in ``~/.defenseclaw/config.yaml``,
+  persists, and (when ``--restart`` is on) bounces the gateway so
+  ``inventory.NewContinuousDiscoveryService`` actually constructs the service.
+  With ``--scan`` (the default) this command also calls ``POST /api/v1/ai-
+  usage/scan`` once the sidecar is back up so the operator gets the first
+  inventory snapshot in the same flow.
+
+  All ``ai_discovery.*`` knobs can be set inline as flags so this command is
+  fully scriptable; for an interactive walkthrough that prompts for each value
+  with the existing config as the default, use ``defenseclaw agent discovery
+  setup``.
+
+Options:
+  --mode [passive|enhanced]       Discovery mode (defaults to existing config
+                                  or 'enhanced').
+  --scan-roots TEXT               Comma-separated roots for artifact scans
+                                  (overrides existing
+                                  ai_discovery.scan_roots). Tildes are kept;
+                                  the sidecar expands them.
+  --scan-interval-min INTEGER RANGE
+                                  Minutes between full discovery scans. Range
+                                  1..1440; default 5.  [1<=x<=1440]
+  --process-interval-s INTEGER RANGE
+                                  Seconds between cheap process-list polls.
+                                  Range 5..3600; default 60.  [5<=x<=3600]
+  --max-files-per-scan INTEGER RANGE
+                                  Cap on number of files inspected per scan
+                                  (default 1000).  [10<=x<=100000]
+  --max-file-bytes INTEGER RANGE  Per-file byte cap when reading
+                                  manifests/configs (default 524288).
+                                  [4096<=x<=16777216]
+  --include-shell-history / --no-include-shell-history
+                                  Inspect shell history for AI CLI invocations
+                                  (default: on).
+  --include-package-manifests / --no-include-package-manifests
+                                  Inspect
+                                  package.json/pyproject/Cargo.toml/etc. for
+                                  AI SDKs (default: on).
+  --include-env-var-names / --no-include-env-var-names
+                                  Inspect environment variable names for AI
+                                  provider keys (default: on).
+  --include-network-domains / --no-include-network-domains
+                                  Inspect /etc/hosts and SSH configs for AI
+                                  provider domains, and probe vetted loopback
+                                  model metadata APIs (default: on).
+  --allow-workspace-signatures / --no-allow-workspace-signatures
+                                  Honor signature packs found inside scanned
+                                  workspaces. Off by default (workspace-
+                                  supplied signatures can override the
+                                  operator's intent).
+  --store-raw-local-paths / --no-store-raw-local-paths
+                                  Persist raw local paths in the discovery
+                                  state file. Off by default for privacy; only
+                                  enable for diagnostics on a trusted machine.
+  --restart / --no-restart        Restart the gateway after enabling so the
+                                  sidecar wires the discovery service
+                                  (default: on).
+  --scan / --no-scan              Trigger an immediate scan after restart
+                                  (default: on).
+  --yes                           Skip the confirmation prompt.
+  --gateway-host TEXT             Sidecar API host override (for --scan).
+  --gateway-port INTEGER          Sidecar API port override (for --scan).
+  --gateway-token-env TEXT        Environment variable containing the sidecar
+                                  API token override (for --scan).
+  --help                          Show this message and exit.

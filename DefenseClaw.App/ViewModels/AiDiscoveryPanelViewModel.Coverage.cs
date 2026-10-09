@@ -154,7 +154,7 @@ public sealed partial class AiDiscoveryPanelViewModel
     public ObservableCollection<RuntimeFindingRow> RuntimeFindings { get; } = new();
 
     /// <summary>Esc closes the review dialog. True when it consumed the key. (The model inspector closes on the bubbling Esc, so an open drop-down keeps its own.)</summary>
-    public bool HandleEscape() => Review.IsOpen && Review.HandleEscape();
+    public bool HandleEscape() => Tuning.HandleEscape() || (Review.IsOpen && Review.HandleEscape());
 
     // ---- Enable / disable ------------------------------------------------------------------------
 

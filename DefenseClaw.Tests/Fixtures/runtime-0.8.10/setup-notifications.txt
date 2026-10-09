@@ -1,0 +1,42 @@
+Usage: defenseclaw setup notifications [OPTIONS] [on|off|status]
+
+  Toggle user-session desktop notifications for blocks and HITL approvals.
+
+  DefenseClaw can surface a desktop notification whenever a hook,
+  guardrail verdict, or asset policy blocks a tool call, or when a
+  Human-in-the-Loop approval is pending in the chat / TUI. The
+  notification is informational only — clicking it does not approve
+  or deny anything; the operator still replies in the existing
+  chat/CLI surface.
+  
+  With no argument this command is a one-shot Y/n onboarding
+  prompt:
+  
+    Show desktop notifications for blocks and approval requests? [Y/n]
+  
+  Use ``on`` / ``off`` to flip ``notifications.enabled`` directly,
+  and ``status`` to print the resolved configuration without
+  mutating it.
+  
+  Examples:
+    defenseclaw setup notifications
+    defenseclaw setup notifications on
+    defenseclaw setup notifications off --yes
+    defenseclaw setup notifications status
+
+Options:
+  -y, --yes                 Skip the interactive confirmation prompt and
+                            accept the default answer. Required for non-TTY
+                            callers (CI, scripts, TUI shell-outs); without it
+                            the command may hang waiting on stdin when invoked
+                            without an explicit on/off/status argument.
+  --restart / --no-restart  Restart defenseclaw-gateway after toggling. The
+                            notification dispatcher is built once at sidecar
+                            boot from ``notifications.*`` so a flip without
+                            restart leaves the previous state in effect for
+                            the running process. Use ``--no-restart`` only
+                            when the sidecar is offline; the ``setup`` group's
+                            auto-restart hook will not double-bounce the
+                            gateway because this command marks the restart as
+                            handled.  [default: restart]
+  --help                    Show this message and exit.

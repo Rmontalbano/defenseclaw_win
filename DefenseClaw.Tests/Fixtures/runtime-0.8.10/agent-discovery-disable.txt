@@ -1,0 +1,13 @@
+Usage: defenseclaw agent discovery disable [OPTIONS]
+
+  Disable the sidecar AI discovery service.
+
+  Sets ``ai_discovery.enabled = false`` in ``~/.defenseclaw/config.yaml`` and
+  (when ``--restart`` is on) restarts the gateway so the sidecar drops the
+  running discovery service.
+
+Options:
+  --restart / --no-restart  Restart the gateway after disabling so the
+                            discovery service stops (default: on).
+  --yes                     Skip the confirmation prompt.
+  --help                    Show this message and exit.

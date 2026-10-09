@@ -29,8 +29,16 @@ public sealed record DiscoverStep(
     bool RetainFullOutput = false,
     Func<string, string>? OutputFilter = null);
 
-/// <summary>What a reviewed action did, handed to the panel so it can re-read its state.</summary>
-public sealed record DiscoverReviewResult(bool Succeeded, IReadOnlyList<CliInvocation> Invocations);
+/// <summary>
+/// What a reviewed action did, handed to the panel so it can re-read its state. <paramref name="Steps"/> says, for each step of the review in
+/// order, whether it succeeded, failed or did not run (<see cref="PlanReport"/> turns it into the sentence); <paramref name="Invocations"/>
+/// holds one entry for each step that started.
+/// </summary>
+public sealed record DiscoverReviewResult(bool Succeeded, IReadOnlyList<CliInvocation> Invocations, IReadOnlyList<DiscoverStepOutcome>? Steps = null)
+{
+    /// <summary>The outcome of every step, in order; empty only for a result that was built without them.</summary>
+    public IReadOnlyList<DiscoverStepOutcome> Outcomes => Steps ?? Array.Empty<DiscoverStepOutcome>();
+}
 
 /// <summary>
 /// Helpers shared by the Discover panels for talking to the CLI.
@@ -357,6 +365,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
         ResultOutput = null;
 
         var invocations = new List<CliInvocation>();
+        var outcomes = new List<DiscoverStepOutcome>(review.Steps.Count);
         var output = new StringBuilder();
         var succeeded = true;
 
@@ -369,6 +378,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 if (!succeeded)
                 {
                     row.SetStatus("Skipped: an earlier step did not succeed", "Neutral");
+                    outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.NotRun, row.CommandText, "an earlier step did not succeed"));
                     continue;
                 }
 
@@ -392,11 +402,13 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     if (invocation.FailureReason is { Length: > 0 } reason)
                     {
                         row.SetStatus($"Did not complete: {reason}", "Bad");
+                        outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Failed, row.CommandText, reason));
                         succeeded = false;
                     }
                     else if (invocation.ExitCode != 0)
                     {
                         row.SetStatus($"Failed (exit {invocation.ExitCode})", "Bad");
+                        outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Failed, row.CommandText, $"exit {invocation.ExitCode}"));
                         succeeded = false;
                     }
                     else if (step.Verify?.Invoke(invocation) is { Length: > 0 } problem)
@@ -404,11 +416,13 @@ public sealed partial class DiscoverActionReview : ObservableObject
                         // Exit 0 is not success for this step: its own report says it did not finish the job.
                         row.SetStatus("Reported a problem (exit 0)", "Bad");
                         output.AppendLine(problem);
+                        outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Failed, row.CommandText, "it reported a problem although it exited 0"));
                         succeeded = false;
                     }
                     else
                     {
                         row.SetStatus("Succeeded (exit 0)", "Ok");
+                        outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Succeeded, row.CommandText, string.Empty));
                     }
 
                     AppendOutput(output, i + 1, invocation, label: review.Steps.Count > 1);
@@ -417,11 +431,13 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 {
                     row.SetStatus("Could not start", "Bad");
                     output.AppendLine($"'{ex.ExecutableName}' was not found: {ex.Message}");
+                    outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Failed, row.CommandText, "it could not start"));
                     succeeded = false;
                 }
                 catch (SecretInArgumentException)
                 {
                     row.SetStatus("Refused: a secret was in the arguments", "Bad");
+                    outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Failed, row.CommandText, "a secret was in the arguments"));
                     succeeded = false;
                 }
             }
@@ -432,10 +448,14 @@ public sealed partial class DiscoverActionReview : ObservableObject
             IsFinished = true;
         }
 
+        // A review of several steps says which ran and which did not (PlanReport); one step's own status line is the whole story.
+        var report = PlanReport.Describe(outcomes);
         ResultKey = succeeded ? "Ok" : "Bad";
-        ResultText = succeeded
-            ? "Done. The exact command and its full output are in the Activity panel."
-            : "Did not finish. Steps after the failing one were not run. The exact command and its full output are in the Activity panel.";
+        ResultText = report.Length > 0
+            ? (succeeded ? "Done. " : "Did not finish. ") + report + " The exact commands and their full output are in the Activity panel."
+            : succeeded
+                ? "Done. The exact command and its full output are in the Activity panel."
+                : "Did not finish. Steps after the failing one were not run. The exact command and its full output are in the Activity panel.";
         ResultOutput = output.Length == 0 ? null : output.ToString().TrimEnd();
 
         var callback = _onFinished;
@@ -444,7 +464,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
         {
             try
             {
-                await callback(new DiscoverReviewResult(succeeded, invocations)).ConfigureAwait(true);
+                await callback(new DiscoverReviewResult(succeeded, invocations, outcomes)).ConfigureAwait(true);
             }
 #pragma warning disable CA1031 // A panel's re-read failing must not turn a finished run into an unhandled exception.
             catch (Exception ex)

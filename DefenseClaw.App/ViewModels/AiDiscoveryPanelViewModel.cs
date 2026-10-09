@@ -391,6 +391,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         ModelsView = CollectionViewSource.GetDefaultView(_allModels);
         ModelsView.Filter = FilterModel;
         Review = new DiscoverActionReview(services);
+        Tuning = new AiDiscoveryTuningViewModel(services, applied: (result, argv) => AfterRunAsync(result, argv));
 
         // The old code toggled IsRunningDiscover around its own run; the shared review dialog owns the
         // run now, so mirror its state to keep NotRunningDiscover meaningful for any binding.
@@ -399,6 +400,11 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             if (e.PropertyName == nameof(DiscoverActionReview.IsRunning))
             {
                 IsRunningDiscover = Review.IsRunning;
+            }
+
+            if (e.PropertyName is nameof(DiscoverActionReview.IsRunning) or nameof(DiscoverActionReview.IsOpen))
+            {
+                OpenTuningCommand.NotifyCanExecuteChanged();
             }
         };
     }
