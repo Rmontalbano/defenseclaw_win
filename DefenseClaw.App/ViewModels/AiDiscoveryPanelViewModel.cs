@@ -480,7 +480,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// scan via the sidecar"; it answers HTTP 503 when <c>ai_discovery</c> is disabled).
     /// </para>
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
     private void RunScan()
     {
         var argv = new[] { "agent", "discovery", "scan" };
@@ -513,7 +513,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// meant to be a local re-read, so it does neither. Flags checked against
     /// <c>defenseclaw agent discover --help</c>.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
     private void RefreshConnectors()
     {
         var argv = new[] { "agent", "discover", "--refresh", "--no-emit-otel" };

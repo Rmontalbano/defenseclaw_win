@@ -70,6 +70,12 @@ public sealed class ConfigSaveService
     /// <summary>Test seam: runs between the drift check and the backup read, the window in which a CLI write can land.</summary>
     internal Action? AfterDriftCheck { get; set; }
 
+    /// <summary>
+    /// The installation whose config.yaml this writes, and so whether it may be written: the live answer the runner uses when there is a runner,
+    /// else the one the paths started with.
+    /// </summary>
+    private InstallationContext Installation => _cli?.Installation ?? _paths.Installation;
+
     public ConfigSaveService(DefenseClawPaths paths, CliRunner? cli)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
@@ -103,6 +109,13 @@ public sealed class ConfigSaveService
                 "Nothing was saved: this data folder is a read-only copy of a container's. Change the container's configuration with its own CLI.",
                 null,
                 null);
+        }
+
+        // A managed or invalid installation is only read. This editor writes config.yaml itself rather than through the CLI, so the runner's
+        // guard does not see it: the same rule is asked here, of the same live answer.
+        if (Installation.BlockedReason is { } readOnly)
+        {
+            return new SaveOutcome(false, SaveStage.WriteFailed, "Nothing was saved: " + readOnly, null, null);
         }
 
         // 0. The validate step at the end runs a CLI verb without a confirmation, which is only allowed for a
@@ -215,6 +228,12 @@ public sealed class ConfigSaveService
     public async Task<RestoreOutcome> RestoreFromBackupAsync(string backupPath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(backupPath);
+
+        // The same rule as the save: a managed or invalid installation is only read, and a restore is a write.
+        if (Installation.BlockedReason is { } readOnly)
+        {
+            return new RestoreOutcome(false, "Nothing was restored: " + readOnly);
+        }
 
         if (!File.Exists(backupPath))
         {

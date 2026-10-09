@@ -399,7 +399,7 @@ public sealed class TrayIconService : IDisposable
 
         var title = GatewayControl.Title(action);
 
-        var (allowed, reason) = GatewayControl.Availability(action, _services.Monitor.Current);
+        var (allowed, reason) = GatewayControl.Availability(action, _services.Monitor.Current, _services.Installation);
         if (!allowed)
         {
             Notify(title, reason ?? "Not available right now.", NotificationIcon.Info);
@@ -491,7 +491,7 @@ public sealed class TrayIconService : IDisposable
         if (_gatewayItem is not null)
         {
             var action = snapshot.IsRunning ? GatewayAction.Stop : GatewayAction.Start;
-            var (allowed, reason) = GatewayControl.Availability(action, snapshot);
+            var (allowed, reason) = GatewayControl.Availability(action, snapshot, _services.Installation);
             _gatewayItem.Header = snapshot.IsRunning ? "Stop Gateway" : "Start Gateway";
             _gatewayItem.IsEnabled = allowed;
             _gatewayItem.ToolTip = allowed ? GatewayControl.Summary(action) : reason;
@@ -499,7 +499,7 @@ public sealed class TrayIconService : IDisposable
 
         if (_restartItem is not null)
         {
-            var (allowed, reason) = GatewayControl.Availability(GatewayAction.Restart, snapshot);
+            var (allowed, reason) = GatewayControl.Availability(GatewayAction.Restart, snapshot, _services.Installation);
             _restartItem.IsEnabled = allowed;
             _restartItem.ToolTip = allowed ? GatewayControl.Summary(GatewayAction.Restart) : reason;
         }

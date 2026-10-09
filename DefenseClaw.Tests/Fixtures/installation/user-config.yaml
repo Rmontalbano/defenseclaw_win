@@ -1,0 +1,9 @@
+# Synthetic: an ordinary user-owned configuration. It names no deployment mode.
+config_version: 8
+gateway:
+  api_port: 18970
+guardrail:
+  enabled: true
+  mode: observe
+claw:
+  mode: claudecode

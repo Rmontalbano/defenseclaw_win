@@ -245,13 +245,17 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     private string? ChangesBlockedReasonNow => TrustBlockedReason ?? (IsBusy || IsRunning ? "Another command is running." : null);
 
     /// <summary>
-    /// Why the data on screen may not be acted on: no read yet, a failed or partial or old one, or a configuration that moved since (the trust
-    /// says all of those). Null when it may.
+    /// Why the data on screen may not be acted on: the installation is read-only (managed or invalid; it comes first, being the one reason a
+    /// refresh would not cure), or no read yet, a failed or partial or old one, or a configuration that moved since (the trust says all of
+    /// those). Null when it may.
     /// </summary>
     private string? TrustBlockedReason =>
-        State != PoliciesState.Loaded
+        Services.Installation.BlockedReason
+        ?? (State != PoliciesState.Loaded
             ? Trust.Reason ?? "Changes are off until the policies have been read."
-            : Trust.Reason;
+            : Trust.Reason);
+
+    protected override void OnInstallationChanged() => NotifyTrust();
 
     private void NotifyTrust()
     {

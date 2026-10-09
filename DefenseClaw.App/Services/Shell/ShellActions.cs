@@ -40,6 +40,12 @@ internal sealed class ShellActions
     public GatewaySnapshot Snapshot => _services.Monitor.Current;
 
     /// <summary>
+    /// Whether the installation may be changed (and why not): a palette row that would run a change from here is greyed out with this
+    /// sentence, the same one every other disabled control shows. See <see cref="InstallationGuard"/>.
+    /// </summary>
+    public InstallationGuard Installation => _services.Installation;
+
+    /// <summary>
     /// The current panel's <c>RefreshCommand</c> (by convention every panel view-model exposes one),
     /// or null when the panel on screen has none. Found by name so a panel needs no shell-specific
     /// interface: GA's F5 binds to whatever the panel already calls its refresh.
@@ -366,6 +372,16 @@ internal sealed class ShellActions
                 command.Title,
                 "It asks questions at a prompt, which needs a terminal. Copied the command for you to paste into one" +
                 (command.NeedsArguments ? $", then add {string.Join(", ", command.RequiredArguments)}." : "."));
+            return;
+        }
+
+        // A read-only installation only runs reads, and the palette greys the row out; this is the same rule for a Run that arrived another way
+        // (the detail pane, a remembered command). The runner would refuse it too, so the toast is the explanation rather than the guard. A
+        // command that only gets copied for the operator to finish in a terminal runs nothing here, so it is not held back.
+        if (!(command.NeedsArguments && command.Form is null) &&
+            _services.Installation.ReasonFor(command.Executable, command.Argv) is { } blocked)
+        {
+            ShowToast(command.Title, blocked);
             return;
         }
 

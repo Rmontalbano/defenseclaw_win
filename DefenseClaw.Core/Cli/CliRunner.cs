@@ -388,6 +388,7 @@ public sealed class CliRunner : IDisposable
 
     private readonly DefenseClawPaths _paths;
     private readonly string _neutralWorkingDirectory;
+    private readonly Func<InstallationContext>? _installation;
     private readonly object _gate = new();
     private readonly LinkedList<CliInvocation> _activity = new();
     private readonly List<SecretValue> _knownSecrets = new();
@@ -412,12 +413,24 @@ public sealed class CliRunner : IDisposable
     /// The empty directory the Python <c>defenseclaw</c> CLI runs in (see <see cref="CliWorkingDirectory"/>);
     /// <c>null</c> is <see cref="CliWorkingDirectory.DefaultPath"/>. Injectable so a test never touches the real one.
     /// </param>
-    public CliRunner(DefenseClawPaths paths, int activityCapacity = 200, string? neutralWorkingDirectory = null)
+    /// <param name="installation">
+    /// The installation the runs act on, read for every run (the app's live copy follows config.yaml; <c>null</c> is the one
+    /// <paramref name="paths"/> carries). While it is not <see cref="InstallationContext.IsMutable"/> the runner refuses every run
+    /// <see cref="InstallationGate"/> does not call read-only, and every DefenseClaw child gets the installation's identity in its environment
+    /// last (<see cref="InstallationContext.ProtectedEnvironment"/>).
+    /// </param>
+    public CliRunner(DefenseClawPaths paths, int activityCapacity = 200, string? neutralWorkingDirectory = null, Func<InstallationContext>? installation = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         ActivityCapacity = activityCapacity > 0 ? activityCapacity : 200;
         _neutralWorkingDirectory = neutralWorkingDirectory ?? CliWorkingDirectory.DefaultPath;
+        _installation = installation;
     }
+
+    /// <summary>The installation a run started now would act on, and so whether it may change anything: what the runner gates on, for the writers that do not go through it (the config editor).</summary>
+    public InstallationContext Installation => CurrentInstallation;
+
+    private InstallationContext CurrentInstallation => _installation?.Invoke() ?? _paths.Installation;
 
     /// <summary>
     /// Bounded ring size for <see cref="Activity"/>. Bounds entries, not bytes — each
@@ -702,6 +715,13 @@ public sealed class CliRunner : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(executableName);
 
+        // The one enforcement point for a read-only installation. Judged on the tool and argv the caller asked for, before a container wraps
+        // them in `docker exec` and before the executable is looked up (a refusal needs no CLI to exist).
+        if (RefuseOnReadOnlyInstallation(executableName, args, stdinSecret, options) is { } refused)
+        {
+            return refused;
+        }
+
         // The developer runtime selector's container mode (Settings → Advanced). Off for everyone else: the branch is a property read.
         if (_paths.Runtime.Kind == RuntimeKind.Container && RuntimeLaunch.RunsInContainer(executableName))
         {
@@ -714,7 +734,32 @@ public sealed class CliRunner : IDisposable
         var path = await _paths.FindExecutableAsync(executableName).ConfigureAwait(true)
             ?? throw new CliNotFoundException(executableName, _paths.CandidatesFor(executableName));
 
-        return await RunExecutableAsync(path, args, stdinSecret, cancellationToken, options).ConfigureAwait(true);
+        return await RunGatedExecutableAsync(path, args, stdinSecret, cancellationToken, options).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The read-only guard (<see cref="InstallationGate"/>): when the installation is not writable and the run is not a read, records the run as
+    /// refused (<see cref="RecordRefusal"/>, the same Activity entry and "refused" badge a confirmed command gets when its list went out of date,
+    /// with the installation's own reason) and returns that entry; otherwise null. Nothing is started. A bad option or a secret in argv is still
+    /// the error it always is (a refusal must not record one in Activity).
+    /// </summary>
+    private CliInvocation? RefuseOnReadOnlyInstallation(
+        string executable,
+        IReadOnlyList<string> args,
+        SecretValue? stdinSecret,
+        CliRunOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+
+        var installation = CurrentInstallation;
+        if (installation.IsMutable || InstallationGate.IsReadOnly(executable, args))
+        {
+            return null;
+        }
+
+        GuardArguments(args, stdinSecret, ResolveEnvironment(options));
+
+        return RecordRefusal(executable, args, InstallationGate.RefusalReason(installation));
     }
 
     /// <summary>
@@ -742,7 +787,7 @@ public sealed class CliRunner : IDisposable
             ResolveEnvironment(effective).Select(e => e.Name),
             usesStdin: stdinSecret is { IsEmpty: false });
 
-        return await RunExecutableAsync(
+        return await RunGatedExecutableAsync(
             docker,
             wrapped,
             stdinSecret,
@@ -777,6 +822,27 @@ public sealed class CliRunner : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(executablePath);
         ArgumentNullException.ThrowIfNull(args);
 
+        // A read-only installation only runs reads (see InstallationGate): a path to an installer, a script or any tool that is not the DefenseClaw
+        // CLI or gateway is a change. The named entry points have already asked this, with the name the caller gave.
+        if (RefuseOnReadOnlyInstallation(executablePath, args, stdinSecret, options) is { } refused)
+        {
+            return refused;
+        }
+
+        return await RunGatedExecutableAsync(executablePath, args, stdinSecret, cancellationToken, options).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <see cref="RunExecutableAsync"/> after the read-only guard has had its say (the named entry points ask it with the tool's name, before a
+    /// container wraps the argv in <c>docker exec</c>, so they must not ask again with <c>docker</c>).
+    /// </summary>
+    private async Task<CliInvocation> RunGatedExecutableAsync(
+        string executablePath,
+        IReadOnlyList<string> args,
+        SecretValue? stdinSecret,
+        CancellationToken cancellationToken,
+        CliRunOptions? options)
+    {
         // Resolved before anything is recorded so a bad option is a plain argument error and
         // leaves no half-recorded invocation behind.
         var environment = ResolveEnvironment(options);
@@ -1076,6 +1142,16 @@ public sealed class CliRunner : IDisposable
             startInfo.ArgumentList.Add(arg);
         }
 
+        // What the app itself would pass on for the three variables that define an installation, taken before the call's overlay can change them,
+        // so the overlay cannot move a DefenseClaw child to another installation (see ApplyInstallationIdentity). Only when there is an overlay:
+        // without one nothing can have changed them.
+        var identityBaseline = environment.Count > 0 && IsDefenseClawExecutable(executablePath)
+            ? InstallationContext.ProtectedVariables.ToDictionary(
+                name => name,
+                name => startInfo.Environment.TryGetValue(name, out var value) ? value : null,
+                StringComparer.OrdinalIgnoreCase)
+            : null;
+
         // Touched only when there is something to overlay: reading Environment copies the whole
         // parent environment into the start info, which a plain run has no reason to do. This sets
         // the child's block and nothing else — Environment.SetEnvironmentVariable is never called, so
@@ -1089,6 +1165,12 @@ public sealed class CliRunner : IDisposable
         if (_paths.Runtime is { Kind: RuntimeKind.Cli, HomeDirectory: { } runtimeHome } && IsDefenseClawExecutable(executablePath))
         {
             startInfo.Environment[DefenseClawPaths.HomeVariableName] = runtimeHome;
+        }
+
+        // Last of all, so nothing above can redirect the child: the selected installation's own identity.
+        if (IsDefenseClawExecutable(executablePath))
+        {
+            ApplyInstallationIdentity(startInfo, identityBaseline);
         }
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
@@ -1203,6 +1285,34 @@ public sealed class CliRunner : IDisposable
             }
 
             run.DetachJob();
+        }
+    }
+
+    /// <summary>
+    /// Gives a DefenseClaw child the identity of the installation the app selected (<see cref="InstallationContext.ProtectedEnvironment"/>),
+    /// <b>after</b> everything else that shaped its environment: a variable the selection pins is set to the pinned value, and one it does not pin
+    /// goes back to what the app itself would pass on (<paramref name="baseline"/>, taken before the call's overlay). With nothing pinned and no
+    /// overlay (the user default, an ordinary run) the child's environment is not even read, let alone changed.
+    /// </summary>
+    private void ApplyInstallationIdentity(ProcessStartInfo startInfo, IReadOnlyDictionary<string, string?>? baseline)
+    {
+        foreach (var (name, pinned) in CurrentInstallation.ProtectedEnvironment())
+        {
+            if (pinned is not null)
+            {
+                startInfo.Environment[name] = pinned;
+            }
+            else if (baseline is not null)
+            {
+                if (baseline.TryGetValue(name, out var inherited) && inherited is not null)
+                {
+                    startInfo.Environment[name] = inherited;
+                }
+                else
+                {
+                    _ = startInfo.Environment.Remove(name);
+                }
+            }
         }
     }
 

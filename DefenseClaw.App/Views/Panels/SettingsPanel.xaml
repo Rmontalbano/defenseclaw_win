@@ -302,6 +302,9 @@
                                                 Header="Start the gateway automatically"
                                                 local:SettingsRow.Caption="Once per launch, if the gateway is stopped because nothing is listening on its port, runs defenseclaw-gateway start. Never after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it yourself. Off by default; turning it on shows the command first.">
                             <ui:ToggleSwitch IsChecked="{Binding AutoStartGateway, Mode=TwoWay}"
+                                             IsEnabled="{Binding CanChangeAutoStart}"
+                                             ToolTipService.ShowOnDisabled="True"
+                                             ToolTip="{Binding AutoStartToolTip}"
                                              AutomationProperties.Name="Start the gateway automatically"
                                              AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. You review the command when you turn this on." />
                         </HeaderedContentControl>
@@ -353,6 +356,46 @@
                                        AutomationProperties.HelpText="Re-reads config.yaml and the .env file from disk." />
                         </HeaderedContentControl>
                         <TextBlock Style="{StaticResource StatusLine}" Text="{Binding ConnectionMessage}" />
+
+                        <!--
+                            Installation: which DefenseClaw this run drives, what chose it (DEFENSECLAW_CONFIG, the developer runtime selector,
+                            DEFENSECLAW_HOME, a managed layout, or the user default), and whether the app may change it. A managed or invalid
+                            installation is only read: the reason is the caption under Access, and it is what every disabled control says.
+                        -->
+                        <TextBlock Margin="0,16,0,0"
+                                   Style="{StaticResource DcBody}"
+                                   FontWeight="SemiBold"
+                                   AutomationProperties.HeadingLevel="Level3"
+                                   Text="Installation" />
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Selected by"
+                                                local:SettingsRow.Caption="The first of these that applies: DEFENSECLAW_CONFIG, the developer runtime selector, DEFENSECLAW_HOME, the Windows managed installation, then your user profile. Chosen once, when the app starts.">
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding InstallationSelectedBy}"
+                                       AutomationProperties.Name="{Binding InstallationSelectedBy, StringFormat=Installation selected by: {0}}" />
+                        </HeaderedContentControl>
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Access"
+                                                local:SettingsRow.Caption="{Binding InstallationReason}">
+                            <Border Style="{StaticResource DcBadge}"
+                                    VerticalAlignment="Center"
+                                    Tag="{Binding InstallationAccessTone}">
+                                <TextBlock Style="{StaticResource DcBadgeText}"
+                                           FontSize="12"
+                                           Text="{Binding InstallationAccessText}"
+                                           AutomationProperties.Name="{Binding InstallationAccessText, StringFormat=Installation access: {0}}" />
+                            </Border>
+                        </HeaderedContentControl>
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Override"
+                                                local:SettingsRow.Caption="The developer runtime selector under Advanced, when it is on. It applies the next time the app starts, like the selector itself.">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     Text="{Binding InstallationOverride, Mode=OneWay}"
+                                     AutomationProperties.Name="Installation override path" />
+                        </HeaderedContentControl>
                     </StackPanel>
                 </Border>
 

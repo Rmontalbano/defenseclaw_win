@@ -75,6 +75,20 @@ internal static class GatewayControl
     public static string SucceededText(GatewayAction action) => $"{CommandText(action)} succeeded.";
 
     /// <summary>
+    /// <see cref="Availability(GatewayAction, GatewaySnapshot)"/> on an installation that may not be changed: start, stop and restart are changes
+    /// (<see cref="InstallationGate"/>), so a managed or invalid installation is told so before the gateway's own state is considered. The
+    /// reason is the installation's sentence.
+    /// </summary>
+    public static (bool Allowed, string? Reason) Availability(GatewayAction action, GatewaySnapshot snapshot, InstallationGuard installation)
+    {
+        ArgumentNullException.ThrowIfNull(installation);
+
+        return installation.ReasonFor(Executable, Argv(action)) is { } blocked
+            ? (false, blocked)
+            : Availability(action, snapshot);
+    }
+
+    /// <summary>
     /// Whether <paramref name="action"/> makes sense for <paramref name="snapshot"/>, and if not, why.
     /// The reason is written for a tooltip or a palette row.
     /// </summary>

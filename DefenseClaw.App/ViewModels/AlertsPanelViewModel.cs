@@ -418,7 +418,23 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     /// The confirm button is live only for a preview that ran to exit 0, matched something, and is
     /// not being redone or applied right now - the follow-up is gated on the previous exit code.
     /// </summary>
-    public bool CanConfirmReview => PreviewSucceeded && PreviewMatched > 0 && !IsPreviewing && !IsApplying;
+    public bool CanConfirmReview => PreviewSucceeded && PreviewMatched > 0 && !IsPreviewing && !IsApplying && CanChangeInstallation;
+
+    /// <summary>
+    /// The dialog's note when the installation is managed or invalid: the preview (the CLI's own dry run, a read) still works, the confirm
+    /// does not, and says why. Null while the installation may be changed.
+    /// </summary>
+    public string? ReviewBlockedText => InstallationBlockedReason is { } reason ? "State-changing actions disabled: " + reason : null;
+
+    public bool HasReviewBlockedText => ReviewBlockedText is not null;
+
+    /// <summary>The installation turned read-only (or writable) while the page was open or its dialog was up: the confirm is asked again.</summary>
+    protected override void OnInstallationChanged()
+    {
+        OnPropertyChanged(nameof(CanConfirmReview));
+        OnPropertyChanged(nameof(ReviewBlockedText));
+        OnPropertyChanged(nameof(HasReviewBlockedText));
+    }
 
     public bool HasHiddenAcknowledged => HiddenAcknowledgedCount > 0;
 

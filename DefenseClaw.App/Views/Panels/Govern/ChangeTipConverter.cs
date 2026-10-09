@@ -5,8 +5,9 @@ namespace DefenseClaw.App.Views.Panels.Govern;
 
 /// <summary>
 /// The tooltip of a button or menu item that changes something: normally the sentence written next to it (the converter parameter),
-/// and, while the panel's list may not authorize a change (partial, failed, old - <see cref="ViewModels.CatalogTrust"/>), the reason it is
-/// off. Bound to the reason (a string, null while changes are allowed).
+/// and, while the panel's list may not authorize a change (partial, failed, old - <see cref="ViewModels.CatalogTrust"/>) or the installation is
+/// read-only (<c>PanelViewModelBase.InstallationBlockedReason</c>, which comes first), the reason it is off. Bound to the reason (a string,
+/// null while changes are allowed).
 /// </summary>
 public sealed class ChangeTipConverter : IValueConverter
 {

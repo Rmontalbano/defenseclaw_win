@@ -1,0 +1,3 @@
+# Synthetic: a deployment_mode the CLI refuses to load.
+config_version: 8
+deployment_mode: roaming_laptop

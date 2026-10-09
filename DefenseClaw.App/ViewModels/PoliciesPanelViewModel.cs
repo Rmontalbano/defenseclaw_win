@@ -237,6 +237,11 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
     {
         get
         {
+            if (Services.Installation.BlockedReason is { } installation)
+            {
+                return installation;
+            }
+
             if (State is not (PoliciesState.Loaded or PoliciesState.Empty))
             {
                 return Trust.Reason ?? "Changes are off until the policies have been read.";
@@ -250,6 +255,8 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
             return IsBusy || IsRunning ? "Another command is running." : null;
         }
     }
+
+    protected override void OnInstallationChanged() => NotifyTrust();
 
     private void NotifyTrust()
     {

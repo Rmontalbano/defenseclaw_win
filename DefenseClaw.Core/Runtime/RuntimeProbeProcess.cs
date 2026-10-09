@@ -18,11 +18,32 @@ public static class RuntimeEnvironment
     /// <item><description><b>Container</b>: the data directory is the host copy, read-only; PATH is kept, because <c>docker</c> is found on it.</description></item>
     /// </list>
     /// </summary>
-    public static DefenseClawPaths CreatePaths(RuntimeSelection? selection)
+    public static DefenseClawPaths CreatePaths(RuntimeSelection? selection) => CreatePaths(selection, installation: null);
+
+    /// <summary>
+    /// <see cref="CreatePaths(RuntimeSelection?)"/> for the installation the app resolved at start (<see cref="InstallationContext.Resolve"/>),
+    /// which the paths carry: it names the config.yaml (<c>DEFENSECLAW_CONFIG</c>, a managed layout's <c>etc\config.yaml</c>), it is what the runner
+    /// gates on, and for a managed layout it also moves the data directory to the layout's <c>runtime</c> folder and pins the layout's own
+    /// <c>defenseclaw.exe</c> when it is there. Everything else is as it was: with no installation, or one the user default or
+    /// <c>DEFENSECLAW_HOME</c> selected, the paths are the ones <c>new DefenseClawPaths()</c> builds.
+    /// </summary>
+    public static DefenseClawPaths CreatePaths(RuntimeSelection? selection, InstallationContext? installation)
     {
         if (selection is null || selection.IsDefault)
         {
-            return new DefenseClawPaths();
+            if (installation is { Source: InstallationSource.ManagedLayout, Layout: { } layout })
+            {
+                var managed = new DefenseClawPaths(
+                    dataDirectoryOrigin: new DataDirectoryResolution(installation.HomeRoot, DataDirectorySource.Installation, null),
+                    installation: installation);
+
+                // The managed gateway answers for the managed install, so its own CLI is the one that talks to it. While the file is missing the
+                // lookup carries on as usual (SetCliPathOverride), so a managed layout without a CLI still finds one.
+                managed.SetCliPathOverride(layout.CliPath);
+                return managed;
+            }
+
+            return new DefenseClawPaths(installation: installation);
         }
 
         switch (selection.Kind)
@@ -33,17 +54,18 @@ public static class RuntimeEnvironment
                     dataDirectory: home,
                     binDirectory: Path.GetDirectoryName(cli),
                     searchPath: Array.Empty<string>(),
-                    runtime: selection);
+                    runtime: selection,
+                    installation: installation);
                 paths.SetCliPathOverride(cli);
                 return paths;
             }
 
             case RuntimeKind.Container when selection.HostDataFolder is { } data:
-                return new DefenseClawPaths(dataDirectory: data, runtime: selection);
+                return new DefenseClawPaths(dataDirectory: data, runtime: selection, installation: installation);
 
             default:
                 // An incomplete selection never half-applies: the installed runtime is used, and Settings says why it was refused.
-                return new DefenseClawPaths();
+                return new DefenseClawPaths(installation: installation);
         }
     }
 

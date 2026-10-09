@@ -682,6 +682,8 @@
                                Appearance="Primary"
                                Content="Execute"
                                IsEnabled="{Binding CanExecute}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding InstallationBlockedReason}"
                                Visibility="{Binding ShowExecute, Converter={StaticResource BoolToVisibility}}"
                                Command="{Binding ExecuteCommand}" />
                     <!-- A destructive tier (setup remove ...) gets the danger appearance. -->
@@ -689,6 +691,8 @@
                                Appearance="Danger"
                                Content="Execute (destructive)"
                                IsEnabled="{Binding CanExecute}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding InstallationBlockedReason}"
                                Visibility="{Binding ShowDangerExecute, Converter={StaticResource BoolToVisibility}}"
                                Command="{Binding ExecuteCommand}" />
                     <!--

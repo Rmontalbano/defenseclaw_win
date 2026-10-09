@@ -194,8 +194,8 @@ internal static class ShellCommandRegistry
             Description: "Open AI Discovery on its scan review. The scan runs only after you confirm it.",
             Shortcut: ShellShortcuts.ScanAiText,
             Keywords: "ai discovery scan components agents inventory find",
-            IsEnabled: true,
-            DisabledReason: null,
+            IsEnabled: actions.Installation.IsMutable,
+            DisabledReason: actions.Installation.BlockedReason,
             Run: actions.ScanAiComponents));
 
         commands.Add(new ShellCommand(
@@ -304,7 +304,7 @@ internal static class ShellCommandRegistry
         var snapshot = actions.Snapshot;
         foreach (var action in new[] { GatewayAction.Start, GatewayAction.Stop, GatewayAction.Restart })
         {
-            var (allowed, reason) = GatewayControl.Availability(action, snapshot);
+            var (allowed, reason) = GatewayControl.Availability(action, snapshot, actions.Installation);
             var captured = action;
             commands.Add(new ShellCommand(
                 Id: $"gateway.{GatewayControl.Verb(action)}",
@@ -354,8 +354,17 @@ internal static class ShellCommandRegistry
 
             var captured = command;
             var (allowed, reason) = command.LifecycleAction is { } lifecycle
-                ? GatewayControl.Availability(lifecycle, actions.Snapshot)
+                ? GatewayControl.Availability(lifecycle, actions.Snapshot, actions.Installation)
                 : (gate.IsAvailable, gate.Reason);
+
+            // A row that would run a change from here is off on a read-only installation, with the installation's sentence, which comes before
+            // any other reason (the Docker look, the gateway's state): nothing about the machine can make it runnable. A row that only copies a
+            // command for a terminal runs nothing, so it stays.
+            if (!command.NeedsTerminal && !(command.NeedsArguments && command.Form is null) &&
+                actions.Installation.ReasonFor(command.Executable, command.Argv) is { } installationBlock)
+            {
+                (allowed, reason) = (false, installationBlock);
+            }
 
             rows.Add(new ShellCommand(
                 Id: command.Id,

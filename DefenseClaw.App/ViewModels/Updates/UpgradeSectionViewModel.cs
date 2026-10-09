@@ -272,6 +272,9 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         _services.Cli.InvocationStarted += OnAnyInvocationStarted;
         _services.Cli.InvocationCompleted += OnAnyInvocationCompleted;
 
+        // The window can stay open while config.yaml is edited to managed (or fixed): the upgrade follows the installation.
+        _services.Installation.Changed += OnInstallationChanged;
+
         // Seeded after subscribing, never before: a command that starts or finishes in between is
         // then seen by the handlers rather than lost between the snapshot and the subscription.
         SeedCliInFlight();
@@ -513,13 +516,22 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
     /// </summary>
     private CancellationToken LifetimeToken => _disposed ? new CancellationToken(canceled: true) : _cts.Token;
 
-    public bool CanDownload => IsUpdateAvailable && !IsBusy;
+    public bool CanDownload => IsUpdateAvailable && !IsBusy && UpgradeBlockedReason is null;
+
+    /// <summary>
+    /// Why the runtime is not upgraded from here, or null while it is: the installation is managed or invalid, or the app is driving a developer
+    /// runtime (a side-by-side CLI or a container) that the Setup installer would not touch. Downloading what could not be installed is not
+    /// offered either. Reads and the copyable commands are unaffected. See <see cref="InstallationGuard.UpgradeBlockedReason"/>.
+    /// </summary>
+    public string? UpgradeBlockedReason => _services.Installation.UpgradeBlockedReason;
+
+    public bool HasUpgradeBlockedReason => UpgradeBlockedReason is not null;
 
     /// <summary>
     /// The run button. cosign is a hard gate on the resolver channel — that script refuses without
     /// it — and no gate at all on the installer channel, which never invokes cosign.
     /// </summary>
-    public bool CanOpenConfirm => IsStaged && !IsBusy && (IsInstallerChannel || IsCosignReady);
+    public bool CanOpenConfirm => IsStaged && !IsBusy && (IsInstallerChannel || IsCosignReady) && UpgradeBlockedReason is null;
 
     public bool CanRunUpgrade => CanOpenConfirm && IsConfirmVisible;
 
@@ -609,6 +621,7 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
         _runner.InvocationStarted -= OnUpgradeInvocationStarted;
         _services.Cli.InvocationStarted -= OnAnyInvocationStarted;
         _services.Cli.InvocationCompleted -= OnAnyInvocationCompleted;
+        _services.Installation.Changed -= OnInstallationChanged;
         _cts.Cancel();
         _cts.Dispose();
     }
@@ -1276,12 +1289,32 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
     partial void OnHasCosignGuidanceChanged(bool value) => OnPropertyChanged(nameof(ShowCosignGuidance));
 
+    /// <summary>The installation turned read-only (or writable) while the window is open: Download, Run and the explanation under them are asked again.</summary>
+    private void OnInstallationChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (_dispatcher.CheckAccess())
+        {
+            RaiseState();
+        }
+        else
+        {
+            _ = _dispatcher.BeginInvoke(RaiseState);
+        }
+    }
+
     private void RaiseState()
     {
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(CanDownload));
         OnPropertyChanged(nameof(CanOpenConfirm));
         OnPropertyChanged(nameof(CanRunUpgrade));
+        OnPropertyChanged(nameof(UpgradeBlockedReason));
+        OnPropertyChanged(nameof(HasUpgradeBlockedReason));
     }
 
     /// <summary>

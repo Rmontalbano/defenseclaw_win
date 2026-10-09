@@ -11,17 +11,28 @@ namespace DefenseClaw.App.Tests.TestSupport;
 /// </summary>
 internal static class TestServices
 {
-    public static DefenseClawPaths IsolatedPaths(string dataDirectory) =>
+    /// <param name="dataDirectory">The scratch folder the composition treats as the data directory.</param>
+    /// <param name="installation">
+    /// The installation the composition starts with (CUST-308): null is the permissive, user-owned one every test has always had; a managed or invalid
+    /// one (<see cref="TestInstallations"/>) makes the composition read-only from the start.
+    /// </param>
+    public static DefenseClawPaths IsolatedPaths(string dataDirectory, InstallationContext? installation = null) =>
         new(
             dataDirectory: dataDirectory,
             binDirectory: System.IO.Path.Combine(dataDirectory, "no-such-bin"),
-            searchPath: Array.Empty<string>());
+            searchPath: Array.Empty<string>(),
+            installation: installation);
 
     /// <param name="runtimeProbeRunner">
     /// What answers the runtime probes (<c>--version-json</c>, the help screens). Null: nothing does, so the runtime reads as unknown and every
     /// capability newer than 0.8.10 is absent - the default for the panels that do not care.
     /// </param>
-    public static AppServices Create(TempDirectory temp, string? configYaml = null, RuntimeProbeRunner? runtimeProbeRunner = null)
+    /// <param name="installation">The installation the composition starts with; null is the usual writable one. See <see cref="IsolatedPaths"/>.</param>
+    public static AppServices Create(
+        TempDirectory temp,
+        string? configYaml = null,
+        RuntimeProbeRunner? runtimeProbeRunner = null,
+        InstallationContext? installation = null)
     {
         if (configYaml is not null)
         {
@@ -29,7 +40,7 @@ internal static class TestServices
         }
 
         return AppServices.CreateIsolated(
-            IsolatedPaths(temp.Path),
+            IsolatedPaths(temp.Path, installation),
             claudeSettingsPath: temp.File("claude-settings.json"),
             runtimeProbeRunner: runtimeProbeRunner);
     }

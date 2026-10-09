@@ -221,7 +221,7 @@ public sealed partial class InventoryPanelViewModel
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
     private void GenerateAiBom()
     {
         var connector = SelectedBomConnector;

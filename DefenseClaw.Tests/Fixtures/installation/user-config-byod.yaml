@@ -1,0 +1,5 @@
+# Synthetic: a user-owned configuration that names the legacy alias of unmanaged_byod.
+config_version: 8
+deployment_mode: standalone
+gateway:
+  api_port: 18970

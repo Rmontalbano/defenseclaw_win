@@ -70,7 +70,7 @@ public sealed class AppServices : IDisposable
     /// The file reads a fresh composition starts with, possibly still running on a pool thread:
     /// see <see cref="BeginInitialize"/>.
     /// </summary>
-    private sealed record StartupLoad(DefenseClawPaths Paths, Task<LoadedStartup> Work);
+    private sealed record StartupLoad(DefenseClawPaths Paths, Task<LoadedStartup> Work, Func<InstallationContext>? ResolveInstallation = null);
 
     /// <summary>What <see cref="StartupLoad"/> produces: the two readers and the first config state.</summary>
     private sealed record LoadedStartup(ConfigStore ConfigStore, TokenResolver TokenResolver, LoadedConfig Initial);
@@ -84,6 +84,9 @@ public sealed class AppServices : IDisposable
         IDockerProbe? dockerProbe = null)
     {
         Paths = startup.Paths;
+
+        // What the installation is and whether it may be changed. Before anything that can run a command, because the runner reads it.
+        Installation = new InstallationGuard(Paths.Installation, Paths.Runtime, startup.ResolveInstallation);
 
         // Joins the config read. A no-op wait when it already finished while the caller was busy
         // theming; otherwise the same wait the inline read used to be. Only the readers'
@@ -118,7 +121,8 @@ public sealed class AppServices : IDisposable
         GatewayLog = new LogTailer(Paths.GatewayLogPath, new LogTailerOptions { StartAtEnd = true });
         WatchdogLog = new LogTailer(Paths.WatchdogLogPath, new LogTailerOptions { StartAtEnd = true });
 
-        Cli = new CliRunner(Paths);
+        // Every run asks the live installation first: a read-only one gets only reads, and every child gets the installation's identity last.
+        Cli = new CliRunner(Paths, installation: () => Installation.Context);
 
         // The token must be registered before anything can shell out: CliRunner then
         // refuses to place it in argv and scrubs it out of any captured output.
@@ -171,6 +175,13 @@ public sealed class AppServices : IDisposable
     private static AppServices? Instance { get; set; }
 
     public DefenseClawPaths Paths { get; }
+
+    /// <summary>
+    /// The installation this run drives (<c>DEFENSECLAW_CONFIG</c> &gt; the developer selector &gt; <c>DEFENSECLAW_HOME</c> &gt; the Windows managed layout &gt; the
+    /// user default) and whether it may be changed: <c>Services.Installation.IsMutable</c> / <c>BlockedReason</c> is what every state-changing
+    /// control consults, and <see cref="Cli"/> refuses every state-changing run while it is false. See <see cref="InstallationGuard"/>.
+    /// </summary>
+    internal InstallationGuard Installation { get; }
 
     public ConfigStore ConfigStore { get; }
 
@@ -333,7 +344,13 @@ public sealed class AppServices : IDisposable
     /// <see cref="Initialize"/> does the same reads inline. Idempotent, and a no-op once the
     /// singleton exists. UI thread only, like <see cref="Initialize"/>.
     /// </summary>
-    public static void BeginInitialize() => BeginInitialize(CreateStartupPaths());
+    public static void BeginInitialize()
+    {
+        if (Instance is null)
+        {
+            _pendingStartup ??= BeginLoad(CreateStartup(), onPoolThread: true);
+        }
+    }
 
     /// <summary>The same, over injected <paramref name="paths"/>; what harnesses use to keep clear of the real data directory.</summary>
     internal static void BeginInitialize(DefenseClawPaths paths)
@@ -350,7 +367,7 @@ public sealed class AppServices : IDisposable
     {
         if (Instance is null)
         {
-            var startup = _pendingStartup ?? BeginLoad(CreateStartupPaths(), onPoolThread: false);
+            var startup = _pendingStartup ?? BeginLoad(CreateStartup(), onPoolThread: false);
             _pendingStartup = null;
             Instance = new AppServices(startup);
         }
@@ -361,11 +378,14 @@ public sealed class AppServices : IDisposable
     private static StartupLoad? _pendingStartup;
 
     /// <summary>
-    /// The paths the process starts with. For everyone who has not turned the developer runtime selector on (the default) this is
-    /// exactly <c>new DefenseClawPaths()</c>; with it on and a valid choice, the paths follow that runtime (see
-    /// <see cref="RuntimeEnvironment.CreatePaths"/>). Never throws: a settings file that cannot be read is "not on".
+    /// The paths the process starts with, and the way to resolve the installation they carry again. The installation is resolved once, here
+    /// (<see cref="InstallationContext.Resolve"/>: <c>DEFENSECLAW_CONFIG</c>, the developer selector, <c>DEFENSECLAW_HOME</c>, the managed layout,
+    /// the user default); for everyone who has not turned the developer runtime selector on and has no managed layout or
+    /// <c>DEFENSECLAW_CONFIG</c> the paths are exactly <c>new DefenseClawPaths()</c>. With the selector on and a valid choice, the paths follow that
+    /// runtime (see <see cref="RuntimeEnvironment.CreatePaths(RuntimeSelection?, InstallationContext?)"/>). Never throws: a settings file that
+    /// cannot be read is "not on".
     /// </summary>
-    private static DefenseClawPaths CreateStartupPaths()
+    private static (DefenseClawPaths Paths, Func<InstallationContext> Resolve) CreateStartup()
     {
         RuntimeSelection selection;
         try
@@ -379,7 +399,9 @@ public sealed class AppServices : IDisposable
             selection = RuntimeSelection.Installed;
         }
 
-        return RuntimeEnvironment.CreatePaths(selection);
+        var inputs = new InstallationInputs { Runtime = selection };
+        var installation = InstallationContext.Resolve(inputs);
+        return (RuntimeEnvironment.CreatePaths(selection, installation), () => InstallationContext.Resolve(inputs));
     }
 
     /// <summary>
@@ -392,7 +414,7 @@ public sealed class AppServices : IDisposable
     /// whichever thread ran it, because the failure is captured into the result, not the task.
     /// </para>
     /// </summary>
-    private static StartupLoad BeginLoad(DefenseClawPaths paths, bool onPoolThread)
+    private static StartupLoad BeginLoad(DefenseClawPaths paths, bool onPoolThread, Func<InstallationContext>? resolveInstallation = null)
     {
         LoadedStartup Read()
         {
@@ -401,8 +423,11 @@ public sealed class AppServices : IDisposable
             return new LoadedStartup(store, resolver, LoadConfigStateGuarded(store, resolver, lastGood: null));
         }
 
-        return new StartupLoad(paths, onPoolThread ? Task.Run(Read) : Task.FromResult(Read()));
+        return new StartupLoad(paths, onPoolThread ? Task.Run(Read) : Task.FromResult(Read()), resolveInstallation);
     }
+
+    private static StartupLoad BeginLoad((DefenseClawPaths Paths, Func<InstallationContext> Resolve) startup, bool onPoolThread) =>
+        BeginLoad(startup.Paths, onPoolThread, startup.Resolve);
 
     /// <summary>
     /// Test seam: a composition over injected <paramref name="paths"/> that is <b>not</b> the
@@ -558,6 +583,10 @@ public sealed class AppServices : IDisposable
 
         // .env or a *_env key may have changed along with the config.
         RegisterConfiguredSecretsWithCli();
+
+        // What config.yaml says is part of whether this installation may be changed (deployment_mode, a file that stopped being YAML or became
+        // YAML again). Re-resolved here, on this thread, because it reads the file; the change is announced with ConfigReloaded, on the UI thread.
+        _ = Installation.Refresh();
 
         if (raise)
         {
@@ -717,16 +746,18 @@ public sealed class AppServices : IDisposable
     /// </summary>
     private void RaiseConfigReloaded()
     {
-        var handler = ConfigReloaded;
-        if (handler is null)
+        // An installation that turned read-only (or writable) with this reload is announced first, so a subscriber that redraws on
+        // ConfigReloaded already sees the new answer. Runs wherever the handler does, which is the UI thread when there is one.
+        void Raise()
         {
-            return;
+            Installation.PublishPendingChange();
+            ConfigReloaded?.Invoke(this, EventArgs.Empty);
         }
 
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.CheckAccess())
         {
-            handler(this, EventArgs.Empty);
+            Raise();
             return;
         }
 
@@ -738,7 +769,7 @@ public sealed class AppServices : IDisposable
 
         try
         {
-            _ = dispatcher.BeginInvoke(() => handler(this, EventArgs.Empty));
+            _ = dispatcher.BeginInvoke(Raise);
         }
         catch (InvalidOperationException)
         {

@@ -68,6 +68,7 @@ internal sealed class GatewayAutoStart : IDisposable
     private readonly Func<bool> _executableFound;
     private readonly Func<Task>? _afterRun;
     private readonly Action<Action> _post;
+    private readonly Func<string?>? _installationBlockedReason;
     private readonly CancellationTokenSource _stop = new();
     private readonly object _lock = new();
 
@@ -84,13 +85,18 @@ internal sealed class GatewayAutoStart : IDisposable
     /// <param name="executableFound">Whether <c>defenseclaw-gateway</c> is installed (<c>DefenseClawPaths.GatewayCliPath</c>); called off the UI thread.</param>
     /// <param name="afterRun">Polls the monitor once the command has returned, so the shell follows the new state.</param>
     /// <param name="post">Runs an action on the UI thread; the application's dispatcher when null.</param>
+    /// <param name="installationBlockedReason">
+    /// Why nothing may be changed on this installation (it is managed or invalid), asked when the one decision is taken; null, or one that answers
+    /// null, means the installation may be changed. A start is a change, so a read-only installation is never started automatically.
+    /// </param>
     public GatewayAutoStart(
         Settings.AppSettingsStore settings,
         IGatewaySnapshotSource source,
         Func<IReadOnlyList<string>, CancellationToken, Task<CliInvocation>> run,
         Func<bool> executableFound,
         Func<Task>? afterRun = null,
-        Action<Action>? post = null)
+        Action<Action>? post = null,
+        Func<string?>? installationBlockedReason = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _source = source ?? throw new ArgumentNullException(nameof(source));
@@ -98,6 +104,7 @@ internal sealed class GatewayAutoStart : IDisposable
         _executableFound = executableFound ?? throw new ArgumentNullException(nameof(executableFound));
         _afterRun = afterRun;
         _post = post ?? PostToDispatcher;
+        _installationBlockedReason = installationBlockedReason;
     }
 
     /// <summary>The service for the running app: the app's runner, paths, monitor and settings. Nothing runs until <see cref="Start"/>.</summary>
@@ -110,7 +117,8 @@ internal sealed class GatewayAutoStart : IDisposable
             services.Monitor,
             (argv, token) => services.Cli.RunGatewayAsync(argv, cancellationToken: token),
             () => services.Paths.GatewayCliPath is not null,
-            async () => _ = await services.Monitor.RefreshAsync().ConfigureAwait(false));
+            async () => _ = await services.Monitor.RefreshAsync().ConfigureAwait(false),
+            installationBlockedReason: () => services.Installation.BlockedReason);
     }
 
     /// <summary>
@@ -266,6 +274,11 @@ internal sealed class GatewayAutoStart : IDisposable
         if (snapshot.IsPaused)
         {
             return "Monitoring is paused.";
+        }
+
+        if (_installationBlockedReason?.Invoke() is { } readOnly)
+        {
+            return "The installation is read-only, and a start is a change. " + readOnly;
         }
 
         if (_userStopped)

@@ -31,9 +31,18 @@ public sealed record CommandReviewWarning(string Title, string Message)
     /// <summary>The heading of <see cref="UnusualCharacters"/>.</summary>
     public const string UnusualCharactersTitle = "Unusual characters in a name";
 
+    /// <summary>The heading of <see cref="ReadOnlyInstallation"/>.</summary>
+    public const string ReadOnlyInstallationTitle = "State-changing actions disabled";
+
     /// <summary>The bar every command that restarts the live gateway carries.</summary>
     public static CommandReviewWarning GatewayRestart(string? message = null) =>
         new("Gateway restart", message ?? CommandReview.RestartNotice);
+
+    /// <summary>
+    /// The bar a review carries when its command cannot run because the installation is read-only (managed or invalid): the installation's
+    /// own sentence, under the heading the Overview banner uses. The confirm button is off for as long as this is there.
+    /// </summary>
+    public static CommandReviewWarning ReadOnlyInstallation(string reason) => new(ReadOnlyInstallationTitle, reason);
 
     /// <summary>
     /// The bar a command carries when the DefenseClaw CLI would rewrite one of its arguments before acting on it
@@ -266,6 +275,27 @@ public sealed record CommandReview
         init => _warnings = value ?? Array.Empty<CommandReviewWarning>();
     }
 
+    /// <summary>
+    /// Why the commands cannot run, when the installation they would act on is read-only (managed, or a selection that is not valid) and a step is
+    /// not a read: the installation's own sentence (see <see cref="InstallationGuard"/>); null when they can. Set by <see cref="GuardedBy"/>, not by
+    /// hand. The shared control shows it as a bar and keeps the confirm button off; the runner refuses the command anyway
+    /// (<see cref="InstallationGate"/>), so a surface that forgot to set this fails safe.
+    /// </summary>
+    public string? BlockedReason { get; init; }
+
+    /// <summary>True when <see cref="BlockedReason"/> keeps the review from running.</summary>
+    public bool IsBlocked => BlockedReason is not null;
+
+    /// <summary>
+    /// This review, carrying the installation's reason when a step would change a read-only installation (<see cref="InstallationGuard.ReasonFor(IEnumerable{CommandReviewStep})"/>);
+    /// the same review otherwise. The one line a surface that builds a review adds.
+    /// </summary>
+    internal CommandReview GuardedBy(InstallationGuard guard)
+    {
+        ArgumentNullException.ThrowIfNull(guard);
+        return guard.ReasonFor(Steps) is { } reason ? this with { BlockedReason = reason } : this;
+    }
+
     private IReadOnlyList<CommandReviewWarning> WithDerivedWarnings(IReadOnlyList<CommandReviewWarning> supplied)
     {
         if (Steps is null)
@@ -274,6 +304,11 @@ public sealed record CommandReview
         }
 
         List<CommandReviewWarning>? derived = null;
+
+        if (BlockedReason is { } blocked && !supplied.Any(w => w.Title == CommandReviewWarning.ReadOnlyInstallationTitle))
+        {
+            (derived ??= new()).Add(CommandReviewWarning.ReadOnlyInstallation(blocked));
+        }
 
         var changes = Steps
             .SelectMany(s => s.Hazards.Select(h => (Step: Steps.Count > 1 ? s.Number : 0, Hazard: h)))

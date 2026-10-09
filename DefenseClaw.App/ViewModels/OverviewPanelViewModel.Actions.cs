@@ -102,7 +102,7 @@ public sealed partial class OverviewPanelViewModel
     /// Scan Skills: <c>defenseclaw skill scan --all</c>, which runs the scanners and records findings, so it is reviewed first (the Mac runs it
     /// on the click). The scan can take minutes; the review allows ten.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
     private void ScanSkills() =>
         Review.Open(
             "Scan all skills?",
@@ -137,7 +137,7 @@ public sealed partial class OverviewPanelViewModel
 
     private bool CanStopGateway() => _stopAllowed;
 
-    private bool CanRestartFromMenu() => GatewayControl.Availability(GatewayAction.Restart, _snapshot).Allowed;
+    private bool CanRestartFromMenu() => GatewayControl.Availability(GatewayAction.Restart, _snapshot, Services.Installation).Allowed;
 
     /// <summary>
     /// Start, stop or restart goes through the same review as the tray and the palette: the argv exactly as it will run
@@ -146,7 +146,7 @@ public sealed partial class OverviewPanelViewModel
     /// </summary>
     private void OpenGatewayReview(GatewayAction action)
     {
-        var (allowed, reason) = GatewayControl.Availability(action, _snapshot);
+        var (allowed, reason) = GatewayControl.Availability(action, _snapshot, Services.Installation);
         if (!allowed)
         {
             ShowDiagnosticMessage(GatewayControl.Title(action), "Neutral", reason ?? "Not available right now.", string.Empty);
@@ -187,8 +187,8 @@ public sealed partial class OverviewPanelViewModel
     private void ApplyGatewayActions(GatewaySnapshot snapshot)
     {
         _gatewayAction = snapshot.IsRunning ? GatewayAction.Restart : GatewayAction.Start;
-        var (allowed, reason) = GatewayControl.Availability(_gatewayAction, snapshot);
-        var (stopAllowed, stopReason) = GatewayControl.Availability(GatewayAction.Stop, snapshot);
+        var (allowed, reason) = GatewayControl.Availability(_gatewayAction, snapshot, Services.Installation);
+        var (stopAllowed, stopReason) = GatewayControl.Availability(GatewayAction.Stop, snapshot, Services.Installation);
 
         GatewayActionLabel = GatewayControl.Title(_gatewayAction).Replace("gateway", "Gateway", StringComparison.Ordinal);
         GatewayActionTip = allowed ? GatewayControl.Summary(_gatewayAction) + " Asks for confirmation first." : reason ?? string.Empty;

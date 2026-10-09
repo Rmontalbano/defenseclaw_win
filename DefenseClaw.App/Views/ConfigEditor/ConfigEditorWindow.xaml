@@ -421,7 +421,8 @@
                            AutomationProperties.HelpText="Shows what will change in config.yaml, then backs it up, writes the new text and validates it with the CLI. Shortcut: Ctrl+S."
                            Command="{Binding ReviewAndSaveCommand}"
                            Content="Save"
-                           ToolTip="Review and save (Ctrl+S)">
+                           ToolTipService.ShowOnDisabled="True"
+                           ToolTip="{Binding SaveToolTip}">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="Save24" />
                     </ui:Button.Icon>
@@ -431,6 +432,14 @@
 
         <!-- Banners: every state the editor can be in, one InfoBar each (a closed InfoBar takes no room) -->
         <StackPanel Grid.Row="1">
+            <!-- A managed or invalid installation is only read: this editor writes config.yaml itself, so Save and Restore are off. -->
+            <ui:InfoBar Title="State-changing actions disabled — Save is off"
+                        Margin="{StaticResource DcCardGap}"
+                        IsClosable="False"
+                        IsOpen="{Binding HasChangesBlockedReason, Mode=OneWay}"
+                        Message="{Binding ChangesBlockedReason}"
+                        Severity="Warning" />
+
             <!--
                 A failed *read* of config.yaml (locked, permissions) — distinct from a parse
                 error. Save and FORM stay disabled until Reload succeeds, so the empty editor

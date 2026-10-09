@@ -178,9 +178,12 @@ public sealed partial class PoliciesPanelViewModel
     private string? ReasonToRefuseRun()
     {
         _ = Trust.CheckConfig();
-        var reason = State is PoliciesState.Loaded or PoliciesState.Empty
-            ? Trust.Reason
-            : Trust.Reason ?? "Changes are off until the policies have been read.";
+
+        // A read-only installation comes first: one reason, and the one a refresh would not cure.
+        var reason = Services.Installation.BlockedReason
+            ?? (State is PoliciesState.Loaded or PoliciesState.Empty
+                ? Trust.Reason
+                : Trust.Reason ?? "Changes are off until the policies have been read.");
         if (reason is null)
         {
             return null;

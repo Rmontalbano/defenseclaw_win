@@ -681,6 +681,13 @@
 
                     <ui:InfoBar Margin="0,8,0,0"
                                 IsClosable="False"
+                                Severity="Warning"
+                                Title="You can preview, not apply"
+                                IsOpen="{Binding HasReviewBlockedText, Mode=OneWay}"
+                                Message="{Binding ReviewBlockedText}" />
+
+                    <ui:InfoBar Margin="0,8,0,0"
+                                IsClosable="False"
                                 Severity="Error"
                                 Title="That did not succeed"
                                 IsOpen="{Binding HasReviewError}"
@@ -709,6 +716,8 @@
                                    Appearance="Primary"
                                    Command="{Binding ConfirmReviewCommand}"
                                    IsEnabled="{Binding CanConfirmReview}"
+                                   ToolTipService.ShowOnDisabled="True"
+                                   ToolTip="{Binding InstallationBlockedReason}"
                                    Visibility="{Binding IsNotDestructive, Converter={StaticResource BoolToVisibility}}"
                                    AutomationProperties.HelpText="Runs the command shown above. Enabled only after the preview succeeded and matched at least one alert." />
                         <ui:Button Margin="8,0,0,0"
@@ -717,6 +726,8 @@
                                    Icon="{ctl:DcSymbolIcon Delete24}"
                                    Command="{Binding ConfirmReviewCommand}"
                                    IsEnabled="{Binding CanConfirmReview}"
+                                   ToolTipService.ShowOnDisabled="True"
+                                   ToolTip="{Binding InstallationBlockedReason}"
                                    Visibility="{Binding IsDestructive, Converter={StaticResource BoolToVisibility}}"
                                    AutomationProperties.HelpText="Runs the destructive command shown above. Enabled only after the preview succeeded and matched at least one alert." />
                     </StackPanel>

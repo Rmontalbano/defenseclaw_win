@@ -435,10 +435,12 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     /// </summary>
     public CatalogTrust Trust { get; }
 
-    public bool IsDataTrusted => Trust.IsTrusted;
+    public bool IsDataTrusted => Trust.IsTrusted && Services.Installation.IsMutable;
 
-    /// <summary>Why changes are off (the buttons' tooltip); null while they are on.</summary>
-    public string? DataUntrustedReason => Trust.Reason;
+    /// <summary>Why changes are off (the buttons' tooltip); null while they are on. A read-only installation says so before the list does.</summary>
+    public string? DataUntrustedReason => Services.Installation.BlockedReason ?? Trust.Reason;
+
+    protected override void OnInstallationChanged() => NotifyTrust();
 
     public bool CanChangeSelectedSource => HasSelectedSource && IsDataTrusted;
 
@@ -459,7 +461,8 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     /// </summary>
     private bool RefuseUntrustedChange()
     {
-        if (Trust.ReasonNow() is not { } reason)
+        // A read-only installation comes first: one reason, and the one a refresh would not cure.
+        if ((Services.Installation.BlockedReason ?? Trust.ReasonNow()) is not { } reason)
         {
             return false;
         }
@@ -476,7 +479,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     /// </summary>
     private string? ReasonToRefuseRun()
     {
-        if (Trust.ReasonNow() is not { } reason)
+        if ((Services.Installation.BlockedReason ?? Trust.ReasonNow()) is not { } reason)
         {
             return null;
         }

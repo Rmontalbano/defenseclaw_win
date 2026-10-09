@@ -174,10 +174,12 @@ public sealed class SettingsPanelViewTests : IDisposable
 
         UiThread.Run(() =>
         {
-            using var shell = Open(1200, 3000, out var page);
+            // Tall enough for every card, the Installation block (CUST-308) included.
+            const double TallWindow = 3300;
+            using var shell = Open(1200, TallWindow, out var page);
             var scroller = ScrollerOf(page);
 
-            Assert.True(scroller.ScrollableHeight < 1, $"{scroller.ScrollableHeight} DIPs of the page are still below the fold at 3000 DIPs");
+            Assert.True(scroller.ScrollableHeight < 1, $"{scroller.ScrollableHeight} DIPs of the page are still below the fold at {TallWindow} DIPs");
 
             RenderTo.Png(shell.Host, $"settings-{style}-{mode}-whole-page");
         });

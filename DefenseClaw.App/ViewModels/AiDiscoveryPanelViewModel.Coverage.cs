@@ -165,7 +165,7 @@ public sealed partial class AiDiscoveryPanelViewModel
     /// restarted. <c>enable</c> keeps every other ai_discovery setting as it is (its knobs default to the existing
     /// config) and, by default, asks for a first scan once the gateway is back.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
     private void ToggleDiscovery()
     {
         var enable = !IsDiscoveryEnabledInConfig;

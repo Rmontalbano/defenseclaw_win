@@ -73,6 +73,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         ShowGateway();
         ShowUpdates();
         ShowRuntimeIdentity();
+        ShowInstallation();
     }
 
     public override string Title => "Settings";
@@ -247,6 +248,13 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     {
         if (_syncing > 0)
         {
+            return;
+        }
+
+        // A start is a change, so a managed or invalid installation cannot be told to make one on every launch (the switch is disabled too).
+        if (value && !CanChangeAutoStart)
+        {
+            Sync(() => AutoStartGateway = false);
             return;
         }
 
@@ -621,7 +629,9 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         {
             UpdateStatusText = UpdateWatcher.Announcement(available);
             UpdateStatusTone = "Medium";
-            UpdateDetail = "Open Updates… to review it. The upgrade itself is only ever run from there, after you have seen the exact command.";
+            UpdateDetail = Services.Installation.UpgradeBlockedReason is { } noUpgrade
+                ? "Open Updates… to read about it. " + noUpgrade
+                : "Open Updates… to review it. The upgrade itself is only ever run from there, after you have seen the exact command.";
         }
         else if (watcher.Latest.State == UpdateCheckState.UpToDate)
         {
@@ -703,6 +713,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         ShowGateway();
         ShowUpdates();
         ShowRuntimeIdentity();
+        ShowInstallation();
         _ = RefreshMachineFactsAsync();
 
         // One stamp of the CLI file when nothing changed; a fresh probe after an upgrade.
@@ -734,6 +745,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         LoadFromSettings();
         ShowGateway();
         ShowUpdates();
+        ShowInstallation();
         await RefreshMachineFactsAsync().ConfigureAwait(true);
     }
 

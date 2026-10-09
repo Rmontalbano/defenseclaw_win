@@ -31,7 +31,7 @@ public sealed partial class AiDiscoveryPanelViewModel
         return ConnectorOnboarding.Offerable(known).Any(o => o.Id == id);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
     private void AddConnector(AgentDiscoveryRow? row)
     {
         if (row is not { CanAdd: true })

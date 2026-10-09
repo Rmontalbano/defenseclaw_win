@@ -123,6 +123,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     /// gateway-restart warning, in the model every confirmation surface shares.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InstallationBlockedReason))]
     private CommandReview? _commandReview;
 
     [ObservableProperty]
@@ -217,6 +218,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         _timer = new DispatcherTimer { Interval = OutputTick };
         _timer.Tick += (_, _) => PullOutput();
+
+        // A wizard can stay open while config.yaml is edited to managed (or fixed): Execute and the review follow the installation.
+        _services.Installation.Changed += OnInstallationChanged;
 
         ApplyGates();
         RefreshCredentials();
@@ -404,7 +408,14 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     /// succeed. A successful run disables Execute until <see cref="RunAgainCommand"/> or a change of
     /// answers resets it.
     /// </summary>
-    public bool CanExecute => IsReview && !IsRunning && !HasReviewProblem && !(HasRun && LastRunSucceeded);
+    public bool CanExecute => IsReview && !IsRunning && !HasReviewProblem && !(HasRun && LastRunSucceeded) && InstallationBlockedReason is null;
+
+    /// <summary>
+    /// Why Execute is off because the installation is managed or invalid and the command on the review changes something; null while it may be
+    /// run (a writable installation, or a command that only reads - a preview, the local stack's status). The preview (<c>--dry-run</c>) still
+    /// works, as on the Mac. The review page carries the same sentence as a bar.
+    /// </summary>
+    public string? InstallationBlockedReason => CommandReview?.BlockedReason;
 
     /// <summary>True after a successful run: the explicit way to run the same command again.</summary>
     public bool CanRunAgain => IsReview && !IsRunning && HasRun && LastRunSucceeded;
@@ -602,6 +613,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        _services.Installation.Changed -= OnInstallationChanged;
         _timer.Stop();
         _dockerCts?.Cancel();
         _dockerCts?.Dispose();
@@ -1050,7 +1062,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 .ToArray(),
         };
         review = SecretFieldWarnings.AppendTo(review, new[] { WizardReview.SecretValueWarning(argv) });
-        CommandReview = review;
+        CommandReview = review.GuardedBy(_services.Installation);
         IsDestructive = review.IsDestructive;
 
         ReviewChanges.Clear();
@@ -1109,6 +1121,31 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             (false, true) => "This command only reads. Running it changes nothing.",
             _ => "Nothing was changed from the current configuration. Running this re-applies it as it stands.",
         };
+    }
+
+    /// <summary>The installation turned read-only (or writable) while the wizard is open: the review is guarded again, and Execute asked again.</summary>
+    private void OnInstallationChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            FollowInstallation();
+        }
+        else
+        {
+            _ = dispatcher.BeginInvoke(FollowInstallation);
+        }
+    }
+
+    private void FollowInstallation()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        RefreshReview();
+        RaiseNavigationState();
     }
 
     private void RaiseNavigationState()

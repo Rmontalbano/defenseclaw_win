@@ -10,16 +10,33 @@ using DefenseClaw.Core.Time;
 namespace DefenseClaw.App.ViewModels;
 
 /// <summary>One credential row as the card shows it: names and states only, never a value.</summary>
-public sealed class CredentialRowViewModel
+public sealed class CredentialRowViewModel : ObservableObject
 {
     private readonly Action<CredentialRowViewModel>? _setInTerminal;
+    private readonly Func<string?>? _installationBlockedReason;
 
-    internal CredentialRowViewModel(CredentialRow row, Action<CredentialRowViewModel>? setInTerminal)
+    /// <param name="row">What <c>keys list</c> said about one variable.</param>
+    /// <param name="setInTerminal">What the Set button does.</param>
+    /// <param name="installationBlockedReason">Why nothing may be changed on this installation right now (managed or invalid); null, or one that answers null, means it may.</param>
+    internal CredentialRowViewModel(CredentialRow row, Action<CredentialRowViewModel>? setInTerminal, Func<string?>? installationBlockedReason = null)
     {
         Row = row;
         _setInTerminal = setInTerminal;
+        _installationBlockedReason = installationBlockedReason;
         SetInTerminalCommand = new RelayCommand(() => _setInTerminal?.Invoke(this), () => CanSet);
     }
+
+    /// <summary>The installation turned read-only (or writable): the Set button and its tooltip are drawn again.</summary>
+    internal void RefreshInstallation()
+    {
+        OnPropertyChanged(nameof(CanSet));
+        OnPropertyChanged(nameof(SetToolTip));
+        SetInTerminalCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>The Set button's tooltip: what it opens, or why it cannot (a read-only installation).</summary>
+    public string SetToolTip => _installationBlockedReason?.Invoke() ??
+        $"Opens a console window running {SetCommandText}; the value is typed there, never here";
 
     internal CredentialRow Row { get; }
 
@@ -53,8 +70,8 @@ public sealed class CredentialRowViewModel
     /// <summary>The exact command the Set button runs in a console; never carries a value.</summary>
     public string SetCommandText => WizardCredentials.KeysSetCommand(Row.EnvName);
 
-    /// <summary>A name the CLI and a console command line can carry; a row with anything else cannot be set from here.</summary>
-    public bool CanSet => WizardCredentials.IsValidName(Row.EnvName);
+    /// <summary>A name the CLI and a console command line can carry (a row with anything else cannot be set from here), on an installation that may be changed.</summary>
+    public bool CanSet => WizardCredentials.IsValidName(Row.EnvName) && _installationBlockedReason?.Invoke() is null;
 
     public string SetAutomationName => $"Set {Row.EnvName} in a terminal";
 
@@ -256,7 +273,7 @@ public sealed partial class CredentialsViewModel : ObservableObject
         Rows.Clear();
         foreach (var row in rows)
         {
-            Rows.Add(new CredentialRowViewModel(row, OnSetInTerminal));
+            Rows.Add(new CredentialRowViewModel(row, OnSetInTerminal, () => _services.Installation.BlockedReason));
         }
 
         MissingRequiredCount = rows.Count(r => r.IsMissingRequired);
@@ -321,6 +338,28 @@ public sealed partial class CredentialsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Why the buttons that open a console to write a credential are off (the installation is managed or invalid); null while they are on.</summary>
+    public string? ChangesBlockedReason => _services.Installation.BlockedReason;
+
+    /// <summary>The installation may be changed, so a credential may be written.</summary>
+    public bool CanChange => ChangesBlockedReason is null;
+
+    /// <summary>The installation turned read-only (or writable): every Set button, and Fill missing, are drawn again.</summary>
+    public void RefreshInstallation()
+    {
+        OnPropertyChanged(nameof(ChangesBlockedReason));
+        OnPropertyChanged(nameof(CanChange));
+        OnPropertyChanged(nameof(FillMissingToolTip));
+        foreach (var row in Rows)
+        {
+            row.RefreshInstallation();
+        }
+    }
+
+    /// <summary>Fill missing's tooltip: what it opens, or why it cannot.</summary>
+    public string FillMissingToolTip => ChangesBlockedReason ??
+        "Opens a console window running defenseclaw keys fill-missing --yes: a hidden prompt for each required key that is unset";
+
     /// <summary>Opens a console running <c>defenseclaw keys fill-missing --yes</c>: a hidden prompt for each required key that is unset.</summary>
     [RelayCommand]
     public Task OpenFillMissingInTerminalAsync() => OpenInTerminalAsync(FillMissingArgv);
@@ -336,6 +375,14 @@ public sealed partial class CredentialsViewModel : ObservableObject
     /// <summary>Opens <c>defenseclaw <paramref name="argv"/></c> in a console, records the hand-off in Activity and arms the re-read.</summary>
     internal async Task OpenInTerminalAsync(IReadOnlyList<string> argv)
     {
+        // A console window the app opens is a run the runner never sees, so the read-only rule is asked here too: keys set and fill-missing write.
+        if (_services.Installation.ReasonFor(argv) is { } blocked)
+        {
+            Note = blocked;
+            NoteKey = "Warn";
+            return;
+        }
+
         var result = await _terminal.OpenAsync(argv).ConfigureAwait(true);
         if (!result.Started)
         {

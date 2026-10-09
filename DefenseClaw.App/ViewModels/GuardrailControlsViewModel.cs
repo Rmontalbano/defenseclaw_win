@@ -41,17 +41,41 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
     private Func<bool, IReadOnlyList<CommandReviewWarning>>? _pendingWarnings;
 
     public GuardrailControlsViewModel(AppServices services)
-        : this((argv, token) => services.Cli.RunAsync(argv, cancellationToken: token))
+        : this((argv, token) => services.Cli.RunAsync(argv, cancellationToken: token), services.Installation)
     {
     }
 
     /// <param name="run">How a verb is run; tests hand in a fake so no process ever starts.</param>
     public GuardrailControlsViewModel(Func<IReadOnlyList<string>, CancellationToken, Task<CliInvocation>> run)
+        : this(run, installation: null)
+    {
+    }
+
+    /// <param name="run">How a verb is run; tests hand in a fake so no process ever starts.</param>
+    /// <param name="installation">Whether the installation may be changed; null (a test with a fake runner) means it may.</param>
+    internal GuardrailControlsViewModel(Func<IReadOnlyList<string>, CancellationToken, Task<CliInvocation>> run, InstallationGuard? installation)
     {
         _run = run ?? throw new ArgumentNullException(nameof(run));
+        _installation = installation;
         Scopes.Add(new GuardrailScopeOption("All connectors", string.Empty));
         _selectedScope = Scopes[0];
     }
+
+    private readonly InstallationGuard? _installation;
+
+    /// <summary>
+    /// Why the controls that change something are off: the installation is managed or invalid, so the app only reads it. Null while it may be
+    /// changed. The reads (Refresh, the raw output) are never held back by this.
+    /// </summary>
+    public string? ChangesBlockedReason => _installation?.BlockedReason;
+
+    public bool HasChangesBlockedReason => ChangesBlockedReason is not null;
+
+    /// <summary>The installation may be changed (the per-connector Add / Remove buttons, which have always ignored whether a command is running, bind to this).</summary>
+    public bool InstallationAllowsChanges => ChangesBlockedReason is null;
+
+    /// <summary>What every control that starts a write binds to: nothing is running or being read, and the installation may be changed.</summary>
+    public bool CanChange => CanUse && ChangesBlockedReason is null;
 
     public string Title => "Guardrail controls";
 
@@ -68,11 +92,11 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
     public bool CanUse => !IsBusy && !IsRunning;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanUse))]
+    [NotifyPropertyChangedFor(nameof(CanUse), nameof(CanChange))]
     private bool _isBusy;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanUse))]
+    [NotifyPropertyChangedFor(nameof(CanUse), nameof(CanChange))]
     private bool _isRunning;
 
     [ObservableProperty]
@@ -220,6 +244,11 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
 
         _reading = true;
         IsBusy = true;
+
+        // The window is opened on demand and holds no subscriptions, so an installation that turned read-only while it was open is noticed here.
+        OnPropertyChanged(nameof(ChangesBlockedReason));
+        OnPropertyChanged(nameof(HasChangesBlockedReason));
+        OnPropertyChanged(nameof(InstallationAllowsChanges));
 
         try
         {
@@ -504,7 +533,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
         Func<bool, string[]> argv,
         Func<bool, IReadOnlyList<CommandReviewWarning>> warnings)
     {
-        if (!CanUse)
+        if (!CanChange)
         {
             return;
         }
@@ -537,7 +566,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
                     "The gateway is not restarted, so the change is saved but not yet in effect until it next restarts."),
         };
 
-        Review = new CommandReview
+        var review = new CommandReview
         {
             Title = _reviewTitle,
             Summary = _reviewNote,
@@ -545,6 +574,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
             RestartsGateway = restarts,
             Warnings = warnings,
         };
+        Review = _installation is { } installation ? review.GuardedBy(installation) : review;
     }
 
     [RelayCommand]
@@ -556,7 +586,7 @@ public sealed partial class GuardrailControlsViewModel : ObservableObject
     [RelayCommand]
     private async Task ConfirmAsync()
     {
-        if (!IsReviewOpen || IsRunning || _pendingArgv is null)
+        if (!IsReviewOpen || IsRunning || _pendingArgv is null || Review is { IsBlocked: true })
         {
             return;
         }

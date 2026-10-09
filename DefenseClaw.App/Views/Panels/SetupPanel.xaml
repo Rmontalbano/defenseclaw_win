@@ -5,6 +5,7 @@
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
              xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels">
     <!--
         The Setup hub. Cards are generated from the CLI's own setup help at runtime, so this
@@ -77,6 +78,14 @@
 
         <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
             <StackPanel>
+                <!-- A managed or invalid installation is only read: the wizards, the guardrail buttons and the credential writers are off, with this as their tooltip. -->
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            IsClosable="False"
+                            Severity="Warning"
+                            Title="State-changing actions disabled"
+                            IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
+                            Message="{Binding InstallationBlockedReason}" />
+
                 <!-- Connector roster: what the wizards are acting on right now. -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>
@@ -251,24 +260,30 @@
                                        Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                                        AutomationProperties.Name="Enable the guardrail"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding InstallationBlockedReason}"
                                        Visibility="{Binding ShowEnableGuardrail, Converter={StaticResource BoolToVisibility}}"
                                        Command="{Binding EnableGuardrailCommand}" />
                             <ui:Button Content="Disable"
                                        Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
                                        AutomationProperties.Name="Disable the guardrail"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding InstallationBlockedReason}"
                                        Visibility="{Binding ShowDisableGuardrail, Converter={StaticResource BoolToVisibility}}"
                                        Command="{Binding DisableGuardrailCommand}" />
                             <ui:Button Content="Fail open"
                                        Icon="{ctl:DcSymbolIcon LockOpen24}"
                                        AutomationProperties.Name="Set the hook fail mode to open"
-                                       ToolTip="Allow and log when the gateway errors (recommended)"
+                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Allow and log when the gateway errors (recommended)'}"
+                                       ToolTipService.ShowOnDisabled="True"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
                                        Command="{Binding SetFailModeOpenCommand}" />
                             <ui:Button Content="Fail closed"
                                        Icon="{ctl:DcSymbolIcon LockClosed24}"
                                        AutomationProperties.Name="Set the hook fail mode to closed"
-                                       ToolTip="Block whenever the gateway errors or is unreachable"
+                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Block whenever the gateway errors or is unreachable'}"
+                                       ToolTipService.ShowOnDisabled="True"
                                        IsEnabled="{Binding CanUseGuardrailControls}"
                                        Command="{Binding SetFailModeClosedCommand}" />
                             <CheckBox Content="Show CLI output"
@@ -484,7 +499,8 @@
                                                 <ui:Button Grid.Column="5"
                                                            Content="Set…"
                                                            Command="{Binding SetInTerminalCommand}"
-                                                           ToolTip="{Binding SetCommandText, StringFormat='Opens a console window running {0}; the value is typed there, never here'}"
+                                                           ToolTipService.ShowOnDisabled="True"
+                                                           ToolTip="{Binding SetToolTip}"
                                                            AutomationProperties.Name="{Binding SetAutomationName}" />
                                             </Grid>
                                         </Border>
@@ -507,7 +523,9 @@
                             <ui:Button Content="Fill missing…"
                                        Icon="{ctl:DcSymbolIcon WindowConsole20}"
                                        Command="{Binding Credentials.OpenFillMissingInTerminalCommand}"
-                                       ToolTip="Opens a console window running defenseclaw keys fill-missing --yes: a hidden prompt for each required key that is unset"
+                                       IsEnabled="{Binding Credentials.CanChange}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding Credentials.FillMissingToolTip}"
                                        AutomationProperties.Name="Fill missing credentials in a terminal" />
                         </WrapPanel>
 
@@ -649,7 +667,7 @@
                                                     Height="92"
                                                     Margin="0,0,12,12"
                                                     Style="{StaticResource DcInteractiveTile}"
-                                                    IsEnabled="{Binding IsAvailable}"
+                                                    IsEnabled="{Binding CanLaunch}"
                                                     ToolTipService.ShowOnDisabled="True"
                                                     ToolTip="{Binding TileToolTip}"
                                                     Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"

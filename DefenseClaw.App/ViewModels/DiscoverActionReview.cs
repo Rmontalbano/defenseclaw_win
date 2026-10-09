@@ -140,6 +140,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
 
     /// <summary>What the dialog shows: the title, tier, steps and warnings. Set before <see cref="IsOpen"/> flips.</summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     private CommandReview? _commandReview;
 
     [ObservableProperty]
@@ -177,8 +178,11 @@ public sealed partial class DiscoverActionReview : ObservableObject
     /// <summary>The checkbox is drawn: the review asks for the acknowledgement and is still waiting for a decision.</summary>
     public bool ShowAcknowledgement => RequiresAcknowledgement && IsConfirming;
 
-    /// <summary>Confirm is live: nothing is waiting on an acknowledgement the operator has not given.</summary>
-    private bool CanConfirm => !RequiresAcknowledgement || IsAcknowledged;
+    /// <summary>
+    /// Confirm is live: nothing is waiting on an acknowledgement the operator has not given, and the commands are not a change to a read-only
+    /// installation (the review carries that reason, which every Discover surface gets from here).
+    /// </summary>
+    private bool CanConfirm => (!RequiresAcknowledgement || IsAcknowledged) && CommandReview is not { IsBlocked: true };
 
     /// <summary>Test seam: runs a step instead of <c>Services.Cli.RunNamedAsync</c>, so a test sees the exact argv and never starts a process.</summary>
     internal Func<string, IReadOnlyList<string>, CliRunOptions?, Task<CliInvocation>>? RunStep { get; set; }
@@ -286,7 +290,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
             Names = names ?? Array.Empty<string>(),
             RestartsGateway = restartsGateway,
             ConfirmLabel = primaryText ?? string.Empty,
-        };
+        }.GuardedBy(_services.Installation);
         IsOpen = true;
     }
 
@@ -327,6 +331,14 @@ public sealed partial class DiscoverActionReview : ObservableObject
         // The button is off until the acknowledgement is ticked, but a command can be invoked without the button: ask again here.
         if (!IsConfirming || !CanConfirm || CommandReview is not { } review)
         {
+            return;
+        }
+
+        // The installation may have turned read-only while the review was open (config.yaml edited to managed): ask the live answer, which comes
+        // first - the runner would refuse every step anyway, but this says why once and records one refusal for the whole review.
+        if (_services.Installation.ReasonFor(review.Steps) is { } installation)
+        {
+            Refuse(review, installation);
             return;
         }
 

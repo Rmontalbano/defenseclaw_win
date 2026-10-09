@@ -121,7 +121,7 @@ public sealed partial class RedactionViewModel
     public string CommandText => HasProblem ? string.Empty : CommandReview.CommandLine(CommandReview.DefaultExecutable, CurrentArgv());
 
     /// <summary>The primary button can be pressed. An apply also needs a policy that was read.</summary>
-    public bool CanRun => CanAct && !HasProblem && (IsReadOperation || DryRun || StatusIsCurrent);
+    public bool CanRun => CanAct && !HasProblem && (IsReadOperation || DryRun || MayChange);
 
     private string[] CurrentArgv()
     {
@@ -152,7 +152,7 @@ public sealed partial class RedactionViewModel
             {
                 ShowNotice("Complete the form", Problem);
             }
-            else if (!IsReadOperation && !DryRun && !StatusIsCurrent)
+            else if (!IsReadOperation && !DryRun && !MayChange)
             {
                 ShowNotice("Changes are off", ChangesBlockedReason);
             }
@@ -220,7 +220,7 @@ public sealed partial class RedactionViewModel
 
     public bool CanQuickPreview => CanAct;
 
-    public bool CanQuickApply => CanAct && StatusIsCurrent;
+    public bool CanQuickApply => CanAct && MayChange;
 
     [RelayCommand]
     private async Task PreviewQuickAsync()
@@ -261,7 +261,7 @@ public sealed partial class RedactionViewModel
     /// the result card then offers to go on and apply it.
     /// </summary>
     public bool CanApplyPreview =>
-        CanAct && StatusIsCurrent && Outcome is { CanApply: true, Signature.Length: > 0 } o && string.Equals(o.Signature, SignatureOfCurrent(o.FromQuick), StringComparison.Ordinal);
+        CanAct && MayChange && Outcome is { CanApply: true, Signature.Length: > 0 } o && string.Equals(o.Signature, SignatureOfCurrent(o.FromQuick), StringComparison.Ordinal);
 
     private string SignatureOfCurrent(bool fromQuick)
     {

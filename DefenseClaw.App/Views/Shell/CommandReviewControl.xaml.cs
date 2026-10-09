@@ -233,6 +233,9 @@ public partial class CommandReviewControl : UserControl
         }
     }
 
+    /// <summary>True while this control has switched the confirm button off for a blocked review (see <see cref="Refresh"/>).</summary>
+    private bool _confirmSwitchedOff;
+
     /// <summary>Pushes the review, the phase and the layout switches onto the parts. Cheap; runs on every change.</summary>
     private void Refresh()
     {
@@ -288,6 +291,29 @@ public partial class CommandReviewControl : UserControl
         AutomationProperties.SetHelpText(
             ConfirmButton,
             review is { IsDestructive: true } ? "Runs the destructive command shown above." : "Runs the command shown above.");
+
+        // A review of a change to a read-only installation cannot be run from here: the button is off, and says why on hover and to a screen
+        // reader. (The runner would refuse the command anyway; this is the operator not being offered it.) The host's own command decides the rest:
+        // IsEnabled is only touched while a review is blocked, and handed back (re-coerced, so the bound command is asked again) when it stops
+        // being. Clearing it on every refresh would drop the command's say for a button that was never switched off.
+        if (review is { IsBlocked: true })
+        {
+            ConfirmButton.IsEnabled = false;
+            _confirmSwitchedOff = true;
+        }
+        else if (_confirmSwitchedOff)
+        {
+            _confirmSwitchedOff = false;
+            ConfirmButton.ClearValue(IsEnabledProperty);
+            ConfirmButton.CoerceValue(IsEnabledProperty);
+        }
+
+        ConfirmButton.ToolTip = review?.BlockedReason;
+        ToolTipService.SetShowOnDisabled(ConfirmButton, review is { IsBlocked: true });
+        if (review?.BlockedReason is { } blockedReason)
+        {
+            AutomationProperties.SetHelpText(ConfirmButton, blockedReason);
+        }
 
         // A different command or tier is news: say so, tier first. An edit to the same review (a checkbox that
         // adds a flag) is not, so it stays quiet. No peer exists unless a UI Automation client is attached.

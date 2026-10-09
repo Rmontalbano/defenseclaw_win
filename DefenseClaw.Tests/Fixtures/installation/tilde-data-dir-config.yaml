@@ -1,0 +1,6 @@
+# Synthetic: ~ is the user's profile, which the CLI and the app both expand.
+config_version: 8
+data_dir: ~/.defenseclaw
+observability:
+  local:
+    path: ~/.defenseclaw/audit.db

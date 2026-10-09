@@ -23,7 +23,7 @@ public sealed partial class RedactionViewModel
             return;
         }
 
-        if (!StatusIsCurrent)
+        if (!MayChange)
         {
             ShowNotice("Changes are off", ChangesBlockedReason);
             return;

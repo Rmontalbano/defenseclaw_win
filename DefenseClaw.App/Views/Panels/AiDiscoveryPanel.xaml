@@ -5,6 +5,7 @@
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
              d:DataContext="{d:DesignInstance Type=vm:AiDiscoveryPanelViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -177,11 +178,14 @@
                                        Content="Run scan…"
                                        Icon="{ctl:DcSymbolIcon Play24}"
                                        Command="{Binding RunScanCommand}"
-                                       ToolTip="defenseclaw agent discovery scan: asks the running gateway for one immediate AI discovery scan, which is what the component cards read."
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discovery scan: asks the running gateway for one immediate AI discovery scan, which is what the component cards read.'}"
                                        AutomationProperties.HelpText="Asks the gateway for one immediate AI discovery scan. Shows the exact command first." />
                             <ui:Button Content="{Binding ToggleDiscoveryText}"
                                        Icon="{ctl:DcSymbolIcon Power24}"
                                        Command="{Binding ToggleDiscoveryCommand}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding InstallationBlockedReason}"
                                        AutomationProperties.HelpText="Turns the AI discovery service on or off in config.yaml. Shows the exact command first." />
                             <CheckBox Content="Restart the gateway now"
                                       IsChecked="{Binding RestartOnToggle}"
@@ -190,7 +194,8 @@
                             <ui:Button Content="Re-detect agents…"
                                        Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding RefreshConnectorsCommand}"
-                                       ToolTip="defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards."
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards.'}"
                                        AutomationProperties.HelpText="Re-checks which agent command-line tools are installed. Shows the exact command first." />
                         </WrapPanel>
 
@@ -688,6 +693,8 @@
                                                            Padding="6,2,6,2"
                                                            Command="{Binding DataContext.AddConnectorCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                            CommandParameter="{Binding}"
+                                                           ToolTipService.ShowOnDisabled="True"
+                                                           ToolTip="{Binding DataContext.InstallationBlockedReason, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                            AutomationProperties.Name="{Binding AddAutomationName}"
                                                            AutomationProperties.HelpText="Opens a review of the setup command. Nothing runs until you confirm."
                                                            Visibility="{Binding CanAdd, Converter={StaticResource BoolToVisibility}}" />

@@ -166,11 +166,17 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     /// </summary>
     public CatalogTrust Trust { get; internal set; }
 
-    /// <summary>True when the list is a complete, recent read; false while it is partial, failed, being read for the first time or old.</summary>
-    public bool IsDataTrusted => Trust.IsTrusted;
+    /// <summary>
+    /// True when the list is a complete, recent read of an installation that may be changed; false while it is partial, failed, being read for
+    /// the first time or old, and for a read-only (managed or invalid) installation.
+    /// </summary>
+    public bool IsDataTrusted => Trust.IsTrusted && Services.Installation.IsMutable;
 
     /// <summary>Why <see cref="IsDataTrusted"/> is false, as a tooltip sentence; null when it is true.</summary>
-    public string? DataUntrustedReason => Trust.Reason;
+    public string? DataUntrustedReason => Services.Installation.BlockedReason ?? Trust.Reason;
+
+    /// <summary>The installation turned read-only (or writable) while the panel was open: every control that follows the trust is drawn again.</summary>
+    protected override void OnInstallationChanged() => NotifyTrust();
 
     /// <summary>What the toolbar's state-changing buttons bind to: nothing running and the list is trusted.</summary>
     public bool CanChange => IsIdle && IsDataTrusted;
@@ -199,7 +205,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         OnPropertyChanged(nameof(HasPartialDiscovery));
         OnPropertyChanged(nameof(PartialDiscoveryMessage));
 
-        var now = (Trust.IsTrusted, Trust.Reason);
+        var now = (IsDataTrusted, DataUntrustedReason);
         if (now != _trustSeen)
         {
             _trustSeen = now;
@@ -218,7 +224,9 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     /// </summary>
     private bool RefuseUntrustedChange(GovernPlan? confirmed = null)
     {
-        if (Trust.ReasonNow() is not { } reason)
+        // A read-only installation (managed or invalid) comes first: whatever the list says, nothing can be changed, and the operator is told
+        // that one reason rather than a stale-data one that a refresh would not cure.
+        if ((Services.Installation.BlockedReason ?? Trust.ReasonNow()) is not { } reason)
         {
             return false;
         }

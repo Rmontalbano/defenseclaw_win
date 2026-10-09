@@ -72,6 +72,14 @@
                       Style="{StaticResource DcPageScroll}">
             <StackPanel>
 
+                <!-- The upgrade is the Setup installer replacing the runtime Setup installed: not for a managed or invalid installation, nor a developer runtime. -->
+                <ui:InfoBar Title="Upgrade is off"
+                            Margin="{StaticResource DcCardGap}"
+                            IsClosable="False"
+                            IsOpen="{Binding Upgrade.HasUpgradeBlockedReason, Mode=OneWay}"
+                            Message="{Binding Upgrade.UpgradeBlockedReason, Mode=OneWay}"
+                            Severity="Warning" />
+
                 <ui:InfoBar Title="Check, verify, then upgrade — one click at a time"
                             Margin="{StaticResource DcCardGap}"
                             IsClosable="False"

@@ -96,8 +96,8 @@ public sealed partial class OverviewPanelViewModel
         return ConnectorOnboarding.Offerable(known);
     }
 
-    /// <summary>The row's Add: the review of the one command. Refused for a row that is configured (it has no button).</summary>
-    [RelayCommand]
+    /// <summary>The row's Add: the review of the one command. Refused for a row that is configured (it has no button), and for a read-only installation.</summary>
+    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
     private void AddConnector(ConnectorRow? row)
     {
         if (row is not { IsUnconfigured: true })

@@ -4,6 +4,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
              AutomationProperties.Name="Guardrail controls">
     <!--
         HILT, block message and the hook-lane judge gate (CUST-222). Not a panel: GuardrailControlsWindow hosts it, and the Setup
@@ -55,6 +56,14 @@
                             IsOpen="{Binding HasError, Mode=OneWay}"
                             Message="{Binding Error}" />
 
+                <!-- A managed or invalid installation is only read: every control that would change it is off, with this sentence as its tooltip. -->
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            IsClosable="False"
+                            Severity="Warning"
+                            Title="State-changing actions disabled"
+                            IsOpen="{Binding HasChangesBlockedReason, Mode=OneWay}"
+                            Message="{Binding ChangesBlockedReason}" />
+
                 <WrapPanel Style="{StaticResource DcToolbarPanel}"
                            Margin="0,0,0,8"
                            Visibility="{Binding HasMultipleConnectors, Converter={StaticResource BoolToVisibility}}">
@@ -89,16 +98,22 @@
                                       AutomationProperties.Name="Minimum severity that asks for approval"
                                       ItemsSource="{Binding MinSeverities}"
                                       SelectedItem="{Binding SelectedMinSeverity, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanUse}" />
+                                      IsEnabled="{Binding CanChange}"
+                                      ToolTipService.ShowOnDisabled="True"
+                                      ToolTip="{Binding ChangesBlockedReason}" />
                             <ui:Button Content="Turn HILT on"
                                        Icon="{ctl:DcSymbolIcon ShieldLock24}"
                                        AutomationProperties.Name="Turn human-in-the-loop approval on at the chosen severity"
-                                       IsEnabled="{Binding CanUse}"
+                                       IsEnabled="{Binding CanChange}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding ChangesBlockedReason}"
                                        Command="{Binding TurnHiltOnCommand}" />
                             <ui:Button Content="Turn HILT off"
                                        Icon="{ctl:DcSymbolIcon Dismiss24}"
                                        AutomationProperties.Name="Turn human-in-the-loop approval off"
-                                       IsEnabled="{Binding CanUse}"
+                                       IsEnabled="{Binding CanChange}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding ChangesBlockedReason}"
                                        Command="{Binding TurnHiltOffCommand}" />
                         </WrapPanel>
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
@@ -120,7 +135,9 @@
                                  Margin="0,0,0,6"
                                  AutomationProperties.Name="New block message (one line)"
                                  PlaceholderText="Blocked by Acme Security: see #sec-help"
-                                 IsEnabled="{Binding CanUse}"
+                                 IsEnabled="{Binding CanChange}"
+                                 ToolTipService.ShowOnDisabled="True"
+                                 ToolTip="{Binding ChangesBlockedReason}"
                                  Text="{Binding MessageText, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Style="{StaticResource WarnCaption}" Margin="0,0,0,6"
                                    Visibility="{Binding HasMessageProblem, Converter={StaticResource BoolToVisibility}}"
@@ -129,13 +146,16 @@
                             <ui:Button Content="Set message"
                                        Icon="{ctl:DcSymbolIcon Save24}"
                                        AutomationProperties.Name="Review and set the block message"
-                                       IsEnabled="{Binding CanUse}"
+                                       IsEnabled="{Binding CanChange}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding ChangesBlockedReason}"
                                        Command="{Binding SetBlockMessageCommand}" />
                             <ui:Button Content="Clear"
                                        Icon="{ctl:DcSymbolIcon ArrowUndo24}"
                                        AutomationProperties.Name="Review and clear the custom block message"
-                                       ToolTip="Revert to the global message or the built-in default"
-                                       IsEnabled="{Binding CanUse}"
+                                       ToolTip="{Binding ChangesBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Revert to the global message or the built-in default'}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       IsEnabled="{Binding CanChange}"
                                        Command="{Binding ClearBlockMessageCommand}" />
                         </WrapPanel>
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}"
@@ -185,12 +205,18 @@
                                                            Icon="{ctl:DcSymbolIcon Add24}"
                                                            AutomationProperties.Name="{Binding Key, StringFormat='Send {0} to the LLM judge'}"
                                                            Visibility="{Binding CanAdd, Converter={StaticResource BoolToVisibility}}"
+                                                           IsEnabled="{Binding DataContext.InstallationAllowsChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           ToolTipService.ShowOnDisabled="True"
+                                                           ToolTip="{Binding DataContext.ChangesBlockedReason, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            Command="{Binding DataContext.AddJudgeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            CommandParameter="{Binding Key}" />
                                                 <ui:Button Content="Remove"
                                                            Icon="{ctl:DcSymbolIcon Delete24}"
                                                            AutomationProperties.Name="{Binding Key, StringFormat='Stop sending {0} to the LLM judge'}"
                                                            Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibility}}"
+                                                           IsEnabled="{Binding DataContext.InstallationAllowsChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           ToolTipService.ShowOnDisabled="True"
+                                                           ToolTip="{Binding DataContext.ChangesBlockedReason, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            Command="{Binding DataContext.RemoveJudgeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            CommandParameter="{Binding Key}" />
                                             </StackPanel>
@@ -210,12 +236,16 @@
                                      Text="{Binding JudgeTimeoutText, UpdateSourceTrigger=PropertyChanged}" />
                             <ui:Button Content="Add all hook connectors"
                                        AutomationProperties.Name="Send every hook connector to the LLM judge"
-                                       IsEnabled="{Binding CanUse}"
+                                       IsEnabled="{Binding CanChange}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding ChangesBlockedReason}"
                                        Command="{Binding AddJudgeCommand}"
                                        CommandParameter="all" />
                             <ui:Button Content="Remove all"
                                        AutomationProperties.Name="Turn the hook-lane judge off for every connector"
-                                       IsEnabled="{Binding CanUse}"
+                                       IsEnabled="{Binding CanChange}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding ChangesBlockedReason}"
                                        Command="{Binding RemoveJudgeCommand}"
                                        CommandParameter="all" />
                         </WrapPanel>

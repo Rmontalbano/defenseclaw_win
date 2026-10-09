@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using DefenseClaw.App.Services;
+using DefenseClaw.Core.Paths;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -60,6 +61,7 @@ public abstract class PanelViewModelBase : ObservableObject
     protected PanelViewModelBase(AppServices services)
     {
         Services = services ?? throw new ArgumentNullException(nameof(services));
+        _installationSeen = services.Installation.Context;
     }
 
     /// <summary>Composition root. Panels pull their Core readers and the monitor from here.</summary>
@@ -164,13 +166,98 @@ public abstract class PanelViewModelBase : ObservableObject
         if (active)
         {
             Services.ConnectorScope.Changed += OnSharedScopeChanged;
+            Services.Installation.Changed += OnSharedInstallationChanged;
             OnActivated();
             CatchUpConnectorScope();
+            CatchUpInstallation();
         }
         else
         {
             Services.ConnectorScope.Changed -= OnSharedScopeChanged;
+            Services.Installation.Changed -= OnSharedInstallationChanged;
             OnDeactivated();
+        }
+    }
+
+    /// <summary>
+    /// Why every control of this panel that changes DefenseClaw is off - the installation is managed or invalid (<c>Services.Installation</c>) -
+    /// as a sentence for a tooltip; null while they are on. Bind a disabled control's <c>ToolTip</c> (with <c>ToolTipService.ShowOnDisabled</c>) to
+    /// it. The Overview banner, the Settings block and every other disabled control say the same sentence.
+    /// </summary>
+    public string? InstallationBlockedReason => Services.Installation.BlockedReason;
+
+    /// <summary>
+    /// False for a managed or invalid installation. What a command that starts a change uses as its can-execute
+    /// (<c>[RelayCommand(CanExecute = nameof(CanChangeInstallation))]</c>) or a button as its <c>IsEnabled</c>; it is raised, and every command of the
+    /// panel asked again, when the verdict changes.
+    /// </summary>
+    public bool CanChangeInstallation => InstallationBlockedReason is null;
+
+    /// <summary>
+    /// The installation this app drives turned read-only (or writable again) while this panel was on screen, or did while it was away and the
+    /// panel has just come back. <see cref="InstallationBlockedReason"/>, <see cref="CanChangeInstallation"/> and every command's can-execute
+    /// are raised again for it (nothing else tells the bindings); a panel that computes anything else from <c>Services.Installation</c> when it
+    /// is drawn (a flag that also follows the trust of a list, a tooltip) raises that here. Runs on the UI thread, only when the verdict differs
+    /// from the one the panel last saw. The default does nothing.
+    /// </summary>
+    protected virtual void OnInstallationChanged()
+    {
+    }
+
+    private InstallationContext _installationSeen;
+
+    /// <summary>The command properties of each panel type (<c>XCommand</c>, from <c>[RelayCommand]</c>), found once.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, System.Reflection.PropertyInfo[]> CommandProperties = new();
+
+    private void NotifyCommandsOfInstallation()
+    {
+        var properties = CommandProperties.GetOrAdd(
+            GetType(),
+            static type => type
+                .GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+                .Where(p => p.GetIndexParameters().Length == 0 && typeof(CommunityToolkit.Mvvm.Input.IRelayCommand).IsAssignableFrom(p.PropertyType))
+                .ToArray());
+
+        foreach (var property in properties)
+        {
+            (property.GetValue(this) as CommunityToolkit.Mvvm.Input.IRelayCommand)?.NotifyCanExecuteChanged();
+        }
+    }
+
+    private void OnSharedInstallationChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            CatchUpInstallation();
+        }
+        else
+        {
+            _ = dispatcher.BeginInvoke(CatchUpInstallation);
+        }
+    }
+
+    private void CatchUpInstallation()
+    {
+        var current = Services.Installation.Context;
+        if (!IsActive || current == _installationSeen)
+        {
+            return;
+        }
+
+        _installationSeen = current;
+        try
+        {
+            OnPropertyChanged(nameof(InstallationBlockedReason));
+            OnPropertyChanged(nameof(CanChangeInstallation));
+            NotifyCommandsOfInstallation();
+            OnInstallationChanged();
+        }
+#pragma warning disable CA1031 // A panel that cannot redraw its controls must not stop the others hearing of the change.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceError($"panel '{Title}' could not follow the installation: {ex}");
         }
     }
 

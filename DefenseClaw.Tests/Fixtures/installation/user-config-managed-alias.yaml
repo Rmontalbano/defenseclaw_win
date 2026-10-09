@@ -1,0 +1,5 @@
+# Synthetic: a user-chosen path whose configuration says it is managed, by the legacy alias.
+config_version: 8
+deployment_mode: managed
+gateway:
+  api_port: 18970

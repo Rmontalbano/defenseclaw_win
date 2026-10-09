@@ -243,6 +243,38 @@
                     </WrapPanel>
                 </StackPanel>
 
+                <!--
+                    A managed or invalid installation is only read (CUST-308). The Mac's banner, word for word, with its button: the reason is the
+                    installation's own sentence, and Review Installation opens Settings → Connection → Installation, which says what chose it.
+                -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding HasInstallationBanner, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ctl:DcSymbolIcon Grid.Column="0"
+                                          Margin="0,0,10,0"
+                                          VerticalAlignment="Center"
+                                          Symbol="LockClosed24" />
+                        <TextBlock Grid.Column="1"
+                                   Margin="0,0,12,0"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource DcBody}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Text="{Binding InstallationBanner}" />
+                        <ui:Button Grid.Column="2"
+                                   VerticalAlignment="Center"
+                                   Content="Review Installation"
+                                   Command="{Binding ReviewInstallationCommand}"
+                                   AutomationProperties.HelpText="Opens Settings, where the Installation block says what chose this installation and why the app only reads it." />
+                    </Grid>
+                </Border>
+
                 <!-- 1. What Needs Attention: the top three, then "Show all". -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
@@ -492,7 +524,8 @@
                                        Margin="0,0,8,8"
                                        Icon="{ctl:DcSymbolIcon ScanText24}"
                                        Command="{Binding ScanSkillsCommand}"
-                                       ToolTip="Scan every configured skill: defenseclaw skill scan --all. Asks for confirmation first."
+                                       ToolTip="{Binding ScanSkillsTip}"
+                                       ToolTipService.ShowOnDisabled="True"
                                        AutomationProperties.HelpText="Runs defenseclaw skill scan --all after you confirm it. The scan records results and findings." />
                             <ui:Button Content="Open Inventory"
                                        Margin="0,0,8,8"
@@ -726,6 +759,8 @@
                                                        VerticalAlignment="Center"
                                                        Command="{Binding DataContext.AddConnectorCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                        CommandParameter="{Binding}"
+                                                       ToolTipService.ShowOnDisabled="True"
+                                                       ToolTip="{Binding DataContext.InstallationBlockedReason, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                        AutomationProperties.Name="{Binding AddAutomationName}"
                                                        AutomationProperties.HelpText="Opens a review of the setup command. Nothing runs until you confirm."
                                                        Visibility="{Binding IsUnconfigured, Converter={StaticResource BoolToVisibility}}" />

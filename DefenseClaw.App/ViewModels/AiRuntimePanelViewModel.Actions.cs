@@ -71,11 +71,18 @@ public sealed partial class AiRuntimePanelViewModel
 
     public bool HasLastRun => LastRunSummary.Length > 0;
 
-    /// <summary>Why every change is off, whatever the snapshot says (a read-only data folder); null when nothing forbids changes.</summary>
+    /// <summary>
+    /// Why every change is off, whatever the snapshot says: the installation is managed or invalid (<c>Services.Installation</c>), or the data
+    /// folder is a read-only copy; null when nothing forbids changes. Reads (Refresh, the prerequisites card) are never held back by this.
+    /// </summary>
     public string? ReadOnlyReason =>
-        Services.Paths.DataDirectoryReadOnly
+        Services.Installation.BlockedReason
+        ?? (Services.Paths.DataDirectoryReadOnly
             ? "This runtime's data folder is a read-only copy (the developer container runtime), so changes from here are off."
-            : null;
+            : null);
+
+    /// <summary>The installation turned read-only (or writable) while the page was open: Poll now, Enable and Disable are asked again.</summary>
+    protected override void OnInstallationChanged() => RaiseActionState();
 
     public string? PollBlockedReason => BlockedReason(AiRuntimeCommands.ScanCommand, requiresEnabled: true);
 

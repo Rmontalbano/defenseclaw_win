@@ -308,7 +308,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         _all.Clear();
         foreach (var definition in definitions)
         {
-            var card = new WizardCardViewModel(definition);
+            var card = new WizardCardViewModel(definition, () => Services.Installation.BlockedReason);
 
             // A card that needs Docker starts from what is known now: the held answer, or "Checking for Docker…" before the first.
             card.ApplyDocker(_localStack.Decision);
@@ -393,7 +393,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     [RelayCommand]
     private async Task LaunchAsync(WizardCardViewModel? card)
     {
-        if (card is null || !card.IsAvailable)
+        if (card is null || !card.CanLaunch)
         {
             return;
         }
@@ -749,8 +749,25 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     /// <summary><c>--connector</c> is for multi-connector installs; with one connector there is nothing to scope.</summary>
     public bool HasMultipleGuardrailConnectors => GuardrailRows.Count > 1;
 
-    /// <summary>Controls are off while a read or a change is in flight.</summary>
-    public bool CanUseGuardrailControls => !IsGuardrailBusy && !IsGuardrailRunning;
+    /// <summary>Controls are off while a read or a change is in flight, and for a read-only (managed or invalid) installation.</summary>
+    public bool CanUseGuardrailControls => !IsGuardrailBusy && !IsGuardrailRunning && Services.Installation.IsMutable;
+
+    /// <summary>The banner at the top of the page shows: the installation is managed or invalid, and every control below that changes something is off.</summary>
+    public bool HasInstallationBlock => InstallationBlockedReason is not null;
+
+    /// <summary>The installation turned read-only (or writable) while the page was open: the tiles, the guardrail buttons and the credential rows are drawn again.</summary>
+    protected override void OnInstallationChanged()
+    {
+        foreach (var card in _all)
+        {
+            card.RefreshInstallation();
+        }
+
+        OnPropertyChanged(nameof(CanUseGuardrailControls));
+        OnPropertyChanged(nameof(HasInstallationBlock));
+        Credentials.RefreshInstallation();
+        RefreshGuardrailReview();
+    }
 
     partial void OnIsGuardrailBusyChanged(bool value) => OnPropertyChanged(nameof(CanUseGuardrailControls));
 
@@ -967,13 +984,13 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
                         "Gateway not restarted",
                         "The gateway is not restarted, so hooks are not regenerated until it next restarts: the change is saved but not yet in effect."),
             },
-        };
+        }.GuardedBy(Services.Installation);
     }
 
     [RelayCommand]
     private async Task ConfirmGuardrailAsync()
     {
-        if (!IsGuardrailReviewOpen || IsGuardrailRunning)
+        if (!IsGuardrailReviewOpen || IsGuardrailRunning || GuardrailReview is { IsBlocked: true })
         {
             return;
         }
@@ -1163,11 +1180,34 @@ public sealed partial class WizardCardViewModel : ObservableObject
     // definition that lands later (Apply) neither forgets it nor overrides a reason the policy gives.
     private string _dockerReason = string.Empty;
 
-    public WizardCardViewModel(WizardDefinition definition)
+    private readonly Func<string?>? _installationBlockedReason;
+
+    /// <param name="definition">What the card shows.</param>
+    /// <param name="installationBlockedReason">
+    /// Why nothing may be changed on the installation right now (it is managed or invalid), asked each time the card is drawn; null, or one that
+    /// answers null, means the wizard may be opened. A card the platform policy cannot offer at all, or that Docker rules out right now, is a
+    /// different thing (<see cref="UnavailableReason"/>); the installation's reason comes first when both apply.
+    /// </param>
+    public WizardCardViewModel(WizardDefinition definition, Func<string?>? installationBlockedReason = null)
     {
+        _installationBlockedReason = installationBlockedReason;
         Target = definition?.Target ?? throw new ArgumentNullException(nameof(definition));
         Group = definition.Group;
         Apply(definition);
+    }
+
+    /// <summary>Why the wizard may not be opened because the installation is read-only; null while it may. The card keeps its place in its group either way.</summary>
+    public string? InstallationBlockedReason => _installationBlockedReason?.Invoke();
+
+    /// <summary>The tile opens its wizard: the platform offers it and the installation may be changed (every wizard ends in a change).</summary>
+    public bool CanLaunch => IsAvailable && InstallationBlockedReason is null;
+
+    /// <summary>The installation turned read-only (or writable): the tile is drawn again.</summary>
+    public void RefreshInstallation()
+    {
+        OnPropertyChanged(nameof(CanLaunch));
+        OnPropertyChanged(nameof(InstallationBlockedReason));
+        OnPropertyChanged(nameof(TileToolTip));
     }
 
     public string Target { get; }
@@ -1200,10 +1240,19 @@ public sealed partial class WizardCardViewModel : ObservableObject
     /// <summary>The Fluent glyph the tile wears (see <see cref="WizardTileIcons"/>).</summary>
     public Wpf.Ui.Controls.SymbolRegular Icon { get; private set; }
 
-    /// <summary>The tile's tooltip: the command it runs, then why it cannot be opened when that is so.</summary>
-    public string TileToolTip => !IsAvailable
-        ? CommandHint + Environment.NewLine + UnavailableReason
-        : ShowTileBadge ? CommandHint + Environment.NewLine + Badge : CommandHint;
+    /// <summary>
+    /// The tile's tooltip: the command it runs, then why it cannot be opened when that is so - one reason. A read-only installation (managed or
+    /// invalid) comes first for any wizard the platform offers, including one that only Docker being down rules out right now: Docker coming up
+    /// would not make it runnable. A wizard this platform does not offer at all says that.
+    /// </summary>
+    public string TileToolTip => InstallationBlockedReason is { } blocked && (IsAvailable || UnavailableOnlyForDocker)
+        ? CommandHint + Environment.NewLine + blocked
+        : !IsAvailable
+            ? CommandHint + Environment.NewLine + UnavailableReason
+            : ShowTileBadge ? CommandHint + Environment.NewLine + Badge : CommandHint;
+
+    /// <summary>True when the only thing keeping this card from opening is the Docker look (the platform offers the wizard).</summary>
+    private bool UnavailableOnlyForDocker => _dockerReason.Length > 0 && string.Equals(UnavailableReason, _dockerReason, StringComparison.Ordinal);
 
     /// <summary>What the tile says under its title: the reason when it cannot be opened, otherwise the CLI's own summary.</summary>
     /// <summary>Certification only says something about a connector; the other wizards' tiles stay unbadged to leave the title its room.</summary>

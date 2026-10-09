@@ -966,7 +966,18 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         }
     }
 
-    private bool CanSave() => !IsSaving && !IsLoading && !LoadFailed;
+    private bool CanSave() => !IsSaving && !IsLoading && !LoadFailed && ChangesBlockedReason is null;
+
+    /// <summary>
+    /// Why Save and Restore are off: the installation is managed or invalid, and this editor writes config.yaml itself. Null while they are on.
+    /// Reading, the FORM and the RAW view are not affected.
+    /// </summary>
+    public string? ChangesBlockedReason => _services.Installation.BlockedReason;
+
+    public bool HasChangesBlockedReason => ChangesBlockedReason is not null;
+
+    /// <summary>The Save button's tooltip: the shortcut, or why it is off.</summary>
+    public string SaveToolTip => ChangesBlockedReason ?? "Review and save (Ctrl+S)";
 
     /// <summary>A saved-and-validated file proves the text parses; drop a stale parse-error banner if our own parser agrees.</summary>
     private void ClearParseErrorIfParses(string text)
@@ -1013,7 +1024,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         }
     }
 
-    private bool CanRestore() => LastBackupPath is not null;
+    private bool CanRestore() => LastBackupPath is not null && ChangesBlockedReason is null;
 
     /// <summary>What a FORM-source fetch produced: the masked YAML, or the reason there is none.</summary>
     internal sealed record FormSourceResult(string? Yaml, string? Failure);

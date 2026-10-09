@@ -5,6 +5,7 @@
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
              d:DataContext="{d:DesignInstance Type=vm:InventoryPanelViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -81,7 +82,8 @@
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ClipboardTaskListLtr24}"
                                Command="{Binding GenerateAiBomCommand}"
-                               ToolTip="Generate AI BOM… defenseclaw aibom scan --json: inventories the connectors' skills, plugins, MCP servers, agents, tools, models and memory for the connector chosen under AI BOM. Records a scan event in audit.db, so it asks first."
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Generate AI BOM… defenseclaw aibom scan --json: inventories the skills, plugins, MCP servers, agents, tools, models and memory of the connector chosen under AI BOM. Records a scan event in audit.db, so it asks first.'}"
                                AutomationProperties.Name="Generate AI BOM…"
                                AutomationProperties.HelpText="Builds an AI bill of materials for the connector chosen under AI BOM. Records a scan event, so it shows the exact command first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"

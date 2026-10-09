@@ -74,6 +74,14 @@
                             Message="{Binding UnsupportedMessage}" />
 
                 <StackPanel Visibility="{Binding IsSupported, Converter={StaticResource BoolToVisibility}}">
+                    <!-- A managed or invalid installation is only read: reading the policy and previewing a change still work, applying one does not. -->
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                IsClosable="False"
+                                Severity="Warning"
+                                Title="State-changing actions disabled — previews still work"
+                                IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
+                                Message="{Binding InstallationBlockedReason}" />
+
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"
                                 Title="{Binding NoticeTitle}"
                                 Message="{Binding NoticeMessage}"

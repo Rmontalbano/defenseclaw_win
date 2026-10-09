@@ -14,6 +14,9 @@ public enum DataDirectorySource
 
     /// <summary>Handed to the constructor (tests, harnesses).</summary>
     Explicit,
+
+    /// <summary>The installation the app selected at start (<see cref="InstallationContext"/>): the managed layout's runtime folder.</summary>
+    Installation,
 }
 
 /// <summary>The resolved data directory, where it came from, and anything odd about the environment that produced it.</summary>
@@ -32,6 +35,7 @@ public sealed record DataDirectoryResolution(string Path, DataDirectorySource So
                 DataDirectorySource.Environment =>
                     $"From {DefenseClawPaths.HomeVariableName}, the override the defenseclaw CLI honours.",
                 DataDirectorySource.Explicit => "Set explicitly.",
+                DataDirectorySource.Installation => "From the installation the app selected (Settings → Connection → Installation).",
                 _ => $"Default location ({DefenseClawPaths.HomeVariableName} is not set).",
             };
 
@@ -121,6 +125,7 @@ public sealed class DefenseClawPaths
     };
 
     private readonly Func<string, bool> _fileExists;
+    private readonly string _configFilePath;
     private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<string, ExecutableLookup> _lookups = new(StringComparer.OrdinalIgnoreCase);
 
@@ -160,6 +165,15 @@ public sealed class DefenseClawPaths
     /// fresh look. Defaults to the real registry — but only when <paramref name="searchPath"/> is not injected, so a
     /// test that fixes the PATH never has it changed under it.
     /// </param>
+    /// <param name="installation">
+    /// The installation the app resolved at start (<see cref="InstallationContext.Resolve"/>). It decides <see cref="ConfigFilePath"/> when it names a
+    /// config.yaml other than <c>&lt;data directory&gt;\config.yaml</c> (<c>DEFENSECLAW_CONFIG</c>, a managed layout), and is what the runner gates on. Null:
+    /// a permissive, user-owned installation at <see cref="DataDirectory"/>, which is exactly how the paths behaved before the context existed.
+    /// </param>
+    /// <param name="dataDirectoryOrigin">
+    /// Where <see cref="DataDirectory"/> came from, when the caller has already decided it (the managed layout's runtime folder); replaces
+    /// <paramref name="dataDirectory"/>.
+    /// </param>
     public DefenseClawPaths(
         string? dataDirectory = null,
         string? binDirectory = null,
@@ -169,16 +183,24 @@ public sealed class DefenseClawPaths
         Func<string, string?>? environment = null,
         Func<IEnumerable<string>>? persistedSearchPath = null,
         IEnumerable<string>? fallbackBinDirectories = null,
-        RuntimeSelection? runtime = null)
+        RuntimeSelection? runtime = null,
+        InstallationContext? installation = null,
+        DataDirectoryResolution? dataDirectoryOrigin = null)
     {
         Runtime = runtime ?? RuntimeSelection.Installed;
         var getEnvironment = environment ?? System.Environment.GetEnvironmentVariable;
 
-        DataDirectoryOrigin = dataDirectory is null
-            ? ResolveDataDirectory(getEnvironment)
-            : new DataDirectoryResolution(dataDirectory, DataDirectorySource.Explicit, null);
+        DataDirectoryOrigin = dataDirectoryOrigin
+            ?? (dataDirectory is null
+                ? ResolveDataDirectory(getEnvironment)
+                : new DataDirectoryResolution(dataDirectory, DataDirectorySource.Explicit, null));
         DataDirectory = DataDirectoryOrigin.Path;
         BinDirectory = binDirectory ?? DefaultBinDirectory();
+
+        // The context's config path only matters when it is not the default one: the usual case keeps the string it always had.
+        Installation = installation ?? InstallationContext.Unmanaged(DataDirectory);
+        var defaultConfig = Path.Combine(DataDirectory, "config.yaml");
+        _configFilePath = string.Equals(Installation.ConfigPath, defaultConfig, StringComparison.OrdinalIgnoreCase) ? defaultConfig : Installation.ConfigPath;
 
         // The default install layouts besides Setup's are only probed when nothing narrower was asked for: a caller (a test) that names its
         // own bin directory gets exactly that one unless it also names fallbacks.
@@ -195,6 +217,14 @@ public sealed class DefenseClawPaths
     }
 
     public string DataDirectory { get; }
+
+    /// <summary>
+    /// The installation this run of the app drives and what it may do to it (see <see cref="InstallationContext"/>): resolved once at start from
+    /// <c>DEFENSECLAW_CONFIG</c>, the developer selector, <c>DEFENSECLAW_HOME</c>, the Windows managed layout and the user default. The runner refuses
+    /// every state-changing run while it is not <see cref="InstallationContext.IsMutable"/>. The app's live copy (which follows config.yaml changes)
+    /// is <c>AppServices.Installation</c>; this is the one the process started with.
+    /// </summary>
+    public InstallationContext Installation { get; }
 
     /// <summary>
     /// Which runtime the app drives: <see cref="RuntimeSelection.Installed"/> for everyone unless the developer selector (Settings →
@@ -230,7 +260,11 @@ public sealed class DefenseClawPaths
             Path.Combine(dataDirectory, ".venv", "Scripts"),
         };
 
-    public string ConfigFilePath => Path.Combine(DataDirectory, "config.yaml");
+    /// <summary>
+    /// The config.yaml the CLI reads: <c>&lt;data directory&gt;\config.yaml</c>, unless the selected installation names another (<c>DEFENSECLAW_CONFIG</c>,
+    /// which the CLI honours ahead of the data directory, or a managed layout's <c>etc\config.yaml</c>).
+    /// </summary>
+    public string ConfigFilePath => _configFilePath;
 
     public string EnvFilePath => Path.Combine(DataDirectory, ".env");
 

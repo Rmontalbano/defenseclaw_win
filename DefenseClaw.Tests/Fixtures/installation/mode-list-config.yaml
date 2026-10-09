@@ -1,0 +1,4 @@
+# Synthetic: deployment_mode is not a string.
+config_version: 8
+deployment_mode:
+  - managed_enterprise
