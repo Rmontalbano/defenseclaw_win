@@ -152,6 +152,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _services.UpdateWatcher.Changed += OnUpdateWatcherChanged;
         ApplyUpdateBanner();
+
+        // The Audit / Activity / AI Discovery capsules (CUST-265); same arrangement as the alert count: this subscription starts the service.
+        _services.UnreadCounts.Changed += OnUnreadChanged;
+        ApplyUnread(_services.UnreadCounts.Current);
     }
 
     /// <summary>True when the Alerts entry shows a count.</summary>
@@ -179,6 +183,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
         _services.AlertCounts.Changed -= OnAlertCountsChanged;
         Strip.Dispose();
+        _services.UnreadCounts.Changed -= OnUnreadChanged;
     }
 
     /// <summary>

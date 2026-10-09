@@ -91,6 +91,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
     private SidebarBadge? _overviewBadge;
 
+    /// <summary>The "N new since last visit" capsules (CUST-265) on the Audit, Activity and AI Discovery entries, by panel id; made by <see cref="BuildNavigation"/>.</summary>
+    private readonly Dictionary<string, SidebarBadge> _unreadBadges = new(StringComparer.Ordinal);
+
     /// <summary>
     /// One line per panel whose initialization failed, newest fault per panel wins; what
     /// <c>PanelFaultBar</c> shows. Cleared when the operator dismisses the bar. UI thread only.
@@ -502,6 +505,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
                 else if (string.Equals(panel.Id, "overview", StringComparison.Ordinal))
                 {
                     _overviewBadge = new SidebarBadge(item, panel.Title, item.ToolTip as string ?? panel.Title, InfoBadgeSeverity.Caution);
+                }
+                else if (UnreadCountsService.IsTracked(panel.Id))
+                {
+                    // "New since last visit" (CUST-265): the accent capsule, not the alert count's red.
+                    _unreadBadges[panel.Id] = new SidebarBadge(item, panel.Title, item.ToolTip as string ?? panel.Title, InfoBadgeSeverity.Attention);
                 }
 
                 _ = RootNavigation.MenuItems.Add(item);
@@ -1105,7 +1113,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         }
         else if (e.PropertyName is nameof(MainWindowViewModel.AlertBadgeText)
                  or nameof(MainWindowViewModel.AlertBadgeDescription)
-                 or nameof(MainWindowViewModel.OverviewBadgeDescription))
+                 or nameof(MainWindowViewModel.OverviewBadgeDescription)
+                 or nameof(MainWindowViewModel.UnreadBadges))
         {
             UpdateNavigationBadges();
         }
@@ -1125,6 +1134,12 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
         _alertsBadge?.Set(_viewModel.AlertBadgeText, _viewModel.AlertBadgeDescription);
         _overviewBadge?.Set("!", _viewModel.OverviewBadgeDescription);
+
+        foreach (var (panelId, badge) in _unreadBadges)
+        {
+            var state = _viewModel.UnreadFor(panelId);
+            badge.Set(state.Text, state.Description);
+        }
     }
 
     /// <summary>

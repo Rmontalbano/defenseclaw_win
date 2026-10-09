@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.FirstRun;
 
 namespace DefenseClaw.App.ViewModels;
@@ -52,19 +53,24 @@ public sealed partial class OverviewPanelViewModel
                     enabled
                         ? "No scan has been recorded yet. Try: defenseclaw agent discovery scan"
                         : "AI discovery is off (ai_discovery.enabled is false in config.yaml).");
+                Services.UnreadCounts.ReportAiDiscovery(AiDiscoveryHead.None);
                 return;
             }
 
             var now = DateTimeOffset.UtcNow;
-            var (agents, detected) = await Task.Run(
+            var (agents, detected, novelty) = await Task.Run(
                 () =>
                 {
                     var text = DefenseClaw.Core.IO.SharedFile.ReadAllText(path);
-                    return (OverviewAgentReader.Parse(text, now), OverviewDetectedConnectors.Parse(text));
+                    return (OverviewAgentReader.Parse(text, now), OverviewDetectedConnectors.Parse(text), AiDiscoveryNovelty.Parse(text));
                 },
                 cancellationToken).ConfigureAwait(true);
             SetDetectedConnectors(detected);
             SetAgents(agents, agents.IsEmpty ? "No AI usage detected yet. Try: defenseclaw agent discovery scan" : string.Empty);
+
+            // The text this card was just built from also says when each component was first seen: handed to the sidebar's AI Discovery badge
+            // (CUST-265), which is therefore as fresh as this read and costs the file nothing.
+            Services.UnreadCounts.ReportAiDiscovery(novelty);
         }
         catch (OperationCanceledException)
         {

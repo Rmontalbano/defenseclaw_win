@@ -314,6 +314,10 @@ public sealed class PanelCatalog : INavigationViewPageProvider
         {
             UpdateActivation(view, _viewModels[pageType]);
         }
+
+        // After the panels have changed hands: a window that comes back counts once, with the panel it comes back on already known; one that goes
+        // to the tray has already moved the markers of the panel it leaves (CUST-265).
+        _services.UnreadCounts.SetInteractive(interactive);
     }
 
     /// <summary>
@@ -330,7 +334,15 @@ public sealed class PanelCatalog : INavigationViewPageProvider
         if (!wasActive && viewModel.IsActive && ByViewType(view.GetType()) is { } descriptor)
         {
             RememberPanel(descriptor);
+
+            // The sidebar's "new since last visit" (CUST-265): this panel is being looked at, so its capsule goes and its marker moves.
+            _ = _services.UnreadCounts.PanelShown(descriptor.Id);
             DeliverPending(descriptor, viewModel);
+        }
+        else if (wasActive && !viewModel.IsActive && ByViewType(view.GetType()) is { } left)
+        {
+            // Left (another panel, or the window went to the tray): what scrolled past while it was open was seen.
+            _ = _services.UnreadCounts.PanelLeft(left.Id);
         }
     }
 

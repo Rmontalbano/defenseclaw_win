@@ -31,6 +31,7 @@ internal static class AppSettingsCodec
     public const string DeveloperKey = "developer";
     public const string ArchiveKey = "archive";
     public const string PaletteKey = "palette";
+    public const string SeenKey = "seen";
 
     /// <summary>Reads every section out of <paramref name="root"/>. Never throws.</summary>
     public static AppSettings Read(JsonObject root)
@@ -46,7 +47,8 @@ internal static class AppSettingsCodec
             ReadUpdates(Section(root, UpdatesKey)),
             ReadDeveloper(Section(root, DeveloperKey)),
             ReadArchive(Section(root, ArchiveKey)),
-            ReadPalette(Section(root, PaletteKey)));
+            ReadPalette(Section(root, PaletteKey)),
+            ReadSeen(Section(root, SeenKey)));
     }
 
     /// <summary>Writes the given sections of <paramref name="settings"/> into <paramref name="root"/>, leaving every other member as it is.</summary>
@@ -124,6 +126,16 @@ internal static class AppSettingsCodec
             var target = SectionForWrite(root, PaletteKey);
             target["recent"] = new JsonArray(settings.Palette.RecentCommandIds.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray());
         }
+
+        if ((sections & AppSettingsSections.Seen) != 0)
+        {
+            // One member per panel, a number under its id. Additive like every section: a panel this build does not track keeps its member.
+            var target = SectionForWrite(root, SeenKey);
+            foreach (var (panelId, marker) in settings.Seen.Markers)
+            {
+                Put(target, panelId, marker);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ sections
@@ -152,6 +164,30 @@ internal static class AppSettingsCodec
         section is null || section["recent"] is not JsonArray recent
             ? new PaletteSettings()
             : new PaletteSettings { RecentCommandIds = recent.Select(item => ReadString(item)).OfType<string>().ToArray() };
+
+    /// <summary>
+    /// The markers: every member of the section whose value is a whole non-negative number. A member of another type, a negative one, a blank
+    /// name or a section that is not an object is skipped, so a hand-edited file reads as "not looked at yet" for that panel and nothing else.
+    /// </summary>
+    private static SeenSettings ReadSeen(JsonObject? section)
+    {
+        if (section is null)
+        {
+            return new SeenSettings();
+        }
+
+        var markers = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var (panelId, node) in section)
+        {
+            var marker = ReadLong(node, -1);
+            if (marker >= 0)
+            {
+                markers[panelId] = marker;
+            }
+        }
+
+        return new SeenSettings { Markers = markers };
+    }
 
     private static AppearanceSettings ReadAppearance(JsonObject? section) =>
         section is null

@@ -21,6 +21,7 @@ namespace DefenseClaw.App.Services.Settings;
 /// <param name="Developer">The developer runtime selector (Settings -> Advanced); off unless a developer turns it on.</param>
 /// <param name="Archive">The optional archived audit database the Audit panel can show beside the live one (CUST-299).</param>
 /// <param name="Palette">What the command palette remembers between runs: the last few commands it ran (CUST-264).</param>
+/// <param name="Seen">Where the operator last looked in each stream panel, so the sidebar can say what is new since (CUST-265).</param>
 internal sealed record AppSettings(
     AppearanceSettings Appearance,
     MonitoringSettings Monitoring,
@@ -30,7 +31,8 @@ internal sealed record AppSettings(
     UpdateSettings Updates,
     DeveloperSettings Developer,
     ArchiveSettings Archive,
-    PaletteSettings Palette)
+    PaletteSettings Palette,
+    SeenSettings Seen)
 {
     /// <summary>A fresh install: every section at its defaults.</summary>
     public static AppSettings Defaults { get; } = new(
@@ -42,7 +44,8 @@ internal sealed record AppSettings(
         new UpdateSettings(),
         new DeveloperSettings(),
         new ArchiveSettings(),
-        new PaletteSettings());
+        new PaletteSettings(),
+        new SeenSettings());
 }
 
 /// <summary>The sections of <see cref="AppSettings"/>, as flags: what <see cref="AppSettingsChangedEventArgs.Sections"/> says changed.</summary>
@@ -59,7 +62,8 @@ internal enum AppSettingsSections
     Developer = 64,
     Archive = 128,
     Palette = 256,
-    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates | Developer | Archive | Palette,
+    Seen = 512,
+    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates | Developer | Archive | Palette | Seen,
 }
 
 /// <summary>Monitoring: how often the gateway's health is polled, and whether polling is paused (the Mac's "pulse interval").</summary>
@@ -288,6 +292,107 @@ internal sealed record PaletteSettings
     }
 }
 
+/// <summary>
+/// Seen: where the operator last looked in each stream panel (CUST-265), by panel id (<c>audit</c>, <c>activity</c>, <c>ai-discovery</c>), so
+/// the sidebar can show "N new since last visit" and still mean it after a restart. The TUI keeps a <em>count</em> per panel
+/// (<c>panel_seen_counts</c>), which stops working the moment a panel's list is capped (its Audit list is the newest 500) or trimmed; this keeps
+/// a <em>position</em>, whose meaning belongs to the panel: the newest <c>rowid</c> of <c>audit_events</c> for Audit, and a UTC instant (ticks) for
+/// the two panels whose data is dated (Activity: when its runs started; AI Discovery: when a component was first seen). A panel with no entry has
+/// not been looked at yet, which is not the same as 0 (an empty table that was looked at). Never a secret, a path or a name: numbers under ids.
+/// <para>
+/// At most <see cref="MaxPanels"/> entries, ids at most <see cref="MaxIdLength"/> long and values never negative; the dictionary cleans itself on the
+/// way in, so a hand-edited file cannot grow it or put a nonsense marker in front of a reader. Equality is by content, so a write of the markers
+/// the store already holds is not a change (no write, no <see cref="AppSettingsStore.Changed"/>).
+/// </para>
+/// </summary>
+internal sealed record SeenSettings
+{
+    /// <summary>How many panels are remembered. The app tracks three; the rest is room for a build that tracks more.</summary>
+    public const int MaxPanels = 32;
+
+    /// <summary>The longest panel id kept. Real ids are a dozen characters.</summary>
+    public const int MaxIdLength = 64;
+
+    private static readonly IReadOnlyDictionary<string, long> NoMarkers = new Dictionary<string, long>(0, StringComparer.Ordinal);
+
+    private readonly IReadOnlyDictionary<string, long> _markers = NoMarkers;
+
+    /// <summary>The marker of each panel that has one.</summary>
+    public IReadOnlyDictionary<string, long> Markers
+    {
+        get => _markers;
+        init => _markers = Clean(value);
+    }
+
+    /// <summary>The marker of <paramref name="panelId"/>; false when the panel has not been looked at (or the store has never heard of it).</summary>
+    public bool TryGet(string panelId, out long marker) => _markers.TryGetValue(panelId, out marker);
+
+    /// <summary>These markers with <paramref name="panelId"/>'s set to <paramref name="marker"/>; this instance when it already is.</summary>
+    public SeenSettings With(string panelId, long marker)
+    {
+        if (_markers.TryGetValue(panelId, out var existing) && existing == marker)
+        {
+            return this;
+        }
+
+        var next = new Dictionary<string, long>(_markers, StringComparer.Ordinal) { [panelId] = marker };
+        return new SeenSettings { Markers = next };
+    }
+
+    /// <summary>Record equality would compare the dictionary by reference, and two settings holding the same markers are the same settings.</summary>
+    public bool Equals(SeenSettings? other)
+    {
+        if (other is null || _markers.Count != other._markers.Count)
+        {
+            return false;
+        }
+
+        foreach (var (panel, marker) in _markers)
+        {
+            if (!other._markers.TryGetValue(panel, out var theirs) || theirs != marker)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public override int GetHashCode()
+    {
+        // Order-insensitive: the same markers hash alike however they were inserted.
+        var hash = 0;
+        foreach (var (panel, marker) in _markers)
+        {
+            hash ^= HashCode.Combine(panel, marker);
+        }
+
+        return hash;
+    }
+
+    internal static IReadOnlyDictionary<string, long> Clean(IEnumerable<KeyValuePair<string, long>>? markers)
+    {
+        if (markers is null)
+        {
+            return NoMarkers;
+        }
+
+        var cleaned = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var (rawId, marker) in markers.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+        {
+            var id = rawId?.Trim() ?? string.Empty;
+            if (id.Length == 0 || id.Length > MaxIdLength || marker < 0 || cleaned.Count >= MaxPanels)
+            {
+                continue;
+            }
+
+            cleaned[id] = marker;
+        }
+
+        return cleaned.Count == 0 ? NoMarkers : cleaned;
+    }
+}
+
 /// <summary>What <see cref="AppSettingsStore.Changed"/> reports.</summary>
 internal sealed class AppSettingsChangedEventArgs : EventArgs
 {
@@ -356,6 +461,11 @@ internal sealed class AppSettingsChangedEventArgs : EventArgs
         if (before.Palette != after.Palette)
         {
             sections |= AppSettingsSections.Palette;
+        }
+
+        if (before.Seen != after.Seen)
+        {
+            sections |= AppSettingsSections.Seen;
         }
 
         return sections;

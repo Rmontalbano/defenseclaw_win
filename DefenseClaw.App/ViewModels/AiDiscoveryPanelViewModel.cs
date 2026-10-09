@@ -611,6 +611,9 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
 
         _loadedAt = DateTimeOffset.Now;
         ApplySignals(signals);
+
+        // What the panel lists now is what the operator can have seen: the sidebar's "new since last visit" (CUST-265) counts from this moment.
+        Services.UnreadCounts.NoteAiDiscoveryDisplayed(_loadedAt.Value);
         Sources.Add(signalSource);
         if (bandsSource is not null)
         {

@@ -94,6 +94,17 @@ internal sealed class SidebarBadge
         _badge.Value = text;
         _badge.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
 
+        // The capsule is decorative to a screen reader (the entry's name below says it all), but a tool that inspects the element itself finds the
+        // same sentence on it: "7 new since last visit".
+        if (shown)
+        {
+            AutomationProperties.SetName(_badge, description);
+        }
+        else
+        {
+            _badge.ClearValue(AutomationProperties.NameProperty);
+        }
+
         var name = shown ? $"{_title}, {description}" : _title;
         var before = AutomationProperties.GetName(_item);
         AutomationProperties.SetName(_item, name);

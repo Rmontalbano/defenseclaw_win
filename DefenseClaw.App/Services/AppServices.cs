@@ -161,6 +161,14 @@ public sealed class AppServices : IDisposable
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
         StatusFacts = new StatusFacts();
 
+        // "New since last visit" on the sidebar's Audit, Activity and AI Discovery entries (CUST-265). Idle - no timer, no subscription, no
+        // read - until the dashboard window listens to it and can be seen; the audit count shares the change probe and rides the alert tick.
+        UnreadCounts = new UnreadCountsService(
+            Settings,
+            new AuditHeadReader(Paths.AuditDatabasePath, AuditChanges, ReaderTimeouts.AlertQueue),
+            Cli,
+            Monitor);
+
         // Knows whether a newer runtime is out (the banner and the one toast). Nothing runs until the app calls Start on it.
         UpdateWatcher = updateWatcherFactory?.Invoke(this) ?? UpdateWatcher.Create(this);
 
@@ -266,6 +274,13 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The kept-fresh counts over <see cref="AlertQueue"/>: subscribe to <c>Changed</c> for a badge, call <c>RefreshAsync</c> after an acknowledge. Idle while nothing subscribes.</summary>
     internal AlertCountsService AlertCounts { get; }
+
+    /// <summary>
+    /// How many audit rows, Activity entries and AI Discovery components are new since the operator last had each panel on screen (the sidebar's
+    /// capsules; <c>Changed</c> for a badge, <c>PanelShown</c> / <c>PanelLeft</c> from the catalog). Idle while nothing listens or the window cannot be seen.
+    /// See <see cref="UnreadCountsService"/>.
+    /// </summary>
+    internal UnreadCountsService UnreadCounts { get; }
 
     /// <summary>The one connector filter every screen shares (All, or one connector). See <see cref="Services.ConnectorScope"/>.</summary>
     internal ConnectorScope ConnectorScope { get; }
@@ -654,6 +669,7 @@ public sealed class AppServices : IDisposable
         ConfigWatcher.Changed -= OnConfigChanged;
         _reloadRetry?.Dispose();
         Settings.Changed -= OnSettingsChanged;
+        UnreadCounts.Dispose();
         AlertCounts.Dispose();
         AuditChanges.Dispose();
         UpdateWatcher.Dispose();

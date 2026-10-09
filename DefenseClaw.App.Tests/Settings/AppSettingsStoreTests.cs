@@ -47,7 +47,8 @@ public sealed class AppSettingsStoreTests : IDisposable
             HostDataFolder = @"D:\next\data",
         },
         new ArchiveSettings { Path = @"D:\archive\audit-before-upgrade.db" },
-        new PaletteSettings { RecentCommandIds = new[] { "cli.doctor", "nav.alerts", "gateway.restart" } });
+        new PaletteSettings { RecentCommandIds = new[] { "cli.doctor", "nav.alerts", "gateway.restart" } },
+        new SeenSettings { Markers = new Dictionary<string, long> { ["audit"] = 612_345, ["activity"] = 639_000_000_000_000_000, ["ai-discovery"] = 639_000_000_000_000_001 } });
 
     // ------------------------------------------------------------------ defaults
 
