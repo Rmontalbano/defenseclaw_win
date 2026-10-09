@@ -9,10 +9,11 @@ using DefenseClaw.Core.Install;
 namespace DefenseClaw.App.Tests.Overview;
 
 /// <summary>
-/// <c>sinks</c> is a /health block the health model does not name, so it stays untyped until the Observability card parses it. A block of the wrong
-/// shape (a number for <c>state</c>, a date that is not one) made that parse throw out of <c>OverviewPanelViewModel.Apply</c>, which aborted the Apply
-/// before it re-derived the gateway action, the enforcement cards and the doctor card, and skipped the data refresh that follows it on every poll.
-/// Whatever answers on the gateway port decides what /health says, so a block of the wrong shape is skipped, not fatal.
+/// <c>sinks</c> is a /health block the health model does not name, so it stays untyped until the Observability card and the Services card's Sinks row
+/// (CUST-313) parse it. A block of the wrong shape (a number for <c>state</c>, a date that is not one) made that parse throw out of
+/// <c>OverviewPanelViewModel.Apply</c>, which aborted the Apply before it re-derived the gateway action, the enforcement cards and the doctor card, and
+/// skipped the data refresh that follows it on every poll. Whatever answers on the gateway port decides what /health says, so a block of the wrong shape
+/// is skipped, not fatal: the Observability card lists nothing from it and the Sinks row says it is not reported.
 /// </summary>
 public sealed class MalformedHealthBlockTests : IDisposable
 {
@@ -58,6 +59,10 @@ public sealed class MalformedHealthBlockTests : IDisposable
         Assert.Equal("healthy", row.State);
         Assert.Equal("Ok", row.StateKey);
         Assert.Equal("Restart Gateway", vm.GatewayActionLabel);
+
+        // The Services card's Sinks row reads the same block.
+        var card = vm.ServiceRows.Single(r => r.Key == "sinks");
+        Assert.Equal(("running", "Ok"), (card.StateText, card.StateKey));
     }
 
     [Theory]
@@ -80,5 +85,26 @@ public sealed class MalformedHealthBlockTests : IDisposable
         Assert.Empty(vm.ObservabilityRows);
         // ApplyGatewayActions runs after the Observability card is built: it only follows when that step did not throw.
         Assert.Equal("Restart Gateway", vm.GatewayActionLabel);
+
+        // BuildServices runs before it: the nine cards are all there, whatever the block said.
+        Assert.Equal(OverviewPanelViewModel.ServiceKeys, vm.ServiceRows.Select(r => r.Key));
+    }
+
+    [Theory]
+    [InlineData("\"sinks\":{\"state\":5}")]
+    [InlineData("\"sinks\":{\"since\":\"not-a-date\"}")]
+    [InlineData("\"sinks\":{\"last_error\":{\"a\":1}}")]
+    [InlineData("\"sinks\":[1,2,3]")]
+    [InlineData("\"sinks\":\"text\"")]
+    [InlineData("\"sinks\":null")]
+    public void A_sinks_block_that_cannot_be_read_is_a_sinks_row_that_says_it_is_not_reported(string sinks)
+    {
+        var vm = Panel();
+
+        vm.Apply(Running(sinks));
+
+        var card = vm.ServiceRows.Single(r => r.Key == "sinks");
+        Assert.Equal(("unknown", "Neutral"), (card.StateText, card.StateKey));
+        Assert.Equal(OverviewPanelViewModel.SinksNotReportedText, card.Detail);
     }
 }

@@ -152,6 +152,7 @@ public sealed partial class OverviewPanelViewModel
     private void RebuildAfterStatus()
     {
         var snapshot = _snapshot;
+        BuildServices(snapshot.Health);
         BuildConnectors(snapshot, snapshot.Health);
         BuildConfiguration();
         RenderActivitySummary();
@@ -263,10 +264,7 @@ public sealed partial class OverviewPanelViewModel
         var host = string.IsNullOrWhiteSpace(config.Gateway.Host) ? "127.0.0.1" : config.Gateway.Host.Trim();
         rows.Add(("Gateway API" + suffix, $"{host}:{Services.ApiPort.ToString(CultureInfo.InvariantCulture)}", "Neutral"));
 
-        if (_status.ApplicationProtectionEnabled is { } protection)
-        {
-            rows.Add(("Application protection" + suffix, protection ? "on" : $"off ({_status.ApplicationProtectionState ?? "disabled"})", "Neutral"));
-        }
+        AddApplicationProtectionRow(rows, suffix);
 
         if (_status.SandboxAvailable is { } sandbox)
         {
@@ -275,6 +273,7 @@ public sealed partial class OverviewPanelViewModel
 
         rows.Add(("Data directory" + suffix, DataDirectorySourceText.Length > 0 ? $"{DataDirectoryText}  ({DataDirectorySourceText})" : DataDirectoryText, "Neutral"));
         rows.Add(("Config file" + suffix, Services.Config.Path, "Neutral"));
+        AddConfigReloadRow(rows, suffix);
     }
 
     private void AddScopedRows(List<(string Label, string Value, string Tone)> rows, string scope)

@@ -21,7 +21,7 @@ namespace DefenseClaw.App.ViewModels;
 /// Configuration, Connectors, Observability destinations, Activity (last 24 h) and Doctor beside the discovered AI agents. This file holds
 /// the gateway-derived cards and the two clocks; each of the newer cards is its own partial: <c>.Enforcement</c> (the four tiles),
 /// <c>.Actions</c> (Quick Actions and their review), <c>.Configuration</c> (rows and the one <c>status --json</c> read),
-/// <c>.Scope</c> (the connector table as the scope selector), <c>.Observability</c>, <c>.Activity</c> (the hourly chart) and <c>.Agents</c>.
+/// <c>.Scope</c> (the connector table as the scope selector), <c>.Observability</c>, <c>.Activity</c> (the hourly chart), <c>.Agents</c> and <c>.Services</c> (the TUI's nine service cards).
 /// <para>
 /// <b>Two clocks.</b> Everything gateway-derived is re-derived on every poll; the audit
 /// counts, the enforcement lists and the scanner-path probes are far more expensive, so they
@@ -245,7 +245,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// <summary>Derived: the short list of things an operator should actually look at.</summary>
     public ObservableCollection<AttentionRow> Attention { get; } = new();
 
-    /// <summary>One row per subsystem block in <c>/health</c>.</summary>
+    /// <summary>The TUI's nine service cards, in its order (<c>.Services</c>).</summary>
     public ObservableCollection<ServiceRow> ServiceRows { get; } = new();
 
     public ObservableCollection<ScannerRow> ScannerRows { get; } = new();
@@ -884,35 +884,6 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     }
 
     /// <summary>
-    /// One row per <c>/health</c> subsystem. <c>disabled</c> is rendered neutral with its
-    /// own explanation — a standalone install has two of them by design.
-    /// </summary>
-    private void BuildServices(GatewayHealth? health)
-    {
-        if (health is null)
-        {
-            SyncByEquality(ServiceRows, Array.Empty<ServiceRow>(), static row => row.Name);
-            return;
-        }
-
-        var rows = new List<ServiceRow>();
-        foreach (var (name, state) in health.Services())
-        {
-            rows.Add(new ServiceRow
-            {
-                Name = FriendlyServiceName(name),
-                StateText = state.State ?? "unknown",
-                StateKey = ClassifyState(state),
-                Posture = PostureFor(name, state),
-                Detail = DescribeService(name, state),
-                SinceText = state.Since is { } since ? $"since {since.ToLocalTime().ToString("MMM d HH:mm", CultureInfo.CurrentCulture)}" : string.Empty,
-            });
-        }
-
-        SyncByEquality(ServiceRows, rows, static row => row.Name);
-    }
-
-    /// <summary>
     /// Refreshes the two scanner executables' locations at most once per <see cref="DataRefreshInterval"/>;
     /// see <see cref="_skillScannerPath"/> for why it is not once per poll. Runs on the UI thread, so it only
     /// <i>reads</i> the last known answer; the lookup itself is started on the pool and applied when it returns
@@ -1417,72 +1388,6 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         _ => "Neutral",
     };
 
-    /// <summary>
-    /// Enforcement posture, kept separate from liveness on purpose: <c>guardrail</c> runs
-    /// with <c>enforcement_enabled: false</c> in observe mode, and collapsing the two
-    /// would paint a correctly configured box as broken.
-    /// </summary>
-    private static string PostureFor(string name, ServiceState state)
-    {
-        if (string.Equals(name, "guardrail", StringComparison.Ordinal))
-        {
-            var mode = state.DetailString("policy_mode") ?? state.DetailString("mode") ?? "unknown";
-            var enforcing = state.DetailBool("enforcement_enabled");
-            var surface = state.DetailString("enforcement_surface");
-            var posture = enforcing == true ? "enforcing" : "observing (enforcement off)";
-            return surface is { Length: > 0 }
-                ? $"{mode} · {posture} · {surface}"
-                : $"{mode} · {posture}";
-        }
-
-        if (string.Equals(name, "application_protection", StringComparison.Ordinal))
-        {
-            var enabled = state.DetailBool("enabled");
-            var assetMode = state.DetailString("asset_policy_mode");
-            return enabled == true
-                ? $"enabled · asset policy {assetMode ?? "?"}"
-                : "not enabled";
-        }
-
-        return string.Empty;
-    }
-
-    private static string DescribeService(string name, ServiceState state)
-    {
-        var summary = state.DetailString("summary")
-            ?? state.DetailString("hint")
-            ?? state.DetailString("addr")
-            ?? state.DetailString("path");
-
-        if (!string.IsNullOrWhiteSpace(summary))
-        {
-            return summary;
-        }
-
-        if (string.Equals(name, "telemetry", StringComparison.Ordinal))
-        {
-            var destinations = DetailNumber(state, "destination_count");
-            var retention = DetailNumber(state, "retention_days");
-            return $"{destinations?.ToString(CultureInfo.CurrentCulture) ?? "?"} destination(s) · " +
-                   $"retention {retention?.ToString(CultureInfo.CurrentCulture) ?? "?"} days";
-        }
-
-        // Shown, but never used to decide the colour: on 0.8.7 a disabled subsystem writes
-        // its own name into last_error.
-        return state.LastError is { Length: > 0 } lastError && !state.IsDisabled
-            ? lastError
-            : string.Empty;
-    }
-
-    private static string FriendlyServiceName(string key) => key switch
-    {
-        "api" => "api",
-        "ai_discovery" => "ai discovery",
-        "application_protection" => "application protection",
-        "gateway" => "fleet uplink",
-        _ => key,
-    };
-
     private static string Flag(ServiceState state, string key) =>
         state.DetailBool(key) switch { true => "on", false => "off", _ => "?" };
 
@@ -1585,9 +1490,12 @@ public sealed record AttentionRow
     }
 }
 
-/// <summary>One subsystem row in the Services box. A record for the same reason as <see cref="AttentionRow"/>.</summary>
+/// <summary>One of the nine cards of the Services box. A record for the same reason as <see cref="AttentionRow"/>.</summary>
 public sealed record ServiceRow
 {
+    /// <summary>The TUI's key for the card (<c>gateway</c>, <c>agent</c>, <c>watcher</c>, <c>guardrail</c>, <c>api</c>, <c>sinks</c>, <c>telemetry</c>, <c>ai_discovery</c>, <c>sandbox</c>): the row's identity across polls.</summary>
+    public required string Key { get; init; }
+
     public required string Name { get; init; }
 
     public required string StateText { get; init; }
