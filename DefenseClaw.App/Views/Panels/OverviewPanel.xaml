@@ -1385,6 +1385,51 @@
                         </StackPanel>
                     </Border>
                 </Grid>
+
+                <!-- 9. AI BOM coverage per connector, from the last AI BOM the Inventory page generated (never a scan of its own). -->
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="BookDatabase24" Section="Discover" Content="AI BOM coverage" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,0,0,8"
+                                   Text="{Binding BomCoverageSummary}" />
+                        <ItemsControl ItemsSource="{Binding BomCoverageRows}"
+                                      Grid.IsSharedSizeScope="True"
+                                      AutomationProperties.Name="AI BOM coverage by connector">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,5">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="BomConnector" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Style="{StaticResource OverviewCell}"
+                                                   Foreground="{DynamicResource DcTextPrimaryBrush}"
+                                                   Margin="0,0,16,0"
+                                                   Text="{Binding Connector}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Style="{StaticResource OverviewCell}"
+                                                   Text="{Binding Counts}" />
+                                        <TextBlock Grid.Column="2"
+                                                   Style="{StaticResource OverviewCell}"
+                                                   Tag="{Binding NoteKey}"
+                                                   Margin="12,0,0,0"
+                                                   Text="{Binding Note}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Text="{Binding BomCoverageNote}" />
+                        <ui:Button Content="Open Inventory →"
+                                   Appearance="Secondary"
+                                   Margin="0,8,0,0"
+                                   Command="{Binding OpenInventoryCommand}"
+                                   AutomationProperties.HelpText="Opens the Inventory panel, where an AI BOM is generated." />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
 

@@ -416,6 +416,9 @@ public sealed partial class InventoryPanelViewModel
         BomBrowser.Load(bom, scanned);
         ApplyBomScope();
 
+        // The Overview's coverage rows (CUST-329) show the last good run; a run that failed leaves the earlier one there, with its time.
+        Services.InventoryBom.Publish(bom, scanned, DateTimeOffset.Now);
+
         _lastBomJson = stdout;
         CanSaveBom = !string.IsNullOrWhiteSpace(stdout);
         BomWarning = WarningFor(bom);

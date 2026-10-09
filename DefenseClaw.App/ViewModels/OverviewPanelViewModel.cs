@@ -275,6 +275,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         await RefreshMetricsAsync(force: true, cancellationToken).ConfigureAwait(true);
         await RefreshHourlyAsync(cancellationToken).ConfigureAwait(true);
         await RefreshAgentsAsync(cancellationToken).ConfigureAwait(true);
+        RefreshBomCoverage();
         await RefreshStatusAsync(forceStatus, cancellationToken).ConfigureAwait(true);
 
         // The compiled observability plan has its own age limit (and is read again when config.yaml changes), so this is a comparison unless it is due.
@@ -309,6 +310,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         Apply(Services.Monitor.Current);
         ApplyScope();
         RefreshDataIfDue();
+        RefreshBomCoverage();
 
         // A config.yaml change while the panel was away: the plan on screen was compiled from the old one (a comparison unless it is stale).
         _ = RefreshObservabilityPlanAsync(force: false, ActiveToken);

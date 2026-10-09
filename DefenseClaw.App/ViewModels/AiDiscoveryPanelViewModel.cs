@@ -124,6 +124,17 @@ public sealed class DiscoveryComponentCard
         }
     }
 
+    /// <summary>
+    /// True when the card's signals are not all in one state: the pill then names only the strongest, so the card also says, in words, how its
+    /// signals are split (<see cref="StateTally"/>). A card whose signals agree has nothing to add to its pill (CUST-329).
+    /// </summary>
+    public bool HasMixedStates => Signals
+        .Select(static s => DiscoveryStates.Normalize(s.State))
+        .Where(static state => state.Length > 0)
+        .Distinct(StringComparer.Ordinal)
+        .Skip(1)
+        .Any();
+
     /// <summary>"high (85%)": the identity band of the first signal that has one, else empty.</summary>
     public string IdentityDisplay =>
         Signals.FirstOrDefault(static s => !string.IsNullOrWhiteSpace(s.IdentityBand)) is { } signal
@@ -215,7 +226,7 @@ public sealed class DiscoveryComponentCard
           "(type, quality, match kind); DefenseClaw does not retain literal file paths.";
 
     public string HeaderDisplay =>
-        $"{Vendor} · {Product}  —  {(HasState ? State + ", " : string.Empty)}{ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
+        $"{Vendor} · {Product}  —  {(HasState ? State + (HasMixedStates ? $" ({StateTally})" : string.Empty) + ", " : string.Empty)}{ConfidenceDisplay} confidence, {Signals.Count} signal{(Signals.Count == 1 ? string.Empty : "s")}";
 
     /// <summary>Tone key for the confidence badge: green from 80 %, amber from 50 %, otherwise neutral (a low score is not an alarm).</summary>
     public string ConfidenceKey => MaxConfidence >= 0.8 ? "Ok" : MaxConfidence >= 0.5 ? "Warn" : "Neutral";
@@ -319,6 +330,9 @@ public sealed record AgentSelectionRow(
 /// </summary>
 public sealed record DiscoverySourceInfo(string Label, string Detail, DateTimeOffset? LastUpdated, bool Available)
 {
+    /// <summary>True when the source exists but could not be read (unreadable file, failed query): a missing one is just not there yet. The panel's trust treats it as an incomplete read (CUST-329).</summary>
+    public bool Faulted { get; init; }
+
     public string LastUpdatedDisplay => LastUpdated is { } dt ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : "—";
 
     /// <summary>Tone key: a source that could not be read is amber, one that answered is neutral.</summary>
@@ -390,7 +404,8 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         CardsView.Filter = FilterCard;
         ModelsView = CollectionViewSource.GetDefaultView(_allModels);
         ModelsView.Filter = FilterModel;
-        Review = new DiscoverActionReview(services);
+        Trust = CatalogTrust.Watching(services.Paths, readClause: "this panel was read");
+        Review = new DiscoverActionReview(services) { RunGuard = ReasonToRefuseRun };
         Tuning = new AiDiscoveryTuningViewModel(services, applied: (result, argv) => AfterRunAsync(result, argv));
 
         // The old code toggled IsRunningDiscover around its own run; the shared review dialog owns the
@@ -448,6 +463,18 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// </summary>
     protected override void OnActivated()
     {
+        Services.ConfigReloaded += OnConfigReloaded;
+
+        // A change to config.yaml or .env while the panel was away is not heard: compare the files with what the read saw.
+        _ = Trust.CheckConfig();
+        NotifyTrust();
+
+        if (Trust.IsStale && !_loadRunning && !Review.IsOpen)
+        {
+            _ = LoadSafelyAsync();
+            return;
+        }
+
         if (_loadRunning || (_loadedAt is { } at && DefenseClaw.Core.Time.WallClock.Elapsed(at) < StaleAfter))
         {
             return;
@@ -486,7 +513,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// scan via the sidecar"; it answers HTTP 503 when <c>ai_discovery</c> is disabled).
     /// </para>
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
+    [RelayCommand(CanExecute = nameof(CanChangeData))]
     private void RunScan()
     {
         var argv = new[] { "agent", "discovery", "scan" };
@@ -519,7 +546,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// meant to be a local re-read, so it does neither. Flags checked against
     /// <c>defenseclaw agent discover --help</c>.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanChangeInstallation))]
+    [RelayCommand(CanExecute = nameof(CanChangeData))]
     private void RefreshConnectors()
     {
         var argv = new[] { "agent", "discover", "--refresh", "--no-emit-otel" };
@@ -568,6 +595,60 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
 
     private bool FilterCard(object obj) => obj is DiscoveryComponentCard card && card.Matches(SearchText);
 
+    // ---- what may be changed from this data (CUST-329) ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether the data on screen may authorize a change: a complete, recent read of the signal files, of a configuration that has not moved
+    /// since (see <see cref="CatalogTrust"/>). Scan, turn on/off and re-detect are off while it is not; Refresh is never gated, it is the cure.
+    /// </summary>
+    public CatalogTrust Trust { get; internal set; }
+
+    /// <summary>
+    /// Why scan, turn on/off and re-detect are off, as one sentence for a tooltip; null while they are on. The installation comes first (a
+    /// refresh would not cure it), then the trust of the data.
+    /// </summary>
+    public string? ChangesBlockedReason => Services.Installation.BlockedReason ?? Trust.Reason;
+
+    public bool HasChangesBlockedReason => ChangesBlockedReason is not null;
+
+    private bool CanChangeData() => ChangesBlockedReason is null;
+
+    protected override void OnInstallationChanged() => NotifyTrust();
+
+    private void NotifyTrust()
+    {
+        OnPropertyChanged(nameof(ChangesBlockedReason));
+        OnPropertyChanged(nameof(HasChangesBlockedReason));
+        RunScanCommand.NotifyCanExecuteChanged();
+        ToggleDiscoveryCommand.NotifyCanExecuteChanged();
+        RefreshConnectorsCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>The review's last question, asked when the operator confirms: a review left open while config.yaml or .env changed must not run.</summary>
+    private string? ReasonToRefuseRun()
+    {
+        _ = Trust.CheckConfig();
+        NotifyTrust();
+        return Trust.Reason;
+    }
+
+    protected override void OnDeactivated() => Services.ConfigReloaded -= OnConfigReloaded;
+
+    private void OnConfigReloaded(object? sender, EventArgs e)
+    {
+        // A read that began after this change (one this panel made, read straight away) finds nothing moved since it.
+        if (!Trust.CheckConfig())
+        {
+            return;
+        }
+
+        NotifyTrust();
+        if (!_loadRunning && !Review.IsOpen && !Review.IsRunning)
+        {
+            _ = LoadSafelyAsync();
+        }
+    }
+
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         // One read at a time: Initialize, the activation catch-up, Refresh and a finished action can all ask.
@@ -586,9 +667,15 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
             {
                 await LoadFromDiskAsync(cancellationToken).ConfigureAwait(true);
             }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Trust.MarkFailed(ex.Message);
+                throw;
+            }
             finally
             {
                 IsLoading = false;
+                NotifyTrust();
             }
 
             // The live parts cost a CLI process and two REST calls (the runtime section, and the gateway's AI usage report, which adds the
@@ -609,6 +696,9 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// </summary>
     internal async Task LoadFromDiskAsync(CancellationToken cancellationToken)
     {
+        // The configuration as it is when this read begins is the one its rows are judged against (CUST-329).
+        Trust.BeginRead();
+        NotifyTrust();
         Sources.Clear();
         _liveStatus = null;
 
@@ -628,6 +718,16 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
 
         _signalSourceAvailable = signalSource.Available;
         _signalCacheUpdatedAt = signalSource.LastUpdated;
+
+        if (signalSource.Faulted)
+        {
+            Trust.MarkPartial(new[] { signalSource.Detail });
+        }
+        else
+        {
+            Trust.MarkComplete();
+        }
+        NotifyTrust();
 
         await LoadScanHistoryAsync(cancellationToken).ConfigureAwait(true);
         await LoadAgentDiscoveryAsync(cancellationToken).ConfigureAwait(true);
@@ -692,8 +792,9 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             // Fall through to the inventory.db fallback below.
-            return await LoadSignalsFromInventoryAsync(cancellationToken, $"ai_discovery_state.json unreadable ({ex.Message}); falling back to inventory.db.")
+            var (fallback, fallbackSource) = await LoadSignalsFromInventoryAsync(cancellationToken, $"ai_discovery_state.json unreadable ({ex.Message}); falling back to inventory.db.")
                 .ConfigureAwait(true);
+            return (fallback, fallbackSource with { Faulted = true });
         }
 
         return await LoadSignalsFromInventoryAsync(cancellationToken, "ai_discovery_state.json not found; falling back to inventory.db.")
@@ -745,7 +846,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         catch (Exception ex) when (ex is IOException or SqliteException or ArgumentException)
         {
             return (Array.Empty<DiscoverySignalRecord>(),
-                new DiscoverySourceInfo("Signal cache", $"{note} inventory.db read failed: {ex.Message}", null, Available: false));
+                new DiscoverySourceInfo("Signal cache", $"{note} inventory.db read failed: {ex.Message}", null, Available: false) { Faulted = true });
         }
     }
 

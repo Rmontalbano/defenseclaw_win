@@ -179,13 +179,13 @@
                                        Icon="{ctl:DcSymbolIcon Play24}"
                                        Command="{Binding RunScanCommand}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discovery scan: asks the running gateway for one immediate AI discovery scan, which is what the component cards read.'}"
+                                       ToolTip="{Binding ChangesBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discovery scan: asks the running gateway for one immediate AI discovery scan, which is what the component cards read.'}"
                                        AutomationProperties.HelpText="Asks the gateway for one immediate AI discovery scan. Shows the exact command first." />
                             <ui:Button Content="{Binding ToggleDiscoveryText}"
                                        Icon="{ctl:DcSymbolIcon Power24}"
                                        Command="{Binding ToggleDiscoveryCommand}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding InstallationBlockedReason}"
+                                       ToolTip="{Binding ChangesBlockedReason}"
                                        AutomationProperties.HelpText="Turns the AI discovery service on or off in config.yaml. Shows the exact command first." />
                             <CheckBox Content="Restart the gateway now"
                                       IsChecked="{Binding RestartOnToggle}"
@@ -200,10 +200,14 @@
                                        Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                        Command="{Binding RefreshConnectorsCommand}"
                                        ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards.'}"
+                                       ToolTip="{Binding ChangesBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='defenseclaw agent discover --refresh --no-emit-otel: re-checks which agent CLIs are installed and rewrites the connector table under Sources. Does not change the component cards.'}"
                                        AutomationProperties.HelpText="Re-checks which agent command-line tools are installed. Shows the exact command first." />
                         </WrapPanel>
 
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="{Binding ChangesBlockedReason}"
+                                   Visibility="{Binding HasChangesBlockedReason, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,4,0,0"
                                    Text="{Binding LastRunSummary}" />
@@ -383,6 +387,12 @@
                                                 VerticalAlignment="Center">
                                             <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SignalCountDisplay}" />
                                         </Border>
+                                        <!-- How the signals split when they are not all in one state ("1 new, 28 seen"): the pill names only the strongest. -->
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   Margin="8,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding StateTally}"
+                                                   Visibility="{Binding HasMixedStates, Converter={StaticResource BoolToVisibility}}" />
                                     </StackPanel>
                                 </ui:CardExpander.Header>
                                 <StackPanel>

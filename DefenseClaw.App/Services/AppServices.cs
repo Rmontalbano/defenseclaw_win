@@ -160,6 +160,7 @@ public sealed class AppServices : IDisposable
         ConnectorScope = new ConnectorScope(Monitor);
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
         StatusFacts = new StatusFacts();
+        InventoryBom = new InventoryBomStore();
 
         // "New since last visit" on the sidebar's Audit, Activity and AI Discovery entries (CUST-265). Idle - no timer, no subscription, no
         // read - until the dashboard window listens to it and can be seen; the audit count shares the change probe and rides the alert tick.
@@ -291,6 +292,9 @@ public sealed class AppServices : IDisposable
 
     /// <summary>What a panel has read that the status strip repeats (the credentials still missing, the redaction label). Holds, never reads. See <see cref="Services.StatusFacts"/>.</summary>
     internal StatusFacts StatusFacts { get; }
+
+    /// <summary>The AI BOM the Inventory page last generated, for the Overview's coverage rows (CUST-329). Holds, never runs a scan. See <see cref="InventoryBomStore"/>.</summary>
+    internal InventoryBomStore InventoryBom { get; }
 
     /// <summary>
     /// The gateway restarts that are waiting because a change was saved without one (the TUI's restart queue): the Setup hub's banner, its readiness
