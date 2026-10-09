@@ -181,6 +181,29 @@ public sealed record GatewaySnapshot
     /// <summary>True when the last alert poll saw a CRITICAL severity.</summary>
     public bool HasCriticalAlert => CriticalAlertCount > 0;
 
+    /// <summary>
+    /// What the status strip's Watchdog, Guardrail and Policy chips draw, as one string: the two subsystems' states and last errors from
+    /// <c>/health</c>, and the guardrail's policy mode and enforcement flag. <see cref="Health"/> as a whole is not compared (it moves on
+    /// nearly every poll), so without this a guardrail that turned from running to error would leave an always-alive strip showing the
+    /// old reading until something else changed. Part of <see cref="RendersSameAs"/>.
+    /// </summary>
+    internal string SubsystemReading
+    {
+        get
+        {
+            var watcher = Health?.Watcher;
+            var guardrail = Health?.Guardrail;
+            return string.Join(
+                '|',
+                watcher?.State,
+                watcher?.LastError,
+                guardrail?.State,
+                guardrail?.LastError,
+                guardrail?.DetailString("policy_mode"),
+                guardrail?.DetailBool("enforcement_enabled")?.ToString());
+        }
+    }
+
     public string ConnectorSummary =>
         ActiveConnectors.Count == 0 ? "none" : string.Join(", ", ActiveConnectors);
 
@@ -207,7 +230,8 @@ public sealed record GatewaySnapshot
     /// <see cref="ApiPort"/>, <see cref="CliPath"/>, <see cref="BinaryVersion"/>,
     /// <see cref="AlertCount"/>, <see cref="CriticalAlertCount"/>,
     /// <see cref="AlertsUnavailable"/>, <see cref="FailModeDrift"/>, the ordered
-    /// <see cref="ActiveConnectors"/> and the alert list itself (see
+    /// <see cref="ActiveConnectors"/>, the <see cref="SubsystemReading"/> (the strip's
+    /// Watchdog, Guardrail and Policy chips) and the alert list itself (see
     /// <see cref="AlertsEquivalent"/>). The tray's toasts key off <see cref="State"/> and the
     /// ids of the CRITICAL alerts in <see cref="RecentAlerts"/> (it announces each id once, so
     /// a new CRITICAL that merely displaces an old one from the window still counts), and it
@@ -253,6 +277,7 @@ public sealed record GatewaySnapshot
                string.Equals(BinaryVersion, other.BinaryVersion, StringComparison.Ordinal) &&
                string.Equals(CliPath, other.CliPath, StringComparison.Ordinal) &&
                string.Equals(AlertsUnavailable, other.AlertsUnavailable, StringComparison.Ordinal) &&
+               string.Equals(SubsystemReading, other.SubsystemReading, StringComparison.Ordinal) &&
                EqualityComparer<PortOwner?>.Default.Equals(PortOwner, other.PortOwner) &&
                EqualityComparer<FailModeDrift?>.Default.Equals(FailModeDrift, other.FailModeDrift) &&
                ActiveConnectors.SequenceEqual(other.ActiveConnectors, StringComparer.Ordinal) &&
@@ -393,7 +418,7 @@ public sealed class GatewaySnapshotEventArgs : EventArgs
 /// is for display only.
 /// </para>
 /// </summary>
-public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
+public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollFreshness
 {
     /// <summary>The default health interval (<see cref="MonitoringSettings.DefaultHealthIntervalSeconds"/>); what a fresh install polls at. The live value is <see cref="HealthInterval"/>.</summary>
     public static readonly TimeSpan FastInterval = TimeSpan.FromSeconds(MonitoringSettings.DefaultHealthIntervalSeconds);
@@ -485,6 +510,12 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     private GatewaySnapshot _current = GatewaySnapshot.Initial;
 
     /// <summary>
+    /// When the last poll that finished without a fault finished, on the monotonic clock: what <see cref="SinceLastGoodPoll"/> measures from. A poll
+    /// still running, one that threw and one that was cancelled are not stamped. Guarded by <see cref="_gate"/> (a struct is not read atomically).
+    /// </summary>
+    private MonotonicStamp _lastGoodPoll = MonotonicStamp.Never;
+
+    /// <summary>
     /// The snapshot the last <see cref="StateChanged"/> was raised for; null until the first
     /// poll, which therefore always publishes. Compared against, never handed out.
     /// </summary>
@@ -571,6 +602,26 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
     /// thread). The background loop makes no poll while this holds; see the type documentation.
     /// </summary>
     public bool IsPaused => _services.Settings.Current.Monitoring.Paused;
+
+    /// <summary>
+    /// How long ago the last poll that finished without a fault finished (monotonic clock, <see cref="IPollFreshness"/>); null before the first.
+    /// This is not <see cref="GatewaySnapshot.PolledAt"/>: a poll that threw and was surfaced after <see cref="PollFaultsBeforeSurface"/> in a row
+    /// publishes a snapshot stamped with its own time, which says the monitor is failing and brought nothing new. A poll that never returns (a
+    /// hung probe holding the poll gate) publishes nothing at all, and this is the one reading that keeps growing for it.
+    /// </summary>
+    public TimeSpan? SinceLastGoodPoll
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _lastGoodPoll.IsNever ? null : _lastGoodPoll.Elapsed(_time);
+            }
+        }
+    }
+
+    /// <summary>The wait the loop is on between polls right now (<see cref="NextWait"/> for the failures counted so far). What "three intervals" is measured in.</summary>
+    public TimeSpan Cadence => NextWait(Volatile.Read(ref _consecutiveFailures));
 
     /// <summary>
     /// Pauses or resumes monitoring: persists the flag (the settings file is the one source of truth), publishes one snapshot so every surface says
@@ -890,6 +941,10 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource
             {
                 snapshot = await PollAsync(forceAlerts, cancellationToken).ConfigureAwait(false);
                 _consecutivePollFaults = 0;
+                lock (_gate)
+                {
+                    _lastGoodPoll = MonotonicStamp.Now(_time);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

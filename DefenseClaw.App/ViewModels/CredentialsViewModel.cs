@@ -277,6 +277,9 @@ public sealed partial class CredentialsViewModel : ObservableObject
         }
 
         MissingRequiredCount = rows.Count(r => r.IsMissingRequired);
+
+        // The status strip's Keys chip repeats this list (names only) - it reads nothing itself, so a failed read above never reaches it.
+        _services.StatusFacts.PublishMissingKeys(rows.Where(r => r.IsMissingRequired).Select(r => r.EnvName));
         Error = string.Empty;
         HasLoaded = true;
         _loadedAt = MonotonicStamp.Now();

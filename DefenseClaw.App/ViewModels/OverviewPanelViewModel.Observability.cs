@@ -319,6 +319,9 @@ public sealed partial class OverviewPanelViewModel
         BuildLocalStorage(plan, retention);
         BuildObservabilityNote();
         RedactionSummary = plan?.RedactionSummary ?? (_planRead is { IsOk: false } ? ObservabilityRedaction.Unavailable : ObservabilityRedaction.Loading);
+
+        // The status strip's Redaction chip repeats this label as it is, and recomputes nothing.
+        Services.StatusFacts.PublishRedaction(RedactionSummary);
     }
 
     /// <summary>

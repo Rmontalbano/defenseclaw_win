@@ -25,6 +25,10 @@ namespace DefenseClaw.App.ViewModels;
 /// unset value, but only to recognise the <see cref="GatewaySnapshot.Initial"/> snapshot, and
 /// the first real poll is always published, so that test can never go stale.)
 /// </para>
+/// <para>
+/// The chips beside the pill are <see cref="Strip"/>'s (CUST-273). It is handed each snapshot from here, and owns the rest of what it needs
+/// (the credentials and redaction facts, the connector filter, the commands in flight, the look for a stopped monitor): this type forwards, it does not decide.
+/// </para>
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
@@ -52,30 +56,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _stateAutomationName = "Gateway status: checking";
 
-    [ObservableProperty]
-    private string _connectorSummary = "—";
-
-    /// <summary>The connector chip text ("Connector: claudecode").</summary>
-    [ObservableProperty]
-    private string _connectorChipText = "No connector";
-
-    [ObservableProperty]
-    private string _alertSummary = "Alerts: —";
-
-    /// <summary><c>Critical</c> when the last alert list held a CRITICAL, else <c>Neutral</c>.</summary>
-    [ObservableProperty]
-    private string _alertTone = "Neutral";
-
-    /// <summary>The alert chip's tooltip / screen-reader sentence (also the reason when unavailable).</summary>
-    [ObservableProperty]
-    private string _alertDetail = "Alerts have not been polled yet.";
-
-    [ObservableProperty]
-    private string _versionSummary = string.Empty;
-
-    /// <summary>False until the gateway has reported a version; hides the version chip.</summary>
-    [ObservableProperty]
-    private bool _hasVersion;
+    /// <summary>
+    /// The chips beside the state pill (CUST-273): the detail sentence, Watchdog, Guardrail, Keys, alerts, connector, redaction, policy, running, stale
+    /// and version, and the <c>+N</c> chip that stands for the ones a narrow window has no room for. They used to be properties of this view-model (the
+    /// connector, alert and version chips); they are derived from the same snapshot, in the same words, by the strip's own view-model.
+    /// </summary>
+    public StatusStripViewModel Strip { get; }
 
     /// <summary>The command palette overlay is showing. Set by the window, which also manages focus.</summary>
     [ObservableProperty]
@@ -152,6 +138,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _reviewUpdate = reviewUpdate ?? (() => _ = Views.Updates.UpdatesWindow.Show(_services));
         _openReleasePage = openReleasePage;
+        Strip = new StatusStripViewModel(_services);
         _services.Monitor.StateChanged += OnStateChanged;
         _services.ConfigReloaded += OnConfigReloaded;
 
@@ -191,6 +178,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _services.ConfigReloaded -= OnConfigReloaded;
         _services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
         _services.AlertCounts.Changed -= OnAlertCountsChanged;
+        Strip.Dispose();
     }
 
     /// <summary>
@@ -262,17 +250,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         StateDetail = snapshot.Detail;
         StateTone = GatewayPresentation.StateTone(snapshot);
         StateAutomationName = $"Gateway status: {snapshot.StateLabel}";
-        ConnectorSummary = snapshot.ConnectorSummary;
-        ConnectorChipText = GatewayPresentation.ConnectorText(snapshot);
-        VersionSummary = GatewayPresentation.VersionText(snapshot);
-        HasVersion = VersionSummary.Length > 0;
 
-        // The Initial snapshot carries no alert answer and no "unavailable" reason, so without
-        // the PolledAt test inside GatewayPresentation it would render as a confident "0 alerts"
-        // before any poll has happened.
-        AlertSummary = GatewayPresentation.AlertText(snapshot);
-        AlertTone = GatewayPresentation.AlertTone(snapshot);
-        AlertDetail = GatewayPresentation.AlertDetail(snapshot);
+        // The chips beside the pill. The Initial snapshot carries no alert answer and no "unavailable" reason, so without the PolledAt test
+        // inside GatewayPresentation the alert chip would render as a confident "0 alerts" before any poll has happened.
+        Strip.Apply(snapshot);
 
         // The banner covers three different situations, and each gets its own words: the
         // sidecar is not answering, it answered but not cleanly (IsDegraded includes both), or

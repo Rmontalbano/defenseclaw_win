@@ -159,6 +159,7 @@ public sealed class AppServices : IDisposable
         AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges, readTimeout: ReaderTimeouts.AlertQueue);
         ConnectorScope = new ConnectorScope(Monitor);
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
+        StatusFacts = new StatusFacts();
 
         // Knows whether a newer runtime is out (the banner and the one toast). Nothing runs until the app calls Start on it.
         UpdateWatcher = updateWatcherFactory?.Invoke(this) ?? UpdateWatcher.Create(this);
@@ -268,6 +269,9 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The one connector filter every screen shares (All, or one connector). See <see cref="Services.ConnectorScope"/>.</summary>
     internal ConnectorScope ConnectorScope { get; }
+
+    /// <summary>What a panel has read that the status strip repeats (the credentials still missing, the redaction label). Holds, never reads. See <see cref="Services.StatusFacts"/>.</summary>
+    internal StatusFacts StatusFacts { get; }
 
     /// <summary>
     /// Whether a newer DefenseClaw release is out, checked in the background at launch and every 6 h (<c>ShowBanner</c> / <c>Changed</c> for the

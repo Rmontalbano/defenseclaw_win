@@ -1,0 +1,127 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.StatusStripControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             Focusable="False"
+             IsTabStop="False">
+
+    <!--
+        The chips of the status strip (CUST-273), between the gateway pill and the buttons. DataContext is the StatusStripViewModel;
+        each chip is a StripChip. They are laid out by ChipStripPanel, which trims the detail sentence first and then hides chips,
+        lowest priority first, so a narrow window never clips or overflows; the +N chip lists what was hidden. Every colour is a Dc tone
+        chosen by Tag, so the strip follows a live light/dark switch. Text is 12 px: the strip's chips used to be 11.
+
+        The words and the tooltip are on the chip's frame; the sentence a screen reader says is the container's automation name (set below
+        from the chip), so the text inside is a StripText, which UI Automation leaves out: it would otherwise be read a second time.
+    -->
+    <UserControl.Resources>
+        <DataTemplate x:Key="SentenceTemplate">
+            <shell:StripText Style="{StaticResource DcCaption}"
+                             VerticalAlignment="Center"
+                             TextWrapping="NoWrap"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding ToolTip}"
+                             Text="{Binding Text}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="BadgeTemplate">
+            <Border Style="{StaticResource DcBadge}"
+                    Tag="{Binding Tone}"
+                    Padding="6,2,6,2"
+                    VerticalAlignment="Center"
+                    ToolTip="{Binding ToolTip}">
+                <shell:StripText Style="{StaticResource DcBadgeText}"
+                                 FontSize="12"
+                                 MaxWidth="480"
+                                 TextWrapping="NoWrap"
+                                 TextTrimming="CharacterEllipsis"
+                                 Text="{Binding Text}" />
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StateTemplate">
+            <Border Style="{StaticResource DcBadge}"
+                    Tag="{Binding Tone}"
+                    Padding="6,2,6,2"
+                    VerticalAlignment="Center"
+                    ToolTip="{Binding ToolTip}">
+                <StackPanel Orientation="Horizontal">
+                    <ctl:DcStatusGlyph Tone="{Binding Tone}"
+                                       Margin="0,0,6,0"
+                                       VerticalAlignment="Center" />
+                    <shell:StripText Style="{StaticResource DcBadgeText}"
+                                     FontSize="12"
+                                     VerticalAlignment="Center"
+                                     TextWrapping="NoWrap"
+                                     Text="{Binding Text}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ChipTemplate">
+            <Border Style="{StaticResource DcChip}"
+                    Padding="6,2,6,2"
+                    VerticalAlignment="Center"
+                    ToolTip="{Binding ToolTip}">
+                <shell:StripText Style="{StaticResource DcBadgeText}"
+                                 FontSize="12"
+                                 MaxWidth="240"
+                                 TextWrapping="NoWrap"
+                                 TextTrimming="CharacterEllipsis"
+                                 Text="{Binding Text}" />
+            </Border>
+        </DataTemplate>
+
+        <!-- The +N chip keeps a minimum width, so "+9" becoming "+10" cannot change which chips fit. -->
+        <DataTemplate x:Key="OverflowTemplate">
+            <Border Style="{StaticResource DcBadge}"
+                    Tag="{Binding Tone}"
+                    Padding="6,2,6,2"
+                    MinWidth="36"
+                    VerticalAlignment="Center"
+                    ToolTip="{Binding ToolTip}">
+                <shell:StripText Style="{StaticResource DcBadgeText}"
+                                 FontSize="12"
+                                 TextWrapping="NoWrap"
+                                 Text="{Binding Text}" />
+            </Border>
+        </DataTemplate>
+
+        <shell:StripChipTemplateSelector x:Key="ChipTemplates"
+                                         Sentence="{StaticResource SentenceTemplate}"
+                                         Badge="{StaticResource BadgeTemplate}"
+                                         State="{StaticResource StateTemplate}"
+                                         Chip="{StaticResource ChipTemplate}"
+                                         Overflow="{StaticResource OverflowTemplate}" />
+    </UserControl.Resources>
+
+    <ItemsControl Focusable="False"
+                  IsTabStop="False"
+                  ItemsSource="{Binding Chips}"
+                  ItemTemplateSelector="{StaticResource ChipTemplates}">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <shell:ChipStripPanel Spacing="6"
+                                      FlexMinWidth="100"
+                                      HiddenCommand="{Binding ApplyHiddenCommand}" />
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemContainerStyle>
+            <Style TargetType="ContentPresenter">
+                <Setter Property="shell:ChipStripPanel.Priority" Value="{Binding Priority}" />
+                <Setter Property="shell:ChipStripPanel.IsFlexible" Value="{Binding IsFlexible}" />
+                <Setter Property="shell:ChipStripPanel.IsOverflowSlot" Value="{Binding IsOverflowSlot}" />
+                <Setter Property="Visibility" Value="{Binding IsShown, Converter={StaticResource BoolToVisibility}}" />
+                <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
+                <Setter Property="AutomationProperties.HelpText" Value="{Binding ToolTip}" />
+                <Style.Triggers>
+                    <!-- Hidden for want of room: arranged with no size, which UI Automation alone does not call off screen. -->
+                    <Trigger Property="shell:ChipStripPanel.IsCollapsed" Value="True">
+                        <Setter Property="AutomationProperties.IsOffscreenBehavior" Value="Offscreen" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ItemsControl.ItemContainerStyle>
+    </ItemsControl>
+</UserControl>

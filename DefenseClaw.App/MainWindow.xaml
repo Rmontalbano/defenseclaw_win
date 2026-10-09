@@ -73,8 +73,10 @@
             Status strip: one line, always visible, always from the GatewayMonitor snapshot.
             Left to right it reads as a hierarchy: the state pill (the one thing that must be
             noticed), the detail sentence (trims first when the window is narrow), then the
-            supporting facts as chips (version, connector, alerts) and the actions. Every colour is
-            a Dc tone chosen by Tag, so the dot and pill follow a live light/dark switch.
+            supporting facts as chips (Watchdog, Guardrail, Keys, alerts, connector, redaction, policy, running,
+            stale, version) and the actions. Every colour is a Dc tone chosen by Tag, so the dot and pill follow a
+            live light/dark switch. The sentence and the chips are the StatusStripControl: it hides chips,
+            lowest priority first, when the window has no room for them (see ChipStripPanel).
         -->
         <Border Grid.Row="1" Style="{StaticResource DcStatusStrip}">
             <Grid>
@@ -105,55 +107,18 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Grid.Column="1"
-                           Style="{StaticResource DcCaption}"
-                           Margin="12,0,12,0"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
-                           TextWrapping="NoWrap"
-                           ToolTip="{Binding StateDetail}"
-                           Text="{Binding StateDetail}" />
+                <!--
+                    The detail sentence and the chips (Watchdog, Guardrail, Keys, alerts, connector, redaction, policy, running, stale,
+                    version) are the strip's own: its view-model is Strip, and it takes whatever room the pill and the buttons leave.
+                -->
+                <shell:StatusStripControl x:Name="StatusStrip"
+                                          Grid.Column="1"
+                                          Margin="12,0,12,0"
+                                          VerticalAlignment="Center" />
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <!--
-                        Density slots. The window's width (in DIPs) decides which supporting chips show
-                        (see MainWindow.UpdateStripDensity): below ~1040 the version chip, then below ~900
-                        the connector chip, step aside so the state, the alerts and the actions never clip.
-                        The slots carry Visibility; the chips inside keep their own bindings.
-                    -->
-                    <StackPanel x:Name="VersionSlot" Orientation="Horizontal">
-                        <Border Style="{StaticResource DcChip}"
-                                Margin="0,0,8,0"
-                                VerticalAlignment="Center"
-                                Visibility="{Binding HasVersion, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding VersionSummary}" />
-                        </Border>
-                    </StackPanel>
-
-                    <StackPanel x:Name="ConnectorSlot" Orientation="Horizontal">
-                        <Border Style="{StaticResource DcChip}" Margin="0,0,8,0" VerticalAlignment="Center">
-                            <TextBlock Style="{StaticResource DcBadgeText}"
-                                       MaxWidth="200"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{Binding ConnectorChipText}"
-                                       Text="{Binding ConnectorChipText}" />
-                        </Border>
-                    </StackPanel>
-
-                    <Border Style="{StaticResource DcBadge}"
-                            Tag="{Binding AlertTone}"
-                            Margin="0,0,12,0"
-                            VerticalAlignment="Center"
-                            ToolTip="{Binding AlertDetail}">
-                        <TextBlock Style="{StaticResource DcBadgeText}"
-                                   MaxWidth="240"
-                                   TextTrimming="CharacterEllipsis"
-                                   AutomationProperties.HelpText="{Binding AlertDetail}"
-                                   Text="{Binding AlertSummary}" />
-                    </Border>
-
                     <ui:Button Content="Refresh"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Check the gateway now. F5 refreshes the panel you are viewing."
