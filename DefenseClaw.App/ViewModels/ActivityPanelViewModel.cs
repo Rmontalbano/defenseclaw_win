@@ -107,7 +107,7 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     internal ActivityPanelViewModel(AppServices services, MutationReader mutationReader)
         : base(services)
     {
-        Mutations = new ActivityMutationsViewModel(mutationReader, scope: Services.ConnectorScope);
+        Mutations = new ActivityMutationsViewModel(mutationReader, Services.ReaderTimeouts.Mutation, Services.ConnectorScope);
         Mutations.PropertyChanged += OnMutationsChanged;
         Services.Cli.InvocationStarted += OnInvocationStarted;
         Services.Cli.InvocationCompleted += OnInvocationCompleted;

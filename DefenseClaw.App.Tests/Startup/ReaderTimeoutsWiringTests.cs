@@ -25,6 +25,11 @@ public sealed class ReaderTimeoutsWiringTests : IDisposable
         Assert.Equal(TimeSpan.FromSeconds(10), services.AlertQueue.ReadTimeout);
         Assert.Equal(TimeSpan.FromSeconds(8), services.ReaderTimeouts.Audit);
         Assert.Equal(TimeSpan.FromSeconds(5), services.ReaderTimeouts.HookTotals);
+        Assert.Equal(TimeSpan.FromSeconds(10), services.ReaderTimeouts.Hourly);
+        Assert.Equal(TimeSpan.FromSeconds(10), services.ReaderTimeouts.Mutation);
+        Assert.Equal(TimeSpan.FromSeconds(10), services.ReaderTimeouts.EventStream);
+        Assert.Equal(TimeSpan.FromSeconds(5), services.ReaderTimeouts.RecentAuditMetrics);
+        Assert.Equal(TimeSpan.FromSeconds(8), services.ReaderTimeouts.JudgeHistory);
     }
 
     [Fact]
@@ -39,7 +44,9 @@ public sealed class ReaderTimeoutsWiringTests : IDisposable
     [Fact]
     public void Limits_handed_to_a_composition_reach_the_queue_reader_the_alerts_inspector_and_the_view_models_that_ask()
     {
-        var odd = new ReaderTimeouts(TimeSpan.FromSeconds(41), TimeSpan.FromSeconds(42), TimeSpan.FromSeconds(43));
+        var odd = new ReaderTimeouts(
+            TimeSpan.FromSeconds(41), TimeSpan.FromSeconds(42), TimeSpan.FromSeconds(43), TimeSpan.FromSeconds(44),
+            TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(46), TimeSpan.FromSeconds(47), TimeSpan.FromSeconds(48));
         using var services = AppServices.CreateIsolated(
             TestServices.IsolatedPaths(_temp.Path),
             claudeSettingsPath: _temp.File("claude-settings.json"),
@@ -51,6 +58,12 @@ public sealed class ReaderTimeoutsWiringTests : IDisposable
         {
             var alerts = new AlertsPanelViewModel(services);
             Assert.Equal(TimeSpan.FromSeconds(42), alerts.DetailReader.ReadTimeout);
+
+            // The Mutations tab and the Judge history take theirs from the composition too; the per-call readers (hourly, streams, the
+            // flyout's counts) read it at the call, from the same record.
+            var activity = new ActivityPanelViewModel(services);
+            Assert.Equal(TimeSpan.FromSeconds(45), activity.Mutations.ReadTimeout);
+            Assert.Equal(TimeSpan.FromSeconds(48), new JudgeHistoryViewModel(services).DefaultReader().ReadTimeout);
         });
     }
 }

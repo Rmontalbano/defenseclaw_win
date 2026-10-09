@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using DefenseClaw.Core.Logs;
 using DefenseClaw.Core.Observability;
 
 namespace DefenseClaw.Tests;
@@ -182,6 +183,93 @@ public class EndpointDisplayTests
         var shown = EndpointDisplay.ScrubText(hostile);
 
         Assert.True(shown.Length <= 240, $"{shown.Length} characters");
+        Assert.DoesNotContain(new string('a', 100), shown, StringComparison.Ordinal);
+    }
+
+    // ---- ScrubLine (CUST-326): the runner's per-line filter, moved here from EndpointHost with its behaviour unchanged ----
+
+    /// <summary>
+    /// The algorithm <c>EndpointHost.ScrubLine</c> had before it became <see cref="EndpointDisplay.ScrubLine"/>, copied here as it was (its own
+    /// pattern, <see cref="EndpointDisplay.Host"/>, <see cref="DisplayRedaction.Prose"/>), so the move is checked against the old text rather than
+    /// against itself.
+    /// </summary>
+    private static string FrozenScrubLine(string? line)
+    {
+        if (string.IsNullOrEmpty(line))
+        {
+            return string.Empty;
+        }
+
+        string reduced;
+        try
+        {
+            reduced = Regex.Replace(line, @"[A-Za-z][A-Za-z0-9+.\-]{1,15}://[^\s""'<>`\\]+", match =>
+            {
+                var schemeEnd = match.Value.IndexOf("://", StringComparison.Ordinal);
+                var host = EndpointDisplay.Host(match.Value);
+                return host == EndpointDisplay.Unreadable ? EndpointDisplay.Unreadable : match.Value[..schemeEnd] + "://" + host;
+            }, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(1000));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return DisplayRedaction.Mask;
+        }
+
+        return DisplayRedaction.Prose(reduced, int.MaxValue);
+    }
+
+    public static TheoryData<string?> Lines => new()
+    {
+        null,
+        "",
+        " ",
+        "\t",
+        "connection refused",
+        "  tls: handshake failure  ",
+        "    Result:         ok (HTTP 200)",
+        "trailing spaces kept   ",
+        "\tindented with a tab\t",
+        "  Testing webhook example-slack [slack] \u2192 https://hooks.example.test/services/synthtoken0/synthtoken1/synthpath-secret",
+        "    \"target\": \"https://collector.example.test:4318/v1/logs/synthpath-secret\",",
+        "primary https://synthuser:synthpass@one.example.test/a?x=synthkey failed, then http://two.example.test:8080/b?token=synthtoken; retry with token=synthtoken-synthtoken",
+        "dial https://synthuser:synthpass@:99999/x?synthkey refused",
+        "Authorization: Bearer synthtoken-synthtoken-synthtoken",
+        "line with a control \u0001 character and a bidi \u202E mark",
+        "  {\"url\": \"https://a.example.test/p\", \"other\": \"ftp://b.example.test:21/q\"}  ",
+        "no scheme only a.example.test/path?token=synthtoken",
+        "x" + new string(' ', 400) + "y",
+        new string('z', 5000),
+    };
+
+    [Theory]
+    [MemberData(nameof(Lines))]
+    public void A_line_is_scrubbed_exactly_as_the_runners_filter_always_did_without_trimming_or_cutting(string? line) =>
+        Assert.Equal(FrozenScrubLine(line), EndpointDisplay.ScrubLine(line));
+
+    [Fact]
+    public void A_line_keeps_its_whitespace_and_its_length_where_the_sentence_scrubber_trims_and_cuts()
+    {
+        const string indented = "    \"name\": \"example-otlp\",   ";
+        Assert.Equal(indented, EndpointDisplay.ScrubLine(indented));
+        Assert.NotEqual(indented, EndpointDisplay.ScrubText(indented));
+
+        var long_ = new string('q', 1000);
+        Assert.Equal(long_, EndpointDisplay.ScrubLine(long_));
+        Assert.True(EndpointDisplay.ScrubText(long_).Length < long_.Length);
+
+        Assert.Equal(string.Empty, EndpointDisplay.ScrubLine(null));
+        Assert.Equal(string.Empty, EndpointDisplay.ScrubLine(string.Empty));
+        Assert.Equal("   ", EndpointDisplay.ScrubLine("   "));
+    }
+
+    [Fact]
+    public void A_line_the_matcher_gives_up_on_is_masked_whole()
+    {
+        var hostile = "https://" + new string('a', 20_000) + "@" + new string('b', 20_000) + "/" + string.Concat(Enumerable.Repeat("https://x@", 2_000));
+
+        var shown = EndpointDisplay.ScrubLine(hostile);
+
+        Assert.Equal(FrozenScrubLine(hostile), shown);
         Assert.DoesNotContain(new string('a', 100), shown, StringComparison.Ordinal);
     }
 }

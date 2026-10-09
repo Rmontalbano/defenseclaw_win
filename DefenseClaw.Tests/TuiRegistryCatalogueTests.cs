@@ -304,7 +304,11 @@ public sealed class TuiRegistryCatalogueTests
         "doctor run", "gateway provenance show", "gateway status", "guardrail status", "help", "info plugin", "info skill", "keys check",
         "keys list", "keys list --json", "list mcps", "list plugins", "list skills", "list tools", "mcp list", "mcps", "observability plan",
         "plugin info", "plugin list", "plugins", "policy domains", "policy list", "policy show", "policy validate", "readiness", "setup local-observability logs",
-        "setup local-observability status", "setup local-observability url", "skill info", "skill list",
+        "setup local-observability status", "setup local-observability url",
+
+        // The Setup list editors' reads (CUST-326): read-only by the classifier, but not on the unreviewed allow-list below.
+        "setup observability list", "setup webhook list", "setup webhook show",
+        "skill info", "skill list",
         "skill search", "skills", "status", "tool list", "tool status", "tools", "uninstall dry-run", "version", "watchdog status",
     };
 

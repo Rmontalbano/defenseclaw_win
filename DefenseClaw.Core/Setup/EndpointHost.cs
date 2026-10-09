@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-using DefenseClaw.Core.Logs;
 using DefenseClaw.Core.Observability;
 using DefenseClaw.Core.Text;
 
@@ -14,18 +12,14 @@ namespace DefenseClaw.Core.Setup;
 /// reduce every address themselves, whatever the CLI printed. Two things are particular to them:
 /// <list type="bullet">
 ///   <item><see cref="ForDestination"/>: a local destination has a path where a remote one has an address, and a path is not an endpoint.</item>
-///   <item><see cref="ScrubLine"/>: the runner's per-line output filter. <see cref="EndpointDisplay.ScrubText"/> trims and cuts what it is given, which
-///     would change the stored lines of a JSON document and of an indented report; a filter has to leave a line the way it found it, minus its secrets.</item>
+///   <item><see cref="ScrubLine"/>: the runner's per-line output filter, which is <see cref="EndpointDisplay.ScrubLine"/> (the one pattern for an address
+///     in text lives there). <see cref="EndpointDisplay.ScrubText"/> trims and cuts what it is given, which would change the stored lines of a JSON
+///     document and of an indented report; a filter has to leave a line the way it found it, minus its secrets.</item>
 /// </list>
 /// </summary>
-public static partial class EndpointHost
+public static class EndpointHost
 {
     private const int MaxPathLength = 260;
-    private const int RegexTimeoutMilliseconds = 1000;
-
-    /// <summary>A URL inside a line of text: a scheme, <c>://</c>, then everything up to a space or a quote. The pattern <see cref="EndpointDisplay"/> reads a sentence with.</summary>
-    [GeneratedRegex(@"[A-Za-z][A-Za-z0-9+.\-]{1,15}://[^\s""'<>`\\]+", RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
-    private static partial Regex UrlInText();
 
     /// <summary>
     /// The address a destination row shows. A local destination (a database, a file, the console) has a path where a remote one has an
@@ -54,28 +48,5 @@ public static partial class EndpointHost
     /// for the setup editors' commands, so an address the CLI prints whole - <c>setup webhook test</c> does - never reaches Activity, the review's
     /// result or the clipboard.
     /// </summary>
-    public static string ScrubLine(string? line)
-    {
-        if (string.IsNullOrEmpty(line))
-        {
-            return string.Empty;
-        }
-
-        string reduced;
-        try
-        {
-            reduced = UrlInText().Replace(line, static match =>
-            {
-                var schemeEnd = match.Value.IndexOf("://", StringComparison.Ordinal);
-                var host = EndpointDisplay.Host(match.Value);
-                return host == EndpointDisplay.Unreadable ? EndpointDisplay.Unreadable : match.Value[..schemeEnd] + "://" + host;
-            });
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            return DisplayRedaction.Mask;
-        }
-
-        return DisplayRedaction.Prose(reduced, int.MaxValue);
-    }
+    public static string ScrubLine(string? line) => EndpointDisplay.ScrubLine(line);
 }

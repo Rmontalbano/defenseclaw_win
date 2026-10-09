@@ -28,7 +28,7 @@ public enum CommandTier
 /// The first recognised verb in the path decides between read-only and state-changing, so a target
 /// that spells a verb cannot downgrade the tier. Anything unrecognised is
 /// <see cref="CommandTier.StateChanging"/> — the safe default is to ask. The exceptions are a short list of
-/// reads under <c>setup</c>, named in full (<see cref="IsReadOnlyLeaf"/>), each read from the CLI's source, and three leaves of
+/// reads under <c>setup</c>, named in full (<see cref="IsReadOnlyLeaf"/>, <see cref="ReadOnlySetupResourceLeaves"/>), each read from the CLI's source, and three leaves of
 /// <c>defenseclaw-gateway</c> (<c>connector verify</c>, <c>connector list-backups</c>, <c>policy domains</c>), each read from its help.
 /// </para>
 /// <para>
@@ -85,6 +85,20 @@ public static class CommandTiers
     private static readonly HashSet<string> ReadOnlySetupLeaves = new(StringComparer.Ordinal)
     {
         "setup local-observability env", "setup local-observability logs", "setup local-observability status", "setup local-observability url",
+    };
+
+    /// <summary>
+    /// The reads of the Setup list editors (CUST-270), named in full: <c>setup observability | webhook | trusted-paths list</c> and
+    /// <c>setup webhook show</c>. Each prints what config.yaml holds (the CLI cuts a destination's or webhook's address itself) and writes
+    /// nothing, read from <c>commands/cmd_setup_observability.py</c>, <c>cmd_setup_webhook.py</c> and the <c>trusted-paths</c> group of
+    /// <c>cmd_setup.py</c>; <c>setup observability</c> has no <c>show</c>. Matched on the exact three-token path in <see cref="Classify"/> only -
+    /// <see cref="IsReadOnlyLeaf"/> stays the local stack's four - and the options cannot change what they do, apart from the secret-printing
+    /// ones, which <see cref="Classify"/> excludes for every read. They are not on <see cref="UnreviewedReadPaths"/>: the editors run them
+    /// through their own whole-shape door (<c>SetupResourceArgv.IsRead</c>), and the palette's picks stay reviewed.
+    /// </summary>
+    private static readonly HashSet<string> ReadOnlySetupResourceLeaves = new(StringComparer.Ordinal)
+    {
+        "setup observability list", "setup trusted-paths list", "setup webhook list", "setup webhook show",
     };
 
     /// <summary>
@@ -231,9 +245,9 @@ public static class CommandTiers
             return CommandTier.Destructive;
         }
 
-        // A read under "setup", named in full (the local stack's status, logs, url, env): "setup" would make it a change. So is one of the
-        // gateway's reads that the verb vocabulary does not know (connector verify, connector list-backups, policy domains).
-        if ((IsReadOnlyLeafPath(path) || IsReadOnlyGatewayLeafPath(path)) && !options.Any(MutatingFlags.Contains) && !options.Any(SensitiveFlags.Contains))
+        // A read under "setup", named in full (the local stack's status, logs, url, env; the list editors' lists and webhook show): "setup" would
+        // make it a change. So is one of the gateway's reads that the verb vocabulary does not know (connector verify, connector list-backups, policy domains).
+        if ((IsReadOnlyLeafPath(path) || IsReadOnlySetupResourcePath(path) || IsReadOnlyGatewayLeafPath(path)) && !options.Any(MutatingFlags.Contains) && !options.Any(SensitiveFlags.Contains))
         {
             return CommandTier.ReadOnly;
         }
@@ -263,6 +277,9 @@ public static class CommandTiers
 
     private static bool IsReadOnlyLeafPath(string[] path) =>
         path.Length == 3 && ReadOnlySetupLeaves.Contains(string.Join(' ', path));
+
+    private static bool IsReadOnlySetupResourcePath(string[] path) =>
+        path.Length == 3 && ReadOnlySetupResourceLeaves.Contains(string.Join(' ', path));
 
     private static bool IsReadOnlyGatewayLeafPath(string[] path) =>
         path.Length == 2 && ReadOnlyGatewayLeaves.Contains(string.Join(' ', path));

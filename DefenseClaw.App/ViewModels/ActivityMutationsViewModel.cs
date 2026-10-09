@@ -91,6 +91,9 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
         Connectors.Add(AllConnectors);
     }
 
+    /// <summary>How long a read of the Mutations tab may run; null is the reader's own default.</summary>
+    internal TimeSpan? ReadTimeout => _timeout;
+
     /// <summary>The empty state's sentence (after the title).</summary>
     public const string DefaultEmptyDetail =
         "Gateway configuration mutations and policy changes appear here from the audit database.";

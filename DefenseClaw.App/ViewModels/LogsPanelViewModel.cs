@@ -1165,7 +1165,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         string? failure = null;
         try
         {
-            result = await StreamReader.ReadAsync(state.Kind, includeTelemetry, cancellationToken: token);
+            result = await StreamReader.ReadAsync(state.Kind, includeTelemetry, Services.ReaderTimeouts.EventStream, token);
         }
         catch (OperationCanceledException)
         {

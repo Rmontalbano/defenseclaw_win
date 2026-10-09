@@ -290,7 +290,7 @@ public sealed partial class JudgeHistoryViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowGuidance));
     }
 
-    private JudgeHistoryReader DefaultReader()
+    internal JudgeHistoryReader DefaultReader()
     {
         var services = _services!;
         string? yaml = null;
@@ -303,6 +303,6 @@ public sealed partial class JudgeHistoryViewModel : ObservableObject
             // No readable config is the same as one that names no paths: the defaults.
         }
 
-        return JudgeHistoryReader.ForConfig(services.Paths, yaml);
+        return JudgeHistoryReader.ForConfig(services.Paths, yaml, services.ReaderTimeouts.JudgeHistory);
     }
 }

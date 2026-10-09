@@ -20,6 +20,25 @@ public class ReaderTimeoutsTests
     }
 
     [Fact]
+    public void The_apps_limits_for_the_readers_that_used_to_keep_their_own_are_what_they_always_were()
+    {
+        // CUST-326: Hourly, Mutation, EventStream, RecentAuditMetrics and JudgeHistory moved into the seam with their values unchanged.
+        var production = ReaderTimeouts.Production;
+
+        Assert.Equal(TimeSpan.FromSeconds(10), production.Hourly);
+        Assert.Equal(TimeSpan.FromSeconds(10), production.Mutation);
+        Assert.Equal(TimeSpan.FromSeconds(10), production.EventStream);
+        Assert.Equal(TimeSpan.FromSeconds(5), production.RecentAuditMetrics);   // the flyout has always passed the counts' 5 s
+        Assert.Equal(TimeSpan.FromSeconds(8), production.JudgeHistory);
+
+        Assert.Equal(HourlyActivityReader.DefaultTimeout, production.Hourly);
+        Assert.Equal(MutationReader.DefaultTimeout, production.Mutation);
+        Assert.Equal(EventStreamReader.DefaultTimeout, production.EventStream);
+        Assert.Equal(ConnectorHookTotalsReader.DefaultTimeout, production.RecentAuditMetrics);
+        Assert.Equal(ReadOnlyQuery.DefaultTimeout, production.JudgeHistory);
+    }
+
+    [Fact]
     public void Each_limit_is_the_default_of_the_reader_it_bounds_so_the_two_cannot_drift()
     {
         var production = ReaderTimeouts.Production;
@@ -35,7 +54,11 @@ public class ReaderTimeoutsTests
     {
         var ceiling = ReaderTimeouts.Uniform(TestTimeouts.Ceiling);
 
-        Assert.Equal(new ReaderTimeouts(TestTimeouts.Ceiling, TestTimeouts.Ceiling, TestTimeouts.Ceiling), ceiling);
+        var c = TestTimeouts.Ceiling;
+        Assert.Equal(new ReaderTimeouts(c, c, c, c, c, c, c, c), ceiling);
+        Assert.All(
+            new[] { ceiling.AlertQueue, ceiling.Audit, ceiling.HookTotals, ceiling.Hourly, ceiling.Mutation, ceiling.EventStream, ceiling.RecentAuditMetrics, ceiling.JudgeHistory },
+            limit => Assert.Equal(c, limit));
         Assert.NotEqual(ReaderTimeouts.Production, ceiling);
         Assert.Equal(TimeSpan.FromSeconds(10), ReaderTimeouts.Production.AlertQueue);
     }

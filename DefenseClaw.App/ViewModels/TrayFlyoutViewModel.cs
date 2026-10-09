@@ -41,7 +41,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     private static readonly TimeSpan MetricsRefreshInterval = TimeSpan.FromSeconds(15);
 
     /// <summary>A read that takes longer than this is abandoned: on the live 6.9 GB database it takes a few milliseconds (5 s; see <see cref="AppServices.ReaderTimeouts"/>).</summary>
-    private TimeSpan MetricsTimeout => _services.ReaderTimeouts.HookTotals;
+    private TimeSpan MetricsTimeout => _services.ReaderTimeouts.RecentAuditMetrics;
 
     private readonly AppServices _services;
     private readonly Action _openDashboard;

@@ -138,6 +138,9 @@ public sealed partial class JudgeHistoryReader
         _timeout = timeout;
     }
 
+    /// <summary>How long one database may take; null means <see cref="ReadOnlyQuery.DefaultTimeout"/>.</summary>
+    public TimeSpan? ReadTimeout => _timeout;
+
     /// <summary>The <c>judge_bodies.db</c> this reads.</summary>
     public string? JudgeBodiesPath => _judgeBodiesPath;
 

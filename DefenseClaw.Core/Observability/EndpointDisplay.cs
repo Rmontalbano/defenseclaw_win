@@ -107,23 +107,50 @@ public static partial class EndpointDisplay
             return string.Empty;
         }
 
-        string scrubbed;
-        try
-        {
-            scrubbed = UrlInText().Replace(text, static match =>
-            {
-                var schemeEnd = match.Value.IndexOf("://", StringComparison.Ordinal);
-                var host = Host(match.Value);
-                return host == Unreadable ? Unreadable : match.Value[..schemeEnd] + "://" + host;
-            });
-        }
-        catch (RegexMatchTimeoutException)
+        if (!TryCutUrls(text, out var scrubbed))
         {
             return DisplayRedaction.Mask;
         }
 
         scrubbed = DisplayNames.Visible(DisplayRedaction.Prose(scrubbed, int.MaxValue)).Trim();
         return scrubbed.Length <= limit ? scrubbed : scrubbed[..Math.Max(0, limit - 1)].TrimEnd() + "…";
+    }
+
+    /// <summary>
+    /// One line of a command's output made fit to store and show: every URL in it is cut to <c>scheme://host[:port]</c> (<see cref="Host"/>), then
+    /// what looks like a credential is masked (<see cref="DisplayRedaction.Prose"/>: <c>token=...</c>, a bearer value, a key with a known prefix, an
+    /// <c>Authorization</c> header). Unlike <see cref="ScrubText"/> the line is otherwise exactly as it was - no trimming, no cutting to a length, no
+    /// control characters written out - because a runner's per-line filter must not change the stored lines of a JSON document or of an indented
+    /// report. A line the pattern matcher gives up on (its time limit) is replaced by <see cref="DisplayRedaction.Mask"/>; null and empty are empty.
+    /// </summary>
+    public static string ScrubLine(string? line)
+    {
+        if (string.IsNullOrEmpty(line))
+        {
+            return string.Empty;
+        }
+
+        return TryCutUrls(line, out var cut) ? DisplayRedaction.Prose(cut, int.MaxValue) : DisplayRedaction.Mask;
+    }
+
+    /// <summary>Every URL in <paramref name="text"/> cut to <c>scheme://host[:port]</c>, or <see cref="Unreadable"/> where it cannot be read; false when the matcher timed out.</summary>
+    private static bool TryCutUrls(string text, out string cut)
+    {
+        try
+        {
+            cut = UrlInText().Replace(text, static match =>
+            {
+                var schemeEnd = match.Value.IndexOf("://", StringComparison.Ordinal);
+                var host = Host(match.Value);
+                return host == Unreadable ? Unreadable : match.Value[..schemeEnd] + "://" + host;
+            });
+            return true;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            cut = string.Empty;
+            return false;
+        }
     }
 
     private static bool IsScheme(ReadOnlySpan<char> scheme)

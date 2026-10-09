@@ -15,20 +15,46 @@ namespace DefenseClaw.Core.Audit;
 /// <b>What each one bounds.</b> <see cref="AlertQueue"/>: the unacknowledged-queue read (the badge, the tray, the Alerts list, the toasts).
 /// <see cref="Audit"/>: the small lookups behind an inspector (an alert's findings and target history, an audit event's run and related events).
 /// <see cref="HookTotals"/>: the counts and feeds that sit beside them on the Overview, the tray flyout and the Alerts list (hook calls and blocks,
-/// the silent-bypass count, the egress feed).
+/// the silent-bypass count, the egress feed). <see cref="Hourly"/>: the Overview's hourly decisions chart. <see cref="Mutation"/>: the Activity
+/// panel's Mutations tab. <see cref="EventStream"/>: the Logs panel's Events and Verdicts streams. <see cref="RecentAuditMetrics"/>: the tray
+/// flyout's counts. <see cref="JudgeHistory"/>: the Judge history window, per database.
 /// </para>
 /// </summary>
 /// <param name="AlertQueue">The alert queue read; <see cref="AlertQueueReader.DefaultTimeout"/> in the app.</param>
 /// <param name="Audit">The inspector lookups; 8 s in the app.</param>
 /// <param name="HookTotals">The Overview, tray and egress counts; <see cref="ConnectorHookTotalsReader.DefaultTimeout"/> in the app.</param>
-public sealed record ReaderTimeouts(TimeSpan AlertQueue, TimeSpan Audit, TimeSpan HookTotals)
+/// <param name="Hourly">The Overview's hourly chart; <see cref="HourlyActivityReader.DefaultTimeout"/> in the app.</param>
+/// <param name="Mutation">The Mutations tab; <see cref="MutationReader.DefaultTimeout"/> in the app.</param>
+/// <param name="EventStream">The Logs panel's streams; <see cref="EventStreamReader.DefaultTimeout"/> in the app.</param>
+/// <param name="RecentAuditMetrics">
+/// The tray flyout's counts; 5 s in the app, which is what the flyout has always passed (it shared <paramref name="HookTotals"/>). The reader's
+/// own fallback, <see cref="RecentAuditMetricsReader.DefaultTimeout"/>, is never the one in effect.
+/// </param>
+/// <param name="JudgeHistory">One database of the Judge history; <see cref="ReadOnlyQuery.DefaultTimeout"/> in the app.</param>
+public sealed record ReaderTimeouts(
+    TimeSpan AlertQueue,
+    TimeSpan Audit,
+    TimeSpan HookTotals,
+    TimeSpan Hourly,
+    TimeSpan Mutation,
+    TimeSpan EventStream,
+    TimeSpan RecentAuditMetrics,
+    TimeSpan JudgeHistory)
 {
-    /// <summary>The limits the app runs with: 10 s for the alert queue, 8 s for the inspector lookups, 5 s for the counts and feeds.</summary>
+    /// <summary>
+    /// The limits the app runs with: 10 s for the alert queue, 8 s for the inspector lookups, 5 s for the counts and feeds, 10 s for the hourly
+    /// chart, the Mutations tab and the Logs streams, 5 s for the tray's counts, 8 s for the Judge history.
+    /// </summary>
     public static ReaderTimeouts Production { get; } = new(
         AlertQueueReader.DefaultTimeout,
         ReadOnlyQuery.DefaultTimeout,
-        ConnectorHookTotalsReader.DefaultTimeout);
+        ConnectorHookTotalsReader.DefaultTimeout,
+        HourlyActivityReader.DefaultTimeout,
+        MutationReader.DefaultTimeout,
+        EventStreamReader.DefaultTimeout,
+        ConnectorHookTotalsReader.DefaultTimeout,
+        ReadOnlyQuery.DefaultTimeout);
 
     /// <summary>One limit for every kind of read. What a test composition uses: its suite's ceiling for a thing that happens on its own.</summary>
-    public static ReaderTimeouts Uniform(TimeSpan limit) => new(limit, limit, limit);
+    public static ReaderTimeouts Uniform(TimeSpan limit) => new(limit, limit, limit, limit, limit, limit, limit, limit);
 }

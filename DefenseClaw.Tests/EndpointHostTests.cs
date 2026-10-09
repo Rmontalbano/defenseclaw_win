@@ -142,6 +142,16 @@ public class EndpointHostTests
         Assert.Equal(EndpointDisplay.ScrubText(line), EndpointHost.ScrubLine(line));
     }
 
+    [Theory]
+    [InlineData("  Testing webhook example-slack [slack] to https://hooks.example.test/services/synthtoken0/synthpath-secret   ")]
+    [InlineData("    \"target\": \"https://collector.example.test:4318/v1/logs/synthpath-secret\",")]
+    [InlineData("    indented, with trailing space ")]
+    [InlineData("dial https://synthuser:synthpass@:99999/x?synthkey refused")]
+    [InlineData(null)]
+    [InlineData("")]
+    public void The_editors_filter_is_the_displays_per_line_scrub_and_nothing_of_its_own(string? line) =>
+        Assert.Equal(EndpointDisplay.ScrubLine(line), EndpointHost.ScrubLine(line));
+
     [Fact]
     public void Hostile_text_is_masked_whole_rather_than_hanging()
     {

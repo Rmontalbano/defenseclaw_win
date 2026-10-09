@@ -25,8 +25,9 @@ public enum SetupResource
 /// </para>
 /// <para>
 /// <b>Reads and changes.</b> <see cref="List"/> and <see cref="ShowWebhook"/> only read (no verb of theirs writes config.yaml, a secret or
-/// the audit log). The first-verb classifier calls every <c>setup ...</c> command a change, so <see cref="IsRead"/> recognises these by their whole
-/// shape and <see cref="InstallationGate"/> lets exactly them through on a managed (read-only) installation; <c>enable</c>, <c>disable</c> and
+/// the audit log). <see cref="CommandTiers"/> names them as read-only leaves (<c>setup observability | webhook | trusted-paths list</c>, <c>setup webhook show</c>), so
+/// the review, Activity's Rerun and <see cref="InstallationGate"/> all call them reads; <see cref="IsRead"/> is the stricter whole-shape test the
+/// editors start a command without a review by. <c>enable</c>, <c>disable</c> and
 /// <c>test</c> are changes (a test records a local compliance entry; a webhook test delivers a real message), <c>remove</c> is destructive.
 /// </para>
 /// </summary>

@@ -50,7 +50,7 @@ public sealed partial class OverviewPanelViewModel
         HourlyActivity hourly;
         try
         {
-            hourly = await _hourlyReader.ReadAsync(cancellationToken: cancellationToken).ConfigureAwait(true);
+            hourly = await _hourlyReader.ReadAsync(Services.ReaderTimeouts.Hourly, cancellationToken).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {

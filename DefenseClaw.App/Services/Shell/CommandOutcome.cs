@@ -13,7 +13,8 @@ namespace DefenseClaw.App.Services;
 /// <list type="bullet">
 /// <item><description><b>config reloaded</b> - the run exited 0 and was a <c>defenseclaw setup | guardrail | settings | init | registry</c> command
 /// (the TUI's list), unless it only reads (<see cref="InstallationGate"/> calls it a read, by <see cref="CommandTiers"/> or by the whole shape of the
-/// argv: <c>guardrail status</c>, <c>registry list</c>, <c>--help</c>, <c>--dry-run</c>, a Setup editor's <c>setup observability list --json</c>), or a
+/// argv: <c>guardrail status</c>, <c>registry list</c>, <c>--help</c>, <c>--dry-run</c>, a Setup editor's <c>setup observability list --json</c>, which
+/// <see cref="CommandTiers"/> names as a read leaf), or a
 /// gateway restart - which re-reads the config - happened.</description></item>
 /// <item><description><b>gateway restarted</b> - the run exited 0 and restarts the gateway by the same rule the review states before it runs
 /// (<see cref="CommandReview.RestartsGatewayFor"/>: a <c>setup</c> or <c>guardrail</c> verb that writes config.yaml, unless told not to), or it was

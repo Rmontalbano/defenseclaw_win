@@ -145,6 +145,40 @@ public sealed class SetupResourceArgvTests
     }
 
     [Fact]
+    public void The_lists_and_the_webhook_show_are_read_only_by_the_classifier_itself_so_every_surface_agrees_with_the_guard()
+    {
+        // CUST-326: they were once called a change by the first-verb classifier and let through by the guard alone. Both say read now.
+        var reads = new List<IReadOnlyList<string>> { SetupResourceArgv.ShowWebhook("example-slack") };
+        reads.AddRange(new[] { SetupResource.Observability, SetupResource.Webhooks, SetupResource.TrustedPaths }.Select(SetupResourceArgv.List));
+
+        foreach (var argv in reads)
+        {
+            Assert.True(SetupResourceArgv.IsRead(argv));
+            Assert.Equal(CommandTier.ReadOnly, TierShown(argv));
+            Assert.Equal(CommandTier.ReadOnly, InstallationGate.TierOf("defenseclaw", argv));
+            Assert.Equal(CommandTier.ReadOnly, InstallationGate.TierOf("defenseclaw.exe", argv));
+        }
+
+        // A name that spells a verb comes after the end of the options and moves nothing.
+        Assert.Equal(CommandTier.ReadOnly, TierShown(SetupResourceArgv.ShowWebhook("remove")));
+    }
+
+    [Theory]
+    [InlineData("setup observability show --json -- x")]      // no such command; unknown is a change
+    [InlineData("setup trusted-paths show --json")]
+    [InlineData("setup observability list extra --json")]    // a fourth token is not the leaf
+    [InlineData("setup webhook list --reveal")]              // a secret-printing flag is never a read
+    [InlineData("setup webhook show --show-values --json -- x")]
+    [InlineData("setup splunk list --json")]
+    [InlineData("setup webhook add --json")]
+    [InlineData("setup webhook test -- x")]
+    [InlineData("setup trusted-paths add C:/opt")]
+    [InlineData("setup trusted-paths list-all")]
+    [InlineData("setup")]
+    public void Nothing_near_the_four_reads_inherits_their_tier(string line) =>
+        Assert.NotEqual(CommandTier.ReadOnly, TierShown(Words(line)));
+
+    [Fact]
     public void Removing_a_trusted_path_is_destructive()
     {
         foreach (var target in new[] { @"C:\opt\tools", "list", "--help", "--dry-run" })
@@ -289,9 +323,15 @@ public sealed class SetupResourceArgvTests
         Assert.NotNull(InstallationGate.RefusalFor(managed, "cmd.exe", SetupResourceArgv.List(SetupResource.Webhooks)));
         Assert.NotNull(InstallationGate.RefusalFor(managed, "defenseclaw-gateway", SetupResourceArgv.List(SetupResource.Webhooks)));
 
-        // A list with anything added to it is not the list.
-        Assert.NotNull(InstallationGate.RefusalFor(managed, "defenseclaw", Words("setup webhook list --json --connector claudecode")));
-        Assert.NotNull(InstallationGate.RefusalFor(managed, "defenseclaw", Words("setup webhook list")));
+        // The gateway has no setup verb, whatever the words say.
+        Assert.NotNull(InstallationGate.RefusalFor(managed, "defenseclaw-gateway", Words("setup local-observability status")));
+
+        // A list is a read to the classifier whatever is added to it (CUST-326: it is the leaf, not the whole shape), so the guard lets it run;
+        // the editors' own door (SetupResourceArgv.IsRead) is the stricter test, and does not.
+        Assert.Null(InstallationGate.RefusalFor(managed, "defenseclaw", Words("setup webhook list --json --connector claudecode")));
+        Assert.Null(InstallationGate.RefusalFor(managed, "defenseclaw", Words("setup webhook list")));
+        Assert.False(SetupResourceArgv.IsRead(Words("setup webhook list --json --connector claudecode")));
+        Assert.False(SetupResourceArgv.IsRead(Words("setup webhook list")));
     }
 
     [Fact]

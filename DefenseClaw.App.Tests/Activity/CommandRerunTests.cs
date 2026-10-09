@@ -238,6 +238,24 @@ public sealed class CommandRerunTests : IDisposable
     }
 
     [Theory]
+    [InlineData("setup", "observability", "list", "--json")]
+    [InlineData("setup", "webhook", "list", "--json")]
+    [InlineData("setup", "trusted-paths", "list", "--json")]
+    [InlineData("setup", "webhook", "show", "--json", "--", "example-slack")]
+    public void A_rerun_of_a_setup_editor_read_is_reviewed_as_the_read_it_is(params string[] argv)
+    {
+        // CUST-326: the classifier used to call these a change, so the review said "changes state" and offered the restart notice.
+        var entry = Finished(Cli, 0, argv);
+
+        Assert.Equal(CommandTier.ReadOnly, CommandRerun.TierOf(entry));
+
+        var review = _rerun.ReviewFor(entry);
+        Assert.Equal(CommandTier.ReadOnly, review.Tier);
+        Assert.False(review.RestartsGateway);
+        Assert.DoesNotContain(review.Warnings, w => w.Title == "Gateway restart");
+    }
+
+    [Theory]
     [InlineData("setup", "guardrail")]
     [InlineData("guardrail", "enable")]
     public void A_command_that_restarts_the_gateway_says_so_as_every_other_review_does(params string[] argv)

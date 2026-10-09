@@ -513,3 +513,9 @@ only. The card starts no process, elevates nothing and never runs `auditpol` or 
 Event Log Readers route, a side-by-side gateway restart, a labelled revert) are text for the user's own prompt. Tests fail if the review's step runner or
 the permissions read is called by the card, and scan its sources for any process-start API. Plane C is described as the Security event log, not ETW or
 kernel events, in the panel's strings and in `docs/RUNTIME-COMPAT-95159fd.md`.
+
+## 27. Parity-wave cleanups: setup read leaves, reader timeouts, one line scrub
+
+- **`CommandTiers` read leaves.** `setup observability | webhook | trusted-paths list` and `setup webhook show` are named read-only leaves in `Classify` (exact three-token path; secret-printing flags still exclude). They are NOT on `UnreviewedReadPaths`: the editors run them through `SetupResourceArgv.IsRead` (whole shape), and a palette pick of one is still reviewed (now as a read). `IsReadOnlyLeaf` stays the local stack's four. `InstallationGate` no longer special-cases `SetupResourceArgv.IsRead`; it refuses `setup ...` handed to `defenseclaw-gateway`, which has no such verb. Rerun's review of these shows the Read-only tier and no restart notice; `CommandOutcome` still withholds "config reloaded".
+- **`ReaderTimeouts`** now also holds Hourly, Mutation, EventStream, RecentAuditMetrics and JudgeHistory (10 s, 10 s, 10 s, 5 s, 8 s: unchanged; the tray had always passed the counts' 5 s). `TestServices` gets the suite ceiling through `Uniform`.
+- **`EndpointDisplay.ScrubLine`** is the one per-line scrub (no trimming or cutting); `EndpointHost.ScrubLine` delegates to it. Tests compare it with a frozen copy of the previous algorithm.

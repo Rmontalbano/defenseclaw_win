@@ -2,7 +2,6 @@ using DefenseClaw.Core.AiRuntime;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Policy.Model;
 using DefenseClaw.Core.Redaction;
-using DefenseClaw.Core.Setup;
 
 namespace DefenseClaw.Core.Cli;
 
@@ -16,7 +15,7 @@ namespace DefenseClaw.Core.Cli;
 /// <c>defenseclaw-gateway</c> the tier is <see cref="CommandTiers.Classify"/> over the argv up to a <c>--</c> (the same classifier every review
 /// uses, so a preview with a standalone <c>--dry-run</c> and a <c>list</c>, <c>show</c> or <c>status</c> read still run), plus the reads that the
 /// classifier cannot prove but that a Core module recognises by the whole shape of the argv (the Policies catalog reads, the redaction
-/// reads and previews, the Runtime panel's permissions read, the Setup editors' <c>list --json</c> and <c>webhook show --json</c>). <b>Any other program is a change</b>: an installer, a script, a tool the app does
+/// reads and previews, the Runtime panel's permissions read). The Setup editors' <c>list --json</c> and <c>webhook show --json</c> are reads by the classifier itself (named leaves). <b>Any other program is a change</b>: an installer, a script, a tool the app does
 /// not know. Unknown is never a read.
 /// </para>
 /// <para>
@@ -50,6 +49,12 @@ public static class InstallationGate
                 terminator = i;
                 break;
             }
+        }
+
+        // "setup" is a verb of defenseclaw only: the gateway has none, so those words handed to it are not the CLI's reads.
+        if (!isCli && argv.Count > 0 && string.Equals(argv[0], "setup", StringComparison.Ordinal))
+        {
+            return CommandTier.StateChanging;
         }
 
         var tier = CommandTiers.Classify(terminator < 0 ? argv : argv.Take(terminator).ToArray());
@@ -87,6 +92,5 @@ public static class InstallationGate
         PolicyActionGuard.IsAllowedRead(argv) ||
         RedactionArgv.IsRead(argv) ||
         RedactionArgv.IsPreview(argv) ||
-        AiRuntimeCommands.IsPermissionsRead(argv) ||
-        SetupResourceArgv.IsRead(argv);
+        AiRuntimeCommands.IsPermissionsRead(argv);
 }

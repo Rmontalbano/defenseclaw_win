@@ -114,6 +114,23 @@ public sealed class UnreviewedCommandSurfaceTests
     }
 
     [Theory]
+    [InlineData("setup", "observability", "list", "--json")]
+    [InlineData("setup", "webhook", "list", "--json")]
+    [InlineData("setup", "trusted-paths", "list", "--json")]
+    [InlineData("setup", "webhook", "show", "--json", "--", "example-slack")]
+    public void The_setup_editors_reads_are_read_only_to_every_surface_yet_never_run_unreviewed_from_a_pick(params string[] argv)
+    {
+        // CUST-326: named read-only leaves, so a review (the palette's, Activity's Rerun) shows them as the reads they are...
+        Assert.Equal(CommandTier.ReadOnly, CommandReview.ResolveTier(argv));
+        Assert.True(InstallationGate.IsReadOnly("defenseclaw", argv));
+
+        // ...but the allow-list of what a pick may run with no review is unchanged: the editors run them through their own whole-shape door.
+        Assert.False(CommandReview.MayRunUnreviewed(argv));
+        Assert.False(CommandTiers.IsUnreviewedRead(argv));
+        Assert.DoesNotContain(string.Join(' ', argv.TakeWhile(a => !a.StartsWith('-'))), CommandTiers.UnreviewedReadPaths);
+    }
+
+    [Theory]
     [MemberData(nameof(ConfigEditorArgvs))]
     public void Every_command_the_config_editor_runs_is_read_only(string[] argv) =>
         Assert.Equal(CommandTier.ReadOnly, CommandReview.ResolveTier(argv));

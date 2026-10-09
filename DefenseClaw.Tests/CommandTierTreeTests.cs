@@ -57,7 +57,16 @@ public sealed class CommandTierTreeTests
         "setup local-observability env", "setup local-observability logs", "setup local-observability status", "setup local-observability url",
         "skill info", "skill list", "skill search",
         "status", "tool list", "tool status", "version",
+
+        // The Setup list editors' reads (CUST-326), each read in cmd_setup_observability.py, cmd_setup_webhook.py and the trusted-paths group of
+        // cmd_setup.py: they list or show what config.yaml holds. Read-only by the classifier, but NOT on the unreviewed allow-list.
+        "setup observability list", "setup trusted-paths list", "setup webhook list", "setup webhook show",
     };
+
+    private static readonly string[] SetupResourceReads =
+    [
+        "setup observability list", "setup trusted-paths list", "setup webhook list", "setup webhook show",
+    ];
 
     private static readonly HashSet<string> ReadVerbs = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -106,7 +115,10 @@ public sealed class CommandTierTreeTests
     {
         // What may run with no review step is not "whatever the classifier calls read-only" but this list, and growing it is a
         // decision made twice: here, after reading the new command's help, and in CommandTiers.UnreviewedReadPaths.
-        Assert.Equal(ReadOnlyLeaves.Order(StringComparer.Ordinal), CommandTiers.UnreviewedReadPaths.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ReadOnlyLeaves.Except(SetupResourceReads).Order(StringComparer.Ordinal),
+            CommandTiers.UnreviewedReadPaths.Order(StringComparer.Ordinal));
+        Assert.All(SetupResourceReads, path => Assert.False(CommandTiers.IsUnreviewedRead(path.Split(' ')), path));
     }
 
     [Fact]
