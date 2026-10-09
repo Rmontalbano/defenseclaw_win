@@ -21,7 +21,8 @@ public sealed record DiagnosticCommand(string Title, string Executable, IReadOnl
 /// state without the shared review: Scan Skills and every gateway action open the in-panel <see cref="CommandReview"/> overlay (the exact argv,
 /// its tier from <see cref="CommandTiers"/>, a confirm that must be pressed); the Diagnostics commands are read-only by the same classifier,
 /// run straight away, and leave their full output in the Activity panel (the runner records every run). The Mac's "Run gateway as
-/// administrator" is not offered.
+/// administrator" is not offered. The buttons the TUI offers by text (Enable AI discovery or Scan, notifications on or off, Fill missing keys;
+/// CUST-274) are below the gateway actions: drawn only while they apply, reviewed the same way, and off on a read-only installation.
 /// </summary>
 public sealed partial class OverviewPanelViewModel
 {
@@ -36,6 +37,10 @@ public sealed partial class OverviewPanelViewModel
             "Ask the running gateway for the health of its subsystems."),
         new("Show provenance", GatewayControl.Executable, new[] { "provenance", "show" },
             "Print the gateway's schema version, content hash, generation and binary version."),
+
+        // The TUI's Policy quick action (`p`): it lists, so it reads (CUST-274).
+        new("List policies", CommandReview.DefaultExecutable, new[] { "policy", "list" },
+            "List the built-in and custom policies and which one is active."),
     };
 
     /// <summary>What Scan Skills runs: every configured skill (<c>--all</c> is the CLI's explicit alias for that).</summary>
@@ -202,6 +207,276 @@ public sealed partial class OverviewPanelViewModel
             RunGatewayActionCommand.NotifyCanExecuteChanged();
             StopGatewayCommand.NotifyCanExecuteChanged();
             RestartGatewayCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    // ---- AI discovery, notifications, missing keys (CUST-274) ----------------------------------------------------
+    //
+    // The buttons the TUI's Overview offers by text ("disabled - run: defenseclaw agent discovery enable", "try: defenseclaw agent discovery scan",
+    // the N quick action, "run: defenseclaw keys fill-missing"), through this app's safety model: each opens the shared review with the exact argv and
+    // its tier, runs through the runner so it is in Activity, and is not drawn at all when it does not apply. Every one is off, with the installation's
+    // sentence as its tooltip, on a managed or invalid installation - that sentence comes before any other reason.
+
+    /// <summary>
+    /// What "Enable AI discovery" runs: the TUI registry's own entry. The verb keeps every other <c>ai_discovery</c> setting, restarts the gateway so
+    /// the sidecar builds the discovery service and asks it for a first scan (<c>--restart</c> and <c>--scan</c> are on by default).
+    /// </summary>
+    internal static readonly string[] EnableAiDiscoveryArgv = { "agent", "discovery", "enable", "--yes" };
+
+    /// <summary>What "Scan AI discovery" runs: one immediate scan, asked of the running gateway (<c>POST /api/v1/ai-usage/scan</c>).</summary>
+    internal static readonly string[] ScanAiDiscoveryArgv = { "agent", "discovery", "scan" };
+
+    /// <summary>What the notifications button runs while they are off. <c>setup notifications</c> takes <c>on | off | status</c>; with one of them it asks nothing.</summary>
+    internal static readonly string[] NotificationsOnArgv = { "setup", "notifications", "on" };
+
+    /// <summary>What the notifications button runs while they are on.</summary>
+    internal static readonly string[] NotificationsOffArgv = { "setup", "notifications", "off" };
+
+    /// <summary>What "Fill missing keys" hands to a console: the same argv the Setup panel's Credentials card and the readiness checklist use.</summary>
+    internal static readonly string[] FillMissingKeysArgv = CredentialsViewModel.FillMissingArgv;
+
+    private CredentialTerminal? _terminal;
+    private CredentialsViewModel? _credentials;
+    private bool _enableAiDiscoveryAllowed;
+    private bool _scanAiDiscoveryAllowed;
+    private bool _notificationsAllowed;
+    private bool _fillMissingKeysAllowed;
+
+    /// <summary>The console hand-off Fill missing keys goes through (CUST-266's, the one Setup uses); a test replaces it so no window ever opens.</summary>
+    internal CredentialTerminal Terminal
+    {
+        get => _terminal ??= new CredentialTerminal(Services.Paths);
+        set
+        {
+            _terminal = value ?? throw new ArgumentNullException(nameof(value));
+            _credentials = null;
+        }
+    }
+
+    /// <summary>
+    /// CUST-266's route for <c>keys fill-missing</c>, used as it is rather than written again: it asks the installation guard, opens the console,
+    /// records the hand-off in Activity and says what happened. This panel owns an instance for itself, so its note is this panel's.
+    /// </summary>
+    private CredentialsViewModel Credentials => _credentials ??= new CredentialsViewModel(Services, Terminal);
+
+    /// <summary>"Enable AI discovery": drawn only while AI discovery is off.</summary>
+    [ObservableProperty]
+    private bool _showEnableAiDiscovery;
+
+    /// <summary>"Scan AI discovery": drawn only while AI discovery is on.</summary>
+    [ObservableProperty]
+    private bool _showScanAiDiscovery;
+
+    /// <summary>"Fill missing keys": drawn only while the doctor cache names a required key that is not set.</summary>
+    [ObservableProperty]
+    private bool _showFillMissingKeys;
+
+    /// <summary>"Turn notifications off" while the runtime's desktop notifications are on, "Turn notifications on" while they are off.</summary>
+    [ObservableProperty]
+    private string _notificationsLabel = "Turn notifications off";
+
+    [ObservableProperty]
+    private string _enableAiDiscoveryTip = string.Empty;
+
+    [ObservableProperty]
+    private string _scanAiDiscoveryTip = string.Empty;
+
+    [ObservableProperty]
+    private string _notificationsTip = string.Empty;
+
+    [ObservableProperty]
+    private string _fillMissingKeysTip = string.Empty;
+
+    /// <summary>
+    /// True when AI discovery is on: config.yaml says so, or the gateway is running the service (a file edited and not yet picked up by a restart
+    /// is on until the gateway says otherwise). The same test as the agents card's note.
+    /// </summary>
+    private bool AiDiscoveryIsOn() => Services.Config.Config.AiDiscovery.Enabled || _snapshot.Health?.AiDiscovery?.IsRunning == true;
+
+    /// <summary>The runtime's notification switch: config.yaml's, else its default, which is on for Windows (<c>_default_notifications_enabled</c>, <c>DefaultNotificationsEnabled</c>).</summary>
+    private bool NotificationsAreOn() => OverviewFacts().NotificationsEnabled ?? true;
+
+    /// <summary>
+    /// Re-derives which of the four buttons are drawn, what each says, and whether it can be pressed. No I/O: the inputs are the snapshot, config.yaml,
+    /// the doctor cache and the installation, all of which the panel already holds, and a change in any of them comes through
+    /// <see cref="BuildAttention"/> or <see cref="OnInstallationChanged"/>.
+    /// </summary>
+    private void ApplyQuickActions()
+    {
+        var snapshot = _snapshot;
+
+        // The installation's sentence first (a refresh would not cure it), then whether DefenseClaw is there to run the command at all.
+        var unavailable = InstallationBlockedReason ?? GatewayControl.Availability(GatewayAction.Restart, snapshot).Reason;
+
+        var discoveryOn = AiDiscoveryIsOn();
+        ShowEnableAiDiscovery = !discoveryOn;
+        ShowScanAiDiscovery = discoveryOn;
+
+        var enableAllowed = unavailable is null;
+        EnableAiDiscoveryTip = unavailable ??
+            "Turn on AI discovery: defenseclaw agent discovery enable --yes. It restarts the gateway and asks for a first scan. Asks for confirmation first.";
+
+        // A scan is a request to the running gateway: with it down there is nothing to ask.
+        var scanUnavailable = unavailable ??
+            (snapshot.State is AppGatewayState.Running or AppGatewayState.Degraded
+                ? null
+                : "The gateway is not running, so there is nothing to ask for a scan. Start it first.");
+        var scanAllowed = scanUnavailable is null;
+        ScanAiDiscoveryTip = scanUnavailable ??
+            "Ask the running gateway for one AI discovery scan now: defenseclaw agent discovery scan. Asks for confirmation first.";
+
+        var notificationsOn = NotificationsAreOn();
+        NotificationsLabel = notificationsOn ? "Turn notifications off" : "Turn notifications on";
+        var notificationsAllowed = unavailable is null;
+        NotificationsTip = unavailable ??
+            $"DefenseClaw's desktop notifications for blocked tool calls and pending approvals are {(notificationsOn ? "on" : "off")}. " +
+            $"{CommandReview.CommandLine(CommandReview.DefaultExecutable, NotificationsArgv(!notificationsOn))} restarts the gateway. Asks for confirmation first.";
+
+        var missingKeys = _doctorSnapshot is { } doctor && DoctorReconciliation.MissingRequiredCredentials(doctor).Count > 0;
+        ShowFillMissingKeys = missingKeys;
+        var fillAllowed = unavailable is null;
+        // No review stands in front of the console (nothing runs in this app), so the tooltip is where the command and its tier are said.
+        FillMissingKeysTip = unavailable ??
+            $"{CommandReview.LabelFor(CommandReview.ResolveTier(FillMissingKeysArgv))}. " +
+            $"Opens a console window running {CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}, a hidden prompt for each required key " +
+            "that is unset. What you type goes to DefenseClaw's .env file and never through this app.";
+
+        if (enableAllowed != _enableAiDiscoveryAllowed || scanAllowed != _scanAiDiscoveryAllowed ||
+            notificationsAllowed != _notificationsAllowed || fillAllowed != _fillMissingKeysAllowed)
+        {
+            _enableAiDiscoveryAllowed = enableAllowed;
+            _scanAiDiscoveryAllowed = scanAllowed;
+            _notificationsAllowed = notificationsAllowed;
+            _fillMissingKeysAllowed = fillAllowed;
+            EnableAiDiscoveryCommand.NotifyCanExecuteChanged();
+            ScanAiDiscoveryCommand.NotifyCanExecuteChanged();
+            ToggleNotificationsCommand.NotifyCanExecuteChanged();
+            FillKeysInConsoleCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private static string[] NotificationsArgv(bool turnOn) => turnOn ? NotificationsOnArgv : NotificationsOffArgv;
+
+    private bool CanEnableAiDiscovery() => CanChangeInstallation && _enableAiDiscoveryAllowed;
+
+    private bool CanScanAiDiscovery() => CanChangeInstallation && _scanAiDiscoveryAllowed;
+
+    private bool CanToggleNotifications() => CanChangeInstallation && _notificationsAllowed;
+
+    private bool CanFillMissingKeys() => CanChangeInstallation && _fillMissingKeysAllowed;
+
+    /// <summary>
+    /// Enable AI discovery: <c>agent discovery enable --yes</c>. Sets <c>ai_discovery.enabled</c> in config.yaml, leaves the other AI discovery settings
+    /// as they are, restarts the gateway so the sidecar builds the service, and asks for a first scan; so it is reviewed first, with the restart said.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanEnableAiDiscovery))]
+    private void EnableAiDiscovery() =>
+        Review.Open(
+            "Turn on AI discovery?",
+            "Sets ai_discovery.enabled to true in config.yaml and leaves your other AI discovery settings (mode, scan roots, cadence, detectors) as they are. " +
+            "It then restarts the gateway so it starts the discovery service, and asks it for a first scan.",
+            new[]
+            {
+                new DiscoverStep(
+                    EnableAiDiscoveryArgv,
+                    "Enable the sidecar AI discovery service.",
+                    CommandTier.StateChanging,
+                    TimeSpan.FromMinutes(5)),
+            },
+            onFinished: _ => AfterQuickActionAsync(refreshAgents: true),
+            restartsGateway: true,
+            primaryText: "Turn on");
+
+    /// <summary>
+    /// Scan AI discovery: <c>agent discovery scan</c>. It asks the running gateway for one immediate scan; the gateway writes the result and records an
+    /// <c>ai.discovery</c> event in the audit trail like any scheduled scan, so it is reviewed first.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanScanAiDiscovery))]
+    private void ScanAiDiscovery() =>
+        Review.Open(
+            "Run an AI discovery scan?",
+            "It asks the running DefenseClaw gateway to scan this machine for AI tools right now: the same scan it already runs on its own schedule. " +
+            "The result is written to ai_discovery_state.json and inventory.db, which is what the agents card reads, and the gateway records it in the audit trail " +
+            "as an ai.discovery event like any scheduled scan.\n\n" +
+            "It needs the gateway running with AI discovery turned on; otherwise the command fails and nothing changes.",
+            new[]
+            {
+                new DiscoverStep(
+                    ScanAiDiscoveryArgv,
+                    "Ask the gateway for one immediate AI discovery scan.",
+                    CommandTier.StateChanging,
+                    TimeSpan.FromMinutes(3)),
+            },
+            onFinished: _ => AfterQuickActionAsync(refreshAgents: true),
+            primaryText: "Run scan");
+
+    /// <summary>
+    /// The notifications switch: <c>setup notifications on|off</c>. It writes <c>notifications.enabled</c> and restarts the gateway, whose dispatcher
+    /// reads it once at start. These are the runtime's own desktop notifications; this app's tray alerts have their own settings, and the review says so.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanToggleNotifications))]
+    private void ToggleNotifications()
+    {
+        var turnOn = !NotificationsAreOn();
+        Review.Open(
+            turnOn ? "Turn desktop notifications on?" : "Turn desktop notifications off?",
+            $"Sets notifications.enabled to {(turnOn ? "true" : "false")} in config.yaml and restarts the gateway, whose notification dispatcher reads it once when it starts. " +
+            "These are DefenseClaw's own desktop notifications for blocked tool calls and pending approvals. " +
+            "The alerts this app shows from the tray are a separate setting (Settings, Notifications) and do not change.",
+            new[]
+            {
+                new DiscoverStep(
+                    NotificationsArgv(turnOn),
+                    turnOn ? "Turn the runtime's desktop notifications on." : "Turn the runtime's desktop notifications off.",
+                    CommandTier.StateChanging),
+            },
+            onFinished: _ => AfterQuickActionAsync(refreshAgents: false),
+            restartsGateway: true,
+            primaryText: turnOn ? "Turn on" : "Turn off");
+    }
+
+    /// <summary>
+    /// Fill missing keys: <c>keys fill-missing --yes</c> reads each value at a hidden console prompt (<c>getpass</c>, which reads the console and not
+    /// stdin), so it cannot run inside this app and is not offered the review's confirm-and-run. It goes the way Setup's button does
+    /// (<see cref="CredentialsViewModel.OpenFillMissingInTerminalAsync"/>): a console window running the exact command, an Activity entry for the hand-off,
+    /// and no value ever on an argv or through this process.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanFillMissingKeys))]
+    private async Task FillKeysInConsoleAsync()
+    {
+        const string title = "Fill missing keys";
+
+        await Credentials.OpenFillMissingInTerminalAsync().ConfigureAwait(true);
+
+        // "Neutral" is the route's word for "the console opened"; a guard's refusal or a console that would not start keeps the route's own sentence.
+        if (Credentials.NoteKey != "Neutral")
+        {
+            ShowDiagnosticMessage(title, Credentials.NoteKey, Credentials.Note, string.Empty);
+            return;
+        }
+
+        ShowDiagnosticMessage(
+            title,
+            "Neutral",
+            $"Opened a console window running `{CommandReview.CommandLine(CommandReview.DefaultExecutable, FillMissingKeysArgv)}`. Type each value at its hidden prompt there. " +
+            "What needs attention comes from the last doctor run, so run doctor again when you are done to refresh it.",
+            string.Empty);
+    }
+
+    /// <summary>
+    /// After a reviewed button ran: the command wrote config.yaml and may have restarted the gateway, so the new file is taken now (not at the
+    /// watcher's next tick), the monitor and the counts are asked again, and - for AI discovery - the agents card is read again.
+    /// </summary>
+    private async Task AfterQuickActionAsync(bool refreshAgents)
+    {
+        Services.ReloadConfig();
+
+        // The buttons and rows follow the file now, whether or not the watcher's notification (which only an active panel hears) is on its way.
+        Apply(Services.Monitor.Current);
+        await RefreshAfterActionAsync().ConfigureAwait(true);
+        if (refreshAgents)
+        {
+            await RefreshAgentsAsync(ActiveToken).ConfigureAwait(true);
         }
     }
 

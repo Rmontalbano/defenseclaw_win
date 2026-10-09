@@ -3,6 +3,7 @@ using System.IO;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Gateway.Models;
+using DefenseClaw.Core.Text;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.ViewModels;
@@ -90,6 +91,26 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
     /// <summary>What the copy-only hint on a missing-key row says (the CLI's own filler for the keys doctor found missing; never run by the app).</summary>
     internal const string FillMissingKeysCommand = "defenseclaw keys fill-missing";
 
+    /// <summary>What the last rebuild of the list drew for the scanner: so a lookup that lands later can tell whether the list needs another.</summary>
+    private bool _scannerNoticeBuilt;
+
+    /// <summary>
+    /// True when the skill scanner is known to be missing <i>and</i> the DefenseClaw CLI is installed: the same lookup the Scanners card shows (never
+    /// "missing" while the first lookup is still out), and not on a machine that has no DefenseClaw at all, where "DefenseClaw was not found" is the
+    /// row and a scanner hint would only be noise. (The TUI runs from the installed CLI, so it has no such case.)
+    /// </summary>
+    private bool SkillScannerNoticeWanted(GatewaySnapshot snapshot) =>
+        _scannerPathsResolved && _skillScannerPath is null && !string.IsNullOrEmpty(snapshot.CliPath);
+
+    /// <summary>The scanner lookup answered (or changed its answer): the list is rebuilt when that changes whether its row is there.</summary>
+    private void RefreshScannerNotice()
+    {
+        if (SkillScannerNoticeWanted(_snapshot) != _scannerNoticeBuilt)
+        {
+            BuildAttention(_snapshot);
+        }
+    }
+
     /// <summary>The Mac's zero-requests notice waits this long after the gateway started before it speaks.</summary>
     internal static readonly TimeSpan ZeroRequestsAfter = TimeSpan.FromSeconds(60);
 
@@ -105,21 +126,97 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
         install != DefenseClaw.Core.Install.InstallState.NotInstalled &&
         install != DefenseClaw.Core.Install.InstallState.InstalledNotInitialized;
 
+    /// <summary>
+    /// What the "skill-scanner not on PATH" row offers to copy. The TUI prints <c>pip install skill-scanner</c>, which names the executable; the
+    /// distribution that provides it is <c>cisco-ai-skill-scanner</c> (the CLI's own error says so: <c>scanner/skill.py</c>, and 0.8.10 ships
+    /// <c>cisco_ai_skill_scanner</c>), so that is what an operator should be handed - not the name of a different package. Copy only: the app never runs it.
+    /// </summary>
+    internal const string InstallSkillScannerCommand = "pip install cisco-ai-skill-scanner";
+
+    /// <summary>
+    /// The states of a subsystem of <c>/health</c> that the TUI reads as "up" (<c>_gateway_state_from_snapshot</c>): an empty one (no block, or no
+    /// state) counts, so a gateway that does not report a subsystem is not "starting" for that.
+    /// </summary>
+    private static readonly string[] UpWords = { string.Empty, "running", "ready", "healthy", "ok" };
+
+    private static readonly string[] DownWords = { "stopped", "offline", "down" };
+
+    /// <summary>
+    /// True when the gateway answered <c>/health</c> but is not up yet: the TUI's <c>starting</c> verdict (<c>_gateway_state_from_snapshot</c>, shown
+    /// as <c>Gateway is starting - health checks will retry automatically</c>). The API block is up when it says running, ready, healthy, ok or
+    /// nothing; the <c>gateway</c> block (the fleet uplink) is up on those or <c>disabled</c>, the normal standalone state. A gateway that is down
+    /// (the API stopped, offline or down, or the gateway block) or failed (the API in error or failed) is not "starting" - those are the TUI's
+    /// offline and error verdicts, and the "not answering" row speaks for the first. Anything else that is not up - <c>starting</c>,
+    /// <c>reconnecting</c>, a state this does not know - is starting, as in the TUI. <paramref name="detail"/> names what is not up yet.
+    /// </summary>
+    internal static bool GatewayIsStarting(GatewayHealth? health, out string detail)
+    {
+        detail = string.Empty;
+        if (health is null)
+        {
+            return false;
+        }
+
+        var api = (health.Api?.State ?? string.Empty).Trim().ToLowerInvariant();
+        var gateway = (health.FleetUplink?.State ?? string.Empty).Trim().ToLowerInvariant();
+        var apiUp = UpWords.Contains(api, StringComparer.Ordinal);
+        var gatewayUp = UpWords.Contains(gateway, StringComparer.Ordinal) || gateway == "disabled";
+        if (apiUp && gatewayUp)
+        {
+            return false;
+        }
+
+        if (DownWords.Contains(api, StringComparer.Ordinal) || api is "error" or "failed" || DownWords.Contains(gateway, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        detail = apiUp
+            ? $"The gateway subsystem of /health reports {SafeStateWord(gateway)}."
+            : $"The API subsystem of /health reports {SafeStateWord(api)}.";
+        return true;
+    }
+
+    /// <summary>A state word the gateway wrote, made fit to draw: control and bidirectional characters written out, and cut short.</summary>
+    private static string SafeStateWord(string word) => DisplayNames.Visible(word.Length > 40 ? word[..40] : word);
+
     /// <summary>Adds the Mac's remaining rules, in its emission order, to <paramref name="rows"/>.</summary>
     private void AppendParityAttention(List<AttentionRow> rows, GatewaySnapshot snapshot)
     {
         var health = snapshot.Health;
         var installDetected = InstallDetected(snapshot);
 
-        // A standalone gateway ("gateway" subsystem disabled) explains itself in /health; the Mac passes that hint on.
-        if (health?.FleetUplink is { IsDisabled: true } standalone &&
-            (standalone.DetailString("hint") is { Length: > 0 } || standalone.DetailString("summary") is { Length: > 0 }))
+        // The TUI's gateway notice is one of: starting (it answered but is not up yet), or a standalone gateway explaining itself.
+        if (GatewayIsStarting(health, out var starting))
         {
+            rows.Add(new AttentionRow
+            {
+                Title = "The gateway is starting",
+                Detail = starting + " Health checks will retry automatically; this clears once it reports running.",
+                SeverityKey = "Info",
+            });
+        }
+        else if (health?.FleetUplink is { IsDisabled: true } standalone &&
+                 (standalone.DetailString("hint") is { Length: > 0 } || standalone.DetailString("summary") is { Length: > 0 }))
+        {
+            // A standalone gateway ("gateway" subsystem disabled) explains itself in /health; the Mac passes that hint on.
             rows.Add(new AttentionRow
             {
                 Title = "The gateway runs standalone",
                 Detail = standalone.DetailString("hint") is { Length: > 0 } hint ? hint : standalone.DetailString("summary")!,
                 SeverityKey = "Info",
+            });
+        }
+
+        // The TUI's "Connector roster degraded" (an error): the connector map in config.yaml has a name the runtime rejects, so the roster it builds
+        // is not the one the file lists. The typed model folds names that differ only by case into one, so this card shows fewer than the file has.
+        if (OverviewFacts().RosterProblem is { Length: > 0 } rosterProblem)
+        {
+            rows.Add(new AttentionRow
+            {
+                Title = "Connector roster degraded",
+                Detail = rosterProblem + " - showing a reduced view; check your connector config",
+                SeverityKey = "Critical",
             });
         }
 
@@ -143,6 +240,20 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
                 Title = "Guardrail not configured",
                 Detail = "The LLM guardrail is off in config.yaml (guardrail.enabled). Set it up in Setup, under Guardrail.",
                 SeverityKey = "High",
+            });
+        }
+
+        // The TUI's "skill-scanner not on PATH - run: pip install skill-scanner": the same lookup the Scanners card shows, with the fix as text to copy.
+        _scannerNoticeBuilt = SkillScannerNoticeWanted(snapshot);
+        if (_scannerNoticeBuilt)
+        {
+            rows.Add(new AttentionRow
+            {
+                Title = "skill-scanner not on PATH",
+                Detail = "The skill scanner is neither on PATH nor in the installer's bin directory, so skill scans cannot run. " +
+                         "Install it with the command below, then press Refresh. The app never runs it for you.",
+                SeverityKey = "High",
+                Command = InstallSkillScannerCommand,
             });
         }
 

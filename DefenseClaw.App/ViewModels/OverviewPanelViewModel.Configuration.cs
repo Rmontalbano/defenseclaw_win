@@ -1,11 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Config;
+using DefenseClaw.Core.Observability;
 using DefenseClaw.Core.Time;
 
 namespace DefenseClaw.App.ViewModels;
@@ -20,7 +22,7 @@ public sealed record ConfigRow
     /// <summary>Every other row of the card; set when the list is built, so a row that moves keeps the stripe of its new place.</summary>
     public bool Alternate { get; init; }
 
-    /// <summary>Neutral, or Warn for a value that is not what was asked for (a hook fail mode that has drifted).</summary>
+    /// <summary>Neutral; Ok for a protection that is on (human approval); Warn for a value that is not what was asked for (a hook fail mode that has drifted).</summary>
     public string ToneKey { get; init; } = "Neutral";
 
     public override string ToString() => $"{Label}: {Value}";
@@ -50,6 +52,14 @@ public sealed partial class OverviewPanelViewModel
     private DateTimeOffset? _statusLoadedAt;
     private MonotonicStamp _statusStamp = MonotonicStamp.Never;
     private int _statusReading;
+    private ConfigDocument? _overviewFactsSource;
+    private OverviewConfigFacts _overviewFacts = OverviewConfigFacts.Empty;
+
+    /// <summary>
+    /// Where the AI Defense row points while config.yaml does not set <c>cisco_ai_defense.endpoint</c>: the runtime's own default, which the TUI prints
+    /// in full on this row (<c>CiscoAIDefenseConfig.endpoint</c> of 0.8.10 and of the pinned source). Only its host is shown, like every address.
+    /// </summary>
+    internal const string DefaultAiDefenseHost = "us.api.inspect.aidefense.security.cisco.com";
 
     /// <summary>The rows on screen: the first four, or all of them once expanded.</summary>
     public ObservableCollection<ConfigRow> ConfigurationRows { get; } = new();
@@ -260,9 +270,14 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(("Scope" + suffix, statusScope, "Neutral"));
         }
 
+        // After the rows the Observability card pinned right behind Guardrail (Redaction, Deployment mode), and not among the four the card opens with.
+        AddHumanApprovalRow(rows, suffix, scoped);
+
         rows.Add(("AI discovery" + suffix, config.AiDiscovery.Enabled
             ? $"on · mode {config.AiDiscovery.Mode ?? "—"} · scan every {config.AiDiscovery.ScanIntervalMin.ToString(CultureInfo.CurrentCulture)} min"
             : "off", "Neutral"));
+
+        AddBackendRows(rows, suffix);
 
         var host = string.IsNullOrWhiteSpace(config.Gateway.Host) ? "127.0.0.1" : config.Gateway.Host.Trim();
         rows.Add(("Gateway API" + suffix, $"{host}:{Services.ApiPort.ToString(CultureInfo.InvariantCulture)}", "Neutral"));
@@ -274,10 +289,77 @@ public sealed partial class OverviewPanelViewModel
             rows.Add(("Sandbox" + suffix, sandbox ? "available" : "not available", "Neutral"));
         }
 
+        rows.Add(("Policy dir" + suffix, PolicyDirectoryText(), "Neutral"));
         rows.Add(("Data directory" + suffix, DataDirectorySourceText.Length > 0 ? $"{DataDirectoryText}  ({DataDirectorySourceText})" : DataDirectoryText, "Neutral"));
         rows.Add(("Config file" + suffix, Services.Config.Path, "Neutral"));
         AddConfigReloadRow(rows, suffix);
     }
+
+    /// <summary>
+    /// The config.yaml facts the TUI's Configuration box reads that the typed model does not carry (human approval, policy folder, LLM, AI Defense,
+    /// notifications), parsed once per parsed config and kept until it is replaced - the same arrangement as <see cref="ObservabilityFacts"/>.
+    /// </summary>
+    private OverviewConfigFacts OverviewFacts()
+    {
+        var config = Services.Config;
+        if (!ReferenceEquals(config, _overviewFactsSource))
+        {
+            _overviewFacts = OverviewConfigFacts.FromConfig(config);
+            _overviewFactsSource = config;
+        }
+
+        return _overviewFacts;
+    }
+
+    /// <summary>
+    /// The TUI's <c>Human approval</c> row: <c>ON (min HIGH)</c> in green or <c>OFF</c>. It is the guardrail's human-in-the-loop switch; with one
+    /// connector that connector's own block wins (<see cref="OverviewConfigFacts.Approval"/>), and scoped to one of several the row is the global
+    /// block, as the TUI's scoped box says (<c>global min HIGH</c>).
+    /// </summary>
+    private void AddHumanApprovalRow(List<(string Label, string Value, string Tone)> rows, string suffix, bool scoped)
+    {
+        var facts = OverviewFacts();
+        var approval = scoped ? facts.GlobalApproval : facts.Approval;
+        rows.Add(("Human approval" + suffix, approval.Text, approval.Enabled ? "Ok" : "Neutral"));
+    }
+
+    /// <summary>
+    /// The TUI's three trailing rows: <c>LLM provider</c> and <c>LLM model</c> (only when config.yaml names one, as the TUI prints them) and
+    /// <c>AI Defense</c>, the endpoint of the Cisco service the scanners and the guardrail call. <b>An address is shown as its host:</b> never the
+    /// URL the TUI prints, since an endpoint typed from a vendor's console can carry a credential in its userinfo, path or query
+    /// (<see cref="EndpointDisplay"/>). An endpoint config.yaml sets empty hides the row (the TUI's does); one it does not set is the runtime's default.
+    /// </summary>
+    private void AddBackendRows(List<(string Label, string Value, string Tone)> rows, string suffix)
+    {
+        var facts = OverviewFacts();
+        if (facts.LlmProvider.Length > 0)
+        {
+            rows.Add(("LLM provider" + suffix, facts.LlmProvider, "Neutral"));
+        }
+
+        if (facts.LlmModel.Length > 0)
+        {
+            rows.Add(("LLM model" + suffix, facts.LlmModel, "Neutral"));
+        }
+
+        switch (facts.AiDefenseHost)
+        {
+            case null:
+                rows.Add(("AI Defense" + suffix, DefaultAiDefenseHost + "  (default)", "Neutral"));
+                break;
+            case { Length: > 0 } host:
+                rows.Add(("AI Defense" + suffix, host, "Neutral"));
+                break;
+        }
+    }
+
+    /// <summary>The TUI's <c>Policy dir</c>: the folder the policy commands read, as config.yaml writes it, or the runtime's default under the data directory.</summary>
+    private string PolicyDirectoryText() => OverviewFacts().PolicyDirectory switch
+    {
+        null => Path.Combine(Services.Paths.DataDirectory, "policies") + "  (default)",
+        { Length: 0 } => "—",
+        var configured => configured,
+    };
 
     private void AddScopedRows(List<(string Label, string Value, string Tone)> rows, string scope)
     {

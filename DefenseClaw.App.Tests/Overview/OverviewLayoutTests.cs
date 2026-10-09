@@ -362,7 +362,7 @@ public sealed class OverviewLayoutTests
             var menu = Assert.IsType<ContextMenu>(diagnostics.Flyout);
             var headers = menu.Items.OfType<MenuItem>().Select(i => (string)i.Header).ToList();
             Assert.Equal(
-                new[] { "Validate configuration", "Check credentials", "Gateway status", "Show provenance", "Restart Gateway…", "Stop Gateway…", "Open Command Palette" },
+                new[] { "Validate configuration", "Check credentials", "Gateway status", "Show provenance", "List policies", "Restart Gateway…", "Stop Gateway…", "Open Command Palette" },
                 headers);
         });
     }
@@ -387,22 +387,23 @@ public sealed class OverviewLayoutTests
                 UiThread.Settle();
                 var items = menu.Items.OfType<MenuItem>().ToList();
 
-                for (var i = 0; i < 4; i++)
+                var checks = OverviewPanelViewModel.DiagnosticCommands.Count;
+                for (var i = 0; i < checks; i++)
                 {
                     Assert.Same(vm.RunDiagnosticCommand, items[i].Command);
                     Assert.Same(OverviewPanelViewModel.DiagnosticCommands[i], items[i].CommandParameter);
                     Assert.True(items[i].IsEnabled);
                 }
 
-                Assert.Same(vm.RestartGatewayCommand, items[4].Command);
-                Assert.Same(vm.StopGatewayCommand, items[5].Command);
-                Assert.Same(vm.OpenCommandPaletteCommand, items[6].Command);
-                Assert.True(items[4].IsEnabled && items[5].IsEnabled && items[6].IsEnabled);
+                Assert.Same(vm.RestartGatewayCommand, items[checks].Command);
+                Assert.Same(vm.StopGatewayCommand, items[checks + 1].Command);
+                Assert.Same(vm.OpenCommandPaletteCommand, items[checks + 2].Command);
+                Assert.True(items[checks].IsEnabled && items[checks + 1].IsEnabled && items[checks + 2].IsEnabled);
 
                 // Gateway down: stop has nothing to stop, and the menu says so by being off.
                 vm.Apply(OverviewScene.Snapshot(running: false));
                 UiThread.Settle();
-                Assert.False(items[5].IsEnabled);
+                Assert.False(items[checks + 1].IsEnabled);
             }
             finally
             {

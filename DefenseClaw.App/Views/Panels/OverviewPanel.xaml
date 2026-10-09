@@ -546,6 +546,39 @@
                                        Command="{Binding RunDoctorCommand}"
                                        ToolTip="Runs 'defenseclaw doctor': read-only probes of every configured service, usually 10-30 seconds."
                                        AutomationProperties.HelpText="Runs defenseclaw doctor. Read-only probes of every configured service, usually 10 to 30 seconds; it writes only its own results cache." />
+
+                            <!-- The TUI's buttons by text (CUST-274). Each is drawn only while it applies; the review (or, for the keys, the console) comes first. -->
+                            <ui:Button Content="Enable AI discovery"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon Power24}"
+                                       Command="{Binding EnableAiDiscoveryCommand}"
+                                       ToolTip="{Binding EnableAiDiscoveryTip}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       Visibility="{Binding ShowEnableAiDiscovery, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.HelpText="Runs defenseclaw agent discovery enable --yes after you confirm it: AI discovery is off. It turns it on in config.yaml, restarts the gateway and asks for a first scan." />
+                            <ui:Button Content="Scan AI discovery"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon SearchSparkle24}"
+                                       Command="{Binding ScanAiDiscoveryCommand}"
+                                       ToolTip="{Binding ScanAiDiscoveryTip}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       Visibility="{Binding ShowScanAiDiscovery, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.HelpText="Runs defenseclaw agent discovery scan after you confirm it. It asks the running gateway for one AI discovery scan now." />
+                            <ui:Button Content="Fill missing keys"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon Key24}"
+                                       Command="{Binding FillKeysInConsoleCommand}"
+                                       ToolTip="{Binding FillMissingKeysTip}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       Visibility="{Binding ShowFillMissingKeys, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.HelpText="Opens a console window running defenseclaw keys fill-missing --yes. A required key is not set; you type each value at the hidden prompt there, never in this app." />
+                            <ui:Button Content="{Binding NotificationsLabel}"
+                                       Margin="0,0,8,8"
+                                       Icon="{ctl:DcSymbolIcon Alert24}"
+                                       Command="{Binding ToggleNotificationsCommand}"
+                                       ToolTip="{Binding NotificationsTip}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       AutomationProperties.HelpText="Turns DefenseClaw's own desktop notifications for blocked tool calls and pending approvals on or off with defenseclaw setup notifications, after you confirm it. The alerts this app shows from the tray are a separate setting." />
                             <ui:DropDownButton Content="Diagnostics"
                                                Margin="0,0,8,8"
                                                Icon="{ctl:DcSymbolIcon MoreHorizontal24}"
@@ -569,6 +602,10 @@
                                                   ToolTip="defenseclaw-gateway provenance show"
                                                   Command="{Binding PlacementTarget.DataContext.RunDiagnosticCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding PlacementTarget.DataContext.Diagnostics[3], RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="List policies"
+                                                  ToolTip="defenseclaw policy list"
+                                                  Command="{Binding PlacementTarget.DataContext.RunDiagnosticCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.DataContext.Diagnostics[4], RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                         <Separator />
                                         <MenuItem Header="Restart Gateway…"
                                                   ToolTip="Asks for confirmation first."
@@ -623,7 +660,7 @@
                         </StackPanel>
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,4,0,0"
-                                   Text="Scan Skills and the gateway actions show the exact command and ask first. The Diagnostics checks are read-only and run at once; their output is in Activity." />
+                                   Text="Scan Skills, AI discovery, notifications and the gateway actions show the exact command and ask first; Fill missing keys opens a console where you type the values. The Diagnostics checks are read-only and run at once; their output is in Activity." />
                     </StackPanel>
                 </Border>
 
@@ -1332,7 +1369,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- Review dialog for Scan Skills and the gateway actions: the exact command, its tier, and a button that must be pressed. -->
+        <!-- Review dialog for Scan Skills, AI discovery, notifications and the gateway actions: the exact command, its tier, and a button that must be pressed. -->
         <panels:DiscoverReviewOverlay Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Review}" />
     </Grid>
 </UserControl>

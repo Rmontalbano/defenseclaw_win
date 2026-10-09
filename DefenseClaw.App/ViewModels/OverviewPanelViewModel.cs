@@ -853,6 +853,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         SyncByEquality(Attention, rows, static row => row.Title);
         RenderVisibleAttention();
+
+        // Every input of the reviewed buttons (config.yaml, the doctor cache, the snapshot) changes with a rebuild of this list: they follow it.
+        ApplyQuickActions();
     }
 
     /// <summary>How many rows "What needs attention" shows before "Show all": the Mac's top three.</summary>
@@ -1043,6 +1046,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         }
 
         SyncByEquality(ScannerRows, rows, static row => row.Name);
+
+        // The attention list has a row for a missing skill scanner: it follows this lookup (Apply builds the list before the lookup has answered).
+        RefreshScannerNotice();
     }
 
     /// <summary>

@@ -34,5 +34,6 @@ public sealed partial class OverviewPanelViewModel
         OnPropertyChanged(nameof(HasInstallationBanner));
         OnPropertyChanged(nameof(ScanSkillsTip));
         ApplyGatewayActions(_snapshot);
+        ApplyQuickActions();
     }
 }

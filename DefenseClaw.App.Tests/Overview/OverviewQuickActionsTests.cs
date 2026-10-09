@@ -28,15 +28,18 @@ public sealed class OverviewQuickActionsTests : IDisposable
     // ---- Diagnostics: read-only, by the same classifier every surface uses ----
 
     [Fact]
-    public void The_diagnostics_menu_is_the_macs_four_read_only_checks_with_their_exact_argv()
+    public void The_diagnostics_menu_is_the_macs_four_read_only_checks_and_the_tuis_policy_list_with_their_exact_argv()
     {
         var commands = OverviewPanelViewModel.DiagnosticCommands;
 
-        Assert.Equal(new[] { "Validate configuration", "Check credentials", "Gateway status", "Show provenance" }, commands.Select(c => c.Title).ToArray());
+        Assert.Equal(
+            new[] { "Validate configuration", "Check credentials", "Gateway status", "Show provenance", "List policies" },
+            commands.Select(c => c.Title).ToArray());
         Assert.Equal("defenseclaw config validate", commands[0].CommandText);
         Assert.Equal("defenseclaw keys check", commands[1].CommandText);
         Assert.Equal("defenseclaw-gateway status", commands[2].CommandText);
         Assert.Equal("defenseclaw-gateway provenance show", commands[3].CommandText);
+        Assert.Equal("defenseclaw policy list", commands[4].CommandText);
         Assert.All(commands, c => Assert.False(string.IsNullOrWhiteSpace(c.Summary)));
     }
 

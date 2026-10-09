@@ -10,7 +10,8 @@ namespace DefenseClaw.App.Tests.Runtime;
 /// The fixed argv the app builds (the ones that are not generated from a <c>--help</c> screen at run time), held against the command tree of
 /// DefenseClaw source commit 95159fd (<c>Fixtures/runtime-95159fd/cli/cli-tree.json</c>): every command path must still exist and every option
 /// the app passes must still be one of that command's options. A flag the CLI renamed would otherwise only show up as a failed command in front
-/// of an operator. The 0.8.10 half of this guarantee is that none of these argv changed.
+/// of an operator. The 0.8.10 half of this guarantee is that none of these argv changed; the Overview's buttons and its policy list (CUST-274), which
+/// 0.8.10 has too, are also held against that runtime's own tree (<c>Fixtures/cli-tree-0.8.10.json</c>, captured with Click's introspection).
 /// </summary>
 public sealed class ArgvContractTests
 {
@@ -18,11 +19,13 @@ public sealed class ArgvContractTests
 
     private sealed record Command(string Path, bool Group, Option[] Options);
 
-    private static readonly Command[] Tree = Load();
+    private static readonly Command[] Tree = Load(System.IO.Path.Combine("runtime-95159fd", "cli", "cli-tree.json"));
 
-    private static Command[] Load()
+    private static readonly Command[] Tree0810 = Load("cli-tree-0.8.10.json");
+
+    private static Command[] Load(string relative)
     {
-        var file = System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", "runtime-95159fd", "cli", "cli-tree.json");
+        var file = System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", relative);
         using var document = JsonDocument.Parse(File.ReadAllText(file));
         return document.RootElement.GetProperty("commands").EnumerateArray().Select(c => new Command(
                 c.GetProperty("path").GetString()!,
@@ -33,15 +36,16 @@ public sealed class ArgvContractTests
             .ToArray();
     }
 
-    /// <summary>Null when <paramref name="argv"/> is a command of the newer tree with only options it has; else why not.</summary>
-    private static string? Check(IReadOnlyList<string> argv)
+    /// <summary>Null when <paramref name="argv"/> is a command of the newer tree (or of <paramref name="tree"/>) with only options it has; else why not.</summary>
+    private static string? Check(IReadOnlyList<string> argv, Command[]? tree = null)
     {
+        tree ??= Tree;
         var depth = 0;
         Command? command = null;
         for (var n = Math.Min(argv.Count, 4); n >= 1; n--)
         {
             var path = string.Join(' ', argv.Take(n));
-            if (Tree.FirstOrDefault(c => c.Path == path) is { } found)
+            if (tree.FirstOrDefault(c => c.Path == path) is { } found)
             {
                 command = found;
                 depth = n;
@@ -115,6 +119,12 @@ public sealed class ArgvContractTests
             string.Join('\u001f', AiRuntimeCommands.Disable()),
             string.Join('\u001f', AiRuntimeCommands.Disable(restart: false)),
             string.Join('\u001f', new[] { "guardrail", "status" }),
+            // the Overview's buttons the TUI offers by text, and its policy list (CUST-274)
+            string.Join('\u001f', OverviewPanelViewModel.EnableAiDiscoveryArgv),
+            string.Join('\u001f', OverviewPanelViewModel.NotificationsOnArgv),
+            string.Join('\u001f', OverviewPanelViewModel.NotificationsOffArgv),
+            string.Join('\u001f', OverviewPanelViewModel.FillMissingKeysArgv),
+            string.Join('\u001f', new[] { "policy", "list" }),
             // alerts
             string.Join('\u001f', new[] { "alerts", "acknowledge", "--severity", "HIGH", "--before", "2030-01-15T00:00:00Z", "--dry-run" }),
             string.Join('\u001f', new[] { "alerts", "acknowledge", "--severity", "HIGH", "--before", "2030-01-15T00:00:00Z", "--yes" }),
@@ -151,10 +161,36 @@ public sealed class ArgvContractTests
         Assert.Null(Check(argv));
     }
 
+    /// <summary>What the Overview runs that 0.8.10 has as well: the installed runtime is the default, and these must work on it unchanged.</summary>
+    public static TheoryData<string> Overview0810Argvs =>
+        new()
+        {
+            string.Join('\u001f', OverviewPanelViewModel.EnableAiDiscoveryArgv),
+            string.Join('\u001f', OverviewPanelViewModel.ScanAiDiscoveryArgv),
+            string.Join('\u001f', OverviewPanelViewModel.NotificationsOnArgv),
+            string.Join('\u001f', OverviewPanelViewModel.NotificationsOffArgv),
+            string.Join('\u001f', OverviewPanelViewModel.FillMissingKeysArgv),
+            string.Join('\u001f', new[] { "policy", "list" }),
+            string.Join('\u001f', OverviewPanelViewModel.StatusArgv),
+        };
+
+    [Theory]
+    [MemberData(nameof(Overview0810Argvs))]
+    public void The_overview_argv_are_still_commands_of_0_8_10_with_options_it_has(string packed)
+    {
+        var argv = packed.Split('\u001f');
+
+        Assert.Null(Check(argv, Tree0810));
+    }
+
     [Fact]
     public void The_checker_notices_a_renamed_flag_and_a_removed_command()
     {
         Assert.Equal("'doctor' has no option --repair", Check(["doctor", "--repair"]));
         Assert.StartsWith("no such command", Check(["migrations", "status"]), StringComparison.Ordinal);
+
+        // 0.8.10 has `migrations status`, and it has no `doctor --repair` either.
+        Assert.Null(Check(["migrations", "status"], Tree0810));
+        Assert.Equal("'doctor' has no option --repair", Check(["doctor", "--repair"], Tree0810));
     }
 }

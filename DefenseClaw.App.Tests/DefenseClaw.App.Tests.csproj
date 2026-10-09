@@ -35,6 +35,8 @@
     <None Include="..\DefenseClaw.Tests\Fixtures\audit-schema.sql" Link="Fixtures\audit-schema.sql" CopyToOutputDirectory="PreserveNewest" />
     <!-- The fixture sets for 0.8.10 and the pinned newer source (runtime detection CUST-291, compatibility CUST-292; docs/RUNTIME-COMPAT-95159fd.md), shared with the Core suite. -->
     <None Include="..\DefenseClaw.Tests\Fixtures\runtime-*\**\*" Link="Fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The 0.8.10 command tree (every command and option, captured with Click's introspection), for the argv contract of the buttons that run on it. -->
+    <None Include="..\DefenseClaw.Tests\Fixtures\cli-tree-0.8.10.json" Link="Fixtures\cli-tree-0.8.10.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Synthetic payloads shaped like what the 0.8.10 CLI and gateway print; see TestSupport/PayloadFixtures.cs. -->
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
