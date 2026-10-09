@@ -157,8 +157,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         // A screen reader should hear the gateway state change, not only find it when it looks.
         _viewModel.PropertyChanged += OnShellPropertyChanged;
 
-        // Taskbar icon mirrors the tray shield, state badge and all, so alt-tab tells the same
-        // story as the notification area. A multi-size icon, so the title bar, the taskbar and
+        // Taskbar icon mirrors the tray shield's gateway-derived state, state badge and all (paused, stopped, warning, a CRITICAL
+        // in the last alert poll), so alt-tab tells the same story as the notification area. The tray alone
+        // adds the unacknowledged count and the scan glyph: they are not in the snapshot this follows.
+        // A multi-size icon, so the title bar, the taskbar and
         // alt-tab each get the frame drawn for their size; cached per state because StateChanged
         // also fires for changes that leave the shield alone (a new detail line, a connector appearing).
         // Ahead of the appearance hookup below: rendering the icon is the step here most likely to throw, and the

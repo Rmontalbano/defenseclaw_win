@@ -28,9 +28,17 @@ namespace DefenseClaw.App.Services;
 /// <b>States.</b> Healthy (<see cref="ShieldState.Running"/>) is the full-blue mark with nothing on it. Every
 /// other state is told apart by shape as well as colour, so it survives a colour-blind glance at 16 px: a
 /// stopped gateway greys the whole shield, dims the claw and adds a round badge with a stop square; a warning
-/// adds an amber triangle with an exclamation mark; a critical alert adds a red disc with one. Badges sit in
-/// the bottom-right corner behind a transparent knockout ring, so they separate from the shield on any
-/// taskbar colour.
+/// adds an amber triangle with an exclamation mark; paused monitoring adds a slate disc with two bars; a scan
+/// in flight adds a blue disc with a magnifying glass; and alerts add a red disc, with the number of
+/// unacknowledged findings in it (1 to 9, then "9+" in a pill) or a bare exclamation mark when no number is
+/// known. Badges sit in the bottom-right corner behind a transparent knockout ring, so they separate from the
+/// shield on any taskbar colour.
+/// </para>
+/// <para>
+/// <b>The count's digits</b> are pixel fonts. At 16 and 20 px a 3 × 5 font (<see cref="SmallFont"/>) is stamped into the
+/// badge's pixel grid, so each digit is whole pixels and legible at the smallest tray size. At 24 px, where the shield is
+/// still a grid, a 5 × 7 font (<see cref="LargeFont"/>) is stamped into a bigger disc the same way; above that the same
+/// 5 × 7 cells are scaled to the vector badge, anti-aliased like its other glyphs.
 /// </para>
 /// <para>
 /// Vector coordinates are on a 256-unit design square. Everything built here is frozen, so it is safe to use
@@ -48,8 +56,14 @@ internal static class ShieldArtwork
     /// <summary>The critical badge (a CRITICAL alert in the last poll).</summary>
     internal static readonly Color CriticalRed = Color.FromRgb(0xD1, 0x34, 0x38);
 
-    /// <summary>The stopped badge's disc: dark enough for its white square, light enough to show on a dark taskbar.</summary>
+    /// <summary>
+    /// The stopped badge's disc: dark enough for its white square, light enough to show on a dark taskbar. The paused badge
+    /// wears it too (both mean "nothing is watching"); the bars against the square, and a blue shield against a grey one, tell them apart.
+    /// </summary>
     internal static readonly Color StoppedSlate = Color.FromRgb(0x56, 0x62, 0x6E);
+
+    /// <summary>The scanning badge's disc: a blue deeper than the shield's top, so it reads on the shield and on a light taskbar, with room for a white glyph.</summary>
+    internal static readonly Color ScanningBlue = Color.FromRgb(0x0B, 0x7F, 0xC4);
 
     /// <summary>The sizes compiled into <c>Assets\DefenseClaw.ico</c> (Explorer, Start menu, taskbar pins, shortcuts).</summary>
     internal static readonly IReadOnlyList<int> AppIconSizes = new[] { 16, 20, 24, 32, 40, 48, 64, 256 };
@@ -269,7 +283,183 @@ internal static class ShieldArtwork
             ".xxxxxxx.",
             "...xxx...",
         },
+
+        // Paused: two bars. At 16 px they are two pixels wide with rounded ends: a pair of one-pixel bars is within five pixels of a 2, 3, 5, 6,
+        // 8 or 9 in the 3 × 5 digits that share this corner (three from the 8), which only the badge's colour would then tell apart; these are
+        // nine or more from every digit.
+        // Scanning: a magnifying glass, its lens up and to the left and its handle running out to the corner.
+        [(Badge.Paused, 16)] = new[]
+        {
+            "..xxx..",
+            ".xgxgx.",
+            "xggxggx",
+            "xggxggx",
+            "xggxggx",
+            ".xgxgx.",
+            "..xxx..",
+        },
+        [(Badge.Scanning, 16)] = new[]
+        {
+            "..xxx..",
+            ".gggxx.",
+            "xgxgxxx",
+            "xgggxxx",
+            "xxxxgxx",
+            ".xxxxg.",
+            "..xxx..",
+        },
+        [(Badge.Paused, 20)] = new[]
+        {
+            "...xxx...",
+            ".xxxxxxx.",
+            ".xggxggx.",
+            "xxggxggxx",
+            "xxggxggxx",
+            "xxggxggxx",
+            ".xggxggx.",
+            ".xxxxxxx.",
+            "...xxx...",
+        },
+        [(Badge.Scanning, 20)] = new[]
+        {
+            "...xxx...",
+            ".xgggxxx.",
+            ".gxxxgxx.",
+            "xgxxxgxxx",
+            "xgxxxgxxx",
+            "xxggggxxx",
+            ".xxxxxgx.",
+            ".xxxxxxg.",
+            "...xxx...",
+        },
     };
+
+    /// <summary>
+    /// The count badge's outline for the sizes whose badges are pixel grids (16, 20 and 24 px): a disc for 1 to 9, a pill for "9+"
+    /// (two characters and the gap between them do not fit a disc this small). <c>x</c> badge, <c>.</c> nothing; the digits are
+    /// stamped in as <c>g</c> by <see cref="CountGrid"/>, in <see cref="SmallFont"/> up to 20 px and <see cref="LargeFont"/> from 24.
+    /// </summary>
+    private static readonly Dictionary<(int Size, bool Wide), string[]> CountShapes = new()
+    {
+        [(16, false)] = new[]
+        {
+            "..xxx..",
+            ".xxxxx.",
+            "xxxxxxx",
+            "xxxxxxx",
+            "xxxxxxx",
+            ".xxxxx.",
+            "..xxx..",
+        },
+        [(16, true)] = new[]
+        {
+            ".xxxxxxx.",
+            "xxxxxxxxx",
+            "xxxxxxxxx",
+            "xxxxxxxxx",
+            "xxxxxxxxx",
+            "xxxxxxxxx",
+            ".xxxxxxx.",
+        },
+        [(20, false)] = new[]
+        {
+            "...xxx...",
+            ".xxxxxxx.",
+            ".xxxxxxx.",
+            "xxxxxxxxx",
+            "xxxxxxxxx",
+            "xxxxxxxxx",
+            ".xxxxxxx.",
+            ".xxxxxxx.",
+            "...xxx...",
+        },
+        [(20, true)] = new[]
+        {
+            "..xxxxxxx..",
+            ".xxxxxxxxx.",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            ".xxxxxxxxx.",
+            "..xxxxxxx..",
+        },
+        [(24, false)] = new[]
+        {
+            "...xxxxx...",
+            "..xxxxxxx..",
+            ".xxxxxxxxx.",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            "xxxxxxxxxxx",
+            ".xxxxxxxxx.",
+            "..xxxxxxx..",
+            "...xxxxx...",
+        },
+        [(24, true)] = new[]
+        {
+            "...xxxxxxxxx...",
+            "..xxxxxxxxxxx..",
+            ".xxxxxxxxxxxxx.",
+            "xxxxxxxxxxxxxxx",
+            "xxxxxxxxxxxxxxx",
+            "xxxxxxxxxxxxxxx",
+            "xxxxxxxxxxxxxxx",
+            "xxxxxxxxxxxxxxx",
+            ".xxxxxxxxxxxxx.",
+            "..xxxxxxxxxxx..",
+            "...xxxxxxxxx...",
+        },
+    };
+
+    /// <summary>A pixel font for the count: the characters it has (the digits 1 to 9 and the plus), each <see cref="Width"/> × <see cref="Height"/> with <c>#</c> as ink.</summary>
+    private sealed record GlyphFont(int Width, int Height, Dictionary<char, string[]> Glyphs)
+    {
+        /// <summary>How many pixels wide <paramref name="text"/> is in this font: its characters and a pixel between each.</summary>
+        public int TextWidth(string text) => (text.Length * Width) + (text.Length - 1);
+    }
+
+    /// <summary>
+    /// 3 pixels wide and 5 tall: the smallest digits that stay apart at 16 px, and what the 16 and 20 px badges hold. The plus is
+    /// 3 × 3 in the middle rows, so it sits on the digits' middle line.
+    /// </summary>
+    private static readonly GlyphFont SmallFont = new(3, 5, new()
+    {
+        ['1'] = new[] { ".#.", "##.", ".#.", ".#.", "###" },
+        ['2'] = new[] { "###", "..#", "###", "#..", "###" },
+        ['3'] = new[] { "###", "..#", "###", "..#", "###" },
+        ['4'] = new[] { "#.#", "#.#", "###", "..#", "..#" },
+        ['5'] = new[] { "###", "#..", "###", "..#", "###" },
+        ['6'] = new[] { "###", "#..", "###", "#.#", "###" },
+        ['7'] = new[] { "###", "..#", ".#.", ".#.", ".#." },
+        ['8'] = new[] { "###", "#.#", "###", "#.#", "###" },
+        ['9'] = new[] { "###", "#.#", "###", "..#", "###" },
+        ['+'] = new[] { "...", ".#.", "###", ".#.", "..." },
+    });
+
+    /// <summary>
+    /// 5 pixels wide and 7 tall, the classic small-display digits: what the 24 px badge holds, and the shapes the larger vector badges
+    /// scale. The plus is 5 × 5 on the digits' middle line.
+    /// </summary>
+    private static readonly GlyphFont LargeFont = new(5, 7, new()
+    {
+        ['1'] = new[] { "..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###." },
+        ['2'] = new[] { ".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####" },
+        ['3'] = new[] { ".###.", "#...#", "....#", "..##.", "....#", "#...#", ".###." },
+        ['4'] = new[] { "...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#." },
+        ['5'] = new[] { "#####", "#....", "####.", "....#", "....#", "#...#", ".###." },
+        ['6'] = new[] { "..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###." },
+        ['7'] = new[] { "#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..." },
+        ['8'] = new[] { ".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###." },
+        ['9'] = new[] { ".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.." },
+        ['+'] = new[] { ".....", "..#..", "..#..", "#####", "..#..", "..#..", "....." },
+    });
+
+    /// <summary>The font a pixel-grid count badge is stamped in: the large one from 24 px, where the disc is big enough for it.</summary>
+    private static GlyphFont FontFor(int size) => size >= 24 ? LargeFont : SmallFont;
 
     static ShieldArtwork()
     {
@@ -279,6 +469,29 @@ internal static class ShieldArtwork
             if (rows.Length != size || rows.Any(row => row.Length != size))
             {
                 throw new InvalidOperationException($"A {size} px icon grid is not {size} × {size}.");
+            }
+        }
+
+        // The count's pieces: an outline can be wider than it is tall (the "9+" pill) but never ragged, and big enough for its text with
+        // a pixel to spare on every side; a font's characters are all one cell.
+        foreach (var (key, rows) in CountShapes)
+        {
+            var font = FontFor(key.Size);
+            var text = key.Wide ? "9+" : "9";
+            if (rows.Length < font.Height + 2 || rows.Any(row => row.Length != rows[0].Length) || rows[0].Length < font.TextWidth(text) + 2)
+            {
+                throw new InvalidOperationException($"The {key.Size} px count outline (wide: {key.Wide}) is ragged or too small for its text.");
+            }
+        }
+
+        foreach (var font in new[] { SmallFont, LargeFont })
+        {
+            foreach (var (character, rows) in font.Glyphs)
+            {
+                if (rows.Length != font.Height || rows.Any(row => row.Length != font.Width))
+                {
+                    throw new InvalidOperationException($"The glyph '{character}' is not {font.Width} × {font.Height}.");
+                }
             }
         }
 
@@ -312,15 +525,50 @@ internal static class ShieldArtwork
         Stopped,
         Warning,
         Critical,
+        Paused,
+        Scanning,
+
+        /// <summary>The red disc (or, for "9+", pill) with the number of unacknowledged findings in it.</summary>
+        Count,
     }
 
-    /// <summary>Draws the mark for <paramref name="state"/> at <paramref name="size"/> × <paramref name="size"/> pixels and returns it frozen.</summary>
-    internal static BitmapSource Render(ShieldState state, int size)
+    /// <summary>A badge and, for <see cref="Badge.Count"/>, which bucket of <see cref="AlertBucket"/> it shows.</summary>
+    private readonly record struct BadgeSpec(Badge Kind, int Bucket = AlertBucket.None)
+    {
+        public static BadgeSpec None => new(Badge.None);
+
+        public bool IsNone => Kind == Badge.None;
+
+        /// <summary>"9+" is two characters and a gap, so it is a pill; every other badge is a disc or a triangle.</summary>
+        public bool IsWide => Kind == Badge.Count && Bucket == AlertBucket.Overflow;
+    }
+
+    /// <summary>
+    /// The badge a state wears. The count rides only on the alerting state (<see cref="ShieldState.Critical"/>), as on the Mac, where
+    /// the number is the alerting icon's and no other's; <paramref name="count"/> is capped by <see cref="AlertBucket.For"/>, so a raw
+    /// number or a bucket both do.
+    /// </summary>
+    private static BadgeSpec BadgeFor(ShieldState state, int count) => state switch
+    {
+        ShieldState.Stopped => new(Badge.Stopped),
+        ShieldState.Warning => new(Badge.Warning),
+        ShieldState.Critical when AlertBucket.For(count) != AlertBucket.None => new(Badge.Count, AlertBucket.For(count)),
+        ShieldState.Critical => new(Badge.Critical),
+        ShieldState.Paused => new(Badge.Paused),
+        ShieldState.Scanning => new(Badge.Scanning),
+        _ => BadgeSpec.None,
+    };
+
+    /// <summary>
+    /// Draws the mark for <paramref name="state"/> at <paramref name="size"/> × <paramref name="size"/> pixels and returns it frozen.
+    /// <paramref name="count"/> is the number of unacknowledged findings the alerting state shows (see <see cref="Draw"/>).
+    /// </summary>
+    internal static BitmapSource Render(ShieldState state, int size, int count = 0)
     {
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())
         {
-            Draw(context, state, size);
+            Draw(context, state, size, count);
         }
 
         var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
@@ -333,15 +581,16 @@ internal static class ShieldArtwork
     /// Encodes the mark for <paramref name="state"/> as a multi-size <c>.ico</c>: one image per entry of
     /// <paramref name="sizes"/>, each drawn for its size. Images below 256 px are 32-bit DIBs with an AND mask
     /// (what every icon consumer understands); the 256 px image is PNG-compressed, as Windows expects.
+    /// <paramref name="count"/> is the number of unacknowledged findings the alerting state shows; see <see cref="Draw"/>.
     /// </summary>
-    internal static byte[] EncodeIco(ShieldState state, IReadOnlyList<int> sizes)
+    internal static byte[] EncodeIco(ShieldState state, IReadOnlyList<int> sizes, int count = 0)
     {
         ArgumentNullException.ThrowIfNull(sizes);
 
         var images = new List<(int Size, byte[] Data)>(sizes.Count);
         foreach (var size in sizes)
         {
-            var bitmap = Render(state, size);
+            var bitmap = Render(state, size, count);
             images.Add((size, size >= 256 ? EncodePng(bitmap) : EncodeDib(bitmap)));
         }
 
@@ -376,20 +625,19 @@ internal static class ShieldArtwork
         return stream.ToArray();
     }
 
-    /// <summary>Draws the mark for <paramref name="state"/> into a <paramref name="size"/>-pixel square at the origin.</summary>
-    internal static void Draw(DrawingContext context, ShieldState state, int size)
+    /// <summary>
+    /// Draws the mark for <paramref name="state"/> into a <paramref name="size"/>-pixel square at the origin.
+    /// <paramref name="count"/> is how many unacknowledged findings the alerting state (<see cref="ShieldState.Critical"/>)
+    /// shows in its badge: none draws the bare exclamation mark, 1 to 9 the number, more "9+" (<see cref="AlertBucket.For"/>).
+    /// Every other state ignores it: its badge is its own glyph.
+    /// </summary>
+    internal static void Draw(DrawingContext context, ShieldState state, int size, int count = 0)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentOutOfRangeException.ThrowIfLessThan(size, 16);
 
         var palette = state == ShieldState.Stopped ? Idle : Live;
-        var badge = state switch
-        {
-            ShieldState.Stopped => Badge.Stopped,
-            ShieldState.Warning => Badge.Warning,
-            ShieldState.Critical => Badge.Critical,
-            _ => Badge.None,
-        };
+        var badge = BadgeFor(state, count);
 
         if (ShieldGrids.TryGetValue(size, out var grid))
         {
@@ -401,14 +649,17 @@ internal static class ShieldArtwork
         }
     }
 
-    private static void DrawGrid(DrawingContext context, string[] grid, ShieldPalette palette, Badge badge, int size)
+    private static void DrawGrid(DrawingContext context, string[] grid, ShieldPalette palette, BadgeSpec badge, int size)
     {
         var cells = grid.Select(row => row.ToCharArray()).ToArray();
-        var mark = BadgeGrids.GetValueOrDefault((badge, size));
-        var origin = size - (mark?.Length ?? 0);
+        var mark = BadgeGrid(badge, size);
+
+        // The badge sits flush in the bottom-right corner; a count's pill is wider than it is tall.
+        var originX = size - (mark?[0].Length ?? 0);
+        var originY = size - (mark?.Length ?? 0);
 
         // A size with a grid shield but no grid badge (24 px) takes the vector badge.
-        var vectorBadge = badge != Badge.None && mark is null ? PushBadgeKnockout(context, badge, size) : null;
+        var vectorBadge = !badge.IsNone && mark is null ? PushBadgeKnockout(context, badge, size) : null;
 
         // The knockout: every shield pixel touching the badge (including diagonally) is cleared.
         if (mark is not null)
@@ -426,7 +677,7 @@ internal static class ShieldArtwork
                     {
                         for (var dx = -1; dx <= 1; dx++)
                         {
-                            var (cx, cy) = (origin + x + dx, origin + y + dy);
+                            var (cx, cy) = (originX + x + dx, originY + y + dy);
                             if (cx >= 0 && cy >= 0 && cx < size && cy < size)
                             {
                                 cells[cy][cx] = '.';
@@ -437,9 +688,9 @@ internal static class ShieldArtwork
             }
         }
 
-        context.DrawGeometry(Solid(palette.Rim), null, Cells(cells, "o", 0));
-        context.DrawGeometry(FaceBrush(palette, 0, size), null, Cells(cells, "b", 0));
-        context.DrawGeometry(Solid(palette.Claw), null, Cells(cells, "W", 0));
+        context.DrawGeometry(Solid(palette.Rim), null, Cells(cells, "o", 0, 0));
+        context.DrawGeometry(FaceBrush(palette, 0, size), null, Cells(cells, "b", 0, 0));
+        context.DrawGeometry(Solid(palette.Claw), null, Cells(cells, "W", 0, 0));
 
         if (vectorBadge is not null)
         {
@@ -451,18 +702,57 @@ internal static class ShieldArtwork
         {
             var (fill, glyph) = BadgeColors(badge);
             var markCells = mark.Select(row => row.ToCharArray()).ToArray();
-            context.DrawGeometry(Solid(fill), null, Cells(markCells, "xg", origin));
-            context.DrawGeometry(Solid(glyph), null, Cells(markCells, "g", origin));
+            context.DrawGeometry(Solid(fill), null, Cells(markCells, "xg", originX, originY));
+            context.DrawGeometry(Solid(glyph), null, Cells(markCells, "g", originX, originY));
         }
     }
 
-    private static void DrawVector(DrawingContext context, ShieldPalette palette, Badge badge, int size)
+    /// <summary>
+    /// The pixel grid of <paramref name="badge"/> at <paramref name="size"/>, or null when that size takes the vector badge.
+    /// A count's grid is its outline (<see cref="CountShapes"/>) with the text stamped in.
+    /// </summary>
+    private static string[]? BadgeGrid(BadgeSpec badge, int size) =>
+        badge.Kind == Badge.Count ? CountGrid(size, badge.Bucket) : BadgeGrids.GetValueOrDefault((badge.Kind, size));
+
+    /// <summary>The count badge for 16, 20 and 24 px: the outline with <see cref="AlertBucket.Text"/> centred in it, in <c>g</c> cells; null at any other size.</summary>
+    private static string[]? CountGrid(int size, int bucket)
+    {
+        var text = AlertBucket.Text(bucket);
+        if (text.Length == 0 || !CountShapes.TryGetValue((size, text.Length > 1), out var shape))
+        {
+            return null;
+        }
+
+        var font = FontFor(size);
+        var rows = shape.Select(row => row.ToCharArray()).ToArray();
+        var left = (rows[0].Length - font.TextWidth(text)) / 2;
+        var top = (rows.Length - font.Height) / 2;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var glyph = font.Glyphs[text[i]];
+            for (var y = 0; y < font.Height; y++)
+            {
+                for (var x = 0; x < font.Width; x++)
+                {
+                    if (glyph[y][x] == '#')
+                    {
+                        rows[top + y][left + (i * (font.Width + 1)) + x] = 'g';
+                    }
+                }
+            }
+        }
+
+        return rows.Select(row => new string(row)).ToArray();
+    }
+
+    private static void DrawVector(DrawingContext context, ShieldPalette palette, BadgeSpec badge, int size)
     {
         var detailed = size >= DetailFrom;
         var toPixels = DesignToPixels(size);
         var unitsPerPixel = 1 / toPixels.Value.M11;
 
-        var badgeShape = badge == Badge.None ? null : PushBadgeKnockout(context, badge, size);
+        var badgeShape = badge.IsNone ? null : PushBadgeKnockout(context, badge, size);
 
         context.PushTransform(toPixels);
         context.DrawGeometry(FaceBrush(palette, 14, 246), null, Shield);
@@ -497,7 +787,7 @@ internal static class ShieldArtwork
     /// Clips everything drawn next away from the badge and a ring around it (the knockout), and returns the badge
     /// outline for <see cref="DrawBadge"/>; the caller pops the clip before drawing the badge.
     /// </summary>
-    private static Geometry PushBadgeKnockout(DrawingContext context, Badge badge, int size)
+    private static Geometry PushBadgeKnockout(DrawingContext context, BadgeSpec badge, int size)
     {
         var shape = BadgeShape(badge, size);
         var ring = new Pen(Brushes.Black, 2 * Math.Max(1, size / 24.0));
@@ -506,7 +796,7 @@ internal static class ShieldArtwork
         return shape;
     }
 
-    private static void DrawBadge(DrawingContext context, Badge badge, int size, Geometry shape)
+    private static void DrawBadge(DrawingContext context, BadgeSpec badge, int size, Geometry shape)
     {
         var (fill, glyph) = BadgeColors(badge);
         context.DrawGeometry(Solid(fill), null, shape);
@@ -562,18 +852,24 @@ internal static class ShieldArtwork
         return brush;
     }
 
-    private static (Color Fill, Color Glyph) BadgeColors(Badge badge) => badge switch
+    private static (Color Fill, Color Glyph) BadgeColors(BadgeSpec badge) => badge.Kind switch
     {
         Badge.Warning => (WarningAmber, Color.FromRgb(0x1B, 0x1B, 0x1B)),
-        Badge.Critical => (CriticalRed, Colors.White),
-        _ => (StoppedSlate, Colors.White),
+        Badge.Critical or Badge.Count => (CriticalRed, Colors.White),
+        Badge.Scanning => (ScanningBlue, Colors.White),
+        _ => (StoppedSlate, Colors.White), // stopped, and paused
     };
 
-    /// <summary>The badge outline in pixels: a disc (stopped, critical) or a rounded triangle (warning), bottom right.</summary>
-    private static Geometry BadgeShape(Badge badge, int size)
+    /// <summary>The badge outline in pixels: a disc (stopped, paused, scanning, alerting), a pill ("9+") or a rounded triangle (warning), bottom right.</summary>
+    private static Geometry BadgeShape(BadgeSpec badge, int size)
     {
-        var box = BadgeBox(size);
-        if (badge != Badge.Warning)
+        var box = BadgeBox(size, badge.IsWide);
+        if (badge.IsWide)
+        {
+            return Frozen(new RectangleGeometry(box, box.Height / 2, box.Height / 2));
+        }
+
+        if (badge.Kind != Badge.Warning)
         {
             return Frozen(new EllipseGeometry(box));
         }
@@ -594,21 +890,31 @@ internal static class ShieldArtwork
         return Frozen(Combine(triangle, triangle.GetWidenedPathGeometry(corners), GeometryCombineMode.Union));
     }
 
-    /// <summary>The badge's glyph in pixels: a stop square, or an exclamation mark.</summary>
-    private static Geometry BadgeGlyph(Badge badge, int size)
+    /// <summary>The badge's glyph in pixels: a stop square, two bars, a magnifying glass, the count, or an exclamation mark.</summary>
+    private static Geometry BadgeGlyph(BadgeSpec badge, int size)
     {
-        var box = BadgeBox(size);
+        var box = BadgeBox(size, badge.IsWide);
         var centre = box.X + (box.Width / 2);
 
-        if (badge == Badge.Stopped)
+        switch (badge.Kind)
         {
-            var side = box.Width * 0.38;
-            return Frozen(new RectangleGeometry(
-                new Rect(centre - (side / 2), box.Y + ((box.Height - side) / 2), side, side), side * 0.12, side * 0.12));
+            case Badge.Count:
+                return CountGlyph(box, badge.Bucket);
+
+            case Badge.Paused:
+                return PausedGlyph(box);
+
+            case Badge.Scanning:
+                return ScanningGlyph(box);
+
+            case Badge.Stopped:
+                var side = box.Width * 0.38;
+                return Frozen(new RectangleGeometry(
+                    new Rect(centre - (side / 2), box.Y + ((box.Height - side) / 2), side, side), side * 0.12, side * 0.12));
         }
 
         // The triangle's mark sits lower, where the triangle is wide enough for it.
-        var (top, barBottom, dot, width) = badge == Badge.Warning
+        var (top, barBottom, dot, width) = badge.Kind == Badge.Warning
             ? (0.34, 0.66, 0.80, 0.13)
             : (0.20, 0.58, 0.76, 0.15);
         var stroke = box.Width * width;
@@ -619,15 +925,94 @@ internal static class ShieldArtwork
         return Frozen(mark);
     }
 
-    /// <summary>Just under half the icon, flush with its bottom-right corner.</summary>
-    private static Rect BadgeBox(int size)
+    /// <summary>Two bars: the pause sign.</summary>
+    private static Geometry PausedGlyph(Rect box)
     {
-        var side = Math.Round(size * 0.46);
-        return new Rect(size - side, size - side, side, side);
+        var bar = box.Width * 0.15;
+        var gap = box.Width * 0.15;
+        var height = box.Height * 0.46;
+        var left = box.X + ((box.Width - ((2 * bar) + gap)) / 2);
+        var top = box.Y + ((box.Height - height) / 2);
+        var round = bar * 0.3;
+
+        var bars = new GeometryGroup();
+        bars.Children.Add(new RectangleGeometry(new Rect(left, top, bar, height), round, round));
+        bars.Children.Add(new RectangleGeometry(new Rect(left + bar + gap, top, bar, height), round, round));
+        return Frozen(bars);
     }
 
-    /// <summary>One rectangle per horizontal run of <paramref name="chars"/> in a pixel grid, offset by <paramref name="origin"/>.</summary>
-    private static Geometry Cells(char[][] rows, string chars, int origin)
+    /// <summary>A magnifying glass: a ring up and to the left of the centre and a handle running out to the bottom-right.</summary>
+    private static Geometry ScanningGlyph(Rect box)
+    {
+        var lens = new Point(box.X + (box.Width * 0.44), box.Y + (box.Height * 0.44));
+        var radius = box.Width * 0.20;
+        var line = Math.Max(1, box.Width * 0.115);
+
+        var ring = new EllipseGeometry(lens, radius, radius).GetWidenedPathGeometry(new Pen(Brushes.Black, line));
+        var handle = new LineGeometry(
+            new Point(lens.X + (radius * 0.7071), lens.Y + (radius * 0.7071)),
+            new Point(box.X + (box.Width * 0.75), box.Y + (box.Height * 0.75)))
+            .GetWidenedPathGeometry(new Pen(Brushes.Black, line * 1.25) { StartLineCap = PenLineCap.Flat, EndLineCap = PenLineCap.Round });
+
+        return Frozen(Combine(ring, handle, GeometryCombineMode.Union));
+    }
+
+    /// <summary>
+    /// The count, in the 5 × 7 font (<see cref="LargeFont"/>) with its cells scaled to the badge: the text takes about 62 % of the
+    /// badge's height (and never more than 80 % of its width), centred. One path, so adjacent cells leave no seam when the edges are anti-aliased.
+    /// </summary>
+    private static Geometry CountGlyph(Rect box, int bucket)
+    {
+        var font = LargeFont;
+        var text = AlertBucket.Text(bucket);
+        var cells = font.TextWidth(text);
+        var unit = Math.Min(box.Height * 0.62 / font.Height, box.Width * 0.80 / cells);
+        var left = box.X + ((box.Width - (cells * unit)) / 2);
+        var top = box.Y + ((box.Height - (font.Height * unit)) / 2);
+
+        var ink = new GeometryGroup();
+        for (var i = 0; i < text.Length; i++)
+        {
+            var glyph = font.Glyphs[text[i]];
+            var origin = left + (i * (font.Width + 1) * unit);
+            for (var y = 0; y < font.Height; y++)
+            {
+                var x = 0;
+                while (x < font.Width)
+                {
+                    if (glyph[y][x] != '#')
+                    {
+                        x++;
+                        continue;
+                    }
+
+                    var start = x;
+                    while (x < font.Width && glyph[y][x] == '#')
+                    {
+                        x++;
+                    }
+
+                    ink.Children.Add(new RectangleGeometry(new Rect(origin + (start * unit), top + (y * unit), (x - start) * unit, unit)));
+                }
+            }
+        }
+
+        return Frozen(ink);
+    }
+
+    /// <summary>
+    /// Just under half the icon, flush with its bottom-right corner. <paramref name="wide"/> is the "9+" pill: the same height,
+    /// about a third wider.
+    /// </summary>
+    private static Rect BadgeBox(int size, bool wide = false)
+    {
+        var side = Math.Round(size * 0.46);
+        var width = wide ? Math.Round(side * 1.32) : side;
+        return new Rect(size - width, size - side, width, side);
+    }
+
+    /// <summary>One rectangle per horizontal run of <paramref name="chars"/> in a pixel grid, whose top-left corner is at (<paramref name="originX"/>, <paramref name="originY"/>).</summary>
+    private static Geometry Cells(char[][] rows, string chars, int originX, int originY)
     {
         var group = new GeometryGroup();
         for (var y = 0; y < rows.Length; y++)
@@ -648,7 +1033,7 @@ internal static class ShieldArtwork
                     x++;
                 }
 
-                group.Children.Add(new RectangleGeometry(new Rect(origin + start, origin + y, x - start, 1)));
+                group.Children.Add(new RectangleGeometry(new Rect(originX + start, originY + y, x - start, 1)));
             }
         }
 

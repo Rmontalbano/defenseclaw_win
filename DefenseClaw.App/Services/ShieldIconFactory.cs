@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -7,27 +8,90 @@ using Drawing = System.Drawing;
 
 namespace DefenseClaw.App.Services;
 
-/// <summary>Tray colour states, in ascending order of "the operator should look at this".</summary>
+/// <summary>
+/// What the shield shows. Which one wins when several apply is <see cref="ShieldIconFactory.StateFor(GatewaySnapshot, int?, bool)"/>'s
+/// precedence, the Mac's menu-bar icon (<c>AppState.menuBarState</c>): paused, scanning, offline, alerting, degraded, healthy.
+/// </summary>
 public enum ShieldState
 {
-    /// <summary>Gateway stopped, not installed, or not initialized.</summary>
+    /// <summary>The Mac's offline: gateway stopped, not installed, or not initialized.</summary>
     Stopped = 0,
 
-    /// <summary>Everything healthy and native.</summary>
+    /// <summary>The Mac's healthy: everything running and native.</summary>
     Running,
 
-    /// <summary>Degraded reads, or a WSL gateway masquerading as the native one.</summary>
+    /// <summary>The Mac's degraded: degraded reads, or a WSL gateway masquerading as the native one.</summary>
     Warning,
 
-    /// <summary>A CRITICAL alert in the last poll.</summary>
+    /// <summary>
+    /// The Mac's alerting: unacknowledged findings are waiting. The badge carries their number (1 to 9, then "9+"); with no number to
+    /// show (the counts have not been read yet, and the gateway's last alert poll held a CRITICAL) it is a bare exclamation mark.
+    /// </summary>
     Critical,
+
+    /// <summary>The operator paused monitoring (<see cref="GatewaySnapshot.IsPaused"/>): nothing is polling, so what the rest of the app knows is as of the pause.</summary>
+    Paused,
+
+    /// <summary>A <c>defenseclaw</c> scan this app started is running (<see cref="ScanActivity"/>).</summary>
+    Scanning,
+}
+
+/// <summary>
+/// The count of unacknowledged findings as the tray icon can show it: nothing, 1 to 9, or "9+". The icon is 16 px at 100 % display
+/// scaling, so more than one digit does not fit; ten findings and five hundred look the same, and the tooltip has the real number.
+/// </summary>
+internal static class AlertBucket
+{
+    /// <summary>No number: nothing is waiting, or it is not known yet.</summary>
+    public const int None = 0;
+
+    /// <summary>The largest number the icon spells out.</summary>
+    public const int MaxDigit = 9;
+
+    /// <summary>"9+": ten or more.</summary>
+    public const int Overflow = MaxDigit + 1;
+
+    /// <summary>The bucket for a count (negative reads as none).</summary>
+    public static int For(int count) => count <= 0 ? None : Math.Min(count, Overflow);
+
+    /// <summary>What the badge says: "" for none, "7", "9+".</summary>
+    public static string Text(int bucket) => For(bucket) switch
+    {
+        None => string.Empty,
+        Overflow => "9+",
+        var digit => digit.ToString(CultureInfo.InvariantCulture),
+    };
+}
+
+/// <summary>
+/// Which tray icon to show: the state and, for the alerting one, the bucket of the count on it. Every distinct key is one icon
+/// (<see cref="ShieldIconFactory.CreateIcon(TrayShieldKey)"/>), cached and persisted per key. The constructor takes a count or a bucket
+/// and leaves the bucket at none for every state that has no number on it, so "paused with 3 findings" and "paused with 7" are the same
+/// key and the same icon, and so are "alerting with 10" and "alerting with 500".
+/// </summary>
+internal readonly record struct TrayShieldKey
+{
+    /// <param name="state">What the shield shows.</param>
+    /// <param name="count">The number of unacknowledged findings (or a bucket; <see cref="AlertBucket.For"/> is idempotent); only the alerting state keeps it.</param>
+    public TrayShieldKey(ShieldState state, int count)
+    {
+        State = state;
+        Bucket = state == ShieldState.Critical ? AlertBucket.For(count) : AlertBucket.None;
+    }
+
+    public ShieldState State { get; }
+
+    /// <summary>An <see cref="AlertBucket"/> value; always <see cref="AlertBucket.None"/> unless <see cref="State"/> is <see cref="ShieldState.Critical"/>.</summary>
+    public int Bucket { get; }
+
+    public override string ToString() => Bucket == AlertBucket.None ? State.ToString() : $"{State} ({AlertBucket.Text(Bucket)})";
 }
 
 /// <summary>
 /// Turns the DefenseClaw mark (<see cref="ShieldArtwork"/>, the one source of every icon the app shows) into
 /// the tray icon and the window icons, at runtime, instead of shipping an <c>.ico</c> per state.
 /// <para>
-/// Four states × every DPI scale is a lot of binary blobs to keep in a repo whose review story is "read the
+/// Six states, ten counts on one of them, × every DPI scale is a lot of binary blobs to keep in a repo whose review story is "read the
 /// diff"; drawing them costs a few milliseconds once WPF's media stack is running and keeps the tree
 /// text-only. (The one binary, the exe's <c>Assets\DefenseClaw.ico</c>, is generated from the same artwork
 /// and a test keeps it in step.)
@@ -73,15 +137,16 @@ public static class ShieldIconFactory
     private const int DefaultImageSize = 32;
 
     /// <summary>
-    /// Per-state encoded ICO bytes — the render/encode cost is paid once, the per-assignment cost
-    /// is a small array read plus <c>CreateIconFromResourceEx</c>. Deliberately <em>bytes</em> and
+    /// Per-icon (state, and count bucket for the alerting one: <see cref="TrayShieldKey"/>) encoded ICO bytes — the render/encode cost
+    /// is paid once, the per-assignment cost is a small array read plus <c>CreateIconFromResourceEx</c>. At most 16 entries:
+    /// the six states, and the nine counts and "9+" besides on the alerting one. Deliberately <em>bytes</em> and
     /// not <see cref="Drawing.Icon"/>: a cached <see cref="Drawing.Icon"/> would be a shared
     /// instance, and any consumer that disposes what it is given (H.NotifyIcon 2.3.2 does, on
     /// reassignment) would poison it for every later caller. With bytes there is no master
     /// instance to poison, so the contract is enforced by construction rather than by convention.
     /// Guarded by <see cref="Gate"/>; entries are never mutated after insertion.
     /// </summary>
-    private static readonly Dictionary<ShieldState, byte[]> IconBytesCache = new();
+    private static readonly Dictionary<TrayShieldKey, byte[]> IconBytesCache = new();
     private static readonly object Gate = new();
 
     /// <summary>
@@ -123,32 +188,78 @@ public static class ShieldIconFactory
         ShieldState.Running => ShieldArtwork.CiscoBlue,
         ShieldState.Warning => ShieldArtwork.WarningAmber,
         ShieldState.Critical => ShieldArtwork.CriticalRed,
+        ShieldState.Paused => ShieldArtwork.StoppedSlate,
+        ShieldState.Scanning => ShieldArtwork.ScanningBlue,
         _ => Color.FromRgb(0x8A, 0x8A, 0x8A),
     };
 
-    /// <summary>Maps the gateway state machine onto a tray colour.</summary>
-    public static ShieldState StateFor(GatewaySnapshot snapshot)
+    /// <summary>
+    /// What the gateway snapshot alone says: paused, offline, alerting (a CRITICAL in the last alert poll), degraded or healthy.
+    /// This is the shield the dashboard's taskbar button wears; the tray also knows the unacknowledged count and whether a scan is
+    /// running, and uses <see cref="StateFor(GatewaySnapshot, int?, bool)"/>.
+    /// </summary>
+    public static ShieldState StateFor(GatewaySnapshot snapshot) => StateFor(snapshot, unacknowledged: null, scanning: false);
+
+    /// <summary>
+    /// Maps what the app knows onto the shield, with the Mac's precedence (<c>AppState.menuBarState</c>): the first that applies wins.
+    /// <list type="number">
+    /// <item><description><b>Paused</b>: the operator paused monitoring. Nothing is polling, so nothing below is current.</description></item>
+    /// <item><description><b>Scanning</b>: a scan this app started is running (<see cref="ScanActivity"/>).</description></item>
+    /// <item><description><b>Offline</b> (<see cref="ShieldState.Stopped"/>): the gateway is stopped, not installed, not initialized, or not heard from yet.</description></item>
+    /// <item><description><b>Alerting</b> (<see cref="ShieldState.Critical"/>): unacknowledged findings are waiting.</description></item>
+    /// <item><description><b>Degraded</b> (<see cref="ShieldState.Warning"/>): degraded reads, or a WSL gateway standing in for the native one.</description></item>
+    /// <item><description><b>Healthy</b> (<see cref="ShieldState.Running"/>).</description></item>
+    /// </list>
+    /// Offline outranks alerting, as on the Mac: the counts are read from the audit database, which answers with the gateway down, but
+    /// a shield that says "findings" while nothing is protecting the machine says the wrong thing first.
+    /// </summary>
+    /// <param name="snapshot">The gateway state, including whether monitoring is paused.</param>
+    /// <param name="unacknowledged">
+    /// How many unacknowledged findings there are (<see cref="AlertCountsService"/>), or null while they have not been read: then the
+    /// gateway's own last alert poll decides, as it did before the counts were on the icon (a CRITICAL in it is alerting). Once the
+    /// count is known it is the whole answer, so an acknowledged CRITICAL the gateway still lists does not keep the shield red.
+    /// </param>
+    /// <param name="scanning">True while a scan is in flight.</param>
+    public static ShieldState StateFor(GatewaySnapshot snapshot, int? unacknowledged, bool scanning)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        if (snapshot.HasCriticalAlert)
+        if (snapshot.IsPaused)
+        {
+            return ShieldState.Paused;
+        }
+
+        if (scanning)
+        {
+            return ShieldState.Scanning;
+        }
+
+        if (snapshot.State is not (AppGatewayState.Running or AppGatewayState.Degraded or AppGatewayState.WslGatewayDetected))
+        {
+            return ShieldState.Stopped;
+        }
+
+        var alerting = unacknowledged.HasValue ? unacknowledged.Value > 0 : snapshot.HasCriticalAlert;
+        if (alerting)
         {
             return ShieldState.Critical;
         }
 
-        return snapshot.State switch
-        {
-            AppGatewayState.Running => ShieldState.Running,
-            AppGatewayState.Degraded => ShieldState.Warning,
-            AppGatewayState.WslGatewayDetected => ShieldState.Warning,
-            _ => ShieldState.Stopped,
-        };
+        return snapshot.State == AppGatewayState.Running ? ShieldState.Running : ShieldState.Warning;
     }
+
+    /// <summary>
+    /// The icon to show: <see cref="StateFor(GatewaySnapshot, int?, bool)"/>, and for the alerting state the bucket of the count
+    /// (<see cref="AlertBucket"/>). Every other state shows its own glyph where the number would go, so it carries none.
+    /// </summary>
+    internal static TrayShieldKey KeyFor(GatewaySnapshot snapshot, int? unacknowledged, bool scanning) =>
+        new(StateFor(snapshot, unacknowledged, scanning), unacknowledged ?? 0);
 
     /// <summary>
     /// Returns a <b>new</b> <see cref="Drawing.Icon"/> for <paramref name="state"/> that the caller
     /// owns. Every call returns a distinct instance with its own HICON; the shield is drawn and
-    /// encoded only on the first request per state, later calls just re-hydrate the cached ICO bytes.
+    /// encoded only on the first request per state (and, for the alerting state's numbered icons,
+    /// per count: <see cref="CreateIcon(TrayShieldKey)"/>), later calls just re-hydrate the cached ICO bytes.
     /// <para>
     /// Replaces the old <c>Get(ShieldState)</c>, which returned one shared cached instance and
     /// crashed the tray: <c>H.NotifyIcon.Wpf</c> 2.3.2 disposes the icon previously assigned to
@@ -168,28 +279,35 @@ public static class ShieldIconFactory
     /// (<see cref="TrayIconSize"/>) — just repeated, and it leaves nothing shared.
     /// </para>
     /// </summary>
-    public static Drawing.Icon CreateIcon(ShieldState state)
+    public static Drawing.Icon CreateIcon(ShieldState state) => CreateIcon(new TrayShieldKey(state, AlertBucket.None));
+
+    /// <summary>
+    /// <see cref="CreateIcon(ShieldState)"/> for one cache key: the state, and for the alerting one the bucket of the count on it.
+    /// Same ownership contract (a new icon every call, the caller's to dispose), and the same economy: a key is drawn and encoded
+    /// once per process, and persisted once per build, however many times the tray swaps to it.
+    /// </summary>
+    internal static Drawing.Icon CreateIcon(TrayShieldKey key)
     {
         lock (Gate)
         {
-            if (IconBytesCache.TryGetValue(state, out var bytes))
+            if (IconBytesCache.TryGetValue(key, out var bytes))
             {
                 return FromIcoBytes(bytes);
             }
 
-            // An earlier launch of this build already drew and encoded this state: no WPF rendering.
-            if (TryReadPersisted(state, out bytes, out var persisted))
+            // An earlier launch of this build already drew and encoded this icon: no WPF rendering.
+            if (TryReadPersisted(key, out bytes, out var persisted))
             {
-                IconBytesCache[state] = bytes;
+                IconBytesCache[key] = bytes;
                 return persisted;
             }
 
             // Materialise the first icon before caching the bytes so a malformed encode throws
             // here (as it always did) instead of poisoning the cache for every later call.
-            bytes = EncodeIco(state);
+            bytes = EncodeIco(key);
             var first = FromIcoBytes(bytes);
-            IconBytesCache[state] = bytes;
-            Persist(state, bytes);
+            IconBytesCache[key] = bytes;
+            Persist(key, bytes);
             return first;
         }
     }
@@ -215,22 +333,30 @@ public static class ShieldIconFactory
     /// </summary>
     private static string BuildKey => typeof(ShieldIconFactory).Module.ModuleVersionId.ToString("N");
 
-    private static string? PersistedPath(ShieldState state) =>
+    /// <summary>
+    /// <c>shield-{build}-tray-{state}.ico</c>, and <c>-n{bucket}</c> after the state for an icon with a number on it
+    /// (<c>shield-{build}-tray-critical-n3.ico</c>). A key with no number keeps the name it has always had.
+    /// </summary>
+    private static string? PersistedPath(TrayShieldKey key) =>
         CacheDirectory is { Length: > 0 } directory
-            ? Path.Combine(directory, $"shield-{BuildKey}-tray-{state.ToString().ToLowerInvariant()}.ico")
+            ? Path.Combine(
+                directory,
+                $"shield-{BuildKey}-tray-{key.State.ToString().ToLowerInvariant()}" +
+                (key.Bucket == AlertBucket.None ? string.Empty : "-n" + key.Bucket.ToString(CultureInfo.InvariantCulture)) +
+                ".ico")
             : null;
 
     /// <summary>
-    /// The persisted ICO for <paramref name="state"/> and a fresh icon built from it, or false when
+    /// The persisted ICO for <paramref name="key"/> and a fresh icon built from it, or false when
     /// there is none this build wrote, or it does not load. A bad file is deleted so it is drawn
     /// again and replaced rather than tried on every launch.
     /// </summary>
-    private static bool TryReadPersisted(ShieldState state, out byte[] bytes, out Drawing.Icon icon)
+    private static bool TryReadPersisted(TrayShieldKey key, out byte[] bytes, out Drawing.Icon icon)
     {
         bytes = Array.Empty<byte>();
         icon = null!;
 
-        var path = PersistedPath(state);
+        var path = PersistedPath(key);
         if (path is null)
         {
             return false;
@@ -269,9 +395,9 @@ public static class ShieldIconFactory
     /// Best-effort write of a freshly encoded icon. Written beside the target and moved into place,
     /// so a launch that reads it never sees half a file and two launches never interleave.
     /// </summary>
-    private static void Persist(ShieldState state, byte[] bytes)
+    private static void Persist(TrayShieldKey key, byte[] bytes)
     {
-        var path = PersistedPath(state);
+        var path = PersistedPath(key);
         if (path is null)
         {
             return;
@@ -388,11 +514,11 @@ public static class ShieldIconFactory
         return new Drawing.Icon(stream, size, size);
     }
 
-    /// <summary>Draws the shield at every tray size and encodes it as ICO bytes (the only expensive step; done once per state).</summary>
-    private static byte[] EncodeIco(ShieldState state)
+    /// <summary>Draws the shield at every tray size and encodes it as ICO bytes (the only expensive step; done once per key).</summary>
+    private static byte[] EncodeIco(TrayShieldKey key)
     {
         _ = Interlocked.Increment(ref EncodeCount);
-        return ShieldArtwork.EncodeIco(state, ShieldArtwork.TrayIconSizes);
+        return ShieldArtwork.EncodeIco(key.State, ShieldArtwork.TrayIconSizes, key.Bucket);
     }
 
     private const int SmCxSmIcon = 49;

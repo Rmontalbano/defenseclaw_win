@@ -7,7 +7,6 @@ using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Gateway.Models;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
-using Drawing = System.Drawing;
 
 namespace DefenseClaw.App.Services;
 
@@ -25,17 +24,18 @@ public sealed class TrayIconService : IDisposable
     private readonly TaskbarIcon _icon;
     private readonly TrayFlyoutViewModel _flyoutViewModel;
     private TrayFlyoutWindow? _flyout;
-    private ShieldState? _currentShield;
 
     /// <summary>
-    /// The icon instance currently assigned to <see cref="TaskbarIcon.Icon"/> — a private icon
-    /// from <see cref="ShieldIconFactory.CreateIcon"/> that nobody else holds. Tracked only so
-    /// <see cref="Dispose"/> can release the last one defensively. While it is still assigned it
+    /// Decides the shield and the tooltip, and owns the icon assigned to <see cref="TaskbarIcon.Icon"/> — a private icon
+    /// from <see cref="ShieldIconFactory.CreateIcon(TrayShieldKey)"/> that nobody else holds. While it is still assigned it
     /// must not be disposed or shared: the library drives the native tray icon from it (reading
     /// <c>Icon.Handle</c>, which throws <see cref="ObjectDisposedException"/> once disposed — the
-    /// original crash). Outgoing icons are NOT disposed here; see <see cref="Apply"/>.
+    /// original crash). The presenter disposes the outgoing one after the swap; see <see cref="TrayShieldPresenter"/>.
     /// </summary>
-    private Drawing.Icon? _ownedIcon;
+    private readonly TrayShieldPresenter _shield;
+
+    /// <summary>Whether a scan this app started is running: the second of the shield's inputs the gateway snapshot does not carry. See <see cref="ScanActivity"/>.</summary>
+    private readonly ScanActivity _scans;
     private MenuItem? _gatewayItem;
     private MenuItem? _restartItem;
     private MenuItem? _autostartItem;
@@ -91,11 +91,22 @@ public sealed class TrayIconService : IDisposable
             DataContext = _flyoutViewModel,
         };
 
+        // Both before anything that can call back into the shield: its inputs must exist when the first notification lands.
+        _shield = new TrayShieldPresenter(
+            ShieldIconFactory.CreateIcon,
+            icon => _icon.Icon = icon,
+            text => _icon.ToolTipText = text);
+
+        // No cost while no scan runs: two events on the CLI runner, no timer.
+        _scans = new ScanActivity(_services.Cli);
+        _scans.Changed += OnScanActivityChanged;
+
         _icon.TrayLeftMouseUp += OnTrayLeftMouseUp;
         _icon.TrayBalloonTipClicked += OnTrayBalloonTipClicked;
         _services.Monitor.StateChanged += OnStateChanged;
 
-        // The tray is the count's permanent reader (the tooltip), so the counts service runs for the life of the process.
+        // The tray is the count's permanent reader (the tooltip and the number on the shield), so the counts service runs for the
+        // life of the process.
         _services.AlertCounts.Changed += OnAlertCountsChanged;
         _alertNotifier = new AlertNotifier(_services, ShowAlertToast);
 
@@ -181,7 +192,15 @@ public sealed class TrayIconService : IDisposable
     {
         if (!_disposed)
         {
-            RefreshTooltip(_services.Monitor.Current);
+            RefreshShield(_services.Monitor.Current);
+        }
+    }
+
+    private void OnScanActivityChanged(object? sender, EventArgs e)
+    {
+        if (!_disposed)
+        {
+            RefreshShield(_services.Monitor.Current);
         }
     }
 
@@ -195,6 +214,8 @@ public sealed class TrayIconService : IDisposable
         _disposed = true;
         _services.Monitor.StateChanged -= OnStateChanged;
         _services.AlertCounts.Changed -= OnAlertCountsChanged;
+        _scans.Changed -= OnScanActivityChanged;
+        _scans.Dispose();
         _alertNotifier.Dispose();
         _icon.TrayLeftMouseUp -= OnTrayLeftMouseUp;
         _icon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
@@ -213,8 +234,7 @@ public sealed class TrayIconService : IDisposable
             // idempotent (it only destroys a non-zero handle, then zeroes it), so a second
             // disposal after the library's is a no-op. This runs strictly after the tray icon is
             // torn down so the shell never sees the handle destroyed while still registered.
-            _ownedIcon?.Dispose();
-            _ownedIcon = null;
+            _shield.Dispose();
         }
     }
 
@@ -424,21 +444,25 @@ public sealed class TrayIconService : IDisposable
     }
 
     /// <summary>
-    /// Pushes a gateway snapshot onto the tray: shield colour, tooltip, toasts, menu text.
+    /// Pushes a gateway snapshot onto the tray: shield, tooltip, toasts, menu text.
     /// <para>
     /// Icon ownership: every assignment to <see cref="TaskbarIcon.Icon"/> gets a brand-new
-    /// <see cref="Drawing.Icon"/> from <see cref="ShieldIconFactory.CreateIcon"/>, never a shared
+    /// <see cref="System.Drawing.Icon"/> from <see cref="ShieldIconFactory.CreateIcon(TrayShieldKey)"/>, never a shared
     /// or previously used one. <c>H.NotifyIcon.Wpf</c> 2.3.2 <b>disposes the icon that was assigned
     /// before</b> whenever <c>TaskbarIcon.Icon</c> is reassigned (proved with a harness), so
     /// re-assigning an instance that has ever been handed to the library throws
     /// <c>ObjectDisposedException ('Icon')</c> from <c>TaskbarIcon.UpdateIcon</c> — the crash seen
-    /// 25 times in the field on Running → Stopped → Running flaps. The outgoing icon is therefore
-    /// deliberately left for the library to dispose; disposing it here as well would be harmless
-    /// (<see cref="Drawing.Icon.Dispose()"/> is idempotent) but redundant, and would start to
-    /// matter only if a future library version stopped disposing — revisit on any upgrade of the
-    /// pinned H.NotifyIcon.Wpf 2.3.2. The construction-time icon goes through this same path
-    /// (<c>_currentShield</c> is null on the first call), so there is no separate initial
+    /// 25 times in the field on Running → Stopped → Running flaps. The presenter therefore only ever
+    /// assigns fresh ones, and disposes the outgoing icon itself once the swap is done: redundant
+    /// with the library's own disposal (<see cref="System.Drawing.Icon.Dispose()"/> is idempotent) while
+    /// it does that, and what keeps a handle from leaking if a future version of the pinned
+    /// H.NotifyIcon.Wpf stops. The construction-time icon goes through this same path (the
+    /// presenter has no icon showing on the first call), so there is no separate initial
     /// assignment to keep in sync.
+    /// </para>
+    /// <para>
+    /// What the shield and the tooltip show also depends on the unacknowledged count and on whether a scan is running, which
+    /// the snapshot does not carry; <see cref="RefreshShield"/> is this without the toasts and the menu, for when only those change.
     /// </para>
     /// </summary>
     private void Apply(GatewaySnapshot snapshot)
@@ -450,17 +474,7 @@ public sealed class TrayIconService : IDisposable
             return;
         }
 
-        var shield = ShieldIconFactory.StateFor(snapshot);
-        if (_currentShield != shield)
-        {
-            _currentShield = shield;
-
-            var fresh = ShieldIconFactory.CreateIcon(shield);
-            _icon.Icon = fresh;
-            _ownedIcon = fresh;
-        }
-
-        RefreshTooltip(snapshot);
+        RefreshShield(snapshot);
 
         // Findings toast from the alert queue (AlertNotifier), not from here; this is the gateway's own edges. Offline and
         // recovered are edges, not levels: one toast per transition, and only for a gateway this session has seen reachable.
@@ -492,12 +506,15 @@ public sealed class TrayIconService : IDisposable
     }
 
     /// <summary>
-    /// The tooltip: the unacknowledged-findings count (<see cref="AlertCountsService"/>, the same number as the sidebar badge)
-    /// and then the gateway state; see <see cref="AlertCountPresentation.TrayTooltip"/>. Called when either changes. The tray
-    /// icon artwork is deliberately not touched here: the count is text only.
+    /// The shield and the tooltip: the Mac's menu-bar icon. Its inputs are the gateway snapshot (paused, offline, degraded, healthy), the
+    /// unacknowledged-findings count (<see cref="AlertCountsService"/>, the same number as the sidebar badge, null until its first read)
+    /// and whether a scan is running (<see cref="ScanActivity"/>); <see cref="ShieldIconFactory.StateFor(GatewaySnapshot, int?, bool)"/> has
+    /// the precedence and <see cref="TrayShieldPresenter"/> replaces only what differs. Called whenever one of the three changes, from the
+    /// notifications the app already raises for them: no timer.
     /// </summary>
-    private void RefreshTooltip(GatewaySnapshot snapshot) =>
-        _icon.ToolTipText = AlertCountPresentation.TrayTooltip(
+    private void RefreshShield(GatewaySnapshot snapshot) =>
+        _ = _shield.Update(
             snapshot,
-            _services.AlertCounts.HasData ? _services.AlertCounts.Current : null);
+            _services.AlertCounts.HasData ? _services.AlertCounts.Current : null,
+            _scans.IsScanning);
 }

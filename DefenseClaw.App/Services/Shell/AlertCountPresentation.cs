@@ -67,18 +67,25 @@ internal static class AlertCountPresentation
     }
 
     /// <summary>
-    /// The tray tooltip: the count first, since it is what the operator glances at, then the gateway state. The shell cuts
-    /// a tooltip at 127 characters, and this stays well inside that. When the count is not known yet (the first read has not
-    /// finished, or there is no audit database and no gateway to ask) the line is the state alone.
+    /// The tray tooltip: the count first, since it is what the operator glances at (the real number: the icon stops at "9+"),
+    /// then the state. The shell cuts a tooltip at 127 characters, and this stays well inside that. When the count is not known
+    /// yet (the first read has not finished, or there is no audit database and no gateway to ask) the line is the state alone.
+    /// <para>
+    /// The state is the gateway's (<see cref="GatewaySnapshot.StateLabel"/>, which says "Monitoring paused" while the operator has
+    /// paused it), and while a scan is running it is led by "Scanning", the second state the icon shows. A pause outranks a scan, as
+    /// it does on the icon, so a paused tooltip never says scanning.
+    /// </para>
     /// </summary>
     /// <param name="snapshot">The gateway state.</param>
     /// <param name="counts">The counts, or null while <see cref="AlertCountsService.HasData"/> is false.</param>
-    public static string TrayTooltip(GatewaySnapshot snapshot, AlertCounts? counts)
+    /// <param name="scanning">True while a scan is running (<see cref="ScanActivity.IsScanning"/>).</param>
+    public static string TrayTooltip(GatewaySnapshot snapshot, AlertCounts? counts, bool scanning = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
+        var state = scanning && !snapshot.IsPaused ? $"Scanning — {snapshot.StateLabel}" : snapshot.StateLabel;
         return counts is null
-            ? $"DefenseClaw — {snapshot.StateLabel}"
-            : $"DefenseClaw — {Sentence(counts)}\n{snapshot.StateLabel}";
+            ? $"DefenseClaw — {state}"
+            : $"DefenseClaw — {Sentence(counts)}\n{state}";
     }
 }

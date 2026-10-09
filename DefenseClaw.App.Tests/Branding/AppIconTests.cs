@@ -89,74 +89,111 @@ public sealed class AppIconTests
         throw new InvalidOperationException($"No DefenseClaw.Win.sln above {AppContext.BaseDirectory}.");
     }
 
-    private static readonly ShieldState[] TrayStates = { ShieldState.Running, ShieldState.Stopped, ShieldState.Warning, ShieldState.Critical };
+    /// <summary>
+    /// Every look the tray can have, in the order the sheet lists them: the four states that are always there, the two that are new (paused,
+    /// scanning), and the alerting one with no number and with each number the icon can show (1 to 9, then "9+").
+    /// </summary>
+    internal static readonly (string Name, ShieldState State, int Count)[] TrayLooks =
+    {
+        ("Running (healthy)", ShieldState.Running, 0),
+        ("Stopped (offline)", ShieldState.Stopped, 0),
+        ("Warning (degraded)", ShieldState.Warning, 0),
+        ("Paused", ShieldState.Paused, 0),
+        ("Scanning", ShieldState.Scanning, 0),
+        ("Alerting, no number", ShieldState.Critical, 0),
+        ("Alerting, 1", ShieldState.Critical, 1),
+        ("Alerting, 2", ShieldState.Critical, 2),
+        ("Alerting, 3", ShieldState.Critical, 3),
+        ("Alerting, 4", ShieldState.Critical, 4),
+        ("Alerting, 5", ShieldState.Critical, 5),
+        ("Alerting, 6", ShieldState.Critical, 6),
+        ("Alerting, 7", ShieldState.Critical, 7),
+        ("Alerting, 8", ShieldState.Critical, 8),
+        ("Alerting, 9", ShieldState.Critical, 9),
+        ("Alerting, 9+", ShieldState.Critical, AlertBucket.Overflow),
+    };
 
     /// <summary>
-    /// The review sheet: on a Windows-light and a Windows-dark background, the app icon at every size it ships,
-    /// each tray state at 16-40 px (100-250 % scaling) actual size, and the tray sizes magnified pixel for pixel.
+    /// The review sheet, on a Windows-light and a Windows-dark background side by side: the app icon at every size it ships, then one
+    /// row per tray look (<see cref="TrayLooks"/>) with every tray size at actual size (16 to 48 px, 100 % to 300 % display scaling) and
+    /// the sizes 100 % to 200 % uses magnified pixel for pixel.
     /// </summary>
     private static void WriteContactSheet(string path)
     {
-        const int Width = 1180;
+        const int PanelWidth = 940;
+        const int LabelWidth = 150;
+        const int RowHeight = 108;
+        var actual = ShieldArtwork.TrayIconSizes;
+        var magnified = new[] { (Size: 16, Zoom: 6), (Size: 20, Zoom: 5), (Size: 24, Zoom: 4), (Size: 32, Zoom: 3) };
 
-        // Each section: a caption, then images left to right (each with the gap after it), wrapping at the edge.
-        var sections = new List<(string Caption, List<(BitmapSource Image, double Gap)> Images)>
-        {
-            ("App icon (Assets\\DefenseClaw.ico): " + string.Join(", ", ShieldArtwork.AppIconSizes.Reverse()) + " px",
-                ShieldArtwork.AppIconSizes.Reverse().Select(size => (ShieldArtwork.Render(ShieldState.Running, size), 18.0)).ToList()),
-            ("Tray, actual size (16, 20, 24, 32, 36, 40 px): running, stopped, warning, critical",
-                Zoomed(new[] { (16, 1), (20, 1), (24, 1), (32, 1), (36, 1), (40, 1) }, 8, 40)),
-            ("Tray, magnified: 16 px ×8, 20 px ×6, 24 px ×5 (100 %, 125 %, 150 % display scaling)",
-                Zoomed(new[] { (16, 8), (20, 6), (24, 5) }, 6, 28)),
-            ("Tray, magnified: 32 px, 36 px, 40 px ×3 (200 %, 225 %, 250 % display scaling)",
-                Zoomed(new[] { (32, 3), (36, 3), (40, 3) }, 6, 28)),
-        };
+        var appIcons = ShieldArtwork.AppIconSizes.Reverse().Select(size => ShieldArtwork.Render(ShieldState.Running, size)).ToList();
+        var appIconsHeight = appIcons.Max(image => image.PixelHeight);
 
-        // Laid out once without drawing to measure a panel, then drawn once per background.
-        double Layout(DrawingContext? context, double top, string ink)
+        double Panel(DrawingContext? context, double left, string ink)
         {
-            var y = top + 14;
-            foreach (var (caption, images) in sections)
+            var y = 14.0;
+            if (context is not null)
+            {
+                Label(context, "App icon (Assets\\DefenseClaw.ico): " + string.Join(", ", ShieldArtwork.AppIconSizes.Reverse()) + " px", ink, left + 20, y);
+            }
+
+            y += 24;
+            var x = left + 20;
+            foreach (var image in appIcons)
+            {
+                context?.DrawImage(image, new Rect(x, y + appIconsHeight - image.PixelHeight, image.PixelWidth, image.PixelHeight));
+                x += image.PixelWidth + 18;
+            }
+
+            y += appIconsHeight + 22;
+            if (context is not null)
+            {
+                Label(context, "Tray: actual size at 16, 20, 24, 28, 32, 36, 40 and 48 px, then 16 px ×6, 20 px ×5, 24 px ×4, 32 px ×3", ink, left + 20, y);
+            }
+
+            y += 26;
+            foreach (var (name, state, count) in TrayLooks)
             {
                 if (context is not null)
                 {
-                    Label(context, caption, ink, 20, y);
+                    Label(context, name, ink, left + 20, y + 4);
                 }
 
-                y += 24;
-                var (x, rowHeight) = (20.0, 0.0);
-                foreach (var (image, gap) in images)
+                var at = left + 20 + LabelWidth;
+                foreach (var size in actual)
                 {
-                    if (x + image.PixelWidth > Width - 20)
-                    {
-                        (x, y, rowHeight) = (20, y + rowHeight + 10, 0);
-                    }
-
-                    context?.DrawImage(image, new Rect(x, y, image.PixelWidth, image.PixelHeight));
-                    rowHeight = Math.Max(rowHeight, image.PixelHeight);
-                    x += image.PixelWidth + gap;
+                    context?.DrawImage(ShieldArtwork.Render(state, size, count), new Rect(at, y + 4, size, size));
+                    at += size + 8;
                 }
 
-                y += rowHeight + 18;
+                at += 16;
+                foreach (var (size, zoom) in magnified)
+                {
+                    var image = Magnify(ShieldArtwork.Render(state, size, count), zoom);
+                    context?.DrawImage(image, new Rect(at, y, image.PixelWidth, image.PixelHeight));
+                    at += image.PixelWidth + 8;
+                }
+
+                y += RowHeight;
             }
 
-            return y - top;
+            return y + 10;
         }
 
-        var panelHeight = (int)Math.Ceiling(Layout(null, 0, "#000000"));
+        var height = (int)Math.Ceiling(Panel(null, 0, "#000000"));
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())
         {
-            var top = 0;
+            var left = 0;
             foreach (var (background, ink) in new[] { ("#F3F3F3", "#1B1B1B"), ("#202020", "#F3F3F3") })
             {
-                context.DrawRectangle(Brush(background), null, new Rect(0, top, Width, panelHeight));
-                _ = Layout(context, top, ink);
-                top += panelHeight;
+                context.DrawRectangle(Brush(background), null, new Rect(left, 0, PanelWidth, height));
+                _ = Panel(context, left, ink);
+                left += PanelWidth;
             }
         }
 
-        var bitmap = new RenderTargetBitmap(Width, panelHeight * 2, 96, 96, PixelFormats.Pbgra32);
+        var bitmap = new RenderTargetBitmap(PanelWidth * 2, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(visual);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
@@ -164,14 +201,6 @@ public sealed class AppIconTests
         using var stream = File.Create(path);
         encoder.Save(stream);
     }
-
-    /// <summary>Every tray state at each (size, zoom), grouped by state: <paramref name="gap"/> between sizes, <paramref name="stateGap"/> between states.</summary>
-    private static List<(BitmapSource Image, double Gap)> Zoomed((int Size, int Zoom)[] sizes, double gap, double stateGap) =>
-        TrayStates
-            .SelectMany(state => sizes.Select((entry, index) => (
-                Magnify(ShieldArtwork.Render(state, entry.Size), entry.Zoom),
-                index == sizes.Length - 1 ? stateGap : gap)))
-            .ToList();
 
     private static void Label(DrawingContext context, string text, string ink, double x, double y) =>
         context.DrawText(

@@ -126,8 +126,8 @@ public sealed class ShieldIconCacheTests : IDisposable
                 using var icon = ShieldIconFactory.CreateIcon(state);
             }
 
-            Assert.Equal(4, ShieldIconFactory.EncodeCount);
-            Assert.Equal(4, CachedFiles().Length);
+            Assert.Equal(Enum.GetValues<ShieldState>().Length, ShieldIconFactory.EncodeCount);
+            Assert.Equal(Enum.GetValues<ShieldState>().Length, CachedFiles().Length);
         });
     }
 
