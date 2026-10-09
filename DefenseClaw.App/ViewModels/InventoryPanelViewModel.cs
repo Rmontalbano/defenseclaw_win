@@ -238,6 +238,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         ComponentsView.Filter = FilterComponent;
         ApplyGrouping();
         Review = new DiscoverActionReview(services);
+        BomBrowser.PropertyChanged += OnBomBrowserChanged;
         BuildBomConnectors();
     }
 
@@ -247,7 +248,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     public override string Title => "Inventory";
 
     public override string Description =>
-        "AI components and SDKs from the latest full scan in inventory.db, with search and grouping.";
+        "AI components and SDKs from the latest full scan in inventory.db, with search and grouping; and the AI bill of materials a scan of your connectors' own configuration prints.";
 
     /// <summary>Filtered, grouped view over the loaded rollup; the grid binds to this.</summary>
     public ICollectionView ComponentsView { get; }
@@ -299,6 +300,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     {
         ComponentsView.Refresh();
         UpdateEmptyState();
+        BomBrowser.SearchText = value;
     }
 
     partial void OnGroupByChanged(string value)

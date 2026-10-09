@@ -70,6 +70,7 @@ adds `schema_version` rows 1..53, and the tests insert a few synthetic rows writ
 | Fixed argv built by the app | Compatible: all 47 still name a command and options that exist. |
 | Runtime planes (`agent discovery runtime`, `GET /api/v1/ai-usage/runtime`) | **New panel** (CUST-309), offered only when `agent discovery --help` lists `runtime` and `agent discovery runtime --help` lists `status`, `scan`, `findings`, `permissions`. Reads the route; runs only `scan`, `enable` and `disable` (each reviewed) and `permissions --json` (read-only, never `--grant`). Synthetic fixtures only (see above). |
 | AI Discovery models: owner, relevance, discovery confidence, lineage (`GET /api/v1/ai-usage`) | **Added**, shown by presence (CUST-310): Owners, Relevance and Confidence columns, the Mac's recommended / all scope, an inspector Provenance block and the `model-lookup=` chip. 0.8.10's data and fixtures are untouched and give the panel they always gave. See below. |
+| Inventory: AI BOM browser (`aibom scan --json`) | **Added**, shown by presence (CUST-275): Summary and one table per kind with the TUI's detail fields, the `--only` scope chips, a Connector column. A newer runtime's extra members, a Tools tab, a Rules count and the "not collected" marks appear when the output has them; 0.8.10's output gets what the TUI shows it. See below. |
 
 ### Gateway HTTP client
 
@@ -289,8 +290,44 @@ only when an enabled gateway said so (a gateway that does not send the member is
 path - a drive path, a UNC or backslashed path, `file:`, `~/`, `/x`, `%VAR%/x` - is shown as "(local path hidden)" unless config.yaml says `ai_discovery.store_raw_local_paths: true`, the runtime's own
 switch for keeping them, and those values are also cut to 512 characters and have their control and bidirectional characters spelled out.
 
+### Inventory: the AI BOM browser (CUST-275)
+
+**What it is.** The Inventory page's second view (AI BOM, beside Components) browses what `defenseclaw aibom scan --json` printed, the way the TUI's Inventory
+panel does (`tui/panels/inventory.py`, `tui/services/inventory_state.py`): a Summary and a table per kind (Skills, Plugins, MCPs, Agents, Models, Memory; Tools
+when some connector lists one) with the TUI's columns, a detail pane with its fields in its order and labels, the Skills and Plugins status chips, a Connector
+column when the scan covered several connectors, and the TUI's `--only` scope chips. Generating it is still the reviewed, state-changing command it always was
+(a scan records an audit event and posts to the gateway); nothing runs on open. On a managed or invalid installation (CUST-308) both Generate buttons are off with the
+installation's own sentence as their tooltip, and a review reached another way carries the read-only bar and cannot be confirmed; browsing a BOM already on the page,
+Save JSON, search, the tabs and the scope chips stay on, because they read. `Core/Inventory/InventoryBomSnapshot.cs` parses and keeps it, bounded.
+
+**Bounds.** Output over 4 MiB (the Mac's parse limit) is not parsed (`Too large to display: aibom scan output is 5.2 MB, over the 4 MB limit`); the run keeps its
+whole output (`RetainFullOutput`, the runner's 200,000-line / 16 MiB ceiling), and output the runner still had to cut is not parsed either, because what is left
+starts in the middle of the document. At most 5,000 rows of a kind per connector are kept (the summary's count still says how many there were), 24 extra members
+per row, 512 characters per value. The raw JSON is not kept (Save JSON writes the run's own output). The TUI has no such limit and no such message; the wording is
+the audit and mutation readers' (CUST-284).
+
+**A connector that cannot be used is skipped and named** (an entry that is not an object, or not an inventory), where the TUI drops it without a word; one whose
+own `errors` name failed commands is kept, with what it did list, and each failed command is named in the Summary's coverage notes.
+
+**By presence, never by version.** The newer source (95159fd) adds to the output: `version` 4, a `rules` list and `summary.rules`, a `collected: false` mark on the
+categories an `--only` run left out, plugin rows with `source_kind` and `enabled` instead of `origin` and `status`, a tool's `kind` and `description`, a skill's
+`scan_eligible` and the `discovery-only` verdict, and per-connector `connector_rule_files` / `connector_policy_settings` (found by reading
+`claw_inventory.py`, `cmd_aibom.py` and `tui/services/inventory_state.py` of both trees). Nothing here asks which runtime printed the output: a row's member that the
+TUI has no field for is listed under "Also in this scan" when the row has it (so a tool's kind, a filesystem connector's `entry_count`, `base_url` and `kind` show up
+exactly where the TUI shows blanks), a Rules row appears when the summary has `rules`, a kind marked not collected says so, the Tools tab appears when a tool was
+listed, and a plugin with no `origin` or `status` shows its `source_kind` and its enabled state as the newer TUI does. Free text a row carries (an MCP server's
+command line and URL, descriptions, every extra member) has its credentials masked first (`DisplayRedaction`) and its control and bidirectional characters spelled out
+(`DisplayNames.Visible`).
+
+**Fixtures** are synthetic and written from the emitting code, not captured (a run writes an audit record): `aibom-scan.openclaw.synthetic.json` (0.8.10's OpenClaw
+path), `aibom-scan.95159fd.synthetic.json` and `aibom-scan.95159fd.only.synthetic.json` (the newer source's connectors and an `--only` run) and
+`aibom-scan.partial.synthetic.json` (entries that cannot be read, a connector with failed commands), in `DefenseClaw.App.Tests/Fixtures/CliPayloads`, beside the 0.8.10
+ones; `runtime-95159fd/cli/aibom-scan.json` is the capture of a fresh install of the newer source (`[]`: no connector).
+
 ## Not verified
 
+- An `aibom scan --json` run of either runtime with a connector: its shape is taken from the code that prints it (see above); a populated BOM, the bound and the
+  masking were exercised with synthetic output only.
 - A populated `GET /api/v1/ai-usage` from a Windows run, and the recommended view against a running pinned runtime: `ai-usage.populated.synthetic.json` is built from the emitting code and held
   to that source's own validation rules, not compared with an answer. The online lookup being on (`lookup_model_provenance_online: true`) was never observed. The 0.8.10 gateway's answer was
   learned from its Python consumers and a text search of its binary, not from an answer of its own.

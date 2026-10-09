@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -7,6 +8,7 @@ using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Inventory;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -19,23 +21,84 @@ public sealed record InventoryBomRow(string Connector, string Summary)
 /// <summary>
 /// Inventory: empty-state logic and the optional "Generate AI BOM" action.
 /// <para>
-/// <b>AI BOM.</b> <c>defenseclaw aibom scan --json [--connector C]</c> (flags from its help) inventories the
+/// <b>AI BOM.</b> <c>defenseclaw aibom scan --json [--only C,...] [--connector C]</c> (flags from its help) inventories the
 /// active connectors' own skills, plugins, MCP servers, agents, tools, models and memory with policy
 /// verdicts. The inventory is only read, but every run records a scan event in audit.db and posts to the
 /// gateway (and fails closed if the gateway is down), so it is a state-changing command: it goes through the
 /// review dialog and never runs on its own. Its JSON shape was never captured from a live run (that writes the audit
-/// record); it is taken from the code that prints it, see <see cref="ParseBom"/>. The summary reads each connector's
-/// <c>summary</c> counts, or the length of each category array, and falls back to "see Activity".
+/// record); it is taken from the code that prints it, see <see cref="InventoryBomSnapshot"/>.
+/// </para>
+/// <para>
+/// <b>Browsing it.</b> What a run printed is kept, parsed and bounded, in <see cref="BomBrowser"/> (the TUI's Inventory panel: a Summary and
+/// one table per kind with a detail pane) until the next run. The run keeps its whole output (<see cref="DiscoverStep.RetainFullOutput"/>);
+/// output the runner had to cut, or that is over the parser's cap, is not parsed at all and the status line says "Too large to display" with what
+/// to do about it. The per-connector count lines (<see cref="ParseBom"/>, which reads counts even from output with no summary) are the Summary
+/// tab's "by connector" rows.
 /// </para>
 /// </summary>
 public sealed partial class InventoryPanelViewModel
 {
     public const string AllConnectorsLabel = "All active connectors";
 
+    /// <summary>The page shows the AI components from inventory.db (the page's own subject).</summary>
+    public const string ViewComponents = "components";
+
+    /// <summary>The page shows the AI bill of materials a scan printed.</summary>
+    public const string ViewBom = "bom";
+
     private static readonly Regex ConnectorNamePattern = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", RegexOptions.Compiled);
 
     private string? _lastBomJson;
     private bool _lastBomTruncated;
+
+    /// <summary>The AI BOM a scan printed, as the TUI browses it: tabs, tables, detail and the <c>--only</c> scope chips.</summary>
+    public InventoryBomBrowser BomBrowser { get; } = new();
+
+    /// <summary><see cref="ViewComponents"/> or <see cref="ViewBom"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBomView), nameof(IsComponentsView), nameof(ToolbarCaption), nameof(SearchPlaceholder), nameof(SearchAutomationName), nameof(SearchHelp))]
+    private string _activeView = ViewComponents;
+
+    public bool IsBomView => ActiveView == ViewBom;
+
+    public bool IsComponentsView => !IsBomView;
+
+    /// <summary>The toolbar's caption: which scan the components come from, or which AI BOM is on screen.</summary>
+    public string ToolbarCaption => IsBomView ? BomBrowser.Caption : StatusMessage ?? string.Empty;
+
+    public string SearchPlaceholder => IsBomView ? "Search the AI BOM…" : "Search name, vendor, framework…";
+
+    public string SearchAutomationName => IsBomView ? "Search the AI BOM" : "Search components";
+
+    public string SearchHelp => IsBomView
+        ? "Matches any column of the rows in the table. Shortcut Ctrl+F; Esc clears it."
+        : "Matches name, vendor, framework and ecosystem. Shortcut Ctrl+F; Esc clears it.";
+
+    /// <summary>
+    /// A note about the last AI BOM that is not an error: connectors it printed that could not be read (skipped, and named), and the inventory
+    /// commands that failed on the connectors that were. Empty when there is nothing to say.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBomWarning))]
+    private string? _bomWarning;
+
+    public bool HasBomWarning => !string.IsNullOrWhiteSpace(BomWarning);
+
+    partial void OnStatusMessageChanged(string? value) => OnPropertyChanged(nameof(ToolbarCaption));
+
+    private void OnBomBrowserChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(InventoryBomBrowser.Caption):
+                OnPropertyChanged(nameof(ToolbarCaption));
+                break;
+
+            case nameof(InventoryBomBrowser.HasSnapshot):
+                OnPropertyChanged(nameof(BomFailed));
+                break;
+        }
+    }
 
     /// <summary>inventory.db does not exist yet: the normal state until AI discovery has run once.</summary>
     [ObservableProperty]
@@ -59,7 +122,7 @@ public sealed partial class InventoryPanelViewModel
     private string? _selectedBomConnector;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasBom))]
+    [NotifyPropertyChangedFor(nameof(HasBom), nameof(BomFailed))]
     private string? _bomStatus;
 
     [ObservableProperty]
@@ -68,6 +131,12 @@ public sealed partial class InventoryPanelViewModel
     public bool HasDatabase => !DatabaseMissing;
 
     public bool HasBom => !string.IsNullOrWhiteSpace(BomStatus);
+
+    /// <summary>
+    /// The last run left nothing to browse - it did not finish, its output was too large or was not JSON, or it listed no connector - so its
+    /// status line is what the AI BOM page has to say.
+    /// </summary>
+    public bool BomFailed => HasBom && !BomBrowser.HasSnapshot;
 
     public ObservableCollection<string> BomConnectors { get; } = new();
 
@@ -179,7 +248,7 @@ public sealed partial class InventoryPanelViewModel
         ApplyBomScope();
     }
 
-    /// <summary>The last BOM's connector lines, narrowed to the shared scope (a line is one connector's; All shows every line).</summary>
+    /// <summary>The last BOM's connector lines, narrowed to the shared scope (a line is one connector's; All shows every line), and the browser with them.</summary>
     private void ApplyBomScope()
     {
         var scope = Services.ConnectorScope;
@@ -191,6 +260,9 @@ public sealed partial class InventoryPanelViewModel
                 BomRows.Add(row);
             }
         }
+
+        BomBrowser.SetConnector(scope.Current);
+        BomBrowser.SetConnectorLines(BomRows.ToList());
     }
 
     /// <summary>The connectors <c>aibom scan --connector</c> can be narrowed to: the ones named in config.yaml.</summary>
@@ -229,16 +301,29 @@ public sealed partial class InventoryPanelViewModel
             !string.Equals(connector, AllConnectorsLabel, StringComparison.Ordinal) &&
             ConnectorNamePattern.IsMatch(connector);
 
+        // The TUI's order: --only (the scope chips), then --connector.
+        var only = BomBrowser.OnlyArgument;
+        var scanned = only.Length == 0 ? Array.Empty<InventoryBomKind>() : BomBrowser.ScopeKinds.ToArray();
+
         var argv = new List<string> { "aibom", "scan", "--json" };
+        if (only.Length > 0)
+        {
+            argv.Add("--only");
+            argv.Add(only);
+        }
+
         if (scoped)
         {
             argv.Add("--connector");
             argv.Add(connector!);
         }
 
+        var what = only.Length == 0
+            ? "the skills, plugins, MCP servers, agents, tools, models and memory"
+            : "only the " + string.Join(", ", scanned.Select(k => k.Plural()));
         Review.Open(
             "Generate an AI BOM?",
-            "Inventories the skills, plugins, MCP servers, agents, tools, models and memory of " +
+            $"Inventories {what} of " +
             (scoped ? $"the {connector} connector" : "every active connector") +
             ", with their policy verdicts. The inventory itself is only read, but every run records a scan event " +
             "in audit.db (it raises Overview's Scans count) and posts an observability event to the gateway, and it " +
@@ -246,66 +331,135 @@ public sealed partial class InventoryPanelViewModel
             "scan on the AI Discovery page.",
             new[]
             {
+                // The whole output is kept (up to the runner's full-output ceiling): a BOM is far longer than an ordinary command's 2,000 lines,
+                // and a transcript cut at its start is not an inventory.
                 new DiscoverStep(
                     argv,
                     "Build the AI bill of materials as JSON.",
                     CommandTier.StateChanging,
-                    CliRunner.ExtendedTimeout),
+                    CliRunner.ExtendedTimeout,
+                    RetainFullOutput: true),
             },
-            result => AfterBomAsync(result, scoped ? connector : null),
+            result => AfterBomAsync(result, scoped ? connector : null, scanned),
             primaryText: "Generate");
     }
 
-    private Task AfterBomAsync(DiscoverReviewResult result, string? connector)
+    private async Task AfterBomAsync(DiscoverReviewResult result, string? connector, IReadOnlyList<InventoryBomKind> scanned)
     {
         BomRows.Clear();
         _bomAll.Clear();
         _lastBomJson = null;
         _lastBomTruncated = false;
         CanSaveBom = false;
+        BomWarning = null;
+        BomStatus = null;
+        BomBrowser.Clear();
+
+        // Whatever the run came to, its answer is on the AI BOM page: the status line is there.
+        ActiveView = ViewBom;
 
         var stamp = DateTimeOffset.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
         if (!result.Succeeded || result.Invocations.Count == 0)
         {
             BomStatus = $"The AI BOM run did not finish ({stamp}). The dialog and the Activity panel have its output.";
-            return Task.CompletedTask;
+            return;
         }
 
         var invocation = result.Invocations[^1];
-        var stdout = DiscoverCli.Stdout(invocation);
         var scope = connector ?? "every active connector";
 
+        // The runner keeps the END of an output longer than it retains and says so; what is left starts in the middle of the document, so it is not
+        // parsed (a fragment could pass for a smaller inventory).
+        if (invocation.IsOutputTruncated)
+        {
+            _lastBomTruncated = true;
+            BomStatus = $"Too large to display: the AI BOM output ran past the {invocation.RetainedLineLimit:N0} lines this app keeps of one command's output " +
+                        $"({invocation.DroppedOutputLineCount:N0} were dropped), so none of it is shown here ({stamp}). Narrow the scan - one connector, " +
+                        "or fewer categories under Scope - and generate it again, or run 'defenseclaw aibom scan --json' in a terminal to capture all of it.";
+            return;
+        }
+
+        var stdout = DiscoverCli.Stdout(invocation);
+        var (parsed, lines) = await Task.Run(() =>
+        {
+            var snapshot = InventoryBomSnapshot.Parse(stdout, connector);
+            return (snapshot, snapshot.Succeeded ? ParseBomLines(stdout, connector) : new List<InventoryBomRow>());
+        }).ConfigureAwait(true);
+
+        switch (parsed.Status)
+        {
+            case InventoryBomParseStatus.TooLarge:
+                BomStatus = $"Too large to display: {parsed.Message} ({stamp}). Narrow the scan - one connector, or fewer categories under Scope - and " +
+                            "generate it again, or run 'defenseclaw aibom scan --json' in a terminal to capture all of it.";
+                return;
+
+            case InventoryBomParseStatus.NotJson:
+                BomStatus = $"AI BOM ran ({stamp}) but its output was not the JSON this page expected ({parsed.Message}). See the Activity panel.";
+                return;
+        }
+
+        var bom = parsed.Snapshot!;
+        if (bom.Connectors.Count == 0)
+        {
+            // '[]' is what a scan of no connector prints (cmd_aibom.py:111-118): nothing was inventoried.
+            BomStatus = bom.Skipped.Count == 0
+                ? $"AI BOM ran ({stamp}) but listed no connector, so there is nothing to summarize. Is a connector configured? The Activity panel has its output."
+                : $"AI BOM ran ({stamp}) but no connector in its output could be read: {SkippedText(bom)}. The Activity panel has its output.";
+            return;
+        }
+
+        foreach (var row in lines)
+        {
+            _bomAll.Add(row);
+        }
+
+        BomBrowser.Load(bom, scanned);
+        ApplyBomScope();
+
+        _lastBomJson = stdout;
+        CanSaveBom = !string.IsNullOrWhiteSpace(stdout);
+        BomWarning = WarningFor(bom);
+        BomStatus = $"AI BOM generated {stamp} for {scope}. The full JSON is in the Activity panel, and you can save it.";
+    }
+
+    /// <summary>
+    /// What to tell the operator about connectors of the scan that did not come through whole: the ones that could not be read at all
+    /// (skipped, each named with the reason) and the ones whose inventory commands failed (kept, each failed command named). Null for a clean scan.
+    /// </summary>
+    internal static string? WarningFor(InventoryBomSnapshot snapshot)
+    {
+        var lines = new List<string>();
+        if (snapshot.Skipped.Count > 0)
+        {
+            lines.Add($"Skipped {snapshot.Skipped.Count} connector{(snapshot.Skipped.Count == 1 ? string.Empty : "s")} the output named but this page could not read: {SkippedText(snapshot)}.");
+        }
+
+        foreach (var connector in snapshot.Connectors.Where(c => c.ErrorCount > 0))
+        {
+            var commands = connector.Errors.Select(e => e.Command).Where(c => c.Length > 0).Distinct(StringComparer.Ordinal).ToList();
+            lines.Add(
+                $"{connector.Name}: {connector.ErrorCount} inventory command{(connector.ErrorCount == 1 ? string.Empty : "s")} failed" +
+                (commands.Count > 0 ? $" ({string.Join(", ", commands)})" : string.Empty) +
+                "; what it did list is shown. The Summary tab has the reasons.");
+        }
+
+        return lines.Count == 0 ? null : string.Join(Environment.NewLine, lines);
+    }
+
+    private static string SkippedText(InventoryBomSnapshot snapshot) =>
+        string.Join("; ", snapshot.Skipped.Select(s => $"{s.Name} ({s.Reason})"));
+
+    /// <summary><see cref="ParseBom"/> for output the snapshot has already read: the same JSON, so it cannot fail, but a count line is never worth an exception.</summary>
+    private static List<InventoryBomRow> ParseBomLines(string stdout, string? connector)
+    {
         try
         {
-            foreach (var row in ParseBom(stdout, connector))
-            {
-                _bomAll.Add(row);
-            }
-
-            ApplyBomScope();
-
-            if (_bomAll.Count == 0)
-            {
-                // '[]' is what a scan of no connector prints (cmd_aibom.py:111-118): nothing was inventoried.
-                BomStatus = $"AI BOM ran ({stamp}) but listed no connector, so there is nothing to summarize. " +
-                            "Is a connector configured? The Activity panel has its output.";
-                return Task.CompletedTask;
-            }
-
-            _lastBomJson = stdout;
-            _lastBomTruncated = invocation.IsOutputTruncated;
-            CanSaveBom = !_lastBomTruncated && !string.IsNullOrWhiteSpace(stdout);
-            BomStatus = _lastBomTruncated
-                ? $"AI BOM generated {stamp} for {scope}. The output was too long to keep in full, so it cannot be saved from here; " +
-                  "run 'defenseclaw aibom scan --json' in a terminal to capture all of it."
-                : $"AI BOM generated {stamp} for {scope}. The full JSON is in the Activity panel, and you can save it.";
+            return ParseBom(stdout, connector);
         }
-        catch (JsonException ex)
+        catch (JsonException)
         {
-            BomStatus = $"AI BOM ran ({stamp}) but its output was not the JSON this page expected ({ex.Message}). See the Activity panel.";
+            return new List<InventoryBomRow>();
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>The seven inventory categories, in the order the CLI lists them (claw_inventory.py:724-747, _build_summary).</summary>

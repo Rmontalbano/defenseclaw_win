@@ -101,6 +101,8 @@ public sealed class ArgvContractTests
             string.Join('\u001f', new[] { "plugin", "info", "--json", "some-plugin" }),
             string.Join('\u001f', new[] { "tool", "status", "--json", "some-tool" }),
             string.Join('\u001f', new[] { "aibom", "scan", "--json" }),
+            // the AI BOM page's scope chips (--only) and connector (--connector), in the TUI's order
+            string.Join('\u001f', new[] { "aibom", "scan", "--json", "--only", "skills,plugins,mcp", "--connector", "codex" }),
             string.Join('\u001f', new[] { "agent", "discovery", "status", "--json" }),
             string.Join('\u001f', new[] { "agent", "discovery", "scan" }),
             string.Join('\u001f', new[] { "agent", "discover", "--refresh", "--no-emit-otel" }),

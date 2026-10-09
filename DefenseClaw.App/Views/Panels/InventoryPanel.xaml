@@ -14,6 +14,11 @@
         Migrated to the shared design system (Themes\DefenseClaw.xaml); the local styles below are the components
         grid's cell text and the narrow/wide switch of its master-detail block.
 
+        Two views share the page (the segmented control at the top of the strip): Components, the AI components inventory.db
+        recorded, and AI BOM, what a reviewed aibom scan printed as JSON, browsed as the TUI's Inventory panel does (Summary and
+        a table per kind with a detail pane). They take turns in the same master-detail block, so the sizing below serves both:
+        the components grid or BomGrid in the master card, ComponentsDetail or BomDetail in the detail card.
+
         Layout. At the window's 940 x 620 DIP minimum the page has ~663 x 498 DIP to itself (sidebar, title bar
         and status strip take the rest), which is less than the toolbar, the scan note, the grid and the table
         browser add up to. So the header stays put and everything under it is one scrolling page (PageScroll).
@@ -53,6 +58,103 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!--
+            The components grid is one of two things the master card shows: the AI BOM view takes its place. The visibility is in the style
+            (a local Visibility would beat a trigger), and the grid stays where it is in the tree.
+        -->
+        <Style x:Key="InventoryComponentsGrid" TargetType="{x:Type ui:DataGrid}" BasedOn="{StaticResource DcDataGrid}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding UsingFallbackView}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsBomView}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The table browser reads inventory.db: it is there when the database is and the Components view is on. -->
+        <Style x:Key="InventoryTableBrowser" TargetType="{x:Type ui:CardExpander}" BasedOn="{StaticResource {x:Type ui:CardExpander}}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasDatabase}" Value="False">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsBomView}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The AI BOM grid's Verdict column: the policy verdict as a state pill, a dash for a row nothing evaluated. -->
+        <DataTemplate x:Key="BomVerdictCell">
+            <Grid>
+                <ctl:DcStatePill HorizontalAlignment="Left"
+                                 Text="{Binding Verdict}"
+                                 Tone="{Binding VerdictTone}"
+                                 Visibility="{Binding HasVerdict, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Text="—">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasVerdict}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+        </DataTemplate>
+
+        <!--
+            A scan-scope chip. ON: a check mark and the selected fill. OFF: the outline alone, dim text. State is never colour alone - the check mark and
+            the outline carry it.
+        -->
+        <Style x:Key="BomScopeChip" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,0,6,6" />
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource DcFocusVisualStyle}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chip"
+                                Padding="9,3,9,3"
+                                CornerRadius="{DynamicResource DcRadiusS}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource DcControlBorderBrush}"
+                                Background="Transparent">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="Mark"
+                                           Margin="0,0,5,0"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="12"
+                                           Opacity="0"
+                                           Text="&#xE73E;" />
+                                <TextBlock x:Name="Label"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource DcTextSecondaryBrush}"
+                                           Text="{TemplateBinding Content}" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource DcSelectedBrush}" />
+                                <Setter TargetName="Mark" Property="Opacity" Value="1" />
+                                <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid Style="{StaticResource DcPage}">
@@ -61,31 +163,39 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar: the scan status, the page actions as icons (Generate AI BOM uses the connector picked in the strip below), the search. -->
+        <!-- Toolbar: the scan status, the page actions as icons (Generate AI BOM uses the connector and the scope picked in the strips below), the search. -->
         <ctl:DcPageToolbar x:Name="PageToolbar"
                            Grid.Row="0"
                            ctl:DcIcon.Symbol="BookDatabase24"
                            ctl:DcIcon.Section="Discover"
                            Title="{Binding Title}"
                            TitleToolTip="{Binding Description}"
-                           Caption="{Binding StatusMessage}"
+                           Caption="{Binding ToolbarCaption}"
                            HasSearch="True"
                            SearchText="{Binding SearchText}"
                            SearchWidth="280"
-                           SearchPlaceholder="Search name, vendor, framework…"
-                           SearchAutomationName="Search components"
-                           SearchHelpText="Matches name, vendor, framework and ecosystem. Shortcut Ctrl+F; Esc clears it.">
+                           SearchPlaceholder="{Binding SearchPlaceholder}"
+                           SearchAutomationName="{Binding SearchAutomationName}"
+                           SearchHelpText="{Binding SearchHelp}">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <!-- AI BOM view only: the output of the last Generate, as the CLI printed it. -->
+                    <ui:Button Icon="{ctl:DcSymbolIcon Save24}"
+                               Command="{Binding SaveBomCommand}"
+                               IsEnabled="{Binding CanSaveBom}"
+                               Visibility="{Binding IsBomView, Converter={StaticResource BoolToVisibility}}"
+                               ToolTip="Save the AI BOM as JSON… (the output of aibom scan --json). It lists your connectors' skills, plugins and MCP servers, so share it with care."
+                               AutomationProperties.Name="Save AI BOM JSON…"
+                               AutomationProperties.HelpText="Save the generated AI BOM to a file you choose." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ClipboardTaskListLtr24}"
                                Command="{Binding GenerateAiBomCommand}"
                                ToolTipService.ShowOnDisabled="True"
-                               ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Generate AI BOM… defenseclaw aibom scan --json: inventories the skills, plugins, MCP servers, agents, tools, models and memory of the connector chosen under AI BOM. Records a scan event in audit.db, so it asks first.'}"
+                               ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Generate AI BOM… defenseclaw aibom scan --json: inventories the skills, plugins, MCP servers, agents, tools, models and memory of the connector chosen under AI BOM and the categories under Scope. Records a scan event in audit.db, so it asks first.'}"
                                AutomationProperties.Name="Generate AI BOM…"
-                               AutomationProperties.HelpText="Builds an AI bill of materials for the connector chosen under AI BOM. Records a scan event, so it shows the exact command first." />
+                               AutomationProperties.HelpText="Builds an AI bill of materials for the connector chosen under AI BOM and the categories under Scope. Records a scan event, so it shows the exact command first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Re-read inventory.db (F5)"
@@ -103,9 +213,26 @@
             <StackPanel x:Name="PageContent">
                 <!-- Toolbar, banners and the generated AI BOM: measured by the code-behind to size the grid under them. -->
                 <StackPanel x:Name="Chrome">
-                    <!-- Filter strip: how the rollup is grouped, and which connector the AI BOM is generated for. -->
+                    <!--
+                        Filter strip: which of the page's two views shows - the AI components inventory.db recorded, or the AI BOM a scan of the
+                        connectors' own configuration printed - how the rollup is grouped, which connector the AI BOM is generated for, and (AI BOM
+                        view) the TUI's two scope shortcuts.
+                    -->
                     <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
-                        <StackPanel Orientation="Horizontal">
+                        <ctl:DcSegmented x:Name="ViewSwitch"
+                                         SelectedValue="{Binding ActiveView, Mode=TwoWay}"
+                                         AutomationProperties.Name="Inventory view"
+                                         AutomationProperties.HelpText="Components lists the AI components inventory.db recorded. AI BOM lists what a scan of your connectors' own configuration printed: skills, plugins, MCP servers, agents, tools, models and memory.">
+                            <ctl:DcSegment Value="components"
+                                           Content="Components"
+                                           ToolTip="The AI components in the latest full scan in inventory.db" />
+                            <ctl:DcSegment Value="bom"
+                                           Content="AI BOM"
+                                           ToolTip="The AI bill of materials a scan of your connectors' own configuration printed" />
+                        </ctl:DcSegmented>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding IsComponentsView, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Group by" />
                             <ComboBox Width="110"
                                       AutomationProperties.Name="Group by"
@@ -120,10 +247,47 @@
                                       ItemsSource="{Binding BomConnectors}"
                                       SelectedItem="{Binding SelectedBomConnector}" />
                         </StackPanel>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding IsBomView, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcToolbarLabel}" Text="{Binding BomBrowser.ScopeLabel}" />
+                            <ui:Button Content="All scope"
+                                       Appearance="Secondary"
+                                       Command="{Binding BomBrowser.ShowAllScopeCommand}"
+                                       ToolTip="Scan every category (aibom scan with no --only)"
+                                       AutomationProperties.Name="Scan every category" />
+                            <ui:Button Content="Fast"
+                                       Appearance="Secondary"
+                                       Command="{Binding BomBrowser.ShowFastScopeCommand}"
+                                       ToolTip="Scan skills, plugins and MCP servers only (aibom scan --only skills,plugins,mcp)"
+                                       AutomationProperties.Name="Scan skills, plugins and MCP servers only" />
+                        </StackPanel>
                     </WrapPanel>
 
+                    <!-- The AI BOM view: the categories the next scan covers (the only list of aibom scan), as the TUI's scope chips. -->
+                    <ItemsControl Margin="0,0,0,4"
+                                  Focusable="False"
+                                  AutomationProperties.Name="Categories to scan"
+                                  ItemsSource="{Binding BomBrowser.ScopeChips}"
+                                  Visibility="{Binding IsBomView, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <ToggleButton Style="{StaticResource BomScopeChip}"
+                                              Content="{Binding Label}"
+                                              IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                              AutomationProperties.Name="{Binding AutomationName}"
+                                              AutomationProperties.HelpText="Include or leave out this category when the AI BOM is generated." />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
                     <!-- Banners and the generated AI BOM -->
-                    <StackPanel>
+                    <StackPanel Visibility="{Binding IsComponentsView, Converter={StaticResource BoolToVisibility}}">
                         <ui:InfoBar Margin="{StaticResource DcCardGap}"
                                     Title="inventory.db"
                                     IsClosable="False"
@@ -145,36 +309,88 @@
                                     Message="This inventory.db does not have the scan tables the rollup is built from (ai_scans, ai_signals and ai_confidence_snapshots, with their scan_id columns), so there is nothing to group. Use the table browser at the bottom to inspect whatever tables this install does have."
                                     Severity="Informational" />
 
-                        <Border Style="{StaticResource DcCardCompact}"
-                                Margin="{StaticResource DcCardGap}"
-                                Visibility="{Binding HasBom, Converter={StaticResource BoolToVisibility}}">
-                            <StackPanel>
-                                <ctl:DcCardHeader Symbol="ClipboardTaskListLtr24" Section="Discover" Content="AI BOM" />
-                                <TextBlock Style="{StaticResource DcTextSecondary}"
-                                           AutomationProperties.LiveSetting="Polite"
-                                           Text="{Binding BomStatus}" />
-                                <ItemsControl Margin="0,8,0,0"
-                                              Focusable="False"
-                                              AutomationProperties.Name="AI BOM summary by connector"
-                                              ItemsSource="{Binding BomRows}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Style="{StaticResource DcField}">
-                                                <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Connector}" />
-                                                <TextBlock Style="{StaticResource DcFieldValue}" Text="{Binding Summary}" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <StackPanel Style="{StaticResource DcActionBar}" HorizontalAlignment="Left">
-                                    <ui:Button Content="Save JSON…"
-                                               Icon="{ctl:DcSymbolIcon Save24}"
-                                               Command="{Binding SaveBomCommand}"
-                                               IsEnabled="{Binding CanSaveBom}"
-                                               AutomationProperties.HelpText="Save the generated AI BOM to a file you choose." />
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
+                    </StackPanel>
+
+                    <!--
+                        The AI BOM view's chrome: how the last run came out, what it could not read, and the tabs. A run that came to nothing (it did not
+                        finish, its output was too large or not JSON) has its sentence in a bar, because it is the only thing on the page to read.
+                    -->
+                    <StackPanel Visibility="{Binding IsBomView, Converter={StaticResource BoolToVisibility}}">
+                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                    Title="AI BOM"
+                                    IsClosable="False"
+                                    IsOpen="{Binding BomFailed, Mode=OneWay}"
+                                    Message="{Binding BomStatus}"
+                                    Severity="Warning" />
+
+                        <TextBlock Margin="0,0,0,8"
+                                   Style="{StaticResource DcCaption}"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Text="{Binding BomStatus}"
+                                   Visibility="{Binding BomBrowser.HasSnapshot, Converter={StaticResource BoolToVisibility}}" />
+
+                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                    Title="Not everything came through"
+                                    IsClosable="False"
+                                    IsOpen="{Binding HasBomWarning, Mode=OneWay}"
+                                    Message="{Binding BomWarning}"
+                                    Severity="Warning" />
+
+                        <!--
+                            The TUI's Inventory sub-tabs. Eight of them are wider than the narrowest page, so they wrap; the counts are the rows under
+                            the connector scope. Tools is there only when some connector listed a tool.
+                        -->
+                        <ctl:DcSegmented x:Name="BomTabs"
+                                         Margin="0,0,0,8"
+                                         SelectedValue="{Binding BomBrowser.ActiveTab, Mode=TwoWay}"
+                                         AutomationProperties.Name="AI BOM tab"
+                                         AutomationProperties.HelpText="Summary, then one list per kind of thing the scan inventoried.">
+                            <ctl:DcSegmented.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ctl:DcSegmented.ItemsPanel>
+                            <ctl:DcSegment Value="summary" Padding="10,0,10,0" Content="Summary" />
+                            <ctl:DcSegment Value="skills" Padding="10,0,10,0" Content="Skills" Count="{Binding BomBrowser.SkillsCount}" />
+                            <ctl:DcSegment Value="plugins" Padding="10,0,10,0" Content="Plugins" Count="{Binding BomBrowser.PluginsCount}" />
+                            <ctl:DcSegment Value="mcp" Padding="10,0,10,0" Content="MCPs" Count="{Binding BomBrowser.McpCount}" />
+                            <ctl:DcSegment Value="agents" Padding="10,0,10,0" Content="Agents" Count="{Binding BomBrowser.AgentsCount}" />
+                            <ctl:DcSegment Value="tools"
+                                           Padding="10,0,10,0"
+                                           Content="Tools"
+                                           Count="{Binding BomBrowser.ToolsCount}"
+                                           IsEnabled="{Binding BomBrowser.ShowToolsTab}"
+                                           Visibility="{Binding BomBrowser.ShowToolsTab, Converter={StaticResource BoolToVisibility}}" />
+                            <ctl:DcSegment Value="models" Padding="10,0,10,0" Content="Models" Count="{Binding BomBrowser.ModelsCount}" />
+                            <ctl:DcSegment Value="memory" Padding="10,0,10,0" Content="Memory" Count="{Binding BomBrowser.MemoryCount}" />
+                        </ctl:DcSegmented>
+
+                        <!-- The TUI's 2 / 3 / 4 keys on Skills and Plugins; the count of what the tab shows. -->
+                        <WrapPanel Margin="0,0,0,4"
+                                   Style="{StaticResource DcToolbarPanel}"
+                                   Visibility="{Binding BomBrowser.HasFilterRow, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcSegmented SelectedValue="{Binding BomBrowser.StatusFilter, Mode=TwoWay}"
+                                             AutomationProperties.Name="Skills filter"
+                                             Visibility="{Binding BomBrowser.IsSkillsTab, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcSegment Value="all" Content="All" />
+                                <ctl:DcSegment Value="eligible" Content="Eligible" ToolTip="Skills the agent can load" />
+                                <ctl:DcSegment Value="warning" Content="Warning" ToolTip="Skills with a warning verdict" />
+                                <ctl:DcSegment Value="blocked" Content="Blocked" ToolTip="Skills on the block list or rejected by a scan" />
+                            </ctl:DcSegmented>
+                            <ctl:DcSegmented SelectedValue="{Binding BomBrowser.StatusFilter, Mode=TwoWay}"
+                                             AutomationProperties.Name="Plugins filter"
+                                             Visibility="{Binding BomBrowser.IsPluginsTab, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcSegment Value="all" Content="All" />
+                                <ctl:DcSegment Value="loaded" Content="Loaded" ToolTip="Plugins whose status is loaded" />
+                                <ctl:DcSegment Value="disabled" Content="Disabled" ToolTip="Plugins whose status is disabled" />
+                                <ctl:DcSegment Value="blocked" Content="Blocked" ToolTip="Plugins on the block list or rejected by a scan" />
+                            </ctl:DcSegmented>
+                            <TextBlock Style="{StaticResource DcResultCaption}"
+                                       Margin="0,0,12,8"
+                                       VerticalAlignment="Center"
+                                       AutomationProperties.LiveSetting="Polite"
+                                       Text="{Binding BomBrowser.ResultCaption}" />
+                        </WrapPanel>
                     </StackPanel>
                 </StackPanel>
 
@@ -209,14 +425,13 @@
                                 virtualization off for grouped items unless it is asked for).
                             -->
                             <ui:DataGrid x:Name="ComponentsGrid"
-                                         Style="{StaticResource DcDataGrid}"
+                                         Style="{StaticResource InventoryComponentsGrid}"
                                          SelectionMode="Single"
                                          VirtualizingPanel.IsVirtualizingWhenGrouping="True"
                                          Sorting="OnComponentsSorting"
                                          AutomationProperties.Name="AI components in the latest scan"
                                          ItemsSource="{Binding ComponentsView}"
-                                         SelectedItem="{Binding SelectedComponent}"
-                                         Visibility="{Binding ShowComponentsGrid, Converter={StaticResource BoolToVisibility}}">
+                                         SelectedItem="{Binding SelectedComponent}">
                                 <ui:DataGrid.GroupStyle>
                                     <GroupStyle>
                                         <GroupStyle.HeaderTemplate>
@@ -270,60 +485,159 @@
                             </ui:DataGrid>
 
                             <!-- Why the grid is empty: no database yet / no rollup / nothing found / search hides all -->
-                            <StackPanel Style="{StaticResource DcEmptyState}"
-                                        MaxWidth="440"
-                                        Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVisibility}}">
-                                <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
-                                <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
-                                <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
-                            </StackPanel>
+                            <Grid Visibility="{Binding IsComponentsView, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Style="{StaticResource DcEmptyState}"
+                                            MaxWidth="440"
+                                            Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVisibility}}">
+                                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
+                                    <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                                </StackPanel>
 
-                            <ui:ProgressRing IsIndeterminate="True"
-                                             Width="32"
-                                             Height="32"
-                                             AutomationProperties.Name="Reading inventory.db"
-                                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                                <ui:ProgressRing IsIndeterminate="True"
+                                                 Width="32"
+                                                 Height="32"
+                                                 AutomationProperties.Name="Reading inventory.db"
+                                                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                            </Grid>
+
+                            <!--
+                                The AI BOM view's table: Summary (Metric, Value) or one kind's rows. Its columns are the TUI's for the tab, built by the
+                                code-behind when the tab (or the Connector column) changes, and sized the way the components grid's are (ColumnSizing).
+                                Rows are in the order the CLI printed them.
+                            -->
+                            <ui:DataGrid x:Name="BomGrid"
+                                         Style="{StaticResource DcDataGrid}"
+                                         AutoGenerateColumns="False"
+                                         CanUserSortColumns="False"
+                                         SelectionMode="Single"
+                                         AutomationProperties.Name="AI BOM rows"
+                                         AutomationProperties.HelpText="The rows of the tab chosen above. Select one for its fields."
+                                         ItemsSource="{Binding BomBrowser.Rows}"
+                                         SelectedItem="{Binding BomBrowser.SelectedRow, Mode=TwoWay}"
+                                         Visibility="{Binding IsBomView, Converter={StaticResource BoolToVisibility}}" />
+
+                            <!-- Why the table is empty: no AI BOM yet, none for this connector, a category not collected, nothing found, a filter or search that hides all. -->
+                            <Grid Visibility="{Binding IsBomView, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Style="{StaticResource DcEmptyState}"
+                                            MaxWidth="440"
+                                            Visibility="{Binding BomBrowser.ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ClipboardTaskListLtr24" />
+                                    <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding BomBrowser.EmptyTitle}" />
+                                    <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                               Text="{Binding BomBrowser.EmptyDetail}"
+                                               Visibility="{Binding BomBrowser.HasEmptyDetail, Converter={StaticResource BoolToVisibility}}" />
+                                    <ui:Button Margin="0,12,0,0"
+                                               HorizontalAlignment="Center"
+                                               Content="Generate AI BOM…"
+                                               Icon="{ctl:DcSymbolIcon ClipboardTaskListLtr24}"
+                                               Command="{Binding GenerateAiBomCommand}"
+                                               Visibility="{Binding BomBrowser.ShowGenerate, Converter={StaticResource BoolToVisibility}}"
+                                               ToolTipService.ShowOnDisabled="True"
+                                               ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Generate AI BOM… defenseclaw aibom scan --json for the connector chosen under AI BOM and the categories under Scope. Records a scan event in audit.db, so it asks first.'}"
+                                               AutomationProperties.HelpText="Builds an AI bill of materials. Records a scan event, so it shows the exact command first." />
+                                </StackPanel>
+                            </Grid>
                         </Grid>
                     </Border>
 
                     <Border x:Name="DetailCard" Style="{StaticResource InventoryDetailCard}">
                         <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
+                            <!-- Components view: every column of the selected component. -->
+                            <Grid x:Name="ComponentsDetail" Visibility="{Binding IsComponentsView, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
 
-                            <ctl:DcCardHeader Grid.Row="0" Symbol="Code24" Section="Discover" Content="Raw row detail" />
+                                <ctl:DcCardHeader Grid.Row="0" Symbol="Code24" Section="Discover" Content="Raw row detail" />
 
-                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding DetailRows}"
-                                              Focusable="False"
-                                              AutomationProperties.Name="Every column of the selected component">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Style="{StaticResource DcField}">
-                                                <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Key}" />
-                                                <TextBlock Style="{StaticResource DcFieldValueMono}" Text="{Binding Value}" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding DetailRows}"
+                                                  Focusable="False"
+                                                  AutomationProperties.Name="Every column of the selected component">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Style="{StaticResource DcField}">
+                                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Key}" />
+                                                    <TextBlock Style="{StaticResource DcFieldValueMono}" Text="{Binding Value}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
 
-                            <TextBlock Grid.Row="1"
-                                       Style="{StaticResource DcEmptyDetail}"
-                                       VerticalAlignment="Center"
-                                       Text="Select a row to see every column."
-                                       Visibility="{Binding NoComponentSelected, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Grid.Row="1"
+                                           Style="{StaticResource DcEmptyDetail}"
+                                           VerticalAlignment="Center"
+                                           Text="Select a row to see every column."
+                                           Visibility="{Binding NoComponentSelected, Converter={StaticResource BoolToVisibility}}" />
+                            </Grid>
+
+                            <!--
+                                AI BOM view: the TUI's detail fields of the selected row, in its order, then what else the scan said about it (a newer
+                                runtime's additions appear here by presence). On the Summary tab: the scan's coverage notes.
+                            -->
+                            <Grid x:Name="BomDetail" Visibility="{Binding IsBomView, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <ctl:DcCardHeader Grid.Row="0" Symbol="Code24" Section="Discover" Content="{Binding BomBrowser.DetailHeading}" />
+
+                                <ScrollViewer Grid.Row="1"
+                                              VerticalScrollBarVisibility="Auto"
+                                              Visibility="{Binding BomBrowser.HasDetail, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel>
+                                        <ItemsControl ItemsSource="{Binding BomBrowser.DetailFields}"
+                                                      Focusable="False"
+                                                      AutomationProperties.Name="Fields of the selected AI BOM row">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Style="{StaticResource DcField}">
+                                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Key}" />
+                                                        <TextBlock Style="{StaticResource DcFieldValueMono}" Text="{Binding Value}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <StackPanel Visibility="{Binding BomBrowser.HasMore, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcCardTitle}"
+                                                       Margin="0,6,0,8"
+                                                       Text="Also in this scan" />
+                                            <ItemsControl ItemsSource="{Binding BomBrowser.DetailMore}"
+                                                          Focusable="False"
+                                                          AutomationProperties.Name="Other fields the scan listed for the selected AI BOM row">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Style="{StaticResource DcField}">
+                                                            <TextBlock Style="{StaticResource DcFieldLabel}" Text="{Binding Key}" />
+                                                            <TextBlock Style="{StaticResource DcFieldValueMono}" Text="{Binding Value}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </ScrollViewer>
+
+                                <TextBlock Grid.Row="1"
+                                           Style="{StaticResource DcEmptyDetail}"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding BomBrowser.DetailEmptyText}"
+                                           Visibility="{Binding BomBrowser.ShowDetailEmpty, Converter={StaticResource BoolToVisibility}}" />
+                            </Grid>
                         </Grid>
                     </Border>
                 </Grid>
 
                 <!-- Table browser: power-user access to every other table/view InventoryReader discovers -->
                 <ui:CardExpander x:Name="TableBrowser"
+                                 Style="{StaticResource InventoryTableBrowser}"
                                  Margin="0,12,0,0"
-                                 Header="Table browser (all tables in inventory.db)"
-                                 Visibility="{Binding HasDatabase, Converter={StaticResource BoolToVisibility}}">
+                                 Header="Table browser (all tables in inventory.db)">
                     <Grid Margin="0,10,0,0">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />

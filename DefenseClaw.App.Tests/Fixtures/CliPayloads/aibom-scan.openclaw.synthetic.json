@@ -1,0 +1,215 @@
+{
+  "version": 3,
+  "generated_at": "2030-01-15T10:00:05.123456+00:00",
+  "connector": "openclaw",
+  "openclaw_config": "C:\\Users\\example\\.openclaw\\openclaw.json",
+  "claw_home": "C:\\Users\\example\\.openclaw",
+  "claw_mode": "openclaw",
+  "live": true,
+  "skills": [
+    {
+      "id": "weather",
+      "source": "openclaw-bundled",
+      "eligible": true,
+      "enabled": true,
+      "bundled": true,
+      "description": "Get the current weather",
+      "emoji": "W",
+      "policy_verdict": "clean",
+      "policy_detail": "scan clean",
+      "scan_findings": 0,
+      "scan_severity": "CLEAN",
+      "scan_target": "C:\\Users\\example\\.openclaw\\skills\\weather",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "gh-issues",
+      "source": "openclaw-workspace",
+      "eligible": false,
+      "enabled": true,
+      "bundled": false,
+      "missing_bins": ["gh"],
+      "missing_env": ["EXAMPLE_GITHUB_TOKEN"],
+      "policy_verdict": "warning",
+      "policy_detail": "2 findings at MEDIUM",
+      "scan_findings": 2,
+      "scan_severity": "MEDIUM",
+      "scan_target": "C:\\Users\\example\\.openclaw\\workspace\\skills\\gh-issues",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    }
+  ],
+  "plugins": [
+    {
+      "id": "example-search",
+      "name": "Example Search",
+      "version": "2.1.0",
+      "origin": "bundled",
+      "enabled": true,
+      "status": "loaded",
+      "toolNames": ["web_search"],
+      "providerIds": ["example-search-provider"],
+      "policy_verdict": "unscanned",
+      "policy_detail": "no scan on record",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "example-voice",
+      "name": "",
+      "version": "0.3.1",
+      "origin": "workspace",
+      "enabled": false,
+      "status": "disabled",
+      "policy_verdict": "unscanned",
+      "policy_detail": "no scan on record",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    }
+  ],
+  "mcp": [
+    {
+      "id": "docs",
+      "source": "openclaw mcp list",
+      "command": "npx",
+      "args": ["-y", "@example/docs-mcp"],
+      "env_keys": ["EXAMPLE_DOCS_TOKEN"],
+      "policy_verdict": "clean",
+      "policy_detail": "scan clean",
+      "scan_findings": 0,
+      "scan_severity": "CLEAN",
+      "scan_target": "mcp://openclaw/docs",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "remote",
+      "source": "openclaw mcp list",
+      "url": "https://mcp.example.test/v1",
+      "transport": "sse",
+      "policy_verdict": "unscanned",
+      "policy_detail": "no scan on record",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    }
+  ],
+  "agents": [
+    {
+      "id": "main",
+      "model": "example/model-large",
+      "workspace": "C:\\Users\\example\\.openclaw\\workspace",
+      "is_default": true,
+      "bindings": 2,
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "helper",
+      "model": "example/model-small",
+      "workspace": "C:\\Users\\example\\.openclaw\\workspace-helper",
+      "is_default": false,
+      "bindings": 0,
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "_defaults",
+      "source": "agents.defaults",
+      "model": "example/model-large",
+      "fallbacks": ["example/model-small"],
+      "subagents_max_concurrent": 4,
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    }
+  ],
+  "tools": [
+    {
+      "id": "web_search",
+      "source": "plugin:example-search",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    }
+  ],
+  "model_providers": [
+    {
+      "id": "_config",
+      "source": "models status",
+      "default_model": "example/model-large",
+      "fallbacks": ["example/model-small"],
+      "allowed": ["example/model-large", "example/model-small"],
+      "config_path": "C:\\Users\\example\\.openclaw\\openclaw.json",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "example",
+      "source": "auth",
+      "status": "ok",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "example-alt",
+      "source": "auth",
+      "status": "missing",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "example-search-provider",
+      "source": "plugin:example-search",
+      "enabled": true,
+      "status": "loaded",
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    },
+    {
+      "id": "example/model-large",
+      "name": "Example Large",
+      "source": "models list",
+      "available": true,
+      "local": false,
+      "input": "text+image",
+      "context_window": 200000,
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    }
+  ],
+  "memory": [
+    {
+      "id": "main",
+      "backend": "sqlite",
+      "files": 12,
+      "chunks": 340,
+      "db_path": "C:\\Users\\example\\.openclaw\\memory\\main.sqlite",
+      "provider": "example-embed",
+      "sources": ["memory", "sessions"],
+      "workspace": "C:\\Users\\example\\.openclaw\\workspace",
+      "fts_available": true,
+      "vector_enabled": false,
+      "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+    }
+  ],
+  "errors": [],
+  "limitations": [],
+  "connector_home": "C:\\Users\\example\\.openclaw",
+  "connector_config_files": [
+    "C:\\Users\\example\\.openclaw\\openclaw.json"
+  ],
+  "connector_skill_dirs": [
+    "C:\\Users\\example\\.openclaw\\skills",
+    "C:\\Users\\example\\.openclaw\\workspace\\skills"
+  ],
+  "connector_plugin_dirs": [
+    "C:\\Users\\example\\.openclaw\\extensions"
+  ],
+  "connector_mcp_files": [
+    "C:\\Users\\example\\.openclaw\\openclaw.json"
+  ],
+  "connector_config": "C:\\Users\\example\\.openclaw\\openclaw.json",
+  "summary": {
+    "total_items": 16,
+    "skills": { "count": 2, "eligible": 1 },
+    "plugins": { "count": 2, "loaded": 1, "disabled": 1 },
+    "mcp": { "count": 2 },
+    "agents": { "count": 3 },
+    "tools": { "count": 1 },
+    "model_providers": { "count": 5 },
+    "memory": { "count": 1 },
+    "errors": 0,
+    "limitations": 0,
+    "policy_skills": { "blocked": 0, "allowed": 0, "rejected": 0, "warning": 1, "clean": 1, "unscanned": 0 },
+    "scan_skills": { "scanned": 2, "unscanned": 0, "total_findings": 2 },
+    "policy_plugins": { "blocked": 0, "allowed": 0, "rejected": 0, "warning": 0, "clean": 0, "unscanned": 2 },
+    "scan_plugins": { "scanned": 0, "unscanned": 2, "total_findings": 0 },
+    "policy_mcp": { "blocked": 0, "allowed": 0, "rejected": 0, "warning": 0, "clean": 1, "unscanned": 1 },
+    "scan_mcp": { "scanned": 1, "unscanned": 1, "total_findings": 0 }
+  },
+  "provenance": { "schema_version": 7, "content_hash": "00000000", "generation": 0, "binary_version": "0.8.10" }
+}

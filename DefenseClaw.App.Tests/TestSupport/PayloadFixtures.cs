@@ -15,6 +15,11 @@ namespace DefenseClaw.App.Tests.TestSupport;
 /// reply exists only upstream (see AiRuntimePayloadTests), so its fixtures follow the Go struct and could not be
 /// compared with a live reply. Non-ASCII text is written as \uXXXX escapes, as Python's json.dumps prints it.
 /// </para>
+/// <para>
+/// A fixture named <c>*.synthetic.json</c> (the AI BOM browser's, CUST-275) was not run through the emitting functions: it is written by hand from
+/// the code that prints it (<c>claw_inventory.py</c> and <c>cmd_aibom.py</c> of 0.8.10; of source commit 95159fd for the <c>95159fd</c> ones), so it
+/// holds the keys and types that code produces and nothing a live run would have added.
+/// </para>
 /// </summary>
 internal static class PayloadFixtures
 {

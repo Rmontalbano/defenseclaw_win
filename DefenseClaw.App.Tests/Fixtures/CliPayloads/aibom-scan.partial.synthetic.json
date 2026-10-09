@@ -1,0 +1,78 @@
+[
+  {
+    "version": 3,
+    "generated_at": "2030-01-15T10:00:05.000000+00:00",
+    "connector": "claudecode",
+    "claw_home": "C:\\Users\\example\\.claude",
+    "claw_mode": "claudecode",
+    "live": true,
+    "skills": [
+      { "id": "pdf-tools", "source": "C:\\Users\\example\\.claude\\skills", "eligible": true, "enabled": true, "bundled": false, "policy_verdict": "clean", "policy_detail": "scan clean", "scan_findings": 0, "scan_severity": "CLEAN" }
+    ],
+    "plugins": [],
+    "mcp": [],
+    "agents": [
+      { "id": "reviewer", "name": "reviewer", "source": "C:\\Users\\example\\.claude\\agents\\reviewer.md", "kind": "subagent" }
+    ],
+    "tools": [],
+    "model_providers": [],
+    "memory": [],
+    "errors": [],
+    "limitations": [
+      { "connector": "claudecode", "category": "tools", "status": "unsupported", "reason": "tool registry is owned by each plugin's manifest" }
+    ],
+    "connector_home": "C:\\Users\\example\\.claude",
+    "connector_config_files": ["C:\\Users\\example\\.claude\\settings.json"],
+    "summary": {
+      "total_items": 2,
+      "skills": { "count": 1, "eligible": 1 },
+      "plugins": { "count": 0, "loaded": 0, "disabled": 0 },
+      "mcp": { "count": 0 },
+      "agents": { "count": 1 },
+      "tools": { "count": 0 },
+      "model_providers": { "count": 0 },
+      "memory": { "count": 0 },
+      "errors": 0,
+      "limitations": 1
+    }
+  },
+  "an entry that is not an object",
+  { "unrelated": true, "note": "an object that is not an inventory" },
+  null,
+  {
+    "version": 3,
+    "generated_at": "2030-01-15T10:00:06.000000+00:00",
+    "connector": "codex",
+    "claw_home": "C:\\Users\\example\\.codex",
+    "claw_mode": "codex",
+    "live": true,
+    "skills": [
+      { "id": "summarize", "source": "C:\\Users\\example\\.codex\\skills", "eligible": true, "enabled": true, "bundled": false }
+    ],
+    "plugins": [],
+    "mcp": [],
+    "agents": [],
+    "tools": [],
+    "model_providers": [],
+    "memory": [],
+    "errors": [
+      { "command": "codex:mcp", "error": "could not read C:\\Users\\example\\.codex\\config.toml: permission denied" },
+      { "command": "codex:plugins", "error": "ambiguous plugin identity 'notes': C:\\Users\\example\\.codex\\plugins\\a, C:\\Users\\example\\.codex\\plugins\\b" }
+    ],
+    "limitations": [],
+    "connector_home": "C:\\Users\\example\\.codex",
+    "connector_config_files": ["C:\\Users\\example\\.codex\\config.toml"],
+    "summary": {
+      "total_items": 1,
+      "skills": { "count": 1, "eligible": 1 },
+      "plugins": { "count": 0, "loaded": 0, "disabled": 0 },
+      "mcp": { "count": 0 },
+      "agents": { "count": 0 },
+      "tools": { "count": 0 },
+      "model_providers": { "count": 0 },
+      "memory": { "count": 0 },
+      "errors": 2,
+      "limitations": 0
+    }
+  }
+]

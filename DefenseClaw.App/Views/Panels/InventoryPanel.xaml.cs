@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -31,6 +32,12 @@ namespace DefenseClaw.App.Views.Panels;
 /// Mouse-wheel input over either grid scrolls the page when the grid has nothing further to scroll
 /// (<see cref="NestedScroll"/>); without that the wheel would stop dead on every grid.
 /// </para>
+/// <para>
+/// <b>Two views.</b> The master card holds the components grid or, with the AI BOM view on, <c>BomGrid</c>, and the detail card the matching
+/// pane; the sizing above serves both. The AI BOM grid's columns are the TUI's for the tab (<see cref="InventoryBomBrowser.Columns"/>), so
+/// they change with the tab: <see cref="RebuildBomColumns"/> makes them and <see cref="ApplyBomColumnWidths"/> shares the grid's width between
+/// them by the sizes the view-model gives (<see cref="InventoryBomColumnSize"/>), each with a floor, as the components grid does.
+/// </para>
 /// </summary>
 public partial class InventoryPanel : UserControl
 {
@@ -58,10 +65,29 @@ public partial class InventoryPanel : UserControl
     /// <summary>The star weights the XAML gave the components columns, captured before they are replaced by resolved widths.</summary>
     private readonly Dictionary<DataGridColumn, double> _columnWeights = new();
 
+    /// <summary>The weight and the floor of each AI BOM column, in column order (see <see cref="RebuildBomColumns"/>).</summary>
+    private readonly List<(double Weight, double Minimum)> _bomSizes = new();
+
+    private InventoryBomBrowser? _browser;
+
     public InventoryPanel()
     {
         InitializeComponent();
         PreviewKeyDown += OnPreviewKeyDown;
+        DataContextChanged += OnDataContextChanged;
+
+        BomGrid.Loaded += (_, _) => ApplyBomColumnWidths(FindScrollViewer(BomGrid));
+        BomGrid.IsVisibleChanged += (_, _) => ApplyBomColumnWidths(FindScrollViewer(BomGrid));
+        BomGrid.AddHandler(
+            ScrollViewer.ScrollChangedEvent,
+            new ScrollChangedEventHandler((_, e) =>
+            {
+                if (e.ViewportWidthChange != 0)
+                {
+                    ApplyBomColumnWidths(e.OriginalSource as ScrollViewer);
+                }
+            }));
+        NestedScroll.SetForwardWheel(BomGrid, true);
 
         Loaded += (_, _) => UpdateLayoutSizes();
         PageScroll.SizeChanged += (_, _) => UpdateLayoutSizes();
@@ -168,6 +194,100 @@ public partial class InventoryPanel : UserControl
             if (!columns[i].Width.IsAbsolute || Math.Abs(columns[i].Width.Value - widths[i]) > 0.5)
             {
                 columns[i].Width = new DataGridLength(widths[i]);
+            }
+        }
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (_browser is not null)
+        {
+            _browser.PropertyChanged -= OnBrowserPropertyChanged;
+        }
+
+        _browser = (e.NewValue as InventoryPanelViewModel)?.BomBrowser;
+        if (_browser is not null)
+        {
+            _browser.PropertyChanged += OnBrowserPropertyChanged;
+        }
+
+        RebuildBomColumns();
+    }
+
+    private void OnBrowserPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(InventoryBomBrowser.Columns))
+        {
+            RebuildBomColumns();
+        }
+    }
+
+    /// <summary>
+    /// Makes the AI BOM grid's columns from the tab's (<see cref="InventoryBomBrowser.Columns"/>): text cells that read <c>Cells[i]</c> of the
+    /// row, and a state pill for the Verdict column. The grid cannot sort - the rows are in the order the CLI printed them, which is the order the
+    /// TUI shows - and has no cells to edit.
+    /// </summary>
+    private void RebuildBomColumns()
+    {
+        BomGrid.Columns.Clear();
+        _bomSizes.Clear();
+        if (_browser is null)
+        {
+            return;
+        }
+
+        var columns = _browser.Columns;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var spec = columns[i];
+            DataGridColumn column = spec.IsVerdict
+                ? new DataGridTemplateColumn { CellTemplate = (DataTemplate)FindResource("BomVerdictCell") }
+                : new DataGridTextColumn
+                {
+                    Binding = new Binding($"Cells[{i}]") { Mode = BindingMode.OneWay },
+                    ElementStyle = (Style)FindResource("DcCellText"),
+                };
+
+            column.Header = spec.Header;
+            column.CanUserSort = false;
+            column.CanUserReorder = false;
+            _bomSizes.Add(spec.Size switch
+            {
+                InventoryBomColumnSize.Narrow => (0.6, 64.0),
+                InventoryBomColumnSize.Wide => (1.8, 120.0),
+                InventoryBomColumnSize.Fill => (3.0, 160.0),
+                _ => (1.0, 96.0),
+            });
+            column.MinWidth = _bomSizes[^1].Minimum;
+            BomGrid.Columns.Add(column);
+        }
+
+        ApplyBomColumnWidths(FindScrollViewer(BomGrid));
+    }
+
+    /// <summary>
+    /// Gives each AI BOM column its share of the grid's viewport, never below its floor (see <see cref="ColumnSizing"/>): the grid keeps the total
+    /// within the viewport whenever the floors allow, and scrolls sideways when they do not. Done here, as for the components grid, because a
+    /// DataGrid first laid out with no rows keeps the widths it worked out for none.
+    /// </summary>
+    private void ApplyBomColumnWidths(ScrollViewer? scroll)
+    {
+        if (scroll is null || scroll.ViewportWidth <= 0 || BomGrid.Columns.Count == 0 || _bomSizes.Count != BomGrid.Columns.Count)
+        {
+            return;
+        }
+
+        var widths = ColumnSizing.Distribute(
+            Math.Floor(scroll.ViewportWidth) - 1,
+            _bomSizes.Select(s => s.Weight).ToArray(),
+            _bomSizes.Select(s => s.Minimum).ToArray());
+
+        for (var i = 0; i < BomGrid.Columns.Count; i++)
+        {
+            var column = BomGrid.Columns[i];
+            if (!column.Width.IsAbsolute || Math.Abs(column.Width.Value - widths[i]) > 0.5)
+            {
+                column.Width = new DataGridLength(widths[i]);
             }
         }
     }
