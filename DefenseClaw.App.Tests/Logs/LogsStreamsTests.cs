@@ -361,6 +361,9 @@ public sealed class LogsStreamsTests : IDisposable
         panel.ActiveSource = "Events";
         panel.SelectedPreset = "all";
 
+        // Events open on the actionable rows (CUST-262); this is about telemetry, so it shows all of them.
+        panel.ActionableOnly = false;
+
         await panel.LoadStructuredAsync();
         Assert.Equal(3, panel.DisplayedLines.Count);
 

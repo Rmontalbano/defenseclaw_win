@@ -55,7 +55,7 @@ public sealed class AuditArchiveSourceTests : IDisposable
     private void Configure(string? path) =>
         Assert.True(_services.Settings.Update(s => s with { Archive = new ArchiveSettings { Path = path } }));
 
-    private AuditPanelViewModel Panel() => new(_services);
+    private AuditPanelViewModel Panel() => new(_services) { ActionableOnly = false };
 
     /// <summary>Leaves the panel and comes back to it, which is when it re-reads the archive path from settings.</summary>
     private static void Reactivate(AuditPanelViewModel panel)

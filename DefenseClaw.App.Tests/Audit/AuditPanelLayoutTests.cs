@@ -271,6 +271,8 @@ public class AuditPanelLayoutTests
             });
             ViewModel = UiThread.Run(() => (AuditPanelViewModel)Shell.ViewModel);
 
+            // The 60 rows are quiet INFO hook decisions; the panel opens on the actionable events (CUST-262), and this is about the layout.
+            UiThread.Run(() => ViewModel.ActionableOnly = false);
             UiThread.WaitFor(() => ViewModel.Rows.Count == 60 && !ViewModel.IsLoading, "audit rows loaded");
 
             // The stand-in NavigationView opens its 220-DIP pane with an animation; measuring before it lands reads a

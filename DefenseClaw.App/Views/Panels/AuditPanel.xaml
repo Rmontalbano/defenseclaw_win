@@ -186,7 +186,7 @@
                                Command="{Binding ResetFiltersCommand}"
                                ToolTip="Reset filters"
                                AutomationProperties.Name="Reset filters"
-                               AutomationProperties.HelpText="Set every filter back to its default: all buckets, any severity, all connectors, the last 24 hours, no text." />
+                               AutomationProperties.HelpText="Set every filter back to its default: all buckets, any severity, all connectors, the last 24 hours, no text. The Actionable only switch is left as you set it." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowDownload24}"
                                Command="{Binding ExportCommand}"
                                ToolTip="Export the list to JSON or CSV (Ctrl+E)"
@@ -248,6 +248,26 @@
                     <ctl:DcSegment Value="credentials" Content="Credentials" ToolTip="Keys, tokens, credentials, auth and rotation" />
                 </ctl:DcSegmented>
 
+                <!-- The TUI's actionable-by-default view (CUST-262). It pauses while a search, a view, a run or another filter asks for something
+                     specific; the chip counts the low-signal events the list is leaving out. -->
+                <ui:ToggleSwitch Content="Actionable only"
+                                 IsChecked="{Binding ActionableOnly, Mode=TwoWay}"
+                                 IsEnabled="{Binding CanChangeActionable}"
+                                 ToolTip="{Binding ActionableToolTip}"
+                                 ToolTipService.ShowOnDisabled="True"
+                                 AutomationProperties.Name="Actionable only"
+                                 AutomationProperties.HelpText="Show the events the DefenseClaw TUI shows by default: HIGH, CRITICAL and ERROR, and anything that blocked, denied, rejected, quarantined or failed. Paused while a search, a view, an action filter, a run or a minimum severity is on." />
+
+                <Border Style="{StaticResource DcChip}"
+                        Margin="0,0,12,8"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding HasHidden, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               FontWeight="SemiBold"
+                               TextWrapping="NoWrap"
+                               Text="{Binding HiddenText}" />
+                </Border>
+
                 <ui:Button Margin="0,0,12,8"
                            Appearance="Secondary"
                            Icon="{ctl:DcSymbolIcon Dismiss12}"
@@ -257,6 +277,21 @@
                            AutomationProperties.Name="Clear the run filter"
                            Visibility="{Binding HasRunFilter, Converter={StaticResource BoolToVisibility}}" />
 
+                <!-- Live: when the list was last known to be current (the panel looks every few seconds while it is on screen), or why it stopped looking. -->
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,0,12,8"
+                           VerticalAlignment="Center"
+                           Text="{Binding LiveStatusText}"
+                           Visibility="{Binding HasLiveStatus, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcToneText}"
+                           Tag="Warn"
+                           Margin="0,0,12,8"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Text="{Binding LiveNote}"
+                           Visibility="{Binding HasLiveNote, Converter={StaticResource BoolToVisibility}}"
+                           AutomationProperties.LiveSetting="Polite" />
                 <TextBlock Style="{StaticResource DcToneText}"
                            Tag="Warn"
                            Margin="0,0,12,8"

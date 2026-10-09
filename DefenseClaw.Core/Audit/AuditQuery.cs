@@ -133,4 +133,14 @@ public sealed record AuditPage(IReadOnlyList<AuditEvent> Events, AuditCursor? Ne
     /// each row is listed, with the reason, and a screen says how many there are.
     /// </summary>
     public bool AllOversized => Events.Count > 0 && OversizedCount == Events.Count;
+
+    /// <summary>
+    /// The rows that were read and then left out of <see cref="Events"/> by a filter applied after the query - the low-signal rows
+    /// <see cref="ActionableAuditPaging"/> skips - as the cursors that name them, so a caller can tell one it has already counted from a new one. Empty for
+    /// an ordinary page, whose every row is in <see cref="Events"/>.
+    /// </summary>
+    public IReadOnlyList<AuditCursor> HiddenRows { get; init; } = Array.Empty<AuditCursor>();
+
+    /// <summary>How many rows were read and left out (see <see cref="HiddenRows"/>).</summary>
+    public int Hidden => HiddenRows.Count;
 }

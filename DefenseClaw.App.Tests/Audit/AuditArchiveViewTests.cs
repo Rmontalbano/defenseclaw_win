@@ -59,7 +59,11 @@ public sealed class AuditArchiveViewTests : IDisposable
         {
             _shell = new PanelShell(_services, 1200, 760);
             var panel = _shell.Show<AuditPanel>();
-            return (panel, (AuditPanelViewModel)_shell.ViewModel);
+            var viewModel = (AuditPanelViewModel)_shell.ViewModel;
+
+            // These rows are all quiet INFO hook decisions; the panel opens on the actionable events (CUST-262), and this is about the archive.
+            viewModel.ActionableOnly = false;
+            return (panel, viewModel);
         });
     }
 

@@ -348,6 +348,16 @@
                        AutomationProperties.Name="Clear filters"
                        AutomationProperties.HelpText="Turn every severity back on, show every kind and clear the text filter." />
 
+            <!-- Alerts is the findings queue; the rest of the history (decisions, egress, scans, platform health) is the Logs panel's Events view, one click away. -->
+            <ui:Button Margin="0,0,12,8"
+                       Appearance="Secondary"
+                       Icon="{ctl:DcSymbolIcon DocumentBulletList24}"
+                       Content="Events (all activity)"
+                       Command="{Binding OpenEventsCommand}"
+                       ToolTip="Open the Events view: every canonical event in audit.db - guardrail evaluations, enforcement, egress decisions, scans, platform health and diagnostics - not only the findings listed here. It opens on the actionable events; switch Actionable only off for all of them."
+                       AutomationProperties.Name="Events (all activity)"
+                       AutomationProperties.HelpText="Opens the Logs panel on its Events stream. Alerts keeps listing only unacknowledged findings." />
+
             <TextBlock Style="{StaticResource DcResultCaption}" Margin="0,0,12,8" Text="{Binding SourceNote}" />
             <!-- Where the empty detail pane's "Select an alert ..." used to be. -->
             <TextBlock Margin="0,0,12,8" Text="Select an alert to see its evidence and full attribute bag.">

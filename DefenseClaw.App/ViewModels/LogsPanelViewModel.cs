@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -43,7 +44,8 @@ namespace DefenseClaw.App.ViewModels;
 /// the panel is activated on one, when one is switched to, on Reload, and then every <see cref="StructuredPollInterval"/> while it stays on
 /// screen; a poll that finds the same rows changes nothing, so the selection and the scroll position survive. Events leave out the
 /// <c>telemetry.ingest</c> bucket (most of the table) unless asked. The Windows build has no separate OTel stream: the Events stream is
-/// every canonical event, which is what the Mac's OTel stream holds.
+/// every canonical event, which is what the Mac's OTel stream holds - and, narrowed to the actionable rows by default, what the 0.8.10 TUI's
+/// Alerts panel shows of the v8 history (see <c>LogsPanelViewModel.Actionable.cs</c>, CUST-262).
 /// </para>
 /// <para>
 /// <b>Redaction.</b> Every line and event shown or copied is masked by <see cref="DisplayRedaction"/> before it is cut; there is no switch.
@@ -333,9 +335,16 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     /// A navigation request (the Overview's Hook Calls tile sends <see cref="LogsPreset"/> "hooks"): a named preset applied from a clean
     /// slate - no search text, any severity, every action and event - on the stream it reads best from. "hooks" opens Events, the stream
     /// that holds the hook calls (the Mac's OTel stream, which it opens there too); the other presets open the gateway log, as on the Mac.
+    /// A <see cref="LogsEvents"/> request (Alerts' "Events (all activity)") opens the Events stream itself, from the same clean slate.
     /// </summary>
     public void Accept(object payload)
     {
+        if (payload is LogsEvents events)
+        {
+            AcceptEvents(events);
+            return;
+        }
+
         if (payload is not LogsPreset request || LogPresets.Resolve(request.Name) is not { } preset)
         {
             return;
@@ -352,6 +361,33 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
             AutoScroll = true;
             SelectedPreset = preset;
             ActiveSource = preset == LogPresets.Hooks ? EventsSource : GatewaySource;
+        }
+        finally
+        {
+            _suspend--;
+        }
+
+        AfterSourceOrFilterChanged(sourceChanged: true);
+    }
+
+    /// <summary>
+    /// The Alerts panel's "Events (all activity)" link (<see cref="LogsEvents"/>): the Events stream from a clean slate - the default preset, no search,
+    /// any severity, every action and event, no telemetry - on the actionable view the request asks for.
+    /// </summary>
+    private void AcceptEvents(LogsEvents request)
+    {
+        _suspend++;
+        try
+        {
+            FilterText = string.Empty;
+            SelectedSeverity = LogPresets.AnySeverity;
+            SelectedAction = "all";
+            SelectedEvent = "all";
+            IncludeTelemetry = false;
+            AutoScroll = true;
+            SelectedPreset = LogPresets.NoNoise;
+            ActionableOnly = request.ActionableOnly;
+            ActiveSource = EventsSource;
         }
         finally
         {
@@ -410,6 +446,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
             return;
         }
 
+        RaiseActionableState();
         Reproject();
         if (sourceChanged && IsActive && _seeded)
         {
@@ -902,6 +939,11 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
 
         var source = ActiveFileState is { } file ? (IReadOnlyCollection<LogEntry>)file.Buffer : ActiveStructuredState?.Entries ?? (IReadOnlyCollection<LogEntry>)Array.Empty<LogEntry>();
 
+        // The Events view's actionable rule (CUST-262) is the last filter: a row it leaves out has passed all the others, which is what the
+        // chip counts - the rows that switching it off would add.
+        var actionable = IsActionableApplied;
+        var lowSignal = 0;
+
         var rows = new List<LogEntry>();
         LogEntry? last = null;
         var matching = 0;
@@ -909,6 +951,12 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         {
             if (!Passes(entry))
             {
+                continue;
+            }
+
+            if (actionable && !entry.IsActionable)
+            {
+                lowSignal++;
                 continue;
             }
 
@@ -924,6 +972,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         }
 
         _matching = matching;
+        ActionableHidden = lowSignal;
         DisplayedLines.ReplaceAll(rows);
         UpdateStatusText();
     }
@@ -946,6 +995,16 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         {
             EmptyTitle = string.Empty;
             EmptyDetail = string.Empty;
+            return;
+        }
+
+        if (structured is not null && !IsLoading && structured.Loaded && ActionableHidden > 0)
+        {
+            // Events, actionable view, and everything the other filters let through was low-signal: say so, and where the switch is.
+            EmptyTitle = "No actionable events";
+            EmptyDetail = string.Create(
+                CultureInfo.CurrentCulture,
+                $"{ActionableHidden:N0} low-signal {(ActionableHidden == 1 ? "event is" : "events are")} hidden. Turn off \"Actionable only\" to see {(ActionableHidden == 1 ? "it" : "them")}.");
             return;
         }
 

@@ -128,7 +128,7 @@ public sealed class AuditPanelTests : IDisposable
         var dataDirectory = _temp.Path;
         AuditTestDatabase.Create(Path.Combine(dataDirectory, "audit.db"), rows, connectorFor);
         _services = TestServices.Create(_temp);
-        return new AuditPanelViewModel(_services);
+        return new AuditPanelViewModel(_services) { ActionableOnly = false };
     }
 
     private static async Task LoadPagesAsync(AuditPanelViewModel panel, int pages)

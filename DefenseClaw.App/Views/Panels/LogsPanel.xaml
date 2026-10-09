@@ -136,7 +136,7 @@
                                    ToolTip="Show the decisions in audit.db: guardrail evaluations, enforcement actions, scans, findings and errors" />
                     <ctl:DcSegment Value="Events"
                                    Content="Events"
-                                   ToolTip="Show every canonical event in audit.db (telemetry ingest is hidden unless switched on)" />
+                                   ToolTip="Show the canonical events in audit.db: the actionable ones (as the DefenseClaw TUI does) or, with Actionable only off, every one. Telemetry ingest is hidden unless switched on" />
                     <ctl:DcSegment Value="Watchdog"
                                    Content="Watchdog"
                                    ToolTip="Show watchdog.log" />
@@ -183,6 +183,26 @@
                           ToolTip="Include the telemetry.ingest bucket, which is most of audit.db and hidden by default"
                           AutomationProperties.Name="Include telemetry"
                           AutomationProperties.HelpText="Events only: also show telemetry.ingest events, which are hidden by default because they are most of the table." />
+
+                <!-- Events only: the TUI's actionable-by-default view (CUST-262). It pauses while a search or another filter asks for something specific; the chip counts what it leaves out. -->
+                <ui:ToggleSwitch Content="Actionable only"
+                                 IsChecked="{Binding ActionableOnly, Mode=TwoWay}"
+                                 IsEnabled="{Binding CanChangeActionable}"
+                                 Visibility="{Binding IsEventsSource, Converter={StaticResource BoolToVisibility}}"
+                                 ToolTip="{Binding ActionableToolTip}"
+                                 ToolTipService.ShowOnDisabled="True"
+                                 AutomationProperties.Name="Actionable only"
+                                 AutomationProperties.HelpText="Events only: show the events the DefenseClaw TUI shows by default - HIGH, CRITICAL and ERROR, and anything that blocked, denied, rejected, quarantined or failed. Paused while a search, a preset or another filter is on." />
+
+                <Border Style="{StaticResource DcChip}"
+                        Margin="0,0,12,8"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding HasActionableHidden, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               FontWeight="SemiBold"
+                               TextWrapping="NoWrap"
+                               Text="{Binding ActionableHiddenText}" />
+                </Border>
 
                 <ItemsControl Margin="0,0,12,8"
                               VerticalAlignment="Center"

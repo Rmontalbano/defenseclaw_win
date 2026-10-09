@@ -28,7 +28,7 @@ public sealed class AuditPanelLoadTests : IDisposable
     {
         AuditTestDatabase.Create(Path.Combine(_temp.Path, "audit.db"), rows);
         _services = TestServices.Create(_temp);
-        return new AuditPanelViewModel(_services);
+        return new AuditPanelViewModel(_services) { ActionableOnly = false };
     }
 
     private long PageQueries => _services!.Audit.PageQueryCount;

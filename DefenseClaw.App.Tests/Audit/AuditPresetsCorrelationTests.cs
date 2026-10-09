@@ -62,7 +62,7 @@ public sealed class AuditPresetsCorrelationTests : IDisposable
 
         SqliteConnection.ClearAllPools();
         _services = TestServices.Create(_temp);
-        return new AuditPanelViewModel(_services);
+        return new AuditPanelViewModel(_services) { ActionableOnly = false };
     }
 
     private void Exec(string sql, params (string Name, object? Value)[] parameters)

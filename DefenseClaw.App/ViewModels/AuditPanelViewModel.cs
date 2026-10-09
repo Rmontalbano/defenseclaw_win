@@ -48,6 +48,10 @@ namespace DefenseClaw.App.ViewModels;
 /// shown, its detail text and its JSON say why they are missing, and the filter strip says how many ("1 event too large to display"). A
 /// first page that is nothing but such rows is therefore a list of them with that note, never the "No matching events" state.
 /// </para>
+/// <para>
+/// <b>Actionable only, and live.</b> The panel opens on the events the 0.8.10 TUI's Audit panel shows and stays current while it is on screen
+/// (CUST-262): see <c>AuditPanelViewModel.Actionable.cs</c> and <c>AuditPanelViewModel.Live.cs</c>.
+/// </para>
 /// </summary>
 public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
@@ -87,7 +91,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
     /// </summary>
     private bool _extended;
 
-    private sealed record ShownSnapshot(AuditPage Page, int? Total, bool PlatformOnly, string RangeLabel);
+    private sealed record ShownSnapshot(AuditPage Page, int? Total, bool PlatformOnly, string RangeLabel, bool Actionable);
 
     /// <summary>While above zero, filter changes only note that a reload is due (see <see cref="ResetFilters"/>).</summary>
     private int _reloadDeferrals;
@@ -412,6 +416,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
     {
         OnPropertyChanged(nameof(ActiveFilterCount));
         OnPropertyChanged(nameof(FiltersHeader));
+        RaiseActionableState();
         if (_reloadDeferrals > 0)
         {
             _reloadPending = true;
@@ -514,6 +519,8 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     private async Task LoadAsync(bool append, CancellationToken cancellationToken)
     {
+        _loadRequested = true;
+
         // The reader of the source on screen. An archive that failed its check has none: that is its error state, already shown.
         var reader = ActiveReader;
         if (reader is null)
@@ -570,14 +577,23 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
             var query = BuildQuery(append ? _cursor : null);
             var platformOnly = SelectedConnector.PlatformOnly;
-            var pageRead = reader.QueryAsync(query, token);
+            var actionable = IsActionableApplied;
+
+            // The live refresh's baseline: the change probe's stamp and the time, taken before anything is read, so a commit that lands during the
+            // read makes the next poll look once more and never skips one (see the Live partial). The archive is a file that does not change.
+            var started = TimeSource.GetUtcNow();
+            var baseline = IsArchive ? AuditStamp.Unknown : await Services.AuditChanges.SampleAsync(token);
+
+            // The actionable view reads the same indexed pages, up to twenty to fill one, and keeps the rows the TUI's rule keeps (CUST-262).
+            var pageRead = actionable ? reader.QueryActionableAsync(query, token) : reader.QueryAsync(query, token);
 
             // A SQL COUNT cannot express the platform-only refinement, so that view reports what is actually on screen
             // rather than a number that would not match it. Every other view counts beside the page, not after it.
             // The preset terms (blocks, scans, credentials) match inside the details text, which no index serves: counting them
             // scans the whole window (15 s for a day of blocks and over a minute for a week on a 6.7 GB database) while the page
-            // itself, which stops at 100 matches, takes milliseconds. So those views do not count either.
-            var countable = !platformOnly && query.ActionAnyOf is not { Count: > 0 };
+            // itself, which stops at 100 matches, takes milliseconds. So those views do not count either. Nor does the actionable view:
+            // the total counts every event of the window, and the list holds the actionable ones.
+            var countable = !platformOnly && !actionable && query.ActionAnyOf is not { Count: > 0 };
             var totalRead = countable
                 ? reader.CountAsync(query with { After = null, Limit = PageSize }, token)
                 : null;
@@ -593,9 +609,18 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
             // A fresh load that read what the list is already built from (the reader answered from its last result, or re-read and found the
             // same rows) changes nothing: the rows, the selection and the scroll position stay, and only the note is brought up to date.
-            if (!append && SameAsShown(page, total, platformOnly, SelectedRange.Label))
+            if (!append && SameAsShown(page, total, platformOnly, SelectedRange.Label, actionable))
             {
+                // The same rows; the events the actionable view leaves out may still have grown in number (new low-signal rows arrived).
+                if (HiddenCount != page.Hidden)
+                {
+                    HiddenCount = page.Hidden;
+                    ResultSummary = Summarize(total, platformOnly, actionable, SelectedRange.Label);
+                }
+
                 StatusNote = OversizedNote();
+                RememberLoad(page, append: false, IsRowCapReached);
+                NoteLiveBaseline(baseline, started);
                 return;
             }
 
@@ -603,6 +628,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             {
                 _shown = null;
                 Rows.Clear();
+                HiddenCount = 0;
             }
 
             var truncated = false;
@@ -629,21 +655,15 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
             _cursor = page.NextCursor;
             HasMore = page.HasMore && !capReached;
+            HiddenCount += page.Hidden;
+            RememberLoad(page, append, capReached);
 
-            ResultSummary = total is not { } counted
-                ? platformOnly
-                    ? $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} platform row(s) loaded · {SelectedRange.Label}"
-                    : $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)}{(HasMore || IsRowCapReached ? "+" : string.Empty)} matching events loaded · {SelectedRange.Label}"
-                :$"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} of " +
-                  $"{counted.ToString("N0", CultureInfo.CurrentCulture)} matching events · {SelectedRange.Label}";
+            ResultSummary = Summarize(total, platformOnly, actionable, SelectedRange.Label);
 
             IsEmpty = Rows.Count == 0;
             if (IsEmpty)
             {
-                EmptyTitle = "No matching events";
-                EmptyDetail = SelectedConnector.PlatformOnly
-                    ? "No platform-scoped rows in this window. Platform rows are the ones with no connector attribution."
-                    : "Widen the time range, lower the minimum severity, or clear the action filter.";
+                SetEmptyText(actionable);
             }
 
             // The note a successful read leaves: how many of the listed events had a value too large to load (and so cleared a stale error).
@@ -651,7 +671,8 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             _extended = append;
             if (!append)
             {
-                _shown = new ShownSnapshot(page, total, platformOnly, SelectedRange.Label);
+                _shown = new ShownSnapshot(page, total, platformOnly, SelectedRange.Label, actionable);
+                NoteLiveBaseline(baseline, started);
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -722,9 +743,9 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
     /// order (the reader's remembered object, or a new read of the same ids - audit rows do not change), the same total, the same
     /// platform refinement and the same range name. Then a refresh has nothing to show.
     /// </summary>
-    private bool SameAsShown(AuditPage page, int? total, bool platformOnly, string rangeLabel)
+    private bool SameAsShown(AuditPage page, int? total, bool platformOnly, string rangeLabel, bool actionable)
     {
-        if (_extended || _shown is not { } shown || shown.PlatformOnly != platformOnly || shown.Total != total
+        if (_extended || _shown is not { } shown || shown.PlatformOnly != platformOnly || shown.Total != total || shown.Actionable != actionable
             || !string.Equals(shown.RangeLabel, rangeLabel, StringComparison.Ordinal))
         {
             return false;

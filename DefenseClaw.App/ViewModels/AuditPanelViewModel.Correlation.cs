@@ -399,14 +399,22 @@ public sealed partial class AuditPanelViewModel
             // limit is for what it can show). Such a query is not remembered by the reader.
             var query = BuildQuery(null) with { Limit = ExportCap, PayloadLimitBytes = AuditQuery.NoPayloadLimit };
             var platformOnly = SelectedConnector.PlatformOnly;
+
+            // A file made while the list is narrowed to the actionable events holds what the list holds (the TUI's export is its filtered rows).
+            var actionable = IsActionableApplied;
             var pageRead = reader.QueryAsync(query, token);
-            var totalRead = platformOnly || query.ActionAnyOf is { Count: > 0 }
+            var totalRead = platformOnly || actionable || query.ActionAnyOf is { Count: > 0 }
                 ? null
                 : reader.CountAsync(query with { After = null, Limit = PageSize }, token);
             await Task.WhenAll(pageRead, totalRead ?? Task.CompletedTask);
 
             var page = await pageRead;
             var events = platformOnly ? page.Events.Where(e => e.Connector is null).ToList() : page.Events.ToList();
+            if (actionable)
+            {
+                events = events.Where(ActionableRule.IsActionable).ToList();
+            }
+
             var text = AuditExport.Serialize(events, format);
 
             // Excel reads a BOM-less CSV as the system code page; JSON is UTF-8 by definition, where a BOM is noise.
@@ -415,11 +423,15 @@ public sealed partial class AuditPanelViewModel
 
             var written = events.Count.ToString("N0", CultureInfo.CurrentCulture);
             var total = totalRead is null ? (int?)null : await totalRead;
-            ExportNote = page.HasMore || (total is { } t && t > events.Count)
-                ? total is { } all
-                    ? $"Exported the newest {written} of {all.ToString("N0", CultureInfo.CurrentCulture)} matching events (the cap is {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}) to {path}."
-                    : $"Exported the newest {written} matching events (the cap is {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}; more match) to {path}."
-                : $"Exported {written} matching events to {path}.";
+            ExportNote = actionable
+                ? page.HasMore
+                    ? $"Exported {written} actionable events from the newest {ExportCap.ToString("N0", CultureInfo.CurrentCulture)} read (the cap; older events were not looked at) to {path}."
+                    : $"Exported {written} actionable events to {path}."
+                : page.HasMore || (total is { } t && t > events.Count)
+                    ? total is { } all
+                        ? $"Exported the newest {written} of {all.ToString("N0", CultureInfo.CurrentCulture)} matching events (the cap is {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}) to {path}."
+                        : $"Exported the newest {written} matching events (the cap is {ExportCap.ToString("N0", CultureInfo.CurrentCulture)}; more match) to {path}."
+                    : $"Exported {written} matching events to {path}.";
         }
         catch (OperationCanceledException)
         {

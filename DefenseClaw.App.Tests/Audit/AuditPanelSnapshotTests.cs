@@ -38,7 +38,7 @@ public sealed class AuditPanelSnapshotTests : IDisposable
         AuditTestDatabase.Create(DbPath, rows, newest: _clock.GetUtcNow());
         SqliteConnection.ClearAllPools();
         _services = TestServices.Create(_temp);
-        return new AuditPanelViewModel(_services) { TimeSource = _clock };
+        return new AuditPanelViewModel(_services) { TimeSource = _clock, ActionableOnly = false };
     }
 
     private void AddRow(string id, DateTimeOffset at, string? details = "synthetic extra", string? structured = null) =>

@@ -1,7 +1,9 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views.Controls;
@@ -128,6 +130,85 @@ public sealed partial class AuditPanel : UserControl
         {
             current.PropertyChanged += OnViewModelPropertyChanged;
         }
+
+        if (e.OldValue is AuditPanelViewModel before)
+        {
+            before.Rows.CollectionChanged -= OnRowsChanged;
+            before.LiveRowsInserted -= OnLiveRowsInserted;
+        }
+
+        _anchor = null;
+        if (e.NewValue is AuditPanelViewModel after)
+        {
+            after.Rows.CollectionChanged += OnRowsChanged;
+            after.LiveRowsInserted += OnLiveRowsInserted;
+        }
+    }
+
+    /// <summary>Where the list was scrolled to just before rows were put above it: the scroll viewer, its offset, and the height of what it scrolls.</summary>
+    private (ScrollViewer Scroller, double Offset, double Extent)? _anchor;
+
+    /// <summary>
+    /// The live refresh (CUST-262) puts the newest rows at the top of the list. At the top that is the point - they are what is first. Scrolled further
+    /// down, they would push the row the operator is reading off the screen, so the first row put in at the top notes where the list stood, before the
+    /// layout moves it, and <see cref="OnLiveRowsInserted"/> puts it back. A note nothing consumes in this turn of the dispatcher (a fresh load, which
+    /// starts the list over) is dropped.
+    /// </summary>
+    private void OnRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_anchor is not null || e.Action != NotifyCollectionChangedAction.Add || e.NewStartingIndex != 0)
+        {
+            return;
+        }
+
+        if (FindScrollViewer(RowList) is not { VerticalOffset: > 0 } scroller)
+        {
+            return;
+        }
+
+        _anchor = (scroller, scroller.VerticalOffset, scroller.ExtentHeight);
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => _anchor = null));
+    }
+
+    /// <summary>
+    /// The rows are in. Lays the list out now, so its height includes them, and scrolls by what they added: the row that was at the top of the
+    /// screen is at the top of the screen still, and the selection (an object, not a position) never moved.
+    /// </summary>
+    private void OnLiveRowsInserted(object? sender, EventArgs e)
+    {
+        if (_anchor is not { } anchor)
+        {
+            return;
+        }
+
+        _anchor = null;
+        RowList.UpdateLayout();
+        var grown = anchor.Scroller.ExtentHeight - anchor.Extent;
+        if (grown > 0)
+        {
+            anchor.Scroller.ScrollToVerticalOffset(anchor.Offset + grown);
+        }
+    }
+
+    /// <summary>The first scroll viewer inside <paramref name="root"/> (the table's own, in the DataGrid's template).</summary>
+    private static ScrollViewer? FindScrollViewer(DependencyObject root)
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is ScrollViewer viewer)
+            {
+                return viewer;
+            }
+
+            if (FindScrollViewer(child) is { } nested)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

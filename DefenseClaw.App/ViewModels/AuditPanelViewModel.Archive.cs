@@ -115,7 +115,11 @@ public sealed partial class AuditPanelViewModel
         }
     }
 
-    protected override void OnActivated() => RefreshArchiveSetting();
+    protected override void OnActivated()
+    {
+        RefreshArchiveSetting();
+        StartLive();
+    }
 
     partial void OnSourceKeyChanged(string value)
     {
@@ -165,6 +169,8 @@ public sealed partial class AuditPanelViewModel
             IsLoading = false;
             StatusNote = string.Empty;
             ExportNote = string.Empty;
+            HiddenCount = 0;
+            ForgetLive();
 
             // The lists first, the selections after: a combo box bound to a list it just lost the selected item from writes null
             // back to the selection, so a selection set beforehand would not survive the Clear.

@@ -16,7 +16,11 @@ public enum EventStreamKind
     /// </summary>
     Verdicts,
 
-    /// <summary>Every bucket; <c>telemetry.ingest</c> only when asked for.</summary>
+    /// <summary>
+    /// Every bucket; <c>telemetry.ingest</c> only when asked for. That includes each of the TUI's Alerts buckets (<see cref="EventStreamReader.AlertBuckets"/>,
+    /// <c>network.egress</c> among them), which is why the Logs panel's Events view is the home of the TUI's "actionable" history (CUST-262): the view
+    /// narrows what this stream reads with <see cref="StreamEvent.IsActionable"/>, not with another query.
+    /// </summary>
     Events,
 }
 
@@ -68,6 +72,20 @@ public sealed record StreamEvent(
     /// payload this size is a stream of rows each saying why its body is missing, never an empty stream.
     /// </summary>
     public IReadOnlyList<OversizedValue> Oversized { get; init; } = Array.Empty<OversizedValue>();
+
+    /// <summary>The severity as stored (trimmed, not folded): <c>ERROR</c> and <c>FATAL</c> are not on <see cref="AuditSeverity"/>'s ladder, and the actionable rule needs them as written.</summary>
+    public string SeverityText { get; init; } = string.Empty;
+
+    /// <summary>What the event was about when its payload says (a finding, enforcement, network, scan target or the agent), masked; empty otherwise.</summary>
+    public string Target { get; init; } = string.Empty;
+
+    /// <summary>
+    /// True when the TUI would show this event in its default, actionable view (<see cref="ActionableRule"/>): an actionable severity, or one of its
+    /// words in the decision, target, event name, bucket, source, connector or reason - the text of the TUI's Alerts row. An event whose payload was
+    /// too large to read (<see cref="PayloadOmitted"/>) is actionable: its decision is unknown, and an event is never hidden on text that was not read.
+    /// Computed once, when the row is projected.
+    /// </summary>
+    public bool IsActionable { get; init; } = true;
 }
 
 /// <summary>What <see cref="EventStreamReader.ReadAsync"/> found.</summary>
@@ -137,16 +155,36 @@ public sealed class EventStreamReader
 
     private static readonly string[] ErrorBuckets = { "platform.health", "diagnostic" };
 
+    /// <summary>
+    /// The buckets the 0.8.10 TUI's Alerts panel reads from the canonical history (<c>_V8_ALERT_BUCKETS</c> in <c>tui/panels/alerts.py</c>): the
+    /// findings, the guardrail and enforcement decisions, scans, egress decisions and the platform's own health and diagnostics. The Events stream
+    /// reads every bucket but telemetry, so each of these is in it; the list is the TUI's, kept here so a test can hold the stream to it (CUST-262).
+    /// </summary>
+    public static IReadOnlyList<string> AlertBuckets { get; } = new[]
+    {
+        "security.finding", "guardrail.evaluation", "enforcement.action", "asset.scan", "network.egress", "platform.health", "diagnostic",
+    };
+
+    // The Mac's keys first, then the ones the TUI's Alerts panel adds (network.decision, scan.verdict): a row that has one of the first keeps what it showed.
     private static readonly string[] DecisionKeys =
     {
         "defenseclaw.guardrail.decision", "defenseclaw.judge.action", "defenseclaw.guardrail.effective_action",
         "defenseclaw.hook.result", "defenseclaw.enforcement.effective_action", "defenseclaw.approval.result",
+        "defenseclaw.network.decision", "defenseclaw.network.policy_outcome", "defenseclaw.scan.verdict",
     };
 
     private static readonly string[] ReasonKeys =
     {
         "defenseclaw.guardrail.reason", "defenseclaw.guardrail.evidence_summary", "defenseclaw.finding.description",
         "defenseclaw.judge.error_summary", "defenseclaw.error.summary",
+        "defenseclaw.network.reason", "defenseclaw.finding.evidence_summary",
+    };
+
+    /// <summary>What an event was about, in the TUI's order (<c>_v8_alert_event</c>'s target).</summary>
+    private static readonly string[] TargetKeys =
+    {
+        "defenseclaw.finding.target_ref", "defenseclaw.enforcement.target_ref", "defenseclaw.network.target_ref",
+        "defenseclaw.scan.target_ref", "defenseclaw.agent.id",
     };
 
     private static readonly JsonWriterOptions WriterOptions = new() { Indented = true, SkipValidation = true };
@@ -448,7 +486,8 @@ public sealed class EventStreamReader
         var bucket = Text(3);
         var eventName = Text(4);
         var source = Text(5);
-        var severity = AuditSeverityExtensions.Parse(Text(6));
+        var severityText = Text(6).Trim();
+        var severity = AuditSeverityExtensions.Parse(severityText);
         var rowAction = Text(7);
         var actor = Text(8);
         var details = Text(9);
@@ -486,7 +525,14 @@ public sealed class EventStreamReader
             var decision = FirstValue(root, DecisionKeys);
             var action = decision.Length > 0 ? decision : rowAction;
             var reason = FirstValue(root, ReasonKeys);
-            var message = DisplayRedaction.Text($"{eventName} {action} — {(reason.Length > 0 ? reason : details)}");
+            var target = FirstValue(root, TargetKeys);
+            var summary = reason.Length > 0 ? reason : details;
+            var message = DisplayRedaction.Text($"{eventName} {action} — {summary}");
+
+            // The TUI's Alerts panel judges a row on its action, target and a details line that names the bucket, event, source and connector
+            // (tui/panels/alerts.py _v8_alert_event); the row's own action is searched as well as the decision the payload carries.
+            var actionable = omitted
+                || ActionableRule.IsActionable(severityText, string.Join(' ', decision, rowAction, target, eventName, bucket, source, connector, summary));
 
             return new StreamEvent(
                 Id: id,
@@ -504,6 +550,9 @@ public sealed class EventStreamReader
                 PayloadOmitted: omitted)
             {
                 Oversized = oversized,
+                SeverityText = severityText,
+                Target = DisplayRedaction.Text(target),
+                IsActionable = actionable,
             };
         }
         finally
@@ -525,6 +574,7 @@ public sealed class EventStreamReader
             "guardrail.evaluation" or "enforcement.action" => "verdict",
             "security.finding" => "scan_finding",
             "asset.scan" => "scan",
+            "network.egress" => "egress",
             "compliance.activity" => "activity",
             "platform.health" or "diagnostic" or TelemetryBucket => severity >= AuditSeverity.High ? "error" : "diagnostic",
             _ => "lifecycle",

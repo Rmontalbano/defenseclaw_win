@@ -136,6 +136,12 @@ public sealed partial class LogEntry : ObservableObject
     /// <summary>The Mac's coarse kind (<c>verdict</c>, <c>scan</c>, <c>error</c>…); for a file line, the first part of its <c>[component]</c>.</summary>
     public string EventType => Get().EventType;
 
+    /// <summary>
+    /// True when the 0.8.10 TUI's default, actionable view would show this row (<see cref="ActionableRule"/>; decided when the event was read).
+    /// A log-file line is never subject to that view, so it is always true.
+    /// </summary>
+    public bool IsActionable => _event?.IsActionable ?? true;
+
     public string Action => Get().Action;
 
     public string Connector => Get().Connector;
@@ -286,6 +292,7 @@ public sealed partial class LogEntry : ObservableObject
         Add("action", e.Action);
         Add("severity", LevelText);
         Add("connector", e.Connector);
+        Add("target", e.Target);
         Add("bucket", e.Bucket);
         Add("event name", e.EventName);
         Add("source", e.Source);
