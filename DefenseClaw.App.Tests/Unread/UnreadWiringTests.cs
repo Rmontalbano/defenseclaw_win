@@ -103,8 +103,8 @@ public sealed class UnreadViewModelTests : IDisposable
             _ = _services.Cli.RecordHandOff("defenseclaw", new[] { "keys", "set" }, "synthetic entry");
         }
 
-        await WaitUntilAsync(() => vm.UnreadFor(Activity).IsShown, "the Activity capsule");
-        Assert.Equal("99+", vm.UnreadFor(Activity).Text);
+        // The capsule can show after the first runs are counted and before the last ones are: wait for the cap itself.
+        await WaitUntilAsync(() => vm.UnreadFor(Activity).Text == "99+", "the Activity capsule to reach 99+");
         Assert.Equal("99+ new since last visit", vm.UnreadFor(Activity).Description);
 
         await _services.UnreadCounts.PanelShown(Activity);
