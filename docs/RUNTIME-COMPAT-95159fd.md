@@ -227,8 +227,9 @@ offered and must say valid: invalid, validator unavailable and did-not-complete 
 way. A folder the CLI would rewrite (`%VAR%`, `~`, wildcards expand in every argument on Windows) is refused before anything runs.
 
 **When changes are off.** The data must be a complete, recent read (`CatalogTrust`, as in the other panels): a partial read (a part failed), a
-refresh that failed (the last good rows stay, labelled), a read older than its window, or a `config.yaml` / `.env` that changed since the read (checked
-again at the moment of the request) turns every change off with the reason as the button's tooltip. Reads stay on.
+refresh that failed (the last good rows stay, labelled), a read older than its window, or a `config.yaml` / `.env` that changed since the read (a stat of
+both files, never their content, checked again at the moment of the request and when a review is confirmed; `docs/PARITY-FOUNDATIONS.md` section 9) turns
+every change off with the reason as the button's tooltip. Reads stay on.
 
 ### AI Discovery models: owner, relevance, confidence, lineage (CUST-310)
 

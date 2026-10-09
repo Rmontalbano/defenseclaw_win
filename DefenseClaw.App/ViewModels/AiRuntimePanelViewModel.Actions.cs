@@ -156,7 +156,7 @@ public sealed partial class AiRuntimePanelViewModel
 
         if (IsStale)
         {
-            return "The snapshot on screen is stale" + (StaleReason.Length > 0 ? " (" + StaleReason.TrimEnd('.') + ")" : string.Empty) + "; refresh it first.";
+            return StaleBlockedReason;
         }
 
         if (IsLoading)
@@ -176,6 +176,17 @@ public sealed partial class AiRuntimePanelViewModel
 
         return null;
     }
+
+    /// <summary>Why a change is off while the snapshot is stale: what made it stale, and what to do about it.</summary>
+    private string StaleBlockedReason =>
+        "The snapshot on screen is stale" + (StaleReason.Length > 0 ? " (" + StaleReason.TrimEnd('.') + ")" : string.Empty) + "; refresh it first.";
+
+    /// <summary>
+    /// The review's last question, asked when the operator confirms: has the snapshot it was opened on gone stale while the dialog was up
+    /// (config.yaml or .env changed, the gateway went away)? The panel's banner and the note under its buttons already say so; the dialog says
+    /// it where the result goes, and Activity records the command as refused.
+    /// </summary>
+    private string? ReasonToRefuseRun() => NoteConfigMoved() ? StaleBlockedReason : null;
 
     /// <summary>Recomputes which buttons are live and the sentence under them. Called whenever anything they depend on changed.</summary>
     internal void RaiseActionState()
@@ -200,6 +211,8 @@ public sealed partial class AiRuntimePanelViewModel
     [RelayCommand(CanExecute = nameof(CanPollNow))]
     private void PollNow()
     {
+        // The buttons follow what the watcher has reported; a change started now looks at the files (CUST-312).
+        _ = NoteConfigMoved();
         if (PollBlockedReason is not null)
         {
             return;
@@ -222,6 +235,7 @@ public sealed partial class AiRuntimePanelViewModel
     [RelayCommand(CanExecute = nameof(CanEnable))]
     private void EnablePlanes()
     {
+        _ = NoteConfigMoved();
         if (EnableBlockedReason is not null)
         {
             return;
@@ -343,6 +357,7 @@ public sealed partial class AiRuntimePanelViewModel
     [RelayCommand(CanExecute = nameof(CanDisable))]
     private void DisablePlanes()
     {
+        _ = NoteConfigMoved();
         if (DisableBlockedReason is not null)
         {
             return;

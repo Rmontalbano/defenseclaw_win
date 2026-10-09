@@ -162,7 +162,8 @@ public sealed partial class PolicyModelViewModel
     /// </summary>
     private bool RefuseChange()
     {
-        CheckConfigStamp();
+        // The bound values only look at what the watcher has reported; a change requested now looks at the files.
+        _ = Trust.CheckConfig();
         if (ChangesBlockedReasonNow is not { } reason)
         {
             return false;
@@ -174,17 +175,23 @@ public sealed partial class PolicyModelViewModel
     }
 
     /// <summary>The same check for a flow that is already running its own checks (it holds <see cref="IsRunning"/>): only the data's trust matters.</summary>
-    private bool RefuseUntrusted()
+    private bool RefuseUntrusted() => ReasonToRefuseRun() is not null;
+
+    /// <summary>
+    /// Why the data may not authorize a change, from its trust alone (read now, files included); shown in the notice bar when there is one.
+    /// The review's last question as well, asked when the operator confirms: a review that was open while config.yaml or .env changed must not run.
+    /// </summary>
+    private string? ReasonToRefuseRun()
     {
-        CheckConfigStamp();
+        _ = Trust.CheckConfig();
         if (TrustBlockedReason is not { } reason)
         {
-            return false;
+            return null;
         }
 
         ShowNotice("Changes are off", reason);
         NotifyTrust();
-        return true;
+        return reason;
     }
 
     /// <summary>Shows the refusal and returns true when the CLI would act on something other than the arguments named (it expands %VAR%, ~ and wildcards on Windows).</summary>
@@ -445,8 +452,9 @@ public sealed partial class PolicyModelViewModel
 
     private async Task AfterChangeAsync(DiscoverReviewResult result, string doneText)
     {
-        // The settings may have changed whether or not the command succeeded: read them again either way.
-        _configMoved = true;
+        // The settings may have changed whether or not the command succeeded (and not always in config.yaml, where the files would say so):
+        // they are not to be acted on until they are read again, either way.
+        Trust.MarkStale(CatalogTrust.ConfigChangedReason("these settings were read"));
         NotifyTrust();
         await LoadAsync().ConfigureAwait(true);
 

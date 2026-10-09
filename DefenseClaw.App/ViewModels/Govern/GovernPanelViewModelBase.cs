@@ -133,6 +133,8 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     protected GovernPanelViewModelBase(AppServices services)
         : base(services)
     {
+        Trust = CatalogTrust.Watching(services.Paths);
+
         Rows.CollectionChanged += (_, _) => NotifyStateFlags();
         ArtifactRows.CollectionChanged += (_, _) => NotifyStateFlags();
 
@@ -158,10 +160,11 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     // ---- Catalog safety: may this list authorize a change? -------------------------------------------------------------
 
     /// <summary>
-    /// What the last read amounted to (complete, partial, failed, old). Every state-changing command of the panel asks it, at the moment it
-    /// is reviewed and again when it is confirmed. Reusable as is by any panel with a list that actions are taken on (Policies).
+    /// What the last read amounted to (complete, partial, failed, old, or read before config.yaml / .env changed). Every state-changing
+    /// command of the panel asks it, at the moment it is reviewed and again when it is confirmed. Reusable as is by any panel with a list that
+    /// actions are taken on (Policies).
     /// </summary>
-    public CatalogTrust Trust { get; internal set; } = new();
+    public CatalogTrust Trust { get; internal set; }
 
     /// <summary>True when the list is a complete, recent read; false while it is partial, failed, being read for the first time or old.</summary>
     public bool IsDataTrusted => Trust.IsTrusted;
@@ -209,18 +212,42 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     /// <summary>
     /// Refuses (with the reason in the result bar) when the list may not authorize a change; true when the caller must stop. The check is
-    /// made against the clock now, not against what a button looked like when it was drawn.
+    /// made against the clock and the config files now (<see cref="CatalogTrust.ReasonNow"/>), not against what a button looked like when it
+    /// was drawn or what the watcher has reported so far. For a <paramref name="confirmed"/> plan - a review the operator has just said yes
+    /// to - the command that was therefore not started is also recorded in Activity, as refused.
     /// </summary>
-    private bool RefuseUntrustedChange()
+    private bool RefuseUntrustedChange(GovernPlan? confirmed = null)
     {
-        if (Trust.Reason is not { } reason)
+        if (Trust.ReasonNow() is not { } reason)
         {
             return false;
         }
 
         ShowResult("Changes are off", reason, InfoBarSeverity.Warning);
+        if (confirmed is not null)
+        {
+            _ = DiscoverCli.RecordRefusal(Services, CommandReview.DefaultExecutable, confirmed.Argv, reason);
+        }
+
         NotifyTrust();
         return true;
+    }
+
+    // ---- Config changes (CUST-312) -------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// config.yaml or .env were rewritten (the existing watcher raises this for both). Whether that postdates the read on screen is the trust's
+    /// to say (a panel that re-read straight after its own change has nothing to be told); the rows stay either way.
+    /// </summary>
+    private void OnConfigReloaded(object? sender, EventArgs e) => NoteConfigMoved();
+
+    /// <summary>Compares the files with what the rows were read under; when they differ the rows lose their say, with the reason as the tooltip.</summary>
+    private void NoteConfigMoved()
+    {
+        if (Trust.CheckConfig())
+        {
+            NotifyTrust();
+        }
     }
 
     /// <summary>Test seam: runs a command instead of <c>Services.Cli.RunAsync</c>, so a test feeds exact output and never starts a process.</summary>
@@ -372,18 +399,25 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     protected override void OnActivated()
     {
+        // Listen while on screen; a change made while the panel was away is found by comparing the files with what the rows were read under.
+        Services.ConfigReloaded += OnConfigReloaded;
+        NoteConfigMoved();
+
         RefreshConnectorList();
         StartScannerProbe();
 
-        // One catch-up read per visit, and only when the data is old (or never arrived). Not a timer.
+        // One catch-up read per visit, and only when the data is old (or never arrived, or read before the config changed). Not a timer.
         var stale = _lastLoadedAt is null
                     || DefenseClaw.Core.Time.WallClock.Elapsed(_lastLoadedAt.Value) >= StaleAfter
-                    || !string.Equals(_loadedScopeKey, ScopeKey(), StringComparison.Ordinal);
+                    || !string.Equals(_loadedScopeKey, ScopeKey(), StringComparison.Ordinal)
+                    || Trust.IsStale;
         if (!_everRequested || stale)
         {
             _ = LoadAsync();
         }
     }
+
+    protected override void OnDeactivated() => Services.ConfigReloaded -= OnConfigReloaded;
 
     /// <summary>Re-read the list (Refresh button, F5). Also looks for the scanner again, so installing it needs no restart.</summary>
     [RelayCommand]
@@ -523,6 +557,9 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     private async Task LoadOnceAsync()
     {
+        // What config.yaml and .env look like as this read starts: the rows it produces were read under that.
+        Trust.BeginRead();
+
         var scope = ToolbarConnector();
         var scopeKey = ScopeKey();
         var argv = new List<string> { Noun, "list", "--json" };
@@ -1199,8 +1236,9 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
         if (plan is not null)
         {
-            // The review may have been open while a refresh finished partial or failed: it was authorized by data that is gone.
-            if (RefuseUntrustedChange())
+            // The review may have been open while a refresh finished partial or failed, or while config.yaml / .env changed: it was authorized
+            // by data that is gone.
+            if (RefuseUntrustedChange(plan))
             {
                 return;
             }

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.AiRuntime;
+using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Time;
 
@@ -48,6 +49,11 @@ public enum AiRuntimeState
 /// report for an empty one would read as a clean host rather than as a lost connection. A 404 or 405 is different - it is the version, not a
 /// fault - and clears the snapshot. Poll now, Enable and Disable are off while the snapshot is stale, the gateway does not serve the planes,
 /// or the runtime does not list the command (<see cref="DefenseClaw.Core.Runtime.RuntimeCapabilities.HasAiRuntimeCommand"/>).
+/// A snapshot read before <c>config.yaml</c> or <c>.env</c> changed is stale the same way (CUST-312; <see cref="CatalogTrust"/> does it for the
+/// other panels' lists): the panel keeps the disk signature the read began under (<see cref="ConfigDiskSignature"/>: a stat, never the
+/// content), compares it when <c>AppServices.ConfigReloaded</c> is raised while the panel is on screen, when the panel comes back, and right
+/// before a change starts or is confirmed, and marks the snapshot stale with <see cref="ConfigMovedReason"/>. A read that began after the
+/// change is not stale.
 /// </para>
 /// <para>
 /// <b>Reads and changes.</b> The snapshot is one authenticated <c>GET /api/v1/ai-usage/runtime</c> through the gateway client; every change is a
@@ -84,9 +90,19 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     /// <summary>Planes whose snapshot is older than this are re-read when the panel comes back on screen.</summary>
     internal static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(60);
 
+    /// <summary>Why the snapshot on screen is stale when config.yaml or .env changed after it was read: the twin of the gateway-away reason.</summary>
+    public const string ConfigMovedReason =
+        "The config.yaml or .env file changed after this snapshot was read, so the coverage above may no longer be true.";
+
     private AiRuntimeSnapshot? _snapshot;
     private DateTimeOffset? _readAt;
     private MonotonicStamp _readStamp;
+
+    /// <summary>What config.yaml and .env looked like when the read in flight began; taken per read, kept with the snapshot it produces.</summary>
+    private ConfigDiskSignature? _pendingSignature;
+
+    /// <summary>What config.yaml and .env looked like when the snapshot on screen was read.</summary>
+    private ConfigDiskSignature? _readSignature;
     private bool _loadRunning;
     private bool _reloadRequested;
     private bool _syncing;
@@ -96,7 +112,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     public AiRuntimePanelViewModel(AppServices services)
         : base(services)
     {
-        Review = new DiscoverActionReview(services);
+        Review = new DiscoverActionReview(services) { RunGuard = ReasonToRefuseRun };
 
         // The review dialog being open or running takes the action buttons away (one change at a time); the panel follows it.
         Review.PropertyChanged += (_, e) =>
@@ -349,9 +365,13 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     {
         Services.Monitor.StateChanged += OnGatewayStateChanged;
         Services.Runtime.Changed += OnRuntimeChanged;
+        Services.ConfigReloaded += OnConfigReloaded;
+
+        // A change to config.yaml or .env while the panel was away was not heard: compare the files with what the snapshot was read under.
+        _ = NoteConfigMoved();
         RaiseActionState();
 
-        if (!_loadRunning && (_snapshot is null || _readStamp.HasElapsed(StaleAfter)))
+        if (!_loadRunning && (_snapshot is null || IsStale || _readStamp.HasElapsed(StaleAfter)))
         {
             _ = LoadSafelyAsync();
         }
@@ -361,9 +381,29 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     {
         Services.Monitor.StateChanged -= OnGatewayStateChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;
+        Services.ConfigReloaded -= OnConfigReloaded;
     }
 
     private void OnRuntimeChanged(object? sender, EventArgs e) => RaiseActionState();
+
+    /// <summary>config.yaml or .env were rewritten (the existing watcher raises this for both): the snapshot on screen is stale if that postdates its read. It is kept either way.</summary>
+    private void OnConfigReloaded(object? sender, EventArgs e) => NoteConfigMoved();
+
+    /// <summary>
+    /// Compares config.yaml and .env with what the snapshot on screen was read under (a stat of each, never their content) and, when they
+    /// differ, marks it stale with <see cref="ConfigMovedReason"/>. Looks only when asked - a reload notification, the panel coming back,
+    /// a change about to start or be confirmed - never on a timer. A read that began after the change finds nothing different.
+    /// </summary>
+    /// <returns>True when the snapshot is stale (now or already).</returns>
+    internal bool NoteConfigMoved()
+    {
+        if (_snapshot is not null && !IsStale && _readSignature is { } read && ConfigDiskSignature.Capture(Services.Paths) != read)
+        {
+            MarkStale(ConfigMovedReason);
+        }
+
+        return IsStale;
+    }
 
     private void OnGatewayStateChanged(object? sender, GatewaySnapshotEventArgs e) => NoteGatewayState(e.Snapshot.State);
 
@@ -441,6 +481,9 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
 
     private async Task<AiRuntimeRead> ReadOnceAsync()
     {
+        // What config.yaml and .env look like as this read starts: the snapshot it produces was read under that.
+        _pendingSignature = ConfigDiskSignature.Capture(Services.Paths);
+
         try
         {
             var result = ReadSnapshot is { } read
@@ -484,13 +527,20 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
                 _unavailableReason = string.Empty;
                 IsStale = false;
                 StaleReason = string.Empty;
+                _readSignature = _pendingSignature ?? ConfigDiskSignature.Capture(Services.Paths);
+                _pendingSignature = null;
                 Project(snapshot);
+
+                // The files moved while this read was running: nothing says which side of the edit it saw.
+                _ = NoteConfigMoved();
                 break;
 
             case AiRuntimeReadStatus.Unsupported:
                 // The version has no such route: that is a fact about the runtime, so nothing from before it is kept.
                 _snapshot = null;
                 _readAt = null;
+                _readSignature = null;
+                _pendingSignature = null;
                 _unavailableReason = string.Empty;
                 IsStale = false;
                 StaleReason = string.Empty;
@@ -499,6 +549,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
                 break;
 
             default:
+                _pendingSignature = null;
                 if (_snapshot is null)
                 {
                     _unavailableReason = read.Message;

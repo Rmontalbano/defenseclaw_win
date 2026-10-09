@@ -394,7 +394,8 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     public RegistriesPanelViewModel(AppServices services)
         : base(services)
     {
-        Review = new DiscoverActionReview(services);
+        Trust = CatalogTrust.Watching(services.Paths);
+        Review = new DiscoverActionReview(services) { RunGuard = ReasonToRefuseRun };
     }
 
     public override string Title => "Registries";
@@ -429,9 +430,10 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
     /// <summary>
     /// What the last read of the sources amounted to. A failed refresh keeps the old rows on screen; they no longer authorize a sync, a
-    /// removal, an approval or a policy switch, and neither does a list that has gone old or has not been read yet (see <see cref="CatalogTrust"/>).
+    /// removal, an approval or a policy switch, and neither does a list that has gone old, has not been read yet, or was read before
+    /// config.yaml or .env changed (see <see cref="CatalogTrust"/>).
     /// </summary>
-    public CatalogTrust Trust { get; } = new();
+    public CatalogTrust Trust { get; }
 
     public bool IsDataTrusted => Trust.IsTrusted;
 
@@ -452,12 +454,12 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     }
 
     /// <summary>
-    /// True (and says why in the result bar) when the list may not authorize a change, checked against the clock at the moment the command
-    /// runs. Every command that opens the review calls it first.
+    /// True (and says why in the result bar) when the list may not authorize a change, checked against the clock and the config files at the
+    /// moment the command runs (<see cref="CatalogTrust.ReasonNow"/>). Every command that opens the review calls it first.
     /// </summary>
     private bool RefuseUntrustedChange()
     {
-        if (Trust.Reason is not { } reason)
+        if (Trust.ReasonNow() is not { } reason)
         {
             return false;
         }
@@ -466,6 +468,37 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         ActionSeverity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
         NotifyTrust();
         return true;
+    }
+
+    /// <summary>
+    /// The review's last question, asked when the operator confirms: the list it was opened on may have gone old, or config.yaml / .env may
+    /// have changed, while the dialog was up. The panel says so too, so the reason is still there when the dialog is closed.
+    /// </summary>
+    private string? ReasonToRefuseRun()
+    {
+        if (Trust.ReasonNow() is not { } reason)
+        {
+            return null;
+        }
+
+        ActionMessage = reason;
+        ActionSeverity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
+        NotifyTrust();
+        return reason;
+    }
+
+    /// <summary>
+    /// config.yaml or .env were rewritten (the existing watcher raises this for both). Whether that postdates the read on screen is the trust's
+    /// to say; the rows stay either way. Nothing here reads: Refresh does.
+    /// </summary>
+    private void OnConfigReloaded(object? sender, EventArgs e) => NoteConfigMoved();
+
+    private void NoteConfigMoved()
+    {
+        if (Trust.CheckConfig())
+        {
+            NotifyTrust();
+        }
     }
 
     public bool HasActionMessage => !string.IsNullOrEmpty(ActionMessage);
@@ -494,16 +527,25 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     public override async Task InitializeAsync(CancellationToken cancellationToken = default) =>
         await LoadAsync(cancellationToken).ConfigureAwait(true);
 
-    /// <summary>One-shot catch-up when the panel comes back on screen after the data has gone stale; no timer.</summary>
+    /// <summary>
+    /// One-shot catch-up when the panel comes back on screen after the data has gone stale (old, or read before config.yaml / .env changed);
+    /// no timer. The panel listens for a config reload only while it is on screen: a change made while it was away is found by comparing the
+    /// files with what the rows were read under.
+    /// </summary>
     protected override void OnActivated()
     {
-        if (_loadRunning || (_loadedAt is { } at && DefenseClaw.Core.Time.WallClock.Elapsed(at) < StaleAfter))
+        Services.ConfigReloaded += OnConfigReloaded;
+        NoteConfigMoved();
+
+        if (_loadRunning || (_loadedAt is { } at && DefenseClaw.Core.Time.WallClock.Elapsed(at) < StaleAfter && !Trust.IsStale))
         {
             return;
         }
 
         _ = LoadSafelyAsync();
     }
+
+    protected override void OnDeactivated() => Services.ConfigReloaded -= OnConfigReloaded;
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -555,7 +597,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
         _loadRunning = true;
         IsLoading = true;
-        Trust.MarkPending();
+        Trust.BeginRead();
         NotifyTrust();
         CliErrorMessage = null;
         var previousId = SelectedSource?.Id;

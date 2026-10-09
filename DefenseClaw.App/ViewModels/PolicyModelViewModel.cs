@@ -1,11 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
-using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Policy;
 using DefenseClaw.Core.Policy.Model;
 using DefenseClaw.Core.Runtime;
@@ -52,8 +50,6 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     private bool _reloadWanted;
     private Task? _loadTask;
     private int _generation;
-    private string? _loadedStamp;
-    private bool _configMoved;
     private bool _disposed;
     private bool _syncing;
 
@@ -69,7 +65,8 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
 
         // A container's files are inside the container; this app cannot reach them, so those views say the catalog was not found.
         _files = files ?? (services.Paths.Runtime.Kind == RuntimeKind.Container ? NoPolicyDataFiles.Instance : FileSystemPolicyData.Instance);
-        Review = new DiscoverActionReview(services);
+        Trust = CatalogTrust.Watching(services.Paths, readClause: "these settings were read");
+        Review = new DiscoverActionReview(services) { RunGuard = ReasonToRefuseRun };
         Review.PropertyChanged += OnReviewChanged;
         foreach (var view in PolicyModel.ViewIds)
         {
@@ -100,7 +97,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     public DiscoverActionReview Review { get; }
 
     /// <summary>Whether the data may authorize a change; see <see cref="CatalogTrust"/>.</summary>
-    public CatalogTrust Trust { get; internal set; } = new();
+    public CatalogTrust Trust { get; internal set; }
 
     /// <summary>Test seam: runs a command instead of <c>Services.Cli.RunAsync</c>, so a test feeds exact output and never starts a process.</summary>
     internal Func<IReadOnlyList<string>, CliRunOptions, Task<CliInvocation>>? RunCli { get; set; }
@@ -247,26 +244,14 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
 
     private string? ChangesBlockedReasonNow => TrustBlockedReason ?? (IsBusy || IsRunning ? "Another command is running." : null);
 
-    /// <summary>Why the data on screen may not be acted on: no read yet, a failed or partial or old one, or a configuration that moved since. Null when it may.</summary>
-    private string? TrustBlockedReason
-    {
-        get
-        {
-            if (State != PoliciesState.Loaded)
-            {
-                return Trust.Reason ?? "Changes are off until the policies have been read.";
-            }
-
-            if (Trust.Reason is { } reason)
-            {
-                return reason;
-            }
-
-            return _configMoved
-                ? "Changes are off: config.yaml or .env changed since these settings were read. Refresh to act on current data."
-                : null;
-        }
-    }
+    /// <summary>
+    /// Why the data on screen may not be acted on: no read yet, a failed or partial or old one, or a configuration that moved since (the trust
+    /// says all of those). Null when it may.
+    /// </summary>
+    private string? TrustBlockedReason =>
+        State != PoliciesState.Loaded
+            ? Trust.Reason ?? "Changes are off until the policies have been read."
+            : Trust.Reason;
 
     private void NotifyTrust()
     {
@@ -307,15 +292,12 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         Services.ConfigReloaded += OnConfigReloaded;
 
         // A change to config.yaml or .env while the panel was away is not heard: compare the files with what the read saw.
-        if (_loadedStamp is not null && !_configMoved && !string.Equals(ConfigStamp(), _loadedStamp, StringComparison.Ordinal))
-        {
-            _configMoved = true;
-        }
+        _ = Trust.CheckConfig();
 
         NotifyTrust();
 
         // One catch-up read per visit, and only when the data is old or the configuration moved. Not a timer.
-        var stale = _lastLoadedAt is null || _configMoved || DefenseClaw.Core.Time.WallClock.Elapsed(_lastLoadedAt.Value) >= StaleAfter;
+        var stale = _lastLoadedAt is null || Trust.IsStale || DefenseClaw.Core.Time.WallClock.Elapsed(_lastLoadedAt.Value) >= StaleAfter;
         if (stale && !_loadRunning && !Review.IsOpen)
         {
             _ = LoadIfIdleAsync();
@@ -340,13 +322,12 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
 
     private void OnConfigReloaded(object? sender, EventArgs e)
     {
-        // The latest read began after this change (a change this panel made, read straight away): nothing moved since it.
-        if (_disposed || (_loadedStamp is not null && string.Equals(ConfigStamp(), _loadedStamp, StringComparison.Ordinal)))
+        // The latest read began after this change (a change this panel made, read straight away): the trust finds nothing moved since it.
+        if (_disposed || !Trust.CheckConfig())
         {
             return;
         }
 
-        _configMoved = true;
         NotifyTrust();
 
         // Read again now unless something is running or being decided; a finished review reads again by itself.
@@ -356,22 +337,9 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         }
     }
 
-    /// <summary>
-    /// The check made at the moment a change is requested: have <c>config.yaml</c> or <c>.env</c> changed since the read that is on screen? The
-    /// bound values only look at a flag (a file read for every button would be a lot); this one reads the files, once, per action.
-    /// </summary>
-    private void CheckConfigStamp()
-    {
-        if (!_configMoved && _loadedStamp is not null && !string.Equals(ConfigStamp(), _loadedStamp, StringComparison.Ordinal))
-        {
-            _configMoved = true;
-            NotifyTrust();
-        }
-    }
-
     private void OnReviewChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DiscoverActionReview.IsOpen) && !Review.IsOpen && _configMoved && !_loadRunning && !IsRunning && !_disposed)
+        if (e.PropertyName == nameof(DiscoverActionReview.IsOpen) && !Review.IsOpen && Trust.IsStale && !_loadRunning && !IsRunning && !_disposed)
         {
             _ = LoadIfIdleAsync();
         }
@@ -379,18 +347,6 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
 
     [RelayCommand]
     private Task RefreshAsync() => LoadIfIdleAsync();
-
-    private string ConfigStamp()
-    {
-        try
-        {
-            return $"{FileSignature.Capture(Services.Paths.ConfigFilePath)}|{FileSignature.Capture(Services.Paths.EnvFilePath)}";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return "unreadable";
-        }
-    }
 
     // ---- reading -------------------------------------------------------------------------------------------------------------
 
@@ -498,9 +454,9 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     private async Task LoadOnceAsync()
     {
         var generation = ++_generation;
-        Trust.MarkPending();
-        _loadedStamp = ConfigStamp();
-        _configMoved = false;
+
+        // What config.yaml and .env look like as this read starts: the data it produces was read under that.
+        Trust.BeginRead();
         try
         {
             var read = await Reader.ReadAsync(_catalog).ConfigureAwait(true);

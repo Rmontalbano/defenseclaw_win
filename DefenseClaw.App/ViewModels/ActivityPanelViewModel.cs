@@ -654,8 +654,11 @@ public sealed partial class ActivityRow : ObservableObject
 
         if (failureReason is { Length: > 0 } failure)
         {
-            // "cancelled" is the operator's own doing, not a fault - but it is not a success either.
-            ExitBadgeText = failure.StartsWith("cancelled", StringComparison.Ordinal) ? "cancelled" : "failed";
+            // "cancelled" is the operator's own doing, not a fault - but it is not a success either. "refused" is a command this app declined to
+            // start (CliRunner.RecordRefusal): it never ran, which "failed" would not say.
+            ExitBadgeText = failure.StartsWith("cancelled", StringComparison.Ordinal) ? "cancelled"
+                : failure.StartsWith(CliRunner.RefusedPrefix, StringComparison.Ordinal) ? "refused"
+                : "failed";
             ExitBadgeKey = "Warn";
             HasFailure = true;
             FailureText = failure;

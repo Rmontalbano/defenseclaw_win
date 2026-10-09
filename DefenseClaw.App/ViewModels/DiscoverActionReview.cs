@@ -67,6 +67,25 @@ internal static class DiscoverCli
     public static string CommandLine(IEnumerable<string> argv) =>
         CommandReview.CommandLine(CommandReview.DefaultExecutable, argv);
 
+    /// <summary>
+    /// Records in Activity that <paramref name="argv"/> was confirmed and then refused (<see cref="CliRunner.RecordRefusal"/>): the one place a
+    /// refusal at the moment of running is written down, for the Govern panels and every <see cref="DiscoverActionReview"/>. An argv that
+    /// cannot be recorded because it holds a known secret is not recorded (the refusal is still shown by the caller); returns the entry, or null.
+    /// </summary>
+    public static CliInvocation? RecordRefusal(AppServices services, string executable, IReadOnlyList<string> argv, string reason)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        try
+        {
+            return services.Cli.RecordRefusal(executable, argv, reason);
+        }
+        catch (SecretInArgumentException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Display quoting only (the runner passes an argument list, no shell is involved).</summary>
     public static string Quote(string argument) => CommandReview.Quote(argument);
 
@@ -163,6 +182,14 @@ public sealed partial class DiscoverActionReview : ObservableObject
 
     /// <summary>Test seam: runs a step instead of <c>Services.Cli.RunNamedAsync</c>, so a test sees the exact argv and never starts a process.</summary>
     internal Func<string, IReadOnlyList<string>, CliRunOptions?, Task<CliInvocation>>? RunStep { get; set; }
+
+    /// <summary>
+    /// The last question before a confirmed review runs: why it must not, or null. Set once by the panel that owns the review, from the trust
+    /// of the data the review was opened on (<c>CatalogTrust.ReasonNow</c>). A review stays open for as long as the operator reads it, and the
+    /// list it was opened on can go out of date in that time (config.yaml or .env changed, a refresh failed), so the answer at the moment
+    /// of Confirm is the one that counts. When it answers, nothing runs: the dialog says why, and Activity gets the command as refused.
+    /// </summary>
+    internal Func<string?>? RunGuard { get; set; }
 
     /// <summary>Which buttons the shared control offers: Cancel and confirm, none while running, then Close.</summary>
     public CommandReviewPhase Phase => IsRunning
@@ -303,6 +330,13 @@ public sealed partial class DiscoverActionReview : ObservableObject
             return;
         }
 
+        // The data this review was opened on may have gone out of date while it was open: ask again before anything starts.
+        if (RunGuard?.Invoke() is { Length: > 0 } refusal)
+        {
+            Refuse(review, refusal);
+            return;
+        }
+
         IsRunning = true;
         ResultText = null;
         ResultOutput = null;
@@ -399,6 +433,29 @@ public sealed partial class DiscoverActionReview : ObservableObject
             }
 #pragma warning restore CA1031
         }
+    }
+
+    /// <summary>
+    /// Ends a confirmed review without running it. The step that would have run first is recorded in Activity as refused (the later ones were
+    /// never going to run) and the dialog finishes the way a failed one does, with the reason where the result goes. The follow-up
+    /// (<c>onFinished</c>) is not called: nothing ran, so there is nothing to report, and the panel that set the guard has already told its own
+    /// buttons the data is out of date.
+    /// </summary>
+    private void Refuse(CommandReview review, string reason)
+    {
+        var first = _plan[0];
+        _ = DiscoverCli.RecordRefusal(_services, first.Executable, first.Argv, reason);
+
+        for (var i = 0; i < review.Steps.Count; i++)
+        {
+            review.Steps[i].SetStatus(i == 0 ? "Refused: not started" : "Skipped: the first step was refused", i == 0 ? "Bad" : "Neutral");
+        }
+
+        _onFinished = null;
+        ResultKey = "Bad";
+        ResultText = "Not run. " + reason + " Nothing was changed; the refusal is recorded in the Activity panel.";
+        ResultOutput = null;
+        IsFinished = true;
     }
 
     private static void AppendOutput(StringBuilder builder, int stepNumber, CliInvocation invocation, bool label)

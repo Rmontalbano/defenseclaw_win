@@ -86,7 +86,8 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
         // A backend handed in (a test of one generation of the runtime) fixes the surface; otherwise the connected runtime's probe decides.
         _surfaceFixed = backend is not null;
         _backend = backend is { Surface: PolicySurface.NamedPolicies } ? backend : Release0810PolicyBackend.Instance;
-        Review = new DiscoverActionReview(services);
+        Trust = CatalogTrust.Watching(services.Paths);
+        Review = new DiscoverActionReview(services) { RunGuard = ReasonToRefuseRun };
         Form = new PolicyFormViewModel();
         Rows = new ObservableCollection<PolicyRow>();
         ApplySurface(backend?.Surface ?? SurfaceOfRuntime());
@@ -129,7 +130,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
     public PolicyFormViewModel Form { get; }
 
     /// <summary>Whether the list may authorize a change; see <see cref="CatalogTrust"/>.</summary>
-    public CatalogTrust Trust { get; internal set; } = new();
+    public CatalogTrust Trust { get; internal set; }
 
     /// <summary>Test seam: the data files the policy model reads (<see cref="PolicyModelViewModel.DataFiles"/>); handed on to the model, now or when it is created.</summary>
     internal IPolicyDataFiles? DataFiles
@@ -305,6 +306,9 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
 
     protected override void OnActivated()
     {
+        // Listen for a config reload while on screen (the table's trust is the one that matters; the model panel listens for its own).
+        Services.ConfigReloaded += OnConfigReloaded;
+
         if (!_surfaceFixed)
         {
             Services.Runtime.Changed += OnRuntimeChanged;
@@ -329,17 +333,33 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
 
     protected override void OnDeactivated()
     {
+        Services.ConfigReloaded -= OnConfigReloaded;
         Services.Runtime.Changed -= OnRuntimeChanged;
         Model?.SetActive(false);
     }
 
+    /// <summary>
+    /// config.yaml or .env were rewritten (the existing watcher raises this for both). Whether that postdates the read on screen is the trust's
+    /// to say; the rows stay either way. With the policy model as the surface this table is not on screen and has nothing to mark.
+    /// </summary>
+    private void OnConfigReloaded(object? sender, EventArgs e)
+    {
+        if (Model is null && Trust.CheckConfig())
+        {
+            NotifyTrust();
+        }
+    }
+
     private void CatchUpClassic()
     {
+        // A change to config.yaml / .env while the panel was away was not heard: compare the files with what the rows were read under.
+        _ = Trust.CheckConfig();
+
         // The bound values only update when something raises PropertyChanged: do it now, so an old list is not offered as fresh.
         NotifyTrust();
 
-        // One catch-up read per visit, and only when the data is old. Not a timer.
-        var stale = _lastLoadedAt is null || DefenseClaw.Core.Time.WallClock.Elapsed(_lastLoadedAt.Value) >= StaleAfter;
+        // One catch-up read per visit, and only when the data is old or was read before the config changed. Not a timer.
+        var stale = _lastLoadedAt is null || DefenseClaw.Core.Time.WallClock.Elapsed(_lastLoadedAt.Value) >= StaleAfter || Trust.IsStale;
         if (stale && !_loadRunning && !Review.IsOpen && !Form.IsOpen)
         {
             _ = LoadAsync();
@@ -460,7 +480,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
         }
 
         _loadRunning = true;
-        Trust.MarkPending();
+        Trust.BeginRead();
         IsBusy = true;
         try
         {

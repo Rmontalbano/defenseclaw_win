@@ -156,6 +156,8 @@ public sealed partial class PoliciesPanelViewModel
     /// </summary>
     private bool RefuseChange()
     {
+        // The bound values only look at what the watcher has reported; a change requested now looks at the files (CUST-312).
+        _ = Trust.CheckConfig();
         if (ChangesBlockedReasonNow is not { } reason)
         {
             return false;
@@ -167,19 +169,26 @@ public sealed partial class PoliciesPanelViewModel
     }
 
     /// <summary>The same check for a flow that is already running its own checks (it holds <see cref="IsRunning"/>): only the list's trust matters.</summary>
-    private bool RefuseUntrusted()
+    private bool RefuseUntrusted() => ReasonToRefuseRun() is not null;
+
+    /// <summary>
+    /// Why the list may not authorize a change, from its trust alone (read now, files included); shown in the notice bar when there is one.
+    /// The review's last question as well, asked when the operator confirms: a review that was open while config.yaml or .env changed must not run.
+    /// </summary>
+    private string? ReasonToRefuseRun()
     {
+        _ = Trust.CheckConfig();
         var reason = State is PoliciesState.Loaded or PoliciesState.Empty
             ? Trust.Reason
             : Trust.Reason ?? "Changes are off until the policies have been read.";
         if (reason is null)
         {
-            return false;
+            return null;
         }
 
         ShowNotice("Changes are off", reason);
         NotifyTrust();
-        return true;
+        return reason;
     }
 
     // ---- Validate and test (read-only, run directly) -------------------------------------------------------------------

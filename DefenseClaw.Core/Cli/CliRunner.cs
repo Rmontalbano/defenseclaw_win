@@ -654,6 +654,38 @@ public sealed class CliRunner : IDisposable
     }
 
     /// <summary>
+    /// The prefix of <see cref="CliInvocation.FailureReason"/> on an entry <see cref="RecordRefusal"/> made. The Activity panel badges such an
+    /// entry "refused" rather than "failed": the command never started.
+    /// </summary>
+    public const string RefusedPrefix = "refused";
+
+    /// <summary>
+    /// Records, in <see cref="Activity"/>, a command this app declined to start: it was reviewed and confirmed, and a check made right before it
+    /// would have run (the list it was reviewed on had gone stale) said no. Nothing is started and nothing changes. The entry is born finished,
+    /// has no exit code, fails with <c>refused - <paramref name="reason"/></c> (the way "not started - DefenseClaw for Windows is exiting" reads)
+    /// and carries the reason as its only output line. Only the argv is stored, and it is checked like any run's (a secret on it is refused
+    /// and nothing is recorded), so the entry cannot hold a value.
+    /// </summary>
+    public CliInvocation RecordRefusal(string executable, IReadOnlyList<string> argv, string reason)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(executable);
+        ArgumentNullException.ThrowIfNull(argv);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        GuardArguments(argv, null, Array.Empty<EnvironmentEntry>());
+
+        var now = DateTimeOffset.UtcNow;
+        var invocation = new CliInvocation(executable, argv.ToArray(), now);
+        invocation.Append(new CliOutputLine(now, CliStream.Notice, "Refused before it started: nothing was run and nothing was changed. " + reason));
+        invocation.FailureReason = RefusedPrefix + " — " + reason;
+        invocation.FinishedAt = now;
+        Record(invocation);
+        InvocationStarted?.Invoke(this, invocation);
+        InvocationCompleted?.Invoke(this, invocation);
+        return invocation;
+    }
+
+    /// <summary>
     /// Resolves <paramref name="executableName"/> through PATH then the install bin dir.
     /// <para>
     /// The resolution happens on a pool thread, inside the returned task: a PATH scan that meets a dead network
