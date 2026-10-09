@@ -328,7 +328,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ReloadConfigCommand))]
     private bool _isReloading;
 
-    /// <summary>Config file, data directory, .env, audit database, gateway log: where the app reads, each with its Copy and Open-folder.</summary>
+    /// <summary>Config file, data directory, .env, audit database, gateway log, Python runtime: where the app reads, each with its Copy and Open-folder.</summary>
     public ObservableCollection<SettingsPathRow> Files { get; }
 
     private IEnumerable<SettingsPathRow> BuildFiles()
@@ -339,6 +339,16 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         yield return NewRow(".env file", paths.EnvFilePath, isDirectory: false, note: null);
         yield return NewRow("Audit database", paths.AuditDatabasePath, isDirectory: false, note: null);
         yield return NewRow("Gateway log", paths.GatewayLogPath, isDirectory: false, note: null);
+
+        // The interpreter the installed DefenseClaw runs (CUST-329, SG15): the Setup layout's runtime, or the installer script's venv.
+        var python = paths.PythonInterpreterPath;
+        yield return NewRow(
+            "Python runtime",
+            python,
+            isDirectory: false,
+            note: string.Equals(python, paths.VenvPythonPath, StringComparison.OrdinalIgnoreCase)
+                ? "From the installer script's .venv under the data directory."
+                : "From the Setup install's runtime folder.");
     }
 
     private SettingsPathRow NewRow(string label, string path, bool isDirectory, string? note)

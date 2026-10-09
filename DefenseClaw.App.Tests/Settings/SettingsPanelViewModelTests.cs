@@ -4,6 +4,7 @@ using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.Services.Updates;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.Core.Paths;
 
 namespace DefenseClaw.App.Tests.Settings;
 
@@ -31,7 +32,7 @@ public sealed class SettingsPanelViewModelTests : IDisposable
         _temp.Dispose();
     }
 
-    private AppServices Create(string? configYaml = null, Func<AppServices, UpdateWatcher>? watcher = null, string? settingsPath = null)
+    private AppServices Create(string? configYaml = null, Func<AppServices, UpdateWatcher>? watcher = null, string? settingsPath = null, DefenseClawPaths? paths = null)
     {
         if (configYaml is not null)
         {
@@ -39,7 +40,7 @@ public sealed class SettingsPanelViewModelTests : IDisposable
         }
 
         var services = AppServices.CreateIsolated(
-            TestServices.IsolatedPaths(_temp.Path),
+            paths ?? TestServices.IsolatedPaths(_temp.Path),
             claudeSettingsPath: _temp.File("claude-settings.json"),
             settingsPath: settingsPath,
             updateWatcherFactory: watcher);
@@ -450,10 +451,10 @@ public sealed class SettingsPanelViewModelTests : IDisposable
         var model = Build(services);
 
         Assert.Equal(
-            new[] { "Config file", "Data directory", ".env file", "Audit database", "Gateway log" },
+            new[] { "Config file", "Data directory", ".env file", "Audit database", "Gateway log", "Python runtime" },
             model.Files.Select(f => f.Label).ToArray());
         Assert.Equal(
-            new[] { services.Paths.ConfigFilePath, services.Paths.DataDirectory, services.Paths.EnvFilePath, services.Paths.AuditDatabasePath, services.Paths.GatewayLogPath },
+            new[] { services.Paths.ConfigFilePath, services.Paths.DataDirectory, services.Paths.EnvFilePath, services.Paths.AuditDatabasePath, services.Paths.GatewayLogPath, services.Paths.PythonInterpreterPath },
             model.Files.Select(f => f.FullPath).ToArray());
 
         var data = model.Files[1];
@@ -480,6 +481,61 @@ public sealed class SettingsPanelViewModelTests : IDisposable
         Assert.False(model.Files[3].Exists);
         Assert.Contains("Not found on disk", model.Files[3].DetailText, StringComparison.Ordinal);
         Assert.Equal(string.Empty, model.Files[0].DetailText);
+    }
+
+    [Fact]
+    public async Task The_python_runtime_row_is_the_setup_layouts_runtime_python()
+    {
+        var bin = Path.Combine(_temp.Path, "Programs", "DefenseClaw", "bin");
+        var python = Path.Combine(_temp.Path, "Programs", "DefenseClaw", "runtime", "python", "python.exe");
+        TouchFile(python);
+        var services = Create(paths: new DefenseClawPaths(dataDirectory: _temp.Path, binDirectory: bin, searchPath: Array.Empty<string>()));
+        var model = Build(services);
+
+        await UiThread.Run(model.RefreshMachineFactsAsync);
+
+        var row = model.Files.Single(f => f.Label == "Python runtime");
+        Assert.Equal(python, row.FullPath);
+        Assert.False(row.IsDirectory);
+        Assert.True(row.Exists);
+        Assert.Equal("From the Setup install's runtime folder.", row.Note);
+        Assert.DoesNotContain("Not found", row.DetailText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_python_runtime_row_is_the_installer_scripts_venv_when_there_is_no_setup_runtime()
+    {
+        var venv = Path.Combine(_temp.Path, ".venv", "Scripts", "python.exe");
+        TouchFile(venv);
+        var services = Create(paths: new DefenseClawPaths(dataDirectory: _temp.Path, binDirectory: Path.Combine(_temp.Path, "no-such-bin"), searchPath: Array.Empty<string>()));
+        var model = Build(services);
+
+        await UiThread.Run(model.RefreshMachineFactsAsync);
+
+        var row = model.Files.Single(f => f.Label == "Python runtime");
+        Assert.Equal(venv, row.FullPath);
+        Assert.True(row.Exists);
+        Assert.Equal("From the installer script's .venv under the data directory.", row.Note);
+    }
+
+    [Fact]
+    public async Task The_python_runtime_row_says_not_found_when_neither_layout_has_one()
+    {
+        var services = Create(paths: new DefenseClawPaths(dataDirectory: _temp.Path, binDirectory: Path.Combine(_temp.Path, "no-such-bin"), searchPath: Array.Empty<string>()));
+        var model = Build(services);
+
+        await UiThread.Run(model.RefreshMachineFactsAsync);
+
+        var row = model.Files.Single(f => f.Label == "Python runtime");
+        Assert.Equal(Path.Combine(_temp.Path, "runtime", "python", "python.exe"), row.FullPath);
+        Assert.False(row.Exists);
+        Assert.Contains("Not found on disk", row.DetailText, StringComparison.Ordinal);
+    }
+
+    private static void TouchFile(string path)
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, string.Empty);
     }
 
     [Fact]

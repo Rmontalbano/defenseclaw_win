@@ -353,6 +353,26 @@
                                        Text="{Binding RepeatText}"
                                        Visibility="{Binding IsRepeated, Converter={StaticResource BoolToVisibility}}" />
 
+                            <!-- Copy summary (the labelled fields below) and Copy JSON (an event's payload; a file line has none). CUST-329, LG5. -->
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <ui:Button Icon="{ctl:DcSymbolIcon Copy24}"
+                                           Content="Copy summary"
+                                           Command="{Binding DataContext.CopySummaryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                           CommandParameter="{Binding}"
+                                           ToolTip="Copy the labelled fields below, one per line."
+                                           AutomationProperties.Name="Copy summary"
+                                           AutomationProperties.HelpText="Copy the fields of this row as Label: value lines." />
+                                <ui:Button Icon="{ctl:DcSymbolIcon Copy24}"
+                                           Content="Copy JSON"
+                                           Margin="8,0,0,0"
+                                           Command="{Binding DataContext.CopyJsonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                           CommandParameter="{Binding}"
+                                           Visibility="{Binding IsStructured, Converter={StaticResource BoolToVisibility}}"
+                                           ToolTip="Copy the event's JSON payload, with secrets masked."
+                                           AutomationProperties.Name="Copy JSON"
+                                           AutomationProperties.HelpText="Copy this event's canonical JSON payload, already redacted." />
+                            </StackPanel>
+
                             <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TagMultiple24" Section="Observe" Content="Fields" />
                             <ItemsControl Grid.IsSharedSizeScope="True"
                                           ItemsSource="{Binding Fields}"

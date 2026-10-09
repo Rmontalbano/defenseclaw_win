@@ -595,6 +595,33 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         _ = Views.Controls.DcClipboard.TrySetText(text);
     }
 
+    /// <summary>The inspector's Copy summary (CUST-329, LG5): the labelled fields it shows, one "Label: value" line each.</summary>
+    public static string CopySummaryText(LogEntry entry) =>
+        string.Join(Environment.NewLine, entry.Fields.Select(field => $"{field.Name}: {field.Value}"));
+
+    /// <summary>The inspector's Copy JSON (LG5): an event's canonical payload, already display-redacted (<see cref="LogEntry.Raw"/>).</summary>
+    public static string CopyJsonText(LogEntry entry) => entry.Raw;
+
+    /// <summary>The row's labelled fields to the clipboard. The row is the inspector's, passed by its button.</summary>
+    [RelayCommand]
+    private void CopySummary(LogEntry? entry)
+    {
+        if (entry is not null)
+        {
+            _ = Views.Controls.DcClipboard.TrySetText(CopySummaryText(entry));
+        }
+    }
+
+    /// <summary>The event's canonical JSON to the clipboard; a file line has no payload, so its button is not shown.</summary>
+    [RelayCommand]
+    private void CopyJson(LogEntry? entry)
+    {
+        if (entry is { IsStructured: true })
+        {
+            _ = Views.Controls.DcClipboard.TrySetText(CopyJsonText(entry));
+        }
+    }
+
     /// <summary>The log file on screen; null on Verdicts and Events.</summary>
     private SourceState? ActiveFileState => ActiveSource switch
     {

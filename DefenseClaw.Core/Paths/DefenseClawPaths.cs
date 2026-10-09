@@ -252,6 +252,18 @@ public sealed class DefenseClawPaths
     /// </summary>
     public IReadOnlyList<string> FallbackBinDirectories { get; }
 
+    /// <summary>The Setup layout's Python: <c>runtime\python\python.exe</c> beside the program folder that holds <see cref="BinDirectory"/>.</summary>
+    public string SetupPythonPath => Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(BinDirectory)) ?? string.Empty, "runtime", "python", "python.exe");
+
+    /// <summary>The installer-script layout's Python: <c>.venv\Scripts\python.exe</c> under the data directory.</summary>
+    public string VenvPythonPath => Path.Combine(DataDirectory, ".venv", "Scripts", "python.exe");
+
+    /// <summary>
+    /// The interpreter the installed DefenseClaw runs: the Setup layout's when it is there, else the script layout's venv when that is. When neither is,
+    /// the Setup path, so "not found" names where the interpreter belongs.
+    /// </summary>
+    public string PythonInterpreterPath => !_fileExists(SetupPythonPath) && _fileExists(VenvPythonPath) ? VenvPythonPath : SetupPythonPath;
+
     /// <summary>The installer-script layout: <c>~\.local\bin</c>, then the venv's <c>Scripts</c> under <paramref name="dataDirectory"/>.</summary>
     public static IReadOnlyList<string> DefaultFallbackBinDirectories(string dataDirectory) =>
         new[]
