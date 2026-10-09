@@ -192,11 +192,20 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _resultMessage = string.Empty;
 
-    public WizardViewModel(AppServices services, WizardDefinition definition, IDockerProbe? dockerProbe = null)
+    /// <param name="loadModels">
+    /// How the model catalogue is read, given the CLI's path and the data folder; null reads the installed runtime's. Only a test passes another,
+    /// so that what a model box offers does not depend on what is installed on the machine the test runs on.
+    /// </param>
+    public WizardViewModel(
+        AppServices services,
+        WizardDefinition definition,
+        IDockerProbe? dockerProbe = null,
+        Func<string?, string, ModelCatalogue?>? loadModels = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         ArgumentNullException.ThrowIfNull(definition);
         _dockerProbe = dockerProbe;
+        _loadModels = loadModels ?? ModelCatalogue.Load;
 
         // The catalog's definition is a cache over --help and knows nothing of this machine; the pages
         // start from what config.yaml says now. Applied per open wizard, never to the shared definition.
@@ -213,7 +222,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 _fields.Add(field);
             }
 
-            Steps.Add(new WizardStepViewModel(step, fields, BuildGuide(step, fields)));
+            Steps.Add(new WizardStepViewModel(step, fields, BuildGuide(step, fields), BuildGoals(step, fields)));
         }
 
         _timer = new DispatcherTimer { Interval = OutputTick };
@@ -234,6 +243,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         _ = ResolveExecutablePathAsync();
+        _ = LoadModelCatalogueAsync();
     }
 
     // ------------------------------------------------------------------ guide pages
@@ -271,7 +281,10 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     private void StartDockerCheck()
     {
         var cards = DockerCards.ToArray();
-        if (cards.Length == 0 || _disposed)
+
+        // A goal that needs Docker (local Splunk) is offered off until the same look says it can run.
+        var goals = GoalOptions.Where(o => o.RequiresDocker).ToArray();
+        if ((cards.Length == 0 && goals.Length == 0) || _disposed)
         {
             return;
         }
@@ -287,10 +300,19 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             card.BeginChecking();
         }
 
-        _ = CheckDockerAsync(probe, cards, token);
+        foreach (var goal in goals)
+        {
+            goal.BeginChecking();
+        }
+
+        _ = CheckDockerAsync(probe, cards, goals, token);
     }
 
-    private async Task CheckDockerAsync(IDockerProbe probe, IReadOnlyList<WizardGuideCardViewModel> cards, CancellationToken token)
+    private async Task CheckDockerAsync(
+        IDockerProbe probe,
+        IReadOnlyList<WizardGuideCardViewModel> cards,
+        IReadOnlyList<WizardGoalOptionViewModel> goals,
+        CancellationToken token)
     {
         DockerStatus status;
         try
@@ -314,6 +336,11 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         foreach (var card in cards)
         {
             card.ApplyDocker(status);
+        }
+
+        foreach (var goal in goals)
+        {
+            goal.ApplyDocker(status);
         }
 
         RefreshReview();
@@ -905,28 +932,48 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // A goal is being applied: it sets several answers, and the one change that started it reviews the command once at the end.
+        if (_applyingGoal)
+        {
+            return;
+        }
+
         // An answer changed, so the last run's badge, message and console describe a command that
         // is no longer the one on the review page.
         ResetRunState();
 
+        // Choosing what to do seeds the answers that goal needs (and puts back the last goal's).
+        if (ReferenceEquals(sender, _goalField))
+        {
+            ApplyGoal();
+        }
+
         ApplyGates();
+        UpdateProgress();
 
         // Some credential variables depend on another answer (the destination preset, the key's env name).
         RefreshCredentials();
+
+        // The provider (or custom instance) a model box lists the models of may have just changed.
+        RefreshModelBoxes(sender);
         RefreshReview();
     }
 
-    /// <summary>Re-evaluates every step and field gate against the current answers.</summary>
+    /// <summary>
+    /// Re-evaluates every step and field gate against the current answers, and the goal that was chosen: which pages are there, and which
+    /// fields they show (see <see cref="WizardDefinition.Evaluate"/>). The command and the review read the same evaluation.
+    /// </summary>
     private void ApplyGates()
     {
+        var visibility = Definition.Evaluate(_values);
+
         foreach (var step in Steps)
         {
-            step.IsVisible = WizardDefinition.IsVisible(step.Step.VisibleWhenFieldId, step.Step.VisibleWhenValues, _values);
+            step.IsVisible = visibility.IsShown(step.Step);
 
             foreach (var field in step.Fields)
             {
-                field.IsVisible = step.IsVisible &&
-                    WizardDefinition.IsVisible(field.Field.VisibleWhenFieldId, field.Field.VisibleWhenValues, _values);
+                field.IsVisible = visibility.IsShown(field.Field);
             }
         }
     }
@@ -1000,10 +1047,16 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             errors.Add("Choose at least one option above to continue.");
         }
 
+        // The page that asks what to do: the pages after it follow the answer.
+        if (errors.Count == 0 && CurrentStep.Goals is { HasSelection: false })
+        {
+            errors.Add("Choose what you want to do to continue.");
+        }
+
         // Rules that span fields (splunk: a pipeline's required fields) can only be judged once every page has had its say, so
         // they are checked when leaving the last page; the review page checks them again and will not run a command that fails.
         if (errors.Count == 0 && ReferenceEquals(CurrentStep, VisibleSteps.LastOrDefault()) &&
-            Definition.CrossValidator?.Invoke(_values) is { Length: > 0 } crossProblem)
+            Definition.CrossCheck(_values) is { Length: > 0 } crossProblem)
         {
             errors.Add(crossProblem);
         }
@@ -1033,7 +1086,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             string.Equals(f.Flag, "--dry-run", StringComparison.Ordinal) &&
             string.Equals(_values[f.Id].Trim(), ToggleValues.On, StringComparison.OrdinalIgnoreCase))
             ? CommandTier.ReadOnly
-            : CommandTier.StateChanging;
+
+            // Turning the guardrail off tears the connectors' hooks down: the tier the Setup hub gives the same command.
+            : WizardCautions.Floor(argv) ?? CommandTier.StateChanging;
 
     /// <summary>
     /// Rebuilds everything the review page says: the exact command, how much it changes, the restart
@@ -1066,6 +1121,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                     : Array.Empty<CommandReviewWarning>())
                 .Concat(LocalStackReview.Warnings(argv, _services.LocalStack.Status))
                 .Concat(SplunkDashboardsReview.Warnings(argv))
+                .Concat(WizardCautions.For(argv))
                 .ToArray(),
         };
         review = SecretFieldWarnings.AppendTo(review, new[] { WizardReview.SecretValueWarning(argv) });
@@ -1073,7 +1129,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         IsDestructive = review.IsDestructive;
 
         ReviewChanges.Clear();
-        foreach (var line in Definition.DescribeChanges(_values))
+        foreach (var line in Definition.DescribeChanges(_values, GoalStarts))
         {
             ReviewChanges.Add(line);
         }
@@ -1089,7 +1145,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         HasReviewCredentials = ReviewCredentials.Count > 0;
 
-        ReviewProblem = Definition.CrossValidator?.Invoke(_values) ?? string.Empty;
+        ReviewProblem = Definition.CrossCheck(_values) ?? string.Empty;
         HasReviewProblem = ReviewProblem.Length > 0;
 
         // A non-interactive switch that is off means the CLI will try to ask a question, and this app

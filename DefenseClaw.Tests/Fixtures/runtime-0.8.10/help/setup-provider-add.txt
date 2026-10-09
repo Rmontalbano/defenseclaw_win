@@ -1,0 +1,90 @@
+Usage: defenseclaw setup provider add [OPTIONS]
+
+  Add a provider entry to the operator overlay.
+
+  Additive: if ``NAME`` already exists in the overlay, its Domains and EnvKeys
+  are unioned; duplicates are collapsed so repeated ``add`` calls are
+  idempotent.
+
+Options:
+  --name TEXT                     Canonical provider name (case-insensitive
+                                  match against built-ins). When omitted and
+                                  stdin is a tty, an interactive wizard
+                                  prompts for every field. Under --non-
+                                  interactive this becomes a hard error.
+  --domain TEXT                   Domain to recognise as LLM traffic
+                                  (repeatable). Accepts full URLs; scheme and
+                                  path are stripped. Optional when --base-url
+                                  is set.
+  --env-key TEXT                  Environment variable holding the API key for
+                                  this provider (repeatable). Optional.
+  --profile-id TEXT               OpenClaw auth-profiles.json profile ID.
+                                  Optional; leave unset for providers without
+                                  a profile (e.g. bedrock).
+  --ollama-port INTEGER           Additional Ollama-style loopback port.
+                                  Repeatable. Optional.
+  --base-provider-type [openai|anthropic|bedrock|azure|vertex_ai|gemini|gemini-openai|groq|mistral|cohere|deepseek|xai|fireworks_ai|perplexity|huggingface|replicate|openrouter|together_ai|cerebras|ollama|vllm|lm_studio]
+                                  Upstream provider family this instance
+                                  speaks (openai / bedrock / vertex_ai / azure
+                                  / ollama / ...). Routes the gateway to the
+                                  matching Bifrost adapter.
+  --base-url TEXT                 HTTP(S) base URL for the custom endpoint
+                                  (e.g. https://llm.internal:8443).
+  --allowed-request [chat|completion|embedding|rerank|image|audio|responses]
+                                  Restrict the instance to listed request
+                                  types (repeatable). Empty = allow all.
+  --available-model TEXT          Model id served by this instance
+                                  (repeatable). Used by the wizard's model
+                                  picker.
+  --request-path-override TEXT    Per-route path override formatted
+                                  ``key=value`` (e.g.
+                                  chat=/openai/v1/chat/completions).
+                                  Repeatable.
+  --ca-cert-file FILE             Path to a PEM-encoded CA bundle for self-
+                                  signed instance certs.
+  --insecure-skip-verify          Disable TLS verification for this instance.
+                                  Use only in trusted labs.
+  --bedrock-region TEXT           AWS region for an overlay-managed Bedrock
+                                  instance (requires --base-provider-type
+                                  bedrock).
+  --bedrock-auth-mode [api_key|iam_credentials|profile|instance_role]
+                                  Bedrock authentication scheme (api_key/iam_c
+                                  redentials/profile/instance_role).
+  --bedrock-access-key-env TEXT   Env var name holding AWS_ACCESS_KEY_ID for
+                                  this instance.
+  --bedrock-secret-key-env TEXT   Env var name holding AWS_SECRET_ACCESS_KEY
+                                  for this instance.
+  --bedrock-session-token-env TEXT
+                                  Env var name holding AWS_SESSION_TOKEN for
+                                  short-lived STS credentials.
+  --bedrock-profile-name TEXT     AWS shared-config profile name (from
+                                  ~/.aws/credentials). Applied process-wide on
+                                  the gateway side.
+  --bedrock-inference-profile TEXT
+                                  Inference-profile prefix (e.g. 'us.')
+                                  prepended to the model id before dispatch.
+  --bedrock-deployment TEXT       alias=model-id mapping for Bedrock model
+                                  aliases (repeatable). Honored by the gateway
+                                  when resolving a model id.
+  --vertex-project-id TEXT        GCP project id for an overlay-managed Vertex
+                                  AI instance.
+  --vertex-region TEXT            GCP region/location for Vertex AI (e.g. us-
+                                  central1).
+  --vertex-auth-mode [service_account|adc|workload_identity]
+                                  Vertex AI authentication scheme
+                                  (service_account/adc/workload_identity).
+  --vertex-service-account-json-env TEXT
+                                  Env var name holding the GCP service-account
+                                  JSON.
+  --azure-endpoint TEXT           Azure OpenAI endpoint (e.g.
+                                  https://name.openai.azure.com).
+  --azure-api-version TEXT        Azure OpenAI API version (e.g. 2024-10-21).
+  --azure-auth-mode [api_key|managed_identity]
+                                  Azure OpenAI authentication scheme
+                                  (api_key/managed_identity).
+  --azure-deployment-alias TEXT   model=deployment mapping for Azure
+                                  deployments (repeatable). Honored by the
+                                  gateway when resolving a model id.
+  --no-reload                     Do not call the sidecar reload endpoint
+                                  after writing.
+  --help                          Show this message and exit.

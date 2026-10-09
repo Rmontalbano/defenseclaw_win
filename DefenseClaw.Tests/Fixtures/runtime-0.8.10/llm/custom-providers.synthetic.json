@@ -1,0 +1,16 @@
+{
+  "_comment": "SYNTHETIC. Shaped like ~/.defenseclaw/custom-providers.json as `defenseclaw setup provider add` writes it: a providers list, each with a name, a base_url and the available_models the model picker offers for it.",
+  "providers": [
+    {
+      "name": "corp-gateway",
+      "base_url": "https://llm.corp.example.test",
+      "base_provider_type": "openai",
+      "available_models": ["corp-model-a", "corp-model-b"]
+    },
+    {
+      "name": "empty-one",
+      "base_url": "https://empty.example.test",
+      "available_models": []
+    }
+  ]
+}

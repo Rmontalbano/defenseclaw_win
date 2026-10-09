@@ -280,6 +280,62 @@
                         </ItemsControl>
                     </StackPanel>
 
+                    <!--
+                        "What do you want to do?" (llm, guardrail, the hook connectors, splunk): one choice, and the pages after it follow it. A choice
+                        is a radio button bound to the wizard's own goal field, so choosing it is only answering that field; nothing is run from here.
+                        A goal that needs Docker is shown off, with the reason, until the read-only look says it can run.
+                    -->
+                    <StackPanel Visibility="{Binding CurrentStep.IsGoals, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Margin="{StaticResource DcCardGap}"
+                                   MaxWidth="760"
+                                   HorizontalAlignment="Left"
+                                   Style="{StaticResource DcBody}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding CurrentStep.Goals.Intro}" />
+
+                        <Border Margin="{StaticResource DcCardGap}"
+                                MaxWidth="760"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource DcSubtleRow}"
+                                Visibility="{Binding CurrentStep.Goals.HasStateSummary, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       AutomationProperties.Name="What is configured today"
+                                       Text="{Binding CurrentStep.Goals.StateSummary}" />
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding CurrentStep.Goals.Options}"
+                                      IsTabStop="False"
+                                      MaxWidth="760"
+                                      HorizontalAlignment="Left"
+                                      KeyboardNavigation.DirectionalNavigation="Cycle">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,8" Style="{StaticResource DcCardCompact}">
+                                        <RadioButton GroupName="WizardGoal"
+                                                     HorizontalContentAlignment="Stretch"
+                                                     IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                     IsEnabled="{Binding IsAvailable}"
+                                                     AutomationProperties.Name="{Binding AutomationName}">
+                                            <StackPanel Margin="4,0,0,0">
+                                                <TextBlock Style="{StaticResource DcCardTitle}"
+                                                           Margin="0,0,0,2"
+                                                           Text="{Binding Label}" />
+                                                <TextBlock Style="{StaticResource DcCaption}"
+                                                           Text="{Binding Summary}" />
+                                                <ui:InfoBar Margin="0,8,0,0"
+                                                            IsClosable="False"
+                                                            Severity="Warning"
+                                                            Title="Not available right now"
+                                                            IsOpen="{Binding HasUnavailableReason, Mode=OneWay}"
+                                                            Message="{Binding UnavailableReason}" />
+                                            </StackPanel>
+                                        </RadioButton>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
                     <ItemsControl ItemsSource="{Binding CurrentStep.Fields}"
                                   IsTabStop="False"
                                   Visibility="{Binding CurrentStep.ShowsFields, Converter={StaticResource BoolToVisibility}}">
@@ -289,7 +345,12 @@
                                             Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Style="{StaticResource FieldName}" Text="{Binding Label}" />
-                                        <Border Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcChip}">
+
+                                        <!-- A choice that only steers the wizard (the goal, the scope) is not an option, so it has no flag to show. -->
+                                        <Border Margin="8,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource DcChip}"
+                                                Visibility="{Binding HasFlagDisplay, Converter={StaticResource BoolToVisibility}}">
                                             <TextBlock Style="{StaticResource FlagText}" Text="{Binding FlagDisplay}" />
                                         </Border>
                                         <Border Margin="6,0,0,0"
@@ -320,7 +381,13 @@
                                                 AutomationProperties.HelpText="{Binding Help}"
                                                 PlaceholderText="{Binding Placeholder}"
                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
-                                                Visibility="{Binding IsText, Converter={StaticResource BoolToVisibility}}" />
+                                                Visibility="{Binding IsPlainText, Converter={StaticResource BoolToVisibility}}" />
+
+                                    <!--
+                                        A model field, when the runtime has a model catalogue: the same text box with the catalogue's models under
+                                        it, narrowed as the operator types. Without a catalogue this is the plain text box above.
+                                    -->
+                                    <wizards:ModelPickerBox Visibility="{Binding ShowsModelPicker, Converter={StaticResource BoolToVisibility}}" />
 
                                     <!-- Path: same control, hinted for a filesystem location -->
                                     <ui:TextBox Width="420"

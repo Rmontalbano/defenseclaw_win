@@ -1,0 +1,101 @@
+Usage: defenseclaw setup llm [OPTIONS]
+
+  Configure the unified top-level ``llm:`` block.
+
+  Prompts for provider, model, API key env var, and base URL, writing the
+  values to ``~/.defenseclaw/config.yaml`` (config) and
+  ``~/.defenseclaw/.env`` (secret, chmod 0600). Every LLM-using component
+  (guardrail judge, MCP scanner, skill scanner, plugin scanner) resolves
+  through this block via ``Config.resolve_llm``, so a single edit reroutes
+  them all.
+
+  Use ``--show`` to inspect the current resolved values without modifying
+  anything. This is the CLI equivalent of ``scripts/setup-llm.sh`` and the LLM
+  section of ``defenseclaw init``.
+
+Options:
+  --show                          Print the current unified LLM config and
+                                  exit (no prompts).
+  --provider [anthropic|openai|openrouter|azure|gemini|gemini-openai|groq|mistral|cohere|deepseek|xai|bedrock|vertex_ai|fireworks_ai|perplexity|huggingface|replicate|together_ai|cerebras|ollama|vllm|lm_studio|custom]
+                                  LLM provider to write non-interactively. Use
+                                  'custom' with --instance-name to bind a
+                                  custom-providers.json instance.
+  --model TEXT                    LLM model id to write non-interactively.
+  --api-key-env TEXT              Environment variable name holding the LLM
+                                  API key.
+  --api-key TEXT                  Secret value to persist into
+                                  ~/.defenseclaw/.env under --api-key-env.
+  --base-url TEXT                 Provider base URL override.
+  --timeout INTEGER               LLM timeout in seconds.
+  --max-retries INTEGER           LLM retry count.
+  --region TEXT                   Generic provider region (Bedrock, Vertex,
+                                  etc.). Stored on llm.region.
+  --instance-name TEXT            Custom-provider instance name as registered
+                                  via `defenseclaw setup provider add`.
+                                  Selects the overlay entry whose base_url,
+                                  env keys, and TLS settings are applied at
+                                  resolve time.
+  --inherit-from [guardrail|guardrail.judge|scanners.skill|scanners.mcp|scanners.plugin]
+                                  Copy a resolved component config
+                                  (provider/model/api_key_env/base_url) into
+                                  the unified top-level llm block before
+                                  applying other flags.
+  --inherit / --no-inherit        Run the interactive 'inherit preflight' that
+                                  lists sibling LLM configs (per-scanner /
+                                  guardrail / judge) and offers to reuse one.
+                                  Defaults to on in interactive mode, off
+                                  under --non-interactive.
+  --role [unified|agent|judge]    Where to write the LLM settings. 'unified'
+                                  updates the top-level llm: block (default).
+                                  'judge' writes to guardrail.judge.llm so a
+                                  hook-based connector can keep its own agent
+                                  LLM. 'agent' writes to the top-level llm:
+                                  block AND leaves guardrail.judge.llm empty
+                                  so it inherits through the unified merge.
+                                  [default: unified]
+  --auth-mode TEXT                Generic auth mode flag. When --provider
+                                  bedrock, maps to --bedrock-auth-mode;
+                                  --provider azure maps to --azure-auth-mode;
+                                  --provider vertex_ai maps to --vertex-auth-
+                                  mode.
+  --bedrock-region TEXT           AWS region for Bedrock (e.g. us-east-1).
+  --bedrock-auth-mode [api_key|iam_credentials|profile|instance_role]
+                                  Bedrock auth strategy.
+  --bedrock-access-key-env TEXT   Env var holding AWS access key ID for
+                                  Bedrock.
+  --bedrock-secret-key-env TEXT   Env var holding AWS secret access key for
+                                  Bedrock.
+  --bedrock-session-token-env TEXT
+                                  Env var holding AWS session token for
+                                  Bedrock.
+  --bedrock-profile-name TEXT     AWS profile name when bedrock-auth-
+                                  mode=profile.
+  --bedrock-inference-profile TEXT
+                                  Bedrock inference-profile prefix (e.g.
+                                  'us.').
+  --bedrock-deployment TEXT       Bedrock model alias formatted ``alias=model-
+                                  id`` (repeatable).
+  --vertex-project-id TEXT        GCP project ID for Vertex AI.
+  --vertex-region TEXT            GCP region/location for Vertex AI.
+  --vertex-auth-mode [service_account|adc|workload_identity]
+                                  Vertex auth strategy.
+  --vertex-service-account-json-env TEXT
+                                  Env var holding the path to the Vertex
+                                  service-account JSON.
+  --azure-endpoint TEXT           Azure OpenAI endpoint (e.g.
+                                  https://name.openai.azure.com).
+  --azure-api-version TEXT        Azure OpenAI api-version (e.g. 2024-10-21).
+  --azure-auth-mode [api_key|managed_identity]
+                                  Azure auth strategy.
+  --azure-deployment-alias TEXT   Azure deployment alias formatted
+                                  ``model=deployment`` (repeatable).
+  --tls-ca-cert-file FILE         PEM CA bundle for self-signed LLM endpoints
+                                  (inline-stored on llm.tls.ca_cert_pem).
+  --insecure-skip-verify          Disable TLS verification for this LLM
+                                  endpoint (lab use only).
+  --ping / --no-ping              After saving, send a one-shot 'ping' request
+                                  via LiteLLM to verify reachability.
+  --non-interactive, --accept-defaults
+                                  Use flags/current defaults instead of
+                                  prompting.
+  --help                          Show this message and exit.

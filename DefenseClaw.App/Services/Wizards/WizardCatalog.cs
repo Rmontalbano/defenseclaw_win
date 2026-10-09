@@ -414,7 +414,7 @@ public sealed class WizardCatalog
         if (help.HasSubcommands)
         {
             var subcommands = await LoadSubcommandsAsync(path, help).ConfigureAwait(false);
-            steps = WizardStepFactory.BuildGroup(help, subcommands);
+            steps = WizardStepFactory.BuildGroup(help, subcommands, target);
         }
         else
         {
@@ -433,11 +433,15 @@ public sealed class WizardCatalog
         // and galileo gets its "what you need" page. Built from the same fields, so argv and secret routes are unchanged.
         steps = WizardWalkthroughs.Apply(target, steps, result.Text);
 
+        // Last of all, the "what do you want to do?" page in front of the wizards that have goals (llm, guardrail, the hook connectors, splunk): the
+        // goals are kept to what the flags above really are.
+        var (stepsWithGoals, goals) = WizardGoals.Apply(target, steps);
+
         // The per-target help is authoritative for certification; the summary hint from the
         // top-level screen was only ever a stand-in until this landed. For a target that is not
         // a connector the parser reports NotApplicable rather than Certified (see
         // SetupHelpParser.ExtractPlatformStatus).
-        Replace(new WizardDefinition
+        var definition = new WizardDefinition
         {
             Target = target,
             Title = TitleFor(target),
@@ -445,14 +449,22 @@ public sealed class WizardCatalog
 
             // The dashboards' card keeps its own sentence: the CLI's summary of the group does not say "Terraform" or that it can delete.
             Description = SplunkDashboards.IsTarget(target) ? SplunkDashboards.Description : help.Summary.Length > 0 ? help.Summary : existing?.Description ?? string.Empty,
-            Steps = steps,
+            Steps = stepsWithGoals,
             PlatformStatus = help.PlatformStatus,
             PlatformNote = help.PlatformNote,
             HelpText = result.Text,
             IsCurated = curated,
             IsDetailLoaded = true,
             CrossValidator = WizardWindowsPolicy.CrossValidatorFor(target),
-        }, generation);
+            Goals = goals,
+        };
+
+        // The guardrail's Scope step, with no roster yet (the wizard fits it to config.yaml when it opens, see WizardBaseline).
+        Replace(
+            string.Equals(target, "guardrail", StringComparison.Ordinal)
+                ? GuardrailScope.Install(definition, GuardrailScopeContext.Empty)
+                : definition,
+            generation);
     }
 
     private async Task<IReadOnlyDictionary<string, ParsedHelp>> LoadSubcommandsAsync(

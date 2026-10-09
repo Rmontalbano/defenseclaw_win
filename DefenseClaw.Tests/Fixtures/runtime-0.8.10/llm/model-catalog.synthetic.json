@@ -1,0 +1,47 @@
+{
+  "_comment": "SYNTHETIC. Shaped like defenseclaw/_data/llm/model_catalog.json in the installed 0.8.10 (schema_version 1: a providers list, each with name, label, kind and models), with invented model ids. The tests read it instead of the real file so that what they see does not depend on what is installed on the machine they run on.",
+  "schema_version": 1,
+  "providers": [
+    {
+      "name": "anthropic",
+      "label": "Anthropic (Claude)",
+      "kind": "cloud",
+      "env_keys": ["ANTHROPIC_API_KEY", "DEFENSECLAW_LLM_KEY"],
+      "models": ["acme-large-2", "acme-large-1", "acme-small-1", "acme-mini"]
+    },
+    {
+      "name": "openai",
+      "label": "OpenAI",
+      "kind": "cloud",
+      "env_keys": ["OPENAI_API_KEY", "DEFENSECLAW_LLM_KEY"],
+      "models": ["orbit-5", "orbit-5-mini", "orbit-4"]
+    },
+    {
+      "name": "bedrock",
+      "label": "AWS Bedrock",
+      "kind": "regional",
+      "env_keys": ["AWS_BEARER_TOKEN_BEDROCK", "DEFENSECLAW_LLM_KEY"],
+      "regions": ["us-east-1", "eu-west-1"],
+      "inference_profiles": ["us.", "eu."],
+      "auth_modes": ["api_key", "iam_credentials", "profile", "instance_role"],
+      "models": ["us.acme.large-v1:0", "us.acme.small-v1:0", "eu.acme.large-v1:0"]
+    },
+    {
+      "name": "vertex_ai",
+      "label": "Google Vertex AI",
+      "kind": "regional",
+      "env_keys": ["GOOGLE_APPLICATION_CREDENTIALS"],
+      "regions": ["us-central1"],
+      "auth_modes": ["service_account", "adc"],
+      "models": ["cosmos-pro", "cosmos-flash"]
+    },
+    {
+      "name": "vllm",
+      "label": "vLLM (local)",
+      "kind": "local",
+      "env_keys": [],
+      "default_base_url": "http://127.0.0.1:8000/v1",
+      "models": []
+    }
+  ]
+}

@@ -1,0 +1,172 @@
+Usage: defenseclaw setup guardrail [OPTIONS]
+
+  Configure the LLM guardrail (routes LLM traffic through the Go proxy for
+  inspection).
+
+  Routes all LLM traffic through the built-in Go guardrail proxy. Every prompt
+  and response is inspected for prompt injection, secrets, PII, and data
+  exfiltration patterns.
+
+  Use --connector (alias: --agent) to select the agent framework connector.
+  The connector determines how LLM traffic is intercepted, how tool calls are
+  inspected, and what subprocess enforcement policy is applied. When omitted,
+  the value defaults to the install-time hint at
+  ``<data_dir>/picked_connector`` (written by ``scripts/install.sh --connector
+  ...``), then to any previously saved choice in ``guardrail.connector``, then
+  to ``openclaw``.
+
+  Two modes:   observe — log findings, never block (default, recommended to
+  start)   action  — block prompts/responses that match security policies
+
+  Use --disable to turn off the guardrail and restore direct LLM access.
+
+Options:
+  --disable                       Disable guardrail and restore connector
+                                  config where applicable.
+  --connector, --agent [claudecode|codex]
+                                  Agent framework connector. Alias: --agent.
+                                  Defaults to <data_dir>/picked_connector when
+                                  set by the installer, else filesystem auto-
+                                  detection, else openclaw.
+  --mode [observe|action]         Guardrail mode
+  --scanner-mode [local|remote|both]
+                                  Scanner mode (local patterns, remote Cisco
+                                  API, or both)
+  --cisco-endpoint TEXT           Cisco AI Defense API endpoint
+  --cisco-api-key-env TEXT        Env var name holding Cisco AI Defense API
+                                  key
+  --cisco-timeout-ms INTEGER      Cisco AI Defense timeout (ms)
+  --port INTEGER                  Guardrail proxy port
+  --block-message TEXT            Custom message shown when a request is
+                                  blocked (empty = default)
+  --detection-strategy [regex_only|regex_judge|judge_first]
+                                  Detection strategy (regex_only, regex_judge,
+                                  judge_first)
+  --detection-strategy-prompt [regex_only|regex_judge|judge_first]
+                                  Per-direction detection strategy for the
+                                  prompt lane (opt-in; default inherits
+                                  --detection-strategy).
+  --detection-strategy-completion [regex_only|regex_judge|judge_first]
+                                  Per-direction detection strategy for the
+                                  tool-output/completion lane (opt-in; OFF by
+                                  default — judging tool output adds an LLM
+                                  round-trip per tool call). Go wiring lands
+                                  in Round-2 fu/judge-go.
+  --detection-strategy-tool-call [regex_only|regex_judge|judge_first]
+                                  Per-direction detection strategy for the
+                                  tool-call lane (opt-in; OFF by default). Go
+                                  wiring lands in Round-2 fu/judge-go.
+  --rule-pack [default|strict|permissive]
+                                  Guardrail rule-pack profile
+  --rule-pack-dir TEXT            Custom rule-pack DIRECTORY (free-text path)
+                                  — CLI parity with the TUI's free-text field.
+                                  Use instead of --rule-pack to point at a
+                                  pack outside the built-in
+                                  default/strict/permissive presets. Scoped
+                                  per-connector when --connector names a
+                                  multi-install peer, else global. Mutually
+                                  exclusive with --rule-pack; pass "" to
+                                  clear.
+  --judge-model TEXT              LLM judge model (e.g. anthropic/claude-
+                                  sonnet-4-20250514)
+  --judge-api-base TEXT           LLM judge API base URL (e.g. Bifrost URL)
+  --judge-api-key-env TEXT        Env var name for judge API key
+  --judge-provider TEXT           Judge LLM provider (e.g. anthropic, bedrock,
+                                  vertex_ai). Persisted to
+                                  guardrail.judge.llm.provider.
+  --judge-region TEXT             Judge regional provider region
+                                  (Bedrock/Vertex). Persisted to
+                                  guardrail.judge.llm.region.
+  --judge-instance-name TEXT      Custom-provider instance for the judge.
+                                  Persisted to
+                                  guardrail.judge.llm.instance_name.
+  --judge-hook-connectors TEXT    Hook-lane judge gate
+                                  (guardrail.judge.hook_connectors). The judge
+                                  always covers the proxy lane; hook
+                                  connectors are opt-in. Pass 'all' (or '*'),
+                                  'none', or a comma-separated list of hook-
+                                  enforced connectors (e.g. hermes,codex).
+                                  When omitted and the judge is being enabled
+                                  for the first time, defaults to all active
+                                  hook connectors.
+  --llm-role [judge_only|judge_and_agent]
+                                  How the LLM is used by this connector.
+                                  'judge_only' (hook-based connectors like
+                                  Codex/Claude Code) configures only the
+                                  guardrail judge. 'judge_and_agent' (proxy-
+                                  backed connectors like OpenClaw/ZeptoClaw)
+                                  configures both judge and the agent's
+                                  upstream LLM.
+  --inherit-from [|guardrail|scanners.skill|scanners.mcp|scanners.plugin]
+                                  Copy resolved provider/model/api_key_env
+                                  from a sibling LLM block onto
+                                  guardrail.judge.llm before applying flags.
+  --inherit-llm / --no-inherit-llm
+                                  Shortcut for --inherit-from guardrail.
+                                  Copies the connector's agent-side LLM into
+                                  guardrail.judge.llm so the judge reuses the
+                                  same model/key.
+  --judge-auth-mode TEXT          Generic judge auth-mode. Maps to --judge-
+                                  bedrock-auth-mode / --judge-azure-auth-mode
+                                  / --judge-vertex-auth-mode depending on
+                                  --judge-provider.
+  --judge-bedrock-region TEXT     AWS region for the Bedrock judge (e.g. us-
+                                  east-1).
+  --judge-bedrock-auth-mode [api_key|iam_credentials|profile|instance_role]
+                                  Bedrock auth strategy for the judge.
+  --judge-bedrock-access-key-env TEXT
+                                  Env var holding AWS access key ID for the
+                                  Bedrock judge.
+  --judge-bedrock-secret-key-env TEXT
+                                  Env var holding AWS secret access key for
+                                  the Bedrock judge.
+  --judge-bedrock-session-token-env TEXT
+                                  Env var holding AWS session token for the
+                                  Bedrock judge.
+  --judge-bedrock-profile-name TEXT
+                                  AWS profile name when judge-bedrock-auth-
+                                  mode=profile.
+  --judge-bedrock-inference-profile TEXT
+                                  Bedrock inference-profile prefix for the
+                                  judge (e.g. 'us.').
+  --judge-bedrock-deployment TEXT
+                                  Judge Bedrock model alias formatted
+                                  ``alias=model-id`` (repeatable).
+  --judge-vertex-project-id TEXT  GCP project ID for the Vertex AI judge.
+  --judge-vertex-region TEXT      GCP region/location for the Vertex AI judge.
+  --judge-vertex-auth-mode [service_account|adc|workload_identity]
+                                  Vertex auth strategy for the judge.
+  --judge-vertex-service-account-json-env TEXT
+                                  Env var holding the path to the Vertex
+                                  service-account JSON (judge).
+  --judge-azure-endpoint TEXT     Azure OpenAI endpoint for the judge (e.g.
+                                  https://name.openai.azure.com).
+  --judge-azure-api-version TEXT  Azure OpenAI api-version for the judge (e.g.
+                                  2024-10-21).
+  --judge-azure-auth-mode [api_key|managed_identity]
+                                  Azure auth strategy for the judge.
+  --judge-azure-deployment-alias TEXT
+                                  Judge Azure deployment alias formatted
+                                  ``model=deployment`` (repeatable).
+  --judge-tls-ca-cert-file FILE   PEM CA bundle for self-signed judge
+                                  endpoints (inline-stored on
+                                  guardrail.judge.llm.tls.ca_cert_pem).
+  --judge-insecure-skip-verify    Disable TLS verification for the judge
+                                  endpoint (lab use only).
+  --human-approval / --no-human-approval
+                                  Enable or disable human approval (HILT) for
+                                  risky actions
+  --hilt-min-severity [high|medium|low|critical]
+                                  Minimum severity that asks for human
+                                  approval
+  --workspace, --workspace-dir TEXT
+                                  Opt into workspace-scoped connector config.
+                                  Defaults to global/user config.
+  --restart / --no-restart        Restart gateway and the active connector
+                                  after setup (default: on)
+  --verify / --no-verify          Run connectivity checks after setup
+                                  (default: on)
+  --non-interactive, --accept-defaults, --yes
+                                  Use flags instead of prompts (aliases:
+                                  --accept-defaults, --yes)
+  --help                          Show this message and exit.

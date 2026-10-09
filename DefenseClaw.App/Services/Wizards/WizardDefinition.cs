@@ -120,7 +120,7 @@ public sealed record WizardChoice(string Value, string Label)
 /// fresh <c>--help</c> parse without disturbing an open wizard.
 /// </para>
 /// </summary>
-public sealed class WizardField
+public sealed partial class WizardField
 {
     public required string Id { get; init; }
 
@@ -197,9 +197,11 @@ public sealed class WizardField
     /// <summary>True when the value must never appear on the command line.</summary>
     public bool IsSecret => Kind == WizardFieldKind.Secret;
 
-    public string FlagDisplay => Kind == WizardFieldKind.Toggle && NegativeFlag is { Length: > 0 }
-        ? $"{Flag} / {NegativeFlag}"
-        : Flag ?? (ViaEnvironment.Length > 0 ? "env " + ViaEnvironment : "(positional)");
+    public string FlagDisplay => IsSynthetic
+        ? string.Empty
+        : Kind == WizardFieldKind.Toggle && NegativeFlag is { Length: > 0 }
+            ? $"{Flag} / {NegativeFlag}"
+            : Flag ?? (ViaEnvironment.Length > 0 ? "env " + ViaEnvironment : "(positional)");
 
     /// <summary>
     /// A copy that starts from <paramref name="defaultValue"/> (the current configuration) and treats
@@ -218,34 +220,7 @@ public sealed class WizardField
     public WizardField WithWording(string label, string help) =>
         Clone(DefaultValue, BaselineValue, BaselineSource, Credential, label, help);
 
-    private WizardField Clone(
-        string defaultValue,
-        string baselineValue,
-        string source,
-        SecretRoute? credential,
-        string? label = null,
-        string? help = null) => new()
-    {
-        Id = Id,
-        Label = label ?? Label,
-        Kind = Kind,
-        Flag = Flag,
-        NegativeFlag = NegativeFlag,
-        Help = help ?? Help,
-        Choices = Choices,
-        DefaultValue = defaultValue,
-        BaselineValue = baselineValue,
-        BaselineSource = source,
-        AllowEmptyWhenChanged = AllowEmptyWhenChanged,
-        Credential = credential,
-        ViaEnvironment = ViaEnvironment,
-        IsPositional = IsPositional,
-        PositionalOrder = PositionalOrder,
-        IsRequired = IsRequired,
-        Placeholder = Placeholder,
-        VisibleWhenFieldId = VisibleWhenFieldId,
-        VisibleWhenValues = VisibleWhenValues,
-    };
+    // Clone, and the With… copies of the curated layouts (a gate, a picker, a list of choices), are in WizardField.Editing.cs.
 }
 
 /// <summary>One page of a wizard. The review page is synthesised by the view-model, not defined here.</summary>
@@ -339,7 +314,7 @@ public static class WizardGroups
 /// from generated ones only in how carefully their steps are grouped and worded.
 /// </para>
 /// </summary>
-public sealed class WizardDefinition
+public sealed partial class WizardDefinition
 {
     /// <summary>
     /// The CLI noun: the <c>&lt;target&gt;</c> in <c>defenseclaw setup &lt;target&gt;</c>. Words separated by one space name a nested
@@ -400,6 +375,12 @@ public sealed class WizardDefinition
     /// </summary>
     public Func<WizardValues, string?>? CrossValidator { get; init; }
 
+    /// <summary>
+    /// The "what do you want to do?" choices that open the wizard (<see cref="WizardGoals"/>): each seeds some answers and narrows the pages to
+    /// the ones that matter for it. Empty for a wizard that starts straight on its first page; when there are some, the first page is the one that asks.
+    /// </summary>
+    public IReadOnlyList<WizardGoal> Goals { get; init; } = Array.Empty<WizardGoal>();
+
     /// <summary>A copy with different pages and pre-fill notes; everything else carries over.</summary>
     public WizardDefinition With(IReadOnlyList<WizardStep> steps, string baselineNote, string baselineWarning) => new()
     {
@@ -419,6 +400,7 @@ public sealed class WizardDefinition
         BaselineNote = baselineNote,
         BaselineWarning = baselineWarning,
         CrossValidator = CrossValidator,
+        Goals = Goals,
     };
 
     /// <summary>
@@ -443,21 +425,36 @@ public sealed class WizardDefinition
     /// configuration held when the wizard opened — not against the CLI baseline, so a change back to the
     /// CLI default still shows up as the change it is.
     /// </summary>
-    public IReadOnlyList<string> DescribeChanges(WizardValues values)
+    public IReadOnlyList<string> DescribeChanges(WizardValues values) => DescribeChanges(values, null);
+
+    /// <summary>
+    /// <see cref="DescribeChanges(WizardValues)"/>, where a field the chosen goal set starts at the value the goal gave it
+    /// (<paramref name="started"/>, by field id) and not at the configuration's.
+    /// </summary>
+    public IReadOnlyList<string> DescribeChanges(WizardValues values, IReadOnlyDictionary<string, string>? started)
     {
         ArgumentNullException.ThrowIfNull(values);
 
         var lines = new List<string>();
         foreach (var field in VisibleFields(values))
         {
-            if (field.IsSecret || field.IsPositional || WizardFieldBuilder.IsNonInteractiveFlag(field.Flag))
+            // The goal is how the operator got here, not a setting; a secret is never listed.
+            if (field.IsSecret || field.IsPositional || WizardFieldBuilder.IsNonInteractiveFlag(field.Flag) ||
+                string.Equals(field.Id, WizardGoals.FieldId, StringComparison.Ordinal))
             {
                 continue;
             }
 
             var now = Normalize(field, values[field.Id]);
-            var was = Normalize(field, field.DefaultValue);
+            var was = Normalize(field, started is not null && started.TryGetValue(field.Id, out var seeded) ? seeded : field.DefaultValue);
             if (string.Equals(now, was, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // A blank answer sends nothing (Emit writes an empty value only where the CLI documents "pass empty to clear"), so "cleared" would
+            // describe a change that is not made: a field that starts at the configuration's value and is blanked, as the judge goal does.
+            if (now.Length == 0 && !field.AllowEmptyWhenChanged)
             {
                 continue;
             }
@@ -493,49 +490,18 @@ public sealed class WizardDefinition
     internal static IReadOnlyList<string> SplitLines(string raw) =>
         raw.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    /// <summary>Fields whose gates are satisfied by the current answers.</summary>
-    public IEnumerable<WizardField> VisibleFields(WizardValues values)
-    {
-        foreach (var step in Steps)
-        {
-            if (!IsVisible(step.VisibleWhenFieldId, step.VisibleWhenValues, values))
-            {
-                continue;
-            }
+    /// <summary>
+    /// Fields whose gates are satisfied by the current answers - the ones that count: they are what the command is built from and what the
+    /// review describes. With a goal chosen, a field the goal seeds counts even when no page shows it (see <see cref="Evaluate"/>).
+    /// </summary>
+    public IEnumerable<WizardField> VisibleFields(WizardValues values) => Evaluate(values).ActiveFields;
 
-            foreach (var field in step.Fields)
-            {
-                if (IsVisible(field.VisibleWhenFieldId, field.VisibleWhenValues, values))
-                {
-                    yield return field;
-                }
-            }
-        }
-    }
-
-    internal static bool IsVisible(string? gateFieldId, IReadOnlyList<string> gateValues, WizardValues values)
-    {
-        if (gateFieldId is not { Length: > 0 })
-        {
-            return true;
-        }
-
-        // "a|b" is any-of: visible when ANY of those fields holds one of the values (splunk's index/source/sourcetype
-        // belong to both the local and the enterprise pipeline).
-        foreach (var id in gateFieldId.Split('|'))
-        {
-            var actual = values[id];
-            for (var i = 0; i < gateValues.Count; i++)
-            {
-                if (string.Equals(gateValues[i], actual, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
+    /// <summary>
+    /// Whether a gate (a field id and its values: the plain form, <c>a|b</c> any-of, or the compound AND of <see cref="WizardGate"/>) is satisfied
+    /// by the answers given.
+    /// </summary>
+    internal static bool IsVisible(string? gateFieldId, IReadOnlyList<string> gateValues, WizardValues values) =>
+        WizardGate.IsVisible(gateFieldId, gateValues, values);
 
     /// <summary>
     /// The words of a target's noun path, one command-line argument each: <c>["splunk", "dashboards"]</c> for <c>splunk dashboards</c>,

@@ -182,14 +182,16 @@ public static class WizardFieldBuilder
             return WizardFieldKind.Choice;
         }
 
+        // "INTEGER RANGE" is Click's own metavar for a whole number with limits (agent discovery enable's --scan-interval-min, "Range 1..1440"):
+        // still a whole number here, and the CLI states its limits when one is out of them.
         var metavar = option.Metavar.ToUpperInvariant();
-        if (metavar == "INTEGER")
+        if (metavar is "INTEGER" or "INTEGER RANGE")
         {
             return WizardFieldKind.Integer;
         }
 
         // Click's FLOAT (galileo / observability / webhook --timeout): a decimal, not free text.
-        if (metavar == "FLOAT")
+        if (metavar is "FLOAT" or "FLOAT RANGE")
         {
             return WizardFieldKind.Number;
         }

@@ -1,0 +1,22 @@
+Usage: defenseclaw guardrail disable [OPTIONS]
+
+  Disable the LLM guardrail and run connector teardown.
+
+  Without ``--connector`` this is the global kill switch: it sets
+  ``guardrail.enabled = false`` in ~/.defenseclaw/config.yaml and (when
+  --restart is on, the default) restarts the gateway so the sidecar boot path
+  runs ``Connector.Teardown`` for EVERY active connector.
+
+  With ``--connector X`` it scopes the disable to one connector: the boot loop
+  drops X from the active set so only X's hooks/config are torn down (the
+  others keep running). X's policy is retained so a later ``guardrail enable
+  --connector X`` restores it with no re-prompt.
+
+Options:
+  --restart / --no-restart  Restart the gateway after disabling (default: on;
+                            needed to run connector teardown).
+  --yes                     Skip the confirmation prompt.
+  --connector TEXT          Scope the disable to a single connector (multi-
+                            connector installs only). Omit to disable the
+                            whole guardrail.
+  --help                    Show this message and exit.

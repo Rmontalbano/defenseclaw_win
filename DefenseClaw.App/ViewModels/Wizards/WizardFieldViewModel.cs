@@ -521,6 +521,12 @@ public sealed partial class WizardFieldViewModel : ObservableObject
         OnPropertyChanged(nameof(IsOn));
         OnPropertyChanged(nameof(SelectedChoice));
 
+        // The model box suggests as the operator types (the typed text is the first row).
+        if (ShowsModelPicker)
+        {
+            RefreshModelRows();
+        }
+
         if (ValidationError.Length > 0)
         {
             ValidationError = Validate();
@@ -552,11 +558,16 @@ public sealed partial class WizardStepViewModel : ObservableObject
     [ObservableProperty]
     private bool _isVisible = true;
 
-    public WizardStepViewModel(WizardStep step, IReadOnlyList<WizardFieldViewModel> fields, WizardGuideViewModel? guide = null)
+    public WizardStepViewModel(
+        WizardStep step,
+        IReadOnlyList<WizardFieldViewModel> fields,
+        WizardGuideViewModel? guide = null,
+        WizardGoalsViewModel? goals = null)
     {
         Step = step ?? throw new ArgumentNullException(nameof(step));
         Fields = fields ?? throw new ArgumentNullException(nameof(fields));
         Guide = guide;
+        Goals = goals;
     }
 
     public WizardStep Step { get; }
@@ -571,14 +582,19 @@ public sealed partial class WizardStepViewModel : ObservableObject
     /// The page binds every field and hides the gated ones per item, so a gate flipping on
     /// an earlier page never has to rebuild a collection mid-edit.
     /// </summary>
-    public bool HasFields => Fields.Count > 0 || Guide is not null;
+    public bool HasFields => Fields.Count > 0 || Guide is not null || Goals is not null;
 
     /// <summary>The cards of a guided first step, or null for an ordinary page. A guide page shows them instead of the field list.</summary>
     public WizardGuideViewModel? Guide { get; }
 
     public bool IsGuide => Guide is not null;
 
-    public bool ShowsFields => Guide is null;
+    /// <summary>The "what do you want to do?" choices when this is the page that asks, or null. The page shows them instead of the field list.</summary>
+    public WizardGoalsViewModel? Goals { get; }
+
+    public bool IsGoals => Goals is not null;
+
+    public bool ShowsFields => Guide is null && Goals is null;
 
     public override string ToString() => Title;
 }

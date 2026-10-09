@@ -1,0 +1,17 @@
+Usage: defenseclaw setup provider [OPTIONS] COMMAND [ARGS]...
+
+  Manage the custom provider overlay (~/.defenseclaw/custom-providers.json).
+
+  The overlay additively extends the domains / env-vars / Ollama ports the
+  guardrail treats as "known LLM endpoints". Use this when you deploy an
+  internal or self-hosted LLM and do not want to wait for its domain to land
+  in a DefenseClaw release.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  add     Add a provider entry to the operator overlay.
+  list    Print the live merged registry, with a labeled disk fallback.
+  remove  Remove an entry from the operator overlay.
+  show    Print the merged registry as reported by the live sidecar...

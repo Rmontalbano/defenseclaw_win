@@ -57,8 +57,12 @@ public static class WizardBaseline
         var yaml = ConfigYaml.Parse(config.RawText);
         return definition.Target switch
         {
-            "guardrail" => Replace(definition, GuardrailFacts(yaml), "config.yaml → guardrail"),
-            "llm" => Replace(definition, LlmFacts(yaml), "config.yaml → llm"),
+            // The guardrail's Scope step needs the roster: which connectors are active decides the starting scope, the connector list and the
+            // check that the connector named is one of them.
+            "guardrail" => GuardrailScope.Install(
+                Replace(definition, GuardrailFacts(yaml), "config.yaml → guardrail"),
+                GuardrailScopeContext.From(config, yaml.Get("guardrail", "mode"))),
+            "llm" => RequireProviderAndModel(Replace(definition, LlmFacts(yaml), "config.yaml → llm"), yaml),
             _ => definition,
         };
     }
@@ -131,7 +135,14 @@ public static class WizardBaseline
     private static Dictionary<string, Fact> GuardrailFacts(ConfigYaml yaml)
     {
         var facts = new Dictionary<string, Fact>(StringComparer.Ordinal);
-        Add(facts, "--connector", yaml.Get("guardrail", "connector"));
+
+        // Not a baseline, as --mode is not for a hook connector: naming the connector is what scopes the command to it (a mode written with no
+        // --connector goes to every connector), so a connector that is chosen is always sent, even when it is the one config.yaml names.
+        if (yaml.Get("guardrail", "connector") is { } connector && !string.IsNullOrWhiteSpace(connector))
+        {
+            facts["--connector"] = new Fact(connector.Trim(), IsBaseline: false);
+        }
+
         Add(facts, "--scanner-mode", yaml.Get("guardrail", "scanner_mode"));
         Add(facts, "--mode", yaml.Get("guardrail", "mode"));
         Add(facts, "--port", yaml.Get("guardrail", "port"));
@@ -157,7 +168,68 @@ public static class WizardBaseline
         Add(facts, "--timeout", yaml.Get("llm", "timeout"));
         Add(facts, "--max-retries", yaml.Get("llm", "max_retries"));
         Add(facts, "--region", yaml.Get("llm", "region"));
+        Add(facts, "--instance-name", yaml.Get("llm", "instance_name"));
+
+        // The provider groups (Bedrock, Vertex AI, Azure): what the wizard's pages for them start from. A page that is not shown sends nothing.
+        Add(facts, "--bedrock-region", yaml.Get("llm", "bedrock", "region"));
+        Add(facts, "--bedrock-auth-mode", yaml.Get("llm", "bedrock", "auth_mode"));
+        Add(facts, "--bedrock-access-key-env", yaml.Get("llm", "bedrock", "access_key_env"));
+        Add(facts, "--bedrock-secret-key-env", yaml.Get("llm", "bedrock", "secret_key_env"));
+        Add(facts, "--bedrock-session-token-env", yaml.Get("llm", "bedrock", "session_token_env"));
+        Add(facts, "--bedrock-profile-name", yaml.Get("llm", "bedrock", "profile_name"));
+        Add(facts, "--bedrock-inference-profile", yaml.Get("llm", "bedrock", "inference_profile"));
+        Add(facts, "--vertex-project-id", yaml.Get("llm", "vertex", "project_id"));
+        Add(facts, "--vertex-region", yaml.Get("llm", "vertex", "region"));
+        Add(facts, "--vertex-auth-mode", yaml.Get("llm", "vertex", "auth_mode"));
+        Add(facts, "--vertex-service-account-json-env", yaml.Get("llm", "vertex", "service_account_json_env"));
+        Add(facts, "--azure-endpoint", yaml.Get("llm", "azure", "endpoint"));
+        Add(facts, "--azure-api-version", yaml.Get("llm", "azure", "api_version"));
+        Add(facts, "--azure-auth-mode", yaml.Get("llm", "azure", "auth_mode"));
         return facts;
+    }
+
+    /// <summary>
+    /// <c>setup llm</c> runs without prompts (<c>--non-interactive</c>), so a provider or a model that neither the form nor config.yaml has is
+    /// a command the CLI refuses ("missing required value under --non-interactive"). Said here, before the review, in the operator's words.
+    /// The judge role is exempt: the judge block inherits whatever it does not set.
+    /// </summary>
+    private static WizardDefinition RequireProviderAndModel(WizardDefinition definition, ConfigYaml yaml)
+    {
+        var hasProvider = definition.AllFields.Any(f => f.Flag == "--provider");
+        var hasModel = definition.AllFields.Any(f => f.Flag == "--model");
+        if (!hasProvider && !hasModel)
+        {
+            return definition;
+        }
+
+        var storedProvider = yaml.Get("llm", "provider")?.Trim() ?? string.Empty;
+        var storedModel = yaml.Get("llm", "model")?.Trim() ?? string.Empty;
+        var existing = definition.CrossValidator;
+
+        return definition.WithCrossValidator(values =>
+        {
+            if (existing?.Invoke(values) is { Length: > 0 } other)
+            {
+                return other;
+            }
+
+            if (string.Equals(values[WizardFieldBuilder.Identifier("--role")].Trim(), "judge", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (hasProvider && storedProvider.Length == 0 && values[WizardFieldBuilder.Identifier("--provider")].Trim().Length == 0)
+            {
+                return "Choose a provider. config.yaml has none yet, and this command runs without prompts, so it cannot ask.";
+            }
+
+            if (hasModel && storedModel.Length == 0 && values[WizardFieldBuilder.Identifier("--model")].Trim().Length == 0)
+            {
+                return "Enter a model id. config.yaml has none yet, and this command runs without prompts, so it cannot ask.";
+            }
+
+            return null;
+        });
     }
 
     private static void Add(Dictionary<string, Fact> facts, string flag, string? value)
@@ -185,7 +257,7 @@ public static class WizardBaseline
             var fields = new List<WizardField>(step.Fields.Count);
             foreach (var field in step.Fields)
             {
-                if (field.Flag is { Length: > 0 } flag && !field.IsPositional && facts.TryGetValue(flag, out var fact) &&
+                if (field.Flag is { Length: > 0 } flag && !field.IsPositional && !field.IgnoresConfig && facts.TryGetValue(flag, out var fact) &&
                     Coerce(field, fact.Value) is { } value)
                 {
                     fields.Add(field.WithAnswers(value, fact.IsBaseline ? value : field.BaselineValue, source));
@@ -224,7 +296,7 @@ public static class WizardBaseline
     /// Fits a stored value to what the control can show, or returns null when it cannot (a choice the
     /// flag does not list, a non-number for a numeric flag). A value that does not fit is left alone.
     /// </summary>
-    private static string? Coerce(WizardField field, string value)
+    internal static string? Coerce(WizardField field, string value)
     {
         switch (field.Kind)
         {
@@ -276,7 +348,7 @@ public static class WizardBaseline
         _ => null,
     };
 
-    private static bool? TryBool(string value) => value.Trim().ToLowerInvariant() switch
+    internal static bool? TryBool(string value) => value.Trim().ToLowerInvariant() switch
     {
         "true" or "yes" or "on" => true,
         "false" or "no" or "off" => false,
@@ -290,7 +362,7 @@ public static class WizardBaseline
     /// fields; this reads the rest (HILT, the <c>llm:</c> block) without widening a Core type that
     /// belongs to another group. Never throws: an unreadable document is an empty one.
     /// </summary>
-    private sealed class ConfigYaml
+    internal sealed class ConfigYaml
     {
         private static readonly IDeserializer Deserializer = new DeserializerBuilder().Build();
 

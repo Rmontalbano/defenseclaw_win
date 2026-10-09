@@ -15,7 +15,7 @@ namespace DefenseClaw.App.Services.Wizards;
 ///     booleans as toggles, <c>[a|b]</c> metavars as combos, and the rest as text.</item>
 /// </list>
 /// </summary>
-public static class WizardStepFactory
+public static partial class WizardStepFactory
 {
     /// <summary>Generated pages hold at most this many fields before a new page starts.</summary>
     private const int FieldsPerGeneratedStep = 7;
@@ -27,7 +27,7 @@ public static class WizardStepFactory
 
         var curated = Curate(target, help);
         return curated is not null
-            ? (WithRemainder(curated, help), true)
+            ? (WithRemainder(curated, help, RemainderGate(target, help)), true)
             : (Generate(help), false);
     }
 
@@ -37,9 +37,13 @@ public static class WizardStepFactory
     /// subcommand; every later page is gated on that pick, so the review screen only ever
     /// builds a command out of flags that subcommand actually accepts.
     /// </summary>
+    /// <param name="target">
+    /// The setup noun when the group has a curated subcommand (<c>provider</c>'s <c>add</c>); null builds every subcommand's pages from its help.
+    /// </param>
     public static IReadOnlyList<WizardStep> BuildGroup(
         ParsedHelp help,
-        IReadOnlyDictionary<string, ParsedHelp> subcommands)
+        IReadOnlyDictionary<string, ParsedHelp> subcommands,
+        string? target = null)
     {
         ArgumentNullException.ThrowIfNull(help);
         ArgumentNullException.ThrowIfNull(subcommands);
@@ -91,6 +95,13 @@ public static class WizardStepFactory
             var gateValues = new[] { name };
             var prefix = name + ":";
             var order = 1;
+
+            // `provider add` is the one subcommand with a curated layout: the base provider type picks which cloud's settings appear.
+            if (CuratedSubcommand(target, name, subHelp, prefix, gateValues) is { Count: > 0 } curatedPages)
+            {
+                steps.AddRange(curatedPages);
+                continue;
+            }
 
             var fields = new List<WizardField>();
             foreach (var positional in subHelp.Positionals)
@@ -201,6 +212,9 @@ public static class WizardStepFactory
             case "guardrail":
                 return GuardrailSteps(help);
 
+            case "llm":
+                return LlmSteps(help);
+
             case "skill-scanner":
                 return SkillScannerSteps(help);
 
@@ -251,59 +265,6 @@ public static class WizardStepFactory
             // after saving when it is used on Windows) and its default is already "off".
             "--restart",
             "--yes"));
-
-    private static IReadOnlyList<WizardStep> GuardrailSteps(ParsedHelp help) => Compact(
-        Step(
-            "connector",
-            "Connector and mode",
-            "Which agent's traffic the guardrail inspects, and whether it blocks or only records.",
-            help,
-            "--connector",
-            "--mode",
-            "--disable",
-            "--port"),
-        Step(
-            "detection",
-            "Detection",
-            "Scanner lane and rule pack. Per-direction strategies are opt-in.",
-            help,
-            "--scanner-mode",
-            "--detection-strategy",
-            "--detection-strategy-prompt",
-            "--rule-pack",
-            "--rule-pack-dir",
-            "--block-message"),
-        Step(
-            "judge",
-            "LLM judge",
-            "The judge model and how it authenticates. Key material is referenced by environment-variable NAME, which is what config.yaml stores.",
-            help,
-            "--judge-provider",
-            "--judge-model",
-            "--judge-api-base",
-            "--judge-api-key-env",
-            "--judge-region",
-            "--judge-hook-connectors",
-            "--inherit-llm"),
-        Step(
-            "cisco",
-            "Cisco AI Defense",
-            "Remote scanning through Cisco AI Defense. Only used when the scanner mode includes remote.",
-            help,
-            "--cisco-endpoint",
-            "--cisco-api-key-env",
-            "--cisco-timeout-ms"),
-        Step(
-            "apply",
-            "Approval and apply",
-            "Human-in-the-loop gating, then how the change is written.",
-            help,
-            "--human-approval",
-            "--hilt-min-severity",
-            "--workspace",
-            "--verify",
-            "--restart",
-            "--non-interactive"));
 
     private static IReadOnlyList<WizardStep> SkillScannerSteps(ParsedHelp help) => Compact(
         Step(
@@ -393,7 +354,10 @@ public static class WizardStepFactory
     /// Curated pages plus a trailing "More options" page holding every flag the curation did
     /// not place. Keeps the hand-ordered flows readable without ever hiding CLI surface.
     /// </summary>
-    private static IReadOnlyList<WizardStep> WithRemainder(IReadOnlyList<WizardStep> curated, ParsedHelp help)
+    private static IReadOnlyList<WizardStep> WithRemainder(
+        IReadOnlyList<WizardStep> curated,
+        ParsedHelp help,
+        (string? FieldId, IReadOnlyList<string> Values) gate = default)
     {
         ArgumentNullException.ThrowIfNull(curated);
         ArgumentNullException.ThrowIfNull(help);
@@ -429,8 +393,8 @@ public static class WizardStepFactory
             remaining,
             "More options",
             "Everything else this command accepts, straight from its help screen.",
-            null,
-            null,
+            gate.FieldId,
+            gate.Values,
             "more-"));
 
         return steps;
