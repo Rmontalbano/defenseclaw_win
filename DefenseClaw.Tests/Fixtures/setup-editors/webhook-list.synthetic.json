@@ -1,0 +1,57 @@
+[
+  {
+    "name": "example-slack",
+    "type": "slack",
+    "url": "https://hooks.example.test/***",
+    "secret_env": "",
+    "room_id": "",
+    "min_severity": "HIGH",
+    "events": [],
+    "timeout_seconds": 10,
+    "cooldown_seconds": null,
+    "enabled": true
+  },
+  {
+    "name": "example-pagerduty",
+    "type": "pagerduty",
+    "url": "https://events.example.test/***",
+    "secret_env": "EXAMPLE_PD_ROUTING_KEY",
+    "room_id": "",
+    "min_severity": "CRITICAL",
+    "events": [
+      "block",
+      "scan"
+    ],
+    "timeout_seconds": 15,
+    "cooldown_seconds": 0,
+    "enabled": false
+  },
+  {
+    "name": "example-webex",
+    "type": "webex",
+    "url": "https://webex.example.test:8443/***",
+    "secret_env": "EXAMPLE_WEBEX_TOKEN",
+    "room_id": "Y2lzY29zeW50aGV0aWM",
+    "min_severity": "MEDIUM",
+    "events": [],
+    "timeout_seconds": 10,
+    "cooldown_seconds": 600,
+    "enabled": true
+  },
+  {
+    "name": "example-hmac",
+    "type": "generic",
+    "url": "https://***@siem.example.test/***?***",
+    "secret_env": "EXAMPLE_SIEM_SECRET",
+    "room_id": "",
+    "min_severity": "HIGH",
+    "events": [
+      "guardrail",
+      "drift",
+      "health"
+    ],
+    "timeout_seconds": 10,
+    "cooldown_seconds": null,
+    "enabled": true
+  }
+]

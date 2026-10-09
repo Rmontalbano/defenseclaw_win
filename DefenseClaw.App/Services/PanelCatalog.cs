@@ -152,6 +152,9 @@ public sealed class PanelCatalog : INavigationViewPageProvider
 
                     // The "Redaction policy" tile (CUST-295): shown only while the runtime has `setup redaction` (RuntimeCapability.RedactionAdvanced).
                     OpenRedaction = () => DefenseClaw.App.Views.Redaction.RedactionWindow.Open(s, System.Windows.Application.Current?.MainWindow),
+
+                    // The Observability, Webhook and Trusted binary paths tiles (CUST-270): a list-first window each, with the wizard behind its Add.
+                    OpenResourceEditor = resource => DefenseClaw.App.Views.SetupResources.SetupResourceWindow.Open(s, resource, System.Windows.Application.Current?.MainWindow),
                 }),
             new("policies", "Policies", "Configure", SymbolRegular.Gavel24,
                 typeof(PoliciesPanel), s => new PoliciesPanelViewModel(s)),

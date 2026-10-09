@@ -1,5 +1,6 @@
 using System.Windows;
 using DefenseClaw.App.ViewModels.Wizards;
+using DefenseClaw.App.Views.SetupResources;
 using DefenseClaw.App.Views.Wizards;
 
 namespace DefenseClaw.App.Services.Wizards;
@@ -20,11 +21,13 @@ public static class WizardLauncher
     /// <summary>
     /// Shows the wizard modally over <paramref name="owner"/>. Returns once the window closes.
     /// </summary>
+    /// <param name="preset">Where a group wizard opens (the Setup editors' Add: <c>add</c>, with a directory); null opens it on its first page.</param>
     public static async Task ShowAsync(
         AppServices services,
         string target,
         Window? owner = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        WizardPreset? preset = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrEmpty(target);
@@ -32,10 +35,16 @@ public static class WizardLauncher
         var catalog = WizardCatalog.Shared(services);
         var definition = await catalog.EnsureDetailAsync(target, cancellationToken).ConfigureAwait(true);
 
-        var window = new WizardWindow(new WizardViewModel(services, definition))
+        var viewModel = new WizardViewModel(services, definition);
+        _ = preset?.ApplyTo(viewModel);
+
+        var window = new WizardWindow(viewModel)
         {
             Owner = owner ?? Application.Current?.MainWindow,
         };
+
+        // A connector setup that stopped on a folder that is not trusted offers to open the trusted-folder editor over this window.
+        viewModel.OpenTrustedPaths = (directory, context) => SetupResourceWindow.OpenTrustedPaths(services, window, directory, context);
 
         window.ShowDialog();
     }

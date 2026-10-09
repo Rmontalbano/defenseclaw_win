@@ -1,0 +1,367 @@
+<UserControl x:Class="DefenseClaw.App.Views.SetupResources.SetupResourceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels.SetupResources"
+             panels:CompactLayout.Below="960"
+             AutomationProperties.Name="Setup list editor">
+    <!--
+        The list-first Setup editors (CUST-270): observability destinations, webhooks and trusted binary locations. One view, three
+        view-models (SetupResourceViewModel); what differs between them is data (the columns the view-model names, the verbs it offers, the
+        words of its reviews) except the one card the trusted-folder editor adds (the Extras template).
+
+        Top to bottom: the heading and Refresh; the banners (a managed installation, the result of the last action, an older read, why the
+        operator came); the verbs (Add, Enable, Disable, Test, Show, Remove) which act on the selected row; the list with its details beside it
+        (in place of it on a window narrower than 960 DIPs).
+        A list that could not be read is a state of its own, not an empty one. Nothing changes anything by itself: Add opens the setup wizard on
+        add, and the other verbs open the shared review with the exact command (DiscoverReviewOverlay) - Test and Remove included, and Enter on
+        a row never starts either.
+
+        Keys: F5 reads the list again, Enter on a row shows it (it never tests), Delete reviews a Remove, Esc closes the review, the notice, then the
+        details. Shared styling: Themes\DefenseClaw.xaml (Dc*); nothing is hard-coded.
+    -->
+    <UserControl.Resources>
+        <!-- The state of a row as a pill: the word, and a dot in its tone. -->
+        <DataTemplate x:Key="StateCell">
+            <ctl:DcStatePill Text="{Binding StateText}" Tone="{Binding StateTone}" Margin="0,0,8,0" />
+        </DataTemplate>
+
+        <Style x:Key="SetupRow" TargetType="DataGridRow" BasedOn="{StaticResource DcDataGridRow}">
+            <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
+            <EventSetter Event="MouseDoubleClick" Handler="OnRowDoubleClick" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Heading, what the list is, when it was read, and Refresh. -->
+        <Grid Grid.Row="0" Margin="24,20,24,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Style="{StaticResource DcPageTitle}" Text="{Binding Title}" AutomationProperties.HeadingLevel="Level1" />
+                <TextBlock Style="{StaticResource DcPageSubtitle}" Text="{Binding Subtitle}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <ui:ProgressRing Width="16" Height="16" Margin="0,0,8,0" IsIndeterminate="True"
+                                 AutomationProperties.Name="Reading the list"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding AsOf}" />
+                <ui:Button Content="Refresh"
+                           Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                           Command="{Binding RefreshCommand}"
+                           ToolTip="Read the list again (F5)"
+                           AutomationProperties.Name="Read the list again"
+                           AutomationProperties.AcceleratorKey="F5" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Banners. -->
+        <StackPanel Grid.Row="1" Margin="24,0,24,0">
+            <!-- A managed or invalid installation is only read: the list and a webhook's details still are, every change is off. -->
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        IsClosable="False"
+                        Severity="Warning"
+                        Title="State-changing actions disabled - the list is still read"
+                        IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
+                        Message="{Binding InstallationBlockedReason}" />
+
+            <!-- What only one editor has (the trusted-folder editor's reason for opening and its connectors). -->
+            <ContentControl Content="{Binding Extras}" IsTabStop="False" Focusable="False">
+                <ContentControl.Resources>
+                    <DataTemplate DataType="{x:Type vm:TrustedPathsViewModel}">
+                        <StackPanel>
+                            <!-- Why the operator is here: a connector setup stopped on a folder that is not trusted. -->
+                            <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}"
+                                    Visibility="{Binding HasContext, Converter={StaticResource BoolToVisibility}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,0,0,4" Text="A connector setup stopped on a folder that is not trusted" />
+                                        <TextBlock Style="{StaticResource DcBody}" Text="{Binding ContextMessage}" AutomationProperties.LiveSetting="Polite" />
+                                        <TextBlock Style="{StaticResource DcMono}" Margin="0,6,0,0" Text="{Binding Prefill}"
+                                                   Visibility="{Binding HasPrefill, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center" Appearance="Primary"
+                                               Content="Trust this folder…"
+                                               Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                               Command="{Binding TrustPrefillCommand}"
+                                               IsEnabled="{Binding CanAdd}"
+                                               ToolTip="{Binding AddTip}"
+                                               ToolTipService.ShowOnDisabled="True"
+                                               Visibility="{Binding HasPrefill, Converter={StaticResource BoolToVisibility}}"
+                                               AutomationProperties.Name="Trust the folder the setup named: opens the setup wizard with it filled in" />
+                                </Grid>
+                            </Border>
+
+                            <!-- The TUI's proactive highlight: connectors whose program the last discovery scan skipped for the folder it is in. -->
+                            <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}"
+                                    Visibility="{Binding HasUntrustedHeadline, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="{Binding UntrustedTone}" ShowDot="False" GlyphSize="14" Gap="6" />
+                                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   AutomationProperties.LiveSetting="Polite"
+                                                   Text="{Binding UntrustedHeadline}" />
+                                    </StackPanel>
+                                    <ItemsControl ItemsSource="{Binding UntrustedConnectors}" IsTabStop="False"
+                                                  AutomationProperties.Name="Connectors in folders that are not trusted">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,8,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="140" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Connector}" />
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource DcMono}" VerticalAlignment="Center" Text="{Binding Directory}" />
+                                                    <ui:Button Grid.Column="2" Margin="12,0,0,0" Content="Trust…"
+                                                               Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                                               Command="{Binding DataContext.TrustCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                               CommandParameter="{Binding}"
+                                                               IsEnabled="{Binding DataContext.CanAdd, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                               ToolTip="{Binding DataContext.AddTip, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                               ToolTipService.ShowOnDisabled="True"
+                                                               AutomationProperties.Name="{Binding AutomationName}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Style="{StaticResource DcCaption}" Margin="0,8,0,0"
+                                               Visibility="{Binding HasUntrustedConnectors, Converter={StaticResource BoolToVisibility}}"
+                                               Text="Trust a folder only if you control it: anything placed in a trusted folder can be run while DefenseClaw looks for connectors. Trust opens the setup wizard with the folder filled in; the command is shown before anything runs." />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+                </ContentControl.Resources>
+            </ContentControl>
+
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="{Binding NoticeTitle}"
+                        Message="{Binding NoticeMessage}"
+                        Severity="{Binding NoticeSeverity}"
+                        IsOpen="{Binding HasNotice, Mode=OneWay}"
+                        IsClosable="True"
+                        AutomationProperties.LiveSetting="Polite" />
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="Showing an older read"
+                        Message="{Binding RefreshWarning}"
+                        Severity="Warning"
+                        IsOpen="{Binding HasRefreshWarning, Mode=OneWay}"
+                        IsClosable="False"
+                        AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+
+        <!-- The verbs. They act on the selected row; a disabled one says why in its tooltip. -->
+        <WrapPanel Grid.Row="2" Margin="24,0,24,4" Style="{StaticResource DcToolbarPanel}">
+            <ui:Button Content="Add…"
+                       Appearance="Primary"
+                       Icon="{ctl:DcSymbolIcon Add24}"
+                       Command="{Binding AddCommand}"
+                       IsEnabled="{Binding CanAdd}"
+                       ToolTip="{Binding AddTip}"
+                       ToolTipService.ShowOnDisabled="True"
+                       Visibility="{Binding HasAdd, Converter={StaticResource BoolToVisibility}}"
+                       AutomationProperties.Name="{Binding Singular, StringFormat='Add a {0}: opens the setup wizard on add'}" />
+            <ui:Button Content="Enable"
+                       Icon="{ctl:DcSymbolIcon PlayCircle24}"
+                       Command="{Binding EnableCommand}"
+                       IsEnabled="{Binding CanEnable}"
+                       ToolTip="{Binding EnableTip}"
+                       ToolTipService.ShowOnDisabled="True"
+                       Visibility="{Binding HasEnable, Converter={StaticResource BoolToVisibility}}"
+                       AutomationProperties.Name="{Binding Singular, StringFormat='Enable the selected {0}'}" />
+            <ui:Button Content="Disable"
+                       Icon="{ctl:DcSymbolIcon PauseCircle24}"
+                       Command="{Binding DisableCommand}"
+                       IsEnabled="{Binding CanDisable}"
+                       ToolTip="{Binding DisableTip}"
+                       ToolTipService.ShowOnDisabled="True"
+                       Visibility="{Binding HasDisable, Converter={StaticResource BoolToVisibility}}"
+                       AutomationProperties.Name="{Binding Singular, StringFormat='Disable the selected {0}'}" />
+            <ui:Button Content="Test…"
+                       Icon="{ctl:DcSymbolIcon PlugConnected24}"
+                       Command="{Binding TestCommand}"
+                       IsEnabled="{Binding CanTest}"
+                       ToolTip="{Binding TestTip}"
+                       ToolTipService.ShowOnDisabled="True"
+                       Visibility="{Binding HasTest, Converter={StaticResource BoolToVisibility}}"
+                       AutomationProperties.Name="{Binding Singular, StringFormat='Test the selected {0}: opens a review, nothing is sent until you confirm'}" />
+            <ui:Button Content="Show"
+                       Icon="{ctl:DcSymbolIcon Eye24}"
+                       Command="{Binding ShowCommand}"
+                       IsEnabled="{Binding CanShow}"
+                       ToolTip="{Binding ShowTip}"
+                       ToolTipService.ShowOnDisabled="True"
+                       Visibility="{Binding HasShow, Converter={StaticResource BoolToVisibility}}"
+                       AutomationProperties.Name="{Binding Singular, StringFormat='Show the selected {0}: reads it with the CLI, changes nothing'}" />
+            <ui:Button Content="Remove…"
+                       Icon="{ctl:DcSymbolIcon Delete24}"
+                       Command="{Binding RemoveCommand}"
+                       IsEnabled="{Binding CanRemove}"
+                       ToolTip="{Binding RemoveTip}"
+                       ToolTipService.ShowOnDisabled="True"
+                       Visibility="{Binding HasRemove, Converter={StaticResource BoolToVisibility}}"
+                       AutomationProperties.Name="{Binding Singular, StringFormat='Remove the selected {0}: opens a review of the exact command'}" />
+            <TextBlock Style="{StaticResource DcStatusText}" Margin="4,0,0,8" Text="{Binding Caption}" />
+        </WrapPanel>
+
+        <!-- The list, and the selected row's details beside it. -->
+        <Grid Grid.Row="3" Margin="24,0,24,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="360" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="ListCard" Grid.Column="0">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+                        <Setter Property="Grid.ColumnSpan" Value="2" />
+                        <Style.Triggers>
+                            <!-- With the details open the list's right edge meets their divider. -->
+                            <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                <Setter Property="Grid.ColumnSpan" Value="1" />
+                                <Setter Property="CornerRadius" Value="0" />
+                                <Setter Property="BorderThickness" Value="1,1,0,1" />
+                            </DataTrigger>
+                            <!-- A narrow window (CompactLayout, under 960 DIPs) has no room for both: the details replace the list until Esc or their X. The verbs above stay. -->
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasSelection}" Value="True" />
+                                    <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <ui:DataGrid x:Name="RowList"
+                                 Style="{StaticResource DcDataGrid}"
+                                 RowStyle="{StaticResource SetupRow}"
+                                 ItemsSource="{Binding Rows}"
+                                 SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                                 SelectionMode="Single"
+                                 CanUserSortColumns="False"
+                                 ctl:DcGridColumns.Fit="True"
+                                 AutomationProperties.Name="{Binding Plural}"
+                                 Visibility="{Binding ShowList, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- Reading. -->
+                    <StackPanel Style="{StaticResource DcEmptyState}"
+                                Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
+                        <ui:ProgressRing Width="32" Height="32" IsIndeterminate="True" AutomationProperties.Name="Reading the list" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" AutomationProperties.LiveSetting="Polite" Text="Reading the list from the CLI…" />
+                    </StackPanel>
+
+                    <!-- Read, and there is nothing in it. -->
+                    <StackPanel x:Name="EmptyState"
+                                Style="{StaticResource DcEmptyState}"
+                                MaxWidth="520"
+                                Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="DocumentBulletList24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
+                    </StackPanel>
+
+                    <!-- Not read: the list is unknown, which is not the same as empty. -->
+                    <StackPanel x:Name="FailedState"
+                                Style="{StaticResource DcEmptyState}"
+                                MaxWidth="520"
+                                Visibility="{Binding ShowFailed, Converter={StaticResource BoolToVisibility}}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ErrorCircle24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" AutomationProperties.LiveSetting="Assertive" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding FailedDetail}" />
+                        <ui:Button Margin="0,12,0,0"
+                                   Content="Try again"
+                                   Appearance="Secondary"
+                                   Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                   Command="{Binding RefreshCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- The selected row: its facts, and for a webhook what show printed with the exact command. -->
+            <ctl:DcInspector x:Name="Inspector"
+                             Title="Details"
+                             IsOpen="{Binding HasSelection}"
+                             CloseCommand="{Binding ClearSelectionCommand}"
+                             CloseAutomationName="Close the details"
+                             AutomationProperties.Name="Details"
+                             Content="{Binding}">
+                <ctl:DcInspector.Badges>
+                    <ctl:DcStatePill Text="{Binding SelectedRow.StateText}" Tone="{Binding SelectedRow.StateTone}" />
+                </ctl:DcInspector.Badges>
+                <ctl:DcInspector.ContentTemplate>
+                    <DataTemplate>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0,0,0,8" Text="{Binding SelectedRow.Title}" />
+                            <ui:ProgressRing Width="20" Height="20" Margin="0,0,0,8" HorizontalAlignment="Left" IsIndeterminate="True"
+                                             AutomationProperties.Name="Reading"
+                                             Visibility="{Binding IsDetailLoading, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Style="{StaticResource DcToneText}" Tag="Bad" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"
+                                       Text="{Binding DetailError}"
+                                       Visibility="{Binding HasDetailError, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.LiveSetting="Assertive" />
+                            <ItemsControl ItemsSource="{Binding DetailFacts}" IsTabStop="False" AutomationProperties.Name="Facts about the selected row">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Style="{StaticResource DcFieldLabel}" Margin="0,0,10,0" Text="{Binding Label}" />
+                                            <TextBlock Grid.Column="1" TextWrapping="Wrap" Text="{Binding Value}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DcBody}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Mono}" Value="True">
+                                                                <Setter Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
+                                                                <Setter Property="FontSize" Value="12" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- What the CLI's show printed, with the command that printed it. -->
+                            <StackPanel Visibility="{Binding HasDetailCommand, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,10,0,4" Text="The command that ran" />
+                                <TextBlock Style="{StaticResource DcMono}" Text="{Binding DetailCommand}" />
+                                <Expander Header="Exactly as the CLI printed it" Margin="0,10,0,0"
+                                          AutomationProperties.Name="Output of the show command"
+                                          Visibility="{Binding HasDetailRaw, Converter={StaticResource BoolToVisibility}}">
+                                    <ctl:DcCommandOutput MaxHeight="220" OutputName="Output of the show command" Text="{Binding DetailRaw, Mode=OneWay}" />
+                                </Expander>
+                            </StackPanel>
+                        </StackPanel>
+                    </DataTemplate>
+                </ctl:DcInspector.ContentTemplate>
+            </ctl:DcInspector>
+        </Grid>
+
+        <!-- The confirm-and-run dialog every change goes through; Esc dismisses it. -->
+        <panels:DiscoverReviewOverlay Grid.Row="0" Grid.RowSpan="4" DataContext="{Binding Review}" />
+    </Grid>
+</UserControl>

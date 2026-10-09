@@ -1,0 +1,90 @@
+[
+  {
+    "name": "local-sqlite",
+    "kind": "sqlite",
+    "enabled": true,
+    "generated": true,
+    "signals": [
+      "logs"
+    ],
+    "capabilities": [
+      "logs"
+    ],
+    "policy": "default",
+    "bucket_count": 8,
+    "redaction": "redacted: sensitive",
+    "target": "C:\\Users\\synthetic\\.defenseclaw\\audit.db",
+    "platform_status": "supported"
+  },
+  {
+    "name": "example-otlp",
+    "kind": "otlp",
+    "enabled": true,
+    "generated": false,
+    "signals": [
+      "logs",
+      "traces"
+    ],
+    "capabilities": [
+      "logs",
+      "traces",
+      "metrics"
+    ],
+    "policy": "concise",
+    "bucket_count": 6,
+    "redaction": "redacted: strict",
+    "target": "https://collector.example.test:4318/v1/logs",
+    "platform_status": "supported"
+  },
+  {
+    "name": "example-hec",
+    "kind": "splunk_hec",
+    "enabled": false,
+    "generated": false,
+    "signals": [
+      "logs"
+    ],
+    "capabilities": [
+      "logs"
+    ],
+    "policy": "concise",
+    "bucket_count": 12,
+    "redaction": "unredacted (none)",
+    "target": "https://hec.example.test:8088/services/collector/event",
+    "platform_status": "supported"
+  },
+  {
+    "name": "example-jsonl",
+    "kind": "http_jsonl",
+    "enabled": true,
+    "generated": false,
+    "signals": [
+      "logs"
+    ],
+    "capabilities": [
+      "logs"
+    ],
+    "policy": "advanced",
+    "bucket_count": 3,
+    "redaction": "mixed: none, sensitive",
+    "target": "https://logs.example.test/ingest",
+    "platform_status": "supported"
+  },
+  {
+    "name": "example-local-stack",
+    "kind": "otlp",
+    "enabled": false,
+    "generated": false,
+    "signals": [],
+    "capabilities": [
+      "logs",
+      "traces",
+      "metrics"
+    ],
+    "policy": "concise",
+    "bucket_count": 0,
+    "redaction": "not-applicable",
+    "target": "http://127.0.0.1:4317",
+    "platform_status": "unsupported"
+  }
+]

@@ -37,6 +37,8 @@
     <None Include="..\DefenseClaw.Tests\Fixtures\runtime-*\**\*" Link="Fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The 0.8.10 command tree (every command and option, captured with Click's introspection), for the argv contract of the buttons that run on it. -->
     <None Include="..\DefenseClaw.Tests\Fixtures\cli-tree-0.8.10.json" Link="Fixtures\cli-tree-0.8.10.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- What the Setup list editors read (CUST-270: the three list commands with their json flag, webhook show, agent_discovery.json), shared with the Core suite. -->
+    <None Include="..\DefenseClaw.Tests\Fixtures\setup-editors\**\*" Link="Fixtures\setup-editors\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Synthetic payloads shaped like what the 0.8.10 CLI and gateway print; see TestSupport/PayloadFixtures.cs. -->
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

@@ -7,6 +7,7 @@ using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Runtime;
+using DefenseClaw.Core.Setup;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -205,6 +206,29 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         OpenRedactionTileCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// Where the Observability, Webhook and Trusted binary paths tiles go (CUST-270): a list-first window per resource instead of the wizard. The
+    /// wizard is still one press away (the window's Add opens it on <c>add</c>). Null until the shell wires it, and then those tiles open their
+    /// wizard as they always did; wired, they stay on a managed installation too, because the window only reads there.
+    /// </summary>
+    public Action<SetupResource>? OpenResourceEditor
+    {
+        get => _openResourceEditor;
+        set
+        {
+            _openResourceEditor = value;
+            foreach (var card in _all)
+            {
+                card.OpensEditor = ResourceFor(card) is not null;
+            }
+        }
+    }
+
+    private Action<SetupResource>? _openResourceEditor;
+
+    /// <summary>The list the tile opens, when it is one of the three that have an editor and the shell has wired it.</summary>
+    private SetupResource? ResourceFor(WizardCardViewModel card) => _openResourceEditor is null ? null : SetupResourceArgv.ForTarget(card.Target);
+
     private void OnRuntimeChanged(object? sender, EventArgs e) => RaiseRedactionTile();
 
     /// <summary>Shows these definitions as the tile grid without asking the CLI (tests).</summary>
@@ -334,6 +358,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     private void AddCard(WizardDefinition definition)
     {
         var card = new WizardCardViewModel(definition, () => Services.Installation.BlockedReason);
+        card.OpensEditor = ResourceFor(card) is not null;
 
         // A card that needs Docker or Terraform starts from what is known now: the held answer, or "Checking for …" before the first.
         card.ApplyDocker(_localStack.Decision);
@@ -439,6 +464,13 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         if (card is null || !card.CanLaunch)
         {
+            return;
+        }
+
+        // The list-first editors (CUST-270): the tile opens the list, and the list's Add opens the wizard on add.
+        if (ResourceFor(card) is { } resource && _openResourceEditor is { } openEditor)
+        {
+            openEditor(resource);
             return;
         }
 
@@ -1253,8 +1285,30 @@ public sealed partial class WizardCardViewModel : ObservableObject
     /// <summary>Why the wizard may not be opened because the installation is read-only; null while it may. The card keeps its place in its group either way.</summary>
     public string? InstallationBlockedReason => _installationBlockedReason?.Invoke();
 
-    /// <summary>The tile opens its wizard: the platform offers it and the installation may be changed (every wizard ends in a change).</summary>
-    public bool CanLaunch => IsAvailable && InstallationBlockedReason is null;
+    /// <summary>The tile opens its wizard: the platform offers it and the installation may be changed (every wizard ends in a change). A tile that opens a list-first editor (<see cref="OpensEditor"/>) is open on a read-only installation too: the editor only reads there.</summary>
+    public bool CanLaunch => IsAvailable && (InstallationBlockedReason is null || OpensEditor);
+
+    private bool _opensEditor;
+
+    /// <summary>
+    /// The tile opens a list-first editor (observability destinations, webhooks, trusted binary paths; CUST-270) rather than the wizard. Set by the
+    /// hub when the shell has wired the editors; the editor lists whatever the installation, and turns every change off on a read-only one.
+    /// </summary>
+    internal bool OpensEditor
+    {
+        get => _opensEditor;
+        set
+        {
+            if (_opensEditor == value)
+            {
+                return;
+            }
+
+            _opensEditor = value;
+            OnPropertyChanged(nameof(CanLaunch));
+            OnPropertyChanged(nameof(TileToolTip));
+        }
+    }
 
     /// <summary>The installation turned read-only (or writable): the tile is drawn again.</summary>
     public void RefreshInstallation()
@@ -1300,7 +1354,10 @@ public sealed partial class WizardCardViewModel : ObservableObject
     /// missing (the Splunk dashboards') rules out right now: Docker coming up, or Terraform being installed, would not make it runnable. A wizard
     /// this platform does not offer at all, or that the installed CLI has no command for, says that.
     /// </summary>
-    public string TileToolTip => InstallationBlockedReason is { } blocked && (IsAvailable || UnavailableOnlyForLook)
+    public string TileToolTip => OpensEditor && IsAvailable
+        ? CommandHint + Environment.NewLine + "Opens the list; Add opens the wizard." +
+          (InstallationBlockedReason is { } readOnly ? " Changes are off: " + readOnly : string.Empty)
+        : InstallationBlockedReason is { } blocked && (IsAvailable || UnavailableOnlyForLook)
         ? CommandHint + Environment.NewLine + blocked
         : !IsAvailable
             ? CommandHint + Environment.NewLine + UnavailableReason

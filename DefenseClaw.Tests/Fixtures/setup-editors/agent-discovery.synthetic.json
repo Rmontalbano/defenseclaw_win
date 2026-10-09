@@ -1,0 +1,51 @@
+{
+  "agents": {
+    "claudecode": {
+      "active": true,
+      "binary_path": "C:\\Users\\synthetic\\.local\\bin\\claude.exe",
+      "config_path": "C:\\Users\\synthetic\\.claude\\settings.json",
+      "configured": true,
+      "error": "binary path is not in a trusted install prefix",
+      "installed": true,
+      "mode": "observe",
+      "name": "claudecode",
+      "version": ""
+    },
+    "codex": {
+      "active": false,
+      "binary_path": "C:\\Program Files\\nodejs\\codex.cmd",
+      "config_path": "C:\\Users\\synthetic\\.codex\\config.toml",
+      "configured": false,
+      "error": "",
+      "installed": true,
+      "mode": "",
+      "name": "codex",
+      "version": "0.0.0"
+    },
+    "cursor": {
+      "active": false,
+      "binary_path": "D:\\agents\\cursor\\bin\\cursor.cmd",
+      "config_path": "",
+      "configured": false,
+      "error": "binary path is not in a trusted install prefix",
+      "installed": true,
+      "mode": "",
+      "name": "cursor",
+      "version": ""
+    },
+    "windsurf": {
+      "active": false,
+      "binary_path": "",
+      "config_path": "",
+      "configured": false,
+      "error": "",
+      "installed": false,
+      "mode": "",
+      "name": "windsurf",
+      "version": ""
+    }
+  },
+  "scanned_at": "2026-10-08T17:30:00Z",
+  "ttl_seconds": 300,
+  "version": 1
+}

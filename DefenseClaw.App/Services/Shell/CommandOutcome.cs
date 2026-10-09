@@ -12,8 +12,9 @@ namespace DefenseClaw.App.Services;
 /// </para>
 /// <list type="bullet">
 /// <item><description><b>config reloaded</b> - the run exited 0 and was a <c>defenseclaw setup | guardrail | settings | init | registry</c> command
-/// (the TUI's list), unless it only reads (<see cref="CommandTiers"/> calls it read-only: <c>guardrail status</c>, <c>registry list</c>, <c>--help</c>,
-/// <c>--dry-run</c>), or a gateway restart - which re-reads the config - happened.</description></item>
+/// (the TUI's list), unless it only reads (<see cref="InstallationGate"/> calls it a read, by <see cref="CommandTiers"/> or by the whole shape of the
+/// argv: <c>guardrail status</c>, <c>registry list</c>, <c>--help</c>, <c>--dry-run</c>, a Setup editor's <c>setup observability list --json</c>), or a
+/// gateway restart - which re-reads the config - happened.</description></item>
 /// <item><description><b>gateway restarted</b> - the run exited 0 and restarts the gateway by the same rule the review states before it runs
 /// (<see cref="CommandReview.RestartsGatewayFor"/>: a <c>setup</c> or <c>guardrail</c> verb that writes config.yaml, unless told not to), or it was
 /// <c>defenseclaw-gateway restart</c> itself.</description></item>
@@ -115,8 +116,10 @@ internal sealed record CommandOutcome(bool ConfigReloaded, bool GatewayRestarted
         var cancelled = reason is not null && reason.StartsWith("cancelled", StringComparison.Ordinal);
 
         var restarted = succeeded && (cli ? CommandReview.RestartsGatewayFor(argv) : argv.Count == 1 && argv[0] == "restart");
+        // A read is a read by the guard's word, which knows the whole-shape reads the first-verb classifier cannot prove (a Setup editor's list, the
+        // redaction status): a list that was only looked at reloaded nothing.
         var reloaded = restarted ||
-                       (succeeded && cli && argv.Count > 0 && ConfigCommands.Contains(argv[0]) && CommandTiers.Classify(argv) != CommandTier.ReadOnly);
+                       (succeeded && cli && argv.Count > 0 && ConfigCommands.Contains(argv[0]) && !InstallationGate.IsReadOnly(tool, argv));
         var doctor = cli && argv.Count > 0 && argv[0] == "doctor" && doctorCacheWrittenUtc is { } written && WroteDuring(invocation, written);
 
         // A run that was stopped has no exit code; the hint treats it as the failure it is (and says nothing for the operator's own cancel).

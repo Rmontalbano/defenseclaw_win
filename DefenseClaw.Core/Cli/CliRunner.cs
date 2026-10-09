@@ -276,6 +276,19 @@ public sealed record CliRunOptions
     /// a callback must never be able to orphan a child that is already running.
     /// </summary>
     public Action? OnProcessStarted { get; init; }
+
+    /// <summary>
+    /// Applied to every line the child prints, on either stream, after the known secrets are scrubbed and before the line is stored in
+    /// <see cref="CliInvocation.OutputLines"/> or streamed (<see cref="CliRunner.OutputReceived"/>): Activity, a wizard's console, a review's
+    /// result and the clipboard all get the filtered line, and the original is gone. For output that is secret in a way no value is known
+    /// for in advance: the Setup editors cut every address a command prints to its host, because <c>setup webhook test</c> prints a webhook's
+    /// URL whole and a chat webhook's secret is its path.
+    /// <para>
+    /// <b>Fail closed.</b> A filter that throws costs the line - it is replaced by a fixed notice - never the run and never the unfiltered
+    /// text. It runs on the thread that reads the child's output, one line at a time, so it must be quick and must not block.
+    /// </para>
+    /// </summary>
+    public Func<string, string>? OutputLineFilter { get; init; }
 }
 
 /// <summary>
@@ -881,7 +894,7 @@ public sealed class CliRunner : IDisposable
             }
             else
             {
-                await SuperviseAsync(invocation, run, executablePath, args, stdinSecret, environment, cancellationToken, timeout, options?.OnProcessStarted)
+                await SuperviseAsync(invocation, run, executablePath, args, stdinSecret, environment, cancellationToken, timeout, options?.OnProcessStarted, options?.OutputLineFilter)
                     .ConfigureAwait(false);
             }
         }
@@ -1116,7 +1129,8 @@ public sealed class CliRunner : IDisposable
         IReadOnlyList<EnvironmentEntry> environment,
         CancellationToken callerToken,
         TimeSpan? timeout,
-        Action? onProcessStarted)
+        Action? onProcessStarted,
+        Func<string, string>? lineFilter)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -1190,8 +1204,8 @@ public sealed class CliRunner : IDisposable
         // reporting "invalid key: <key>" — would put the very value the wizard promised to keep out
         // of the Activity panel straight into it.
         var callSecrets = CallSecrets(stdinSecret, environment);
-        process.OutputDataReceived += (_, e) => Capture(invocation, CliStream.StandardOutput, e.Data, stdoutDone, callSecrets);
-        process.ErrorDataReceived += (_, e) => Capture(invocation, CliStream.StandardError, e.Data, stderrDone, callSecrets);
+        process.OutputDataReceived += (_, e) => Capture(invocation, CliStream.StandardOutput, e.Data, stdoutDone, callSecrets, lineFilter);
+        process.ErrorDataReceived += (_, e) => Capture(invocation, CliStream.StandardError, e.Data, stderrDone, callSecrets, lineFilter);
 
         // One token for everything that may end this run early. The timeout is armed here, before
         // the launch, so the clock covers the whole life of the child. Shutdown is linked in only
@@ -1596,7 +1610,8 @@ public sealed class CliRunner : IDisposable
         CliStream stream,
         string? data,
         TaskCompletionSource completion,
-        IReadOnlyList<SecretValue> callSecrets)
+        IReadOnlyList<SecretValue> callSecrets,
+        Func<string, string>? lineFilter)
     {
         if (data is null)
         {
@@ -1604,9 +1619,31 @@ public sealed class CliRunner : IDisposable
             return;
         }
 
-        var line = new CliOutputLine(DateTimeOffset.UtcNow, stream, Scrub(data, callSecrets));
+        var line = new CliOutputLine(DateTimeOffset.UtcNow, stream, Filter(Scrub(data, callSecrets), lineFilter));
         invocation.Append(line);
         OutputReceived?.Invoke(this, line);
+    }
+
+    /// <summary>What replaces a line whose <see cref="CliRunOptions.OutputLineFilter"/> threw: the filter could not vouch for it, so none of it is kept.</summary>
+    internal const string FilterFailedNotice = "[this output line was withheld: its filter failed]";
+
+    private static string Filter(string text, Func<string, string>? lineFilter)
+    {
+        if (lineFilter is null)
+        {
+            return text;
+        }
+
+#pragma warning disable CA1031 // Whatever a caller's filter throws, the unfiltered line must not be what is kept.
+        try
+        {
+            return lineFilter(text) ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            return FilterFailedNotice;
+        }
+#pragma warning restore CA1031
     }
 
     /// <summary>

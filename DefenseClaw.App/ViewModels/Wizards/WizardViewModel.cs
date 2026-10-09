@@ -809,7 +809,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         OutputText += added.ToString();
     }
 
-    private void ApplyResult(CliInvocation invocation, bool preview)
+    internal void ApplyResult(CliInvocation invocation, bool preview)
     {
         LastRunSucceeded = false;
         var prefix = preview ? "preview · " : string.Empty;
@@ -839,6 +839,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
             // A preview never counts as "the run": Execute must stay available after one.
             LastRunSucceeded = code == 0 && !preview;
+
+            // A setup that stopped on a folder that is not trusted printed the folder; the result bar offers to trust it.
+            OfferTrustHint(invocation, code);
 
             ResultMessage = (preview, code) switch
             {
@@ -879,6 +882,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         ExitBadgeText = string.Empty;
         ExitBadgeKey = "Neutral";
         ResultMessage = string.Empty;
+        ClearTrustHint();
         Output.Clear();
         OutputText = string.Empty;
         _outputBuffer.Clear();

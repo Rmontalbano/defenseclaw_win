@@ -1,0 +1,15 @@
+{
+  "name": "example-pagerduty",
+  "type": "pagerduty",
+  "url": "https://events.example.test/***",
+  "secret_env": "EXAMPLE_PD_ROUTING_KEY",
+  "room_id": "",
+  "min_severity": "CRITICAL",
+  "events": [
+    "block",
+    "scan"
+  ],
+  "timeout_seconds": 15,
+  "cooldown_seconds": 0,
+  "enabled": false
+}

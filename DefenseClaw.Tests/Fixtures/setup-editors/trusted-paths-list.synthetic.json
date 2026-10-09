@@ -1,0 +1,44 @@
+[
+  {
+    "path": "C:\\Windows\\System32",
+    "resolved": "C:\\Windows\\System32",
+    "source": "default",
+    "status": "ok",
+    "removable": false
+  },
+  {
+    "path": "C:\\Program Files\\nodejs",
+    "resolved": "C:\\Program Files\\nodejs",
+    "source": "default",
+    "status": "ok",
+    "removable": false
+  },
+  {
+    "path": "~\\.synthetic-tools\\bin",
+    "resolved": "C:\\Users\\synthetic\\.synthetic-tools\\bin",
+    "source": "config",
+    "status": "ok",
+    "removable": true
+  },
+  {
+    "path": "D:\\agents\\bin",
+    "resolved": "D:\\agents\\bin",
+    "source": "legacy .env",
+    "status": "missing",
+    "removable": true
+  },
+  {
+    "path": "C:\\Users\\Public\\tools",
+    "resolved": "C:\\Users\\Public\\tools",
+    "source": "config",
+    "status": "unsafe-permissions",
+    "removable": true
+  },
+  {
+    "path": "C:\\opt\\env-only",
+    "resolved": "C:\\opt\\env-only",
+    "source": "env",
+    "status": "ok",
+    "removable": false
+  }
+]

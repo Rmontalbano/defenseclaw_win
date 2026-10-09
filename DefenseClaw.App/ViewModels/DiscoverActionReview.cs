@@ -16,6 +16,8 @@ namespace DefenseClaw.App.ViewModels;
 /// <see cref="Verify"/> is for a command whose exit code is not its result (<c>init --json-summary</c> exits 0 with a failed report): it
 /// reads what the run printed and returns null when it is satisfied, or the reason the step must count as failed, which stops the steps
 /// after it. <see cref="RetainFullOutput"/> keeps the whole transcript for a step whose output <see cref="Verify"/> parses.
+/// <see cref="OutputFilter"/> is applied to every line the command prints before it is stored (<see cref="CliRunOptions.OutputLineFilter"/>):
+/// for a command that prints an address whole, such as a webhook test, so Activity and the review's result never hold it.
 /// </summary>
 public sealed record DiscoverStep(
     IReadOnlyList<string> Argv,
@@ -24,7 +26,8 @@ public sealed record DiscoverStep(
     TimeSpan? Timeout = null,
     string Executable = CommandReview.DefaultExecutable,
     Func<CliInvocation, string?>? Verify = null,
-    bool RetainFullOutput = false);
+    bool RetainFullOutput = false,
+    Func<string, string>? OutputFilter = null);
 
 /// <summary>What a reviewed action did, handed to the panel so it can re-read its state.</summary>
 public sealed record DiscoverReviewResult(bool Succeeded, IReadOnlyList<CliInvocation> Invocations);
@@ -375,6 +378,11 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     var options = step.Timeout is { } timeout
                         ? CliRunOptions.WithTimeout(timeout) with { RetainFullOutput = step.RetainFullOutput }
                         : step.RetainFullOutput ? CliRunOptions.JsonRead : null;
+                    if (step.OutputFilter is { } filter)
+                    {
+                        options = (options ?? CliRunOptions.Default) with { OutputLineFilter = filter };
+                    }
+
                     var invocation = await (RunStep is { } run
                             ? run(step.Executable, step.Argv, options)
                             : _services.Cli.RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options))
