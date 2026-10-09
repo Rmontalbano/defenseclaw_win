@@ -84,7 +84,7 @@ public sealed class TuiRegistryPaletteViewTests : IDisposable
             var actions = new ShellActions(services, new PanelCatalog(services), tray, () => null);
             var catalogue = CuratedCommandCatalog.For(null);
             var rows = ShellCommandRegistry.BuildCliCommands(
-                catalogue.Commands.Where(c => c.TuiName is "block skill" or "doctor" or "setup webhook add" or "keys set").ToArray(),
+                catalogue.Commands.Where(c => c.TuiName is "block skill" or "doctor" or "setup webhook add" or "keys fill-missing").ToArray(),
                 actions);
 
             var palette = new CommandPaletteViewModel();
@@ -112,7 +112,7 @@ public sealed class TuiRegistryPaletteViewTests : IDisposable
             RenderTo.Png(host, "palette-registry-argument-typed");
 
             // A row with nothing to type, one that needs more than a form, and one that needs a terminal: no box.
-            foreach (var title in new[] { "doctor", "setup webhook add", "keys set" })
+            foreach (var title in new[] { "doctor", "setup webhook add", "keys fill-missing" })
             {
                 Select(palette, title);
                 host.Relayout();

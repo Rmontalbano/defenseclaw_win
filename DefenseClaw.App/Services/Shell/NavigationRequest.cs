@@ -87,6 +87,14 @@ public sealed record AiDiscoveryScan;
 /// <param name="SourceId">The registry source that promoted the item (the id in its policy rule's <c>registry:&lt;id&gt;</c> reason); null when it is not known.</param>
 public sealed record RegistryFocus(string EntryType, string Name, string? SourceId = null);
 
+/// <summary>
+/// Payload for <c>setup</c> (CUST-328, the palette's <c>keys set NAME</c>): open the Credentials card on this variable - the masked box beside its row, or a
+/// row for it when the CLI's credential list does not have it, or the console window where the app cannot type the value itself. Nothing is stored or run by
+/// it, and no value is in it: the operator types the value into the box and reviews the command, as for any row.
+/// </summary>
+/// <param name="EnvName">The variable's NAME, already checked as an environment variable name.</param>
+public sealed record CredentialSet(string EnvName);
+
 /// <summary>What <see cref="ShellNavigation.Requested"/> carries.</summary>
 public sealed class NavigationRequestedEventArgs : EventArgs
 {

@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Runtime;
@@ -212,6 +214,93 @@ public sealed partial class CredentialsViewModel
         ForgetEntries();
         Note = string.Empty;
         NoteKey = "Neutral";
+    }
+
+    // ------------------------------------------------------------------------------------------------------- set from the palette
+
+    /// <summary>The longest the card waits for a read already in flight before it opens a variable's box (the read has its own limits; this only stops a wait for ever).</summary>
+    private static readonly TimeSpan ReadWait = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The palette's <c>keys set NAME</c> (CUST-328): opens the box of the row for <paramref name="envName"/> - the same flow as pressing that row's Set - or, where
+    /// the app cannot type values, the console window. The CLI's credential list is read first when there is none, so the row is the real one; a name it does not
+    /// list gets a row of its own, marked as a variable the operator named. The installation's guard comes before anything opens.
+    /// </summary>
+    public async Task BeginSetForAsync(string envName)
+    {
+        if (!WizardCredentials.IsValidName(envName))
+        {
+            Note = "That is not the NAME of an environment variable, so no box was opened.";
+            NoteKey = "Warn";
+            return;
+        }
+
+        if (_services.Installation.ReasonFor(SecretPtyRunner.SetKeyArgv(envName)) is { } blocked)
+        {
+            Note = blocked;
+            NoteKey = "Warn";
+            return;
+        }
+
+        // A read in flight (the panel just came on screen) lands first: it would close a box opened before it.
+        var waited = Stopwatch.StartNew();
+        while (_reading && waited.Elapsed < ReadWait)
+        {
+            await Task.Delay(25).ConfigureAwait(true);
+        }
+
+        if (!HasLoaded && !_reading)
+        {
+            await RefreshAsync().ConfigureAwait(true);
+        }
+
+        if (!CanStartReview)
+        {
+            Note = "Finish or cancel the review that is open first, then ask again.";
+            NoteKey = "Warn";
+            return;
+        }
+
+        // Another variable's box (or Fill missing) is closed: one value at a time, from the palette.
+        ForgetEntries();
+
+        var row = Rows.FirstOrDefault(r => string.Equals(r.EnvName, envName, StringComparison.Ordinal));
+        if (row is null)
+        {
+            row = new CredentialRowViewModel(NamedRow(envName), OnSetInTerminal, () => _services.Installation.BlockedReason, owner: this);
+            Rows.Insert(0, row);
+            OnPropertyChanged(nameof(HasRows));
+            OnPropertyChanged(nameof(ShowEmpty));
+        }
+
+        if (!row.CanSet)
+        {
+            Note = ChangesBlockedReason ?? "That variable cannot be set from here.";
+            NoteKey = "Warn";
+            return;
+        }
+
+        // Where the app cannot type, the console route says what it opened itself.
+        Note = InAppAvailable ? $"Type the value for {envName} in the box below, then review. Nothing runs until you confirm." : string.Empty;
+        NoteKey = "Neutral";
+
+        // Exactly what pressing Set on the row does: the masked box where the app can type, the console window where it cannot.
+        row.SetCommand.Execute(null);
+    }
+
+    /// <summary>A row for a variable the CLI's list does not have: only what the app can honestly say (whether a value is there, from the same look the wizards take).</summary>
+    private CredentialRow NamedRow(string envName)
+    {
+        var presence = new WizardCredentials(_services.Paths).Check(envName, fresh: true);
+        var isSet = presence is CredentialPresence.InDotEnv or CredentialPresence.InEnvironment;
+        return new CredentialRow(
+            envName,
+            envName,
+            "Named in the palette",
+            "optional",
+            presence switch { CredentialPresence.InDotEnv => "dotenv", CredentialPresence.InEnvironment => "env", _ => "unset" },
+            isSet,
+            "A variable you named. The CLI keeps its value in ~/.defenseclaw/.env; it is not in the CLI's credential list, so nothing here says what reads it.");
     }
 
     // ------------------------------------------------------------------------------------------------------- set

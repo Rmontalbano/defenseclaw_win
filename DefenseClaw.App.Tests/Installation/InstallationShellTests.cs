@@ -167,7 +167,7 @@ public sealed class InstallationShellTests : IDisposable
         foreach (var row in rows)
         {
             var command = row.Cli!;
-            var onlyCopies = command.NeedsTerminal || (command.NeedsArguments && command.Form is null);
+            var onlyCopies = (command.NeedsTerminal && !command.TypesInApp) || (command.NeedsArguments && command.Form is null);
             var changes = guard.ReasonFor(command.Executable, command.Argv) is not null;
 
             if (command.LifecycleAction is not null || (changes && !onlyCopies))
@@ -250,7 +250,7 @@ public sealed class InstallationShellTests : IDisposable
             // A review that is shown at all is of a read (a read the list does not know, which the classifier allows).
             Assert.All(h.Reviews, review => Assert.Null(h.Services.Installation.ReasonFor(review.Steps)));
 
-            var onlyCopies = command.NeedsTerminal || (command.NeedsArguments && command.Form is null);
+            var onlyCopies = (command.NeedsTerminal && !command.TypesInApp) || (command.NeedsArguments && command.Form is null);
             if (command.LifecycleAction is null && !onlyCopies && !CuratedCommandCatalog.Refuses(command.Argv) &&
                 h.Services.Installation.ReasonFor(command.Executable, command.Argv) is { } reason)
             {

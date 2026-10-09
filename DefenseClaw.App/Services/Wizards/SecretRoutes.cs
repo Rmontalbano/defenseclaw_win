@@ -20,7 +20,7 @@ namespace DefenseClaw.App.Services.Wizards;
 /// (<c>config._load_dotenv_into_os</c>). The operator stores the value once in a real console
 /// (<c>defenseclaw keys set NAME</c>) and the wizard's command reads it by name. The Setup page's Credentials card can do that store from the
 /// app (CUST-221): it types the value at that same prompt in a pseudo-console (<see cref="Core.Cli.SecretPtyRunner"/>) and falls back to a console
-/// window where it cannot. The wizards' own cards still open a console.
+/// window where it cannot. So do the wizards' own cards (CUST-328): a masked box stores the key with <c>keys set</c> as the first step of the review's plan, and the console button stays beside it.
 /// </para>
 /// <para>
 /// <b>Route 2 — typed in the app, delivered in the child's environment (only where the CLI reads one).</b>

@@ -929,6 +929,106 @@ public sealed class CredentialsInAppTests
         Assert.DoesNotContain("--value", argv); // the CLI's own flag for it would put the value on the command line
     }
 
+    // ----------------------------------------------------------------------------------------------------------- from the palette (CUST-328)
+
+    [Fact]
+    public async Task The_palettes_keys_set_opens_the_box_of_the_row_that_is_listed_and_nothing_is_stored_or_launched()
+    {
+        using var h = new Harness();
+        await h.Credentials.RefreshAsync();
+
+        await h.Credentials.BeginSetForAsync(Telemetry);
+
+        var row = h.Credentials.Rows.Single(r => r.EnvName == Telemetry);
+        Assert.True(row.IsEditing);
+        Assert.True(row.ShowEditor);
+        Assert.Equal(5, h.Credentials.Rows.Count); // no row was added: the CLI lists it
+        Assert.False(row.HasEntry);
+        Assert.Empty(h.Stored);
+        Assert.Empty(h.Launched);
+        Assert.False(h.Review.IsOpen);
+
+        // From here it is the card's own flow: type, review (the value masked), confirm.
+        row.SetEntry(Secure(Value));
+        row.ReviewCommand.Execute(null);
+        Assert.True(h.Review.IsOpen);
+        Assert.Equal(new[] { "keys", "set", Telemetry }, Assert.Single(h.Review.CommandReview!.Steps).Argv);
+        await h.Review.ConfirmCommand.ExecuteAsync(null);
+        Assert.Equal((Telemetry, Value), Assert.Single(h.Stored));
+        AssertNothingHolds(h, Value);
+    }
+
+    [Fact]
+    public async Task A_name_the_cli_does_not_list_gets_a_row_of_its_own_with_the_same_flow()
+    {
+        using var h = new Harness();
+        await h.Credentials.RefreshAsync();
+
+        await h.Credentials.BeginSetForAsync("EXAMPLE_CUSTOM_KEY");
+
+        var row = h.Credentials.Rows[0];
+        Assert.Equal("EXAMPLE_CUSTOM_KEY", row.EnvName);
+        Assert.Equal(6, h.Credentials.Rows.Count);
+        Assert.Equal("Named in the palette", row.Feature);
+        Assert.False(row.IsMissingRequired); // it says nothing about what needs it
+        Assert.Equal(5, h.Credentials.Snapshot.Count); // the CLI's list, and the missing count, are untouched
+        Assert.True(row.ShowEditor);
+
+        row.SetEntry(Secure(Value));
+        row.ReviewCommand.Execute(null);
+        await h.Review.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(("EXAMPLE_CUSTOM_KEY", Value), Assert.Single(h.Stored));
+        AssertNothingHolds(h, Value);
+    }
+
+    [Fact]
+    public async Task Where_the_app_cannot_type_the_palettes_keys_set_opens_the_console_window_by_itself()
+    {
+        using var h = new Harness(pty: () => false);
+        await h.Credentials.RefreshAsync();
+
+        await h.Credentials.BeginSetForAsync(Telemetry);
+
+        UiWait(() => h.Launched.Count == 1);
+        Assert.Contains("keys set " + Telemetry, Assert.Single(h.Launched).Arguments, StringComparison.Ordinal);
+        Assert.False(h.Credentials.Rows.Single(r => r.EnvName == Telemetry).ShowEditor);
+        Assert.Empty(h.Stored);
+    }
+
+    [Fact]
+    public async Task A_read_only_installation_opens_neither_a_box_nor_a_console_for_the_palettes_keys_set()
+    {
+        using var h = new Harness(installation: TestInstallations.ManagedAt);
+        await h.Credentials.RefreshAsync();
+
+        await h.Credentials.BeginSetForAsync(Telemetry);
+
+        Assert.Equal(TestInstallations.ManagedReason, h.Credentials.Note);
+        Assert.All(h.Credentials.Rows, r => Assert.False(r.IsEditing));
+        Assert.Empty(h.Launched);
+        Assert.Empty(h.Stored);
+    }
+
+    [Fact]
+    public async Task A_name_that_is_not_a_variable_name_opens_nothing_and_a_review_that_is_open_is_not_disturbed()
+    {
+        using var h = new Harness();
+        await h.Credentials.RefreshAsync();
+
+        await h.Credentials.BeginSetForAsync("not a name");
+        Assert.All(h.Credentials.Rows, r => Assert.False(r.IsEditing));
+        Assert.Equal(5, h.Credentials.Rows.Count);
+
+        await h.OpenAndReview(h.Credentials.Rows.Single(r => r.EnvName == Judge));
+        Assert.True(h.Review.IsOpen);
+        await h.Credentials.BeginSetForAsync(Telemetry);
+
+        Assert.True(h.Review.IsOpen);
+        Assert.False(h.Credentials.Rows.Single(r => r.EnvName == Telemetry).IsEditing);
+        Assert.Contains("review", h.Credentials.Note, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void UiWait(Func<bool> condition)
     {
         var clock = Stopwatch.StartNew();

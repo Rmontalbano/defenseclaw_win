@@ -454,9 +454,9 @@
                                                            Text="{Binding CredentialStatus}" />
                                             </StackPanel>
 
-                                            <!-- Typed here: supplied as an environment variable for one run. -->
+                                            <!-- Typed here: supplied as an environment variable for one run, or stored by keys set as the first step of the plan (OffersKeysSetEntry). -->
                                             <StackPanel Margin="0,0,0,12"
-                                                        Visibility="{Binding OffersInAppEntry, Converter={StaticResource BoolToVisibility}}">
+                                                        Visibility="{Binding ShowsEntryBox, Converter={StaticResource BoolToVisibility}}">
                                                 <TextBlock Margin="0,0,0,6"
                                                            Style="{StaticResource DcCaption}"
                                                            Text="{Binding InAppExplanation}" />
@@ -465,7 +465,7 @@
                                                                  wizards:SecretEntryBox.Attach="True"
                                                                  AutomationProperties.Name="{Binding InAppAutomationName}"
                                                                  AutomationProperties.HelpText="{Binding InAppExplanation}"
-                                                                 ToolTip="Supplied to the command as an environment variable for one run. Never on the command line." />
+                                                                 ToolTip="{Binding EntryToolTip}" />
                                                     <ui:Button Margin="8,0,0,0"
                                                                Appearance="Secondary"
                                                                Content="Clear"

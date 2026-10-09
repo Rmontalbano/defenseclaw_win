@@ -493,6 +493,45 @@ internal sealed class ShellActions
         ShowToast(title, accepted ? $"Cancelling {LineOf(target)}: the process tree is being killed." : why);
     }
 
+    /// <summary>
+    /// The palette's <c>keys set</c> (CUST-328): the Credentials card's own masked-entry-and-review flow, opened on the variable typed, instead of a copied command.
+    /// <para>
+    /// The installation's sentence comes first, before the name is looked at (a read-only installation stores nothing, so there is nothing to open). Then the
+    /// name: a checked variable name, or it is refused here and nothing opens. Then the Setup page is shown with a <see cref="CredentialSet"/> request, which
+    /// opens the masked box (or, where the app cannot type, the console window - the card's automatic fallback). <b>No value passes through here</b> and
+    /// nothing runs from here: the card reviews and runs, and the value goes from its box to the CLI's hidden prompt.
+    /// </para>
+    /// </summary>
+    private void OpenKeySet(CuratedCommand command, string? argument)
+    {
+        if (_services.Installation.ReasonFor(command.Executable, command.Argv) is { } blocked)
+        {
+            ShowToast(command.Title, blocked);
+            return;
+        }
+
+        if (argument is null || command.Form is not { } form)
+        {
+            CopyCurated(command);
+            ShowToast(command.Title, $"Needs {string.Join(", ", command.RequiredArguments)}. Copied the command for you to complete in a terminal.");
+            return;
+        }
+
+        if (form.Check(argument, out var name) is { } problem)
+        {
+            ShowToast(command.Title, problem);
+            return;
+        }
+
+        if (!WizardCredentials.IsValidName(name))
+        {
+            ShowToast(command.Title, "That is not the NAME of an environment variable: letters, digits and underscores, starting with a letter or an underscore.");
+            return;
+        }
+
+        OpenPanel("setup", new CredentialSet(name));
+    }
+
     /// <summary>Copies a curated command as text that is safe to paste into PowerShell - with the value the operator typed for it, when there is one.</summary>
     public void CopyCurated(CuratedCommand command, string? argument = null)
     {
@@ -529,6 +568,12 @@ internal sealed class ShellActions
         if (command.LifecycleAction is { } lifecycle)
         {
             await (GatewayActionRunner is { } runLifecycle ? runLifecycle(lifecycle) : RunGatewayActionAsync(lifecycle)).ConfigureAwait(true);
+            return;
+        }
+
+        if (command.TypesInApp)
+        {
+            OpenKeySet(command, argument);
             return;
         }
 

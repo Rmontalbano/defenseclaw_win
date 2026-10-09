@@ -114,10 +114,12 @@ public class SecretEntryTests
         StaThread.Run(() =>
         {
             using var services = TestServices.Create(temp);
-            using var vm = new WizardViewModel(services, WizardSamples.Llm());
+            // Where the app cannot type at keys set's prompt (CUST-328: with one it offers a box of its own), the card is the terminal card.
+            using var vm = new WizardViewModel(services, WizardSamples.Llm()) { PtyAvailable = () => false };
             var key = Field(vm, "--api-key");
 
             Assert.False(key.OffersInAppEntry);
+            Assert.False(key.OffersKeysSetEntry);
             Assert.Contains("never takes the secret", key.CredentialExplanation, StringComparison.Ordinal);
 
             key.SetEntry(Secure(Value));

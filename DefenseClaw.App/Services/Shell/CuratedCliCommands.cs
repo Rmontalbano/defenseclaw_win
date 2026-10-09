@@ -137,8 +137,18 @@ internal sealed record CuratedCommand(
         string.Equals(Executable, CommandReview.DefaultExecutable, StringComparison.Ordinal) &&
         (NeedTheConsole.Contains(string.Join(' ', Argv)) || Summary.Contains("interactive", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The small form that takes its argument, or null: it needs none, needs a console, or needs more than one plain value.</summary>
-    public ArgumentForm? Form => NeedsArguments && !NeedsTerminal ? ArgumentForm.Parse(ArgumentHint) : null;
+    /// <summary>
+    /// True for <c>defenseclaw keys set</c> (CUST-328): the one command here whose prompt the app can answer itself. Run does not copy it for a terminal; it opens
+    /// the Setup page's Credentials card on the name typed, where the value goes into a masked box, is reviewed and is typed at the CLI's hidden prompt in a
+    /// pseudo-console (<see cref="DefenseClaw.Core.Cli.SecretPtyRunner"/>) - and where a console window opens by itself if the app cannot do that. It stays
+    /// <see cref="NeedsTerminal"/> for everything that asks what the command needs a terminal for (the console fallback), and the value is never part of it.
+    /// </summary>
+    public bool TypesInApp =>
+        string.Equals(Executable, CommandReview.DefaultExecutable, StringComparison.Ordinal) &&
+        Argv.Count == 2 && string.Equals(Argv[0], "keys", StringComparison.Ordinal) && string.Equals(Argv[1], "set", StringComparison.Ordinal);
+
+    /// <summary>The small form that takes its argument, or null: it needs none, needs a console, or needs more than one plain value. <c>keys set</c> takes its NAME.</summary>
+    public ArgumentForm? Form => NeedsArguments && (!NeedsTerminal || TypesInApp) ? ArgumentForm.Parse(ArgumentHint) : null;
 
     /// <summary>
     /// The gateway verb this row stands for when it is one of the three lifecycle verbs. They run through the same path as the tray's and the
@@ -175,14 +185,19 @@ internal sealed record CuratedCommand(
     /// <summary>What the review and the tier policy make of it: only an allow-listed read is read-only and runs as it is; everything else is at least a change, and is reviewed first.</summary>
     public CommandTier Tier => CommandReview.ResolveTier(Argv, RunsWithoutReview ? CommandTier.ReadOnly : CommandTier.StateChanging);
 
-    /// <summary>The argv with the operator's value added as a target: after <c>--</c>, so nothing typed can be read as an option.</summary>
-    public IReadOnlyList<string> ArgvWith(string argument) => Argv.Append("--").Append(argument).ToArray();
+    /// <summary>
+    /// The argv with the operator's value added as a target: after <c>--</c>, so nothing typed can be read as an option. <c>keys set NAME</c> is the exception
+    /// (<see cref="TypesInApp"/>): the name is a checked variable name that cannot start with a dash, and the argv shown is the one that runs.
+    /// </summary>
+    public IReadOnlyList<string> ArgvWith(string argument) => TypesInApp ? Argv.Append(argument).ToArray() : Argv.Append("--").Append(argument).ToArray();
 
     /// <summary>The command as it reads with a value (or the form's placeholder, <c>&lt;skill-name&gt;</c>, when none is typed yet).</summary>
     public string CommandLineWith(string? argument) =>
         Form is null
             ? CommandLineText
-            : CommandReview.CommandLine(Executable, Argv.Append("--").Append(string.IsNullOrWhiteSpace(argument) ? ArgumentHint : argument.Trim()));
+            : CommandReview.CommandLine(Executable, TypesInApp
+                ? Argv.Append(string.IsNullOrWhiteSpace(argument) ? ArgumentHint : argument.Trim())
+                : Argv.Append("--").Append(string.IsNullOrWhiteSpace(argument) ? ArgumentHint : argument.Trim()));
 
     /// <summary>The same with a value, as PowerShell text.</summary>
     public string ClipboardTextWith(string argument) => CommandReview.ClipboardLine(Executable, ArgvWith(argument));

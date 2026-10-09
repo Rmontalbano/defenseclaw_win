@@ -489,8 +489,9 @@ public sealed class TuiRegistryPaletteTests : IDisposable
     {
         var h = Create();
 
-        // keys set / fill-missing read a hidden prompt, bare setup is the connector picker, and the registry calls the others interactive.
-        foreach (var name in new[] { "keys set", "keys fill-missing", "fix credentials", "setup", "open setup", "setup connector", "setup llm", "setup gateway", "reset", "uninstall", "agent discovery setup", "setup skill-scanner" })
+        // keys fill-missing reads a hidden prompt, bare setup is the connector picker, and the registry calls the others interactive. (keys set is not
+        // here any more: the app answers its prompt itself, CUST-328 - see PaletteKeysSetTests.)
+        foreach (var name in new[] { "keys fill-missing", "fix credentials", "setup", "open setup", "setup connector", "setup llm", "setup gateway", "reset", "uninstall", "agent discovery setup", "setup skill-scanner" })
         {
             h.Toasts.Clear();
             h.Clipboard.Clear();
@@ -676,7 +677,7 @@ public sealed class TuiRegistryPaletteTests : IDisposable
     {
         var h = Create();
         var rows = ShellCommandRegistry.BuildCliCommands(
-            new[] { Command(Baseline, "setup webhook add"), Command(Baseline, "keys set"), Command(Baseline, "setup llm"), Command(Baseline, "setup codex") },
+            new[] { Command(Baseline, "setup webhook add"), Command(Baseline, "keys fill-missing"), Command(Baseline, "setup llm"), Command(Baseline, "setup codex") },
             h.Actions);
 
         var items = rows.Select(r => new PaletteItem(r)).ToArray();

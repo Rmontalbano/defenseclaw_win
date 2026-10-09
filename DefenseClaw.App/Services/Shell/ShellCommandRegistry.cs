@@ -419,7 +419,8 @@ internal static class ShellCommandRegistry
             // A row that would run a change from here is off on a read-only installation, with the installation's sentence, which comes before
             // any other reason (the Docker look, the gateway's state): nothing about the machine can make it runnable. A row that only copies a
             // command for a terminal runs nothing, so it stays.
-            if (!command.NeedsTerminal && !(command.NeedsArguments && command.Form is null) &&
+            // keys set is the exception to the terminal rule (CUST-328): it opens the Credentials card to store a value, so a read-only installation turns it off.
+            if ((!command.NeedsTerminal || command.TypesInApp) && !(command.NeedsArguments && command.Form is null) &&
                 actions.Installation.ReasonFor(command.Executable, command.Argv) is { } installationBlock)
             {
                 (allowed, reason) = (false, installationBlock);

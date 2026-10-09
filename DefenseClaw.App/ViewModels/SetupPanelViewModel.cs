@@ -64,7 +64,7 @@ public enum SetupEmptyState
 /// Refresh — never on a timer.
 /// </para>
 /// </summary>
-public sealed partial class SetupPanelViewModel : PanelViewModelBase
+public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
     /// <summary>How long a <c>guardrail status</c> read is trusted when the panel is re-entered.</summary>
     private static readonly TimeSpan GuardrailFreshFor = TimeSpan.FromMinutes(2);
@@ -298,6 +298,18 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     /// <see cref="InitializeAsync"/> has finished on the first visit — with no cards yet, the
     /// card half of the catch-up simply has nothing to do.
     /// </summary>
+    /// <summary>
+    /// A deep link (<see cref="IAcceptsNavigation"/>): a <see cref="CredentialSet"/> (the palette's <c>keys set NAME</c>, CUST-328) opens the Credentials card's masked
+    /// box on that variable. Any other payload is ignored. Nothing is stored or run by it.
+    /// </summary>
+    public void Accept(object payload)
+    {
+        if (payload is CredentialSet set)
+        {
+            _ = Credentials.BeginSetForAsync(set.EnvName);
+        }
+    }
+
     protected override void OnActivated()
     {
         _catalog.DefinitionChanged += OnDefinitionChanged;

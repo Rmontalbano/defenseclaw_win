@@ -185,7 +185,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// The terminal route in one paragraph, for the card. Where the app can also take the value
     /// (<see cref="OffersInAppEntry"/>) it is the alternative; otherwise it is the only way.
     /// </summary>
-    public string CredentialExplanation => OffersInAppEntry
+    public string CredentialExplanation => ShowsEntryBox
         ? "Or store it once from a real console instead: `defenseclaw keys set` is the CLI's own hidden prompt, and the " +
           "command then reads the value from ~/.defenseclaw/.env by name. On Windows that prompt reads a console, not a pipe."
         : "This app never takes the secret itself. The command reads it from a variable in ~/.defenseclaw/.env, and " +
@@ -200,6 +200,54 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// </summary>
     public bool OffersInAppEntry => IsSecret && InAppEnvName.Length > 0;
 
+    /// <summary>Whether the wizard says the app can type a value at <c>keys set</c>'s prompt (a pseudo-console, a writable installation). Set by the wizard.</summary>
+    private bool _keysSetAvailable;
+
+    /// <summary>
+    /// A password box is shown for a secret whose CLI reads it from nowhere but a flag (CUST-328: <c>setup llm --api-key</c>, <c>setup gateway --token</c>): the
+    /// value is stored with <c>defenseclaw keys set NAME</c>, typed by this app at that command's own hidden prompt in a pseudo-console
+    /// (<see cref="DefenseClaw.Core.Cli.SecretPtyRunner"/>), as the first step of one reviewed plan whose second step is the wizard's command. The name
+    /// of the variable is all that reaches either argv.
+    /// </summary>
+    public bool OffersKeysSetEntry => IsSecret && !OffersInAppEntry && _keysSetAvailable && WizardCredentials.IsValidName(CredentialEnvName);
+
+    /// <summary>A password box is drawn, by either route.</summary>
+    public bool ShowsEntryBox => OffersInAppEntry || OffersKeysSetEntry;
+
+    /// <summary>
+    /// The wizard says whether the app can type a value at <c>keys set</c>'s prompt. A value held for a route that is gone is dropped with a sentence.
+    /// </summary>
+    internal void SetKeysSetAvailable(bool available, string notice = "")
+    {
+        if (_keysSetAvailable == available)
+        {
+            return;
+        }
+
+        _keysSetAvailable = available;
+        if (!available && _entry is not null && !OffersInAppEntry)
+        {
+            ClearEntry(notice);
+        }
+
+        RaiseEntryRoute();
+    }
+
+    private void RaiseEntryRoute()
+    {
+        OnPropertyChanged(nameof(OffersKeysSetEntry));
+        OnPropertyChanged(nameof(ShowsEntryBox));
+        OnPropertyChanged(nameof(CredentialExplanation));
+        OnPropertyChanged(nameof(InAppExplanation));
+        OnPropertyChanged(nameof(EntryToolTip));
+        NotifyEntryChanged();
+    }
+
+    /// <summary>The password box's tooltip: where the value goes, said for the route in use.</summary>
+    public string EntryToolTip => OffersKeysSetEntry
+        ? "Stored by the CLI's own keys set prompt when you press Execute. Never on a command line."
+        : "Supplied to the command as an environment variable for one run. Never on the command line.";
+
     public bool HasEntryProblem => EntryProblem.Length > 0;
 
     public bool HasEntryNotice => EntryNotice.Length > 0;
@@ -212,6 +260,13 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     {
         get
         {
+            if (OffersKeysSetEntry)
+            {
+                return $"Type it here and this app stores it for you. Execute runs two commands, both shown on the review page: `defenseclaw keys set {CredentialEnvName}`, " +
+                       "where this app types the value at that command's own hidden prompt, and then the command below, which reads it by name. " +
+                       "The value is never on a command line, in Activity or in this window's output, and the box is cleared as soon as it has been used.";
+            }
+
             var stored = Field.Credential?.InAppStorage is { Length: > 0 } custom
                 ? " " + custom
                 : CredentialEnvName.Length > 0 && !string.Equals(CredentialEnvName, InAppEnvName, StringComparison.Ordinal)
@@ -226,7 +281,9 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// <summary>One line under the box: what is held, or why it cannot be used. Never the value or its length.</summary>
     public string EntryStatus => EntryProblem.Length > 0
         ? EntryProblem
-        : HasEntry
+        : HasEntry && OffersKeysSetEntry
+            ? $"A value is entered (hidden). Execute stores it as {CredentialEnvName} first, then runs the command; nothing runs before you press Execute."
+            : HasEntry
             ? $"A value is entered (hidden). It goes to the command as {InAppEnvName}, then is cleared." +
               (PersistSentence.Length > 0 ? " " + PersistSentence : string.Empty)
             : EntryNotice.Length > 0
@@ -280,6 +337,13 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     {
         get
         {
+            if (OffersKeysSetEntry)
+            {
+                return HasEntry
+                    ? $"Step 1 stores the value you typed as {CredentialEnvName} (value masked: typed at the keys set prompt, never on a command line); step 2 reads it by that name."
+                    : $"Nothing entered here; the command reads {CredentialEnvName} from ~/.defenseclaw/.env if it is stored. Go back to type a value and the review will store it first.";
+            }
+
             if (!OffersInAppEntry)
             {
                 return "This app does not send it; the command reads it by name.";
@@ -301,7 +365,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// </summary>
     public void SetEntry(SecureString? value)
     {
-        if (!OffersInAppEntry)
+        if (!ShowsEntryBox)
         {
             // Not a field that takes a value here: refuse to hold one rather than keep it unused.
             value?.Dispose();
@@ -342,7 +406,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     /// nothing usable (no value, only whitespace, or a control character in it). The caller passes it straight to
     /// <see cref="Core.Cli.CliRunOptions.WithEnvironment"/>; nothing here keeps it.
     /// </summary>
-    internal SecretValue? MaterializeSecret() => OffersInAppEntry ? SecretEntry.ToSecret(_entry) : null;
+    internal SecretValue? MaterializeSecret() => ShowsEntryBox ? SecretEntry.ToSecret(_entry) : null;
 
     /// <summary>
     /// Drops the held value and tells the password box to empty itself. Called when a run has ended, when the
@@ -396,8 +460,9 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
         // A value typed for one destination must not follow the operator to another (choosing a different
         // preset changes where the token is stored), and must not outlive its route disappearing.
+        var routeStays = inApp.Length > 0 || (_keysSetAvailable && WizardCredentials.IsValidName(name));
         if (_entry is not null &&
-            (!string.Equals(name, CredentialEnvName, StringComparison.Ordinal) || inApp.Length == 0))
+            (!string.Equals(name, CredentialEnvName, StringComparison.Ordinal) || !routeStays))
         {
             ClearEntry("The value you entered was cleared because the destination changed. Enter it again.");
         }
@@ -427,8 +492,7 @@ public sealed partial class WizardFieldViewModel : ObservableObject
         OnPropertyChanged(nameof(HasCredentialEnvName));
         OnPropertyChanged(nameof(CredentialCommand));
         OnPropertyChanged(nameof(CanOpenTerminal));
-        OnPropertyChanged(nameof(InAppExplanation));
-        NotifyEntryChanged();
+        RaiseEntryRoute();
     }
 
     [RelayCommand]
@@ -540,6 +604,8 @@ public sealed partial class WizardFieldViewModel : ObservableObject
     partial void OnInAppEnvNameChanged(string value)
     {
         OnPropertyChanged(nameof(OffersInAppEntry));
+        OnPropertyChanged(nameof(OffersKeysSetEntry));
+        OnPropertyChanged(nameof(ShowsEntryBox));
         OnPropertyChanged(nameof(CredentialExplanation));
         OnPropertyChanged(nameof(InAppExplanation));
     }

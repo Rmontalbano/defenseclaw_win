@@ -232,6 +232,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         _services.Installation.Changed += OnInstallationChanged;
 
         ApplyGates();
+        RefreshKeysSetRoute();
         RefreshCredentials();
         SyncPersistState();
         GoTo(0);
@@ -700,8 +701,11 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task RunCoreAsync(IReadOnlyList<string> argv, bool preview)
     {
-        var suppliedSecrets = !preview && HasSuppliedSecrets;
-        var previewSkipsSecrets = preview && HasSuppliedSecrets;
+        var suppliedSecrets = !preview && HasTypedSecrets;
+        var previewSkipsSecrets = preview && HasTypedSecrets;
+
+        // The values to store first (CUST-328), decided once from what the review showed.
+        var stores = preview ? Array.Empty<WizardFieldViewModel>() : KeysSetFields().ToArray();
 
         // A retry after a failed or cancelled attempt starts from a clean console and badge, not
         // the previous attempt's.
@@ -722,6 +726,18 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         try
         {
+            // The keys typed for the keys set route are stored first; the command runs only if they all were (it reads them by name).
+            if (stores.Length > 0)
+            {
+                if (!await StoreKeysAsync(stores, token).ConfigureAwait(true))
+                {
+                    return;
+                }
+
+                _pendingArgv = argv;
+                ResultMessage = "Running. Cancel stops the command and everything it started.";
+            }
+
             // Null unless a typed secret is being supplied, in which case it carries the variable and nothing
             // else is different from a plain run. A preview never gets one: the value goes to a single child.
             var options = RunOptionsFor(preview);
@@ -761,6 +777,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
             IsRunning = false;
             HasRun = true;
+
+            // The key that was typed is used up (its box was emptied while the first step ran): the review is the plan that is left.
+            if (stores.Length > 0)
+            {
+                RefreshReview();
+            }
 
             // The run is over, however it ended: the typed secret goes with it. The result line says so, and
             // says what a preview left alone, so an empty box is never a mystery.
@@ -1106,10 +1128,14 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         _previewFlagInCommand = argv.Contains("--dry-run", StringComparer.Ordinal);
 
         var restartWarning = WizardReview.RestartWarning(Definition, _values, argv);
+        var steps = PlanSteps(argv);
         var review = new CommandReview
         {
-            Title = "Command",
-            Steps = new[] { new CommandReviewStep(argv, floor: ReviewFloor(argv)) },
+            Title = steps.Length > 1 ? "Commands" : "Command",
+            Summary = steps.Length > 1
+                ? "Execute runs these in order, each only if the one before it succeeded. The first stores the key you typed; the value is shown nowhere and is on no command line."
+                : string.Empty,
+            Steps = steps,
             RestartsGateway = restartWarning.Length > 0,
 
             // The local observability stack says what its verbs really do besides the restart bar above (data deleted, files overwritten, a
@@ -1213,6 +1239,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             return;
         }
 
+        RefreshKeysSetRoute();
         RefreshReview();
         RaiseNavigationState();
     }

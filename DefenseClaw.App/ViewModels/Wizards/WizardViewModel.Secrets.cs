@@ -70,6 +70,13 @@ public sealed partial class WizardViewModel
 
             SyncPersistState();
             RefreshEnvironmentNotes();
+
+            // A key typed for the keys set route is the first step of the plan: the review follows it (not while a run is using it).
+            if (e.PropertyName == nameof(WizardFieldViewModel.HasEntry) && !IsRunning)
+            {
+                RefreshReview();
+                RaiseNavigationState();
+            }
         }
         else if (e.PropertyName == nameof(WizardFieldViewModel.Value) && sender is WizardFieldViewModel changed && IsPersistChoice(changed))
         {
@@ -144,9 +151,15 @@ public sealed partial class WizardViewModel
             .Select(f => f.Field.Credential?.PreviewNote)
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.Ordinal)
-            .ToArray();
+            .ToList();
 
-        return notes.Length == 0 ? string.Empty : " " + string.Join(' ', notes);
+        // A key typed for the keys set route is stored by Execute alone: a preview writes nothing, so the command it previews reads whatever is stored now.
+        if (KeysSetFields().Any())
+        {
+            notes.Add("A preview does not store the key you typed: Execute stores it first, so a preview reads whatever is stored now.");
+        }
+
+        return notes.Count == 0 ? string.Empty : " " + string.Join(' ', notes);
     }
 
     /// <summary>

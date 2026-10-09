@@ -235,7 +235,7 @@ public static partial class WizardStepFactory
             PageOf(
                 WizardPages.LlmKey,
                 "Key and endpoint",
-                "The key is referenced by the NAME of an environment variable, which is what config.yaml stores. Store the key itself once with defenseclaw keys set.",
+                "The key is referenced by the NAME of an environment variable, which is what config.yaml stores. Type the key itself in the box below (the review stores it with defenseclaw keys set, then applies this), or store it once yourself with defenseclaw keys set.",
                 NoGate,
                 F("--api-key-env"),
                 F("--api-key"),
