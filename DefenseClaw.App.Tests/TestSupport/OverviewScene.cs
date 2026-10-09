@@ -170,8 +170,13 @@ internal sealed class OverviewScene : IDisposable
 
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false }.ToString());
         connection.Open();
+
+        // The schema and the rows in one transaction: run statement by statement the ~200 DDL statements are a commit each (a journal file
+        // created, synced and deleted), ~2 s a database on a quiet machine against 30 ms this way, with the same sqlite_master.
+        using var transaction = connection.BeginTransaction();
         using (var ddl = connection.CreateCommand())
         {
+            ddl.Transaction = transaction;
             ddl.CommandText = schema;
             _ = ddl.ExecuteNonQuery();
         }
@@ -180,6 +185,7 @@ internal sealed class OverviewScene : IDisposable
         void Add(DateTimeOffset at, string action, string connector, string? details, string severity = "INFO", string? bucket = null)
         {
             using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
             insert.CommandText = """
                 INSERT INTO audit_events (id, timestamp, action, target, actor, details, severity, connector, bucket, event_name)
                 VALUES ($id, $ts, $action, '', 'audit_logger', $details, $severity, $connector, $bucket, $event)
@@ -217,6 +223,7 @@ internal sealed class OverviewScene : IDisposable
 
         Add(hourStart.AddHours(-2).AddMinutes(1), "scan-finding", "claudecode", null, severity: "HIGH", bucket: "security.finding");
         Add(hourStart.AddHours(-2).AddMinutes(2), "scan-finding", "hermes", null, severity: "MEDIUM", bucket: "security.finding");
+        transaction.Commit();
         SqliteConnection.ClearAllPools();
     }
 

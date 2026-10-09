@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Tests.TestSupport;
@@ -9,10 +10,21 @@ namespace DefenseClaw.Tests;
 /// Kill-on-close job containment (<see cref="WindowsJob"/>) and Activity Clear. The children are cmd.exe, ping and a
 /// short PowerShell script that starts a grandchild ping - harmless programs only; the real defenseclaw is never invoked.
 /// Every process a test starts is killed in a finally.
+/// <para>
+/// <b>No test here asserts how long anything takes.</b> A test waits for a condition (the grandchild has reported, the process is
+/// gone) up to <see cref="Wait"/>, a ceiling that only bounds a hang. It is generous because starting <c>powershell.exe</c> and having
+/// it start a process took 0.9 s on a quiet machine and 23 to 32 s with sixteen busy processes sharing two cores (measured), the kind
+/// of squeeze a CI runner is in while both test projects and xunit's parallel classes run on it. A fixed 30 s bound failed on CI twice
+/// in a row (and fails on that emulated load), each time while the child was still starting, before anything was cancelled (CUST-301).
+/// The children also live well past the ceiling, so a slow machine never finds one gone by itself.
+/// </para>
 /// </summary>
 public sealed class CliRunnerJobTests
 {
-    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Wait = TestTimeouts.Ceiling;
+
+    /// <summary>How long the PowerShell child, and the ping it starts, live if nobody ends them: two ceilings and a minute.</summary>
+    private static readonly TimeSpan ChildLifetime = Wait + Wait + TimeSpan.FromMinutes(1);
 
     private static string CmdPath => Path.Combine(Environment.SystemDirectory, "cmd.exe");
 
@@ -61,10 +73,11 @@ public sealed class CliRunnerJobTests
         return Process.Start(info)!;
     }
 
+    /// <summary>Polls <paramref name="condition"/> every 50 ms until it holds or <see cref="Wait"/> has passed (measured on the monotonic clock).</summary>
     private static bool WaitUntil(Func<bool> condition)
     {
-        var deadline = DateTime.UtcNow + Wait;
-        while (DateTime.UtcNow < deadline)
+        var clock = Stopwatch.StartNew();
+        while (clock.Elapsed < Wait)
         {
             if (condition())
             {
@@ -77,26 +90,103 @@ public sealed class CliRunnerJobTests
         return condition();
     }
 
-    private static string[] GrandchildScript(string pidFile) => new[]
+    private static string[] GrandchildScript(string pidFile)
     {
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        // The child starts a ping of its own and records its pid, then idles: the ping is the grandchild.
-        $"$p = Start-Process -FilePath '{PingPath}' -ArgumentList '-n','60','127.0.0.1' -WindowStyle Hidden -PassThru; " +
-        $"[IO.File]::WriteAllText('{pidFile}', [string]$p.Id); Start-Sleep -Seconds 60",
-    };
+        var seconds = ((int)ChildLifetime.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+        var pidPath = pidFile.Replace("'", "''", StringComparison.Ordinal);
+        return new[]
+        {
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            // The child starts a ping of its own and records its pid, then idles: the ping is the grandchild. Any failure ends the child
+            // on the spot (Stop), so a test waiting for the pid is told why instead of waiting for one that is never coming.
+            "$ErrorActionPreference = 'Stop'; " +
+            $"$p = Start-Process -FilePath '{PingPath}' -ArgumentList '-n','{seconds}','127.0.0.1' -WindowStyle Hidden -PassThru; " +
+            $"[IO.File]::WriteAllText('{pidPath}', [string]$p.Id); Start-Sleep -Seconds {seconds}",
+        };
+    }
 
     private static bool TryReadPid(string pidFile, out int pid)
     {
         pid = 0;
         try
         {
-            return File.Exists(pidFile) && int.TryParse(File.ReadAllText(pidFile), out pid) && pid > 0;
+            return File.Exists(pidFile) && int.TryParse(File.ReadAllText(pidFile).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out pid) && pid > 0;
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // The child is writing it this very moment (or a scanner has it open): not there yet.
             return false;
+        }
+    }
+
+    /// <summary>What an invocation did, for a failure message: how it ended and the last thing it printed.</summary>
+    private static string Describe(CliInvocation? invocation) =>
+        invocation is null
+            ? "the run never started"
+            : $"exit code {invocation.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "none"}, " +
+              $"{invocation.FailureReason ?? "no failure reason"}, " +
+              $"output: [{string.Join(" | ", invocation.OutputLines.TakeLast(10).Select(l => l.Text))}]";
+
+    /// <summary>
+    /// A runner and the PowerShell child it runs, which starts a ping of its own and writes the ping's pid to a file: a tree of three
+    /// processes below the test. Disposing it ends whatever is left of the tree, whether the test passed or not.
+    /// </summary>
+    private sealed class ChildWithGrandchild : IDisposable
+    {
+        private readonly TempDirectory _temp = new();
+        private readonly string _pidFile;
+
+        public ChildWithGrandchild()
+        {
+            Runner = CliRunnerJobTests.Runner(_temp.Path);
+            _pidFile = _temp.File("grandchild.pid");
+            Runner.InvocationStarted += (_, i) => Invocation = i;
+            Run = Runner.RunExecutableAsync(
+                PowerShellPath,
+                GrandchildScript(_pidFile),
+                options: CliRunOptions.Default with { Timeout = ChildLifetime + TimeSpan.FromMinutes(1) });
+        }
+
+        public CliRunner Runner { get; }
+
+        /// <summary>The run, finished when the child is.</summary>
+        public Task<CliInvocation> Run { get; }
+
+        /// <summary>The live invocation; the runner announces it synchronously when the run starts, before the run's task is handed back.</summary>
+        public CliInvocation? Invocation { get; private set; }
+
+        /// <summary>The ping's pid, once <see cref="WaitUntilReported"/> has it.</summary>
+        public int Grandchild { get; private set; }
+
+        /// <summary>
+        /// Waits for the child to say it has started its grandchild, then holds the pid. If the run ends first there is nothing left to wait
+        /// for (the script failed, or the child was killed): that is a failure now, with what the child said, not after the ceiling.
+        /// </summary>
+        public void WaitUntilReported()
+        {
+            var pid = 0;
+            _ = WaitUntil(() => TryReadPid(_pidFile, out pid) || Run.IsCompleted);
+            if (pid == 0 && !TryReadPid(_pidFile, out pid))
+            {
+                Assert.Fail(Run.IsCompleted
+                    ? $"the child ended without reporting its grandchild: {Describe(Invocation)}"
+                    : $"the child did not report its grandchild within {Wait.TotalSeconds:0} s: {Describe(Invocation)}");
+            }
+
+            Grandchild = pid;
+        }
+
+        public void Dispose()
+        {
+            _ = Runner.Shutdown(TimeSpan.FromSeconds(10));
+            if (Grandchild > 0)
+            {
+                KillQuietly(Grandchild);
+            }
+
+            _temp.Dispose();
         }
     }
 
@@ -174,67 +264,27 @@ public sealed class CliRunnerJobTests
     [Fact]
     public async Task Cancel_kills_a_grandchild_the_child_started_right_after_launch()
     {
-        using var temp = new TempDirectory();
-        var runner = Runner(temp.Path);
-        var pidFile = temp.File("grandchild.pid");
-        var grandchild = 0;
+        using var tree = new ChildWithGrandchild();
+        tree.WaitUntilReported();
+        Assert.True(IsAlive(tree.Grandchild), "the grandchild is gone before anything was cancelled");
 
-        CliInvocation? invocation = null;
-        runner.InvocationStarted += (_, i) => invocation = i;
-        var run = runner.RunExecutableAsync(
-            PowerShellPath,
-            GrandchildScript(pidFile),
-            options: CliRunOptions.Default with { Timeout = TimeSpan.FromMinutes(2) });
-        try
-        {
-            Assert.True(WaitUntil(() => TryReadPid(pidFile, out grandchild)), "the child never reported its grandchild");
-            Assert.True(IsAlive(grandchild));
+        Assert.True(tree.Runner.Cancel(tree.Invocation!, out _));
+        var finished = await tree.Run.WaitAsync(Wait);
 
-            Assert.True(runner.Cancel(invocation!, out _));
-            var finished = await run.WaitAsync(Wait);
-
-            Assert.StartsWith("cancelled", finished.FailureReason, StringComparison.OrdinalIgnoreCase);
-            Assert.True(WaitUntil(() => !IsAlive(grandchild)), "the grandchild outlived the cancel");
-        }
-        finally
-        {
-            _ = runner.Shutdown(TimeSpan.FromSeconds(10));
-            if (grandchild > 0)
-            {
-                KillQuietly(grandchild);
-            }
-        }
+        Assert.StartsWith("cancelled", finished.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.True(WaitUntil(() => !IsAlive(tree.Grandchild)), "the grandchild outlived the cancel");
     }
 
     [Fact]
     public async Task Shutdown_ends_the_whole_tree_of_a_running_child()
     {
-        using var temp = new TempDirectory();
-        var runner = Runner(temp.Path);
-        var pidFile = temp.File("grandchild.pid");
-        var grandchild = 0;
+        using var tree = new ChildWithGrandchild();
+        tree.WaitUntilReported();
 
-        var run = runner.RunExecutableAsync(
-            PowerShellPath,
-            GrandchildScript(pidFile),
-            options: CliRunOptions.Default with { Timeout = TimeSpan.FromMinutes(2) });
-        try
-        {
-            Assert.True(WaitUntil(() => TryReadPid(pidFile, out grandchild)));
+        _ = tree.Runner.Shutdown(Wait);
+        _ = await tree.Run.WaitAsync(Wait);
 
-            _ = runner.Shutdown(Wait);
-            _ = await run.WaitAsync(Wait);
-
-            Assert.True(WaitUntil(() => !IsAlive(grandchild)), "the grandchild outlived shutdown");
-        }
-        finally
-        {
-            _ = runner.Shutdown(TimeSpan.FromSeconds(10));
-            if (grandchild > 0)
-            {
-                KillQuietly(grandchild);
-            }
-        }
+        Assert.True(WaitUntil(() => !IsAlive(tree.Grandchild)), "the grandchild outlived shutdown");
     }
 
     [Fact]

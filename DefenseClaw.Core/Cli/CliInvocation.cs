@@ -198,6 +198,24 @@ public sealed class CliInvocation
     /// <summary>True when a secret was piped in on stdin. The secret itself is never stored.</summary>
     public bool UsedStdinSecret { get; internal set; }
 
+    private int _processId;
+
+    /// <summary>
+    /// The child's process id from the moment it has started; null before that, and for a run that never started. Internal on purpose:
+    /// nothing shows it to the operator. The Core suite uses it to find what a run started below its own child, rather than picking
+    /// "the new ping" out of every ping on the machine, which can be somebody else's.
+    /// </summary>
+    internal int? ProcessId
+    {
+        get
+        {
+            var id = Volatile.Read(ref _processId);
+            return id == 0 ? null : id;
+        }
+
+        set => Volatile.Write(ref _processId, value ?? 0);
+    }
+
     /// <summary>
     /// The <b>names</b> of the environment variables the runner set for this child from
     /// <see cref="CliRunOptions.EnvironmentOverlay"/> (empty values, which are skipped, are not listed),
@@ -424,6 +442,7 @@ public sealed class CliInvocation
             EnvironmentNames = EnvironmentNames,
             SurvivesShutdown = SurvivesShutdown,
             CancelRequested = CancelRequested,
+            ProcessId = ProcessId,
         };
 
         lock (_gate)

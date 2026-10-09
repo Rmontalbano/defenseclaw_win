@@ -141,10 +141,17 @@ internal sealed class AlertQueueDatabase
     private void Execute(string sql)
     {
         using var connection = Open();
+
+        // One transaction, whatever the script: the audit schema is ~200 statements, and run one by one each is a commit of its own - a
+        // journal file created, synced and deleted - which took ~2 s a database on a quiet machine (30 ms in a transaction, the same
+        // sqlite_master either way) and is where a test over this database spent nearly all of its time.
+        using var transaction = connection.BeginTransaction();
         using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database
         command.CommandText = sql;
         _ = command.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     private SqliteConnection Open()

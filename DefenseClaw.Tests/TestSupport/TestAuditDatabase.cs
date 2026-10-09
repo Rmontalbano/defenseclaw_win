@@ -35,10 +35,18 @@ public sealed class TestAuditDatabase : IDisposable
         using var connection = OpenWritable();
         using var command = connection.CreateCommand();
 
+        // One transaction for the whole schema. It is ~200 statements, and run one by one each is a commit of its own - a journal file
+        // created, synced and deleted - which took ~2 s a database on a quiet machine (30 ms in one transaction, the same sqlite_master
+        // either way) and many times that on a loaded or slow one: most of what every test using this class spent, and a long stretch of
+        // file-system work for a scanner or a busy disk to get in the way of.
+        using var transaction = connection.BeginTransaction();
+        command.Transaction = transaction;
+
         // SQLite's own tokenizer splits the statements, so the multi-statement trigger
         // bodies in the DDL survive intact.
         command.CommandText = FixtureFiles.ReadText(schemaFixture);
         command.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     public string Path { get; }

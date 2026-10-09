@@ -672,21 +672,6 @@ public class CliRunnerTests
 
     private static readonly string GatewayCli = Path.Combine("C:\\", "bin", "defenseclaw-gateway.exe");
 
-    /// <summary>Ids of every ping.exe running right now. Disposes the Process objects it opens.</summary>
-    private static HashSet<int> PingPids()
-    {
-        var ids = new HashSet<int>();
-        foreach (var process in Process.GetProcessesByName("ping"))
-        {
-            using (process)
-            {
-                _ = ids.Add(process.Id);
-            }
-        }
-
-        return ids;
-    }
-
     private static bool IsAlive(int pid)
     {
         try
@@ -723,18 +708,23 @@ public class CliRunnerTests
     /// Waits for the ping grandchild of a run in flight to appear and returns its id — which is
     /// also the signal that the whole tree is up, so a test can act on a live child rather than
     /// racing process start-up.
+    /// <para>
+    /// Only a ping below the child this run started counts (its parent is the cmd.exe the runner started), never a ping that merely
+    /// appeared: the machine is also running other pings (the same suite in another checkout, another developer's tests, a person's own)
+    /// and other test classes' of this process, and a test that adopts one of those as "its" ping and later waits for it, or kills it,
+    /// ends a run that is not its own, so the other test sees "Already finished" or a dead process tree.
+    /// </para>
     /// </summary>
-    private static async Task<int> WaitForNewPingAsync(HashSet<int> known, Task run)
+    /// <param name="invocation">The run's invocation (the runner's newest activity entry right after it was started).</param>
+    /// <param name="run">The run itself, to stop waiting when it is over.</param>
+    private static async Task<int> WaitForPingAsync(CliInvocation invocation, Task run)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
-        while (DateTime.UtcNow < deadline && !run.IsCompleted)
+        var clock = Stopwatch.StartNew();
+        while (clock.Elapsed < TestTimeouts.Ceiling && !run.IsCompleted)
         {
-            foreach (var pid in PingPids())
+            if (invocation.ProcessId is { } child && ProcessTree.DescendantsNamed("ping.exe", child) is { Count: > 0 } pings)
             {
-                if (!known.Contains(pid))
-                {
-                    return pid;
-                }
+                return pings.Min();
             }
 
             await Task.Delay(25);
@@ -800,13 +790,12 @@ public class CliRunnerTests
     {
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
-        var known = PingPids();
 
         var run = runner.RunExecutableAsync(
             CmdPath,
             LongPing,
             options: CliRunOptions.WithTimeout(TimeSpan.FromSeconds(3)));
-        var grandchild = await WaitForNewPingAsync(known, run);
+        var grandchild = await WaitForPingAsync(runner.Activity[0], run);
 
         try
         {
@@ -828,11 +817,10 @@ public class CliRunnerTests
     {
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
-        var known = PingPids();
         using var cts = new CancellationTokenSource();
 
         var run = runner.RunExecutableAsync(CmdPath, LongPing, cancellationToken: cts.Token);
-        var grandchild = await WaitForNewPingAsync(known, run);
+        var grandchild = await WaitForPingAsync(runner.Activity[0], run);
 
         try
         {
@@ -866,7 +854,6 @@ public class CliRunnerTests
     {
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
-        var known = PingPids();
         var completedEvents = 0;
         runner.InvocationCompleted += (_, _) => Interlocked.Increment(ref completedEvents);
         using var cts = new CancellationTokenSource();
@@ -879,7 +866,7 @@ public class CliRunnerTests
         // Updates window, counted one forever).
         var secret = new SecretValue(new string('s', 4 * 1024 * 1024));
         var run = runner.RunExecutableAsync(CmdPath, LongPing, secret, cts.Token);
-        var grandchild = await WaitForNewPingAsync(known, run);
+        var grandchild = await WaitForPingAsync(runner.Activity[0], run);
 
         try
         {
@@ -1009,11 +996,9 @@ public class CliRunnerTests
     {
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
-        var known = PingPids();
 
         var doomed = runner.RunExecutableAsync(CmdPath, LongPing);
-        var doomedPing = await WaitForNewPingAsync(known, doomed);
-        _ = known.Add(doomedPing);
+        var doomedPing = await WaitForPingAsync(runner.Activity[0], doomed);
 
         using var release = new CancellationTokenSource();
         var exempt = runner.RunExecutableAsync(
@@ -1021,7 +1006,7 @@ public class CliRunnerTests
             LongPing,
             cancellationToken: release.Token,
             options: CliRunOptions.Installer);
-        var exemptPing = await WaitForNewPingAsync(known, exempt);
+        var exemptPing = await WaitForPingAsync(runner.Activity[0], exempt);
 
         try
         {
@@ -1101,10 +1086,9 @@ public class CliRunnerTests
     {
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
-        var known = PingPids();
 
         var run = runner.RunExecutableAsync(CmdPath, LongPing);
-        var ping = await WaitForNewPingAsync(known, run);
+        var ping = await WaitForPingAsync(runner.Activity[0], run);
 
         try
         {
@@ -1160,10 +1144,9 @@ public class CliRunnerTests
         var started = CaptureStarted(runner);
         var completedEvents = 0;
         runner.InvocationCompleted += (_, _) => Interlocked.Increment(ref completedEvents);
-        var known = PingPids();
 
         var run = runner.RunExecutableAsync(CmdPath, LongPing);
-        var ping = await WaitForNewPingAsync(known, run);
+        var ping = await WaitForPingAsync(runner.Activity[0], run);
 
         try
         {
@@ -1222,14 +1205,12 @@ public class CliRunnerTests
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
         var started = CaptureStarted(runner);
-        var known = PingPids();
 
         var first = runner.RunExecutableAsync(CmdPath, LongPing);
-        var firstPing = await WaitForNewPingAsync(known, first);
-        _ = known.Add(firstPing);
+        var firstPing = await WaitForPingAsync(runner.Activity[0], first);
 
         var second = runner.RunExecutableAsync(CmdPath, LongPing);
-        var secondPing = await WaitForNewPingAsync(known, second);
+        var secondPing = await WaitForPingAsync(runner.Activity[0], second);
 
         try
         {
@@ -1275,7 +1256,6 @@ public class CliRunnerTests
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
         var started = CaptureStarted(runner);
-        var known = PingPids();
 
         // The upgrade installer's stand-in. Its caller's token is how the test ends it, because
         // that is the only thing that is allowed to.
@@ -1285,7 +1265,7 @@ public class CliRunnerTests
             LongPing,
             cancellationToken: release.Token,
             options: CliRunOptions.Installer);
-        var ping = await WaitForNewPingAsync(known, run);
+        var ping = await WaitForPingAsync(runner.Activity[0], run);
 
         try
         {
@@ -1356,10 +1336,9 @@ public class CliRunnerTests
         using var temp = new TempDirectory();
         var runner = Runner(temp.Path);
         var started = CaptureStarted(runner);
-        var known = PingPids();
 
         var run = runner.RunExecutableAsync(CmdPath, LongPing);
-        var ping = await WaitForNewPingAsync(known, run);
+        var ping = await WaitForPingAsync(runner.Activity[0], run);
 
         try
         {

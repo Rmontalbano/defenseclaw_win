@@ -25,13 +25,18 @@ internal static class AuditTestDatabase
 
         using (var connection = Open(path))
         {
+            // The schema and the rows in one transaction. The schema is ~200 statements, and run one by one each is a commit of its own - a
+            // journal file created, synced and deleted - which took ~2 s a database on a quiet machine (30 ms in a transaction, the same
+            // sqlite_master either way) and was nearly all of what a test over this database spent, on a machine where every file operation
+            // can be slow.
+            using var transaction = connection.BeginTransaction();
             using (var ddl = connection.CreateCommand())
             {
+                ddl.Transaction = transaction;
                 ddl.CommandText = schema;
                 _ = ddl.ExecuteNonQuery();
             }
 
-            using var transaction = connection.BeginTransaction();
             using var insert = connection.CreateCommand();
             insert.Transaction = transaction;
             insert.CommandText = """

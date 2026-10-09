@@ -203,19 +203,27 @@ public sealed class AuditPanelTests : IDisposable
         Assert.False(panel.IsRowCapReached);
     }
 
+    /// <summary>
+    /// What a failed assertion about the paging should say. A load never throws: a read it cannot do (audit.db locked or unreadable for a
+    /// moment) is written to <c>StatusNote</c> and the list stays as it was, so a load that quietly did nothing looks like wrong numbers
+    /// unless the note is in the message.
+    /// </summary>
+    private static string State(AuditPanelViewModel panel) =>
+        $"rows={panel.Rows.Count}, capReached={panel.IsRowCapReached}, hasMore={panel.HasMore}, loading={panel.IsLoading}, note='{panel.StatusNote}'";
+
     [Fact]
     public async Task A_fresh_load_after_hitting_the_cap_clears_the_notice_and_restores_load_more()
     {
         var panel = PanelOver(2250);
         await panel.InitializeAsync();
         await LoadPagesAsync(panel, 19);
-        Assert.True(panel.IsRowCapReached);
+        Assert.True(panel.IsRowCapReached, "the twentieth page should have reached the cap: " + State(panel));
 
         await panel.RefreshCommand.ExecuteAsync(null);
 
-        Assert.Equal(AuditPanelViewModel.PageSize, panel.Rows.Count);
-        Assert.False(panel.IsRowCapReached);
-        Assert.True(panel.HasMore);
+        Assert.True(panel.Rows.Count == AuditPanelViewModel.PageSize, "a fresh load should hold one page: " + State(panel));
+        Assert.False(panel.IsRowCapReached, "a fresh load should clear the cap notice: " + State(panel));
+        Assert.True(panel.HasMore, "a fresh load should offer Load more again: " + State(panel));
     }
 
     [Fact]

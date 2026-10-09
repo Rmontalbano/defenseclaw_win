@@ -1100,6 +1100,7 @@ public sealed class CliRunner : IDisposable
             // call, or a shutdown that began between registration and here.
             stop.Token.ThrowIfCancellationRequested();
             process.Start();
+            invocation.ProcessId = process.Id;
             if (job is not null && job.TryAssign(process))
             {
                 run.AttachJob(job);

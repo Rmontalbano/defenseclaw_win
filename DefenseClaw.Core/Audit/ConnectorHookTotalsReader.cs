@@ -156,8 +156,12 @@ public sealed class ConnectorHookTotalsReader
     /// <summary>How many times <see cref="ReadAsync"/> has been called, counted when the call is made; the idle-cost tests hold it still.</summary>
     public long ReadCount => Interlocked.Read(ref _reads);
 
-    /// <summary>How long the block scan may run in one read; a test shortens it. Defaults to <see cref="ScanBudget"/>.</summary>
-    internal TimeSpan Budget { get; set; } = ScanBudget;
+    /// <summary>
+    /// The most full chunks one read scans before it returns what it has, on top of <see cref="ScanBudget"/>. Unbounded by default, so in
+    /// production the time budget alone decides. A test sets 1 to make a catch-up span several reads by <i>counting</i> chunks instead of
+    /// timing them (a zero time budget gives one chunk per read too, but only because the clock has moved by the time the check runs).
+    /// </summary>
+    internal int MaxChunksPerRead { get; set; } = int.MaxValue;
 
     /// <summary>
     /// True when a hook row with these <paramref name="details"/> and <paramref name="enforced"/> flag is an enforced block: the TUI's
@@ -416,6 +420,7 @@ public sealed class ConnectorHookTotalsReader
     {
         var scanStart = clock.Elapsed;
         var resetIfStale = true;
+        var fullChunks = 0;
         _scanIncomplete = false;
 
         while (true)
@@ -471,7 +476,8 @@ public sealed class ConnectorHookTotalsReader
 
             // Another chunk only if the budget has room and a chunk as slow as the last one still ends inside the caller's timeout.
             var chunkTook = clock.Elapsed - chunkStart;
-            if (clock.Elapsed - scanStart > Budget || (limit != Timeout.InfiniteTimeSpan && clock.Elapsed + (chunkTook * 2) > limit))
+            fullChunks++;
+            if (fullChunks >= MaxChunksPerRead || clock.Elapsed - scanStart > ScanBudget || (limit != Timeout.InfiniteTimeSpan && clock.Elapsed + (chunkTook * 2) > limit))
             {
                 _scanIncomplete = true;
                 return;

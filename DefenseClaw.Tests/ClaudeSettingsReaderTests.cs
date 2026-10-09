@@ -285,7 +285,9 @@ public class ClaudeSettingsReaderTests : IDisposable
         startInfo.ArgumentList.Add(Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(command)));
 
         using var process = Process.Start(startInfo)!;
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        // Starting Windows PowerShell is ~1 s on a quiet machine and over 20 s on a squeezed one (CUST-301): a ceiling on a hang, not a speed test.
+        using var timeout = new CancellationTokenSource(TestTimeouts.Ceiling);
         var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
         var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
         await process.WaitForExitAsync(timeout.Token);

@@ -15,6 +15,11 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
 {
     private static readonly DateTimeOffset Base = new(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
 
+    // The reader's own default (5 s) is a production bound for a UI refresh, and it starts counting when the read is queued. These tests
+    // are about what the totals are, not how fast a read is, so they give every read the suite's ceiling instead: a read that is merely slow
+    // on a busy machine (the Core and App suites run at once on CI, and sibling test classes run beside this one) must not be a TimeoutException.
+    private static readonly TimeSpan Patience = TestTimeouts.Ceiling;
+
     private readonly TestAuditDatabase _database = new();
     private int _n;
 
@@ -71,7 +76,7 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
         Bulk(300, "connector-hook", "codex", Hook("allow"));
         Bulk(700, "tool_invocation", "claudecode", null);             // not hooks: must not count
 
-        var totals = await Reader().ReadAsync();
+        var totals = await Reader().ReadAsync(Patience);
 
         Assert.Equal(ConnectorHookTotalsStatus.Ok, totals.Status);
         Assert.Equal(Count("action = 'connector-hook'"), totals.Fleet.Calls);
@@ -93,7 +98,7 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
         Bulk(5, "connector-hook", "claudecode", Hook("block"), enforced: 0);            // explicitly not enforced
         Bulk(60, "guardrail-block", "claudecode", null);                                 // not a hook row: the TUI does not count it
 
-        var totals = await Reader().ReadAsync();
+        var totals = await Reader().ReadAsync(Patience);
 
         Assert.True(totals.BlocksComplete);
         Assert.Equal(550, totals.For("claudecode").Blocks);
@@ -125,22 +130,27 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
         Bulk(120, "connector-hook", "claudecode", Hook("block"));
         Bulk(300, "connector-hook", "claudecode", Hook("allow"));
         var reader = Reader(chunk: 100);
-        reader.Budget = TimeSpan.Zero;   // one chunk per read
+        reader.MaxChunksPerRead = 1;   // one chunk per read, counted: the slicing does not depend on how fast this machine is
 
-        var first = await reader.ReadAsync();
+        var first = await reader.ReadAsync(Patience);
         Assert.False(first.BlocksComplete);
         Assert.Equal(100, first.BlocksScanned);
         Assert.Equal(820, first.Fleet.Calls);   // hook calls are exact from the first read
 
+        // 820 hook rows in chunks of 100 are eight full chunks and a partial one: each read moves the watermark on by one chunk
+        // (nothing scanned twice, nothing skipped) and the ninth is the one that catches up.
+        var scanned = new List<long> { first.BlocksScanned };
         ConnectorHookTotals last = first;
-        for (var i = 0; i < 20 && !last.BlocksComplete; i++)
+        while (!last.BlocksComplete && scanned.Count < 20)
         {
-            last = await reader.ReadAsync();
+            last = await reader.ReadAsync(Patience);
+            scanned.Add(last.BlocksScanned);
         }
 
         Assert.True(last.BlocksComplete);
+        Assert.Equal(new long[] { 100, 200, 300, 400, 500, 600, 700, 800, 820 }, scanned);
         Assert.Equal(120, last.Fleet.Blocks);
-        Assert.Equal(820, last.BlocksScanned);
+        Assert.Equal(820, last.Fleet.Calls);
     }
 
     [Fact]
@@ -148,11 +158,11 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
     {
         Bulk(500, "connector-hook", "claudecode", Hook("block"));
         var reader = Reader(chunk: 100);
-        _ = await reader.ReadAsync();
+        _ = await reader.ReadAsync(Patience);
 
         Bulk(30, "connector-hook", "claudecode", Hook("block"));
         Bulk(10, "connector-hook", "claudecode", Hook("allow"));
-        var next = await reader.ReadAsync();
+        var next = await reader.ReadAsync(Patience);
 
         Assert.True(next.BlocksComplete);
         Assert.Equal(540, next.Fleet.Calls);
@@ -165,7 +175,7 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
         Bulk(300, "connector-hook", "claudecode", Hook("block"));
         Bulk(100, "connector-hook", "claudecode", Hook("allow"));
         var reader = Reader(chunk: 50);
-        var before = await reader.ReadAsync();
+        var before = await reader.ReadAsync(Patience);
         Assert.Equal(300, before.Fleet.Blocks);
 
         using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _database.Path, Pooling = false }.ToString()))
@@ -176,7 +186,7 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        var after = await reader.ReadAsync();
+        var after = await reader.ReadAsync(Patience);
 
         Assert.Equal(300, after.Fleet.Calls);
         Assert.Equal(200, after.Fleet.Blocks);
@@ -195,7 +205,7 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
         Bulk(20, "connector-hook", "claudecode", Hook("block"), target: "curl");
         Bulk(50, "connector-hook", "codex", Hook("allow"), target: "exec");
 
-        var totals = await Reader().ReadAsync();
+        var totals = await Reader().ReadAsync(Patience);
 
         var recent = totals.Recent;
         Assert.Equal(500, recent.Total);
@@ -219,7 +229,7 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
     public async Task A_missing_or_unrelated_database_reads_as_nothing_recorded()
     {
         using var temp = new TempDirectory();
-        var missing = await new ConnectorHookTotalsReader(temp.File("audit.db")).ReadAsync();
+        var missing = await new ConnectorHookTotalsReader(temp.File("audit.db")).ReadAsync(Patience);
         Assert.Equal(ConnectorHookTotalsStatus.NoDatabase, missing.Status);
         Assert.Equal(0, missing.Fleet.Calls);
         Assert.Empty(await new ConnectorHookTotalsReader(temp.File("audit.db")).ExplainAsync());
@@ -242,7 +252,7 @@ public sealed class ConnectorHookTotalsReaderTests : IDisposable
     {
         var reader = Reader();
         Assert.Equal(0, reader.ReadCount);
-        _ = await reader.ReadAsync();
+        _ = await reader.ReadAsync(Patience);
         Assert.Equal(1, reader.ReadCount);
     }
 }
