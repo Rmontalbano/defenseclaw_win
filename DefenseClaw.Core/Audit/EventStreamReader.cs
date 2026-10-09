@@ -86,6 +86,13 @@ public sealed record StreamEvent(
     /// Computed once, when the row is projected.
     /// </summary>
     public bool IsActionable { get; init; } = true;
+
+    /// <summary>
+    /// The labelled fields the TUI's Logs detail lists for the event (stage, direction, model, the ids, categories, latency, the judge's kind, input size, parse error
+    /// and findings; <see cref="EventDetail"/>), masked. Empty fields are fields the event does not have - or, when <see cref="PayloadOmitted"/>, fields that live in a payload
+    /// that was too large to read, which <see cref="Oversized"/> says.
+    /// </summary>
+    public EventDetail Detail { get; init; } = EventDetail.Empty;
 }
 
 /// <summary>What <see cref="EventStreamReader.ReadAsync"/> found.</summary>
@@ -126,6 +133,13 @@ public sealed record EventStreamResult(EventStreamStatus Status, IReadOnlyList<S
 /// a row it has already projected is handed back as it was, by id - an audit row never changes - so only the rows that arrived are parsed
 /// and masked, which is most of a read's cost (measured on a 10 GB database: the Events stream 82 ms -> 23 ms, Verdicts 171 ms -> 125 ms, whose sort of up to six arms' rows is the rest). The panel's own id
 /// comparison then finds the same list and leaves it alone.
+/// </para>
+/// <para>
+/// <b>The labelled fields of an event</b> (CUST-263, <see cref="StreamEvent.Detail"/>). The statement also selects the row's run, trace, request and session
+/// ids (plain columns; a missing one is a NULL), and the payload's keys are read where the row is projected. The span id lives in the stored record
+/// (<c>projected_record_json</c>), which the statement does not select: a second statement, by id and in chunks, asks SQLite for
+/// <c>correlation.span_id</c> of the rows that were just projected - so a poll that finds nothing new, or only rows it has already seen, parses no record,
+/// and the six arms of the Verdicts statement never do.
 /// </para>
 /// </summary>
 public sealed class EventStreamReader
@@ -188,6 +202,10 @@ public sealed class EventStreamReader
     };
 
     private static readonly JsonWriterOptions WriterOptions = new() { Indented = true, SkipValidation = true };
+
+    /// <summary>The columns of the statement, in the order <see cref="Project"/> reads them; the outer select of both streams.</summary>
+    private const string Columns =
+        "rid, id, ts, bucket, event_name, source, severity, action, actor, details, connector, payload, omitted, run_id, trace_id, request_id, session_id";
 
     private readonly string _connectionString;
     private readonly int _limit;
@@ -317,6 +335,7 @@ public sealed class EventStreamReader
 
         var rows = new List<StreamEvent>(Math.Min(_limit, 1024));
         var projected = 0;
+        var fresh = new List<int>();
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -328,9 +347,17 @@ public sealed class EventStreamReader
                     continue;
                 }
 
+                fresh.Add(rows.Count);
                 rows.Add(Project(reader));
                 projected++;
             }
+        }
+
+        // The span id is in the stored record, not in a column: asked for the rows that arrived, after the statement, so that neither the six arms of the
+        // Verdicts statement nor a poll that finds the same rows pays for parsing a record (see AddSpanIdsAsync).
+        if (fresh.Count > 0 && columns.Contains("projected_record_json"))
+        {
+            await AddSpanIdsAsync(connection, rows, fresh, cancellationToken).ConfigureAwait(false);
         }
 
         _ = Interlocked.Add(ref _rowsDecoded, projected);
@@ -356,6 +383,68 @@ public sealed class EventStreamReader
     {
         _results.Store(key, stamp, result);
         return result;
+    }
+
+    /// <summary>How many ids one span lookup binds; far below the limit on bound parameters of any SQLite build.</summary>
+    private const int SpanLookupChunk = 400;
+
+    /// <summary>SQLite's generic error code (<c>SQLITE_ERROR</c>), which an unknown function raises.</summary>
+    private const int SqliteError = 1;
+
+    /// <summary>
+    /// Fills in <see cref="EventDetail.SpanId"/> of the rows the statement just projected. The TUI takes it from the stored record
+    /// (<c>projected_record_json</c>, <c>correlation.span_id</c>); parsing a record is the one expensive thing about a row, so it is done here, by id, for the rows
+    /// that arrived - a row already projected keeps its span (an audit row never changes). The record is parsed inside SQLite and only when it is within
+    /// <see cref="PayloadByteLimit"/> and valid JSON (<c>json_extract</c> on a malformed one is an error that would fail the whole statement). A database that
+    /// cannot do it (no JSON functions) gives its rows no span id and the stream is read all the same.
+    /// </summary>
+    private static async Task AddSpanIdsAsync(SqliteConnection connection, List<StreamEvent> rows, List<int> fresh, CancellationToken cancellationToken)
+    {
+        for (var start = 0; start < fresh.Count; start += SpanLookupChunk)
+        {
+            var count = Math.Min(SpanLookupChunk, fresh.Count - start);
+            await using var command = connection.CreateCommand();
+            var names = new StringBuilder();
+            for (var i = 0; i < count; i++)
+            {
+                var name = "$i" + i.ToString(CultureInfo.InvariantCulture);
+                _ = (i > 0 ? names.Append(',') : names).Append(name);
+                _ = command.Parameters.AddWithValue(name, rows[fresh[start + i]].Id);
+            }
+
+            // nosemgrep: csharp-sqli -- allow-list: a literal statement; the only text added is the generated parameter names ($i0, $i1, ...), and every id is bound
+            command.CommandText =
+                "SELECT e.id, CASE WHEN octet_length(e.projected_record_json) <= " + PayloadByteLimit.ToString(CultureInfo.InvariantCulture)
+                + " AND json_valid(e.projected_record_json) THEN json_extract(e.projected_record_json, '$.correlation.span_id') END"
+                + " FROM audit_events e WHERE e.id IN (" + names + ")";
+
+            var spans = new Dictionary<string, string>(StringComparer.Ordinal);
+            try
+            {
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (!reader.IsDBNull(0) && !reader.IsDBNull(1) && Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) is { Length: > 0 } span)
+                    {
+                        spans[reader.GetString(0)] = span;
+                    }
+                }
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteError && ex.Message.Contains("no such function", StringComparison.OrdinalIgnoreCase))
+            {
+                // No JSON functions in this build: the rows keep an empty span id. Any other failure (an interrupt, a lock) is the read's failure, as it is for the statement before.
+                return;
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                var at = fresh[start + i];
+                if (spans.TryGetValue(rows[at].Id, out var span))
+                {
+                    rows[at] = rows[at] with { Detail = rows[at].Detail with { SpanId = DisplayRedaction.Text(span) } };
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -431,7 +520,9 @@ public sealed class EventStreamReader
                     {Optional("actor", "e.actor")} AS actor, {Optional("details", $"substr(e.details, 1, {DetailsLimit.ToString(CultureInfo.InvariantCulture)})")} AS details,
                     {Optional("connector", "e.connector")} AS connector,
                     {Optional("payload_json", PayloadCap.Within("e.payload_json", PayloadByteLimit))} AS payload,
-                    {Optional("payload_json", PayloadCap.SizeWhenOver("e.payload_json", PayloadByteLimit))} AS omitted
+                    {Optional("payload_json", PayloadCap.SizeWhenOver("e.payload_json", PayloadByteLimit))} AS omitted,
+                    {Optional("run_id", "e.run_id")} AS run_id, {Optional("trace_id", "e.trace_id")} AS trace_id,
+                    {Optional("request_id", "e.request_id")} AS request_id, {Optional("session_id", "e.session_id")} AS session_id
             """;
 
         var logsOnly = columns.Contains("signal") ? " AND e.signal = 'logs'" : string.Empty;
@@ -441,7 +532,7 @@ public sealed class EventStreamReader
             var telemetry = includeTelemetry ? string.Empty : $" AND e.bucket <> '{TelemetryBucket}'";
             return
                 $"""
-                SELECT rid, id, ts, bucket, event_name, source, severity, action, actor, details, connector, payload, omitted FROM (
+                SELECT {Columns} FROM (
                     SELECT {projection}
                         FROM audit_events e
                         WHERE e.bucket IS NOT NULL AND e.bucket <> ''{telemetry}{logsOnly}
@@ -463,7 +554,7 @@ public sealed class EventStreamReader
 
         return
             $"""
-            SELECT rid, id, ts, bucket, event_name, source, severity, action, actor, details, connector, payload, omitted FROM (
+            SELECT {Columns} FROM (
                 {string.Join("\n    UNION ALL\n    ", arms.Select(arm => "SELECT * FROM (" + arm + ")"))}
             ) ORDER BY ts DESC, rid DESC LIMIT $limit
             """;
@@ -493,6 +584,10 @@ public sealed class EventStreamReader
         var details = Text(9);
         var connector = Text(10).Trim();
         var payload = reader.IsDBNull(11) ? null : reader.GetString(11);
+        var runId = Text(13).Trim();
+        var traceId = Text(14).Trim();
+        var requestId = Text(15).Trim();
+        var sessionId = Text(16).Trim();
 
         // Column 12 is the payload's size when it was over the limit (the statement did not select it), NULL otherwise.
         var omittedBytes = reader.IsDBNull(12) ? 0L : reader.GetInt64(12);
@@ -529,6 +624,9 @@ public sealed class EventStreamReader
             var summary = reason.Length > 0 ? reason : details;
             var message = DisplayRedaction.Text($"{eventName} {action} — {summary}");
 
+            // A connector's hook call keeps its decision, mode and timing in the key=value details, which the TUI's detail lays out row by row.
+            var hookDetails = StructuredDetailParser.IsHook(rowAction) ? DisplayRedaction.Text(details) : null;
+
             // The TUI's Alerts panel judges a row on its action, target and a details line that names the bucket, event, source and connector
             // (tui/panels/alerts.py _v8_alert_event); the row's own action is searched as well as the decision the payload carries.
             var actionable = omitted
@@ -553,6 +651,7 @@ public sealed class EventStreamReader
                 SeverityText = severityText,
                 Target = DisplayRedaction.Text(target),
                 IsActionable = actionable,
+                Detail = EventDetail.Read(root, eventName, source, runId, traceId, requestId, sessionId, summary, hookDetails),
             };
         }
         finally

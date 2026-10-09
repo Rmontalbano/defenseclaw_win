@@ -340,7 +340,7 @@ public sealed class LogsStreamsTests : IDisposable
 
         await panel.LoadStructuredAsync();
 
-        Assert.Equal(new[] { "v1", "v2", "s1" }, panel.DisplayedLines.Select(l => l.Fields.Single(f => f.Name == "id").Value).ToArray());
+        Assert.Equal(new[] { "v1", "v2", "s1" }, panel.DisplayedLines.Select(l => l.Fields.Single(f => f.Name == "ID").Value).ToArray());
         Assert.Equal("3 shown · 3 matching · 3 total", panel.StatusLineCount);
         Assert.All(panel.DisplayedLines, l => Assert.DoesNotContain("SECRET-VALUE-1", l.Raw + l.Message, StringComparison.Ordinal));
 
@@ -370,7 +370,7 @@ public sealed class LogsStreamsTests : IDisposable
         panel.IncludeTelemetry = true;
         await panel.LoadStructuredAsync();
         Assert.Equal(4, panel.DisplayedLines.Count);
-        Assert.Contains(panel.DisplayedLines, l => l.Fields.Any(f => f is { Name: "bucket", Value: "telemetry.ingest" }));
+        Assert.Contains(panel.DisplayedLines, l => l.Fields.Any(f => f is { Name: "Bucket", Value: "telemetry.ingest" }));
     }
 
     [Fact]

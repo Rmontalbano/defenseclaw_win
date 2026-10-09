@@ -33,6 +33,29 @@ internal static class ShellShortcuts
 
     public const string CloseText = "Esc";
 
+    // The Logs panel's own keys (CUST-263), the 0.8.10 TUI's e / w / g / G. Bare keys, handled by the panel and only while keyboard focus is not in a text box or a
+    // drop-down list: no shell chord is a bare letter (every one has Ctrl, or is F1 / F5 / Esc), and the two with a Ctrl+E in them are Audit's export (AuditExportText)
+    // and the shell's Ctrl+Shift+E, which the panel's "no modifier" test never sees. Home and End are the list's own; the panel only adds pause and resume to them.
+    public const string LogsErrorsText = "E";
+
+    public const string LogsWarningsText = "W";
+
+    public const string LogsFirstRowText = "Home";
+
+    public const string LogsNewestRowText = "End";
+
+    /// <summary>True for exactly the bare E key: no Ctrl (Audit's export), no Shift (the shell's export of the last output), no Alt (the system menu).</summary>
+    public static bool IsLogsErrorsKey(Key key, ModifierKeys modifiers) => key == Key.E && modifiers == ModifierKeys.None;
+
+    /// <summary>True for exactly the bare W key.</summary>
+    public static bool IsLogsWarningsKey(Key key, ModifierKeys modifiers) => key == Key.W && modifiers == ModifierKeys.None;
+
+    /// <summary>True for exactly the bare Home key; with Shift or Ctrl it is the list's own (extend the selection, move focus).</summary>
+    public static bool IsLogsFirstRowKey(Key key, ModifierKeys modifiers) => key == Key.Home && modifiers == ModifierKeys.None;
+
+    /// <summary>True for exactly the bare End key.</summary>
+    public static bool IsLogsNewestRowKey(Key key, ModifierKeys modifiers) => key == Key.End && modifiers == ModifierKeys.None;
+
     /// <summary>
     /// Light/dark toggle. <c>Ctrl+Shift+L</c>: Ctrl+K, F1, F5 and Ctrl+F are taken, Ctrl+digit and Ctrl+Shift+1..5 are
     /// the panels, and Alt chords belong to the system menu and to screen readers - so this is the free, mnemonic

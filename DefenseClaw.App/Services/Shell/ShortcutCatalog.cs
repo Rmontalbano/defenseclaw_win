@@ -65,6 +65,10 @@ internal static class ShortcutCatalog
                 {
                     new ShortcutRow(ShellShortcuts.FindText, "Focus the panel's search or filter box, where it has one"),
                     new ShortcutRow(ShellShortcuts.AuditExportText, "Audit: export the list to a JSON or CSV file"),
+                    new ShortcutRow(ShellShortcuts.LogsErrorsText, "Logs: show only errors; again to show everything (not in a text box)"),
+                    new ShortcutRow(ShellShortcuts.LogsWarningsText, "Logs: show warnings and above; again to show everything (not in a text box)"),
+                    new ShortcutRow(ShellShortcuts.LogsFirstRowText, "Logs: go to the first row and pause"),
+                    new ShortcutRow(ShellShortcuts.LogsNewestRowText, "Logs: go to the newest row and follow it again"),
                     new ShortcutRow("Tab","Move to the next control; Shift+Tab goes back"),
                 }),
         };

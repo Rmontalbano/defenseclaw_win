@@ -31,6 +31,13 @@ namespace DefenseClaw.Core.Audit;
 /// search or a preset is chosen (<c>show_all_events</c>, <c>show_all_severities</c>). The panels here keep the choice and suspend it
 /// <em>while</em> such a filter is on, so clearing the search brings the actionable view back.
 /// </para>
+/// <para>
+/// <b>Its sibling.</b> The TUI's <em>Logs</em> panel has a rule of the same shape - words that make a row signal, else a row is hidden only when it
+/// carries a low-signal marker - but over a rendered line (the severity is a word in it, not a column) and with lists of its own
+/// (<see cref="LogSignalRule"/>; <c>tui/panels/logs.py</c> <c>ACTIONABLE_LOG_PATTERNS</c> / <c>LOW_SIGNAL_LOG_PATTERNS</c>). The lists differ
+/// (the Logs one adds <c>warn</c>, <c>critical</c> and the padded severity words; its low-signal markers are words, not a severity set), so they are two tables as the TUI
+/// has them; both are read by <see cref="ContainsAny"/>.
+/// </para>
 /// </summary>
 public static class ActionableRule
 {
@@ -88,16 +95,25 @@ public static class ActionableRule
     }
 
     /// <summary>True when any of <see cref="Tokens"/> occurs in <paramref name="text"/>, without regard to case.</summary>
-    public static bool HasToken(string? text)
+    public static bool HasToken(string? text) => ContainsAny(text, Tokens);
+
+    /// <summary>
+    /// True when any of <paramref name="patterns"/> occurs in <paramref name="text"/> as a substring, without regard to case: the one matcher both of the TUI's
+    /// "is this row signal" rules run on - this class's (a severity and a handful of words) and <see cref="LogSignalRule"/>'s (a rendered line and three tables of
+    /// patterns) - so that the two can differ in their lists and never in how a list is read.
+    /// </summary>
+    public static bool ContainsAny(string? text, IReadOnlyList<string> patterns)
     {
+        ArgumentNullException.ThrowIfNull(patterns);
+
         if (string.IsNullOrEmpty(text))
         {
             return false;
         }
 
-        foreach (var token in Tokens)
+        for (var i = 0; i < patterns.Count; i++)
         {
-            if (text.Contains(token, StringComparison.OrdinalIgnoreCase))
+            if (text.Contains(patterns[i], StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

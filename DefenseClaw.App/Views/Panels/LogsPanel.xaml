@@ -147,8 +147,9 @@
                     <ComboBox Width="130"
                               ItemsSource="{Binding Presets}"
                               SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
-                              ToolTip="A saved filter: no-noise hides heartbeat chatter, important keeps errors, verdicts and lifecycle, the rest keep one topic"
-                              AutomationProperties.Name="Preset" />
+                              ToolTip="A saved filter: no-noise hides heartbeat chatter and quiet INFO / LOW / MEDIUM rows (as the TUI does), important keeps errors, verdicts and lifecycle, the rest keep one topic. E toggles errors and W warnings+ (not while typing in a box)"
+                              AutomationProperties.Name="Preset"
+                              AutomationProperties.HelpText="Which rows the list keeps. With focus outside a text box or drop-down list, E shows only errors (again: everything) and W shows warnings and above (again: everything)." />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal">
@@ -277,6 +278,8 @@
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling"
                          AutomationProperties.Name="Log rows"
+                         AutomationProperties.HelpText="Up and Down move through the rows. Home goes to the first row and pauses, End to the newest and follows it. E and W show only errors, or warnings and above."
+                         PreviewKeyDown="OnListPreviewKeyDown"
                          SelectionChanged="OnSelectionChanged">
                     <!-- WPF-UI's list item pads 12 px on every side: a one-line log entry became a 42 px row and only
                          three fit on screen. A log is read by the screenful, so rows are 24 px. -->
@@ -332,13 +335,14 @@
             </Grid>
         </Border>
 
-            <!-- Inspector: the selected line's parsed fields and its raw text. -->
+            <!-- Inspector: the selected line's parsed fields and its raw text. For an event of Verdicts or Events the fields are the TUI's labelled ones
+                 (Stage, Direction, Model, the ids, Categories, Latency, the judge's fields, numbered findings); the heading says which it is. -->
             <ctl:DcInspector x:Name="Inspector"
-                             Title="Line details"
+                             Title="{Binding SelectedEntry.InspectorTitle, FallbackValue='Line details'}"
                              IsOpen="{Binding HasSelection}"
                              CloseCommand="{Binding ClearSelectionCommand}"
                              CloseAutomationName="Close line details"
-                             AutomationProperties.Name="Line details"
+                             AutomationProperties.Name="{Binding SelectedEntry.InspectorTitle, FallbackValue='Line details'}"
                              Content="{Binding SelectedEntry}">
                 <ctl:DcInspector.ContentTemplate>
                     <DataTemplate>

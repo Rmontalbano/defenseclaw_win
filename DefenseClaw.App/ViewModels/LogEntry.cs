@@ -21,11 +21,6 @@ public sealed record LogField(string Name, string Value);
 /// </summary>
 public sealed partial class LogEntry : ObservableObject
 {
-    private static readonly string[] NoisePatterns =
-    {
-        "event tick seq=", "event health seq=", "payload_len=20", "mallocstacklogging", "event sessions.changed", "content-length=0",
-    };
-
     private readonly LogLine? _line;
     private readonly StreamEvent? _event;
     private readonly string _stream;
@@ -149,11 +144,23 @@ public sealed partial class LogEntry : ObservableObject
     /// <summary>The bracketed label: <c>[type:action]</c>, <c>[type]</c>, or the stream's name when there is neither.</summary>
     public string Label => Get().Label;
 
-    /// <summary>The lower-cased text the presets and the event / action pickers match against.</summary>
+    /// <summary>
+    /// The lower-cased text the presets match against - the line the 0.8.10 TUI would match them on. A log-file line is itself; an event is its message with the
+    /// severity in front of it as a word (<c>" info     "</c>, <c>" high     "</c>), the bucket and the target, because the TUI renders the severity as a column of the
+    /// line and its No Noise rule tells a quiet row from a loud one by that word (<see cref="DefenseClaw.Core.Audit.LogSignalRule"/>).
+    /// </summary>
     public string MatchText => Get().MatchText;
 
-    /// <summary>The inspector's key/value grid: only what the row actually carries.</summary>
+    /// <summary>
+    /// The inspector's key/value grid: only what the row actually carries. A log-file line has its component, level, time, severity, action, connector and position; an event
+    /// has the TUI's labelled rows (Timestamp, Event type, Severity, Action, then Stage, Direction, Model, Provider, the ids, Categories, Latency, the judge's fields and
+    /// numbered findings - <see cref="DefenseClaw.Core.Audit.EventDetail"/>) followed by the ones the TUI has no label for here (Bucket, Event name, Connector, Target,
+    /// Actor, ID).
+    /// </summary>
     public IReadOnlyList<LogField> Fields => Get().Fields;
+
+    /// <summary>The inspector's heading: a log line's or an event's.</summary>
+    public string InspectorTitle => IsStructured ? "Event details" : "Line details";
 
     public bool IsRepeated => Count > 1;
 
@@ -208,11 +215,14 @@ public sealed partial class LogEntry : ObservableObject
             _ => AuditSeverity.Unknown,
         };
 
+        // The TUI colours error, fatal and panic alike and filters on them as one (its Errors preset); here fatal is the top of the ladder and error, panic and an HTTP
+        // 4xx / 5xx status are the next - the status is the one thing the TUI does not read as an error (see LogPresets).
         if (lower.Contains("critical", StringComparison.Ordinal) || lower.Contains("fatal", StringComparison.Ordinal))
         {
             severity = Max(severity, AuditSeverity.Critical);
         }
-        else if (lower.Contains("error", StringComparison.Ordinal) || lower.Contains("http 4", StringComparison.Ordinal) || lower.Contains("http 5", StringComparison.Ordinal))
+        else if (lower.Contains("error", StringComparison.Ordinal) || lower.Contains("panic", StringComparison.Ordinal)
+            || lower.Contains("http 4", StringComparison.Ordinal) || lower.Contains("http 5", StringComparison.Ordinal))
         {
             severity = Max(severity, AuditSeverity.High);
         }
@@ -286,20 +296,51 @@ public sealed partial class LogEntry : ObservableObject
             }
         }
 
-        Add("time", TimestampText);
-        Add("stream", _stream);
-        Add("event", e.EventType);
-        Add("action", e.Action);
-        Add("severity", LevelText);
-        Add("connector", e.Connector);
-        Add("target", e.Target);
-        Add("bucket", e.Bucket);
-        Add("event name", e.EventName);
-        Add("source", e.Source);
-        Add("actor", e.Actor);
-        Add("id", e.Id);
+        // The TUI's detail (gateway_log_views.detail_pairs), under its labels and in its order: the four every row has, then what the payload and the row's
+        // columns say - Stage, Direction, Model, Provider, the ids, Categories, Latency, the judge's kind, reason, severity, input size and parse error, and one
+        // numbered Finding per finding. Only the rows the event has; the TUI's blank ones are not shown.
+        var severityText = e.SeverityText.ToUpperInvariant();
+        Add("Timestamp", TimestampText);
+        Add("Event type", e.EventType);
+        Add("Severity", severityText);
+        Add("Action", e.Action);
+        foreach (var row in e.Detail.Rows(e.SeverityText))
+        {
+            Add(row.Label, row.Value);
+        }
 
-        return Build(e.RawJson, e.Message, e.Severity, e.EventType, e.Action, e.Connector, e.Message.ToLowerInvariant(), fields);
+        // What the TUI shows as Subsystem and Transition (the bucket and the event name), and then, for a connector's hook call, the decision laid out as its
+        // details say it (StructuredDetailParser: Connector, Tool, Decision, Enforcement mode, ...).
+        Add("Bucket", e.Bucket);
+        Add("Event name", e.EventName);
+        foreach (var row in e.Detail.Hook)
+        {
+            Add(row.Label, row.Value);
+        }
+
+        Add("Error code", e.Detail.ErrorCode);
+        if (!e.Detail.Hook.Any(row => row.Label == "Connector"))
+        {
+            Add("Connector", e.Connector);
+        }
+
+        Add("Target", e.Target);
+        Add("Actor", e.Actor);
+        Add("ID", e.Id);
+
+        // A payload too large to read is not a payload with nothing in it: the fields that live there (Direction, Model, Categories, Latency, the judge's) are missing,
+        // and this is why (CUST-284).
+        if (e.Oversized.Count > 0)
+        {
+            Add("Unavailable", OversizedValue.Describe(e.Oversized));
+        }
+
+        // What the TUI matches its presets on is the line it renders, with the severity in it as a word (INFO when the row has none) - the padded
+        // " info " / " high " its No Noise rule looks for - after the bucket and the event name and before the reason (LogSignalRule).
+        var severityWord = severityText.Length > 0 ? severityText : "INFO";
+        var matchText = string.Concat(" ", severityWord.PadRight(8), " ", e.Bucket, " ", e.Message, " ", e.Target).ToLowerInvariant();
+
+        return Build(e.RawJson, e.Message, e.Severity, e.EventType, e.Action, e.Connector, matchText, fields);
     }
 
     private static Derived Build(string raw, string message, AuditSeverity severity, string eventType, string action, string connector, string matchText, List<LogField> fields)
@@ -352,20 +393,6 @@ public sealed partial class LogEntry : ObservableObject
         }
 
         return end > start ? line[start..end] : null;
-    }
-
-    /// <summary>The noise the "no-noise" preset drops; kept beside <see cref="MatchText"/> so both live in one place.</summary>
-    internal static bool IsNoise(string matchText)
-    {
-        foreach (var pattern in NoisePatterns)
-        {
-            if (matchText.Contains(pattern, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     // The Mac's humanMessage: the parts of a runtime line that differ on every repeat of it, removed so repeats collapse.

@@ -74,7 +74,7 @@ public sealed class LogsConnectorTokenTests : IDisposable
         return panel;
     }
 
-    private static string[] Ids(LogsPanelViewModel panel) => panel.DisplayedLines.Select(l => l.Fields.Single(f => f.Name == "id").Value).ToArray();
+    private static string[] Ids(LogsPanelViewModel panel) => panel.DisplayedLines.Select(l => l.Fields.Single(f => f.Name == "ID").Value).ToArray();
 
     [Fact]
     public async Task A_connector_token_narrows_the_events_to_that_connector()

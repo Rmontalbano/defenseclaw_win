@@ -50,6 +50,12 @@ namespace DefenseClaw.App.ViewModels;
 /// <para>
 /// <b>Redaction.</b> Every line and event shown or copied is masked by <see cref="DisplayRedaction"/> before it is cut; there is no switch.
 /// </para>
+/// <para>
+/// <b>The presets are the TUI's (CUST-263).</b> No Noise drops the heartbeat lines and then the lines marked quiet (<c>" info "</c>, <c>severity=low</c>, ...) that say
+/// nothing actionable, exactly as the 0.8.10 TUI's Logs panel does (<see cref="LogPresets"/>, <see cref="DefenseClaw.Core.Audit.LogSignalRule"/>) - on the Events
+/// stream only the heartbeat half, because the quiet rows there belong to the "Actionable only" switch. An event's inspector lists the TUI's labelled
+/// fields (<see cref="LogEntry.Fields"/>), and the keys and the pause count are in <c>LogsPanelViewModel.Keys.cs</c>.
+/// </para>
 /// </summary>
 public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
@@ -436,7 +442,11 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     /// </summary>
     partial void OnFilterTextChanged(string value) => AfterSourceOrFilterChanged();
 
-    partial void OnAutoScrollChanged(bool value) => LiveStateText = value ? "live" : "paused";
+    partial void OnAutoScrollChanged(bool value)
+    {
+        LiveStateText = value ? "live" : "paused";
+        NotePause(paused: !value);
+    }
 
     /// <summary>One re-projection (and, when the stream changed, one read) however many properties a request or a handler just set.</summary>
     private void AfterSourceOrFilterChanged(bool sourceChanged = false)
@@ -700,6 +710,9 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     /// </summary>
     private void ApplyLines(SourceState state, IReadOnlyList<LogLine> lines)
     {
+        // Counted before anything decides whether it is shown: the "+N since pause" is what the source received, as the TUI's is.
+        state.Arrived += lines.Count;
+
         // Nobody is looking: keep the line (the buffer is the record, and OnActivated
         // re-projects from it) but do none of the UI work. IsActive is read here, when the
         // queued call runs, not when the batch was received.
@@ -907,7 +920,8 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
             return false;
         }
 
-        if (!LogPresets.Matches(SelectedPreset, entry))
+        // The TUI's whole No Noise rule, except on Events, where the low-signal half is the "Actionable only" switch (see LogPresets.Matches).
+        if (!LogPresets.Matches(SelectedPreset, entry, hideLowSignal: !IsEventsSource))
         {
             return false;
         }
@@ -985,7 +999,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         StatusPath = file?.FilePath ?? Services.Paths.AuditDatabasePath;
         StatusLineCount = string.Create(
             System.Globalization.CultureInfo.InvariantCulture,
-            $"{shown:N0} shown · {Math.Min(_matching, total):N0} matching · {total:N0} total");
+            $"{shown:N0} shown · {Math.Min(_matching, total):N0} matching · {total:N0} total{SincePauseSuffix}");
         LiveStateText = AutoScroll ? "live" : "paused";
 
         IsEmpty = shown == 0;
@@ -1013,7 +1027,9 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
                 : structured.Missing ? "audit.db does not exist yet. It is created the first time the gateway records an event."
                 : !structured.Loaded ? "The stream has not been read yet."
                 : structured.Entries.Count == 0 ? $"No data in audit.db for the {structured.Name} stream yet."
-                : "Nothing matches the current filters.";
+                : structured.Kind == EventStreamKind.Verdicts && SelectedPreset == LogPresets.NoNoise
+                    ? "Nothing matches the current filters. The default preset, no-noise, hides quiet INFO, LOW and MEDIUM rows as the TUI's does; choose preset \"all\" to see every row read."
+                    : "Nothing matches the current filters.";
             return;
         }
 
@@ -1111,6 +1127,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
 
         var token = cts.Token;
         var includeTelemetry = IncludeTelemetry;
+        var wasLoaded = state.Loaded;
         IsLoading = !state.Loaded;
         if (IsLoading)
         {
@@ -1185,6 +1202,13 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
             return;
         }
 
+        // A read that finds rows the one before did not have is what arrived; the first read of a stream is not (it is where the stream starts).
+        if (wasLoaded)
+        {
+            var before = new HashSet<string>(state.LastIds, StringComparer.Ordinal);
+            state.Arrived += ids.Count(id => !before.Contains(id));
+        }
+
         state.LastIds = ids;
         var entries = new List<LogEntry>(result.Rows.Count);
         for (var i = result.Rows.Count - 1; i >= 0; i--)
@@ -1225,6 +1249,9 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
 
         /// <summary>What the banner says while this source's tail is faulted; null when it is healthy.</summary>
         public string? FaultText { get; set; }
+
+        /// <summary>Lines the live tail has delivered over the life of the panel (the seed and a reload are not arrivals); what "+N since pause" is the difference of.</summary>
+        public long Arrived { get; set; }
     }
 
     /// <summary>One database stream: what was last read from it.</summary>
@@ -1254,6 +1281,9 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
 
         /// <summary>True when the database does not exist yet.</summary>
         public bool Missing { get; set; }
+
+        /// <summary>Rows that were not in the read before one that found them, over the life of the panel (the first read of a stream is its start, not an arrival).</summary>
+        public long Arrived { get; set; }
 
         /// <summary>Forgets the last read, so the next one is shown whatever it holds.</summary>
         public void Reset()

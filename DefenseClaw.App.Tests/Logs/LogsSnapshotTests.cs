@@ -134,7 +134,7 @@ public sealed class LogsSnapshotTests : IDisposable
         Add(path, add => add("v3", 4, "guardrail.evaluation", "guardrail.evaluated", null));
         await panel.LoadStructuredAsync();
         Assert.Equal(3, panel.DisplayedLines.Count);
-        Assert.Equal("v3", panel.DisplayedLines[^1].Fields.Single(f => f.Name == "id").Value);
+        Assert.Equal("v3", panel.DisplayedLines[^1].Fields.Single(f => f.Name == "ID").Value);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public sealed class LogsSnapshotTests : IDisposable
 
         // Both rows are listed (the stream is not empty because of the big one), and the big one says why it has no body.
         Assert.Equal(2, panel.DisplayedLines.Count);
-        var row = panel.DisplayedLines.Single(l => l.Fields.Any(f => f is { Name: "id", Value: "big" }));
+        var row = panel.DisplayedLines.Single(l => l.Fields.Any(f => f is { Name: "ID", Value: "big" }));
         Assert.Contains(
             string.Create(CultureInfo.InvariantCulture, $"payload_json is {big.Length:N0} bytes, over the 64 KB limit"),
             row.Raw,

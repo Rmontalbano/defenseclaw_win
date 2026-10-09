@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using DefenseClaw.App.Services;
 using DefenseClaw.App.ViewModels;
 
 namespace DefenseClaw.App.Views.Panels;
@@ -36,7 +37,10 @@ namespace DefenseClaw.App.Views.Panels;
 /// (<c>ApplicationCommands.Find.Execute(null, page)</c>). Esc clears the filter text when there is
 /// any, otherwise closes the inspector (a control that handled Esc itself first keeps it: the handler is on the bubbling
 /// <c>KeyDown</c>). On a narrow panel (<see cref="CompactLayout"/>) the inspector replaces the list, so focus follows it: to
-/// its close button when it opens, back to the list when it closes.
+/// its close button when it opens, back to the list when it closes. The TUI's own keys (CUST-263): <c>E</c> and <c>W</c> toggle the Errors and
+/// Warnings+ presets (<see cref="LogsPanelViewModel.ToggleErrorsCommand"/>; bare keys, never from a text box or a drop-down list - see
+/// <see cref="ShellShortcuts"/>), and in the list <c>Home</c> goes to the first row and pauses, <c>End</c> to the newest and follows it again
+/// (<see cref="LogsPanelViewModel.JumpToStart"/>).
 /// </para>
 /// </summary>
 public sealed partial class LogsPanel : UserControl
@@ -75,7 +79,23 @@ public sealed partial class LogsPanel : UserControl
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape || e.Handled || _viewModel is not { } viewModel)
+        if (e.Handled || _viewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        // The TUI's plain e and w, for the Errors and Warnings+ presets (CUST-263). Only the bare key: Ctrl+E is Audit's export and Ctrl+Shift+E the shell's, and only
+        // when the key is not text - in a text box it is a letter, and a drop-down list takes it as a first letter to jump to.
+        var modifiers = Keyboard.Modifiers;
+        if ((ShellShortcuts.IsLogsErrorsKey(e.Key, modifiers) || ShellShortcuts.IsLogsWarningsKey(e.Key, modifiers))
+            && !IsTextEntry(e.OriginalSource) && !IsTextEntry(Keyboard.FocusedElement))
+        {
+            (e.Key == Key.E ? viewModel.ToggleErrorsCommand : viewModel.ToggleWarningsCommand).Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Escape)
         {
             return;
         }
@@ -90,6 +110,58 @@ public sealed partial class LogsPanel : UserControl
             viewModel.ClearSelectionCommand.Execute(null);
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="element"/> (where the key came from, or where focus is) is somewhere a letter is input: a text box (the filter box, the inspector's
+    /// selectable raw text), a password box, or a combo box (a closed one jumps to the item that starts with the letter typed, so E would pick "errors" twice). The
+    /// shell's own <c>?</c> asks the same question.
+    /// </summary>
+    internal static bool IsTextEntry(object? element) =>
+        element is System.Windows.Controls.Primitives.TextBoxBase or PasswordBox or ComboBox or ComboBoxItem;
+
+    /// <summary>
+    /// Home and End in the list, the TUI's <c>g</c> and <c>G</c>: Home goes to the first row and pauses, End to the newest and follows it again (the view-model
+    /// decides; this brings the row into sight and puts keyboard focus on it, so the arrow keys go on from there). With Shift or Ctrl they are the list's own
+    /// (extend the selection, move focus), left alone.
+    /// </summary>
+    private void OnListPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Handled || _viewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        var modifiers = Keyboard.Modifiers;
+        LogEntry? row;
+        if (ShellShortcuts.IsLogsFirstRowKey(e.Key, modifiers))
+        {
+            row = viewModel.JumpToStart();
+        }
+        else if (ShellShortcuts.IsLogsNewestRowKey(e.Key, modifiers))
+        {
+            row = viewModel.JumpToEnd();
+        }
+        else
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (row is null)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(() =>
+            {
+                // A virtualizing list makes the row's container when it is scrolled to, which the layout pass does; without it there is nothing to focus yet.
+                LogListBox.ScrollIntoView(row);
+                LogListBox.UpdateLayout();
+                (LogListBox.ItemContainerGenerator.ContainerFromItem(row) as ListBoxItem)?.Focus();
+            }));
     }
 
     /// <summary>True while the panel is narrow enough that a selected line's inspector replaces the list instead of sitting beside it.</summary>

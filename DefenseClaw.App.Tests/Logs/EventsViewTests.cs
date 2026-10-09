@@ -89,7 +89,7 @@ public sealed class EventsViewTests : IDisposable
     }
 
     private static string[] Ids(LogsPanelViewModel panel) =>
-        panel.DisplayedLines.Select(l => l.Fields.Single(f => f.Name == "id").Value).ToArray();
+        panel.DisplayedLines.Select(l => l.Fields.Single(f => f.Name == "ID").Value).ToArray();
 
     // ---- The default ----
 
@@ -147,12 +147,12 @@ public sealed class EventsViewTests : IDisposable
         var panel = EventsPanel(Mixed());
         await panel.LoadStructuredAsync();
 
-        var egress = panel.DisplayedLines.Single(l => l.Fields.Any(f => f is { Name: "id", Value: "e-egress" }));
+        var egress = panel.DisplayedLines.Single(l => l.Fields.Any(f => f is { Name: "ID", Value: "e-egress" }));
 
         Assert.Equal("block", egress.Action);
         Assert.Equal("egress", egress.EventType);
         Assert.Equal("[egress:block]", egress.Label);
-        Assert.Contains(egress.Fields, f => f is { Name: "target", Value: "api.example.test" });
+        Assert.Contains(egress.Fields, f => f is { Name: "Target", Value: "api.example.test" });
         Assert.Contains("not on the allow list", egress.Message, StringComparison.Ordinal);
         Assert.True(egress.IsActionable);
     }
