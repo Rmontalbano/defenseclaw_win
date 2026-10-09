@@ -922,10 +922,8 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
             return false;
         }
 
-        var needle = FilterText.Trim();
-        return needle.Length == 0
-            || entry.Raw.Contains(needle, StringComparison.OrdinalIgnoreCase)
-            || entry.Message.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        // The filter box (CUST-261): a connector:name token and the free text, see LogsPanelViewModel.Search.cs.
+        return PassesSearch(entry);
     }
 
     /// <summary>

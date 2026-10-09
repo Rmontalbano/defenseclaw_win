@@ -18,6 +18,44 @@ public static class StructuredDetailParser
         "findings", "max_severity", "rule_ids", "scan_id", "scanner",
     };
 
+    /// <summary>The keys the TUI lists first, in its order (<c>_DETAIL_KEY_ORDER</c>).</summary>
+    private static readonly string[] KnownKeyOrder =
+    {
+        "connector", "tool", "action", "raw_action", "severity", "mode", "decision", "reason", "would_block", "elapsed", "duration_ms", "elapsed_ms", "result", "bytes",
+        "source", "raw_args", "raw_content", "raw_payload", "request_id",
+    };
+
+    /// <summary>The TUI's own labels for the keys whose raw form is opaque (<c>_DETAIL_KEY_LABELS</c>); any other key reads as <see cref="Label"/> reads it.</summary>
+    private static readonly Dictionary<string, string> InspectorLabels = new(StringComparer.Ordinal)
+    {
+        ["connector"] = "Connector",
+        ["action"] = "Decision",
+        ["raw_action"] = "Decision (raw)",
+        ["severity"] = "Severity (decision)",
+        ["mode"] = "Enforcement mode",
+        ["would_block"] = "Would block",
+        ["elapsed"] = "Elapsed",
+        ["duration_ms"] = "Elapsed (ms)",
+        ["elapsed_ms"] = "Elapsed (ms)",
+        ["tool"] = "Tool",
+        ["raw_args"] = "Tool args",
+        ["raw_payload"] = "Raw payload",
+        ["raw_content"] = "Raw content",
+        ["request_id"] = "Request ID",
+        ["reason"] = "Reason",
+        ["result"] = "Result",
+        ["bytes"] = "Bytes",
+        ["source"] = "Source",
+        ["event"] = "Hook event",
+        ["hook"] = "Hook event",
+        ["decision"] = "Decision",
+        ["registry_status"] = "Registry status",
+        ["registry_configured"] = "Registry configured",
+        ["skill_name_raw"] = "Skill name (raw)",
+        ["source_path"] = "Source path",
+        ["surface"] = "Surface",
+    };
+
     /// <summary>
     /// Parses a contiguous structured record from the start of <paramref name="details"/>. When the text starts with prose or
     /// a redaction placeholder the result is empty and the caller keeps the raw text; parsing stops at the first thing
@@ -25,9 +63,24 @@ public static class StructuredDetailParser
     /// </summary>
     public static IReadOnlyList<DetailPair> Pairs(string? details)
     {
+        var result = new List<DetailPair>();
+        foreach (var (key, value) in RawPairs(details))
+        {
+            result.Add(new DetailPair(Label(key), DisplayValue(value)));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// The same contiguous record as <see cref="Pairs"/>, but as written: each key as the gateway spelled it and each value without a label or a
+    /// reading-aid applied (a <c>&lt;redacted ...&gt;</c> placeholder is still the placeholder). What the hook helpers below look keys up in.
+    /// </summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> RawPairs(string? details)
+    {
         var text = details ?? string.Empty;
         var index = SkipWhitespace(text, 0);
-        var result = new List<DetailPair>();
+        var result = new List<KeyValuePair<string, string>>();
 
         while (index < text.Length)
         {
@@ -36,11 +89,223 @@ public static class StructuredDetailParser
                 break;
             }
 
-            result.Add(new DetailPair(Label(key), DisplayValue(value)));
+            result.Add(new KeyValuePair<string, string>(key, value));
             index = SkipWhitespace(text, next);
         }
 
         return result;
+    }
+
+    // ---- Connector hooks (CUST-261) -------------------------------------------------------------------------------------------------------------
+    // A hook call's audit row says only "connector-hook" and the phase (preToolUse); who made the call and what was decided lives in the key=value
+    // details (connector=claudecode action=allow severity=NONE mode=observe would_block=false elapsed=320ms ...). The 0.8.10 TUI reads those into the
+    // row (tui/panels/audit.py _row_target_label, _row_details_label, _structured_detail_rows); these are the same readings, over the same parser.
+
+    /// <summary>The audit action of a connector's hook call.</summary>
+    public const string HookAction = "connector-hook";
+
+    /// <summary>True for the audit row of a connector's hook call.</summary>
+    public static bool IsHook(string? action) => string.Equals(action, HookAction, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The details as a dictionary of keys to values as written (<see cref="RawPairs"/>); a key that repeats keeps its last value, and the keys
+    /// are compared as written. Empty when the details are not a record.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Values(string? details)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in RawPairs(details))
+        {
+            values[key] = value;
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// The row's Target cell for a hook call: <c>claudecode · preToolUse</c> - the connector (from the details, else <paramref name="connector"/>, the
+    /// row's own column) and the hook phase (the row's target). Just the connector when there is no phase, just the phase when there is no connector,
+    /// which is what any other row shows: its target.
+    /// </summary>
+    public static string HookTarget(string? target, string? details, string? connector = null)
+    {
+        var name = HookConnector(details, connector);
+        var phase = target?.Trim() ?? string.Empty;
+        if (name.Length > 0 && phase.Length > 0)
+        {
+            return name + " · " + phase;
+        }
+
+        return name.Length > 0 ? name : phase;
+    }
+
+    /// <summary>
+    /// The inspector's title for a hook call: <c>claudecode preToolUse</c>, <c>claudecode hook</c> or the phase alone; null when the row says neither
+    /// (the caller keeps its action).
+    /// </summary>
+    public static string? HookTitle(string? target, string? details, string? connector = null)
+    {
+        var name = HookConnector(details, connector);
+        var phase = target?.Trim() ?? string.Empty;
+        if (name.Length > 0 && phase.Length > 0)
+        {
+            return name + " " + phase;
+        }
+
+        if (name.Length > 0)
+        {
+            return name + " hook";
+        }
+
+        return phase.Length > 0 ? phase : null;
+    }
+
+    /// <summary>
+    /// The row's Details cell for a hook call: <c>allow · 320ms</c>, or <c>block · HIGH · 41ms</c> - the decision (<c>action</c>, else
+    /// <c>decision</c>), the severity when it says something (<c>NONE</c> is left out, the rest upper-cased) and how long the hook took (<c>elapsed</c>,
+    /// else <c>duration_ms</c> or <c>elapsed_ms</c>, which the 0.8.10 gateway writes: a bare number reads as milliseconds). Empty when the details hold
+    /// none of those, and the caller shows the details themselves.
+    /// </summary>
+    public static string HookSummary(string? details)
+    {
+        var values = Values(details);
+        var parts = new List<string>(3);
+
+        var decision = First(values, "action", "decision");
+        if (decision.Length > 0)
+        {
+            parts.Add(decision);
+        }
+
+        var severity = First(values, "severity");
+        if (severity.Length > 0 && !severity.Equals("NONE", StringComparison.OrdinalIgnoreCase))
+        {
+            parts.Add(severity.ToUpperInvariant());
+        }
+
+        var elapsed = First(values, "elapsed");
+        if (elapsed.Length == 0)
+        {
+            elapsed = First(values, "duration_ms", "elapsed_ms");
+            if (elapsed.Length > 0 && IsNumber(elapsed))
+            {
+                elapsed += "ms";
+            }
+        }
+
+        if (elapsed.Length > 0)
+        {
+            parts.Add(elapsed);
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// The inspector's rows for a record of key=value details, the way the TUI lays them out: the keys it knows first and in its order (connector, tool,
+    /// decision, reason, ...), the rest after them as they came; each with the TUI's label (<c>action</c> reads "Decision", <c>mode</c> "Enforcement
+    /// mode"); a <c>&lt;redacted ...&gt;</c> placeholder as its length and digest; <c>would_block</c> and <c>registry_configured</c> as yes / no; and the
+    /// two fields that are noise on every passing hook call left out - <c>severity=NONE</c>, and <c>would_block=false</c> while <c>mode=observe</c>.
+    /// Empty when the details are not a record (the caller keeps the details text, or the metadata it can pick out of prose).
+    /// </summary>
+    public static IReadOnlyList<DetailPair> InspectorRows(string? details)
+    {
+        var pairs = RawPairs(details);
+        if (pairs.Count == 0)
+        {
+            return Array.Empty<DetailPair>();
+        }
+
+        // A key that repeats keeps its last value at the position it first had (what a dictionary does in the TUI).
+        var order = new List<string>(pairs.Count);
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in pairs)
+        {
+            if (!values.ContainsKey(key))
+            {
+                order.Add(key);
+            }
+
+            values[key] = value;
+        }
+
+        var observing = values.TryGetValue("mode", out var mode) && mode.Equals("observe", StringComparison.OrdinalIgnoreCase);
+        var rows = new List<DetailPair>(order.Count);
+
+        foreach (var key in KnownKeyOrder.Concat(order.Where(k => !KnownKeyOrder.Contains(k, StringComparer.Ordinal))))
+        {
+            if (!values.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
+            if ((key == "severity" && value.Equals("NONE", StringComparison.OrdinalIgnoreCase)) || (key == "would_block" && observing && value == "false"))
+            {
+                continue;
+            }
+
+            rows.Add(new DetailPair(InspectorLabel(key), Reading(key, value)));
+        }
+
+        return rows;
+    }
+
+    private static string InspectorLabel(string key) => InspectorLabels.TryGetValue(key, out var label) ? label : Label(key);
+
+    /// <summary>A value as the inspector reads it: a redaction placeholder as its size and digest, the two yes/no flags as words, anything else as written.</summary>
+    private static string Reading(string key, string value)
+    {
+        var shown = DisplayValue(value);
+        if (key is "would_block" or "registry_configured")
+        {
+            return shown switch
+            {
+                "true" => "yes",
+                "false" => "no",
+                _ => shown,
+            };
+        }
+
+        return shown;
+    }
+
+    private static string HookConnector(string? details, string? column)
+    {
+        var fromDetails = Values(details).TryGetValue("connector", out var value) ? value.Trim() : string.Empty;
+        return fromDetails.Length > 0 ? fromDetails : column?.Trim() ?? string.Empty;
+    }
+
+    /// <summary>The first of <paramref name="keys"/> the record has a value for (trimmed); empty when none.</summary>
+    private static string First(IReadOnlyDictionary<string, string> values, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (values.TryGetValue(key, out var value) && value.Trim() is { Length: > 0 } trimmed)
+            {
+                return trimmed;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>A plain number: digits with at most one point (<c>320</c>, <c>0.5</c>).</summary>
+    private static bool IsNumber(string text)
+    {
+        var points = 0;
+        foreach (var c in text)
+        {
+            if (c == '.')
+            {
+                points++;
+            }
+            else if (!char.IsAsciiDigit(c))
+            {
+                return false;
+            }
+        }
+
+        return points <= 1 && text != ".";
     }
 
     /// <summary>

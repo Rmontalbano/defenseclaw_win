@@ -118,6 +118,10 @@ public sealed partial class AuditPanelViewModel
     protected override void OnActivated()
     {
         RefreshArchiveSetting();
+
+        // The Connector column follows the roster (CUST-261); the roster may have changed while the panel was away.
+        Services.ConnectorScope.Changed += OnRosterChanged;
+        OnPropertyChanged(nameof(ShowConnectorColumn));
         StartLive();
     }
 

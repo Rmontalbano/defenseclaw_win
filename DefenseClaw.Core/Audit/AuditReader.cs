@@ -1174,6 +1174,7 @@ public sealed class AuditReader
             || !string.IsNullOrWhiteSpace(query.SearchText)
             || !string.IsNullOrWhiteSpace(query.RunId)
             || query.ActionAnyOf is { Count: > 0 }
+            || query.FieldFilters is { Count: > 0 }
             || BucketsOf(query).Count > 0)
         {
             return false;
@@ -1390,6 +1391,8 @@ public sealed class AuditReader
                 """);
         }
 
+        AppendFieldFilters(clauses, command, query);
+
         AppendWindow(clauses, command, query, mode);
 
         if (includeCursor && query.After is { } cursor)
@@ -1419,6 +1422,60 @@ public sealed class AuditReader
             sql.Append("WHERE ").AppendLine(string.Join("\n  AND ", clauses));
         }
     }
+
+    /// <summary>
+    /// The search box's <c>field:value</c> tokens (<see cref="AuditQuery.FieldFilters"/>, CUST-261), one clause each, ANDed. Every clause is a fixed
+    /// text: the column comes from <see cref="ColumnOf"/>'s own list and the value is only ever the bound <c>$field0 ... $fieldN</c> (escaped for LIKE
+    /// unless the match is exact), so nothing typed becomes SQL. A blank value narrows nothing. A LIKE walks the window like the free-text search does
+    /// (case-insensitively, unindexed); an exact match on an indexed column (<c>connector</c>, <c>run_id</c>, <c>trace_id</c>, ...) is a seek.
+    /// </summary>
+    private static void AppendFieldFilters(List<string> clauses, SqliteCommand command, AuditQuery query)
+    {
+        if (query.FieldFilters is not { Count: > 0 } filters)
+        {
+            return;
+        }
+
+        for (var i = 0; i < filters.Count; i++)
+        {
+            var filter = filters[i];
+            if (string.IsNullOrWhiteSpace(filter.Value))
+            {
+                continue;
+            }
+
+            var name = "$field" + i.ToString(CultureInfo.InvariantCulture);
+            if (filter.Match == AuditFieldMatch.Exact)
+            {
+                command.Parameters.AddWithValue(name, filter.Value);
+                clauses.Add($"{ColumnOf(filter.Field)} = {name}");
+                continue;
+            }
+
+            command.Parameters.AddWithValue(name, Like(filter.Value));
+            clauses.Add(filter.Field == AuditField.Type
+                ? $"({AuditTargetType.SqlCase("e.action")} LIKE {name} ESCAPE '\\' OR e.bucket LIKE {name} ESCAPE '\\')"
+                : $"{ColumnOf(filter.Field)} LIKE {name} ESCAPE '\\'");
+        }
+    }
+
+    /// <summary>The column a filter field narrows. A closed list of this reader's own column names: nothing from outside ever reaches it.</summary>
+    private static string ColumnOf(AuditField field) => field switch
+    {
+        AuditField.Id => "e.id",
+        AuditField.Actor => "e.actor",
+        AuditField.Target => "e.target",
+        AuditField.Details => "e.details",
+        AuditField.Severity => "e.severity",
+        AuditField.Action => "e.action",
+        AuditField.Run => "e.run_id",
+        AuditField.Trace => "e.trace_id",
+        AuditField.Request => "e.request_id",
+        AuditField.Session => "e.session_id",
+        AuditField.Connector => "e.connector",
+        AuditField.Type => "e.bucket",
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown audit field."),
+    };
 
     /// <summary>
     /// The From (inclusive) / To (exclusive) window. Indexed mode: two plain bounds on the raw

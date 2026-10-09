@@ -134,7 +134,11 @@ public sealed partial class AuditPanelViewModel
     /// </summary>
     internal Func<CancellationToken, Task<AuditStamp>>? LiveStampSource { get; set; }
 
-    protected override void OnDeactivated() => StopLive();
+    protected override void OnDeactivated()
+    {
+        Services.ConnectorScope.Changed -= OnRosterChanged;
+        StopLive();
+    }
 
     /// <summary>
     /// The panel came on screen: start the timer (when there is a dispatcher to tick on) and catch up once with whatever happened while it was away. The

@@ -36,6 +36,12 @@ namespace DefenseClaw.App.ViewModels;
 /// this panel already narrowed to a severity and above.
 /// </para>
 /// <para>
+/// <b>Search tokens, correlation ids, the Connector column.</b> The filter box takes <c>connector:codex</c>, <c>severity:high</c>, <c>run:</c>, <c>trace:</c>,
+/// <c>id:</c>, <c>actor:</c>, <c>type:</c>, <c>target:</c> ... (and a pasted trace id finds its alert); the inspector lists the run, trace, request and session
+/// ids and Copy details of one alert is the TUI's multi-line form with them; a Connector column joins the table while more than one connector is active
+/// (CUST-261): see <c>AlertsPanelViewModel.Search.cs</c>.
+/// </para>
+/// <para>
 /// <b>Why the filters are not optional.</b> On a development box the alert stream is
 /// dominated by the agent that is operating the box — every <c>$env:</c> reference trips
 /// <c>CMD-ENV-DUMP</c> at HIGH. So this panel ships three affordances that make that
@@ -460,6 +466,10 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         // The counts service runs while anything listens (the tray always does) and says when the queue changed; a finding that
         // arrives while this panel is open shows up on its next tick.
         Services.AlertCounts.Changed += OnAlertCountsChanged;
+
+        // The Connector column follows the roster (CUST-261); the roster may have changed while the panel was away.
+        Services.ConnectorScope.Changed += OnRosterChanged;
+        OnPropertyChanged(nameof(ShowConnectorColumn));
         _clock.Start();
         _ = RefreshQueueAsync();
     }
@@ -468,6 +478,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         Services.Monitor.PollCompleted -= OnPollCompleted;
         Services.AlertCounts.Changed -= OnAlertCountsChanged;
+        Services.ConnectorScope.Changed -= OnRosterChanged;
         _clock.Stop();
         CancelDetail();
     }
@@ -600,11 +611,15 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     public IReadOnlyList<AlertItem> ActionRows =>
         _selectedMany.Count > 0 ? _selectedMany : SelectedAlert is { } one ? new[] { one } : Array.Empty<AlertItem>();
 
-    /// <summary>"time [SEVERITY] action target - details" for each row, one per line (the Mac's Copy Details).</summary>
+    /// <summary>
+    /// Copy details. One row: the TUI's multi-line form with the correlation ids (<see cref="AlertItem.CopyDetailText"/>, CUST-261). Several: "time [SEVERITY]
+    /// action target - details" for each row, one per line (the Mac's Copy Details).
+    /// </summary>
     public static string CopyText(IEnumerable<AlertItem> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        return string.Join(Environment.NewLine, rows.Select(r => r.CopyLine));
+        var list = rows as IReadOnlyList<AlertItem> ?? rows.ToList();
+        return list.Count == 1 ? list[0].CopyDetailText : string.Join(Environment.NewLine, list.Select(r => r.CopyLine));
     }
 
     /// <summary>Closes the detail pane (Esc, or its own close button).</summary>
@@ -1771,7 +1786,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             .Select(f => f.SeverityKey)
             .ToHashSet(StringComparer.Ordinal);
 
-        var needle = FilterText.Trim();
+        var search = ActiveSearch;
         var selectedKey = SelectedAlert?.Key;
         RefreshTileState();
 
@@ -1808,9 +1823,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             query = query.Where(KindAllows);
         }
 
-        if (needle.Length > 0)
+        if (!search.IsEmpty)
         {
-            query = query.Where(item => item.Matches(needle));
+            query = query.Where(item => item.Matches(search));
         }
 
         var filtered = query.ToList();
@@ -2133,6 +2148,10 @@ public sealed partial class AlertItem : ObservableObject
             Evidence = alert.EvidenceSummary ?? string.Empty,
             Scanner = alert.Scanner ?? string.Empty,
             Source = alert.Actor ?? string.Empty,
+            Details = alert.Details ?? string.Empty,
+            RequestId = alert.RequestId ?? string.Empty,
+            TraceId = Extra(alert, "trace_id", "traceId", "traceID"),
+            SessionId = Extra(alert, "session_id", "sessionId", "sessionID"),
             Tags = string.Join(", ", alert.Tags.Concat(alert.DataAxes)),
             ConfidenceText = alert.Confidence is { } confidence
                 ? confidence.ToString("P0", CultureInfo.CurrentCulture)
@@ -2167,6 +2186,10 @@ public sealed partial class AlertItem : ObservableObject
             Scanner = row.StructuredString(GatewayAlert.Keys.Scanner) ?? string.Empty,
             Source = row.Actor ?? row.Source ?? string.Empty,
             Connector = row.Connector,
+            Details = row.Details ?? string.Empty,
+            RequestId = row.RequestId ?? string.Empty,
+            TraceId = row.TraceId ?? string.Empty,
+            SessionId = row.SessionId ?? string.Empty,
             Tags = string.Empty,
             ConfidenceText = string.Empty,
             StructuredText = structuredOver is null
@@ -2224,6 +2247,10 @@ public sealed partial class AlertItem : ObservableObject
         Scanner = Scanner,
         Source = Source,
         Connector = Connector,
+        Details = Details,
+        RequestId = RequestId,
+        TraceId = TraceId,
+        SessionId = SessionId,
         Tags = Tags,
         ConfidenceText = ConfidenceText,
         StructuredText = StructuredText,
@@ -2243,15 +2270,12 @@ public sealed partial class AlertItem : ObservableObject
         _ => "Info",
     };
 
+    /// <summary>
+    /// True when <paramref name="needle"/>, as one phrase, is in any field a free search covers: the rule, kind, title, action, target, evidence, scanner and tags
+    /// it always was, and the run, severity, source, connector, details and correlation ids (CUST-261: a trace id pasted from another tool finds its alert).
+    /// </summary>
     public bool Matches(string needle) =>
-        Contains(RuleId, needle) ||
-        Contains(Kind, needle) ||
-        Contains(Headline, needle) ||
-        Contains(Action, needle) ||
-        Contains(TargetRef, needle) ||
-        Contains(Evidence, needle) ||
-        Contains(Scanner, needle) ||
-        Contains(Tags, needle);
+        Searchable().Any(value => !string.IsNullOrEmpty(value) && Contains(value, needle));
 
     public void Restamp() => RelativeTime = AlertsPanelViewModel.Relative(Timestamp);
 

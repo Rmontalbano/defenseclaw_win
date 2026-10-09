@@ -397,7 +397,22 @@ public static class DcGridColumns
         }
     }
 
-    /// <summary>Resolves the columns' widths against the grid's viewport now.</summary>
+    /// <summary>
+    /// Resolves the columns' widths against the grid's viewport now - after the grid changed its columns (<see cref="Apply"/> is otherwise only called by
+    /// the grid's own events: first layout, a new viewport width). The Alerts and Audit tables add and remove their Connector column this way.
+    /// </summary>
+    public static void Refit(DataGrid grid)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        Apply(grid, FindScrollViewer(grid));
+    }
+
+    /// <summary>
+    /// Resolves the columns' widths against the grid's viewport now. A column keeps the weight and floor it was first seen with (its star width in the
+    /// XAML) however many times its width has been resolved since - also across being taken out of the grid and put back, which a column that comes and
+    /// goes (the Connector column) does; a column that joins the grid later is learned when it first takes part. A column that is not
+    /// <see cref="Visibility.Visible"/> takes no share of the room and is left as it is.
+    /// </summary>
     public static void Apply(DataGrid grid, ScrollViewer? scroll)
     {
         if (scroll is null || scroll.ViewportWidth <= 0 || grid.Columns.Count == 0)
@@ -406,36 +421,45 @@ public static class DcGridColumns
         }
 
         var state = (Dictionary<DataGridColumn, (double Weight, double Minimum)>?)grid.GetValue(StateProperty);
-        if (state is null || state.Count != grid.Columns.Count)
+        if (state is null)
         {
             state = new Dictionary<DataGridColumn, (double, double)>();
-            foreach (var column in grid.Columns)
+            grid.SetValue(StateProperty, state);
+        }
+
+        foreach (var column in grid.Columns)
+        {
+            if (!state.ContainsKey(column))
             {
                 state[column] = column.Width.IsStar
                     ? (column.Width.Value, column.MinWidth)
                     : (0, column.Width.IsAbsolute ? column.Width.Value : column.MinWidth);
             }
+        }
 
-            grid.SetValue(StateProperty, state);
+        var shown = grid.Columns.Where(c => c.Visibility == Visibility.Visible).ToList();
+        if (shown.Count == 0)
+        {
+            return;
         }
 
         // One DIP short of the viewport, so rounding cannot leave a one-pixel sideways scroll bar.
         var available = Math.Floor(scroll.ViewportWidth) - 1;
         var widths = Views.Panels.ColumnSizing.Distribute(
             available,
-            grid.Columns.Select(c => state[c].Weight).ToArray(),
-            grid.Columns.Select(c => state[c].Minimum).ToArray(),
+            shown.Select(c => state[c].Weight).ToArray(),
+            shown.Select(c => state[c].Minimum).ToArray(),
             GetLeadingColumns(grid));
 
         // A column within half a DIP of its target is left alone (no relayout for nothing) - unless the columns as they stand add up
         // to more than the room: eight columns each up to half a DIP over used to beat the one-DIP slack and show a sideways scroll bar.
-        var current = grid.Columns.Sum(c => c.Width.IsAbsolute ? c.Width.Value : double.PositiveInfinity);
+        var current = shown.Sum(c => c.Width.IsAbsolute ? c.Width.Value : double.PositiveInfinity);
         var overflowing = current > available;
-        for (var i = 0; i < grid.Columns.Count; i++)
+        for (var i = 0; i < shown.Count; i++)
         {
-            if (overflowing || !grid.Columns[i].Width.IsAbsolute || Math.Abs(grid.Columns[i].Width.Value - widths[i]) > 0.5)
+            if (overflowing || !shown[i].Width.IsAbsolute || Math.Abs(shown[i].Width.Value - widths[i]) > 0.5)
             {
-                grid.Columns[i].Width = new DataGridLength(widths[i]);
+                shown[i].Width = new DataGridLength(widths[i]);
             }
         }
     }

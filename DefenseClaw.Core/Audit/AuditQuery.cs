@@ -45,6 +45,13 @@ public sealed record AuditQuery
     /// <summary>Case-insensitive substring match across details/event_name/tool_name/target.</summary>
     public string? SearchText { get; init; }
 
+    /// <summary>
+    /// The search box's <c>field:value</c> tokens (CUST-261, see <see cref="AuditQuerySearch"/>): each narrows one column, ANDed with every other
+    /// filter here. The column comes from <see cref="AuditField"/> (a fixed list of this reader's own column names) and the value is only ever a bound
+    /// parameter, so what an operator typed can never become SQL.
+    /// </summary>
+    public IReadOnlyList<AuditFieldFilter>? FieldFilters { get; init; }
+
     /// <summary>Inclusive lower bound.</summary>
     public DateTimeOffset? From { get; init; }
 
@@ -96,7 +103,15 @@ public sealed record AuditQuery
         AppendList(key, ActionAnyOf);
         key.Append(Field).Append(SearchText)
            .Append(Field).Append(From?.UtcTicks.ToString(CultureInfo.InvariantCulture))
-           .Append(Field).Append(To?.UtcTicks.ToString(CultureInfo.InvariantCulture));
+           .Append(Field).Append(To?.UtcTicks.ToString(CultureInfo.InvariantCulture))
+           .Append(Field);
+        if (FieldFilters is not null)
+        {
+            foreach (var filter in FieldFilters)
+            {
+                key.Append((int)filter.Field).Append(filter.Match == AuditFieldMatch.Exact ? '=' : '~').Append(filter.Value).Append(Item);
+            }
+        }
 
         if (includePaging)
         {
@@ -121,6 +136,35 @@ public sealed record AuditQuery
         }
     }
 }
+
+/// <summary>A column of <c>audit_events</c> a <see cref="AuditFieldFilter"/> can narrow (the reader maps each to its own column name; nothing typed picks one).</summary>
+public enum AuditField
+{
+    Id,
+    Actor,
+    Target,
+    Details,
+    Severity,
+    Action,
+    Run,
+    Trace,
+    Request,
+    Session,
+    Connector,
+
+    /// <summary>What the row is about: the kind its action names (<see cref="AuditTargetType"/>) or its bucket.</summary>
+    Type,
+}
+
+/// <summary>How an <see cref="AuditFieldFilter"/> compares: a case-insensitive part of the column (LIKE), or the whole column as it is stored (indexed ones can seek).</summary>
+public enum AuditFieldMatch
+{
+    Contains,
+    Exact,
+}
+
+/// <summary>One <c>field:value</c> of the search box as a filter on a single column. The value is a bound parameter; <c>%</c>, <c>_</c> and <c>\</c> in it are literal.</summary>
+public sealed record AuditFieldFilter(AuditField Field, string Value, AuditFieldMatch Match = AuditFieldMatch.Contains);
 
 /// <summary>One page of results plus the cursor needed to fetch the next.</summary>
 public sealed record AuditPage(IReadOnlyList<AuditEvent> Events, AuditCursor? NextCursor, bool HasMore)

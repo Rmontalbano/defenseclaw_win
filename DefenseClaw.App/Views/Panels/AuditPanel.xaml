@@ -134,6 +134,16 @@
             <Setter Property="ContextMenu" Value="{StaticResource AuditRowMenu}" />
         </Style>
 
+        <!--
+            The Connector column (CUST-261). It is not in the table until there is more than one connector to tell apart (the code-behind puts it
+            after Type while the view-model's ShowConnectorColumn is true, as the TUI does, and takes it out again otherwise), so a one-connector
+            install has the columns it always had.
+        -->
+        <DataGridTextColumn x:Key="ConnectorColumn" Width="1.3*" MinWidth="64" Header="Connector"
+                            SortMemberPath="ConnectorCell"
+                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                            Binding="{Binding ConnectorCell}" />
+
         <Style x:Key="AuditListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
             <Setter Property="Grid.Column" Value="0" />
             <Setter Property="Grid.ColumnSpan" Value="2" />
@@ -176,7 +186,7 @@
                            SearchWidth="260"
                            SearchPlaceholder="Search details, event, tool, target…"
                            SearchAutomationName="Search details, event, tool and target"
-                           SearchHelpText="Free text over the details, event name, tool and target. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Free text over the details, event name, tool and target. Narrow to one field with connector:codex, severity:high, run:, trace:, request:, session:, id:, actor:, type:, target:, action: or details: - quote a value that has spaces, target:&quot;my skill&quot;. Shortcut Ctrl+F; Esc clears it.">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>
@@ -401,7 +411,8 @@
                     </Grid.RowDefinitions>
 
                     <!--
-                        The table: Time, Action, Type (the bucket), Target, Severity, Run, Details, and the row menu. Newest first (the
+                        The table: Time, Action, Type (the bucket), [Connector - only while more than one connector is active], Target, Severity,
+                        Run, Details, and the row menu. A connector's hook call reads "claudecode · preToolUse" and "allow · 320ms". Newest first (the
                         query's order) until a header is clicked; a header sorts the rows loaded so far. The columns share the width
                         (DcGridColumns), a cell says its whole value in a tooltip while it is cut, and the table is virtualized by the
                         pixel - this list can hold twenty pages of events. Extended selection: the first row drives the detail pane;
@@ -432,9 +443,9 @@
                                                 ElementStyle="{StaticResource DcCellTextQuiet}"
                                                 Binding="{Binding Bucket}" />
                             <DataGridTextColumn Width="1.6*" MinWidth="80" Header="Target"
-                                                SortMemberPath="Target"
+                                                SortMemberPath="TargetText"
                                                 ElementStyle="{StaticResource DcCellText}"
-                                                Binding="{Binding Target}" />
+                                                Binding="{Binding TargetText}" />
                             <DataGridTemplateColumn Width="0.9*" MinWidth="84" Header="Severity"
                                                     SortMemberPath="SeverityRank">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -450,9 +461,9 @@
                                                 ElementStyle="{StaticResource DcCellTextMono}"
                                                 Binding="{Binding RunId}" />
                             <DataGridTextColumn Width="2*" MinWidth="90" Header="Details"
-                                                SortMemberPath="Summary"
+                                                SortMemberPath="DetailsText"
                                                 ElementStyle="{StaticResource DcCellTextQuiet}"
-                                                Binding="{Binding Summary}" />
+                                                Binding="{Binding DetailsText}" />
                             <DataGridTemplateColumn Width="32" Header="Actions"
                                                     CanUserSort="False"
                                                     HeaderStyle="{StaticResource DcDataGridActionsHeader}">
@@ -521,13 +532,29 @@
                 <ctl:DcInspector.ContentTemplate>
                     <DataTemplate>
                         <StackPanel>
-                            <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0" Text="{Binding Action}" />
+                            <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0" Text="{Binding Title}" />
                             <TextBlock Style="{StaticResource DcTextSecondary}"
                                        Margin="0,6,0,0"
-                                       Text="{Binding Summary}" />
+                                       Text="{Binding DetailsText}" />
                             <TextBlock Style="{StaticResource DcCaption}"
                                        Margin="0,4,0,0"
                                        Text="{Binding TimestampText}" />
+
+                            <!-- What is being done to the item now (the TUI's "Current State"): for an event about a skill, MCP server, plugin or tool that has an entry. -->
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0,8,0,0"
+                                        AutomationProperties.Name="{Binding DataContext.CurrentStateLabel, RelativeSource={RelativeSource AncestorType={x:Type panels:AuditPanel}}}"
+                                        Visibility="{Binding DataContext.HasCurrentState, RelativeSource={RelativeSource AncestorType={x:Type panels:AuditPanel}}, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"
+                                           Text="Current state" />
+                                <TextBlock Style="{StaticResource DcToneText}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Tag="{Binding DataContext.CurrentStateTone, RelativeSource={RelativeSource AncestorType={x:Type panels:AuditPanel}}}"
+                                           Text="{Binding DataContext.CurrentStateText, RelativeSource={RelativeSource AncestorType={x:Type panels:AuditPanel}}}" />
+                            </StackPanel>
 
                             <!-- Correlation: both chips filter the list (this inspector follows the selection, so it closes with it). -->
                             <WrapPanel Margin="0,10,0,0">
@@ -627,7 +654,7 @@
                                                        TextWrapping="Wrap"
                                                        TextTrimming="CharacterEllipsis"
                                                        MaxHeight="48"
-                                                       Text="{Binding Summary}" />
+                                                       Text="{Binding DetailsText}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

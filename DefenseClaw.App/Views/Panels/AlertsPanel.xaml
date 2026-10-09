@@ -69,6 +69,16 @@
             <Setter Property="ContextMenu" Value="{StaticResource AlertRowMenu}" />
         </Style>
 
+        <!--
+            The Connector column (CUST-261). It is not in the table until there is more than one connector to tell apart (the code-behind puts it
+            after Action while the view-model's ShowConnectorColumn is true and takes it out again otherwise), so a one-connector install has the
+            columns it always had.
+        -->
+        <DataGridTextColumn x:Key="ConnectorColumn" Width="1.1*" MinWidth="64" Header="Connector"
+                            SortMemberPath="ConnectorCell"
+                            ElementStyle="{StaticResource DcCellTextQuiet}"
+                            Binding="{Binding ConnectorCell}" />
+
         <Style x:Key="AlertListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
             <Setter Property="Grid.Column" Value="0" />
             <Setter Property="Grid.ColumnSpan" Value="2" />
@@ -187,9 +197,9 @@
                            Caption="{Binding CountSummary}"
                            HasSearch="True"
                            SearchText="{Binding FilterText}"
-                           SearchPlaceholder="Filter alerts…"
+                           SearchPlaceholder="Filter alerts… (connector:codex)"
                            SearchAutomationName="Filter alerts"
-                           SearchHelpText="Shows only alerts whose rule, kind, title, action, target, evidence, scanner or tags contain this text. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Shows only alerts whose rule, kind, title, action, target, evidence, scanner, tags, run, severity, source or ids (run, trace, request, session) contain this text. Narrow to one field with connector:codex, severity:high, run:, trace:, request:, session:, id:, actor:, type:, target: or action: - quote a value that has spaces, target:&quot;my skill&quot;. Shortcut Ctrl+F; Esc clears it.">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>
@@ -384,7 +394,8 @@
             <Border x:Name="ListCard" Style="{StaticResource AlertListCard}">
                 <Grid>
                     <!--
-                        The table: Time, Severity, Kind (audit / scan / egress; the rule id is the inspector's title), Action, Target, Details (the title, with the repeat count
+                        The table: Time, Severity, Kind (audit / scan / egress; the rule id is the inspector's title), Action, [Connector - only while more than one
+                        connector is active], Target, Details (the title, with the repeat count
                         while repeats are folded), Run, and the row menu. Newest first until a header is clicked; the columns
                         share the width (DcGridColumns), the short ones keep a floor, and a cell says its whole value in a
                         tooltip while it is cut. Extended selection: Ctrl / Shift pick rows, the first one drives the detail
@@ -498,6 +509,33 @@
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Scanner, StringFormat='scanner: {0}'}" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding ConfidenceText, StringFormat='confidence: {0}'}" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Tags, StringFormat='tags: {0}'}" />
+
+                            <!-- Run, trace, request and session id (CUST-261): selectable, so one can be copied into another tool or pasted into a search here. -->
+                            <StackPanel Visibility="{Binding HasCorrelation, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Link24" Section="Observe" Content="Correlation" />
+                                <ItemsControl Grid.IsSharedSizeScope="True"
+                                              ItemsSource="{Binding Correlation}"
+                                              AutomationProperties.Name="Correlation ids">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="AlertCorrelationKey" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcCaption}"
+                                                           Margin="0,0,10,0"
+                                                           Text="{Binding Name}" />
+                                                <TextBox Grid.Column="1"
+                                                         Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="{Binding Name}"
+                                                         Text="{Binding Value, Mode=OneWay}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
 
                             <ctl:DcCardHeader Margin="0,14,0,4" Symbol="DocumentSearch24" Section="Observe" Content="Evidence" />
                             <Border Style="{StaticResource DcCodeBlock}">

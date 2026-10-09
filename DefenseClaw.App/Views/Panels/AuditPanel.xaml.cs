@@ -143,6 +143,40 @@ public sealed partial class AuditPanel : UserControl
             after.Rows.CollectionChanged += OnRowsChanged;
             after.LiveRowsInserted += OnLiveRowsInserted;
         }
+
+        ApplyConnectorColumn();
+    }
+
+    /// <summary>
+    /// The Connector column (CUST-261) is in the table only while more than one connector is active (<see cref="AuditPanelViewModel.ShowConnectorColumn"/>):
+    /// put in after Type, as the TUI's is, taken out again otherwise, and the columns share the room again either way. A one-connector install has exactly
+    /// the columns it always had.
+    /// </summary>
+    private void ApplyConnectorColumn()
+    {
+        if (DataContext is not AuditPanelViewModel viewModel)
+        {
+            return;
+        }
+
+        var column = (DataGridColumn)FindResource("ConnectorColumn");
+        var shown = RowList.Columns.Contains(column);
+        if (viewModel.ShowConnectorColumn == shown)
+        {
+            return;
+        }
+
+        if (shown)
+        {
+            _ = RowList.Columns.Remove(column);
+        }
+        else
+        {
+            var type = RowList.Columns.Select((c, i) => (c, i)).FirstOrDefault(p => Equals(p.c.Header, "Type"));
+            RowList.Columns.Insert(type.c is null ? RowList.Columns.Count : type.i + 1, column);
+        }
+
+        DcGridColumns.Refit(RowList);
     }
 
     /// <summary>Where the list was scrolled to just before rows were put above it: the scroll viewer, its offset, and the height of what it scrolls.</summary>
@@ -213,6 +247,12 @@ public sealed partial class AuditPanel : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(AuditPanelViewModel.ShowConnectorColumn))
+        {
+            ApplyConnectorColumn();
+            return;
+        }
+
         if (e.PropertyName != nameof(AuditPanelViewModel.HasSelection) || !IsCompact || sender is not AuditPanelViewModel viewModel)
         {
             return;

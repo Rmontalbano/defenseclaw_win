@@ -82,9 +82,9 @@
                            HasSearch="True"
                            SearchText="{Binding FilterText}"
                            SearchDelay="400"
-                           SearchPlaceholder="Filter log lines…"
+                           SearchPlaceholder="Filter lines… (connector:codex)"
                            SearchAutomationName="Filter log lines"
-                           SearchHelpText="Shows only lines that contain this text. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Shows only lines that contain this text. connector:codex shows only that connector's lines. Shortcut Ctrl+F; Esc clears it.">
             <ctl:DcPageToolbar.ConnectorSlot>
                 <ctl:DcConnectorScopeChip Model="{Binding ConnectorChip}" />
             </ctl:DcPageToolbar.ConnectorSlot>

@@ -147,6 +147,40 @@ public sealed partial class AlertsPanel : UserControl
         {
             current.PropertyChanged += OnViewModelPropertyChanged;
         }
+
+        ApplyConnectorColumn();
+    }
+
+    /// <summary>
+    /// The Connector column (CUST-261) is in the table only while more than one connector is active (<see cref="AlertsPanelViewModel.ShowConnectorColumn"/>):
+    /// put in after Action, taken out again otherwise, and the columns share the room again either way. A one-connector install has exactly the columns it
+    /// always had.
+    /// </summary>
+    private void ApplyConnectorColumn()
+    {
+        if (DataContext is not AlertsPanelViewModel viewModel)
+        {
+            return;
+        }
+
+        var column = (DataGridColumn)FindResource("ConnectorColumn");
+        var shown = AlertList.Columns.Contains(column);
+        if (viewModel.ShowConnectorColumn == shown)
+        {
+            return;
+        }
+
+        if (shown)
+        {
+            _ = AlertList.Columns.Remove(column);
+        }
+        else
+        {
+            var action = AlertList.Columns.Select((c, i) => (c, i)).FirstOrDefault(p => Equals(p.c.Header, "Action"));
+            AlertList.Columns.Insert(action.c is null ? AlertList.Columns.Count : action.i + 1, column);
+        }
+
+        DcGridColumns.Refit(AlertList);
     }
 
     /// <summary>
@@ -156,6 +190,12 @@ public sealed partial class AlertsPanel : UserControl
     /// </summary>
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(AlertsPanelViewModel.ShowConnectorColumn))
+        {
+            ApplyConnectorColumn();
+            return;
+        }
+
         if (e.PropertyName != nameof(AlertsPanelViewModel.HasSelection) || !IsCompact || sender is not AlertsPanelViewModel viewModel)
         {
             return;

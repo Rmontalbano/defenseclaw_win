@@ -52,6 +52,13 @@ namespace DefenseClaw.App.ViewModels;
 /// <b>Actionable only, and live.</b> The panel opens on the events the 0.8.10 TUI's Audit panel shows and stays current while it is on screen
 /// (CUST-262): see <c>AuditPanelViewModel.Actionable.cs</c> and <c>AuditPanelViewModel.Live.cs</c>.
 /// </para>
+/// <para>
+/// <b>Search tokens, hook rows, Current state, the Connector column.</b> The search box takes <c>connector:codex</c>, <c>severity:high</c>, <c>run:</c>,
+/// <c>trace:</c>, <c>id:</c>, <c>actor:</c>, <c>type:</c>, <c>target:</c> ... as filters of the list's own query; a connector's hook call reads
+/// <c>claudecode · preToolUse</c> / <c>allow · 320ms</c> (<see cref="AuditRow.TargetText"/>, <see cref="AuditRow.DetailsText"/>); selecting an event about a
+/// skill, MCP server, plugin or tool shows its current state; and a Connector column joins the table while more than one connector is active (CUST-261): see
+/// <c>AuditPanelViewModel.Search.cs</c>.
+/// </para>
 /// </summary>
 public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
@@ -320,6 +327,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
     {
         OnPropertyChanged(nameof(HasSelection));
         StartCorrelation(value);
+        StartCurrentState(value);
     }
 
     /// <summary>The action dropdown is a helper that fills the substring box, not a second filter.</summary>
@@ -375,7 +383,8 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         ArgumentNullException.ThrowIfNull(row);
         if (row.Target.Length > 0)
         {
-            SearchText = row.Target;
+            // As plain text: a target that reads like a token (type:abc) would otherwise be searched for as one.
+            SearchText = SearchQuery.AsFreeText(row.Target);
         }
     }
 
@@ -712,7 +721,11 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         }
     }
 
-    private AuditQuery BuildQuery(AuditCursor? after) => new()
+    /// <summary>
+    /// The query the list, its "Load more", the total, the live refresh and the export all read with: the filter bar, the preset and the run, narrowed by the
+    /// search box (CUST-261) - its <c>field:value</c> tokens as database filters, the free words as the text search it always was.
+    /// </summary>
+    private AuditQuery BuildQuery(AuditCursor? after) => new AuditQuery
     {
         Bucket = string.Equals(SelectedBucket, AnyBucket, StringComparison.Ordinal) ? null : SelectedBucket,
         MinimumSeverity = PresetMinimumSeverity(ActivePreset, SelectedSeverity.Value),
@@ -721,11 +734,10 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         ActionContains = string.IsNullOrWhiteSpace(ActionFilter) ? null : ActionFilter.Trim(),
         ActionAnyOf = PresetActionTerms(ActivePreset),
         RunId = string.IsNullOrWhiteSpace(RunFilter) ? null : RunFilter.Trim(),
-        SearchText = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
         From = SelectedRange.Since is { } window ? WindowStart(window) : null,
         Limit = PageSize,
         After = after,
-    };
+    }.WithSearch(ActiveSearch);
 
     /// <summary>
     /// Where a window of <paramref name="window"/> ending now starts: the whole minute it falls in. A window that starts at a different
@@ -1008,6 +1020,31 @@ public sealed class AuditRow
 
     public string Connector { get; }
 
+    /// <summary>The Connector column's cell: the connector, or a dash for a platform row that belongs to none (the TUI's <c>—</c>).</summary>
+    public string ConnectorCell => IsPlatform ? "—" : Connector;
+
+    /// <summary>True for the audit row of a connector's hook call (<c>connector-hook</c>), which the table and the inspector read from its details (CUST-261).</summary>
+    public bool IsHook => StructuredDetailParser.IsHook(Action);
+
+    /// <summary>
+    /// The Target cell. A hook call's row says only the phase (<c>preToolUse</c>), so the cell says who made the call too: <c>claudecode · preToolUse</c>
+    /// (the connector from the details, else the row's own). Every other row shows its target.
+    /// </summary>
+    public string TargetText => _targetText ??= IsHook ? StructuredDetailParser.HookTarget(Target, Details, IsPlatform ? null : Connector) : Target;
+
+    /// <summary>
+    /// The Details cell. A hook call's details are a wall of <c>key=value</c> that cut off after <c>connector=claudecod</c>, so the cell reads the decision,
+    /// the severity when it says something and how long it took: <c>allow · 320ms</c>. Every other row shows <see cref="Summary"/>.
+    /// </summary>
+    public string DetailsText => _detailsText ??= IsHook && StructuredDetailParser.HookSummary(Details) is { Length: > 0 } hook ? hook : Summary;
+
+    /// <summary>The inspector's title: <c>claudecode preToolUse</c> for a hook call (every one would otherwise be titled <c>connector-hook</c>), the action for any other row.</summary>
+    public string Title => _title ??= (IsHook ? StructuredDetailParser.HookTitle(Target, Details, IsPlatform ? null : Connector) : null) ?? Action;
+
+    private string? _targetText;
+    private string? _detailsText;
+    private string? _title;
+
     public bool IsPlatform { get; }
 
     public string EventName { get; }
@@ -1064,8 +1101,10 @@ public sealed class AuditRow
             return Array.Empty<DetailPair>();
         }
 
-        var pairs = StructuredDetailParser.Pairs(details);
-        return pairs.Count > 0 ? pairs : StructuredDetailParser.SafeMetadataPairs(details);
+        // The TUI's reading of a record (CUST-261): its key order and labels, a redaction as its size and digest, yes / no flags, and the two fields that
+        // are noise on every passing hook call (severity=NONE, would_block=false while observing) left out. Prose gives only its known metadata keys.
+        var rows = StructuredDetailParser.InspectorRows(details);
+        return rows.Count > 0 ? rows : StructuredDetailParser.SafeMetadataPairs(details);
     }
 
     /// <summary>
@@ -1096,7 +1135,7 @@ public sealed class AuditRow
     /// </summary>
     public override string ToString()
     {
-        var parts = new List<string> { $"{Severity} {Action}", Summary, $"connector {Connector}", TimestampText };
+        var parts = new List<string> { $"{Severity} {Action}", DetailsText, $"connector {Connector}", TimestampText };
         return string.Join(". ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
     }
 
