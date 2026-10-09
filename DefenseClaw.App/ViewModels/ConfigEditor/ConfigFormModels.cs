@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.Core.Config;
@@ -22,6 +23,12 @@ public enum FormFieldKind
     /// field is always read-only in FORM and shows a placeholder — never a value, never a reveal.
     /// </summary>
     Secret,
+
+    /// <summary>
+    /// A text value the TUI offers as a list (<c>llm.provider</c>, <c>claw.mode</c>, the severity actions, ...): a combo box over
+    /// <see cref="FormField.Choices"/>. A value the list does not have is one more item, selected: never replaced.
+    /// </summary>
+    Choice,
 }
 
 /// <summary>
@@ -30,6 +37,11 @@ public enum FormFieldKind
 /// <para>
 /// A field that is not <see cref="IsEditable"/> never commits: the guard lives here as well as in the
 /// UI (a disabled control) so that a masked value can not reach config.yaml by any route.
+/// </para>
+/// <para>
+/// <b>Validation.</b> An editable field checks its own value every time the operator changes it
+/// (<see cref="ConfigFieldValidator"/>) and reports through <see cref="Validation"/>; the view-model reads that when the
+/// commit arrives. A value the operator did not change is never an error (<see cref="FieldValidation.AsExistingValue"/>).
 /// </para>
 /// </summary>
 public sealed partial class FormField : ObservableObject
@@ -49,6 +61,15 @@ public sealed partial class FormField : ObservableObject
     [ObservableProperty]
     private bool _isDirty;
 
+    /// <summary>What the field's value last checked out as. Errors are only ever for a changed value; see the class remarks.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowValidation))]
+    [NotifyPropertyChangedFor(nameof(ValidationText))]
+    [NotifyPropertyChangedFor(nameof(ValidationTone))]
+    private FieldValidation _validation = FieldValidation.Ok;
+
+    /// <param name="options">For <see cref="FormFieldKind.Choice"/>: the values the list offers (the current value is added to the items if it is not one of them).</param>
+    /// <param name="hint">The TUI's one-line hint for the key, or null.</param>
     public FormField(
         string key,
         string displayName,
@@ -58,7 +79,9 @@ public sealed partial class FormField : ObservableObject
         bool isEditable,
         string? disabledReason,
         Action<FormField> onCommit,
-        bool isMasked = false)
+        bool isMasked = false,
+        IReadOnlyList<string>? options = null,
+        string? hint = null)
     {
         Key = key;
         DisplayName = displayName;
@@ -68,6 +91,7 @@ public sealed partial class FormField : ObservableObject
         IsEditable = isEditable;
         DisabledReason = disabledReason;
         IsMasked = isMasked || kind == FormFieldKind.Secret;
+        Hint = string.IsNullOrWhiteSpace(hint) ? null : hint;
         _onCommit = onCommit;
 
         _suppressCommit = true;
@@ -85,6 +109,11 @@ public sealed partial class FormField : ObservableObject
         }
 
         _suppressCommit = false;
+
+        ChoiceValues = kind == FormFieldKind.Choice ? options ?? Array.Empty<string>() : Array.Empty<string>();
+        Choices = kind == FormFieldKind.Choice ? ConfigFieldCatalog.ChoiceItems(ChoiceValues, TextValue) : Array.Empty<ChoiceOption>();
+        OriginalText = ValueText();
+        Revalidate();
     }
 
     public string Key { get; }
@@ -114,6 +143,53 @@ public sealed partial class FormField : ObservableObject
     /// <summary>What a secret field displays in place of a value: never the value, and never a reveal.</summary>
     public string MaskedText => TextValue.Length == 0 ? "(not set)" : SecretValue.Redacted;
 
+    /// <summary>The TUI's one-line hint for this key (<see cref="ConfigFieldCatalog"/>), or null.</summary>
+    public string? Hint { get; }
+
+    public bool HasHint => Hint is not null;
+
+    /// <summary>The row's tooltip: the hint, then the dotted path.</summary>
+    public string ToolTipText => Hint is null ? Path : Hint + Environment.NewLine + Path;
+
+    /// <summary>The row's UI Automation help text: the hint, then the dotted path.</summary>
+    public string HelpText => Hint is null ? Path : Hint + " " + Path;
+
+    /// <summary>For a <see cref="FormFieldKind.Choice"/>: the values the TUI's list offers, in its order. Empty for every other kind.</summary>
+    public IReadOnlyList<string> ChoiceValues { get; }
+
+    /// <summary>For a <see cref="FormFieldKind.Choice"/>: what the combo shows. <see cref="ChoiceValues"/> plus, when the field holds a value they do not have, that value.</summary>
+    public IReadOnlyList<ChoiceOption> Choices { get; }
+
+    /// <summary>The field's value as text when it was loaded: the baseline "changed" is measured against.</summary>
+    public string OriginalText { get; }
+
+    /// <summary>True when the operator has put a value in this field that differs from the one it was loaded with (changing it back is not a change).</summary>
+    public bool IsChanged => !string.Equals(ValueText(), OriginalText, StringComparison.Ordinal);
+
+    public bool ShowValidation => !Validation.IsOk;
+
+    /// <summary>The line under the field, severity word first (<see cref="FieldValidation.DisplayText"/>).</summary>
+    public string ValidationText => Validation.DisplayText;
+
+    /// <summary>The design system's tone key for the line: <c>Critical</c> for an error, <c>Warn</c> for a warning.</summary>
+    public string ValidationTone => Validation.IsError ? "Critical" : "Warn";
+
+    /// <summary>
+    /// What a Choice's combo box binds its selection to. It is <see cref="TextValue"/> without the one thing a binding must not do to it:
+    /// a combo whose selection is cleared (items replaced, nothing matching) writes null, which would blank the value in config.yaml.
+    /// </summary>
+    public string? SelectedChoice
+    {
+        get => TextValue;
+        set
+        {
+            if (value is not null)
+            {
+                TextValue = value;
+            }
+        }
+    }
+
     partial void OnBoolValueChanged(bool value) => Commit();
 
     partial void OnNumberValueChanged(double value) => Commit();
@@ -122,6 +198,7 @@ public sealed partial class FormField : ObservableObject
     {
         Commit();
         OnPropertyChanged(nameof(MaskedText));
+        OnPropertyChanged(nameof(SelectedChoice));
     }
 
     private void Commit()
@@ -132,7 +209,32 @@ public sealed partial class FormField : ObservableObject
         }
 
         IsDirty = true;
+        Revalidate();
         _onCommit(this);
+    }
+
+    /// <summary>The current value as the validator reads it: a bool as <c>true</c>/<c>false</c>, an integer in invariant digits, anything else as it is.</summary>
+    private string ValueText() => Kind switch
+    {
+        FormFieldKind.Bool => BoolValue ? "true" : "false",
+        FormFieldKind.Int => ((int)Math.Round(NumberValue)).ToString(CultureInfo.InvariantCulture),
+        _ => TextValue ?? string.Empty,
+    };
+
+    /// <summary>
+    /// Checks the current value. A field that cannot be edited is never checked (there is nothing to fix, and a masked placeholder is not a
+    /// value), and a value that is still the one the file had never blocks: its error, if any, is shown as the warning it is.
+    /// </summary>
+    private void Revalidate()
+    {
+        if (!IsEditable)
+        {
+            Validation = FieldValidation.Ok;
+            return;
+        }
+
+        var result = ConfigFieldValidator.Validate(Path, Kind, ValueText(), OriginalText, ChoiceValues);
+        Validation = IsChanged ? result : result.AsExistingValue();
     }
 
     /// <summary>The value to write back, formatted for whichever kind this field is.</summary>
@@ -153,6 +255,7 @@ public sealed partial class FormField : ObservableObject
         FormFieldKind.Int => $"{DisplayName}, number setting",
         FormFieldKind.EnvName => $"{DisplayName}, environment variable name",
         FormFieldKind.Secret => $"{DisplayName}, secret, masked and read-only",
+        FormFieldKind.Choice => $"{DisplayName}, choice setting",
         _ => IsMasked ? $"{DisplayName}, masked and read-only" : $"{DisplayName}, text setting",
     };
 }

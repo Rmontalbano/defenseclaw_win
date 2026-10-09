@@ -62,7 +62,7 @@ adds `schema_version` rows 1..53, and the tests insert a few synthetic rows writ
 | `--version-json`, `status --json`, `keys list --json`, doctor JSON and cache | Compatible as is. |
 | `guardrail status` (text) | **Fixed.** New `Block/alert` column is fine; the narrow-terminal block layout was not read. |
 | Audit, alert queue, mutations, hook totals, hourly activity, recent metrics, event stream, judge history, egress, correlation | Compatible as is. The whole Core suite passes against the 53-migration schema (see below). |
-| `config.yaml` reader and editor | Compatible as is. |
+| `config.yaml` reader and editor | Compatible as is. The editor's connector lists (`claw.mode`, `guardrail.connector`) follow the runtime's own table (CUST-268): see `config.yaml` below. |
 | Install layout, gateway-peer trust | **Fixed.** Both layouts resolve; Setup's wins. |
 | Setup tile grid | Compatible as is (35 targets). |
 | Policies panel | **Added** for a runtime that has the policy model: six views (Windows has no Sandbox packs view), the 0.8.10 table is unchanged elsewhere. See below. |
@@ -156,6 +156,18 @@ How the readers fare:
 (`gateway.api_bind`, per-connector `block_at`, `alert_at`, `hilt`, `enabled`, `ai_discovery.runtime`, `include_user_email`, ...) are ignored by the reader
 and survive an edit, because the editor replaces whole top-level blocks and leaves every other byte alone. A fresh install writes only its overrides
 (about 230 bytes); the effective configuration (`config show`) is 83 KB.
+
+The editor's connector lists (CUST-268) are the runtime's `CONNECTORS` kept to what its own Windows table (`platform_support.py`, `WINDOWS_CONNECTOR_SUPPORT`)
+calls supported or preview, as `supported_connector_choices` does. 0.8.10 has two on Windows (`codex`, `claudecode`: seven connectors are `not_certified`,
+four `unsupported`). This commit drops `windsurf` and `geminicli`, adds `devin`, `amp` and `kiro`, and keeps eleven (`codex`, `claudecode`, `hermes`, `cursor`,
+`devin`, `copilot`, `antigravity`, `opencode`, `amp`, `omnigent`, `kiro`; `openhands`, `openclaw` and `zeptoclaw` stay out). The pinned lists are used only
+when the runtime shows `TuiRegistry` (`setup --help` lists `amp`, `devin` and `kiro`); everything else, a runtime that has not answered its probe included,
+gets 0.8.10's. A value a list does not have is shown and kept, never replaced, so a `claw.mode: kiro` under 0.8.10's lists is the field's current value with
+a note, not an error. The two runtimes' `validate_config_field` (`setup_state.py`) differ in four places. The editor applies three of them to both, because
+none can make 0.8.10 refuse what it accepted: a bool, int or choice that is empty and was empty is not checked; only a changed value can block a save
+(`blocking_validation_errors`); and the `openshell.ingress_port` / `egress_port` range (0 to 65535) and the non-negative `openshell.*` integers. Not ported:
+the pin's other `openshell.*` checks (CPU, memory, harness names, the port lists) and its secret test, which asks the CLI's `looks_like_key_shape` where 0.8.10
+tests prefixes and a length.
 
 ### Install layouts
 

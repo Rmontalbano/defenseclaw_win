@@ -98,7 +98,8 @@ public static partial class ConfigDiffReviewBuilder
     /// <summary>
     /// The lines with every secret replaced by <see cref="Hidden"/>: the value of a secret-named key (not an <c>_env</c>
     /// name), everything beneath a secret-named or header key, a value <see cref="SecretHeuristics"/> recognises whatever
-    /// its key, and the userinfo of a URL. Same length as the input, line for line.
+    /// its key, a value in an <c>_env</c> key that <see cref="ConfigFieldValidator.LooksLikeSecretValue"/> calls a secret (a key
+    /// pasted where a variable name belongs), and the userinfo of a URL. Same length as the input, line for line.
     /// </summary>
     public static string[] MaskLines(IReadOnlyList<string> lines)
     {
@@ -188,6 +189,14 @@ public static partial class ConfigDiffReviewBuilder
                     headerMap = false;
                 }
 
+                continue;
+            }
+
+            // A secret pasted where an env var NAME belongs (the editor warns about it and lets it through): the TUI hides it in its own
+            // review for any value that looks like one, whatever its shape (setup_state.py:575-580, mask_config_value).
+            if (SensitiveKeyClassifier.IsEnvNameKey(key) && ConfigFieldValidator.LooksLikeSecretValue(value.Trim('"', '\'')))
+            {
+                result[i] = prefix + " " + Hidden;
                 continue;
             }
 

@@ -91,7 +91,8 @@ public sealed class ConfigEditorUnsavedChangesTests
         var vm = harness.ViewModel;
         Assert.False(vm.HasUnsavedChanges);
 
-        harness.Field("guardrail.mode").TextValue = "enforce";
+        // `action` is one of the two guardrail modes; the field is a list since CUST-268, and a mode the list does not have is held back.
+        harness.Field("guardrail.mode").TextValue = "action";
 
         Assert.Null(vm.FieldErrorMessage);
         Assert.True(vm.HasUnsavedChanges);
@@ -109,13 +110,13 @@ public sealed class ConfigEditorUnsavedChangesTests
         vm.CommitPendingEdits = () =>
         {
             commits++;
-            harness.Field("guardrail.mode").TextValue = "enforce";
+            harness.Field("guardrail.mode").TextValue = "action";
         };
 
         Assert.False(vm.HasUnsavedChanges);
         Assert.True(vm.CloseNeedsConfirmation());
         Assert.Equal(1, commits);
-        Assert.Contains("mode: enforce", vm.RawText, StringComparison.Ordinal);
+        Assert.Contains("mode: action", vm.RawText, StringComparison.Ordinal);
     }
 
     [Theory]

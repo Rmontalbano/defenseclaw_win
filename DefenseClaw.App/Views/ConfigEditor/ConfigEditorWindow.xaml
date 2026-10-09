@@ -48,11 +48,36 @@
         <!--
             Shape shared by every scalar row: label column (name + optional read-only reason, visible text
             rather than a tooltip so it is reachable by keyboard and screen reader) and a control column.
-            The dotted config path is the tooltip and the UIA help text.
+            The TUI's hint, then the dotted config path, is the tooltip and the UIA help text.
         -->
 
+        <!--
+            What a field's own check says (an error, or a warning), under its label. The severity is a word as well as a tone and a
+            glyph, so colour is never the only carrier; the line is a polite live region so a screen reader reads it when it appears.
+            Declared before the templates that use it: StaticResource in deferred template content needs the key registered already.
+        -->
+        <DataTemplate x:Key="FieldValidationTemplate" DataType="{x:Type vmc:FormField}">
+            <StackPanel Margin="0,2,0,0"
+                        Orientation="Horizontal"
+                        Visibility="{Binding ShowValidation, Converter={StaticResource BoolToVisibility}}">
+                <ctl:DcStatusGlyph Margin="0,0,6,0"
+                                   VerticalAlignment="Top"
+                                   DotSize="8"
+                                   GlyphSize="12"
+                                   SlotHeight="16"
+                                   Tone="{Binding ValidationTone}" />
+                <TextBlock AutomationProperties.LiveSetting="Polite"
+                           FontSize="12"
+                           FontWeight="Normal"
+                           Style="{StaticResource DcToneText}"
+                           Tag="{Binding ValidationTone}"
+                           Text="{Binding ValidationText}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
+
         <DataTemplate x:Key="BoolFieldTemplate" DataType="{x:Type vmc:FormField}">
-            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding Path}">
+            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding ToolTipText}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -62,9 +87,10 @@
                     <TextBlock Style="{StaticResource DcCaption}"
                                Text="{Binding DisabledReason}"
                                Visibility="{Binding ShowReadOnlyNote, Converter={StaticResource BoolToVisibility}}" />
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FieldValidationTemplate}" />
                 </StackPanel>
                 <ui:ToggleSwitch Grid.Column="1"
-                                 AutomationProperties.HelpText="{Binding Path}"
+                                 AutomationProperties.HelpText="{Binding HelpText}"
                                  AutomationProperties.Name="{Binding DisplayName}"
                                  IsChecked="{Binding BoolValue, Mode=TwoWay}"
                                  IsEnabled="{Binding IsEditable}" />
@@ -72,7 +98,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="IntFieldTemplate" DataType="{x:Type vmc:FormField}">
-            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding Path}">
+            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding ToolTipText}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="150" />
@@ -82,9 +108,10 @@
                     <TextBlock Style="{StaticResource DcCaption}"
                                Text="{Binding DisabledReason}"
                                Visibility="{Binding ShowReadOnlyNote, Converter={StaticResource BoolToVisibility}}" />
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FieldValidationTemplate}" />
                 </StackPanel>
                 <ui:NumberBox Grid.Column="1"
-                              AutomationProperties.HelpText="{Binding Path}"
+                              AutomationProperties.HelpText="{Binding HelpText}"
                               AutomationProperties.Name="{Binding DisplayName}"
                               IsEnabled="{Binding IsEditable}"
                               Value="{Binding NumberValue, Mode=TwoWay}" />
@@ -92,7 +119,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="StringFieldTemplate" DataType="{x:Type vmc:FormField}">
-            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding Path}">
+            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding ToolTipText}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="260" />
@@ -112,9 +139,10 @@
                     <TextBlock Style="{StaticResource DcCaption}"
                                Text="{Binding DisabledReason}"
                                Visibility="{Binding ShowReadOnlyNote, Converter={StaticResource BoolToVisibility}}" />
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FieldValidationTemplate}" />
                 </StackPanel>
                 <ui:TextBox Grid.Column="1"
-                            AutomationProperties.HelpText="{Binding Path}"
+                            AutomationProperties.HelpText="{Binding HelpText}"
                             AutomationProperties.Name="{Binding DisplayName}"
                             IsEnabled="{Binding IsEditable}"
                             Text="{Binding TextValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
@@ -122,7 +150,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="EnvNameFieldTemplate" DataType="{x:Type vmc:FormField}">
-            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding Path}">
+            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding ToolTipText}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="260" />
@@ -141,6 +169,7 @@
                     <TextBlock Style="{StaticResource DcCaption}"
                                Text="{Binding DisabledReason}"
                                Visibility="{Binding ShowReadOnlyNote, Converter={StaticResource BoolToVisibility}}" />
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FieldValidationTemplate}" />
                 </StackPanel>
                 <ui:TextBox Grid.Column="1"
                             AutomationProperties.HelpText="Name of the environment variable that holds the value, not the value itself."
@@ -156,7 +185,7 @@
             "set" (a masked placeholder) or "(not set)". The reason names the two ways to change one.
         -->
         <DataTemplate x:Key="SecretFieldTemplate" DataType="{x:Type vmc:FormField}">
-            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding Path}">
+            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding ToolTipText}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="260" />
@@ -177,7 +206,7 @@
                 <Border Grid.Column="1"
                         VerticalAlignment="Center"
                         Style="{StaticResource DcSubtleRow}">
-                    <TextBlock AutomationProperties.HelpText="{Binding Path}"
+                    <TextBlock AutomationProperties.HelpText="{Binding HelpText}"
                                AutomationProperties.Name="{Binding DisplayName, StringFormat='{}{0}: masked, read-only'}"
                                Style="{StaticResource DcMono}"
                                Text="{Binding MaskedText}" />
@@ -185,8 +214,44 @@
             </Grid>
         </DataTemplate>
 
+        <!--
+            Choice: a list the TUI offers (llm.provider, claw.mode, the severity actions, ...). The hint sits under the label, in words, because it
+            says what the choices mean ("observe=log only; action=block."). A value the list does not have is one more item and is selected, so
+            opening the form never changes it; the field's own note says it is kept as is. The combo binds SelectedChoice, which ignores the
+            null a combo writes when its selection is cleared.
+        -->
+        <DataTemplate x:Key="ChoiceFieldTemplate" DataType="{x:Type vmc:FormField}">
+            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding ToolTipText}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="260" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource DcBody}" Text="{Binding DisplayName}" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Text="{Binding Hint}"
+                               Visibility="{Binding HasHint, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Text="{Binding DisabledReason}"
+                               Visibility="{Binding ShowReadOnlyNote, Converter={StaticResource BoolToVisibility}}" />
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FieldValidationTemplate}" />
+                </StackPanel>
+                <ComboBox Grid.Column="1"
+                          Width="260"
+                          HorizontalAlignment="Left"
+                          AutomationProperties.HelpText="{Binding HelpText}"
+                          AutomationProperties.Name="{Binding DisplayName}"
+                          ItemsSource="{Binding Choices}"
+                          DisplayMemberPath="Label"
+                          SelectedValuePath="Value"
+                          SelectedValue="{Binding SelectedChoice, Mode=TwoWay}"
+                          IsEnabled="{Binding IsEditable}" />
+            </Grid>
+        </DataTemplate>
+
         <vc:FormFieldTemplateSelector x:Key="FieldSelector"
                                       BoolTemplate="{StaticResource BoolFieldTemplate}"
+                                      ChoiceTemplate="{StaticResource ChoiceFieldTemplate}"
                                       EnvNameTemplate="{StaticResource EnvNameFieldTemplate}"
                                       IntTemplate="{StaticResource IntFieldTemplate}"
                                       SecretTemplate="{StaticResource SecretFieldTemplate}"
@@ -439,6 +504,18 @@
                         IsOpen="{Binding HasChangesBlockedReason, Mode=OneWay}"
                         Message="{Binding ChangesBlockedReason}"
                         Severity="Warning" />
+
+            <!--
+                A FORM value with an error is held in its box and not written to the buffer (see the view-model's remarks): Save is off until it is
+                fixed or put back. The lines name the key and the kind of problem, never the value. Below the installation's banner, whose reason
+                is the first one.
+            -->
+            <ui:InfoBar Title="Save is off — fix the field errors in the FORM tab"
+                        Margin="{StaticResource DcCardGap}"
+                        IsClosable="False"
+                        IsOpen="{Binding HasBlockingFieldErrors, Mode=OneWay}"
+                        Message="{Binding FieldErrorsSummary, Mode=OneWay}"
+                        Severity="Error" />
 
             <!--
                 A failed *read* of config.yaml (locked, permissions) — distinct from a parse

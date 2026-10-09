@@ -1,5 +1,6 @@
 using DefenseClaw.App.Services;
 using DefenseClaw.App.ViewModels.ConfigEditor;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Tests.TestSupport;
 
@@ -64,17 +65,26 @@ internal sealed class ConfigEditorHarness : IDisposable
     /// <param name="maskedSource">The masked view the CLI would print. Defaults to <see cref="ConfigSamples.MaskedSource"/>.</param>
     /// <param name="maskedSourceEol">Line ending of the masked view; defaults to <paramref name="eol"/>. The real CLI's stdout is CRLF whatever the file is.</param>
     /// <param name="withoutCli">Leave <see cref="ConfigEditorWindowViewModel.FormSourceOverride"/> unset, so the real read path runs against a runner with an empty PATH.</param>
+    /// <param name="runtimeProbeRunner">
+    /// What answers the runtime probes (<see cref="RuntimeFixtureRunner"/>). Null: nothing does, the runtime reads as unknown, and the form offers
+    /// the 0.8.10 lists. When given, the probe has run (and its answer is in) before the form is built.
+    /// </param>
     public static async Task<ConfigEditorHarness> LoadAsync(
         string eol = LineEndings.Lf,
         string? raw = null,
         string? maskedSource = null,
         string? maskedSourceEol = null,
-        bool withoutCli = false)
+        bool withoutCli = false,
+        RuntimeProbeRunner? runtimeProbeRunner = null)
     {
         var fileText = LineEndings.With(raw ?? ConfigSamples.Raw, eol);
 
         var temp = new TempDirectory();
-        var services = TestServices.Create(temp, fileText);
+        var services = TestServices.Create(temp, fileText, runtimeProbeRunner);
+        if (runtimeProbeRunner is not null)
+        {
+            _ = await services.Runtime.RefreshAsync();
+        }
 
         // The shell's file watcher reads config.yaml (to hash it) on its own thread whenever the directory moves, and a
         // save's File.Replace onto a file that is open for that read fails with a sharing violation. That is a race this

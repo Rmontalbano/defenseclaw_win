@@ -9,7 +9,7 @@ namespace DefenseClaw.App.Views.ConfigEditor;
 /// <see cref="FormFieldKind"/>. Every <see cref="FormField"/> is the same CLR type
 /// regardless of kind, so WPF's usual DataType-implicit-template matching cannot tell a
 /// bool toggle from a secret box on its own — this selector is the standard way around
-/// that. The five named templates it looks up live as resources in
+/// that. The six named templates it looks up live as resources in
 /// <c>ConfigEditorWindow.xaml</c>.
 /// </summary>
 public sealed class FormFieldTemplateSelector : DataTemplateSelector
@@ -24,6 +24,8 @@ public sealed class FormFieldTemplateSelector : DataTemplateSelector
 
     public DataTemplate? SecretTemplate { get; set; }
 
+    public DataTemplate? ChoiceTemplate { get; set; }
+
     public override DataTemplate? SelectTemplate(object item, DependencyObject container)
     {
         if (item is not FormField field)
@@ -37,6 +39,7 @@ public sealed class FormFieldTemplateSelector : DataTemplateSelector
             FormFieldKind.Int => IntTemplate,
             FormFieldKind.EnvName => EnvNameTemplate,
             FormFieldKind.Secret => SecretTemplate,
+            FormFieldKind.Choice => ChoiceTemplate,
             _ => StringTemplate,
         };
     }

@@ -68,14 +68,21 @@ public static class ConfigFormBuilder
     /// <param name="sourceYaml">Stdout of <c>defenseclaw config show --source --format yaml</c> (masked).</param>
     /// <param name="document">The raw config.yaml, for editability probing and current-on-disk field lookups.</param>
     /// <param name="onFieldCommitted">Invoked whenever a generated field or list changes.</param>
+    /// <param name="profile">
+    /// Which operating system and runtime the connector lists are for (<see cref="ConfigFieldCatalog"/>); null is this machine with the
+    /// 0.8.10 connector set.
+    /// </param>
     public static BuildResult Build(
         string sourceYaml,
         ConfigDocument document,
         Action<FormField> onFieldCommitted,
-        Action<FormListField> onListCommitted)
+        Action<FormListField> onListCommitted,
+        ConfigChoiceProfile? profile = null)
     {
         ArgumentNullException.ThrowIfNull(sourceYaml);
         ArgumentNullException.ThrowIfNull(document);
+
+        profile ??= ConfigChoiceProfile.ForHost();
 
         var warnings = new List<string>();
         var stream = new YamlStream();
@@ -124,10 +131,10 @@ public static class ConfigFormBuilder
             switch (valueNode)
             {
                 case YamlMappingNode map:
-                    Populate(section, map, path, document, onFieldCommitted, onListCommitted, depth: 1);
+                    Populate(section, map, path, document, onFieldCommitted, onListCommitted, profile, depth: 1);
                     break;
                 case YamlScalarNode scalar:
-                    AddScalarField(section, key, path, scalar, document, onFieldCommitted);
+                    AddScalarField(section, key, path, scalar, document, onFieldCommitted, profile);
                     break;
                 case YamlSequenceNode seq:
                     AddSequenceEntry(section, key, path, seq, document, onFieldCommitted, onListCommitted);
@@ -147,6 +154,7 @@ public static class ConfigFormBuilder
         ConfigDocument document,
         Action<FormField> onFieldCommitted,
         Action<FormListField> onListCommitted,
+        ConfigChoiceProfile profile,
         int depth)
     {
         foreach (var (keyNode, valueNode) in Entries(node))
@@ -163,7 +171,7 @@ public static class ConfigFormBuilder
                 switch (valueNode)
                 {
                     case YamlScalarNode scalar:
-                        AddScalarField(group, key, path, scalar, document, onFieldCommitted);
+                        AddScalarField(group, key, path, scalar, document, onFieldCommitted, profile);
                         break;
 
                     case YamlSequenceNode seq:
@@ -178,7 +186,7 @@ public static class ConfigFormBuilder
                         }
 
                         var subGroup = new FormGroup(key, Humanize(key), string.Join('.', path));
-                        Populate(subGroup, map, path, document, onFieldCommitted, onListCommitted, depth + 1);
+                        Populate(subGroup, map, path, document, onFieldCommitted, onListCommitted, profile, depth + 1);
                         if (subGroup.HasContent)
                         {
                             group.SubGroups.Add(subGroup);
@@ -200,10 +208,20 @@ public static class ConfigFormBuilder
         List<string> path,
         YamlScalarNode scalar,
         ConfigDocument document,
-        Action<FormField> onFieldCommitted)
+        Action<FormField> onFieldCommitted,
+        ConfigChoiceProfile profile)
     {
         var (kind, value) = ClassifyScalar(key, scalar);
         var text = scalar.Value ?? string.Empty;
+        var dotted = string.Join('.', path);
+
+        // What the TUI's Setup config panel knows about this key: its hint, the list it offers, a reason it is not editable there.
+        // Only text becomes a choice: a plain true/false or integer keeps its own control, and a secret-shaped key stays a secret.
+        var info = ConfigFieldCatalog.Resolve(dotted, profile);
+        if (kind == FormFieldKind.String && info?.IsChoice == true)
+        {
+            kind = FormFieldKind.Choice;
+        }
 
         // Masking comes first and overrides everything the raw-document probe would say: the text this
         // field holds came from `config show --source`, and if it is a placeholder (or the field is a
@@ -230,6 +248,11 @@ public static class ConfigFormBuilder
         {
             (isEditable, reason) = (false, managedReason);
         }
+        else if (info?.ReadOnlyReason is { } catalogReason)
+        {
+            // A key the TUI shows but does not let its operator edit (the hook fail mode): editing it here would be editing a copy.
+            (isEditable, reason) = (false, catalogReason);
+        }
         else
         {
             (isEditable, reason) = ProbeScalar(document, path);
@@ -239,7 +262,7 @@ public static class ConfigFormBuilder
             // string path, which quotes it ('0.85'), silently changing its YAML type. Refuse the
             // edit instead; RAW keeps the type intact.
             if (isEditable &&
-                kind == FormFieldKind.String &&
+                kind is FormFieldKind.String or FormFieldKind.Choice &&
                 scalar.Style == ScalarStyle.Plain &&
                 YamlSectionEditor.LooksLikeNonStringPlainScalar(text))
             {
@@ -247,9 +270,8 @@ public static class ConfigFormBuilder
             }
         }
 
-        var dotted = string.Join('.', path);
-
-        group.Fields.Add(new FormField(key, Humanize(key), dotted, kind, value, isEditable, reason, onFieldCommitted, isMasked));
+        group.Fields.Add(new FormField(
+            key, Humanize(key), dotted, kind, value, isEditable, reason, onFieldCommitted, isMasked, info?.Options, info?.Hint));
     }
 
     /// <summary>True when any ancestor key of the value at <paramref name="path"/> is a headers map (the CLI masks every string beneath one).</summary>

@@ -12,6 +12,7 @@ using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Core.Runtime;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 
@@ -69,6 +70,14 @@ namespace DefenseClaw.App.ViewModels.ConfigEditor;
 /// <see cref="PublishPatchedSection"/> refuses any patch that would leave more mask
 /// placeholders in the document than it had before. Four independent guards, one invariant:
 /// FORM never writes a masked value into config.yaml.
+/// </para>
+/// <para>
+/// <b>A value with an error never reaches RAW either.</b> A FORM field checks the value the operator puts in it
+/// (<see cref="ConfigFieldValidator"/>); one with an <i>error</i> stays in its box, with the reason under it, and is not published:
+/// <see cref="HasBlockingFieldErrors"/> turns Review &amp; Save off (after the installation's own reason, which always comes first) until it
+/// is fixed or put back, and it counts as an unsaved edit so closing still asks. Warnings never block and are published like any edit. A
+/// value that is still the one the file had cannot block (the pin and the Mac both look at changed fields only), so a questionable value
+/// already on disk does not stop an unrelated edit. RAW is the escape hatch and is not checked here: the CLI validates what is saved.
 /// </para>
 /// </summary>
 public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDisposable
@@ -268,6 +277,26 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     public IReadOnlyList<string> FormWarnings { get; private set; } = Array.Empty<string>();
 
+    /// <summary>The fields whose value has an error: held in their box and never published to RAW. See the class remarks.</summary>
+    private readonly HashSet<FormField> _fieldsWithErrors = new();
+
+    /// <summary>
+    /// True while a FORM field holds a value with an error. Review &amp; Save is off for it (the installation's reason, when there is one,
+    /// still comes first) and the window counts it as an unsaved edit, until the value is fixed or put back.
+    /// </summary>
+    public bool HasBlockingFieldErrors => _fieldsWithErrors.Count > 0;
+
+    /// <summary>
+    /// One line per field with an error, <c>gateway.api_port: port must be between 1 and 65535</c>, in form order (at most
+    /// <see cref="MaxErrorLines"/>); empty when there is none. A line names the key and the kind of problem and never carries a value.
+    /// </summary>
+    public string FieldErrorsSummary { get; private set; } = string.Empty;
+
+    /// <summary>The one sentence Review &amp; Save's tooltip gives for the field errors: the first of them and how many there are. Null while there is none.</summary>
+    public string? FieldErrorsReason { get; private set; }
+
+    private const int MaxErrorLines = 6;
+
     public string WindowTitle =>
         HasSecretReferences
             ? "DefenseClaw Config Editor — contains secret references"
@@ -300,9 +329,11 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     /// <summary>
     /// True when the editor holds edits that are not in config.yaml — typed in RAW or applied from FORM (FORM edits
-    /// publish into RAW, so this is the single answer for both tabs). See the class remarks for what "modified" means.
+    /// publish into RAW, so this is the single answer for both tabs), or a FORM value with an error that was held back
+    /// (<see cref="HasBlockingFieldErrors"/>: it is not in RAW, but it is still the operator's edit). See the class remarks
+    /// for what "modified" means.
     /// </summary>
-    public bool HasUnsavedChanges => IsRawModified;
+    public bool HasUnsavedChanges => IsRawModified || HasBlockingFieldErrors;
 
     /// <summary>The "changed on disk" notice, except while the save-time drift banner is up: that one already says it, with the same buttons.</summary>
     public bool ShowExternalChangeBanner => ShowExternalChangeNotice && !ShowDriftBanner;
@@ -498,7 +529,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             {
                 _document = ConfigStore.Parse(string.Empty);
                 ParseError = ex.Message;
-                Sections.Clear();
+                ClearSections();
             }
 
             // On a failed parse FORM has nothing (or something stale) to show for this RAW
@@ -511,7 +542,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
             if (_formSourceYaml.Length == 0)
             {
-                Sections.Clear();
+                ClearSections();
             }
             else if (parsed)
             {
@@ -543,7 +574,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         _document = ConfigStore.Parse(string.Empty);
         _formSourceYaml = string.Empty;
         NeedsFormRebuild = false;
-        Sections.Clear();
+        ClearSections();
         FormUnavailableReason = "FORM is unavailable until config.yaml loads successfully (see the error above).";
         HasSecretReferences = false;
     }
@@ -641,9 +672,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             CommitPendingEdits?.Invoke();
 
             // Restore replaces the file with the backup, so what would be lost is anything beyond what is already
-            // on disk (the text of a save the CLI rejected is on disk and is exactly what Restore is for).
+            // on disk (the text of a save the CLI rejected is on disk and is exactly what Restore is for) - and a FORM
+            // value that was held back for its error, which is in no text at all.
             var needsAnswer = context == UnsavedChangesContext.Restore
-                ? !string.Equals(RawText, _diskText, StringComparison.Ordinal)
+                ? !string.Equals(RawText, _diskText, StringComparison.Ordinal) || HasBlockingFieldErrors
                 : HasUnsavedChanges;
             if (!needsAnswer)
             {
@@ -823,12 +855,20 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task ReviewAndSaveAsync()
     {
-        if (IsReviewing)
+        // The button and Ctrl+S ask CanSave first; a caller that does not (the command can be executed directly) is refused here too, so a
+        // review is never offered for a save that is off - the installation's reason, a field error, a load that failed.
+        if (IsReviewing || !CanSave())
         {
             return;
         }
 
         CommitPendingEdits?.Invoke();
+
+        // The box that was committed just now may be the one with the error.
+        if (!CanSave())
+        {
+            return;
+        }
 
         if (!HasUnsavedChanges)
         {
@@ -966,7 +1006,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         }
     }
 
-    private bool CanSave() => !IsSaving && !IsLoading && !LoadFailed && ChangesBlockedReason is null;
+    private bool CanSave() => !IsSaving && !IsLoading && !LoadFailed && ChangesBlockedReason is null && !HasBlockingFieldErrors;
 
     /// <summary>
     /// Why Save and Restore are off: the installation is managed or invalid, and this editor writes config.yaml itself. Null while they are on.
@@ -976,8 +1016,11 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     public bool HasChangesBlockedReason => ChangesBlockedReason is not null;
 
-    /// <summary>The Save button's tooltip: the shortcut, or why it is off.</summary>
-    public string SaveToolTip => ChangesBlockedReason ?? "Review and save (Ctrl+S)";
+    /// <summary>
+    /// The Save button's tooltip: the shortcut, or why it is off. One reason, in this order: the installation's (it is read-only; nothing
+    /// the operator fixes in a field changes that), then a field with an error.
+    /// </summary>
+    public string SaveToolTip => ChangesBlockedReason ?? FieldErrorsReason ?? "Review and save (Ctrl+S)";
 
     /// <summary>A saved-and-validated file proves the text parses; drop a stale parse-error banner if our own parser agrees.</summary>
     private void ClearParseErrorIfParses(string text)
@@ -1178,9 +1221,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     private void RebuildForm()
     {
-        var result = ConfigFormBuilder.Build(_formSourceYaml, _document, OnFieldCommitted, OnListCommitted);
+        var result = ConfigFormBuilder.Build(_formSourceYaml, _document, OnFieldCommitted, OnListCommitted, CurrentChoiceProfile());
 
-        Sections.Clear();
+        ClearSections();
         foreach (var section in result.Sections)
         {
             Sections.Add(section);
@@ -1194,6 +1237,98 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         {
             FormUnavailableReason = string.Join(" ", result.Warnings);
         }
+    }
+
+    /// <summary>
+    /// The connector lists for this machine and this runtime (<see cref="ConfigFieldCatalog"/>): the 0.8.10 set, unless the runtime has
+    /// answered its probe and shown the larger registry of the pinned newer source. Read each time the form is built; a runtime that is
+    /// probed after the editor opened is picked up by the next Reload.
+    /// </summary>
+    private ConfigChoiceProfile CurrentChoiceProfile() =>
+        ConfigChoiceProfile.ForHost(extendedConnectors: _services.Runtime.Capabilities.Has(RuntimeCapability.TuiRegistry));
+
+    /// <summary>Empties the FORM tree. The held-back values go with it: they were boxes of that tree, and RAW never had them.</summary>
+    private void ClearSections()
+    {
+        Sections.Clear();
+        if (_fieldsWithErrors.Count > 0)
+        {
+            _fieldsWithErrors.Clear();
+            RaiseFieldErrorState();
+        }
+    }
+
+    /// <summary>Records whether <paramref name="field"/> now holds a value with an error, and tells everything that depends on the answer.</summary>
+    private void TrackFieldValidation(FormField field)
+    {
+        var wasInError = _fieldsWithErrors.Contains(field);
+        var isInError = field.Validation.IsError;
+        if (isInError)
+        {
+            _ = _fieldsWithErrors.Add(field);
+        }
+        else
+        {
+            _ = _fieldsWithErrors.Remove(field);
+        }
+
+        // A field that stays in error may be in error for another reason now, and the summary names the reason.
+        if (wasInError || isInError)
+        {
+            RaiseFieldErrorState();
+        }
+    }
+
+    private void RaiseFieldErrorState()
+    {
+        var lines = FieldsInFormOrder()
+            .Where(_fieldsWithErrors.Contains)
+            .Select(f => $"{f.Path}: {f.Validation.Message}")
+            .ToList();
+
+        var shown = lines.Take(MaxErrorLines).ToList();
+        if (lines.Count > shown.Count)
+        {
+            shown.Add($"and {lines.Count - shown.Count} more");
+        }
+
+        FieldErrorsSummary = string.Join(Environment.NewLine, shown);
+        FieldErrorsReason = lines.Count switch
+        {
+            0 => null,
+            1 => $"Fix the field error before saving — {lines[0]}",
+            _ => $"Fix the {lines.Count} field errors before saving — {lines[0]}",
+        };
+
+        OnPropertyChanged(nameof(HasBlockingFieldErrors));
+        OnPropertyChanged(nameof(FieldErrorsSummary));
+        OnPropertyChanged(nameof(FieldErrorsReason));
+        OnPropertyChanged(nameof(SaveToolTip));
+        OnPropertyChanged(nameof(HasUnsavedChanges));
+        SaveCommand.NotifyCanExecuteChanged();
+        ReviewAndSaveCommand.NotifyCanExecuteChanged();
+        ConfirmReviewedSaveCommand.NotifyCanExecuteChanged();
+    }
+
+    private IEnumerable<FormField> FieldsInFormOrder()
+    {
+        static IEnumerable<FormField> Walk(FormGroup group)
+        {
+            foreach (var field in group.Fields)
+            {
+                yield return field;
+            }
+
+            foreach (var sub in group.SubGroups)
+            {
+                foreach (var field in Walk(sub))
+                {
+                    yield return field;
+                }
+            }
+        }
+
+        return Sections.SelectMany(Walk);
     }
 
     /// <summary>
@@ -1231,7 +1366,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     /// </summary>
     private bool RefuseMaskedCommit(FormField field)
     {
-        var isMaskedText = (field.Kind is FormFieldKind.String or FormFieldKind.EnvName) &&
+        var isMaskedText = (field.Kind is FormFieldKind.String or FormFieldKind.EnvName or FormFieldKind.Choice) &&
                            SensitiveKeyClassifier.IsMaskedValue(field.TextValue);
 
         if (field.IsMasked || field.Kind == FormFieldKind.Secret || !field.IsEditable || isMaskedText)
@@ -1256,7 +1391,18 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     private void OnFieldCommitted(FormField field)
     {
+        // First, and whatever else happens to the commit: what the field's own check said is what Review & Save follows.
+        TrackFieldValidation(field);
+
         if (!CanApplyFormEdit(field.DisplayName) || RefuseMaskedCommit(field))
+        {
+            return;
+        }
+
+        // A value with an error is the operator's to fix: it stays in its box with the reason under it, RAW is as it was, and a value that
+        // does not parse as a port, a URL or an env var name never gets as far as config.yaml. Putting the old value back is a commit like
+        // any other and goes through.
+        if (field.Validation.IsError)
         {
             return;
         }
