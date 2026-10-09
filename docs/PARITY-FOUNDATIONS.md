@@ -501,3 +501,15 @@ result.Succeeded; result.Outcome; result.RouteFailed; result.Invocation;        
 - **Help docs link (A13).** The palette row "Open DefenseClaw docs" (`app.docs`, `ShellCommandRegistry`) shows `ShellActions.DocsUrl` in its description and runs `ShellActions.OpenDocs`. The address is the Mac app's Help menu address. `OpenDocs` goes through the `UrlOpener` test seam (default: `Process.Start` with `UseShellExecute`, the same call the Updates window uses). Nothing is fetched. A failed launch shows a toast with the address.
 - **Hide until relaunch (AL4).** Stream-only alert rows (no audit id, so acknowledge and dismiss cannot name them) can be hidden from the Alerts toolbar. The hide is kept in memory on `AlertsPanelViewModel` by `AlertItem.HideKey`, which is built from the row's content because an id-less row gets a fresh key on every projection. A toolbar note shows the hidden count, and "Show hidden" lists the rows again. The action changes nothing on disk or in DefenseClaw, so it is not gated by the installation guard and stays available on a read-only installation. A new panel (a relaunch) lists every row again.
 - **Tests.** `DocsLinkTests` (the address, and the palette row opening it through the seam) and `AlertsHideUntilRelaunchTests` (hide, a later poll keeps the hide, show and toggle back, a new panel shows the rows again, an audit-id row cannot be hidden).
+
+## 26. Plane C readiness card and Security-log wording
+
+The Runtime panel has a read-only "Plane C readiness" card, shown only while the developer flag (Settings, Advanced) is on (CUST-324, from the CUST-316 spike).
+`PlaneCReadiness` (Core) builds six checks from injected `IPlaneCProbes` and the plane C row of the snapshot on screen: this app's token elevation type,
+Event Log Readers membership, whether an open-only `EventLogReader` query of the Security channel succeeds, the `ProcessCreationIncludeCmdLine_Enabled` value,
+the audit policy (always "unreadable without elevation", with copy-only verify lines), and plane C as the gateway reports it. Each check says whose token it
+describes, and each probe has a "could not read" state that is never drawn as a pass or a fault. The real probes (`WindowsPlaneCProbes`) use Win32 and .NET
+only. The card starts no process, elevates nothing and never runs `auditpol` or `reg`; copy-only blocks (verify, the runtime's grant lines, the untested
+Event Log Readers route, a side-by-side gateway restart, a labelled revert) are text for the user's own prompt. Tests fail if the review's step runner or
+the permissions read is called by the card, and scan its sources for any process-start API. Plane C is described as the Security event log, not ETW or
+kernel events, in the panel's strings and in `docs/RUNTIME-COMPAT-95159fd.md`.

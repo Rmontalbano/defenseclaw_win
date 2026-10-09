@@ -319,9 +319,9 @@ public sealed record AiRuntimeSnapshot(
         }
     }
 
-    /// <summary>The host plane's own counters, as the CLI prints them: classified kernel events and those left out of non-agent lineage.</summary>
+    /// <summary>The host plane's own counters, as the CLI prints them: classified Security-log events and those left out of non-agent lineage.</summary>
     public string HostPlaneSummary =>
-        $"host plane: {HostPlaneObservations.ToString("N0", CultureInfo.InvariantCulture)} kernel events classified, " +
+        $"host plane: {HostPlaneObservations.ToString("N0", CultureInfo.InvariantCulture)} Security-log events classified, " +
         $"{HostPlaneGated.ToString("N0", CultureInfo.InvariantCulture)} excluded outside AI-agent lineage";
 
     /// <summary>What the planes add up to. See <see cref="AiRuntimeCoverage"/>.</summary>

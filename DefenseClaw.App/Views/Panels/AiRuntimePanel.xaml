@@ -598,6 +598,125 @@
                                    AutomationProperties.LiveSetting="Polite" />
                     </StackPanel>
                 </Border>
+                <!-- Plane C readiness (developer flag). Read-only: four Win32/.NET reads and text to copy; nothing is run or elevated. -->
+                <StackPanel Visibility="{Binding ShowPlaneC, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcSectionHeader}" Text="Plane C readiness (developer)" />
+                    <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcCardHeader Symbol="ShieldLock24" Section="Setup" Content="Can plane C read the Security event log?" />
+                                <ui:ProgressRing Width="18"
+                                                 Height="18"
+                                                 Margin="10,0,0,8"
+                                                 IsIndeterminate="True"
+                                                 AutomationProperties.Name="Reading this PC"
+                                                 Visibility="{Binding IsReadingPlaneC, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource DcTextSecondary}" TextWrapping="Wrap" Text="{Binding PlaneCAppTokenNote}" />
+
+                            <ItemsControl Margin="0,10,0,0"
+                                          Focusable="False"
+                                          ItemsSource="{Binding PlaneCChecks}"
+                                          AutomationProperties.Name="Plane C readiness checks">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,12" AutomationProperties.Name="{Binding AutomationName}">
+                                            <TextBlock Style="{StaticResource DcCaption}" Text="{Binding SubjectText}" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <Border Style="{StaticResource DcBadge}" Tag="{Binding ToneKey}" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ctl:DcStatusGlyph Tone="{Binding ToneKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StateText}" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" VerticalAlignment="Center" Text="{Binding Title}" />
+                                            </StackPanel>
+                                            <TextBlock Style="{StaticResource DcTextSecondary}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding Value}" />
+                                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding Detail}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource DcBody}" Margin="0,4,0,4" FontWeight="SemiBold" Text="Verify the audit policy (elevated prompt)" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         TextWrapping="NoWrap"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="Verify commands to copy (this app does not run them)"
+                                         Text="{Binding PlaneCVerifyText, Mode=OneWay}" />
+                            </Border>
+
+                            <StackPanel Visibility="{Binding HasPlaneCGrant, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource DcBody}" Margin="0,12,0,4" FontWeight="SemiBold" Text="Grant (the runtime's own lines, elevated prompt)" />
+                                <Border Style="{StaticResource DcCodeBlock}">
+                                    <TextBox Style="{StaticResource DcMonoTextBox}"
+                                             TextWrapping="NoWrap"
+                                             HorizontalScrollBarVisibility="Auto"
+                                             AutomationProperties.Name="Grant commands to copy (this app does not run them)"
+                                             Text="{Binding PlaneCGrantText, Mode=OneWay}" />
+                                </Border>
+                            </StackPanel>
+
+                            <TextBlock Style="{StaticResource DcBody}" Margin="0,12,0,4" FontWeight="SemiBold" Text="Optional, untested: Event Log Readers instead of elevation (sign out and in afterwards)" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         TextWrapping="NoWrap"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="Event Log Readers command to copy (this app does not run it)"
+                                         Text="{Binding PlaneCEventLogReadersText, Mode=OneWay}" />
+                            </Border>
+
+                            <TextBlock Style="{StaticResource DcBody}" Margin="0,12,0,4" FontWeight="SemiBold" Text="Restart the side-by-side gateway (your own elevated terminal)" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         TextWrapping="NoWrap"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="Side-by-side gateway restart line to copy (this app does not run it)"
+                                         Text="{Binding PlaneCSideBySideText, Mode=OneWay}" />
+                            </Border>
+
+                            <TextBlock Style="{StaticResource DcBody}" Margin="0,12,0,4" FontWeight="SemiBold" Text="Revert (undoes the grant, including a value your IT may have set)" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         TextWrapping="NoWrap"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="Revert commands to copy (this app does not run them)"
+                                         Text="{Binding PlaneCRevertText, Mode=OneWay}" />
+                            </Border>
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap" Text="{x:Static vm:AiRuntimePanelViewModel.PlaneCCopyOnlyNote}" />
+
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,12,0,0">
+                                <ui:Button Content="Copy verify"
+                                           Icon="{ctl:DcSymbolIcon Copy24}"
+                                           Command="{Binding CopyPlaneCCommand}"
+                                           CommandParameter="verify"
+                                           AutomationProperties.HelpText="Puts the verify lines on the clipboard. Nothing is run." />
+                                <ui:Button Content="Copy grant"
+                                           Icon="{ctl:DcSymbolIcon Copy24}"
+                                           Command="{Binding CopyPlaneCCommand}"
+                                           CommandParameter="grant"
+                                           Visibility="{Binding HasPlaneCGrant, Converter={StaticResource BoolToVisibility}}"
+                                           AutomationProperties.HelpText="Puts the grant lines on the clipboard. Nothing is run." />
+                                <ui:Button Content="Copy restart line"
+                                           Icon="{ctl:DcSymbolIcon Copy24}"
+                                           Command="{Binding CopyPlaneCCommand}"
+                                           CommandParameter="side-by-side"
+                                           AutomationProperties.HelpText="Puts the side-by-side gateway restart line on the clipboard. Nothing is run." />
+                                <ui:Button Content="Copy revert"
+                                           Icon="{ctl:DcSymbolIcon Copy24}"
+                                           Command="{Binding CopyPlaneCCommand}"
+                                           CommandParameter="revert"
+                                           AutomationProperties.HelpText="Puts the revert lines on the clipboard. Nothing is run." />
+                                <ui:Button Content="Check again"
+                                           Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                           Command="{Binding CheckPlaneCCommand}"
+                                           ToolTip="Reads this app's token, group membership, the Security channel and one registry value (read-only)"
+                                           AutomationProperties.HelpText="Reads this PC again. Read-only; starts nothing." />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 

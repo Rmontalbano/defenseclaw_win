@@ -224,6 +224,8 @@ public sealed partial class AiRuntimePanelViewModel
         OnPropertyChanged(nameof(GuidanceOsNote));
         OnPropertyChanged(nameof(CommandsText));
         OnPropertyChanged(nameof(HasCommands));
+        OnPropertyChanged(nameof(PlaneCGrantText));
+        OnPropertyChanged(nameof(HasPlaneCGrant));
     }
 
     private static string Summarise(AiRuntimePermissions permissions)

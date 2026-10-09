@@ -355,6 +355,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
     {
         await LoadAsync().ConfigureAwait(true);
         await LoadPrerequisitesAsync().ConfigureAwait(true);
+        await ReadPlaneCAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -623,6 +624,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
         RaiseCoverage();
         OnPropertyChanged(nameof(CaptionText));
         OnPropertyChanged(nameof(StaleBanner));
+        RebuildPlaneC(snapshot);
     }
 
     private void ClearProjection()
@@ -637,6 +639,7 @@ public sealed partial class AiRuntimePanelViewModel : PanelViewModelBase
         _selectedId = null;
         ApplyRows();
         RaiseCoverage();
+        RebuildPlaneC(null);
     }
 
     private void RaiseCoverage()

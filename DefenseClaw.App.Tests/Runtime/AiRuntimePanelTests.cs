@@ -171,7 +171,7 @@ public sealed class AiRuntimePanelTests : IDisposable
             "6 findings · all planes up · polled " + AiRuntimePanelViewModel.Time(new DateTimeOffset(2030, 1, 15, 10, 4, 30, TimeSpan.Zero)) +
             " · 212 processes, 3 not fully readable, 148 connections, 6 with no owner",
             vm.CaptionText);
-        Assert.Equal("host plane: 57 kernel events classified, 41 excluded outside AI-agent lineage", vm.HostPlaneText);
+        Assert.Equal("host plane: 57 Security-log events classified, 41 excluded outside AI-agent lineage", vm.HostPlaneText);
 
         Assert.True(vm.CanPollNow);
         Assert.True(vm.CanEnable);

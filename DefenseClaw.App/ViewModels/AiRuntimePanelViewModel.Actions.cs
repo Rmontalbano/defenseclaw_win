@@ -23,7 +23,7 @@ public sealed partial class AiRuntimePanelViewModel
     public const string EnableExplanation =
         "Turns the AI Discovery runtime planes on in config.yaml (ai_discovery.runtime) and, unless you untick the restart, restarts the gateway so " +
         "they start. Plane A (inference heartbeat) and plane B (shadow egress) read this PC's process and connection tables and need no elevation " +
-        "for your own processes. Plane C (agent actions) reads kernel and Security-log events; it needs an elevated gateway and the Advanced Audit " +
+        "for your own processes. Plane C (agent actions) reads the Windows Security event log; it needs a gateway token that can read that log (in practice an elevated one) and the Advanced Audit " +
         "Policy (see Prerequisites below) and is only turned on if you choose it here. A plane that cannot run says why on this page.";
 
     public const string DisableExplanation =
@@ -31,7 +31,7 @@ public sealed partial class AiRuntimePanelViewModel
         "Findings already recorded are kept. While they are off, nothing is watching for shadow AI network traffic or unattributed agent actions.";
 
     public const string PlaneCWarning =
-        "Plane C reads kernel process, file and identity events, and every signal it raises is gated on an AI agent in the process lineage. " +
+        "Plane C reads process, file and identity events from the Security event log, and every signal it raises is gated on an AI agent in the process lineage. " +
         "Without an elevated gateway and the audit policy it stays blind and reports why; it never reports a quiet host in its place.";
 
     private int _hostPlaneIndex;

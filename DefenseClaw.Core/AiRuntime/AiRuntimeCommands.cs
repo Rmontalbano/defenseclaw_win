@@ -6,7 +6,7 @@ namespace DefenseClaw.Core.AiRuntime;
 /// What <c>agent discovery runtime enable</c> is asked to change. Every member that is null means "leave it as it is": the CLI's
 /// own default, and the reason the argv carries only what the operator chose.
 /// </summary>
-/// <param name="HostPlane">Plane C (agent actions, kernel events): true <c>--enable-host-plane</c>, false <c>--no-enable-host-plane</c>, null untouched.</param>
+/// <param name="HostPlane">Plane C (agent actions, from the Security event log): true <c>--enable-host-plane</c>, false <c>--no-enable-host-plane</c>, null untouched.</param>
 /// <param name="DnsCapture">Passive DNS observation: true <c>--dns-capture</c>, false <c>--no-dns-capture</c>, null untouched.</param>
 /// <param name="PollIntervalSeconds"><c>--poll-interval-s</c>, <see cref="AiRuntimeCommands.MinPollIntervalSeconds"/> to <see cref="AiRuntimeCommands.MaxPollIntervalSeconds"/>.</param>
 /// <param name="MinRiskToReport"><c>--min-risk-to-report</c>, <see cref="AiRuntimeCommands.MinRiskToReport"/> to <see cref="AiRuntimeCommands.MaxRiskToReport"/>.</param>
