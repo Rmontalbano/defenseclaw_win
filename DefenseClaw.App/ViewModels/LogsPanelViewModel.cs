@@ -227,7 +227,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
     /// <summary>The reader behind Verdicts and Events; made on first use from the audit database path. A test points it at a fixture.</summary>
     internal EventStreamReader StreamReader
     {
-        get => _reader ??= new EventStreamReader(Services.Paths.AuditDatabasePath);
+        get => _reader ??= new EventStreamReader(Services.Paths.AuditDatabasePath, probe: Services.AuditChanges);
         set => _reader = value;
     }
 
@@ -1112,8 +1112,16 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
 
         state.Loaded = true;
 
+        // The reader hands back the list it read last while the database has not changed (a quiet five seconds): nothing to compare.
+        if (ReferenceEquals(result.Rows, state.LastRows))
+        {
+            UpdateStatusText();
+            return;
+        }
+
         // Oldest first, like a log; the reader returns newest first.
         var ids = result.Rows.Select(r => r.Id).ToArray();
+        state.LastRows = result.Rows;
         if (ids.AsSpan().SequenceEqual(state.LastIds))
         {
             UpdateStatusText();
@@ -1181,6 +1189,9 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         /// <summary>The ids of the last read, newest first: what a poll compares with to see whether anything changed.</summary>
         public string[] LastIds { get; set; } = Array.Empty<string>();
 
+        /// <summary>The list the reader returned last: the same object again means the database did not change (see <see cref="EventStreamReader"/>).</summary>
+        public IReadOnlyList<StreamEvent>? LastRows { get; set; }
+
         /// <summary>True once a read has come back (even with no rows).</summary>
         public bool Loaded { get; set; }
 
@@ -1192,6 +1203,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         {
             Entries = new List<LogEntry>();
             LastIds = Array.Empty<string>();
+            LastRows = null;
             Loaded = false;
             Missing = false;
         }

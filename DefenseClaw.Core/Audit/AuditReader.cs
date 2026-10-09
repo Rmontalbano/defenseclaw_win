@@ -145,6 +145,22 @@ public enum AuditQueryShape
 /// index and reads the whole window (1.4 s for 24 h, 17 s cold for 7 days on the live database) — which
 /// the Audit panel abandons and restarts on every keystroke.
 /// </para>
+/// <para>
+/// <b>Unchanged snapshots are not read twice.</b> Given an <see cref="AuditChangeProbe"/> (the app shares one across every reader of the
+/// file), <see cref="QueryAsync"/> and <see cref="CountAsync"/> remember their last few answers by query, each with the probe's stamp
+/// taken before it was read. A call that finds the same stamp for the same query returns the remembered <em>object</em> without opening
+/// a connection, running a statement or decoding a row (<see cref="UnchangedReads"/> counts those, <see cref="RowsDecoded"/> the rows that
+/// were decoded), so a Refresh over a database that did not move costs one trivial probe, and a view-model can tell "nothing changed"
+/// by reference. Without a probe nothing is remembered. An archive (<c>immutable</c>) gets a probe of its own, a file stat, since the
+/// file is promised never to change.
+/// </para>
+/// <para>
+/// <b>An oversized value is unavailable, not truncated and not an empty page.</b> <c>details</c> and <c>structured_json</c> are loaded up to
+/// <see cref="DefaultPayloadLimitBytes"/> a value (or the query's <see cref="AuditQuery.PayloadLimitBytes"/>); a bigger one is left in the
+/// database - decided with <c>octet_length</c>, which reads the record header and not the value - and the row comes back with it listed in
+/// <see cref="AuditEvent.Oversized"/>, its other columns intact. A page whose rows are all oversized is still a page of rows
+/// (<see cref="AuditPage.AllOversized"/>), never "no events".
+/// </para>
 /// </summary>
 public sealed class AuditReader
 {
@@ -170,6 +186,26 @@ public sealed class AuditReader
     /// ended weeks ago is the opposite (the walk reads hundreds of thousands of rows to reach it, 60 s).
     /// </summary>
     public const int DefaultRunWalkBudget = 100_000;
+
+    /// <summary>
+    /// The most bytes of <c>details</c>, and of <c>structured_json</c>, loaded for one row (256 KiB, the size <see cref="MutationReader"/>
+    /// already works to). A row averages a few kilobytes and a model prompt or a tool result a few tens; a value past this is left in the
+    /// database and listed in <see cref="AuditEvent.Oversized"/>. The page query reads a hundred rows into a list the panel then keeps up to
+    /// twenty pages of, so what a row may weigh is what the window may weigh.
+    /// </summary>
+    public const long DefaultPayloadLimitBytes = 256 * 1024;
+
+    /// <summary>
+    /// The most rows a remembered page may have: a bigger result (an export is up to <see cref="AuditQuery.MaxLimit"/>) is read once and not
+    /// kept, so the memo never holds more than a few screens of rows.
+    /// </summary>
+    private const int MemoMaxRows = 250;
+
+    /// <summary>
+    /// The most text (<c>details</c> plus <c>structured_json</c>, in characters) a remembered page may hold. A page of ordinary rows is a few
+    /// hundred kilobytes; a page of rows that each sit just under the payload limit would be tens of megabytes, and is read once and not kept.
+    /// </summary>
+    private const int MemoMaxChars = 4 * 1024 * 1024;
 
     /// <summary>
     /// The most distinct severity spellings the reader will enumerate. The real table has five (INFO, LOW,
@@ -203,19 +239,38 @@ public sealed class AuditReader
     /// <summary>The id as the keyset cursor compares it: a NULL id (see <see cref="Map"/>) is the empty string.</summary>
     private const string IdKey = "COALESCE(e.id, '')";
 
-    internal const string SelectColumns = """
-        e.id, e.timestamp, e.action, e.target, e.actor, e.details, e.severity,
-        e.structured_json, e.bucket, e.connector, e.event_name, e.agent_name,
-        e.tool_name, e.session_id, e.run_id, e.request_id, e.trace_id,
-        e.source, e.signal, e.binary_version
-        """;
+    // Ordinals of the select list (SelectList): 0-19 the row, 20 the sort key, 21 and 22 the sizes of details and structured_json when
+    // they are over the payload limit (NULL otherwise). Map reads them by these numbers.
+    private const int SortNanosOrdinal = 20;
+    private const int DetailsOverOrdinal = 21;
+    private const int StructuredOverOrdinal = 22;
+
+    /// <summary>
+    /// The select list every row read shares: the twenty columns <see cref="Map"/> reads, with <c>details</c> and <c>structured_json</c>
+    /// within <paramref name="payloadLimit"/> bytes (NULL past it: see <c>PayloadCap</c>), then the sort key
+    /// (<paramref name="sortExpression"/>, aliased <c>sort_nanos</c>) and the sizes of the two when they are over the limit. The limit is a number
+    /// this class owns, written into the text.
+    /// </summary>
+    internal static string SelectList(long payloadLimit, string sortExpression) =>
+        "e.id, e.timestamp, e.action, e.target, e.actor, " + PayloadCap.Within("e.details", payloadLimit) + " AS details, e.severity, "
+        + PayloadCap.Within("e.structured_json", payloadLimit) + " AS structured_json, e.bucket, e.connector, e.event_name, e.agent_name, "
+        + "e.tool_name, e.session_id, e.run_id, e.request_id, e.trace_id, e.source, e.signal, e.binary_version, "
+        + sortExpression + " AS sort_nanos, "
+        + PayloadCap.SizeWhenOver("e.details", payloadLimit) + " AS details_over, "
+        + PayloadCap.SizeWhenOver("e.structured_json", payloadLimit) + " AS structured_json_over";
 
     private readonly string _connectionString;
     private readonly int _commonRowThreshold;
     private readonly int _runWalkBudget;
+    private readonly long _payloadLimit;
+    private readonly AuditChangeProbe? _probe;
+    private readonly SnapshotMemo<string, AuditPage> _pages;
+    private readonly SnapshotMemo<string, int> _counts;
     private long _pageQueries;
     private long _countQueries;
     private long _spellingFallbacks;
+    private long _rowsDecoded;
+    private long _unchangedReads;
 
     /// <param name="databasePath">Path to <c>audit.db</c>.</param>
     /// <param name="commonRowThreshold">
@@ -227,16 +282,37 @@ public sealed class AuditReader
     /// How many rows a run filter may walk the retention index past before the run's own index is used instead; see
     /// <see cref="DefaultRunWalkBudget"/>. Tests lower it.
     /// </param>
-    public AuditReader(string databasePath, int commonRowThreshold = DefaultCommonRowThreshold, int runWalkBudget = DefaultRunWalkBudget, bool immutable = false)
+    /// <param name="immutable">True for an archived copy; see <see cref="BuildImmutableConnectionString"/>.</param>
+    /// <param name="probe">
+    /// The change probe of this database, shared with the other readers of it: with one, an unchanged database is answered from the last
+    /// result (see the type documentation). Null remembers nothing, except for an archive, which gets a file-stat probe of its own.
+    /// </param>
+    /// <param name="payloadLimitBytes">The most bytes of <c>details</c> and of <c>structured_json</c> loaded per row; see <see cref="DefaultPayloadLimitBytes"/>.</param>
+    /// <param name="timeProvider">The clock the memo's age is measured on; the system's when null.</param>
+    public AuditReader(
+        string databasePath,
+        int commonRowThreshold = DefaultCommonRowThreshold,
+        int runWalkBudget = DefaultRunWalkBudget,
+        bool immutable = false,
+        AuditChangeProbe? probe = null,
+        long payloadLimitBytes = DefaultPayloadLimitBytes,
+        TimeProvider? timeProvider = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(commonRowThreshold, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(runWalkBudget, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(payloadLimitBytes, 1);
         DatabasePath = databasePath;
         IsImmutable = immutable;
         _commonRowThreshold = commonRowThreshold;
         _runWalkBudget = runWalkBudget;
+        _payloadLimit = payloadLimitBytes;
         _connectionString = immutable ? BuildImmutableConnectionString(databasePath) : BuildReadOnlyConnectionString(databasePath);
+
+        // An archive never changes, so it can always be remembered; it needs no connection to know (a stat), and so nothing to dispose.
+        _probe = probe ?? (immutable ? new AuditChangeProbe(databasePath, immutable: true) : null);
+        _pages = new SnapshotMemo<string, AuditPage>(capacity: 4, time: timeProvider);
+        _counts = new SnapshotMemo<string, int>(capacity: 4, time: timeProvider);
     }
 
     public string DatabasePath { get; }
@@ -260,6 +336,21 @@ public sealed class AuditReader
 
     /// <summary>The same count for <see cref="CountAsync"/> and <see cref="CountBySeverityAsync"/>.</summary>
     public long CountQueryCount => Interlocked.Read(ref _countQueries);
+
+    /// <summary>
+    /// How many rows this reader has decoded into <see cref="AuditEvent"/>s over its life: the cost a repeated read of an unchanged database
+    /// must not pay. A diagnostic seam: a test reads twice, with nothing written in between, and holds this still across the second.
+    /// </summary>
+    public long RowsDecoded => Interlocked.Read(ref _rowsDecoded);
+
+    /// <summary>
+    /// How many calls of <see cref="QueryAsync"/> and <see cref="CountAsync"/> were answered from the last result because the probe said the
+    /// database had not changed (no connection, no statement, no row decoded).
+    /// </summary>
+    public long UnchangedReads => Interlocked.Read(ref _unchangedReads);
+
+    /// <summary>The most bytes of <c>details</c> and of <c>structured_json</c> a row loads; a bigger value is listed in <see cref="AuditEvent.Oversized"/>.</summary>
+    public long PayloadLimitBytes => _payloadLimit;
 
     /// <summary>
     /// How many times the index-only severity counts were thrown away because they did not add up to the window
@@ -356,6 +447,17 @@ public sealed class AuditReader
         ArgumentNullException.ThrowIfNull(query);
 
         var limit = query.EffectiveLimit;
+        var payloadLimit = query.PayloadLimitBytes ?? _payloadLimit;
+
+        // The stamp is taken before anything is read (see SnapshotMemo): a commit that lands after it makes the next sample differ, so the
+        // worst case is one read too many. A query with a payload limit of its own is the unusual, big one (an export): never remembered.
+        var memoKey = query.PayloadLimitBytes is null ? query.PageKey() : null;
+        var stamp = memoKey is null ? AuditStamp.Unknown : SampleStamp();
+        if (memoKey is not null && _pages.TryGet(memoKey, stamp, out var remembered))
+        {
+            _ = Interlocked.Increment(ref _unchangedReads);
+            return remembered;
+        }
 
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -364,16 +466,18 @@ public sealed class AuditReader
 
         await using var command = connection.CreateCommand();
         // nosemgrep: csharp-sqli -- allow-list: BuildPageSql emits fixed text, const columns, ASC/DESC and $-placeholders; every value is a bound parameter
-        command.CommandText = BuildPageSql(command, query, hints);
+        command.CommandText = BuildPageSql(command, query, hints, payloadLimit);
 
         var events = new List<AuditEvent>(limit);
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                events.Add(Map(reader));
+                events.Add(Map(reader, payloadLimit));
             }
         }
+
+        _ = Interlocked.Add(ref _rowsDecoded, events.Count);
 
         // BuildPageSql fetched one extra row to answer HasMore without a second round trip.
         var hasMore = events.Count > limit;
@@ -383,8 +487,33 @@ public sealed class AuditReader
         }
 
         var nextCursor = hasMore && events.Count > 0 ? events[^1].Cursor : (AuditCursor?)null;
-        return new AuditPage(events, nextCursor, hasMore);
+        var page = new AuditPage(events, nextCursor, hasMore);
+        if (memoKey is not null && events.Count <= MemoMaxRows && TextOf(events) <= MemoMaxChars)
+        {
+            _pages.Store(memoKey, stamp, page);
+        }
+
+        return page;
     }
+
+    /// <summary>How much text the events hold (the two payload columns), counted in characters and stopping early once it is past what a remembered page may hold.</summary>
+    private static long TextOf(List<AuditEvent> events)
+    {
+        long total = 0;
+        foreach (var evt in events)
+        {
+            total += (evt.Details?.Length ?? 0) + (evt.StructuredJsonRaw?.Length ?? 0);
+            if (total > MemoMaxChars)
+            {
+                break;
+            }
+        }
+
+        return total;
+    }
+
+    /// <summary>The probe's stamp now, or <see cref="AuditStamp.Unknown"/> when this reader has no probe (it then remembers nothing).</summary>
+    private AuditStamp SampleStamp() => _probe?.Sample() ?? AuditStamp.Unknown;
 
     /// <summary>Convenience wrapper returning just the rows. (Off the caller's thread by way of <see cref="QueryAsync"/>.)</summary>
     public async Task<IReadOnlyList<AuditEvent>> ListAsync(AuditQuery query, CancellationToken cancellationToken = default) =>
@@ -403,12 +532,18 @@ public sealed class AuditReader
         using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
-        // nosemgrep: csharp-sqli -- constant: the only holes are the const SelectColumns and SortKey; the id is the bound $id
-        command.CommandText = $"SELECT {SelectColumns}, {SortKey} AS sort_nanos FROM audit_events e WHERE e.id = $id LIMIT 1";
+        // nosemgrep: csharp-sqli -- constant: the only hole is SelectList, built from literals and the reader's own numeric payload limit; the id is the bound $id
+        command.CommandText = $"SELECT {SelectList(_payloadLimit, SortKey)} FROM audit_events e WHERE e.id = $id LIMIT 1";
         command.Parameters.AddWithValue("$id", id);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? Map(reader) : null;
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        _ = Interlocked.Increment(ref _rowsDecoded);
+        return Map(reader, _payloadLimit);
     }
 
     /// <summary>
@@ -456,16 +591,17 @@ public sealed class AuditReader
             }
 
             command.CommandText =
-                // nosemgrep: csharp-sqli -- allow-list: const columns and the $p0..$pN placeholders built just above from the loop index; the ids are bound parameters
-                $"SELECT {SelectColumns}, {SortKey} AS sort_nanos FROM audit_events e WHERE e.id IN ({string.Join(',', names)})";
+                // nosemgrep: csharp-sqli -- allow-list: SelectList (literals and the reader's numeric payload limit) and the $p0..$pN placeholders built just above from the loop index; the ids are bound parameters
+                $"SELECT {SelectList(_payloadLimit, SortKey)} FROM audit_events e WHERE e.id IN ({string.Join(',', names)})";
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                found.Add(Map(reader));
+                found.Add(Map(reader, _payloadLimit));
             }
         }
 
+        _ = Interlocked.Add(ref _rowsDecoded, found.Count);
         return found;
     }
 
@@ -544,6 +680,22 @@ public sealed class AuditReader
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        // As in QueryCoreAsync: the stamp first, and a remembered total only for the same stamp and the same filters.
+        var memoKey = query.CountKey();
+        var stamp = SampleStamp();
+        if (_counts.TryGet(memoKey, stamp, out var remembered))
+        {
+            _ = Interlocked.Increment(ref _unchangedReads);
+            return remembered;
+        }
+
+        var total = await CountFreshAsync(query, cancellationToken).ConfigureAwait(false);
+        _counts.Store(memoKey, stamp, total);
+        return total;
+    }
+
+    private async Task<int> CountFreshAsync(AuditQuery query, CancellationToken cancellationToken)
+    {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
@@ -641,7 +793,7 @@ public sealed class AuditReader
         await using var command = connection.CreateCommand();
         var sql = shape switch
         {
-            AuditQueryShape.Page => BuildPageSql(command, query, hints),
+            AuditQueryShape.Page => BuildPageSql(command, query, hints, query.PayloadLimitBytes ?? _payloadLimit),
             AuditQueryShape.Count when UsesSpellingCounts(query, hints, shape) => BuildSpellingCountSql(command, query, hints),
             AuditQueryShape.Count => BuildCountSql(command, query, hints),
             AuditQueryShape.CountBySeverity when UsesSpellingCounts(query, hints, shape) => BuildSpellingCountSql(command, query, hints),
@@ -968,10 +1120,10 @@ public sealed class AuditReader
     /// <c>sort_nanos</c> alias (the COALESCE) and does sort.
     /// </para>
     /// </summary>
-    private static string BuildPageSql(SqliteCommand command, AuditQuery query, PlanHints hints)
+    private static string BuildPageSql(SqliteCommand command, AuditQuery query, PlanHints hints, long payloadLimit)
     {
         var sql = new StringBuilder()
-            .Append("SELECT ").Append(SelectColumns).Append(", ").Append(SortKey).AppendLine(" AS sort_nanos")
+            .Append("SELECT ").AppendLine(SelectList(payloadLimit, SortKey))
             .AppendLine("FROM audit_events e");
 
         AppendWhere(sql, command, query, hints, AuditQueryShape.Page);
@@ -1322,10 +1474,14 @@ public sealed class AuditReader
         DateTimeOffset.FromUnixTimeMilliseconds(nanos / 1_000_000L)
             .AddTicks(nanos % 1_000_000L / 100L);
 
-    internal static AuditEvent Map(SqliteDataReader reader)
+    /// <summary>
+    /// One row of a <see cref="SelectList"/> statement as an event. A value that was over <paramref name="payloadLimit"/> arrives as NULL
+    /// (the statement did not select it) with its size beside it; it is listed in <see cref="AuditEvent.Oversized"/> and its column stays null.
+    /// </summary>
+    internal static AuditEvent Map(SqliteDataReader reader, long payloadLimit)
     {
         var rawTimestamp = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-        var nanos = reader.IsDBNull(20) ? 0L : reader.GetInt64(20);
+        var nanos = reader.IsDBNull(SortNanosOrdinal) ? 0L : reader.GetInt64(SortNanosOrdinal);
 
         return new AuditEvent
         {
@@ -1355,6 +1511,7 @@ public sealed class AuditReader
             Source = Nullable(reader, 17),
             Signal = Nullable(reader, 18),
             BinaryVersion = Nullable(reader, 19),
+            Oversized = PayloadCap.Read(reader, payloadLimit, ("details", DetailsOverOrdinal), ("structured_json", StructuredOverOrdinal)),
         };
     }
 

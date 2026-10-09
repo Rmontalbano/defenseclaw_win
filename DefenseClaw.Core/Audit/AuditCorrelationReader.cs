@@ -143,7 +143,7 @@ public sealed class AuditCorrelationReader
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            events.Add(AuditReader.Map(reader));
+            events.Add(AuditReader.Map(reader, AuditReader.DefaultPayloadLimitBytes));
         }
 
         if (basis == RelatedBasis.Run)
@@ -154,8 +154,15 @@ public sealed class AuditCorrelationReader
         return new RelatedEvents(events, basis);
     }
 
+    /// <summary>
+    /// The columns of an event, the same list the Audit page reads: a value over <see cref="AuditReader.DefaultPayloadLimitBytes"/> is left in
+    /// the database and listed in <see cref="AuditEvent.Oversized"/> (an inspector's "related events" are a screenful of one-line summaries).
+    /// </summary>
+    private static string Columns =>
+        AuditReader.SelectList(AuditReader.DefaultPayloadLimitBytes, AuditReader.RetentionColumn);
+
     private static string Select =>
-        "SELECT " + AuditReader.SelectColumns + ", " + AuditReader.RetentionColumn + " AS sort_nanos FROM audit_events e ";
+        "SELECT " + Columns + " FROM audit_events e ";
 
     private static string Order => " ORDER BY " + AuditReader.RetentionColumn + " DESC, e.id DESC LIMIT $limit";
 
@@ -164,7 +171,7 @@ public sealed class AuditCorrelationReader
     /// backwards gives the newest eight with no sort whatever the run's size; they are put in timestamp order afterwards.
     /// </summary>
     private static string RunSql =>
-        "SELECT " + AuditReader.SelectColumns + ", " + AuditReader.RetentionColumn + " AS sort_nanos FROM audit_events e " +
+        "SELECT " + Columns + " FROM audit_events e " +
         "WHERE e.run_id = $run AND COALESCE(e.id, '') <> $id ORDER BY e.rowid DESC LIMIT $limit";
 
     private static string TargetSql =>

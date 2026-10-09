@@ -122,7 +122,7 @@ public sealed partial class AlertsPanelViewModel
     /// <summary>The egress decisions feed; see <see cref="DetailReader"/>.</summary>
     internal NetworkEgressReader EgressReader
     {
-        get => _egressReader ??= new NetworkEgressReader(Services.Paths.AuditDatabasePath);
+        get => _egressReader ??= new NetworkEgressReader(Services.Paths.AuditDatabasePath, Services.AuditChanges);
         set => _egressReader = value;
     }
 
@@ -483,19 +483,16 @@ public sealed partial class AlertsPanelViewModel
     // ---- Egress ------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// The newest egress decisions that deserve a row (not allowed, or LLM-shaped), as alert rows; rows already shown are reused. A feed
-    /// that cannot be read is an empty list and a note, never a failed queue read.
+    /// The newest egress decisions the reader holds (the same list object while the database has not changed). A feed that cannot be read
+    /// is null and a note, never a failed queue read.
     /// </summary>
-    private async Task<List<AlertItem>> ReadEgressRowsAsync(Dictionary<string, AlertItem> shown)
+    private async Task<IReadOnlyList<EgressEvent>?> ReadEgressEventsAsync()
     {
         try
         {
             var events = await EgressReader.ReadRecentAsync(NetworkEgressReader.DefaultLimit, TimeSpan.FromSeconds(5)).ConfigureAwait(true);
             _egressProblem = string.Empty;
-            return events
-                .Where(e => e.IsAlertWorthy)
-                .Select(e => shown.TryGetValue(e.Id, out var existing) ? existing : AlertItem.FromEgress(e))
-                .ToList();
+            return events;
         }
 #pragma warning disable CA1031 // The egress feed is an addition to the queue; a locked or older database must not take the queue down with it.
         catch (Exception ex) when (ex is SqliteException or IOException or TimeoutException or InvalidOperationException)
@@ -503,9 +500,18 @@ public sealed partial class AlertsPanelViewModel
         {
             Trace.TraceWarning($"alerts: the egress feed could not be read: {ex.GetType().Name}: {ex.Message}");
             _egressProblem = "egress could not be read";
-            return new List<AlertItem>();
+            return null;
         }
     }
+
+    /// <summary>The egress decisions that deserve a row (not allowed, or LLM-shaped), as alert rows; rows already shown are reused.</summary>
+    private static List<AlertItem> EgressRows(IReadOnlyList<EgressEvent>? events, Dictionary<string, AlertItem> shown) =>
+        events is null
+            ? new List<AlertItem>()
+            : events
+                .Where(e => e.IsAlertWorthy)
+                .Select(e => shown.TryGetValue(e.Id, out var existing) ? existing : AlertItem.FromEgress(e))
+                .ToList();
 }
 
 public sealed partial class AlertItem
@@ -553,6 +559,14 @@ public sealed partial class AlertItem
             : egress.Branch.Length > 0 ? $"{decision} · {egress.Branch}" : decision;
         var pretty = string.Join(Environment.NewLine, fields.Select(f => $"{f.Name}: {f.Value}"));
 
+        // A document the reader left in the database for its size means the decision above may be read from less than the row says.
+        var notice = egress.Oversized.Count == 0 ? string.Empty : "Too large to display: " + OversizedValue.Describe(egress.Oversized);
+        if (notice.Length > 0)
+        {
+            fields.Insert(0, new AlertField("unavailable", notice));
+            pretty = notice + Environment.NewLine + pretty;
+        }
+
         return new AlertItem(egress.Id, egress.Timestamp)
         {
             Kind = AlertKinds.Egress,
@@ -567,6 +581,7 @@ public sealed partial class AlertItem
             Tags = egress.LooksLikeLlm ? "llm-shaped" : string.Empty,
             StructuredText = pretty,
             Fields = fields,
+            OversizedNotice = notice,
         };
     }
 }

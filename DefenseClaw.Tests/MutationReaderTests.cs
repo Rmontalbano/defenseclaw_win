@@ -207,13 +207,19 @@ public sealed class MutationReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Long_payloads_are_capped_in_the_statement()
+    public async Task A_payload_over_the_limit_is_not_read_and_not_cut_it_is_unavailable_with_its_size()
     {
-        Activity("big", 1, before: new string('x', MutationReader.PayloadLimit + 500));
+        // Cut at the limit it would be a broken document that reads as a different change; left in the database it is a change that says
+        // "before_json is 262,644 bytes, over the 256 KB limit" (see OversizedPayloadTests for the rest of the cases).
+        Activity("big", 1, before: new string('x', MutationReader.PayloadLimit + 500), after: "{\"mode\":\"action\"}");
 
         var item = Assert.Single((await Reader().ReadAsync()).Items);
 
-        Assert.Equal(MutationReader.PayloadLimit, item.BeforeJson.Length);
+        Assert.Equal(string.Empty, item.BeforeJson);
+        Assert.Equal("{\"mode\":\"action\"}", item.AfterJson);
+        var oversized = Assert.Single(item.Oversized);
+        Assert.Equal("before_json", oversized.Column);
+        Assert.Equal(MutationReader.PayloadLimit + 500, oversized.Bytes);
     }
 
     [Fact]

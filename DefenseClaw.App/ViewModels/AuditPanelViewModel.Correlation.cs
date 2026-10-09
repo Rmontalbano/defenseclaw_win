@@ -395,7 +395,9 @@ public sealed partial class AuditPanelViewModel
         var token = timeout.Token;
         try
         {
-            var query = BuildQuery(null) with { Limit = ExportCap };
+            // The whole of every value: a file the operator asked for must not quietly leave out a long details (the panel's own
+            // limit is for what it can show). Such a query is not remembered by the reader.
+            var query = BuildQuery(null) with { Limit = ExportCap, PayloadLimitBytes = AuditQuery.NoPayloadLimit };
             var platformOnly = SelectedConnector.PlatformOnly;
             var pageRead = reader.QueryAsync(query, token);
             var totalRead = platformOnly || query.ActionAnyOf is { Count: > 0 }

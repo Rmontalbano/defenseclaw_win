@@ -35,6 +35,19 @@ namespace DefenseClaw.App.ViewModels;
 /// a burst of changes made together (<see cref="ResetFiltersCommand"/> changes up to seven properties)
 /// is one load, not seven.
 /// </para>
+/// <para>
+/// <b>A refresh of an unchanged database changes nothing on screen.</b> The reader remembers its last answers under the shared change
+/// probe (<see cref="AuditReader"/>), so a Refresh that finds the database where the last read left it costs one probe: no query, no row
+/// decoded. Whether the reader re-read or not, a fresh page whose rows are the ones already listed (same ids in the same order, same
+/// total) leaves the list, the selection and the scroll position alone - the Mac's <c>appliedCanonicalIDs</c> comparison. The window
+/// ("last 24 hours") starts on a whole minute for the same reason: two refreshes inside a minute ask for the same rows.
+/// </para>
+/// <para>
+/// <b>A row that is too large is unavailable, not missing and not an empty list.</b> The reader leaves a <c>details</c> or
+/// <c>structured_json</c> over its limit in the database and lists the row with the reason (<see cref="AuditEvent.Oversized"/>); the row is
+/// shown, its detail text and its JSON say why they are missing, and the filter strip says how many ("1 event too large to display"). A
+/// first page that is nothing but such rows is therefore a list of them with that note, never the "No matching events" state.
+/// </para>
 /// </summary>
 public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
@@ -60,6 +73,21 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
     private CancellationTokenSource _generationSource = new();
     private CancellationToken _generationToken;
     private AuditCursor? _cursor;
+
+    /// <summary>
+    /// What the list was last built from by a fresh load (not "Load more"): the page, its total, whether the platform-only refinement was
+    /// applied and the name of the time range (the summary line says it). A fresh load that reads the same thing leaves the list alone. Null
+    /// whenever the list is not a known result (while it is being rebuilt, after an error, after switching source).
+    /// </summary>
+    private ShownSnapshot? _shown;
+
+    /// <summary>
+    /// True once "Load more" has added pages to the list since the last fresh load. A refresh then still starts over from the newest page
+    /// (that is what Refresh and the row-cap notice promise), so an extended list is never "the same as shown".
+    /// </summary>
+    private bool _extended;
+
+    private sealed record ShownSnapshot(AuditPage Page, int? Total, bool PlatformOnly, string RangeLabel);
 
     /// <summary>While above zero, filter changes only note that a reload is due (see <see cref="ResetFilters"/>).</summary>
     private int _reloadDeferrals;
@@ -176,6 +204,9 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     /// <summary>The gate loads queue behind; a test holds it to line a burst of changes up before any of them can query.</summary>
     internal SemaphoreSlim LoadGate => _loadGate;
+
+    /// <summary>The clock the time window is read from; a test fixes it so a refresh can never straddle the minute the window starts on.</summary>
+    internal TimeProvider TimeSource { get; set; } = TimeProvider.System;
 
     /// <summary>What the list footer says while <see cref="IsRowCapReached"/>.</summary>
     public string RowCapNotice =>
@@ -558,8 +589,19 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             token.ThrowIfCancellationRequested();
 
             var page = await pageRead;
+            int? total = totalRead is null ? null : await totalRead;
+
+            // A fresh load that read what the list is already built from (the reader answered from its last result, or re-read and found the
+            // same rows) changes nothing: the rows, the selection and the scroll position stay, and only the note is brought up to date.
+            if (!append && SameAsShown(page, total, platformOnly, SelectedRange.Label))
+            {
+                StatusNote = OversizedNote();
+                return;
+            }
+
             if (!append)
             {
+                _shown = null;
                 Rows.Clear();
             }
 
@@ -588,12 +630,12 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             _cursor = page.NextCursor;
             HasMore = page.HasMore && !capReached;
 
-            ResultSummary = totalRead is null
+            ResultSummary = total is not { } counted
                 ? platformOnly
                     ? $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} platform row(s) loaded · {SelectedRange.Label}"
                     : $"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)}{(HasMore || IsRowCapReached ? "+" : string.Empty)} matching events loaded · {SelectedRange.Label}"
                 :$"{Rows.Count.ToString("N0", CultureInfo.CurrentCulture)} of " +
-                  $"{(await totalRead).ToString("N0", CultureInfo.CurrentCulture)} matching events · {SelectedRange.Label}";
+                  $"{counted.ToString("N0", CultureInfo.CurrentCulture)} matching events · {SelectedRange.Label}";
 
             IsEmpty = Rows.Count == 0;
             if (IsEmpty)
@@ -604,7 +646,13 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
                     : "Widen the time range, lower the minimum severity, or clear the action filter.";
             }
 
-            StatusNote = string.Empty;
+            // The note a successful read leaves: how many of the listed events had a value too large to load (and so cleared a stale error).
+            StatusNote = OversizedNote();
+            _extended = append;
+            if (!append)
+            {
+                _shown = new ShownSnapshot(page, total, platformOnly, SelectedRange.Label);
+            }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -653,10 +701,73 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         ActionAnyOf = PresetActionTerms(ActivePreset),
         RunId = string.IsNullOrWhiteSpace(RunFilter) ? null : RunFilter.Trim(),
         SearchText = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
-        From = SelectedRange.Since is { } window ? DateTimeOffset.UtcNow - window : null,
+        From = SelectedRange.Since is { } window ? WindowStart(window) : null,
         Limit = PageSize,
         After = after,
     };
+
+    /// <summary>
+    /// Where a window of <paramref name="window"/> ending now starts: the whole minute it falls in. A window that starts at a different
+    /// instant on every call is a different question on every call, so the reader could never recognise a Refresh as a repeat; the
+    /// minute is invisible in a window of an hour or more, and it lets two refreshes inside it share an answer.
+    /// </summary>
+    private DateTimeOffset WindowStart(TimeSpan window)
+    {
+        var start = TimeSource.GetUtcNow() - window;
+        return new DateTimeOffset(start.UtcTicks - (start.UtcTicks % TimeSpan.TicksPerMinute), TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// True when <paramref name="page"/> and <paramref name="total"/> are what the list is already built from: the same rows in the same
+    /// order (the reader's remembered object, or a new read of the same ids - audit rows do not change), the same total, the same
+    /// platform refinement and the same range name. Then a refresh has nothing to show.
+    /// </summary>
+    private bool SameAsShown(AuditPage page, int? total, bool platformOnly, string rangeLabel)
+    {
+        if (_extended || _shown is not { } shown || shown.PlatformOnly != platformOnly || shown.Total != total
+            || !string.Equals(shown.RangeLabel, rangeLabel, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(shown.Page, page))
+        {
+            return true;
+        }
+
+        var before = shown.Page;
+        if (before.HasMore != page.HasMore || before.NextCursor != page.NextCursor || before.Events.Count != page.Events.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < page.Events.Count; i++)
+        {
+            if (!string.Equals(before.Events[i].Id, page.Events[i].Id, StringComparison.Ordinal)
+                || before.Events[i].Oversized.Count != page.Events[i].Oversized.Count)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// "1 event too large to display" / "3 events too large to display" for the listed rows that have a value left in the database
+    /// (<see cref="AuditRow.IsOversized"/>), else empty. Words, not a count alone, because this is what stands where a failed read's note
+    /// would: the list is not empty and not broken, some of it is unavailable, and that is said.
+    /// </summary>
+    private string OversizedNote()
+    {
+        var count = Rows.Count(static row => row.IsOversized);
+        return count switch
+        {
+            0 => string.Empty,
+            1 => "1 event too large to display",
+            _ => $"{count.ToString("N0", CultureInfo.CurrentCulture)} events too large to display",
+        };
+    }
 }
 
 /// <summary>Minimum-severity choice for the filter bar.</summary>
@@ -809,6 +920,7 @@ public sealed class AuditRow
         IsPlatform = source.Connector is null;
         EventName = source.EventName ?? string.Empty;
         Details = source.Details ?? string.Empty;
+        Oversized = source.Oversized;
         Target = source.Target ?? string.Empty;
         Actor = source.Actor ?? string.Empty;
         ToolName = source.ToolName ?? string.Empty;
@@ -828,9 +940,33 @@ public sealed class AuditRow
             () => ParseDetailPairs(Details),
             LazyThreadSafetyMode.ExecutionAndPublication);
         var rawStructured = source.StructuredJsonRaw;
-        _structuredJson = new Lazy<string>(() => PrettyJson(rawStructured), LazyThreadSafetyMode.ExecutionAndPublication);
+        var structuredOversized = source.Oversized.FirstOrDefault(static o => string.Equals(o.Column, "structured_json", StringComparison.Ordinal));
+        _structuredJson = new Lazy<string>(
+            () => structuredOversized is null ? PrettyJson(rawStructured) : structuredOversized.Placeholder(CodeBoxColumns),
+            LazyThreadSafetyMode.ExecutionAndPublication);
         Fields = BuildFields(source);
     }
+
+    /// <summary>
+    /// The values of this event the reader left in the database because they are over its limit (<see cref="AuditEvent.Oversized"/>): which
+    /// column, how big, what the limit was. Empty for a complete row. The row is listed all the same, with the reason where the value would be.
+    /// </summary>
+    public IReadOnlyList<OversizedValue> Oversized { get; }
+
+    /// <summary>True when part of this event is too large to display (<see cref="Oversized"/>).</summary>
+    public bool IsOversized => Oversized.Count > 0;
+
+    /// <summary>"Too large to display: details is 3.2 MB, over the 256 KB limit"; empty for a complete row.</summary>
+    public string OversizedNotice => IsOversized ? "Too large to display: " + OversizedValue.Describe(Oversized) : string.Empty;
+
+    /// <summary>
+    /// How many characters wide the inspector's JSON box is, give or take: it scrolls sideways instead of wrapping, so the placeholder for a
+    /// value the reader did not load is broken into lines this long (<see cref="OversizedValue.Placeholder"/>) and none is cut off at the edge.
+    /// </summary>
+    private const int CodeBoxColumns = 40;
+
+    /// <summary>What stands where a value the reader did not load would be in a field, which wraps by itself: the reason on one line, in the parentheses the "no structured payload" placeholder uses.</summary>
+    private static string UnavailableText(OversizedValue value) => value.Placeholder(int.MaxValue);
 
     public string Id { get; }
 
@@ -923,7 +1059,8 @@ public sealed class AuditRow
 
     public IReadOnlyList<AuditDetailField> Fields { get; }
 
-    public string Summary => Details.Length > 0 ? Details : EventName;
+    /// <summary>The one-line text of the row: its details; when those are too large to display, the reason (so the row says why it has none); otherwise the event name.</summary>
+    public string Summary => Details.Length > 0 ? Details : IsOversized ? OversizedNotice : EventName;
 
     /// <summary>Critical 4 ... Info 0, unknown -1: what the Severity column sorts by (the words sort alphabetically, which is no order).</summary>
     public int SeverityRank { get; }
@@ -965,7 +1102,11 @@ public sealed class AuditRow
         Add("request_id", source.RequestId);
         Add("trace_id", source.TraceId);
         Add("binary_version", source.BinaryVersion);
-        Add("details", source.Details);
+        Add(
+            "details",
+            source.Details ?? (source.Oversized.FirstOrDefault(static o => string.Equals(o.Column, "details", StringComparison.Ordinal)) is { } over
+                ? UnavailableText(over)
+                : null));
 
         return fields;
 

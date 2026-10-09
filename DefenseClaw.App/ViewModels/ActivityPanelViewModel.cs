@@ -87,9 +87,13 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
     public const string MutationsTab = "Mutations";
 
     public ActivityPanelViewModel(AppServices services)
-        : this(services, new MutationReader((services ?? throw new ArgumentNullException(nameof(services))).Paths.AuditDatabasePath))
+        : this(services, NewMutationReader(services ?? throw new ArgumentNullException(nameof(services))))
     {
     }
+
+    /// <summary>The Mutations tab's reader over the live <c>audit.db</c>, sharing the app's change probe so a refresh of an unchanged database reuses the last result.</summary>
+    private static MutationReader NewMutationReader(AppServices services) =>
+        new(services.Paths.AuditDatabasePath, services.AuditChanges);
 
     internal ActivityPanelViewModel(AppServices services, MutationReader mutationReader)
         : base(services)

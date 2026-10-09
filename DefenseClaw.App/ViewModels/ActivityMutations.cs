@@ -48,15 +48,25 @@ public static class MutationDiffBuilder
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <summary>Which of the diffs <paramref name="item"/> can show: before / after first, then a recorded diff, then the audit row's own record.</summary>
+    /// <summary>
+    /// Which of the diffs <paramref name="item"/> can show: before / after first, then a recorded diff, then the audit row's own record. A
+    /// value the reader left in the database for its size (<see cref="MutationItem.Oversized"/>) still counts as recorded - it takes its
+    /// section, which says why it is empty - so a change is never described as having "recorded no values" when it recorded one too big to show.
+    /// </summary>
     public static MutationDiffMode ModeOf(MutationItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return item.HasBeforeAfter ? MutationDiffMode.BeforeAfter
-            : item.HasDiff ? MutationDiffMode.Unified
-            : item.StructuredJson.Length > 0 ? MutationDiffMode.Recorded
+        return item.HasBeforeAfter || WasOversized(item, "before_json", "after_json") ? MutationDiffMode.BeforeAfter
+            : item.HasDiff || WasOversized(item, "diff_json") ? MutationDiffMode.Unified
+            : item.StructuredJson.Length > 0 || WasOversized(item, "structured_json") ? MutationDiffMode.Recorded
             : MutationDiffMode.None;
     }
+
+    /// <summary>The oversized value of <paramref name="item"/> in one of these <paramref name="columns"/>, or null.</summary>
+    internal static OversizedValue? OversizedIn(MutationItem item, params string[] columns) =>
+        item.Oversized.FirstOrDefault(value => columns.Contains(value.Column, StringComparer.Ordinal));
+
+    private static bool WasOversized(MutationItem item, params string[] columns) => OversizedIn(item, columns) is not null;
 
     /// <summary>JSON re-indented so a change reads line by line; anything that is not JSON comes back as it was.</summary>
     public static string Pretty(string text)
@@ -199,14 +209,42 @@ public sealed class MutationRow
         VersionText = item.VersionFrom.Length == 0 && item.VersionTo.Length == 0 ? "—" : $"{item.VersionFrom} → {item.VersionTo}";
         ConnectorText = item.Connector ?? "—";
         SourceText = item.Source == MutationSource.ActivityEvent ? "Activity" : item.Bucket;
-        ReasonText = item.Reason.Length > 0 ? item.Reason.ReplaceLineEndings(" ") : "—";
+        ReasonText = item.Reason.Length > 0
+            ? item.Reason.ReplaceLineEndings(" ")
+            : MutationDiffBuilder.OversizedIn(item, "reason", "details") is not null ? "(too large to display)" : "—";
 
         Mode = MutationDiffBuilder.ModeOf(item);
-        BeforeText = item.BeforeJson.Length > 0 ? MutationDiffBuilder.Pretty(item.BeforeJson) : "(empty)";
-        AfterText = item.AfterJson.Length > 0 ? MutationDiffBuilder.Pretty(item.AfterJson) : "(empty)";
-        UnifiedLines = Mode == MutationDiffMode.Unified ? MutationDiffBuilder.Unified(item.DiffJson) : Array.Empty<DiffLine>();
-        RecordedText = Mode == MutationDiffMode.Recorded ? MutationDiffBuilder.Pretty(item.StructuredJson) : string.Empty;
+        BeforeText = ValueText(item.BeforeJson, "before_json", "(empty)");
+        AfterText = ValueText(item.AfterJson, "after_json", "(empty)");
+        UnifiedLines = Mode != MutationDiffMode.Unified
+            ? Array.Empty<DiffLine>()
+            : item.DiffJson.Length == 0 && MutationDiffBuilder.OversizedIn(item, "diff_json") is { } diff
+                ? diff.PlaceholderLines(BoxColumns).Select(static line => new DiffLine(DiffLineKind.Context, line)).ToList()
+                : MutationDiffBuilder.Unified(item.DiffJson);
+        RecordedText = Mode != MutationDiffMode.Recorded
+            ? string.Empty
+            : item.StructuredJson.Length == 0 && MutationDiffBuilder.OversizedIn(item, "structured_json") is { } recorded
+                ? recorded.Placeholder(BoxColumns)
+                : MutationDiffBuilder.Pretty(item.StructuredJson);
     }
+
+    // The code boxes scroll sideways instead of wrapping, so the placeholder for a value the reader did not load is broken into lines that
+    // fit: the inspector's full-width boxes (diff, recorded detail) hold about 45 characters, each half of the before / after pair about 19.
+    private const int BoxColumns = 40;
+
+    private const int WellColumns = 18;
+
+    /// <summary>A before / after value, indented; the reason it is missing when it was too large to load; otherwise <paramref name="whenAbsent"/>.</summary>
+    private string ValueText(string value, string column, string whenAbsent) =>
+        value.Length > 0
+            ? MutationDiffBuilder.Pretty(value)
+            : MutationDiffBuilder.OversizedIn(Item, column) is { } over ? over.Placeholder(WellColumns) : whenAbsent;
+
+    /// <summary>True when part of this change is too large to display (<see cref="MutationItem.Oversized"/>).</summary>
+    public bool IsOversized => Item.IsOversized;
+
+    /// <summary>"Too large to display: before_json is 300 KB, over the 256 KB limit"; empty for a complete change.</summary>
+    public string OversizedNotice => IsOversized ? "Too large to display: " + OversizedValue.Describe(Item.Oversized) : string.Empty;
 
     public MutationItem Item { get; }
 
@@ -265,6 +303,7 @@ public sealed class MutationRow
             Add("Version", VersionText == "—" ? string.Empty : VersionText);
             Add("Connector", Item.Connector ?? string.Empty);
             Add("Source", SourceText);
+            Add("Unavailable", OversizedNotice);
             return fields;
 
             void Add(string name, string value)

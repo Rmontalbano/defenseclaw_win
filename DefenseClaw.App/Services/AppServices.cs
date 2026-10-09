@@ -109,7 +109,10 @@ public sealed class AppServices : IDisposable
         // the port it inspects and the client it probes through cannot drift apart.
         InstallDetector = new InstallStateDetector(Paths, _endpoint.Client, PortInspector);
 
-        Audit = new AuditReader(Paths.AuditDatabasePath);
+        // One change probe over audit.db for every reader of it (docs/PARITY-FOUNDATIONS.md, "Change probe"): a refresh that finds the
+        // database where the last one left it reuses the last result. It opens its connection on the first sample and does nothing on its own.
+        AuditChanges = new AuditChangeProbe(Paths.AuditDatabasePath);
+        Audit = new AuditReader(Paths.AuditDatabasePath, probe: AuditChanges);
         Inventory = new InventoryReader(Paths.InventoryDatabasePath);
         ClaudeSettings = new ClaudeSettingsReader(claudeSettingsPath);
         GatewayLog = new LogTailer(Paths.GatewayLogPath, new LogTailerOptions { StartAtEnd = true });
@@ -146,7 +149,7 @@ public sealed class AppServices : IDisposable
         Settings.Changed += OnSettingsChanged;
 
         Navigation = new ShellNavigation();
-        AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath);
+        AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges);
         ConnectorScope = new ConnectorScope(Monitor);
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
 
@@ -183,6 +186,15 @@ public sealed class AppServices : IDisposable
     public GatewayClient Gateway => Endpoint.Client;
 
     public AuditReader Audit { get; }
+
+    /// <summary>
+    /// "Has audit.db changed since I last looked?", answered with one trivial statement (<c>PRAGMA data_version</c> on one kept read-only
+    /// connection). Shared by <see cref="Audit"/>, <see cref="AlertQueue"/> and the readers the Mutations tab, the Logs streams and the Alerts
+    /// egress feed build over the same file, so a refresh with no change reuses the last result and skips the query, the decoding and the diff;
+    /// and what a panel that polls (the Audit live refresh) asks instead of reading: <c>await Services.AuditChanges.SampleAsync()</c>, and
+    /// fetch only when the stamp stopped <see cref="AuditStamp.Matches"/>ing the last one. See <see cref="AuditChangeProbe"/>.
+    /// </summary>
+    public AuditChangeProbe AuditChanges { get; }
 
     public InventoryReader Inventory { get; }
 
@@ -577,6 +589,7 @@ public sealed class AppServices : IDisposable
         _reloadRetry?.Dispose();
         Settings.Changed -= OnSettingsChanged;
         AlertCounts.Dispose();
+        AuditChanges.Dispose();
         UpdateWatcher.Dispose();
         GatewayAutoStart.Dispose();
         ConnectorScope.Dispose();

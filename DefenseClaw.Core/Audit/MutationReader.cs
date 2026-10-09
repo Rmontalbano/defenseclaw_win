@@ -41,7 +41,7 @@ public enum MutationStatus
 /// <param name="VersionTo">The version after; empty when not recorded.</param>
 /// <param name="Connector">The connector the change belongs to; null when the row names none (an explicit connector filter hides it, like every other Mac screen).</param>
 /// <param name="Bucket"><c>compliance.activity</c> / <c>enforcement.action</c> for an audit row, empty for an activity event.</param>
-/// <param name="StructuredJson">An audit row's <c>structured_json</c> (capped); empty for an activity event.</param>
+/// <param name="StructuredJson">An audit row's <c>structured_json</c>; empty for an activity event, and when it was too large to load (see <see cref="MutationItem.Oversized"/>).</param>
 public sealed record MutationItem(
     string Id,
     MutationSource Source,
@@ -61,6 +61,17 @@ public sealed record MutationItem(
     string Bucket,
     string StructuredJson)
 {
+    /// <summary>
+    /// The values of this change that were bigger than <see cref="MutationReader.PayloadLimit"/> and so were left in the database (their
+    /// columns above are empty): <c>before_json</c>, <c>after_json</c>, <c>diff_json</c>, <c>reason</c> or <c>structured_json</c>, each with
+    /// its size. A before / after cut off mid-document would read as a different change, so a big one is unavailable, with the reason, and
+    /// the change is still listed. Empty for a complete row.
+    /// </summary>
+    public IReadOnlyList<OversizedValue> Oversized { get; init; } = Array.Empty<OversizedValue>();
+
+    /// <summary>True when part of the change was too large to load (see <see cref="Oversized"/>).</summary>
+    public bool IsOversized => Oversized.Count > 0;
+
     /// <summary>True when the row recorded a before and / or an after value.</summary>
     public bool HasBeforeAfter => BeforeJson.Length > 0 || AfterJson.Length > 0;
 
@@ -95,9 +106,17 @@ public sealed record MutationResult(MutationStatus Status, IReadOnlyList<Mutatio
 /// </para>
 /// <para>
 /// <b>Tolerant.</b> A missing <c>activity_events</c> reads as none; a missing optional column reads as NULL; a database that predates
-/// <c>bucket</c> contributes no audit rows. The long text columns are capped (<see cref="PayloadLimit"/>) in the statement, so a
-/// huge before / after image never crosses into memory whole. Read-only (<c>Mode=ReadOnly</c>), off the caller's thread
-/// (<see cref="ReaderOffload"/>), with a timeout and a token that both end a running statement (<c>sqlite3_interrupt</c>).
+/// <c>bucket</c> contributes no audit rows. The long text columns are limited (<see cref="PayloadLimit"/> bytes) in the statement, so a
+/// huge before / after image never crosses into memory whole - and is not cut off mid-document either, which would read as a different
+/// change: a value over the limit is left in the database and the change comes back listed with it in
+/// <see cref="MutationItem.Oversized"/> (column, size, limit), its other fields intact. Read-only (<c>Mode=ReadOnly</c>), off the
+/// caller's thread (<see cref="ReaderOffload"/>), with a timeout and a token that both end a running statement (<c>sqlite3_interrupt</c>).
+/// </para>
+/// <para>
+/// <b>An unchanged database is not read again.</b> Given an <see cref="AuditChangeProbe"/> (the app shares one), a read that finds the
+/// probe's stamp where the last read of the same <c>limit</c> left it returns that <see cref="MutationResult"/> as it was - the same
+/// object - without a connection, a schema probe, three statements or a row decoded (<see cref="UnchangedReads"/> /
+/// <see cref="RowsDecoded"/>).
 /// </para>
 /// </summary>
 public sealed class MutationReader
@@ -105,7 +124,7 @@ public sealed class MutationReader
     /// <summary>How many rows <see cref="ReadAsync"/> returns unless told otherwise (the Mac's <c>activityEvents(limit: 500)</c>).</summary>
     public const int DefaultLimit = 500;
 
-    /// <summary>The longest before / after / diff / structured text kept per row, in characters.</summary>
+    /// <summary>The most bytes of before / after / diff / reason / structured text loaded per value; a bigger one is listed in <see cref="MutationItem.Oversized"/>.</summary>
     public const int PayloadLimit = 262_144;
 
     /// <summary>The <c>compliance.activity</c> action that records a rejected request, not a change.</summary>
@@ -118,19 +137,34 @@ public sealed class MutationReader
     public static readonly IReadOnlyList<string> AuditBuckets = new[] { "compliance.activity", "enforcement.action" };
 
     private readonly string _connectionString;
+    private readonly AuditChangeProbe? _probe;
+    private readonly SnapshotMemo<int, MutationResult> _results;
     private long _reads;
+    private long _rowsDecoded;
+    private long _unchangedReads;
 
-    public MutationReader(string databasePath)
+    /// <param name="databasePath">Path to <c>audit.db</c>.</param>
+    /// <param name="probe">The change probe of this database, shared with the other readers of it; null reads every time.</param>
+    /// <param name="timeProvider">The clock the remembered answers' age is measured on; the system's when null.</param>
+    public MutationReader(string databasePath, AuditChangeProbe? probe = null, TimeProvider? timeProvider = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         DatabasePath = databasePath;
         _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
+        _probe = probe;
+        _results = new SnapshotMemo<int, MutationResult>(capacity: 2, time: timeProvider);
     }
 
     public string DatabasePath { get; }
 
     /// <summary>How many times <see cref="ReadAsync"/> has been called.</summary>
     public long ReadCount => Interlocked.Read(ref _reads);
+
+    /// <summary>How many change rows this reader has decoded over its life; a read of an unchanged database must not add to it.</summary>
+    public long RowsDecoded => Interlocked.Read(ref _rowsDecoded);
+
+    /// <summary>How many reads were answered without a statement because the probe said the database had not changed.</summary>
+    public long UnchangedReads => Interlocked.Read(ref _unchangedReads);
 
     /// <summary>Reads the newest <paramref name="limit"/> changes. Never blocks the caller's thread.</summary>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
@@ -172,6 +206,14 @@ public sealed class MutationReader
             return MutationResult.Empty(MutationStatus.NoDatabase, clock.Elapsed);
         }
 
+        // The stamp before anything is read (see SnapshotMemo).
+        var stamp = _probe?.Sample() ?? AuditStamp.Unknown;
+        if (_results.TryGet(limit, stamp, out var remembered))
+        {
+            _ = Interlocked.Increment(ref _unchangedReads);
+            return remembered with { Elapsed = clock.Elapsed };
+        }
+
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
@@ -179,7 +221,9 @@ public sealed class MutationReader
         var schema = await ProbeAsync(connection, cancellationToken).ConfigureAwait(false);
         if (!schema.HasActivity && !schema.CanReadAudit)
         {
-            return MutationResult.Empty(MutationStatus.NoDatabase, clock.Elapsed);
+            var nothing = MutationResult.Empty(MutationStatus.NoDatabase, clock.Elapsed);
+            _results.Store(limit, stamp, nothing);
+            return nothing;
         }
 
         var items = new List<MutationItem>();
@@ -198,6 +242,8 @@ public sealed class MutationReader
             }
         }
 
+        _ = Interlocked.Add(ref _rowsDecoded, items.Count);
+
         // Newest first; equal instants keep their statement order (activity events, then audit rows).
         var merged = items
             .Select((item, index) => (item, index))
@@ -211,7 +257,9 @@ public sealed class MutationReader
             hasMore = true;
         }
 
-        return new MutationResult(MutationStatus.Ok, merged, schema.HasActivity, hasMore, clock.Elapsed);
+        var result = new MutationResult(MutationStatus.Ok, merged, schema.HasActivity, hasMore, clock.Elapsed);
+        _results.Store(limit, stamp, result);
+        return result;
     }
 
     /// <summary>Runs one arm for <c>limit + 1</c> rows into <paramref name="into"/>; true when it had more than <c>limit</c>.</summary>
@@ -336,30 +384,40 @@ public sealed class MutationReader
         return columns;
     }
 
+    /// <summary>The column within <see cref="PayloadLimit"/> bytes (NULL past it), or NULL where the table lacks it.</summary>
     private static string Capped(HashSet<string> columns, string column) =>
-        columns.Contains(column) ? $"substr({column}, 1, {PayloadLimit.ToString(CultureInfo.InvariantCulture)}) AS {column}" : $"NULL AS {column}";
+        columns.Contains(column) ? $"{PayloadCap.Within(column, PayloadLimit)} AS {column}" : $"NULL AS {column}";
+
+    /// <summary>The column's size when it is over <see cref="PayloadLimit"/> bytes (else NULL), which is how an unavailable value is told from an absent one.</summary>
+    private static string Over(HashSet<string> columns, string column) =>
+        columns.Contains(column) ? $"{PayloadCap.SizeWhenOver(column, PayloadLimit)} AS {column}_over" : $"NULL AS {column}_over";
 
     private static string Plain(HashSet<string> columns, string column) =>
         columns.Contains(column) ? column : $"NULL AS {column}";
 
-    // Columns: 0 id, 1 timestamp, 2 actor, 3 action, 4 target_type, 5 target_id, 6 reason, 7 before, 8 after, 9 diff, 10 from, 11 to.
+    // Columns: 0 id, 1 timestamp, 2 actor, 3 action, 4 target_type, 5 target_id, 6 reason, 7 before, 8 after, 9 diff, 10 from, 11 to,
+    // then the sizes of the four limited ones when they are over the limit: 12 reason, 13 before, 14 after, 15 diff.
     private static string ActivitySql(Schema schema) =>
         $"""
         SELECT id, timestamp, {Plain(schema.Activity, "actor")}, action, {Plain(schema.Activity, "target_type")},
                {Plain(schema.Activity, "target_id")}, {Capped(schema.Activity, "reason")},
                {Capped(schema.Activity, "before_json")}, {Capped(schema.Activity, "after_json")},
                {Capped(schema.Activity, "diff_json")}, {Plain(schema.Activity, "version_from")},
-               {Plain(schema.Activity, "version_to")}
+               {Plain(schema.Activity, "version_to")},
+               {Over(schema.Activity, "reason")}, {Over(schema.Activity, "before_json")},
+               {Over(schema.Activity, "after_json")}, {Over(schema.Activity, "diff_json")}
           FROM activity_events
          ORDER BY timestamp DESC, rowid DESC LIMIT $limit
         """;
 
-    // Columns: 0 id, 1 timestamp, 2 actor, 3 action, 4 target, 5 details, 6 structured_json, 7 connector, 8 bucket.
+    // Columns: 0 id, 1 timestamp, 2 actor, 3 action, 4 target, 5 details, 6 structured_json, 7 connector, 8 bucket,
+    // then the sizes of details and structured_json when they are over the limit: 9, 10.
     private static string AuditSql(Schema schema) =>
         $"""
         SELECT id, timestamp, {Plain(schema.Audit, "actor")}, action, {Plain(schema.Audit, "target")},
                {Capped(schema.Audit, "details")}, {Capped(schema.Audit, "structured_json")},
-               {Plain(schema.Audit, "connector")}, bucket
+               {Plain(schema.Audit, "connector")}, bucket,
+               {Over(schema.Audit, "details")}, {Over(schema.Audit, "structured_json")}
           FROM audit_events
          WHERE bucket = $bucket AND action <> $authFailure
          ORDER BY timestamp DESC, rowid DESC LIMIT $limit
@@ -393,7 +451,10 @@ public sealed class MutationReader
             VersionTo: Text(reader, 11),
             Connector: null,
             Bucket: string.Empty,
-            StructuredJson: string.Empty);
+            StructuredJson: string.Empty)
+        {
+            Oversized = PayloadCap.Read(reader, PayloadLimit, ("reason", 12), ("before_json", 13), ("after_json", 14), ("diff_json", 15)),
+        };
     }
 
     private static MutationItem MapAudit(SqliteDataReader reader)
@@ -417,6 +478,9 @@ public sealed class MutationReader
             VersionTo: string.Empty,
             Connector: connector.Length == 0 ? null : connector,
             Bucket: Text(reader, 8),
-            StructuredJson: Text(reader, 6));
+            StructuredJson: Text(reader, 6))
+        {
+            Oversized = PayloadCap.Read(reader, PayloadLimit, ("details", 9), ("structured_json", 10)),
+        };
     }
 }

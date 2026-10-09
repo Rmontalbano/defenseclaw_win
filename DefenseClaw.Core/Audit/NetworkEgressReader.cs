@@ -39,6 +39,13 @@ public sealed record EgressEvent
 
     public string Source { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The values of this row that were bigger than <see cref="NetworkEgressReader.PayloadLimit"/> and so were left in the database
+    /// (<c>details</c>, <c>structured_json</c>, <c>payload_json</c>), each with its size. The decision may be in one of them, so an event with
+    /// entries here may be decoded from less than the row says: it is shown with the reason, not as if it were complete.
+    /// </summary>
+    public IReadOnlyList<OversizedValue> Oversized { get; init; } = Array.Empty<OversizedValue>();
+
     /// <summary>The network attributes as written (<c>defenseclaw.network.*</c>, prefix kept), for the inspector's attribute list.</summary>
     public IReadOnlyList<KeyValuePair<string, string>> Attributes { get; init; } = Array.Empty<KeyValuePair<string, string>>();
 
@@ -78,11 +85,21 @@ public sealed record EgressEvent
 /// Both statements are index searches on a timestamp-ordered index (<c>idx_audit_bucket_timestamp</c>, <c>idx_egress_timestamp</c>) that
 /// stop at their limit; the window of the silent-bypass count is a range on the same index.
 /// </para>
+/// <para>
+/// <b>A value over <see cref="PayloadLimit"/> bytes is unavailable, not cut.</b> A JSON document cut at the limit does not parse, and the
+/// decision in it was then silently read as "not allowed"; the value is now left in the database and the event lists it in
+/// <see cref="EgressEvent.Oversized"/>. <b>An unchanged database is not read again:</b> given an <see cref="AuditChangeProbe"/> (the app shares
+/// one), <see cref="ReadRecentAsync"/> returns the last list as it was - the same object - when the probe's stamp has not moved
+/// (<see cref="UnchangedReads"/> / <see cref="RowsDecoded"/>).
+/// </para>
 /// </summary>
 public sealed class NetworkEgressReader
 {
     /// <summary>How many recent events the Alerts panel lists (the Mac's <c>suffix(100)</c>).</summary>
     public const int DefaultLimit = 100;
+
+    /// <summary>The most bytes of <c>details</c>, <c>structured_json</c> and <c>payload_json</c> loaded per row; a bigger value is listed in <see cref="EgressEvent.Oversized"/>.</summary>
+    public const int PayloadLimit = 65_536;
 
     /// <summary>The Mac's "silent bypass" window: 300 seconds.</summary>
     public static readonly TimeSpan SilentBypassWindow = TimeSpan.FromSeconds(300);
@@ -90,19 +107,32 @@ public sealed class NetworkEgressReader
     /// <summary>The most rows of the bypass window that are decoded; a window with more than this is already a flood.</summary>
     private const int WindowRowCap = 5_000;
 
-    private const int PayloadLimit = 65_536;
-
     private readonly string _databasePath;
+    private readonly AuditChangeProbe? _probe;
+    private readonly SnapshotMemo<int, IReadOnlyList<EgressEvent>> _recent;
     private long _reads;
+    private long _rowsDecoded;
+    private long _unchangedReads;
 
-    public NetworkEgressReader(string databasePath)
+    /// <param name="databasePath">Path to <c>audit.db</c>.</param>
+    /// <param name="probe">The change probe of this database, shared with the other readers of it; null reads every time.</param>
+    /// <param name="timeProvider">The clock the remembered list's age is measured on; the system's when null.</param>
+    public NetworkEgressReader(string databasePath, AuditChangeProbe? probe = null, TimeProvider? timeProvider = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         _databasePath = databasePath;
+        _probe = probe;
+        _recent = new SnapshotMemo<int, IReadOnlyList<EgressEvent>>(capacity: 2, time: timeProvider);
     }
 
     /// <summary>How many reads were asked for; the idle-cost tests hold it still.</summary>
     public long ReadCount => Interlocked.Read(ref _reads);
+
+    /// <summary>How many rows this reader has decoded into events over its life; a read of an unchanged database must not add to it.</summary>
+    public long RowsDecoded => Interlocked.Read(ref _rowsDecoded);
+
+    /// <summary>How many <see cref="ReadRecentAsync"/> calls were answered without a statement because the probe said the database had not changed.</summary>
+    public long UnchangedReads => Interlocked.Read(ref _unchangedReads);
 
     /// <summary>The newest <paramref name="limit"/> egress events of both sources, newest first. Empty when there is no database or no such table.</summary>
     public Task<IReadOnlyList<EgressEvent>> ReadRecentAsync(
@@ -112,6 +142,10 @@ public sealed class NetworkEgressReader
     {
         _ = Interlocked.Increment(ref _reads);
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+
+        // The stamp is taken (on the pool thread, before a connection is opened) by the "remembered" step and used by the body to remember
+        // what it reads: see SnapshotMemo. Without a probe the stamp stays unknown and nothing is remembered.
+        var stamp = AuditStamp.Unknown;
 
         return ReadOnlyQuery.RunAsync<IReadOnlyList<EgressEvent>>(
             _databasePath,
@@ -123,10 +157,26 @@ public sealed class NetworkEgressReader
                 var rows = new List<EgressEvent>();
                 rows.AddRange(await ReadAuditAsync(connection, limit, null, token).ConfigureAwait(false));
                 rows.AddRange(await ReadLegacyTableAsync(connection, limit, token).ConfigureAwait(false));
-                return rows
+                _ = Interlocked.Add(ref _rowsDecoded, rows.Count);
+                IReadOnlyList<EgressEvent> newest = rows
                     .OrderByDescending(e => e.Timestamp)
                     .Take(limit)
                     .ToList();
+                _recent.Store(limit, stamp, newest);
+                return newest;
+            },
+            (out IReadOnlyList<EgressEvent> answer) =>
+            {
+                stamp = _probe?.Sample() ?? AuditStamp.Unknown;
+                if (_recent.TryGet(limit, stamp, out var known))
+                {
+                    _ = Interlocked.Increment(ref _unchangedReads);
+                    answer = known;
+                    return true;
+                }
+
+                answer = Array.Empty<EgressEvent>();
+                return false;
             });
     }
 
@@ -167,14 +217,18 @@ public sealed class NetworkEgressReader
         }
 
         string Pick(string name) => columns.Contains(name) ? name : "NULL";
-        string Clipped(string name) => columns.Contains(name) ? $"substr({name}, 1, {PayloadLimit})" : "NULL";
+
+        // Within the limit or NULL (never cut), and beside each the size when it was over: columns 7-9 and 10-12.
+        string Within(string name) => columns.Contains(name) ? PayloadCap.Within(name, PayloadLimit) : "NULL";
+        string Over(string name) => columns.Contains(name) ? PayloadCap.SizeWhenOver(name, PayloadLimit) : "NULL";
 
         await using var command = connection.CreateCommand();
         command.CommandText =
-            // nosemgrep: csharp-sqli -- allow-list: Pick and Clipped emit only the literal column names written here (or NULL when the table lacks the column) and the const PayloadLimit; $limit and $since are bound
+            // nosemgrep: csharp-sqli -- allow-list: Pick, Within and Over emit only the literal column names written here (or NULL when the table lacks the column) and the const PayloadLimit; $limit and $since are bound
             $"""
             SELECT id, timestamp, {Pick("action")}, {Pick("target")}, {Pick("severity")}, {Pick("connector")}, {Pick("source")},
-                   {Clipped("details")}, {Clipped("structured_json")}, {Clipped("payload_json")}
+                   {Within("details")}, {Within("structured_json")}, {Within("payload_json")},
+                   {Over("details")}, {Over("structured_json")}, {Over("payload_json")}
             FROM audit_events
             WHERE bucket = 'network.egress'{(since is null ? string.Empty : " AND timestamp >= $since")}
             ORDER BY timestamp DESC, rowid DESC LIMIT $limit
@@ -192,7 +246,7 @@ public sealed class NetworkEgressReader
         {
             var raw = ReadOnlyQuery.Text(reader, 1);
             var parsed = ReadOnlyQuery.Timestamp(raw);
-            events.Add(Decode(
+            var decoded = Decode(
                 id: "audit:" + (ReadOnlyQuery.Text(reader, 0) ?? string.Empty),
                 timestamp: parsed == DateTimeOffset.MinValue ? null : parsed,
                 action: ReadOnlyQuery.Text(reader, 2),
@@ -200,7 +254,10 @@ public sealed class NetworkEgressReader
                 connector: ReadOnlyQuery.Text(reader, 5),
                 source: ReadOnlyQuery.Text(reader, 6),
                 details: ReadOnlyQuery.Text(reader, 7),
-                json: new[] { ReadOnlyQuery.Text(reader, 8), ReadOnlyQuery.Text(reader, 9) }));
+                json: new[] { ReadOnlyQuery.Text(reader, 8), ReadOnlyQuery.Text(reader, 9) });
+
+            var oversized = PayloadCap.Read(reader, PayloadLimit, ("details", 10), ("structured_json", 11), ("payload_json", 12));
+            events.Add(oversized.Count == 0 ? decoded : decoded with { Oversized = oversized });
         }
 
         return events;

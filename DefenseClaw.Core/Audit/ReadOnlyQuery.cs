@@ -3,6 +3,9 @@ using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.Core.Audit;
 
+/// <summary>A reader's "do I still have the answer?": true with the remembered answer, false to go and read (see <see cref="ReadOnlyQuery.RunAsync{T}"/>).</summary>
+internal delegate bool TryRemembered<T>(out T value);
+
 /// <summary>
 /// The shape every small <c>audit.db</c> reader of the Alerts inspector and the egress feed shares: the connection is
 /// <c>Mode=ReadOnly</c> (the file is the gateway's), the work runs through <see cref="ReaderOffload"/> so the caller's thread
@@ -18,12 +21,18 @@ internal static class ReadOnlyQuery
     /// Opens <paramref name="databasePath"/> read-only and runs <paramref name="body"/> on a pool thread. Returns
     /// <paramref name="whenMissing"/> without opening anything when the file does not exist.
     /// </summary>
+    /// <param name="remembered">
+    /// Runs on the pool thread, after the existence check and before any connection is opened: a reader that remembers its last answer takes the
+    /// probe's stamp here and, when that answer is still good (<see cref="SnapshotMemo{TKey, TValue}"/>), hands it back and the call ends with
+    /// no connection, statement or row. Null always runs <paramref name="body"/>.
+    /// </param>
     internal static async Task<T> RunAsync<T>(
         string databasePath,
         TimeSpan? timeout,
         CancellationToken cancellationToken,
         T whenMissing,
-        Func<SqliteConnection, CancellationToken, Task<T>> body)
+        Func<SqliteConnection, CancellationToken, Task<T>> body,
+        TryRemembered<T>? remembered = null)
     {
         var limit = timeout ?? DefaultTimeout;
         if (limit <= TimeSpan.Zero && limit != Timeout.InfiniteTimeSpan)
@@ -45,6 +54,11 @@ internal static class ReadOnlyQuery
                     if (!File.Exists(databasePath))
                     {
                         return whenMissing;
+                    }
+
+                    if (remembered is not null && remembered(out var answer))
+                    {
+                        return answer;
                     }
 
                     await using var connection = new SqliteConnection(AuditReader.BuildReadOnlyConnectionString(databasePath));

@@ -63,6 +63,14 @@ public sealed record AlertQueueResult(AlertQueueStatus Status, AlertCounts Count
 /// (<c>pragma_table_info</c>, well under a millisecond) precedes every read, so a database upgraded under a running app is
 /// read with the right shape the next time.
 /// </para>
+/// <para>
+/// <b>An unchanged database is not read again.</b> Given an <see cref="AuditChangeProbe"/> (the app shares one), a read that finds the
+/// probe's stamp where the last read left it returns that read's <see cref="AlertCounts"/> as it was - the same object - without a
+/// connection, a schema probe, a statement or a row decoded (<see cref="UnchangedReads"/> / <see cref="RowsDecoded"/>), and a second
+/// caller that asks for a different <c>newestLimit</c> of the same database state builds its counts from the rows the first read already
+/// has instead of running the statement again. The sidebar badge's 30-second read and the Alerts panel's read of the same state therefore
+/// cost one statement between them, and one trivial probe when nothing moved.
+/// </para>
 /// </summary>
 public sealed class AlertQueueReader
 {
@@ -80,23 +88,46 @@ public sealed class AlertQueueReader
 
     private readonly string _connectionString;
     private readonly int _windowLimit;
+    private readonly AuditChangeProbe? _probe;
+
+    /// <summary>The finished answers, by <c>newestLimit</c>: the object a repeat read of an unchanged database gets back.</summary>
+    private readonly SnapshotMemo<int, AlertQueueResult> _results;
+
+    /// <summary>The rows of the last statement, whatever <c>newestLimit</c> asked for them: what a second limit builds its counts from.</summary>
+    private readonly SnapshotMemo<int, QueueWindow> _windows;
+
     private long _reads;
+    private long _rowsDecoded;
+    private long _unchangedReads;
+
+    private sealed record QueueWindow(IReadOnlyList<AlertQueueItem> Items, bool HasMore);
 
     /// <param name="databasePath">Path to <c>audit.db</c>.</param>
     /// <param name="windowLimit">How many alerts make up the window; <see cref="DefaultWindowLimit"/> (the Mac's) in the app, smaller in a test.</param>
-    public AlertQueueReader(string databasePath, int windowLimit = DefaultWindowLimit)
+    /// <param name="probe">The change probe of this database, shared with the other readers of it; null reads every time.</param>
+    /// <param name="timeProvider">The clock the remembered answers' age is measured on; the system's when null.</param>
+    public AlertQueueReader(string databasePath, int windowLimit = DefaultWindowLimit, AuditChangeProbe? probe = null, TimeProvider? timeProvider = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(windowLimit, 1);
         DatabasePath = databasePath;
         _windowLimit = windowLimit;
         _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
+        _probe = probe;
+        _results = new SnapshotMemo<int, AlertQueueResult>(capacity: 4, time: timeProvider);
+        _windows = new SnapshotMemo<int, QueueWindow>(capacity: 1, time: timeProvider);
     }
 
     public string DatabasePath { get; }
 
     /// <summary>How many times <see cref="ReadAsync"/> has been called, counted when the call is made; the idle-cost tests hold it still.</summary>
     public long ReadCount => Interlocked.Read(ref _reads);
+
+    /// <summary>How many queue rows this reader has decoded over its life; a read of an unchanged database must not add to it.</summary>
+    public long RowsDecoded => Interlocked.Read(ref _rowsDecoded);
+
+    /// <summary>How many reads were answered without running the statement because the probe said the database had not changed.</summary>
+    public long UnchangedReads => Interlocked.Read(ref _unchangedReads);
 
     /// <summary>
     /// Reads the queue: one statement, one snapshot. Never blocks the caller's thread.
@@ -147,6 +178,23 @@ public sealed class AlertQueueReader
             return new AlertQueueResult(AlertQueueStatus.NoDatabase, AlertCounts.Empty, clock.Elapsed);
         }
 
+        // The stamp before anything is read (see SnapshotMemo).
+        var stamp = _probe?.Sample() ?? AuditStamp.Unknown;
+        if (_results.TryGet(newestLimit, stamp, out var remembered))
+        {
+            _ = Interlocked.Increment(ref _unchangedReads);
+            return remembered with { Elapsed = clock.Elapsed };
+        }
+
+        if (_windows.TryGet(0, stamp, out var known))
+        {
+            // The same database state was read for another limit (the badge asks for 50, the panel for 500): same rows, other cut.
+            _ = Interlocked.Increment(ref _unchangedReads);
+            var derived = new AlertQueueResult(AlertQueueStatus.Ok, new AlertCounts(known.Items, known.HasMore, newestLimit), clock.Elapsed);
+            _results.Store(newestLimit, stamp, derived);
+            return derived;
+        }
+
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
@@ -154,12 +202,12 @@ public sealed class AlertQueueReader
         var schema = await ProbeSchemaAsync(connection, cancellationToken).ConfigureAwait(false);
         if (!schema.HasAuditTable)
         {
-            return new AlertQueueResult(AlertQueueStatus.NoDatabase, AlertCounts.Empty, clock.Elapsed);
+            return Remember(newestLimit, stamp, new AlertQueueResult(AlertQueueStatus.NoDatabase, AlertCounts.Empty, clock.Elapsed));
         }
 
         if (!schema.SupportsQueue)
         {
-            return new AlertQueueResult(AlertQueueStatus.LegacySchema, AlertCounts.Empty, clock.Elapsed);
+            return Remember(newestLimit, stamp, new AlertQueueResult(AlertQueueStatus.LegacySchema, AlertCounts.Empty, clock.Elapsed));
         }
 
         await using var command = connection.CreateCommand();
@@ -178,13 +226,22 @@ public sealed class AlertQueueReader
             }
         }
 
+        _ = Interlocked.Add(ref _rowsDecoded, window.Count);
+
         var hasMore = window.Count > _windowLimit;
         if (hasMore)
         {
             window.RemoveRange(_windowLimit, window.Count - _windowLimit);
         }
 
-        return new AlertQueueResult(AlertQueueStatus.Ok, new AlertCounts(window, hasMore, newestLimit), clock.Elapsed);
+        _windows.Store(0, stamp, new QueueWindow(window, hasMore));
+        return Remember(newestLimit, stamp, new AlertQueueResult(AlertQueueStatus.Ok, new AlertCounts(window, hasMore, newestLimit), clock.Elapsed));
+    }
+
+    private AlertQueueResult Remember(int newestLimit, AuditStamp stamp, AlertQueueResult result)
+    {
+        _results.Store(newestLimit, stamp, result);
+        return result;
     }
 
     /// <summary>

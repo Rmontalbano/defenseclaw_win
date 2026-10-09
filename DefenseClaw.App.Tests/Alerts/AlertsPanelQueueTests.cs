@@ -266,8 +266,10 @@ public sealed class AlertsPanelQueueTests : IDisposable
             await vm.InitializeAsync();
             Assert.Equal(new[] { "a" }, Ids(vm));
 
-            // The database goes away (a reinstall): the queue says so, and the gateway's own list is shown again.
+            // The database goes away (a reinstall): the queue says so, and the gateway's own list is shown again. Nothing of ours still
+            // holds the file - the pooled connections and the change probe's kept one both let go.
             SqliteConnection.ClearAllPools();
+            _services.AuditChanges.Release();
             File.Delete(_services.Paths.AuditDatabasePath);
             await vm.InitializeAsync();
             vm.Apply(Snapshot(GatewayAlertRow("g1", "HIGH")));

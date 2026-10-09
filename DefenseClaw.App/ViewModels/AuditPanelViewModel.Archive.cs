@@ -158,6 +158,7 @@ public sealed partial class AuditPanelViewModel
         {
             SelectedRow = null;
             Rows.Clear();
+            _shown = null;
             _cursor = null;
             HasMore = false;
             IsRowCapReached = false;
@@ -247,6 +248,7 @@ public sealed partial class AuditPanelViewModel
     {
         _archiveReader = null;
         Rows.Clear();
+        _shown = null;
         SelectedRow = null;
         _cursor = null;
         HasMore = false;

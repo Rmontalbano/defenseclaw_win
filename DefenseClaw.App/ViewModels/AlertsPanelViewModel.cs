@@ -148,6 +148,12 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
     private bool _queueHasMore;
 
+    /// <summary>
+    /// The keys of the rows the list was last built from by a queue read (see <see cref="QueueKeys"/>); a read that finds the same keys
+    /// changes nothing. Null while the queue is not the source, or when the last window held a finding with no id.
+    /// </summary>
+    private string[]? _appliedKeys;
+
     /// <summary>Serializes queue reads: one statement and one hydration at a time, however many callers ask.</summary>
     private readonly SemaphoreSlim _queueGate = new(1, 1);
 
@@ -1485,6 +1491,21 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
         var window = result.Counts.Newest;
 
+        // The gateway's egress decisions that deserve a row (blocked, or LLM-shaped) join the findings, newest first.
+        var egressEvents = await ReadEgressEventsAsync().ConfigureAwait(true);
+
+        // A read that finds the very rows the list is built from (the readers answered from their last result, or re-read and found the
+        // same ids - the database moves all day for reasons that are not findings) has nothing to rebuild: no hydration, no row building, no
+        // filter pass, and the list, its selection and its scroll position stay. Only the age in the note moves. (The Mac's
+        // appliedCanonicalIDs comparison.) A finding whose id is empty has no stable key, so a window holding one is always rebuilt.
+        var keys = QueueKeys(window, egressEvents);
+        if (_queueActive && keys is not null && result.Counts.HasMore == _queueHasMore && keys.AsSpan().SequenceEqual(_appliedKeys))
+        {
+            _queueReadAt = DateTimeOffset.UtcNow;
+            SourceNote = QueueNote();
+            return;
+        }
+
         // Rows already shown are reused; only the findings this panel has not shown yet are read in full.
         var shown = new Dictionary<string, AlertItem>(StringComparer.Ordinal);
         if (_queueActive)
@@ -1506,8 +1527,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         // A row flattens and pretty-prints its attribute bag, and a first load builds hundreds: not on the UI thread.
         var rows = await Task.Run(() => BuildQueueRows(window, shown, details)).ConfigureAwait(true);
 
-        // The gateway's egress decisions that deserve a row (blocked, or LLM-shaped) join the findings, newest first.
-        var egress = await ReadEgressRowsAsync(shown).ConfigureAwait(true);
+        var egress = EgressRows(egressEvents, shown);
         if (egress.Count > 0)
         {
             rows = rows.Concat(egress).OrderByDescending(row => row.Timestamp).ToList();
@@ -1534,6 +1554,42 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         SourceNote = QueueNote();
         SetEmpty("Nothing to acknowledge", "No unacknowledged findings are waiting in the audit database.");
         ApplyFilters();
+
+        // Last, so a pass that failed half-way is not remembered as done: the next read rebuilds.
+        _appliedKeys = keys;
+    }
+
+    /// <summary>
+    /// The keys of the rows a read lists, in the order the readers gave them: the queue's finding ids, then (after a marker, so the two
+    /// can never be mistaken for one another) the egress decisions that deserve a row. Equal keys mean equal rows - an audit row is
+    /// immutable. Null when a finding has no id and so no stable key.
+    /// </summary>
+    private static string[]? QueueKeys(IReadOnlyList<AlertQueueItem> window, IReadOnlyList<EgressEvent>? egress)
+    {
+        var keys = new List<string>(window.Count + 1 + (egress?.Count ?? 0));
+        foreach (var item in window)
+        {
+            if (item.Id.Length == 0)
+            {
+                return null;
+            }
+
+            keys.Add(item.Id);
+        }
+
+        keys.Add("\0egress");
+        if (egress is not null)
+        {
+            foreach (var decision in egress)
+            {
+                if (decision.IsAlertWorthy)
+                {
+                    keys.Add(decision.Id);
+                }
+            }
+        }
+
+        return keys.ToArray();
     }
 
     /// <summary>The queue, newest first, as rows: a row already shown as it is, a new one from its full audit row, one whose row has gone (retention) from what the queue knows.</summary>
@@ -1584,6 +1640,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         }
 
         _queueActive = false;
+        _appliedKeys = null;
         _all.Clear();
         _allFromAudit = false;
         _appliedAlerts = null;
@@ -1601,7 +1658,16 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         var egressNote = egress > 0
             ? $" · {egress.ToString("N0", CultureInfo.CurrentCulture)} egress"
             : _egressProblem.Length > 0 ? $" · {_egressProblem}" : string.Empty;
-        return $"Unacknowledged findings · {what}{egressNote} · read {Relative(_queueReadAt)}";
+
+        // A finding whose attributes are too large to load is still listed (with what the queue knows); the note says how many are like that.
+        var oversized = _all.Count(static item => item.IsOversized);
+        var oversizedNote = oversized switch
+        {
+            0 => string.Empty,
+            1 => " · 1 finding too large to display",
+            _ => $" · {oversized.ToString("N0", CultureInfo.CurrentCulture)} findings too large to display",
+        };
+        return $"Unacknowledged findings · {what}{egressNote}{oversizedNote} · read {Relative(_queueReadAt)}";
     }
 
     /// <summary>
@@ -1984,6 +2050,16 @@ public sealed partial class AlertItem : ObservableObject
 
     public IReadOnlyList<AlertField> Fields { get; private init; } = Array.Empty<AlertField>();
 
+    /// <summary>
+    /// "Too large to display: structured_json is 3.2 MB, over the 256 KB limit" when part of the finding's audit row was left in the database
+    /// because of its size (its rule, title and attributes are then what the queue knows, not what the row says); empty for a complete row.
+    /// The finding is listed and can be acknowledged all the same.
+    /// </summary>
+    public string OversizedNotice { get; private init; } = string.Empty;
+
+    /// <summary>True when part of the finding is too large to display (<see cref="OversizedNotice"/>).</summary>
+    public bool IsOversized => OversizedNotice.Length > 0;
+
     /// <summary>Collapse axis: the same signature firing on the same action.</summary>
     public string GroupKey => $"{RuleId}|{Action}";
 
@@ -2046,6 +2122,8 @@ public sealed partial class AlertItem : ObservableObject
         ArgumentNullException.ThrowIfNull(row);
 
         var structured = row.StructuredJson;
+        var notice = NoticeOf(row.Oversized);
+        var structuredOver = row.Oversized.FirstOrDefault(static o => string.Equals(o.Column, "structured_json", StringComparison.Ordinal));
 
         return new AlertItem(row.Id, row.Timestamp)
         {
@@ -2055,7 +2133,9 @@ public sealed partial class AlertItem : ObservableObject
             RawTarget = row.Target ?? string.Empty,
             RuleId = row.StructuredString(GatewayAlert.Keys.RuleId) ?? string.Empty,
             RunId = row.RunId ?? string.Empty,
-            Headline = row.StructuredString(GatewayAlert.Keys.Title) ?? row.Details ?? row.Action,
+
+            // A finding whose attributes were left in the database has no title to show: the row says why instead of looking blank.
+            Headline = row.StructuredString(GatewayAlert.Keys.Title) ?? row.Details ?? (notice.Length > 0 ? notice : row.Action),
             Action = row.Action,
             TargetRef = row.StructuredString(GatewayAlert.Keys.TargetRef) ?? row.Target ?? string.Empty,
             Evidence = row.StructuredString(GatewayAlert.Keys.EvidenceSummary) ?? string.Empty,
@@ -2064,10 +2144,21 @@ public sealed partial class AlertItem : ObservableObject
             Connector = row.Connector,
             Tags = string.Empty,
             ConfidenceText = string.Empty,
-            StructuredText = Pretty(structured),
-            Fields = ToFields(structured),
+            StructuredText = structuredOver is null
+                ? Pretty(structured)
+                : $"({structuredOver.Reason}; it is left in the database, so its attributes are not shown here)",
+            Fields = WithNotice(ToFields(structured), notice),
+            OversizedNotice = notice,
         };
     }
+
+    /// <summary>"Too large to display: ..." for the values of an audit row the reader left in the database; empty when it left none.</summary>
+    private static string NoticeOf(IReadOnlyList<OversizedValue> oversized) =>
+        oversized.Count == 0 ? string.Empty : "Too large to display: " + OversizedValue.Describe(oversized);
+
+    /// <summary>The attribute rows, with the reason on top when something was too large to load.</summary>
+    private static IReadOnlyList<AlertField> WithNotice(IReadOnlyList<AlertField> fields, string notice) =>
+        notice.Length == 0 ? fields : fields.Prepend(new AlertField("unavailable", notice)).ToList();
 
     /// <summary>
     /// A row from what the alert queue itself knows (id, severity, action, target, connector), for a finding whose full audit row
@@ -2112,6 +2203,7 @@ public sealed partial class AlertItem : ObservableObject
         ConfidenceText = ConfidenceText,
         StructuredText = StructuredText,
         Fields = Fields,
+        OversizedNotice = OversizedNotice,
     };
 
     private static bool HasUsableId(string? id) =>

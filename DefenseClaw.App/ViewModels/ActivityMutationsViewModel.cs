@@ -21,6 +21,13 @@ namespace DefenseClaw.App.ViewModels;
 /// <b>Empty is the expected state</b>, not a failure: the live <c>activity_events</c> table is empty on a fresh install, and the
 /// empty state says where changes will appear. Selecting a row opens the shared inspector with a before / after diff.
 /// </para>
+/// <para>
+/// <b>A refresh that finds nothing new changes nothing on screen.</b> The reader remembers its last answer under the shared change probe
+/// (<see cref="MutationReader"/>), and a read that returns the changes already listed (the reader's remembered list, or a new read of the
+/// same ids in the same order - audit rows do not change) leaves the rows, the connector list, the selection and the scroll position alone:
+/// only the note is brought up to date. <b>A change with a value too large to load is listed, not dropped</b>: its before / after / diff
+/// says why it is missing (<see cref="MutationItem.Oversized"/>), and the note says how many there are.
+/// </para>
 /// </summary>
 public sealed partial class ActivityMutationsViewModel : ObservableObject
 {
@@ -31,6 +38,10 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
     private readonly TimeSpan? _timeout;
     private CancellationTokenSource _generation = new();
     private IReadOnlyList<MutationRow> _loaded = Array.Empty<MutationRow>();
+
+    /// <summary>The read <see cref="_loaded"/> was built from; a read of the same changes leaves the list alone.</summary>
+    private MutationResult? _loadedResult;
+
     private bool _applyingConnectors;
     private readonly ConnectorScope? _scope;
 
@@ -135,12 +146,21 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
                 return;
             }
 
+            // The very changes already listed: nothing to rebuild, and the selection and the scroll position stay.
+            if (SameAsLoaded(result))
+            {
+                StatusNote = NoteOf(result);
+                return;
+            }
+
+            _loadedResult = null;
             _loaded = result.Items.Select(item => new MutationRow(item)).ToList();
-            StatusNote = result.HasMore
-                ? string.Create(CultureInfo.CurrentCulture, $"Showing the newest {MutationReader.DefaultLimit} changes; older ones are in the Audit panel.")
-                : string.Empty;
+            StatusNote = NoteOf(result);
             RebuildConnectors();
             ApplyFilters();
+
+            // Last, so a pass that failed half-way is not remembered as done: the next read rebuilds.
+            _loadedResult = result;
         }
         catch (OperationCanceledException)
         {
@@ -166,6 +186,63 @@ public sealed partial class ActivityMutationsViewModel : ObservableObject
                 HasLoaded = true;
             }
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="result"/> lists the changes <see cref="_loaded"/> was built from: the reader's remembered list, or the same
+    /// ids from the same sources in the same order with the same flags.
+    /// </summary>
+    private bool SameAsLoaded(MutationResult result)
+    {
+        if (_loadedResult is not { } before || before.HasMore != result.HasMore || before.HasActivityTable != result.HasActivityTable)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(before.Items, result.Items))
+        {
+            return true;
+        }
+
+        if (before.Items.Count != result.Items.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < result.Items.Count; i++)
+        {
+            var was = before.Items[i];
+            var now = result.Items[i];
+            if (was.Source != now.Source
+                || !string.Equals(was.Id, now.Id, StringComparison.Ordinal)
+                || was.Timestamp != now.Timestamp
+                || was.Oversized.Count != now.Oversized.Count)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>What the tab says after a successful read: that older changes are in the Audit panel, and how many listed changes are too large to display.</summary>
+    private static string NoteOf(MutationResult result)
+    {
+        var parts = new List<string>(2);
+        if (result.HasMore)
+        {
+            parts.Add(string.Create(CultureInfo.CurrentCulture, $"Showing the newest {MutationReader.DefaultLimit} changes; older ones are in the Audit panel."));
+        }
+
+        var oversized = result.Items.Count(static item => item.IsOversized);
+        if (oversized > 0)
+        {
+            parts.Add(oversized == 1
+                ? "1 change too large to display."
+                : string.Create(CultureInfo.CurrentCulture, $"{oversized:N0} changes too large to display."));
+        }
+
+        return string.Join(' ', parts);
     }
 
     /// <summary>The shared connector scope changed: the loaded changes are listed again under it (no new read).</summary>

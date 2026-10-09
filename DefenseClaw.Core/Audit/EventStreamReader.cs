@@ -60,7 +60,15 @@ public sealed record StreamEvent(
     string Connector,
     string Actor,
     string RawJson,
-    bool PayloadOmitted);
+    bool PayloadOmitted)
+{
+    /// <summary>
+    /// The payload when it was left in the database: <c>payload_json</c>, its size and the limit (see <see cref="OversizedValue"/>); empty
+    /// when it was read. The row is still an event - its metadata, message and decision are intact - so a stream whose newest rows all have a
+    /// payload this size is a stream of rows each saying why its body is missing, never an empty stream.
+    /// </summary>
+    public IReadOnlyList<OversizedValue> Oversized { get; init; } = Array.Empty<OversizedValue>();
+}
 
 /// <summary>What <see cref="EventStreamReader.ReadAsync"/> found.</summary>
 /// <param name="Status">Whether <paramref name="Rows"/> is the stream, or why it is not.</param>
@@ -90,6 +98,16 @@ public sealed record EventStreamResult(EventStreamStatus Status, IReadOnlyList<S
 /// </list>
 /// The statements are read-only (<c>Mode=ReadOnly</c>), run through <see cref="ReaderOffload"/>, and a token or the timeout ends a running one
 /// with <c>sqlite3_interrupt</c>. A schema probe precedes every read, so a database upgraded under a running app is read with the right shape next time.
+/// </para>
+/// <para>
+/// <b>An unchanged database is not read again</b> (the Mac's <c>appliedCanonicalIDs</c>, one level down). Given an <see cref="AuditChangeProbe"/>
+/// (the app shares one), a read that finds the probe's stamp where the last read of the same stream left it returns that
+/// <see cref="EventStreamResult"/> as it was - the same object - without a connection, a statement, a row projected, a payload parsed or
+/// masked (<see cref="UnchangedReads"/> / <see cref="RowsDecoded"/>); the Logs panel's five-second poll over a quiet database is then one
+/// trivial probe. When the database did change (it does all day, mostly for rows this stream does not list) the statement runs again, but
+/// a row it has already projected is handed back as it was, by id - an audit row never changes - so only the rows that arrived are parsed
+/// and masked, which is most of a read's cost (measured on a 10 GB database: the Events stream 82 ms -> 23 ms, Verdicts 171 ms -> 125 ms, whose sort of up to six arms' rows is the rest). The panel's own id
+/// comparison then finds the same list and leaves it alone.
 /// </para>
 /// </summary>
 public sealed class EventStreamReader
@@ -135,23 +153,42 @@ public sealed class EventStreamReader
 
     private readonly string _connectionString;
     private readonly int _limit;
+    private readonly AuditChangeProbe? _probe;
+    private readonly SnapshotMemo<(EventStreamKind Kind, bool IncludeTelemetry), EventStreamResult> _results;
+
+    /// <summary>The rows of each stream's last read by id: what a later read of the same stream does not project again.</summary>
+    private readonly Dictionary<(EventStreamKind Kind, bool IncludeTelemetry), Dictionary<string, StreamEvent>> _known = new();
+
+    private readonly object _knownGate = new();
     private long _reads;
+    private long _rowsDecoded;
+    private long _unchangedReads;
 
     /// <param name="databasePath">Path to <c>audit.db</c>.</param>
     /// <param name="limit">How many rows a read returns; <see cref="DefaultLimit"/> in the app, smaller in a test.</param>
-    public EventStreamReader(string databasePath, int limit = DefaultLimit)
+    /// <param name="probe">The change probe of this database, shared with the other readers of it; null reads every time.</param>
+    /// <param name="timeProvider">The clock the remembered answers' age is measured on; the system's when null.</param>
+    public EventStreamReader(string databasePath, int limit = DefaultLimit, AuditChangeProbe? probe = null, TimeProvider? timeProvider = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
         DatabasePath = databasePath;
         _limit = limit;
         _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
+        _probe = probe;
+        _results = new SnapshotMemo<(EventStreamKind, bool), EventStreamResult>(capacity: 3, time: timeProvider);
     }
 
     public string DatabasePath { get; }
 
     /// <summary>How many times <see cref="ReadAsync"/> has been called, counted when the call is made; a hidden panel's tests hold it still.</summary>
     public long ReadCount => Interlocked.Read(ref _reads);
+
+    /// <summary>How many rows this reader has projected into <see cref="StreamEvent"/>s over its life; a read of an unchanged database must not add to it.</summary>
+    public long RowsDecoded => Interlocked.Read(ref _rowsDecoded);
+
+    /// <summary>How many reads were answered without a statement because the probe said the database had not changed.</summary>
+    public long UnchangedReads => Interlocked.Read(ref _unchangedReads);
 
     /// <summary>Reads the newest rows of <paramref name="kind"/>, newest first. Never blocks the caller's thread.</summary>
     /// <param name="kind">Which stream.</param>
@@ -201,6 +238,15 @@ public sealed class EventStreamReader
             return new EventStreamResult(EventStreamStatus.NoDatabase, Array.Empty<StreamEvent>(), clock.Elapsed);
         }
 
+        // The stamp before anything is read (see SnapshotMemo). Telemetry only changes the Events stream; Verdicts ignores it, so it shares one answer.
+        var key = (kind, kind == EventStreamKind.Events && includeTelemetry);
+        var stamp = _probe?.Sample() ?? AuditStamp.Unknown;
+        if (_results.TryGet(key, stamp, out var remembered))
+        {
+            _ = Interlocked.Increment(ref _unchangedReads);
+            return remembered with { Elapsed = clock.Elapsed };
+        }
+
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         using var interrupt = ReaderOffload.InterruptOnCancel(connection, cancellationToken);
@@ -208,12 +254,12 @@ public sealed class EventStreamReader
         var columns = await ColumnsAsync(connection, cancellationToken).ConfigureAwait(false);
         if (columns.Count == 0)
         {
-            return new EventStreamResult(EventStreamStatus.NoDatabase, Array.Empty<StreamEvent>(), clock.Elapsed);
+            return Remember(key, stamp, new EventStreamResult(EventStreamStatus.NoDatabase, Array.Empty<StreamEvent>(), clock.Elapsed));
         }
 
         if (!Supports(columns))
         {
-            return new EventStreamResult(EventStreamStatus.LegacySchema, Array.Empty<StreamEvent>(), clock.Elapsed);
+            return Remember(key, stamp, new EventStreamResult(EventStreamStatus.LegacySchema, Array.Empty<StreamEvent>(), clock.Elapsed));
         }
 
         await using var command = connection.CreateCommand();
@@ -221,16 +267,57 @@ public sealed class EventStreamReader
         command.CommandText = BuildSql(columns, kind, includeTelemetry);
         command.Parameters.AddWithValue("$limit", _limit);
 
+        // An audit row never changes once written, so a row this stream has already projected is the same row now: it is handed back as it
+        // was (the same object) and its payload is neither copied out of the page nor parsed nor masked again. That is nearly all of the
+        // cost of a read (the Events stream on a 10 GB database: 82 ms -> 23 ms; Verdicts 171 ms -> 125 ms, the rest being its sort) - so a database that moved for another reason
+        // (it does all day) re-projects only the rows that arrived. The panel's own id comparison then finds the same list.
+        Dictionary<string, StreamEvent>? known;
+        lock (_knownGate)
+        {
+            _ = _known.TryGetValue(key, out known);
+        }
+
         var rows = new List<StreamEvent>(Math.Min(_limit, 1024));
+        var projected = 0;
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
+                var id = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                if (id.Length > 0 && known is not null && known.TryGetValue(id, out var prior))
+                {
+                    rows.Add(prior);
+                    continue;
+                }
+
                 rows.Add(Project(reader));
+                projected++;
             }
         }
 
-        return new EventStreamResult(EventStreamStatus.Ok, rows, clock.Elapsed);
+        _ = Interlocked.Add(ref _rowsDecoded, projected);
+
+        var byId = new Dictionary<string, StreamEvent>(rows.Count, StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            if (row.Id.Length > 0)
+            {
+                _ = byId.TryAdd(row.Id, row);
+            }
+        }
+
+        lock (_knownGate)
+        {
+            _known[key] = byId;
+        }
+
+        return Remember(key, stamp, new EventStreamResult(EventStreamStatus.Ok, rows, clock.Elapsed));
+    }
+
+    private EventStreamResult Remember((EventStreamKind Kind, bool IncludeTelemetry) key, AuditStamp stamp, EventStreamResult result)
+    {
+        _results.Store(key, stamp, result);
+        return result;
     }
 
     /// <summary>
@@ -305,8 +392,8 @@ public sealed class EventStreamReader
                     {Optional("source", "e.source")} AS source, e.severity AS severity, e.action AS action,
                     {Optional("actor", "e.actor")} AS actor, {Optional("details", $"substr(e.details, 1, {DetailsLimit.ToString(CultureInfo.InvariantCulture)})")} AS details,
                     {Optional("connector", "e.connector")} AS connector,
-                    {Optional("payload_json", $"CASE WHEN length(CAST(e.payload_json AS BLOB)) <= {PayloadByteLimit.ToString(CultureInfo.InvariantCulture)} THEN e.payload_json END")} AS payload,
-                    {Optional("payload_json", $"CASE WHEN length(CAST(e.payload_json AS BLOB)) > {PayloadByteLimit.ToString(CultureInfo.InvariantCulture)} THEN 1 ELSE 0 END")} AS omitted
+                    {Optional("payload_json", PayloadCap.Within("e.payload_json", PayloadByteLimit))} AS payload,
+                    {Optional("payload_json", PayloadCap.SizeWhenOver("e.payload_json", PayloadByteLimit))} AS omitted
             """;
 
         var logsOnly = columns.Contains("signal") ? " AND e.signal = 'logs'" : string.Empty;
@@ -367,7 +454,13 @@ public sealed class EventStreamReader
         var details = Text(9);
         var connector = Text(10).Trim();
         var payload = reader.IsDBNull(11) ? null : reader.GetString(11);
-        var omitted = !reader.IsDBNull(12) && reader.GetInt64(12) == 1;
+
+        // Column 12 is the payload's size when it was over the limit (the statement did not select it), NULL otherwise.
+        var omittedBytes = reader.IsDBNull(12) ? 0L : reader.GetInt64(12);
+        var omitted = omittedBytes > 0;
+        IReadOnlyList<OversizedValue> oversized = omitted
+            ? new[] { new OversizedValue("payload_json", omittedBytes, PayloadByteLimit) }
+            : Array.Empty<OversizedValue>();
 
         var timestamp = DateTimeOffset.TryParse(rawTimestamp, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed)
             ? parsed
@@ -407,8 +500,11 @@ public sealed class EventStreamReader
                 Message: message,
                 Connector: DisplayRedaction.Text(connector),
                 Actor: DisplayRedaction.Text(actor),
-                RawJson: BuildRaw(eventName, bucket, source, severity, omitted, payload, document),
-                PayloadOmitted: omitted);
+                RawJson: BuildRaw(eventName, bucket, source, severity, omitted, OversizedValue.Describe(oversized), payload, document),
+                PayloadOmitted: omitted)
+            {
+                Oversized = oversized,
+            };
         }
         finally
         {
@@ -465,7 +561,7 @@ public sealed class EventStreamReader
         return string.Empty;
     }
 
-    private static string BuildRaw(string eventName, string bucket, string source, AuditSeverity severity, bool omitted, string? payload, JsonDocument? document)
+    private static string BuildRaw(string eventName, string bucket, string source, AuditSeverity severity, bool omitted, string omittedReason, string? payload, JsonDocument? document)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, WriterOptions))
@@ -476,6 +572,12 @@ public sealed class EventStreamReader
             writer.WriteString("source", source);
             writer.WriteString("severity", severity == AuditSeverity.Unknown ? string.Empty : severity.ToString().ToUpperInvariant());
             writer.WriteBoolean("payload_omitted", omitted);
+            if (omitted)
+            {
+                // Why the body is missing, in the row's own text: the Logs panel shows this JSON as it is.
+                writer.WriteString("payload_unavailable", omittedReason);
+            }
+
             if (document is not null)
             {
                 writer.WritePropertyName("body");

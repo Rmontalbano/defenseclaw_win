@@ -98,8 +98,19 @@ public sealed class AuditEvent
 
     public string? BinaryVersion { get; init; }
 
-    /// <summary>Raw <c>structured_json</c> column; null when the row carries none.</summary>
+    /// <summary>Raw <c>structured_json</c> column; null when the row carries none, and when it was too large to load (see <see cref="Oversized"/>).</summary>
     public string? StructuredJsonRaw { get; init; }
+
+    /// <summary>
+    /// The values of this row that were bigger than the reader's payload limit (<see cref="AuditReader.DefaultPayloadLimitBytes"/>) and so were
+    /// left in the database: their columns (<see cref="Details"/>, <see cref="StructuredJsonRaw"/>) are null, and each entry says which column,
+    /// how big and the limit. Empty for a complete row. A row with entries is not an empty row and not a failed read: it is a row whose
+    /// payload is unavailable, for that reason.
+    /// </summary>
+    public IReadOnlyList<OversizedValue> Oversized { get; init; } = Array.Empty<OversizedValue>();
+
+    /// <summary>True when part of the row was too large to load (see <see cref="Oversized"/>).</summary>
+    public bool IsOversized => Oversized.Count > 0;
 
     public AuditSeverity SeverityLevel => AuditSeverityExtensions.Parse(Severity);
 
