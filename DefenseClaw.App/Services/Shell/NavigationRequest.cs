@@ -77,6 +77,16 @@ public sealed record OverviewFocus(string Section)
 /// </summary>
 public sealed record AiDiscoveryScan;
 
+/// <summary>
+/// Payload for <c>registries</c> (CUST-276, the Skills and MCPs "Open in Registries" row action; the TUI's <c>R</c> on those panels): open the
+/// Registries panel on its Entries tab, narrowed to the cached entries of this type and name in every source, with the entry of
+/// <paramref name="SourceId"/> selected and focused (the first match when that source does not list it). Nothing is run by it.
+/// </summary>
+/// <param name="EntryType">The kind of entry, as the registry cache spells it: <c>skill</c> or <c>mcp</c>.</param>
+/// <param name="Name">The entry's name: a skill's name or an MCP server's key.</param>
+/// <param name="SourceId">The registry source that promoted the item (the id in its policy rule's <c>registry:&lt;id&gt;</c> reason); null when it is not known.</param>
+public sealed record RegistryFocus(string EntryType, string Name, string? SourceId = null);
+
 /// <summary>What <see cref="ShellNavigation.Requested"/> carries.</summary>
 public sealed class NavigationRequestedEventArgs : EventArgs
 {

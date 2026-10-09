@@ -1,0 +1,49 @@
+{
+  "blocked_count": 0,
+  "clean_count": 3,
+  "entry_count": 4,
+  "error_count": 0,
+  "fetched_at": "2026-09-21T08:30:00.000000+00:00",
+  "publisher": "Team Catalog",
+  "schema_version": 1,
+  "source_id": "team.catalog",
+  "verdicts": [
+    {
+      "approved": false,
+      "name": "pdf-tools",
+      "rejected": false,
+      "source_url": "https://git.example.test/team/catalog/skills/pdf-tools",
+      "status": "clean",
+      "type": "skill"
+    },
+    {
+      "approved": true,
+      "args": [
+        "-y",
+        "@example/docs-mcp"
+      ],
+      "command": "npx",
+      "name": "docs-mcp",
+      "rejected": false,
+      "status": "clean",
+      "transport": "stdio",
+      "type": "mcp"
+    },
+    {
+      "approved": true,
+      "name": "wiki-skill",
+      "rejected": false,
+      "source_url": "https://git.example.test/team/catalog/skills/wiki-skill",
+      "status": "clean",
+      "type": "skill"
+    },
+    {
+      "approved": false,
+      "name": "scratch-notes",
+      "rejected": false,
+      "status": "pending",
+      "type": "skill"
+    }
+  ],
+  "warning_count": 0
+}

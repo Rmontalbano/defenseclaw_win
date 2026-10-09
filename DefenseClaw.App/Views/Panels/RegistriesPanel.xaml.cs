@@ -25,11 +25,23 @@ namespace DefenseClaw.App.Views.Panels;
 /// redistributes them once the rows come (they stayed at 46 DIPs each). When the floors of all seven do not fit, the leading
 /// columns take the whole width and the rest wait past the edge.
 /// </para>
+/// <para>
+/// <b>Tabs (CUST-276).</b> Sources shows the master/detail block above; Entries and Approved show a second block, the table of every source's cached
+/// entries (<c>EntriesBlock</c>), sized the same way (<see cref="SizeBlock"/>). Only one of the two is on screen, chosen by the view-model's
+/// <c>ActiveTab</c>. When the view-model lands an "Open in Registries" link on an entry it raises <c>FocusEntryRequested</c>, and
+/// <see cref="FocusSelectedTabEntry"/> brings that row into view and gives its Name cell the keyboard focus.
+/// </para>
 /// </summary>
 public partial class RegistriesPanel : UserControl
 {
-    /// <summary>The sources + details block is never shorter than this, however small the window.</summary>
-    private const double MinBlockHeight = 420;
+    /// <summary>
+    /// The sources + details block is never shorter than this, however small the window. The details card carries a publisher, a fetch time and the
+    /// verdict counts besides what it always had (CUST-276), and the entries under them still get their 150 DIPs.
+    /// </summary>
+    private const double MinBlockHeight = 500;
+
+    /// <summary>The Entries and Approved table's card is never shorter than this: the table, its action bar and the strip over it.</summary>
+    private const double MinEntriesBlockHeight = 380;
 
     /// <summary>The columns the sources grid is read for - id, enabled, entries - however narrow it is.</summary>
     private const int MinLeadingColumns = 3;
@@ -52,6 +64,8 @@ public partial class RegistriesPanel : UserControl
         PageScroll.SizeChanged += (_, _) => UpdateLayoutSizes();
         Chrome.SizeChanged += (_, _) => UpdateLayoutSizes();
         MasterDetail.SizeChanged += (_, _) => UpdateLayoutSizes();
+        EntriesBlock.SizeChanged += (_, _) => UpdateLayoutSizes();
+        DataContextChanged += OnDataContextChanged;
         RawFields.Expanded += (_, _) => UpdateLayoutSizes();
         RawFields.Collapsed += (_, _) => UpdateLayoutSizes();
         RawFields.SizeChanged += (_, _) =>
@@ -97,21 +111,32 @@ public partial class RegistriesPanel : UserControl
     private void UpdateLayoutSizes()
     {
         var viewport = PageScroll.ActualHeight;
-        if (viewport <= 0 || MasterDetail.ActualWidth <= 0)
+        if (viewport <= 0)
+        {
+            return;
+        }
+
+        // Opening the raw fields adds their body to the details card, so the block grows by as much and the entries keep
+        // the room they had. (The body's height does not depend on the block's: its scroller has a MaxHeight.)
+        var minimum = MinBlockHeight + (RawFields.IsExpanded ? Math.Max(0, RawFields.ActualHeight - _rawFieldsClosedHeight) : 0);
+        SizeBlock(MasterDetail, MasterRow, minimum, viewport);
+        SizeBlock(EntriesBlock, EntriesRow, MinEntriesBlockHeight, viewport);
+    }
+
+    /// <summary>Gives the one row of a block (the sources + details, or the Entries table) the rest of the viewport under the chrome, never less than <paramref name="minimum"/>. A block that is not on screen is left alone.</summary>
+    private void SizeBlock(FrameworkElement block, RowDefinition row, double minimum, double viewport)
+    {
+        if (block.ActualWidth <= 0)
         {
             return;
         }
 
         // Where the block starts inside the scrolled content: everything above it, margins included.
-        var top = MasterDetail.TranslatePoint(new Point(0, 0), PageContent).Y;
-
-        // Opening the raw fields adds their body to the details card, so the block grows by as much and the entries keep
-        // the room they had. (The body's height does not depend on the block's: its scroller has a MaxHeight.)
-        var minimum = MinBlockHeight + (RawFields.IsExpanded ? Math.Max(0, RawFields.ActualHeight - _rawFieldsClosedHeight) : 0);
+        var top = block.TranslatePoint(new Point(0, 0), PageContent).Y;
         var height = Math.Max(minimum, Math.Floor(viewport - top));
-        if (Math.Abs(MasterRow.Height.Value - height) > 0.5)
+        if (Math.Abs(row.Height.Value - height) > 0.5)
         {
-            MasterRow.Height = new GridLength(height);
+            row.Height = new GridLength(height);
         }
     }
 
@@ -197,6 +222,79 @@ public partial class RegistriesPanel : UserControl
     private void OnApproveEntry(object sender, RoutedEventArgs e) => RunOnEntry(sender, v => v.ApproveEntryCommand);
 
     private void OnRejectEntry(object sender, RoutedEventArgs e) => RunOnEntry(sender, v => v.RejectEntryCommand);
+
+    // The Entries and Approved table's row menu: the same, on the row it was opened on.
+
+    private void OnApproveListedEntry(object sender, RoutedEventArgs e) => RunOnListedEntry(sender, v => v.ApproveListedEntryCommand);
+
+    private void OnRejectListedEntry(object sender, RoutedEventArgs e) => RunOnListedEntry(sender, v => v.RejectListedEntryCommand);
+
+    private void OnShowEntrySource(object sender, RoutedEventArgs e) => RunOnListedEntry(sender, v => v.ShowEntrySourceCommand);
+
+    private void RunOnListedEntry(object sender, Func<RegistriesPanelViewModel, System.Windows.Input.ICommand> command)
+    {
+        if (DataContext is RegistriesPanelViewModel viewModel)
+        {
+            // The menu belongs to the row it was opened on; make sure that row is the one the command acts on.
+            if (sender is FrameworkElement { DataContext: RegistryEntryRow row })
+            {
+                viewModel.SelectedTabEntry = row;
+            }
+
+            Run(command(viewModel));
+        }
+    }
+
+    // ---- "Open in Registries": bring the entry the panel selected into sight.
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.OldValue is RegistriesPanelViewModel old)
+        {
+            old.FocusEntryRequested -= OnFocusEntryRequested;
+        }
+
+        if (e.NewValue is RegistriesPanelViewModel current)
+        {
+            current.FocusEntryRequested += OnFocusEntryRequested;
+        }
+    }
+
+    /// <summary>
+    /// The view-model landed a link on an entry: scroll it into view in the table and give its row the keyboard focus, so the operator can act on it
+    /// (the menu key, Enter on the buttons) without reaching for the mouse. The row is realized after the layout the tab switch caused, so this waits for it.
+    /// </summary>
+    private void OnFocusEntryRequested(object? sender, EventArgs e)
+    {
+        _ = Dispatcher.BeginInvoke(new Action(() => FocusSelectedTabEntry()), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// Brings the selected row of the Entries table into view and gives it the keyboard focus. A <see cref="DataGridRow"/> is not itself a focus
+    /// target: the keyboard lives in a cell, so the row is focused through its Name cell, which also makes it the grid's current cell (the arrow keys,
+    /// the menu key and Enter start from there). True when a cell took the focus.
+    /// </summary>
+    internal bool FocusSelectedTabEntry()
+    {
+        if (TabGrid.SelectedItem is not { } item || TabGrid.Columns.Count == 0)
+        {
+            return false;
+        }
+
+        var column = TabGrid.Columns.FirstOrDefault(c => c.Header as string == "Name") ?? TabGrid.Columns[0];
+        TabGrid.UpdateLayout();
+        TabGrid.ScrollIntoView(item, column);
+        TabGrid.UpdateLayout();
+        TabGrid.CurrentCell = new DataGridCellInfo(item, column);
+
+        DependencyObject? node = column.GetCellContent(item);
+        while (node is not null and not DataGridCell)
+        {
+            node = VisualTreeHelper.GetParent(node);
+        }
+
+        return node is DataGridCell cell && cell.Focus();
+    }
 
     private void RunOnSource(Func<RegistriesPanelViewModel, System.Windows.Input.ICommand> command)
     {

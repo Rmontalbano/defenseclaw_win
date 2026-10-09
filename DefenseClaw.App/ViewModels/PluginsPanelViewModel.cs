@@ -113,6 +113,10 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
         if (GovernJson.Obj(item, "scan") is { } scan)
         {
             AddField(fields, "Scan target", GovernJson.Str(scan, "target"));
+
+            // The TUI's plugin detail shows the severity mix of the scan as well as the worst severity; 0.8.10's plugin list does not print one yet,
+            // so the line appears when the CLI sends it (as it does for skills) and a plugin without it shows the Scan line alone.
+            AddField(fields, "Findings", GovernJson.SeverityBreakdown(scan));
         }
 
         var verbs = artifact

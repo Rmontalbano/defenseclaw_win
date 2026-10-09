@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Config;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -79,12 +80,14 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
         var bundled = GovernJson.Bool(item, "bundled") == true;
         var eligible = GovernJson.Bool(item, "eligible");
         var source = GovernJson.Str(item, "source");
+        var registry = RegistrySourceOf(RegistryAttribution.SkillKind, name);
 
         var fields = new List<GovernField>();
         AddField(fields, "Name", name);
         AddField(fields, "Connector", connector);
         AddField(fields, "Status", state.Status);
         AddField(fields, "Source", source);
+        AddField(fields, "Registry", GovernRow.FullRegistryText(registry));
         AddField(fields, "Eligible", eligible is null ? null : eligible.Value ? "yes" : "no");
         AddField(fields, "Bundled", bundled ? "yes" : null);
         AddField(fields, "Homepage", GovernJson.Str(item, "homepage"));
@@ -93,18 +96,16 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
         if (GovernJson.Obj(item, "scan") is { } scan)
         {
             AddField(fields, "Scan target", GovernJson.Str(scan, "target"));
-            if (GovernJson.Obj(scan, "severity_counts") is { } counts)
-            {
-                AddField(
-                    fields,
-                    "Findings",
-                    string.Join(
-                        " · ",
-                        new[] { "critical", "high", "medium", "low", "info" }
-                            .Select(k => (Key: k, Count: GovernJson.Int(counts, k)))
-                            .Where(p => p.Count is > 0)
-                            .Select(p => $"{p.Key} {p.Count}")));
-            }
+            AddField(fields, "Findings", GovernJson.SeverityBreakdown(scan));
+        }
+
+        // A bundled skill ships with the connector: it can be inspected but not blocked, disabled or moved.
+        var verbs = GovernVerbs.Scan | (bundled
+            ? GovernVerbs.Info | GovernVerbs.CopyName
+            : StandardVerbs(state, canDisable: true, canQuarantine: true));
+        if (registry is not null)
+        {
+            verbs |= GovernVerbs.OpenInRegistries;
         }
 
         return new GovernRow(this)
@@ -112,6 +113,7 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
             Noun = Noun,
             Name = name,
             Connector = connector,
+            RegistrySource = registry,
             Description = GovernJson.Str(item, "description"),
             MetaLine = JoinMeta(("source", source), ("bundled", bundled ? "yes" : null), ("eligible", eligible == false ? "no" : null)),
             StateLabel = state.Label,
@@ -126,10 +128,7 @@ public sealed partial class SkillsPanelViewModel : GovernPanelViewModelBase
             NeedsAttention = state.NeedsAttention,
             RawJson = GovernJson.Pretty(item),
             Fields = fields,
-            // A bundled skill ships with the connector: it can be inspected but not blocked, disabled or moved.
-            Verbs = GovernVerbs.Scan | (bundled
-                ? GovernVerbs.Info | GovernVerbs.CopyName
-                : StandardVerbs(state, canDisable: true, canQuarantine: true)),
+            Verbs = verbs,
         };
     }
 

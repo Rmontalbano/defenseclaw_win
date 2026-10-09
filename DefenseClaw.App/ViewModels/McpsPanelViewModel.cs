@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
+using DefenseClaw.Core.Config;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -98,6 +99,7 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         var args = GovernJson.JoinedArray(item, "args");
         var url = GovernJson.Str(item, "url");
         var launch = command is null ? null : (args is null ? command : command + " " + args);
+        var registry = RegistrySourceOf(RegistryAttribution.McpKind, name);
 
         var fields = new List<GovernField>();
         AddField(fields, "Name", name);
@@ -105,17 +107,31 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
         AddField(fields, "Transport", transport);
         AddField(fields, "Command", launch);
         AddField(fields, "URL", url);
+        AddField(fields, "Registry", GovernRow.FullRegistryText(registry));
         AddField(fields, "Enforcement", state.ActionsText);
         AddField(fields, "Scan", state.ScanLabel);
 
+        // 0.8.10 prints a bare "severity" for an MCP server; a scan object (target, findings and a per-severity breakdown, as a skill has) is what the
+        // TUI's MCP detail is built to show, so it is shown when the CLI sends one.
+        if (GovernJson.Obj(item, "scan") is { } scan)
+        {
+            AddField(fields, "Scan target", GovernJson.Str(scan, "target"));
+            AddField(fields, "Findings", GovernJson.SeverityBreakdown(scan));
+        }
+
         // No 'mcp info' exists, so the raw JSON in the details is the per-server view. Info is not offered.
         var verbs = (StandardVerbs(state, canDisable: false, canQuarantine: false) & ~GovernVerbs.Info) | GovernVerbs.Unset | GovernVerbs.Scan;
+        if (registry is not null)
+        {
+            verbs |= GovernVerbs.OpenInRegistries;
+        }
 
         return new GovernRow(this)
         {
             Noun = Noun,
             Name = name,
             Connector = connector,
+            RegistrySource = registry,
             MetaLine = JoinMeta(("transport", transport), ("command", launch), ("url", url)),
             StateLabel = state.Label,
             StateTone = state.Tone,

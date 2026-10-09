@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using DefenseClaw.Core.Config;
+using DefenseClaw.Core.Text;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -29,6 +31,12 @@ public enum GovernVerbs
 
     /// <summary><c>&lt;noun&gt; scan [--connector C] -- NAME</c>: runs the scanner and records the result (reviewed first).</summary>
     Scan = 1 << 11,
+
+    /// <summary>
+    /// "Open in Registries" (CUST-276): offered on a skill or MCP server a registry promoted. A navigation, not a command: it shows the Registries
+    /// panel on the item's cached entry and runs nothing, so it is not reviewed and is not held back by a stale list or a read-only installation.
+    /// </summary>
+    OpenInRegistries = 1 << 12,
 }
 
 /// <summary>What a row calls back into when one of its buttons is pressed. Implemented by the panel view-model.</summary>
@@ -91,6 +99,12 @@ public sealed partial class GovernRow : INotifyPropertyChanged
     public string? SourceScope { get; init; }
 
     public string? Description { get; init; }
+
+    /// <summary>
+    /// The registry source that promoted this skill or MCP server into the allow policy (the id in its rule's <c>registry:&lt;id&gt;</c> reason, see
+    /// <see cref="RegistryAttribution"/>); null for an item no registry promoted, and always for plugins and tools.
+    /// </summary>
+    public string? RegistrySource { get; init; }
 
     /// <summary>One compact line of secondary facts ("origin: … · version: …").</summary>
     public string? MetaLine { get; init; }
@@ -227,6 +241,33 @@ public sealed partial class GovernRow : INotifyPropertyChanged
 
     public bool HasFields => Fields.Count > 0;
 
+    /// <summary>True when a registry promoted this item: the row shows the <see cref="RegistryBadge"/> and offers Open in Registries.</summary>
+    public bool HasRegistry => !string.IsNullOrWhiteSpace(RegistrySource);
+
+    /// <summary>
+    /// The badge text, <c>registry:corp-skills</c>: the TUI's <c>registry_badge</c>, so an id past 18 characters is cut and ends in <c>...</c> (the
+    /// whole id is in <see cref="RegistryToolTip"/> and the details). The id came from config.yaml, so a control or format character in it is spelled
+    /// out. Empty when no registry promoted the item.
+    /// </summary>
+    public string RegistryBadge => HasRegistry ? DisplayNames.Visible(RegistryAttribution.Badge(RegistrySource)) : string.Empty;
+
+    /// <summary>The whole <c>registry:&lt;id&gt;</c>, uncut (the Registry line of the details); empty without a registry.</summary>
+    public string RegistryFull => FullRegistryText(RegistrySource);
+
+    /// <summary><see cref="RegistryFull"/> for a source id, for a parser that fills the details before the row exists.</summary>
+    public static string FullRegistryText(string? registrySource) =>
+        string.IsNullOrWhiteSpace(registrySource) ? string.Empty : RegistryAttribution.ReasonPrefix + DisplayNames.Visible(registrySource.Trim());
+
+    /// <summary>What hovering the badge says: where the item came from, and that clicking it opens the entry.</summary>
+    public string RegistryToolTip => HasRegistry
+        ? $"Promoted into the allow policy by the registry source “{DisplayNames.Visible(RegistrySource!.Trim())}”. Click to open its entry in Registries."
+        : string.Empty;
+
+    /// <summary>What a screen reader announces for the badge.</summary>
+    public string RegistryAutomationName => HasRegistry
+        ? $"Promoted by registry {DisplayNames.Visible(RegistrySource!.Trim())}. Opens its entry in Registries."
+        : string.Empty;
+
     public bool CanInfo => (Verbs & GovernVerbs.Info) != 0;
 
     public bool CanBlock => (Verbs & GovernVerbs.Block) != 0;
@@ -249,10 +290,12 @@ public sealed partial class GovernRow : INotifyPropertyChanged
 
     public bool CanScan => (Verbs & GovernVerbs.Scan) != 0;
 
+    public bool CanOpenInRegistries => (Verbs & GovernVerbs.OpenInRegistries) != 0;
+
     /// <summary>Lower-cased text the panel's filter box matches against.</summary>
     public string SearchText => _searchText ??= string.Join(
         ' ',
-        new[] { Name, Title, Connector, Description, MetaLine, StateLabel, ScanLabel, Reason, ActionsText }
+        new[] { Name, Title, Connector, Description, MetaLine, StateLabel, ScanLabel, Reason, ActionsText, RegistryFull }
             .Where(s => !string.IsNullOrWhiteSpace(s)))
         .ToLowerInvariant();
 
@@ -275,6 +318,11 @@ public sealed partial class GovernRow : INotifyPropertyChanged
             if (HasScan)
             {
                 parts.Add(ScanLabel);
+            }
+
+            if (HasRegistry)
+            {
+                parts.Add($"promoted by registry {DisplayNames.Visible(RegistrySource!.Trim())}");
             }
 
             if (IsArtifact)

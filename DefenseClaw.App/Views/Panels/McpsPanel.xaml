@@ -49,7 +49,7 @@
                            SearchText="{Binding FilterText}"
                            SearchPlaceholder="Filter MCP servers…"
                            SearchAutomationName="Filter MCP servers"
-                           SearchHelpText="Matches name, transport, command, URL, connector and state. Shortcut Ctrl+F; Esc clears it.">
+                           SearchHelpText="Matches name, transport, command, URL, connector, state and registry. Shortcut Ctrl+F; Esc clears it.">
             <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="16"
                                  Height="16"
@@ -318,10 +318,10 @@
                         <DataGridTemplateColumn Width="1*" MinWidth="110" Header="Status"
                                                 SortMemberPath="StateLabel"
                                                 CellTemplate="{StaticResource GovernStatusCell}" />
-                        <DataGridTextColumn Width="1.4*" MinWidth="100" Header="Name"
-                                            SortMemberPath="DisplayTitle"
-                                            ElementStyle="{StaticResource DcCellText}"
-                                            Binding="{Binding DisplayTitle}" />
+                        <DataGridTemplateColumn Width="1.4*" MinWidth="100" Header="Name"
+                                                SortMemberPath="DisplayTitle"
+                                                ClipboardContentBinding="{Binding DisplayTitle}"
+                                                CellTemplate="{StaticResource GovernNameCell}" />
                         <DataGridTextColumn Width="0.8*" MinWidth="76" Header="Transport"
                                             SortMemberPath="Transport"
                                             ElementStyle="{StaticResource DcCellTextQuiet}"

@@ -45,6 +45,14 @@
                   Command="{Binding ActionCommand}"
                   CommandParameter="CopyName"
                   AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Copy name {0}'}" />
+        <!-- A skill or MCP server a registry promoted: shows its cached entry in Registries. Read-only navigation, so no change gate applies. -->
+        <MenuItem Header="Open in Registries"
+                  Icon="{ctl:DcSymbolIcon Library24}"
+                  Command="{Binding ActionCommand}"
+                  CommandParameter="OpenInRegistries"
+                  ToolTip="Shows this item's entry in the registry that promoted it. Runs nothing."
+                  AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Open {0} in Registries'}"
+                  Visibility="{Binding CanOpenInRegistries, Converter={StaticResource BoolToVisibility}}" />
         <Separator />
         <MenuItem Header="Allow…"
                   Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
@@ -165,6 +173,32 @@
                          TextWrapping="NoWrap"
                          Text="{Binding RawJson, Mode=OneWay}"
                          AutomationProperties.Name="{Binding DisplayTitle, StringFormat='Raw JSON of {0}'}" />
+            </Border>
+        </StackPanel>
+    </DataTemplate>
+
+    <!--
+        Name, for the tables of items a registry can promote (Skills, MCPs; CUST-276): the name, and under it, for an item a registry promoted, the
+        registry:<id> badge (the TUI puts it beside the source). Under the name rather than beside it, so the name keeps the column at every window
+        width and the badge, trimmed to what the column has, still says where the item came from; its whole text is in the tooltip. Clicking the badge
+        does what the row menu's "Open in Registries" does. An item no registry promoted is one line, as it always was.
+    -->
+    <DataTemplate x:Key="GovernNameCell">
+        <StackPanel VerticalAlignment="Center">
+            <TextBlock Style="{StaticResource DcCellText}" Text="{Binding DisplayTitle}" />
+            <Border Style="{StaticResource DcChip}"
+                    HorizontalAlignment="Left"
+                    Margin="0,1,8,3"
+                    Cursor="Hand"
+                    ToolTip="{Binding RegistryToolTip}"
+                    Visibility="{Binding HasRegistry, Converter={StaticResource BoolToVisibility}}">
+                <Border.InputBindings>
+                    <MouseBinding Gesture="LeftClick" Command="{Binding ActionCommand}" CommandParameter="OpenInRegistries" />
+                </Border.InputBindings>
+                <TextBlock Style="{StaticResource DcBadgeText}"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding RegistryBadge}"
+                           AutomationProperties.Name="{Binding RegistryAutomationName}" />
             </Border>
         </StackPanel>
     </DataTemplate>

@@ -240,7 +240,8 @@ public sealed partial class RegistriesPanelViewModel
     [RelayCommand]
     private void SyncSelected()
     {
-        if (SelectedSource is not { } source || RefuseUntrustedChange())
+        // The selected source; on the Entries and Approved tabs, the source of the selected entry.
+        if (ActionSource is not { } source || RefuseUntrustedChange())
         {
             return;
         }
@@ -348,14 +349,24 @@ public sealed partial class RegistriesPanelViewModel
             return;
         }
 
+        ReviewEntry(approve, source.Id, entry);
+    }
+
+    /// <summary>
+    /// The review of approving or rejecting <paramref name="entry"/> of the source <paramref name="sourceId"/>: the selected source's own list passes the
+    /// selected source, the Entries and Approved tables the source each row came from. The caller has checked that the entry can be reviewed and that
+    /// the list may authorize a change.
+    /// </summary>
+    private void ReviewEntry(bool approve, string sourceId, RegistryEntryRow entry)
+    {
         var verb = approve ? "approve" : "reject";
         var type = entry.TypeDisplay.ToLowerInvariant();
 
         // A name that starts with '-' would be read as an option: put the options first and the names
         // after "--". The normal (and far more common) form keeps the names first, as the help shows.
         var argv = entry.Name.StartsWith('-')
-            ? new[] { "registry", verb, "--type", type, "--json", "--", source.Id, entry.Name }
-            : new[] { "registry", verb, source.Id, entry.Name, "--type", type, "--json" };
+            ? new[] { "registry", verb, "--type", type, "--json", "--", sourceId, entry.Name }
+            : new[] { "registry", verb, sourceId, entry.Name, "--type", type, "--json" };
 
         Review.Open(
             approve
@@ -372,15 +383,15 @@ public sealed partial class RegistriesPanelViewModel
                 new DiscoverStep(
                     argv,
                     approve
-                        ? $"Approve {entry.Name} from {source.Id}."
-                        : $"Reject {entry.Name} from {source.Id}."),
+                        ? $"Approve {entry.Name} from {sourceId}."
+                        : $"Reject {entry.Name} from {sourceId}."),
             },
             result => AfterActionAsync(
                 result,
                 approve ? $"Approved “{entry.Name}”." : $"Rejected “{entry.Name}”.",
                 $"“{entry.Name}” was not changed."),
             primaryText: approve ? "Approve" : "Reject",
-            names: new[] { source.Id, entry.Name });
+            names: new[] { sourceId, entry.Name });
     }
 
     // ---- Registry required (default-deny) ---------------------------------------------------------

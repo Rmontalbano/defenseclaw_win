@@ -72,6 +72,68 @@
             <Setter Property="ContextMenu" Value="{StaticResource EntryRowMenu}" />
         </Style>
 
+        <!-- The same two reviews for a row of the Entries and Approved tables, whose source is the row's own; plus a way back to that source. -->
+        <ContextMenu x:Key="TabEntryRowMenu">
+            <MenuItem Header="Approve…"
+                      Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                      IsEnabled="{Binding CanReview}"
+                      ToolTip="Approve this entry and promote it into the allow policy. Shows the command first."
+                      Click="OnApproveListedEntry" />
+            <MenuItem Header="Reject…"
+                      Style="{StaticResource DcDangerMenuItem}"
+                      Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
+                      IsEnabled="{Binding CanReview}"
+                      ToolTip="Reject this entry so it stays blocked. Shows the command first."
+                      Click="OnRejectListedEntry" />
+            <Separator />
+            <MenuItem Header="Show source"
+                      Icon="{ctl:DcSymbolIcon Library24}"
+                      ToolTip="Select this entry's source on the Sources tab: its publisher, fetch time and counts."
+                      Click="OnShowEntrySource" />
+        </ContextMenu>
+
+        <Style x:Key="TabEntryRow" TargetType="DataGridRow" BasedOn="{StaticResource DcDataGridRow}">
+            <Setter Property="ContextMenu" Value="{StaticResource TabEntryRowMenu}" />
+        </Style>
+
+        <!--
+            A second line under an entry, only for one that has something to say: the scan's error (Bad tone) and a findings count badge (tone by
+            the worst severity, High when none is given), with what the cache knows about the findings in its tooltip. An entry with neither
+            collapses this to nothing. Each part has its own automation name; the row's own name (its ToString) carries the same words.
+            Shared by the selected source's entries and the Entries and Approved tables.
+        -->
+        <DataTemplate x:Key="EntryRowDetails">
+            <Grid Margin="10,0,10,8"
+                  Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Top"
+                        Style="{StaticResource DcBadge}"
+                        Tag="{Binding FindingsKey}"
+                        AutomationProperties.Name="{Binding FindingsAutomationName}"
+                        AutomationProperties.HelpText="{Binding FindingsToolTip}"
+                        Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibility}}">
+                    <Border.ToolTip>
+                        <TextBlock MaxWidth="420"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding FindingsToolTip}" />
+                    </Border.ToolTip>
+                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FindingsBadgeText}" />
+                </Border>
+                <TextBlock Grid.Column="1"
+                           Style="{StaticResource DcToneText}"
+                           Tag="Bad"
+                           TextWrapping="Wrap"
+                           AutomationProperties.Name="{Binding ErrorAutomationName}"
+                           Text="{Binding ErrorText}"
+                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+            </Grid>
+        </DataTemplate>
+
         <!-- One line of a source's facts (Location, Last sync): trimmed, the whole value in a tooltip when it is cut. -->
         <Style x:Key="RegistryFactValue" TargetType="TextBlock" BasedOn="{StaticResource DcFieldValue}">
             <Setter Property="TextWrapping" Value="NoWrap" />
@@ -115,11 +177,33 @@
                            Title="{Binding Title}"
                            TitleToolTip="{Binding Description}"
                            Caption="{Binding StatusMessage}">
+            <!-- Sources | Entries | Approved, right after the title (the TUI's three sub-tabs, the Mac's segmented picker). The counts are the rows under each. -->
+            <ctl:DcPageToolbar.Leading>
+                <ctl:DcSegmented x:Name="TabSwitch"
+                                 Margin="12,0,0,0"
+                                 SelectedValue="{Binding ActiveTab, Mode=TwoWay}"
+                                 Visibility="{Binding HasSources, Converter={StaticResource BoolToVisibility}}"
+                                 AutomationProperties.Name="Registries view"
+                                 AutomationProperties.HelpText="Sources lists the registry sources. Entries lists the cached entries of every source. Approved lists the ones that were approved.">
+                    <ctl:DcSegment Value="sources"
+                                   Content="Sources"
+                                   ToolTip="The registry sources, and the selected one's details and cached entries" />
+                    <ctl:DcSegment Value="entries"
+                                   Content="Entries"
+                                   Count="{Binding EntriesCount}"
+                                   ToolTip="The cached entries of every source in one table" />
+                    <ctl:DcSegment Value="approved"
+                                   Content="Approved"
+                                   Count="{Binding ApprovedCount}"
+                                   ToolTip="The entries of every source that were approved" />
+                </ctl:DcSegmented>
+            </ctl:DcPageToolbar.Leading>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon Add24}"
                                Command="{Binding OpenAddFormCommand}"
                                IsEnabled="{Binding IsDataTrusted}"
+                               Visibility="{Binding IsSourcesTab, Converter={StaticResource BoolToVisibility}}"
                                ToolTipService.ShowOnDisabled="True"
                                ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Add source…'}"
                                AutomationProperties.Name="Add source…"
@@ -141,12 +225,14 @@
                     <ui:Button Icon="{ctl:DcSymbolIcon Power24}"
                                Command="{Binding ToggleSelectedEnabledCommand}"
                                IsEnabled="{Binding CanChangeSelectedSource}"
+                               Visibility="{Binding IsSourcesTab, Converter={StaticResource BoolToVisibility}}"
                                ToolTip="{Binding ToggleEnabledText}"
                                AutomationProperties.Name="{Binding ToggleEnabledText}"
                                AutomationProperties.HelpText="Turn the selected source on or off." />
                     <ui:Button Icon="{ctl:DcSymbolIcon Delete24}"
                                Command="{Binding RemoveSelectedCommand}"
                                IsEnabled="{Binding CanChangeSelectedSource}"
+                               Visibility="{Binding IsSourcesTab, Converter={StaticResource BoolToVisibility}}"
                                ToolTipService.ShowOnDisabled="True"
                                ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Remove…'}"
                                AutomationProperties.Name="Remove…"
@@ -181,6 +267,14 @@
                                 IsOpen="{Binding HasCliError}"
                                 Message="{Binding CliErrorMessage}"
                                 Severity="Warning" />
+
+                    <!-- An "Open in Registries" link that found no cached entry (CUST-276): said here, so it shows on every tab and with no sources. -->
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                Title="That entry is not in the registries"
+                                IsClosable="False"
+                                IsOpen="{Binding HasFocusNote}"
+                                Message="{Binding FocusNote}"
+                                Severity="Informational" />
 
                     <!--
                         Default-deny switches (asset_policy.<type>.registry_required). Closed by default - they are set
@@ -392,7 +486,7 @@
                     grids inside always have a definite, bounded height.
                 -->
                 <Grid x:Name="MasterDetail"
-                      Visibility="{Binding HasSources, Converter={StaticResource BoolToVisibility}}">
+                      Visibility="{Binding ShowSourcesView, Converter={StaticResource BoolToVisibility}}">
                     <Grid.RowDefinitions>
                         <RowDefinition x:Name="MasterRow" Height="420" />
                     </Grid.RowDefinitions>
@@ -512,7 +606,11 @@
                                     </Border>
                                 </WrapPanel>
 
-                                <!-- What the sources grid cannot always show: where it comes from and when it was last synced. -->
+                                <!--
+                                    What the sources grid cannot always show: where it comes from, when it was last synced, and - from its cached index
+                                    (CUST-276; the TUI's source detail) - who publishes it, when the manifest was fetched, and how the last sync judged
+                                    its entries. The counts are always the four verdicts, a zero in the quiet tone; a source with no index shows none.
+                                -->
                                 <Grid Grid.Row="1" Margin="0,2,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -521,13 +619,44 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,10,2" Style="{StaticResource DcFieldLabel}" Text="Location" />
                                     <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,2" Style="{StaticResource RegistryFactValue}"
                                                Text="{Binding SelectedSource.Location, TargetNullValue=—}" />
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" Style="{StaticResource DcFieldLabel}" Text="Last sync" />
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource RegistryFactValue}"
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,10,2" Style="{StaticResource DcFieldLabel}" Text="Last sync" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,2" Style="{StaticResource RegistryFactValue}"
                                                Text="{Binding SelectedSource.LastSyncDisplay}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,10,2" Style="{StaticResource DcFieldLabel}" Text="Publisher" />
+                                    <TextBlock x:Name="PublisherValue" Grid.Row="2" Grid.Column="1" Margin="0,0,0,2" Style="{StaticResource RegistryFactValue}"
+                                               Text="{Binding SourceFacts.Publisher}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,10,2" Style="{StaticResource DcFieldLabel}" Text="Fetched at" />
+                                    <TextBlock x:Name="FetchedAtValue" Grid.Row="3" Grid.Column="1" Margin="0,0,0,2" Style="{StaticResource RegistryFactValue}"
+                                               Text="{Binding SourceFacts.FetchedAt}" />
+                                    <WrapPanel x:Name="CountChips"
+                                               Grid.Row="4"
+                                               Grid.Column="0"
+                                               Grid.ColumnSpan="2"
+                                               Margin="0,4,0,0"
+                                               Visibility="{Binding SourceFacts.HasCounts, Converter={StaticResource BoolToVisibility}}">
+                                        <Border Style="{StaticResource DcChip}" Margin="0,0,6,4">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SourceFacts.EntriesText}" />
+                                        </Border>
+                                        <Border Style="{StaticResource DcBadge}" Margin="0,0,6,4" Tag="{Binding SourceFacts.CleanTone}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SourceFacts.CleanText}" />
+                                        </Border>
+                                        <Border Style="{StaticResource DcBadge}" Margin="0,0,6,4" Tag="{Binding SourceFacts.WarningTone}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SourceFacts.WarningText}" />
+                                        </Border>
+                                        <Border Style="{StaticResource DcBadge}" Margin="0,0,6,4" Tag="{Binding SourceFacts.BlockedTone}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SourceFacts.BlockedText}" />
+                                        </Border>
+                                        <Border Style="{StaticResource DcBadge}" Margin="0,0,6,4" Tag="{Binding SourceFacts.ErrorTone}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SourceFacts.ErrorText}" />
+                                        </Border>
+                                    </WrapPanel>
                                 </Grid>
 
                                 <Grid Grid.Row="2" Margin="0,12,0,4">
@@ -557,6 +686,7 @@
                                 <ui:DataGrid Grid.Row="4"
                                              Style="{StaticResource DcDataGrid}"
                                              RowStyle="{StaticResource EntryRow}"
+                                             RowDetailsTemplate="{StaticResource EntryRowDetails}"
                                              MinHeight="100"
                                              SelectionMode="Single"
                                              RowDetailsVisibilityMode="Visible"
@@ -565,46 +695,6 @@
                                              AutomationProperties.Name="Cached entries of the selected source"
                                              ItemsSource="{Binding Entries}"
                                              SelectedItem="{Binding SelectedEntry}">
-                                    <!--
-                                        A second line under an entry, only for one that has something to say: the scan's
-                                        error (Bad tone) and a findings count badge (tone by the worst severity, High when
-                                        none is given), with what the cache knows about the findings in its tooltip. An
-                                        entry with neither collapses this to nothing. Each part has its own automation name;
-                                        the row's own name (its ToString) carries the same words.
-                                    -->
-                                    <ui:DataGrid.RowDetailsTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="10,0,10,8"
-                                                  Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <Border Grid.Column="0"
-                                                        Margin="0,0,8,0"
-                                                        VerticalAlignment="Top"
-                                                        Style="{StaticResource DcBadge}"
-                                                        Tag="{Binding FindingsKey}"
-                                                        AutomationProperties.Name="{Binding FindingsAutomationName}"
-                                                        AutomationProperties.HelpText="{Binding FindingsToolTip}"
-                                                        Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibility}}">
-                                                    <Border.ToolTip>
-                                                        <TextBlock MaxWidth="420"
-                                                                   TextWrapping="Wrap"
-                                                                   Text="{Binding FindingsToolTip}" />
-                                                    </Border.ToolTip>
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FindingsBadgeText}" />
-                                                </Border>
-                                                <TextBlock Grid.Column="1"
-                                                           Style="{StaticResource DcToneText}"
-                                                           Tag="Bad"
-                                                           TextWrapping="Wrap"
-                                                           AutomationProperties.Name="{Binding ErrorAutomationName}"
-                                                           Text="{Binding ErrorText}"
-                                                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ui:DataGrid.RowDetailsTemplate>
                                     <ui:DataGrid.Columns>
                                         <DataGridTextColumn Width="*" MinWidth="64" Header="Name"
                                                             SortMemberPath="Name"
@@ -683,6 +773,154 @@
                                     </ScrollViewer>
                                 </Expander>
                             </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!--
+                    The Entries and Approved tabs (CUST-276): the cached entries of every source in one table, the TUI's _entry_rows. Approved is the same
+                    table with the approved ones only. Like the sources block, the card gets a definite height from the code-behind (UpdateLayoutSizes), so
+                    the grid in it is bounded and virtualized inside the scrolling page. Over the grid: the strip of an "Open in Registries" link (the
+                    table is narrowed to one entry until the strip's button or Esc ends it) and a warning for a source whose cache could not be read.
+                -->
+                <Grid x:Name="EntriesBlock"
+                      Visibility="{Binding ShowEntriesView, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="EntriesRow" Height="420" />
+                    </Grid.RowDefinitions>
+
+                    <Border Style="{StaticResource DcCardFlush}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Grid x:Name="FocusStrip"
+                                  Grid.Row="0"
+                                  Margin="12,8,12,4"
+                                  Visibility="{Binding HasEntryFocus, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource DcCaption}"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding EntryFocusText}" />
+                                <ui:Button Grid.Column="1"
+                                           Margin="12,0,0,0"
+                                           Content="Show all entries"
+                                           Icon="{ctl:DcSymbolIcon FilterDismiss24}"
+                                           Command="{Binding ClearEntryFocusCommand}"
+                                           AutomationProperties.HelpText="Ends the narrowing to this one entry and lists every entry again (Esc)." />
+                            </Grid>
+
+                            <TextBlock x:Name="EntriesWarning"
+                                       Grid.Row="1"
+                                       Margin="12,4,12,4"
+                                       Style="{StaticResource DcToneText}"
+                                       Tag="Warn"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding EntriesNote}"
+                                       Visibility="{Binding HasEntriesNote, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.LiveSetting="Polite" />
+
+                            <ui:DataGrid x:Name="TabGrid"
+                                         Grid.Row="2"
+                                         Style="{StaticResource DcDataGrid}"
+                                         RowStyle="{StaticResource TabEntryRow}"
+                                         RowDetailsTemplate="{StaticResource EntryRowDetails}"
+                                         MinHeight="100"
+                                         SelectionMode="Single"
+                                         RowDetailsVisibilityMode="Visible"
+                                         AreRowDetailsFrozen="True"
+                                         VirtualizingPanel.ScrollUnit="Pixel"
+                                         ctl:DcGridColumns.Fit="True"
+                                         panels:NestedScroll.ForwardWheel="True"
+                                         AutomationProperties.Name="Registry entries"
+                                         ItemsSource="{Binding TabEntries}"
+                                         SelectedItem="{Binding SelectedTabEntry}"
+                                         Visibility="{Binding HasTabEntries, Converter={StaticResource BoolToVisibility}}">
+                                <ui:DataGrid.Columns>
+                                    <DataGridTextColumn Width="1.1*" MinWidth="96" Header="Source"
+                                                        SortMemberPath="SourceDisplay"
+                                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                        Binding="{Binding SourceDisplay}" />
+                                    <DataGridTextColumn Width="1.5*" MinWidth="90" Header="Name"
+                                                        SortMemberPath="Name"
+                                                        ElementStyle="{StaticResource DcCellText}"
+                                                        Binding="{Binding Name}" />
+                                    <DataGridTextColumn Width="52" Header="Type"
+                                                        SortMemberPath="TypeDisplay"
+                                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                        Binding="{Binding TypeDisplay}" />
+                                    <DataGridTemplateColumn Width="80" Header="Status"
+                                                            SortMemberPath="StatusDisplay">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ctl:DcStatusLabel Text="{Binding StatusDisplay}" Tone="{Binding StatusKey}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Width="0.7*" MinWidth="64" Header="Severity"
+                                                        SortMemberPath="SeverityDisplay"
+                                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                        Binding="{Binding SeverityDisplay}" />
+                                    <DataGridTemplateColumn Width="84" Header="Review"
+                                                            SortMemberPath="ReviewDisplay">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ctl:DcStatusLabel Text="{Binding ReviewDisplay}" Tone="{Binding ReviewKey}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Width="2*" MinWidth="80" Header="Location"
+                                                        SortMemberPath="LocationDisplay"
+                                                        ElementStyle="{StaticResource DcCellTextMono}"
+                                                        Binding="{Binding LocationDisplay}" />
+                                    <DataGridTemplateColumn Width="30" Header="Actions"
+                                                            CanUserSort="False"
+                                                            HeaderStyle="{StaticResource DcDataGridActionsHeader}">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ctl:DcRowMenuButton AutomationProperties.HelpText="Approve or reject this entry, or show its source." />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </ui:DataGrid.Columns>
+                            </ui:DataGrid>
+
+                            <!-- Nothing to list: the TUI's sentence for the tab. -->
+                            <StackPanel x:Name="TabEmpty"
+                                        Grid.Row="2"
+                                        Style="{StaticResource DcEmptyState}"
+                                        MaxWidth="460"
+                                        Visibility="{Binding ShowTabEmpty, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Database24" />
+                                <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyEntriesText}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="3" Style="{StaticResource DcActionBar}" Margin="12,8,12,10">
+                                <ui:Button Content="Approve…"
+                                           Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                           Command="{Binding ApproveListedEntryCommand}"
+                                           IsEnabled="{Binding CanReviewTabEntry}"
+                                           AutomationProperties.HelpText="Approve the selected entry and promote it into the allow policy." />
+                                <ui:Button Content="Reject…"
+                                           Icon="{ctl:DcSymbolIcon ShieldDismiss24}"
+                                           Command="{Binding RejectListedEntryCommand}"
+                                           IsEnabled="{Binding CanReviewTabEntry}"
+                                           AutomationProperties.HelpText="Reject the selected entry so it stays blocked." />
+                                <ui:Button Content="Show source"
+                                           Icon="{ctl:DcSymbolIcon Library24}"
+                                           Command="{Binding ShowEntrySourceCommand}"
+                                           IsEnabled="{Binding HasSelectedTabEntry}"
+                                           AutomationProperties.HelpText="Select the entry's source on the Sources tab: its publisher, fetch time and counts." />
+                            </StackPanel>
                         </Grid>
                     </Border>
                 </Grid>

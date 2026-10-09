@@ -150,6 +150,58 @@ public static class GovernJson
         return Str(element, name);
     }
 
+    /// <summary>The severities a scan counts its findings in, worst first (the TUI's <c>SEVERITY_BUCKETS</c>).</summary>
+    public static IReadOnlyList<string> SeverityBuckets { get; } = new[] { "critical", "high", "medium", "low", "info" };
+
+    /// <summary>
+    /// The per-severity finding counts of a scan object (<c>scan.severity_counts</c>, CUST-276), worst bucket first, only the buckets with a
+    /// finding in them. Read the way the TUI's <c>_parse_severity_counts</c> reads them: a bucket's name is folded to lower case (the scanner stores
+    /// <c>CRITICAL</c>, <c>HIGH</c>…), a name that is not one of the five is dropped, a count is a number (a fraction is cut) or numeric text, and
+    /// anything that is not above zero is left out; two spellings of one bucket add up. Empty when the scan has no breakdown (0.8.10 prints one for
+    /// skills only), which is not the same as a clean scan.
+    /// </summary>
+    public static IReadOnlyList<(string Bucket, int Count)> SeverityCounts(JsonElement scan)
+    {
+        if (Obj(scan, "severity_counts") is not { } counts)
+        {
+            return Array.Empty<(string, int)>();
+        }
+
+        var totals = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var property in counts.EnumerateObject())
+        {
+            var bucket = property.Name.Trim().ToLowerInvariant();
+            var count = CountOf(property.Value);
+            if (count > 0 && SeverityBuckets.Contains(bucket))
+            {
+                totals[bucket] = totals.GetValueOrDefault(bucket) + count;
+            }
+        }
+
+        return SeverityBuckets
+            .Where(totals.ContainsKey)
+            .Select(bucket => (bucket, (int)Math.Min(totals[bucket], int.MaxValue)))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// <see cref="SeverityCounts"/> as the details line writes it: <c>critical 1 · high 2 · low 3</c>. Null when no bucket has a finding, so a clean
+    /// scan, a scan without a breakdown and a payload of zeros all show no line.
+    /// </summary>
+    public static string? SeverityBreakdown(JsonElement scan)
+    {
+        var counts = SeverityCounts(scan);
+        return counts.Count == 0 ? null : string.Join(" · ", counts.Select(c => $"{c.Bucket} {c.Count}"));
+    }
+
+    private static long CountOf(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Number when value.TryGetInt64(out var whole) => whole,
+        JsonValueKind.Number when value.TryGetDouble(out var fraction) && double.IsFinite(fraction) => (long)Math.Truncate(Math.Clamp(fraction, -1e15, 1e15)),
+        JsonValueKind.String when long.TryParse(value.GetString()?.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var text) => text,
+        _ => 0,
+    };
+
     // Shown to a person in the details expander, never embedded in HTML: the default encoder would print a skill named
     // "résumé", or a description in Japanese, as backslash-u escape sequences.
     private static readonly JsonSerializerOptions PrettyOptions = new()

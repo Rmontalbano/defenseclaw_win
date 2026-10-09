@@ -1,0 +1,103 @@
+# SYNTHETIC. The shape `defenseclaw registry sync` leaves in config.yaml: one asset_policy rule per promoted entry in
+# asset_policy.<skill|mcp>.registry, each with reason "registry:<source id>" (registries/sync.py, _promote_to_asset_policy, 0.8.10).
+# Written from that code with made-up names and hosts under example.test; nothing in it comes from a real machine.
+config_version: 8
+claw:
+  mode: claudecode
+registries:
+  sources:
+  - id: corp-skills
+    kind: http_yaml
+    url: https://registry.example.test/defenseclaw-registry.yaml
+    content: both
+    auth_env: EXAMPLE_REGISTRY_TOKEN
+    enabled: true
+    auto_sync: false
+    sync_interval_hours: 24
+  - id: team.catalog
+    kind: git
+    url: https://git.example.test/team/catalog.git
+    content: skill
+    enabled: true
+asset_policy:
+  enabled: true
+  skill:
+    default: allow
+    registry_required: false
+    registry:
+    - name: pdf-tools
+      connector: ''
+      reason: registry:corp-skills
+      url: https://registry.example.test/skills/pdf-tools.tar.gz
+      command: ''
+      args_prefix: []
+      transport: ''
+      source_path_contains: []
+    - name: wiki-skill
+      connector: claudecode
+      reason: registry:team.catalog
+      url: https://git.example.test/team/catalog/skills/wiki-skill
+      command: ''
+      args_prefix: []
+      transport: ''
+      source_path_contains: []
+    - name: hand-written-skill
+      connector: ''
+      reason: approved by the security team
+      url: ''
+      command: ''
+      args_prefix: []
+      transport: ''
+      source_path_contains: []
+    allowed:
+    - name: allowed-by-hand
+      reason: reviewed on 2026-09-01
+    - name: lookalike-allowed
+      reason: registry:corp-skills
+    denied:
+    - name: banned-skill
+      reason: registry:corp-skills
+    runtime_detection:
+      enabled: true
+      terminal_commands: true
+      unknown_terminal_mcp: observe
+    registry_empty_action: deny
+  mcp:
+    default: allow
+    registry_required: false
+    registry:
+    - name: docs-mcp
+      connector: claudecode
+      reason: registry:corp-skills
+      url: ''
+      command: npx
+      args_prefix:
+      - -y
+      - '@example/docs-mcp'
+      transport: stdio
+      source_path_contains: []
+    - name: remote-mcp
+      connector: ''
+      reason: registry:team.catalog
+      url: https://mcp.example.test/sse
+      command: ''
+      args_prefix: []
+      transport: sse
+      source_path_contains: []
+    - name: second-hand-mcp
+      connector: ''
+      reason: ''
+      url: ''
+      command: ''
+      args_prefix: []
+      transport: ''
+      source_path_contains: []
+  plugin:
+    default: allow
+    registry_required: false
+    registry:
+    - name: plugin-that-registries-do-not-promote
+      reason: registry:corp-skills
+guardrail:
+  enabled: true
+  mode: observe

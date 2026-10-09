@@ -44,7 +44,7 @@ Services.Settings.Changed += (_, e) => { if (e.Affects(AppSettingsSections.Monit
 ## 2. Navigation requests - `ShellNavigation` / `IAcceptsNavigation`
 
 **For:** "show this panel, and tell it this" (the Mac's `openAlerts / openAudit / openLogs`). A request is `{ PanelId, Payload }`; payloads today:
-`AlertsFilter(SeverityFloor?, Kind?)`, `AuditPreset(Name)`, `LogsPreset(Name)`. A target panel ignores payloads it does not understand.
+`AlertsFilter(SeverityFloor?, Kind?)`, `AuditPreset(Name)`, `LogsPreset(Name)`, `RegistryFocus(EntryType, Name, SourceId?)` (the Skills and MCPs "Open in Registries": the Entries tab narrowed to that entry, the source's row selected; CUST-276, see `RegistriesPanelViewModel.Entries.cs`). A target panel ignores payloads it does not understand.
 
 ```csharp
 RequestNavigation("alerts", new AlertsFilter(AuditSeverity.Critical));              // from any panel view-model (or Services.Navigation.Request(...))

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Text;
 using Wpf.Ui.Controls;
 
@@ -289,6 +290,33 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     protected abstract string BuildEmptyDetail(string scope);
 
     protected virtual IReadOnlyList<string> StatusFilterChoices => DefaultStatusFilters;
+
+    // ---- Registry attribution (CUST-276) -------------------------------------------------------------------------------
+
+    /// <summary>The attribution of the config.yaml read last, found once per loaded document (<c>Services.Config</c> is replaced wholesale on a reload).</summary>
+    private sealed record AttributionMemo(ConfigDocument Document, RegistryAttribution Attribution);
+
+    private AttributionMemo? _attributionMemo;
+
+    /// <summary>
+    /// The registry source that promoted the <paramref name="kind"/> (<see cref="RegistryAttribution.SkillKind"/> or
+    /// <see cref="RegistryAttribution.McpKind"/>) called <paramref name="name"/> into the allow policy, or null when none did: what a parser puts on
+    /// a row as <see cref="GovernRow.RegistrySource"/>. Read from the <c>asset_policy</c> rules of the config.yaml the app has loaded, so it costs no
+    /// command; a list read after a registry sync sees the new rules, and the stale-data rule (CUST-312) is what says the badges are old when
+    /// config.yaml moved after the read.
+    /// </summary>
+    protected string? RegistrySourceOf(string kind, string name)
+    {
+        var document = Services.Config;
+        var memo = _attributionMemo;
+        if (memo is null || !ReferenceEquals(memo.Document, document))
+        {
+            memo = new AttributionMemo(document, RegistryAttribution.From(document));
+            _attributionMemo = memo;
+        }
+
+        return memo.Attribution.SourceOf(kind, name);
+    }
 
     /// <summary>
     /// The scanner executable <c>&lt;noun&gt; scan</c> shells out to (<c>skill-scanner</c>, <c>mcp-scanner</c>); null when this
@@ -745,8 +773,8 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
     {
         var text = FilterText.Trim().ToLowerInvariant();
         var desired = _allRows.Where(r => Matches(r, text)).ToList();
-        SyncCollection(Rows, desired, r => r.Key, static (a, b) => a.RawJson == b.RawJson && a.Verbs == b.Verbs);
-        SyncCollection(ArtifactRows, _artifacts, r => r.Key, static (a, b) => a.RawJson == b.RawJson && a.Verbs == b.Verbs);
+        SyncCollection(Rows, desired, r => r.Key, static (a, b) => a.RawJson == b.RawJson && a.Verbs == b.Verbs && a.RegistrySource == b.RegistrySource);
+        SyncCollection(ArtifactRows, _artifacts, r => r.Key, static (a, b) => a.RawJson == b.RawJson && a.Verbs == b.Verbs && a.RegistrySource == b.RegistrySource);
         NotifyStateFlags();
     }
 
@@ -906,6 +934,13 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             return;
         }
 
+        // A navigation, not a command: it works while another command runs and while the list may not authorize a change.
+        if (verb == GovernVerbs.OpenInRegistries)
+        {
+            OpenInRegistries(row);
+            return;
+        }
+
         if (IsBusy)
         {
             ShowResult("Please wait", "Another command is still running. Try again when it finishes.", InfoBarSeverity.Informational);
@@ -927,6 +962,19 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         if (PlanFor(row, verb) is { } plan)
         {
             BeginReview(plan);
+        }
+    }
+
+    /// <summary>
+    /// "Open in Registries" (CUST-276): shows the Registries panel on its Entries tab, on the cached entry of the registry that promoted this
+    /// skill or MCP server (the <see cref="RegistryFocus"/> payload; the panel selects the entry of that source and focuses it). It reads and navigates,
+    /// nothing more, so neither the installation guard nor the catalogue trust is asked: a managed installation can look at where an item came from.
+    /// </summary>
+    private void OpenInRegistries(GovernRow row)
+    {
+        if (row.CanOpenInRegistries && row.RegistrySource is { Length: > 0 } source)
+        {
+            RequestNavigation("registries", new RegistryFocus(row.Noun, row.Name, source));
         }
     }
 

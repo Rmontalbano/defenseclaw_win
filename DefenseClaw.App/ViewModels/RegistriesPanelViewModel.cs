@@ -144,6 +144,38 @@ public sealed class RegistryEntryRow
 
     public string? LastScanned { get; init; }
 
+    /// <summary>
+    /// The source whose <c>index.json</c> this row was read from. Set on the rows of the Entries and Approved tabs, which mix sources (the TUI's
+    /// <c>RegistryEntryRow.source_id</c>); the rows of the selected source's own list leave it null, as that list always has.
+    /// </summary>
+    public string? SourceId { get; init; }
+
+    /// <summary>MCP entries: <c>stdio</c>, <c>sse</c> and so on (<c>transport</c>).</summary>
+    public string? Transport { get; init; }
+
+    /// <summary>MCP entries that run a local process: the command (<c>command</c>), with <see cref="Args"/> after it.</summary>
+    public string? Command { get; init; }
+
+    public IReadOnlyList<string> Args { get; init; } = Array.Empty<string>();
+
+    public string SourceDisplay => string.IsNullOrWhiteSpace(SourceId) ? "—" : SourceId;
+
+    private string? _key;
+
+    /// <summary>Identity of the entry across reads: its source, type and name (an entry is unique by type and name within a source). Built once: a read compares thousands of them.</summary>
+    public string Key => _key ??= string.Join('\u001f', SourceId, Type, Name);
+
+    /// <summary>A stdio MCP entry's launch line, <c>npx -y @example/docs-mcp</c>; null for an entry that runs nothing.</summary>
+    public string? LaunchLine => string.IsNullOrWhiteSpace(Command)
+        ? null
+        : Args.Count == 0 ? Command : Command + " " + string.Join(' ', Args);
+
+    /// <summary>
+    /// What the Location column of the cross-source tables shows: where the entry is fetched from (<see cref="Location"/>), else, for an MCP entry
+    /// that runs a local process, what it runs (the TUI's <c>location</c> is its url, else its command, else its source URL).
+    /// </summary>
+    public string LocationDisplay => Location ?? LaunchLine ?? string.Empty;
+
     public string TypeDisplay => string.IsNullOrWhiteSpace(Type) ? "—" : Type;
 
     public string StatusDisplay => string.IsNullOrWhiteSpace(Status) ? "—" : Status;
@@ -273,7 +305,9 @@ public sealed class RegistryEntryRow
     /// </summary>
     public override string ToString()
     {
-        var text = $"{TypeDisplay} entry {Name}, status {StatusDisplay}, review {ReviewDisplay}";
+        // A row of the cross-source tables also says which source it is from; the selected source's own list does not repeat it.
+        var from = string.IsNullOrWhiteSpace(SourceId) ? string.Empty : $" from {SourceId}";
+        var text = $"{TypeDisplay} entry {Name}{from}, status {StatusDisplay}, review {ReviewDisplay}";
         if (HasError)
         {
             text += ", " + ErrorAutomationName;
@@ -345,6 +379,9 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowUnavailable))]
     [NotifyPropertyChangedFor(nameof(ShowPolicyCard))]
     [NotifyPropertyChangedFor(nameof(CanSyncAll))]
+    [NotifyPropertyChangedFor(nameof(ShowSourcesView))]
+    [NotifyPropertyChangedFor(nameof(ShowEntriesView))]
+    [NotifyPropertyChangedFor(nameof(ShowTabEmpty))]
     private bool _hasSources;
 
     /// <summary>False until the first read finishes, so the panel does not flash "no sources" while it is still looking.</summary>
@@ -442,7 +479,8 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
     protected override void OnInstallationChanged() => NotifyTrust();
 
-    public bool CanChangeSelectedSource => HasSelectedSource && IsDataTrusted;
+    /// <summary>A source the toolbar's source actions apply to is chosen (the selected source, or on the Entries and Approved tabs the selected entry's), and changes are allowed.</summary>
+    public bool CanChangeSelectedSource => ActionSource is not null && IsDataTrusted;
 
     public bool CanSyncAll => HasSources && IsDataTrusted;
 
@@ -453,6 +491,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         OnPropertyChanged(nameof(CanChangeSelectedSource));
         OnPropertyChanged(nameof(CanSyncAll));
         OnPropertyChanged(nameof(CanReviewEntry));
+        OnPropertyChanged(nameof(CanReviewTabEntry));
     }
 
     /// <summary>
@@ -571,7 +610,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             return true;
         }
 
-        return false;
+        return ClearEntryFocusOnEscape();
     }
 
     private async Task LoadSafelyAsync()
@@ -591,6 +630,19 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 #pragma warning restore CA1031
     }
 
+    /// <summary>
+    /// Test seam: answers <c>registry list --json</c> instead of the CLI, so a test feeds the sources exactly (and can hold the read open) without a
+    /// process. Null: the CLI, through <see cref="DiscoverCli.RunReadOnlyAsync"/>.
+    /// </summary>
+    internal Func<IReadOnlyList<string>, CancellationToken, Task<CliInvocation>>? ReadSources { get; set; }
+
+    /// <summary>
+    /// True from the moment a read of the sources starts until its entries have been read too (the selected source's and every source's, which
+    /// the read ends with): what the Entries tab holds is then about to be replaced, so an "Open in Registries" link waits for it
+    /// (<see cref="ApplyPendingFocus"/>) rather than answering from rows that are about to change.
+    /// </summary>
+    private bool _refreshing;
+
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         if (_loadRunning)
@@ -598,6 +650,20 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             return;
         }
 
+        _refreshing = true;
+        try
+        {
+            await LoadCoreAsync(cancellationToken).ConfigureAwait(true);
+        }
+        finally
+        {
+            _refreshing = false;
+            ApplyPendingFocus();
+        }
+    }
+
+    private async Task LoadCoreAsync(CancellationToken cancellationToken)
+    {
         _loadRunning = true;
         IsLoading = true;
         Trust.BeginRead();
@@ -612,8 +678,9 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         {
             try
             {
-                var invocation = await DiscoverCli.RunReadOnlyAsync(
-                    Services, new[] { "registry", "list", "--json" }, cancellationToken).ConfigureAwait(true);
+                var listArgv = new[] { "registry", "list", "--json" };
+                var invocation = await (ReadSources?.Invoke(listArgv, cancellationToken)
+                    ?? DiscoverCli.RunReadOnlyAsync(Services, listArgv, cancellationToken)).ConfigureAwait(true);
 
                 if (invocation.FailureReason is { Length: > 0 } reason)
                 {
@@ -685,8 +752,9 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             _loadRunning = false;
         }
 
-        // Entries change on disk after a sync/approve; re-read them for whatever is selected.
+        // Entries change on disk after a sync/approve; re-read them for whatever is selected, and for the Entries and Approved tabs.
         await LoadEntriesAsync(SelectedSource).ConfigureAwait(true);
+        await LoadAllEntriesSafelyAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -741,6 +809,9 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     partial void OnSelectedSourceChanged(RegistrySourceRow? value)
     {
         SelectedEntry = null;
+
+        // What the details say about the source (publisher, fetched at, counts) is read with its entries; until that lands they are not the last source's.
+        SourceFacts = RegistrySourceFacts.None;
         _ = LoadEntriesSafelyAsync(value);
     }
 
@@ -771,15 +842,56 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         if (source is null || !IsPlainSourceId(source.Id))
         {
             Entries.Clear();
-            EntriesMessage = source is null ? null : "This source id is not a plain name, so its cache is not read here.";
+            SourceFacts = RegistrySourceFacts.None;
+            EntriesMessage = source is null ? null : NotPlainMessage;
             IsEntriesLoading = false;
             return;
         }
 
         IsEntriesLoading = true;
+        var read = await ReadIndexAsync(Services.Paths.DataDirectory, source.Id, stampSource: false).ConfigureAwait(true);
+
+        if (sequence != _entriesSequence)
+        {
+            return;
+        }
+
+        Entries.Clear();
+        foreach (var row in read.Rows)
+        {
+            Entries.Add(row);
+        }
+
+        SourceFacts = new RegistrySourceFacts(read.Info);
+        EntriesMessage = read.Message;
+        IsEntriesLoading = false;
+    }
+
+    private const string NotPlainMessage = "This source id is not a plain name, so its cache is not read here.";
+
+    private const string TruncatedPrefix = "Showing the first ";
+
+    /// <summary>
+    /// Reads <c>registries\&lt;id&gt;\index.json</c> of one source into rows, the facts about the source (publisher, fetch time, counts) and a
+    /// sentence for what the operator should know (nothing cached, unreadable, too large, cut at the row limit); the same read for the selected
+    /// source's list and for every source of the Entries and Approved tabs. Never throws for what is on disk. The id is checked against
+    /// <see cref="CachedSourceIdPattern"/> first, so a value from the CLI's JSON can never point outside the registries folder; the file is
+    /// capped at 4 MiB and 5,000 entries. The read and the parse run off the caller's context (nothing here touches a control), so a source with a
+    /// large cache does not hold the UI thread.
+    /// </summary>
+    /// <param name="stampSource">True for rows that go into a table mixing sources: each carries its <see cref="RegistryEntryRow.SourceId"/>.</param>
+    internal static async Task<RegistryIndexRead> ReadIndexAsync(string dataDirectory, string sourceId, bool stampSource)
+    {
+        if (!IsPlainSourceId(sourceId))
+        {
+            return new RegistryIndexRead(Array.Empty<RegistryEntryRow>(), NotPlainMessage, null, IsProblem: true);
+        }
+
         var rows = new List<RegistryEntryRow>();
-        string? message = null;
-        var path = Path.Combine(Services.Paths.DataDirectory, "registries", source.Id, "index.json");
+        RegistryIndexInfo? info = null;
+        string? message;
+        var problem = false;
+        var path = Path.Combine(dataDirectory, "registries", sourceId, "index.json");
 
         try
         {
@@ -790,31 +902,22 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             else if (new FileInfo(path).Length > MaxIndexBytes)
             {
                 message = "The cached index is larger than 4 MiB, so it is not shown here. Use 'defenseclaw registry entries' in a terminal.";
+                problem = true;
             }
             else
             {
-                var text = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path).ConfigureAwait(true);
-                message = ParseIndex(text, rows);
+                var text = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path).ConfigureAwait(false);
+                message = ParseIndex(text, rows, stampSource ? sourceId : null, out info);
+                problem = message is not null && message.StartsWith(TruncatedPrefix, StringComparison.Ordinal);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             message = $"Could not read the cached index: {ex.Message}";
+            problem = true;
         }
 
-        if (sequence != _entriesSequence)
-        {
-            return;
-        }
-
-        Entries.Clear();
-        foreach (var row in rows)
-        {
-            Entries.Add(row);
-        }
-
-        EntriesMessage = message;
-        IsEntriesLoading = false;
+        return new RegistryIndexRead(rows, message, info, problem);
     }
 
     /// <summary>A name that is one folder under registries\: the CLI's id alphabet, and never '..' or a trailing '.'.</summary>
@@ -828,10 +931,19 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     /// <c>EntryVerdict.to_dict()</c> (cache.py:70-89) that always has name/type/status/approved/rejected and omits every
     /// other field when it is empty.
     /// </summary>
-    internal static string? ParseIndex(string json, List<RegistryEntryRow> rows)
+    internal static string? ParseIndex(string json, List<RegistryEntryRow> rows) => ParseIndex(json, rows, null, out _);
+
+    /// <summary>
+    /// <see cref="ParseIndex(string, List{RegistryEntryRow})"/>, also stamping each row with <paramref name="sourceId"/> (null: none) and handing back
+    /// the source's own facts: <c>publisher</c>, <c>fetched_at</c> and the five counts. The counts are the file's own when it has them and otherwise
+    /// counted from the entries, as the TUI's <c>load_registry_index</c> does (<c>tui/services/registry_cache.py</c>); an index that is a bare list
+    /// has no header, so only the counts are known.
+    /// </summary>
+    internal static string? ParseIndex(string json, List<RegistryEntryRow> rows, string? sourceId, out RegistryIndexInfo? info)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
+        info = null;
 
         JsonElement list = default;
         var found = false;
@@ -855,6 +967,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
         if (!found)
         {
+            info = IndexInfo(root, rows);
             return "The cached index has no entry list yet. Sync this source.";
         }
 
@@ -862,7 +975,8 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
         {
             if (rows.Count >= MaxEntries)
             {
-                return $"Showing the first {MaxEntries:N0} entries.";
+                info = IndexInfo(root, rows);
+                return $"{TruncatedPrefix}{MaxEntries:N0} entries.";
             }
 
             if (element.ValueKind != JsonValueKind.Object)
@@ -877,16 +991,21 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             }
 
             var (findings, findingLines, findingSeverity) = ReadFindings(element);
+            var args = JsonStrings(element, "args");
 
             rows.Add(new RegistryEntryRow
             {
                 Name = name,
+                SourceId = sourceId,
                 Type = JsonString(element, "type"),
                 Status = JsonString(element, "status"),
                 Approved = JsonBool(element, "approved"),
                 Rejected = JsonBool(element, "rejected"),
                 Severity = JsonString(element, "severity"),
                 Location = JsonString(element, "source_url") ?? JsonString(element, "url") ?? JsonString(element, "target"),
+                Transport = JsonString(element, "transport"),
+                Command = JsonString(element, "command"),
+                Args = args,
                 Error = OneLine(JsonString(element, "error")),
                 Findings = findings,
                 FindingLines = findingLines,
@@ -896,6 +1015,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
             });
         }
 
+        info = IndexInfo(root, rows);
         return rows.Count == 0 ? "The last sync cached no entries." : null;
     }
 
@@ -1012,6 +1132,60 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
 
     private static bool JsonBool(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
+
+    /// <summary>A JSON array of an entry as text (an MCP entry's <c>args</c>): a string as it is, null as nothing, anything else as its JSON; not an array: none.</summary>
+    private static IReadOnlyList<string> JsonStrings(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return value.EnumerateArray()
+            .Select(item => item.ValueKind switch
+            {
+                JsonValueKind.String => item.GetString() ?? string.Empty,
+                JsonValueKind.Null => string.Empty,
+                _ => item.GetRawText(),
+            })
+            .ToArray();
+    }
+
+    /// <summary>One of an index's counts: a number or numeric text, never below zero; null when the index does not have it (or it is something else).</summary>
+    private static int? JsonCount(JsonElement root, string property)
+    {
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(property, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Number when value.TryGetInt64(out var whole) => (int)Math.Clamp(whole, 0, int.MaxValue),
+            JsonValueKind.Number when value.TryGetDouble(out var fraction) && double.IsFinite(fraction) => (int)Math.Clamp(Math.Truncate(fraction), 0, int.MaxValue),
+            JsonValueKind.String when long.TryParse(value.GetString()?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var text) => (int)Math.Clamp(text, 0, int.MaxValue),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// The facts about the source an index states: its publisher, when it was fetched and the five counts - the file's own count when it has one,
+    /// otherwise what the entries add up to (the TUI's <c>_int(payload.get("clean_count"), _count_status(verdicts, "clean"))</c>).
+    /// </summary>
+    private static RegistryIndexInfo IndexInfo(JsonElement root, IReadOnlyList<RegistryEntryRow> rows)
+    {
+        int Counted(string status) => rows.Count(row => string.Equals(row.Status, status, StringComparison.Ordinal));
+
+        var header = root.ValueKind == JsonValueKind.Object;
+        return new RegistryIndexInfo(
+            header ? OneLine(JsonString(root, "publisher")) : null,
+            header ? OneLine(JsonString(root, "fetched_at")) : null,
+            JsonCount(root, "entry_count") ?? rows.Count,
+            JsonCount(root, "clean_count") ?? Counted("clean"),
+            JsonCount(root, "warning_count") ?? Counted("warning"),
+            JsonCount(root, "blocked_count") ?? Counted("blocked"),
+            JsonCount(root, "error_count") ?? Counted("error"));
+    }
 
     /// <summary>
     /// Reads <c>registry list --json</c>: always a JSON array, <c>[]</c> when nothing is configured
