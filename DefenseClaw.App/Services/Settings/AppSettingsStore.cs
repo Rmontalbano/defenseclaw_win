@@ -8,6 +8,19 @@ using System.Text.Json.Nodes;
 
 namespace DefenseClaw.App.Services.Settings;
 
+/// <summary>The file operations of <see cref="AppSettingsStore"/> that wait for a file another process holds for a moment.</summary>
+internal enum StoreFileOperation
+{
+    /// <summary>Reading the settings file.</summary>
+    Read,
+
+    /// <summary>Moving the temp file over the settings file.</summary>
+    Move,
+
+    /// <summary>Removing the temp file after a save (or a failed one).</summary>
+    RemoveTemp,
+}
+
 /// <summary>
 /// The app's settings file, <c>%LOCALAPPDATA%\DefenseClaw.App\settings.json</c> — the same folder as its update cache and
 /// crash log, and never anything under <c>~\.defenseclaw</c>, which belongs to the CLI. One store per file, shared by the
@@ -34,6 +47,16 @@ namespace DefenseClaw.App.Services.Settings;
 /// A file that is missing or damaged is replaced by one holding every section that differs from its defaults.
 /// </para>
 /// <para>
+/// <b>A file held for a moment is waited for, not failed.</b> A virus scanner, an indexer or a backup agent opens a file it has just seen
+/// change, and until it lets go the read of that file, the move over it and the removal of the temp file fail with a sharing violation
+/// (or, for the move and the removal, "access denied"). Each of those three is tried up to <see cref="Attempts"/> times, with 20, 40 and 60 ms
+/// between the tries: 120 ms at most for one operation, so at most 360 ms for an <see cref="Update"/> in which all three meet a hold, and
+/// it is the caller's thread that waits. A read waits only for a sharing or lock violation - one that fails for good (no permission, a
+/// path too long) must fail at once, since <see cref="Current"/> asks again until it works; the move and the removal wait for any I/O error or
+/// access denial, as the move always did. Without this a hold of a few milliseconds turned a setting change into "could not be saved" on the
+/// Settings page (CUST-323: <c>Update</c> returned false in a run of the concurrent-update test on this machine).
+/// </para>
+/// <para>
 /// <b>Tolerance.</b> A missing, empty, truncated, non-JSON or wrongly shaped file yields the defaults; a bad field falls back
 /// for that field alone. Nothing is thrown at the caller for anything the file contains or the disk does.
 /// </para>
@@ -45,6 +68,15 @@ internal sealed class AppSettingsStore
 
     /// <summary>A settings file bigger than this is not one (they are a few hundred bytes); it reads as damaged rather than being loaded whole.</summary>
     private const long MaxFileBytes = 4 * 1024 * 1024;
+
+    /// <summary>How many times a file operation is tried when something else has the file open for a moment: the first try and three more.</summary>
+    internal const int Attempts = 4;
+
+    /// <summary>The wait before the next try is this many milliseconds times the number of the try that just failed: 20, 40, 60.</summary>
+    internal const int PauseStepMilliseconds = 20;
+
+    private const int ErrorSharingViolation = 32;
+    private const int ErrorLockViolation = 33;
 
     private static readonly ConcurrentDictionary<string, AppSettingsStore> Stores = new(StringComparer.OrdinalIgnoreCase);
 
@@ -80,6 +112,15 @@ internal sealed class AppSettingsStore
 
     /// <summary>Where this store reads and writes.</summary>
     public string FilePath { get; }
+
+    /// <summary>
+    /// Called before every try of every file operation, with which operation it is and the number of the try (1 for the first). A test
+    /// throws from it to stand in for a scanner holding the file for a moment; null in the app.
+    /// </summary>
+    internal Action<StoreFileOperation, int>? BeforeFileOperation { get; set; }
+
+    /// <summary>How the store waits between two tries: a real sleep in the app, a recorder in a test (which then sees the bound without waiting it out).</summary>
+    internal Action<TimeSpan> Pause { get; set; } = Thread.Sleep;
 
     /// <summary>
     /// Raised after an <see cref="Update"/> (or a <see cref="Load"/> that found the file changed) leaves the settings different
@@ -265,7 +306,8 @@ internal sealed class AppSettingsStore
                 return new DiskRead(DiskState.Damaged, new JsonObject(), AppSettings.Defaults);
             }
 
-            text = File.ReadAllText(FilePath);
+            // Waited for when the file is held for a moment (see Attempts); anything else that goes wrong here is "unreadable" at once.
+            text = Retrying(StoreFileOperation.Read, () => File.ReadAllText(FilePath), static ex => ex is IOException io && IsSharingOrLockViolation(io));
         }
 #pragma warning disable CA1031 // Unreadable settings mean the defaults, whatever the reason.
         catch (Exception ex)
@@ -393,7 +435,8 @@ internal sealed class AppSettingsStore
             {
                 try
                 {
-                    File.Delete(temp);
+                    // The same scanner that held the target may have the temp file open, and a temp file left behind is never cleaned up.
+                    _ = Retrying(StoreFileOperation.RemoveTemp, () => { File.Delete(temp); return true; }, IsTransientForReplace);
                 }
 #pragma warning disable CA1031 // Best-effort cleanup of a temp file.
                 catch (Exception)
@@ -406,24 +449,43 @@ internal sealed class AppSettingsStore
 
     /// <summary>
     /// <c>File.Move(overwrite)</c>, tried a few times: a virus scanner or an indexer that has the old file open for a moment
-    /// turns the replace into a sharing violation, and losing a setting to that would be silly. Bounded, so a real failure still ends.
+    /// turns the replace into a sharing violation, and losing a setting to that would be silly. Bounded (see <see cref="Attempts"/>), so a
+    /// real failure still ends.
     /// </summary>
-    private static void MoveOver(string temp, string target)
+    private void MoveOver(string temp, string target)
     {
-        const int attempts = 4;
-        for (var attempt = 1; ; attempt++)
+        _ = Retrying(StoreFileOperation.Move, () => { File.Move(temp, target, overwrite: true); return true; }, IsTransientForReplace);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="attempt"/>, and again (at most <see cref="Attempts"/> times in all, pausing 20, 40, 60 ms between the tries) while it
+    /// fails in a way <paramref name="isTransient"/> calls a hold that will pass. The last failure, or any other, is the caller's.
+    /// </summary>
+    private T Retrying<T>(StoreFileOperation operation, Func<T> attempt, Func<Exception, bool> isTransient)
+    {
+        for (var number = 1; ; number++)
         {
             try
             {
-                File.Move(temp, target, overwrite: true);
-                return;
+                BeforeFileOperation?.Invoke(operation, number);
+                return attempt();
             }
-            catch (Exception ex) when (attempt < attempts && ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (number < Attempts && isTransient(ex))
             {
-                Thread.Sleep(20 * attempt);
+                Pause(TimeSpan.FromMilliseconds(PauseStepMilliseconds * number));
             }
         }
     }
+
+    /// <summary>
+    /// A replace or a delete meets a scanner's hold as a sharing violation, as "access denied" (a file pending deletion) or as another I/O error
+    /// (a section mapped by the scanner): all waited for, as the move always was. A read is pickier (<see cref="IsSharingOrLockViolation"/>), because
+    /// a read that fails for good (no permission) is asked for again by every <see cref="Current"/> until it works, and must fail at once.
+    /// </summary>
+    private static bool IsTransientForReplace(Exception ex) => ex is IOException or UnauthorizedAccessException;
+
+    /// <summary>ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION: another process has the file open in a way that excludes this one, for now.</summary>
+    private static bool IsSharingOrLockViolation(IOException ex) => (ex.HResult & 0xFFFF) is ErrorSharingViolation or ErrorLockViolation;
 
     private void Raise(AppSettingsChangedEventArgs? args)
     {

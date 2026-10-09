@@ -247,12 +247,21 @@ public class DefenseClawPathsTests
         private readonly ManualResetEventSlim _release = new(false);
         private readonly ManualResetEventSlim _entered = new(false);
         private int _deadProbes;
+        private int _gaveUp;
+        private ParkedProbe? _parkNext;
 
         public volatile bool Blocks;
 
         public string? Installed { get; set; }
 
         public int DeadProbes => Volatile.Read(ref _deadProbes);
+
+        /// <summary>
+        /// True when a blocked probe stopped waiting because its bound (a hang's ceiling, far longer than any wait of a test) ran out and not
+        /// because the test let it go. A lookup that "returned at once" while this is still false really did not wait for the blocked probe -
+        /// which is the guarantee, and needs no stopwatch: how long a call takes on a busy machine is not what it promises.
+        /// </summary>
+        public bool GaveUp => Volatile.Read(ref _gaveUp) != 0;
 
         public bool Exists(string path)
         {
@@ -262,21 +271,46 @@ public class DefenseClawPathsTests
                 if (Blocks)
                 {
                     _entered.Set();
-                    _ = _release.Wait(TimeSpan.FromSeconds(30));
+                    if (!_release.Wait(TestTimeouts.Ceiling))
+                    {
+                        _ = Interlocked.Exchange(ref _gaveUp, 1);
+                    }
                 }
 
                 return false;
             }
 
+            if (path == Installed && Interlocked.Exchange(ref _parkNext, null) is { } parked)
+            {
+                parked.Entered.Set();
+                _ = parked.Resume.Wait(TestTimeouts.Ceiling);
+            }
+
             return path == Installed;
         }
 
-        public void WaitUntilBlocked() => Assert.True(_entered.Wait(TimeSpan.FromSeconds(10)), "the scan never reached the dead entry");
+        /// <summary>Holds the next probe of the installed file, whoever makes it, until <see cref="ParkedProbe.Resume"/> is set.</summary>
+        public ParkedProbe ParkNextProbeOfInstalled()
+        {
+            var parked = new ParkedProbe();
+            Volatile.Write(ref _parkNext, parked);
+            return parked;
+        }
+
+        public void WaitUntilBlocked() => Assert.True(_entered.Wait(TestTimeouts.Ceiling), "the scan never reached the dead entry");
 
         public void Release() => _release.Set();
     }
 
-    private static readonly TimeSpan Promptly = TimeSpan.FromSeconds(2);
+    /// <summary>A probe held in place by a test: it has been reached (<see cref="Entered"/>) and goes on when told (<see cref="Resume"/>).</summary>
+    private sealed class ParkedProbe
+    {
+        public ManualResetEventSlim Entered { get; } = new(false);
+
+        public ManualResetEventSlim Resume { get; } = new(false);
+
+        public void WaitUntilEntered() => Assert.True(Entered.Wait(TestTimeouts.Ceiling), "the caller never reached its probe of the remembered file");
+    }
 
     [Fact]
     public async Task A_lookup_during_a_slow_scan_gets_the_previous_answer_at_once_and_the_probe_runs_once()
@@ -298,25 +332,65 @@ public class DefenseClawPathsTests
         probe.Blocks = true;
         clock.Advance(DefenseClawPaths.FoundLookupLifetime + TimeSpan.FromSeconds(1));
 
-        var stopwatch = Stopwatch.StartNew();
+        // Answered from memory, with the refresh left running behind it: the call returned while the probe was still blocked (nothing has
+        // let it go yet), which is the promise - not how many milliseconds a busy machine took to return it.
         var first = paths.CliPath;
-        stopwatch.Stop();
         Assert.Equal(inBin, first);
-        Assert.True(stopwatch.Elapsed < Promptly, $"the stale answer took {stopwatch.Elapsed}");
 
         probe.WaitUntilBlocked();
 
-        stopwatch.Restart();
         var second = paths.CliPath;
-        stopwatch.Stop();
         Assert.Equal(inBin, second);
-        Assert.True(stopwatch.Elapsed < Promptly, $"the lookup during the scan took {stopwatch.Elapsed}");
+        Assert.False(probe.GaveUp, "a lookup waited for the blocked scan instead of answering from memory");
 
         // One scan is in flight, blocked in the first probe of the dead entry: nothing started a second one.
         Assert.Equal(deadProbesInFirstScan + 1, probe.DeadProbes);
 
+        // Let it go and wait for it. Its answer is stored before the wait ends, and a lookup that comes in while it finishes - after it has
+        // published, before its flight is gone, or after both - must not start a scan of its own: the dead entry is probed by this one scan
+        // (two file names) and no other, however the lookup and the end of the scan interleave. (It used to be: 6 probes on CI, not 4.)
         probe.Release();
         Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
+        Assert.Equal(deadProbesInFirstScan + 2, probe.DeadProbes);
+    }
+
+    [Fact]
+    public async Task A_caller_that_looked_before_a_scan_finished_takes_the_answer_it_published_instead_of_scanning_again()
+    {
+        var clock = new ManualTimeProvider();
+        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var probe = new DeadDirectoryProbe { Installed = inBin };
+        var paths = new DefenseClawPaths(
+            binDirectory: FakeBin,
+            searchPath: new[] { DeadEntry },
+            fileExists: probe.Exists,
+            timeProvider: clock);
+
+        Assert.Equal(inBin, paths.CliPath);
+        var deadProbesInFirstScan = probe.DeadProbes;
+
+        // The remembered answer goes stale, a lookup starts the refresh, and the refresh is blocked in the dead entry.
+        probe.Blocks = true;
+        clock.Advance(DefenseClawPaths.FoundLookupLifetime + TimeSpan.FromSeconds(1));
+        Assert.Equal(inBin, paths.CliPath);
+        probe.WaitUntilBlocked();
+
+        // A second caller (the one that waits for a fresh answer) looks: it holds the stale answer, and is held in its check that the
+        // remembered file is still there - after it looked, before it decides whether to scan or to join the refresh.
+        var parked = probe.ParkNextProbeOfInstalled();
+        var late = paths.FindExecutableAsync("defenseclaw");
+        parked.WaitUntilEntered();
+
+        // The refresh finishes and publishes while it is held. A third caller waits for the refresh, so when it has its answer the refresh
+        // is over and published - the interleaving CI hit by chance, made certain.
+        probe.Release();
+        Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
+        Assert.Equal(deadProbesInFirstScan + 2, probe.DeadProbes);
+
+        // The held caller goes on with the stale answer in hand, finds no scan in flight and something newer than it has published:
+        // that is its answer. A scan of its own would probe the dead entry twice more.
+        parked.Resume.Set();
+        Assert.Equal(inBin, await late);
         Assert.Equal(deadProbesInFirstScan + 2, probe.DeadProbes);
     }
 
@@ -340,12 +414,10 @@ public class DefenseClawPathsTests
         var starter = Task.Run(() => paths.CliPath);
         probe.WaitUntilBlocked();
 
-        // ...the others are told what was last known, immediately.
-        var stopwatch = Stopwatch.StartNew();
+        // ...the others are told what was last known, immediately: the call returns while the probe is still blocked, not after waiting for it.
         var other = paths.CliPath;
-        stopwatch.Stop();
         Assert.Null(other);
-        Assert.True(stopwatch.Elapsed < Promptly, $"the lookup during the scan took {stopwatch.Elapsed}");
+        Assert.False(probe.GaveUp, "a lookup waited for the blocked scan instead of answering with what was last known");
         Assert.False(starter.IsCompleted);
 
         probe.Release();
@@ -388,17 +460,16 @@ public class DefenseClawPathsTests
             fileExists: probe.Exists,
             timeProvider: new ManualTimeProvider());
 
-        var stopwatch = Stopwatch.StartNew();
         var known = paths.TryGetKnownExecutable("defenseclaw", out var path);
-        stopwatch.Stop();
 
         Assert.False(known);
         Assert.Null(path);
-        Assert.True(stopwatch.Elapsed < Promptly, $"the peek took {stopwatch.Elapsed}");
 
-        // The scan it started is still stuck on the dead entry; a second peek does not queue another.
+        // The scan it started is still stuck on the dead entry; a second peek does not queue another. (The peek came back with the probe
+        // not yet reached, let alone released: it did not wait for the file system.)
         probe.WaitUntilBlocked();
         Assert.False(paths.TryGetKnownExecutable("defenseclaw", out _));
+        Assert.False(probe.GaveUp, "a peek waited for the blocked scan");
 
         probe.Release();
         Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));

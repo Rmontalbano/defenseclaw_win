@@ -17,7 +17,13 @@ public sealed class AlertDetailReaderTests : IDisposable
 
     public void Dispose() => _database.Dispose();
 
-    private AlertDetailReader Reader(int window = AlertDetailReader.HistoryWindow) => new(_database.Path, window);
+    /// <summary>
+    /// A lookup that outlasts the app's 8 s on a loaded machine (the wait for a pool thread counts) throws a TimeoutException, which no test
+    /// here is about, so every reader waits as long as a test lets anything happen on its own.
+    /// </summary>
+    private AlertDetailReader Reader(int window = AlertDetailReader.HistoryWindow) => new(_database.Path, window, TestTimeouts.Ceiling);
+
+    private static AlertDetailReader ReaderOver(string path) => new(path, readTimeout: TestTimeouts.Ceiling);
 
     private void Exec(string sql, params (string Name, object? Value)[] parameters)
     {
@@ -109,7 +115,7 @@ public sealed class AlertDetailReaderTests : IDisposable
         Exec("DROP TABLE scan_findings");
 
         Assert.Empty(await Reader().ReadFindingsAsync("run-1", "/x"));
-        Assert.Empty(await new AlertDetailReader(Path.Combine(Path.GetTempPath(), "dcw-missing-" + Guid.NewGuid().ToString("n"), "audit.db")).ReadFindingsAsync("r", "t"));
+        Assert.Empty(await ReaderOver(Path.Combine(Path.GetTempPath(), "dcw-missing-" + Guid.NewGuid().ToString("n"), "audit.db")).ReadFindingsAsync("r", "t"));
     }
 
     // ---- history ----
@@ -165,7 +171,7 @@ public sealed class AlertDetailReaderTests : IDisposable
 
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => Reader().ReadHistoryAsync(new[] { "/p/x" }, null, cancellationToken: cts.Token));
-        Assert.Empty(await new AlertDetailReader(Path.Combine(Path.GetTempPath(), "dcw-missing-" + Guid.NewGuid().ToString("n"), "audit.db")).ReadHistoryAsync(new[] { "x" }, null));
+        Assert.Empty(await ReaderOver(Path.Combine(Path.GetTempPath(), "dcw-missing-" + Guid.NewGuid().ToString("n"), "audit.db")).ReadHistoryAsync(new[] { "x" }, null));
     }
 
     // ---- plans ----

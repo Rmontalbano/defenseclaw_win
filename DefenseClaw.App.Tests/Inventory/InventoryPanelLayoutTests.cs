@@ -212,7 +212,7 @@ public class InventoryPanelLayoutTests
         // after. A DataGrid left to its own star sizing keeps the widths it worked out for no rows.
         using var temp = new TempDirectory();
         InventoryFixture.Create(temp.File("inventory.db"), 60);
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(temp.Path);
         using var services = TestServices.Create(temp);
 
         var viewModel = UiThread.Run(() => new InventoryPanelViewModel(services));
@@ -249,7 +249,7 @@ public class InventoryPanelLayoutTests
                 UiThread.Run(host.Dispose);
             }
 
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(temp.Path);
         }
     }
 
@@ -390,21 +390,19 @@ public class InventoryPanelLayoutTests
                 .First(h => h.Column is not null && (string)h.Column.Header == "Installs");
             Assert.False(string.IsNullOrEmpty(installs.Column.SortMemberPath));
 
-            Press(installs, System.Windows.Input.Key.Space);
-            scene.Host.Relayout();
+            Press(installs, scene.Host);
             Assert.Equal(System.ComponentModel.ListSortDirection.Ascending, installs.SortDirection);
             AssertGroupedAndSorted(scene.ViewModel, descending: false);
 
-            Press(installs, System.Windows.Input.Key.Space);
-            scene.Host.Relayout();
+            Press(installs, scene.Host);
             Assert.Equal(System.ComponentModel.ListSortDirection.Descending, installs.SortDirection);
             AssertGroupedAndSorted(scene.ViewModel, descending: true);
 
             // Another header takes the arrow; the first one lets go of it.
             var name = VisualTree.Descendants<System.Windows.Controls.Primitives.DataGridColumnHeader>(scene.ComponentsGrid)
                 .First(h => h.Column is not null && (string)h.Column.Header == "Name");
-            Press(name, System.Windows.Input.Key.Space);
-            Assert.Null(installs.SortDirection);
+            Press(name, scene.Host);
+            Assert.True(installs.SortDirection is null, $"the first header still shows its arrow: {installs.SortDirection}");
             Assert.Equal(System.ComponentModel.ListSortDirection.Ascending, name.SortDirection);
         });
     }
@@ -426,11 +424,23 @@ public class InventoryPanelLayoutTests
         }
     }
 
-    private static void Press(System.Windows.Controls.Primitives.DataGridColumnHeader header, System.Windows.Input.Key key)
+    /// <summary>
+    /// Clicks a header - what a mouse click and the Space key both end in (<c>ButtonBase.OnClick</c>, which the header overrides to sort) - and
+    /// lets the click's effects run. A synthetic Space key press is not a stand-in: a button turns Space into a click only if the Alt keys and
+    /// the left mouse button are up <i>on the machine</i> (the real keyboard and mouse state, read when the key goes up), so a person dragging a
+    /// window while the suite runs can make the header ignore the press and its <c>SortDirection</c> stay null - the likeliest reason for the one
+    /// failure seen (CUST-323), though it was not caught in the act.
+    /// </summary>
+    private static void Press(System.Windows.Controls.Primitives.DataGridColumnHeader header, OffscreenHost host)
     {
-        var source = PresentationSource.FromVisual(header);
-        header.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, Environment.TickCount, key) { RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent, Source = header });
-        header.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, Environment.TickCount, key) { RoutedEvent = System.Windows.Input.Keyboard.KeyUpEvent, Source = header });
+        var onClick = typeof(System.Windows.Controls.Primitives.ButtonBase).GetMethod(
+            "OnClick",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.True(onClick is not null, "ButtonBase.OnClick was not found; the header cannot be clicked without the keyboard");
+
+        // A virtual method: this runs the header's override.
+        _ = onClick!.Invoke(header, null);
+        host.Relayout();
     }
 
     private sealed class Scene : IDisposable
@@ -441,7 +451,7 @@ public class InventoryPanelLayoutTests
         private Scene(int width, int height, int components)
         {
             InventoryFixture.Create(_temp.File("inventory.db"), components);
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(_temp.Path);
 
             _services = TestServices.Create(_temp);
             Shell = UiThread.Run(() =>
@@ -510,7 +520,7 @@ public class InventoryPanelLayoutTests
         {
             UiThread.Run(Shell.Dispose);
             _services.Dispose();
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(_temp.Path);
             _temp.Dispose();
         }
     }

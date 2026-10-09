@@ -534,7 +534,7 @@ public sealed class AuditSeverityTests : IClassFixture<AuditSeverityFixture>
 
         // The reader is not left broken: the pooled connections the cancelled statements used answer normally.
         Assert.Equal(12_000, await reader.CountAsync(new AuditQuery()));
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(database.Path);
     }
 
     [Fact]

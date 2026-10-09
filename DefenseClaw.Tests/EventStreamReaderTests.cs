@@ -249,7 +249,7 @@ public sealed class EventStreamReaderTests : IDisposable
     {
         using var directory = new TempDirectory("dcw-legacy");
         var path = directory.File("audit.db");
-        using (var connection = new SqliteConnection($"Data Source={path}"))
+        using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
@@ -257,7 +257,7 @@ public sealed class EventStreamReaderTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(directory.Path);
         var result = await new EventStreamReader(path).ReadAsync(EventStreamKind.Verdicts);
 
         Assert.Equal(EventStreamStatus.LegacySchema, result.Status);

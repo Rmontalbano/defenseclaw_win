@@ -15,11 +15,24 @@ namespace DefenseClaw.Core.Cli;
 /// new one nests (Windows 8 and later), so nothing here needs the outer job's breakaway permission.
 /// </para>
 /// <para>
-/// <b>The launch window.</b> .NET starts a child running; it cannot create it suspended (the TUI does). The child is assigned
-/// right after <see cref="Process.Start()"/> returns, so a grandchild spawned in the first milliseconds is not in the job.
-/// Cancel and timeout still reach it, because <see cref="CliRunner"/> follows the job termination with the
-/// <c>Kill(entireProcessTree)</c> walk; only the crash guarantee has the gap. A CLI that starts a grandchild before its own
-/// interpreter has finished starting is not a case that occurs.
+/// <b>The launch window.</b> .NET starts a child running; it can neither create it suspended (the TUI does) nor create it inside a job
+/// (<c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>, which <see cref="Process.Start()"/> does not offer). The child is assigned right after
+/// <see cref="Process.Start()"/> returns, so a process it starts before that is not in the job. Measured, from the return of
+/// <c>Start</c> to the return of <see cref="TryAssign"/> (300 runs each): a median of 0.06 ms and a 99th percentile of 0.2 ms on a busy
+/// laptop; a median of 0.1 ms, a 99th percentile of 1 ms and one run of 440 ms with 24 busy loops sharing the cores of the thread that
+/// starts the child (the time that thread spent not running).
+/// </para>
+/// <para>
+/// That is a case that occurs for the installed CLI, rarely. <c>defenseclaw.exe</c> is a small native launcher (a Go program that starts the
+/// embedded <c>python.exe</c> as its child through <c>os/exec</c>, as the strings of the file show; the file was read, never run) with
+/// little to do first, so it starts that child very soon after its own start;
+/// on a starved machine that can come before the assignment, and the interpreter is then outside the job. (An earlier version of this comment
+/// said that a CLI starting a grandchild that early is not a case that occurs.) Cancel, timeout and shutdown are not affected: <see cref="CliRunner"/>
+/// follows the job termination with the <c>Kill(entireProcessTree)</c> walk, which finds a descendant whether it is in the job or not.
+/// Only the crash guarantee has the gap: if the app is later killed outright while such a command runs, the launcher goes with the job and
+/// the interpreter it started early may stay behind (whether it does depends on the launcher, which nothing here relies on). It is left open
+/// on purpose: closing it needs a process created already inside the job, and sweeping a launcher's existing children into the job after the
+/// fact by parent id would put whatever owns a reused id by then in a job that kills it.
 /// </para>
 /// <para>
 /// Everything is best-effort: <see cref="TryCreate"/> and <see cref="TryAssign"/> report failure instead of throwing, and
@@ -31,7 +44,12 @@ public sealed class WindowsJob : IDisposable
     private const uint JobObjectLimitBreakawayOk = 0x00000800;
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;
     private const int JobObjectBasicAccountingInformation = 1;
+    private const int JobObjectBasicProcessIdList = 3;
     private const int JobObjectExtendedLimitInformation = 9;
+    private const int ErrorMoreData = 234;
+
+    /// <summary>How many process ids <see cref="ProcessIds"/> has room for; a job of this app's (a CLI, its interpreter, a console host) is far smaller.</summary>
+    internal const int MaxListedProcesses = 64;
 
     private readonly object _gate = new();
     private IntPtr _job;
@@ -140,6 +158,52 @@ public sealed class WindowsJob : IDisposable
                     return QueryInformationJobObject(_job, JobObjectBasicAccountingInformation, buffer, (uint)size, IntPtr.Zero)
                         ? (int)Marshal.PtrToStructure<JobObjectBasicAccountingInformationStruct>(buffer).ActiveProcesses
                         : -1;
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The ids of the processes in the job right now (up to <see cref="MaxListedProcesses"/>), or empty when the job is closed or cannot be read. For
+    /// the tests, which must not count on the exact set: a console program started without a window gets a <c>conhost.exe</c>, and Windows puts it in
+    /// the job of the program it serves a moment after that program was assigned (60 of 60 <c>ping.exe</c> runs, within 150 ms), so "the job holds
+    /// one process" is true at one instant and false at the next. What a test can know is that the process it assigned is a member.
+    /// </summary>
+    internal IReadOnlyList<int> ProcessIds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_job == IntPtr.Zero)
+                {
+                    return Array.Empty<int>();
+                }
+
+                // JOBOBJECT_BASIC_PROCESS_ID_LIST: ULONG NumberOfAssignedProcesses; ULONG NumberOfProcessIdsInList; ULONG_PTR ProcessIdList[].
+                var size = 8 + (IntPtr.Size * MaxListedProcesses);
+                var buffer = Marshal.AllocHGlobal(size);
+                try
+                {
+                    // False with ERROR_MORE_DATA still fills the buffer with as many as fit, which is all a test asks for.
+                    if (!QueryInformationJobObject(_job, JobObjectBasicProcessIdList, buffer, (uint)size, IntPtr.Zero) &&
+                        Marshal.GetLastWin32Error() != ErrorMoreData)
+                    {
+                        return Array.Empty<int>();
+                    }
+
+                    var listed = Math.Min(Marshal.ReadInt32(buffer, 4), MaxListedProcesses);
+                    var ids = new int[listed];
+                    for (var i = 0; i < listed; i++)
+                    {
+                        ids[i] = (int)Marshal.ReadIntPtr(buffer, 8 + (i * IntPtr.Size));
+                    }
+
+                    return ids;
                 }
                 finally
                 {

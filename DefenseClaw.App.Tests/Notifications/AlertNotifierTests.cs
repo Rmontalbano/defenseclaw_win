@@ -33,7 +33,7 @@ public sealed class AlertNotifierTests : IDisposable
         }
 
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -66,7 +66,7 @@ public sealed class AlertNotifierTests : IDisposable
 
         public async Task<AlertToast> NextAsync()
         {
-            Assert.True(await _signal.WaitAsync(TimeSpan.FromSeconds(30)), "No toast was shown.");
+            Assert.True(await _signal.WaitAsync(TestTimeouts.Ceiling), "No toast was shown.");
             lock (_gate)
             {
                 return _shown[^1];
@@ -103,10 +103,12 @@ public sealed class AlertNotifierTests : IDisposable
         Finding("b", 11, "CRITICAL");
         Finding("c", 12, "CRITICAL");
         var toasts = new Toasts();
+        var notifier = Notifier(toasts);
 
-        var shown = await Notifier(toasts).LookAsync();
+        var shown = await notifier.LookAsync();
 
-        Assert.True(shown);
+        // A look that cannot read the queue says nothing and answers false, like a look with nothing to say: name which it was.
+        Assert.True(shown, $"nothing was announced; the look's last failure: '{notifier.LastFailure}'");
         var toast = Assert.Single(toasts.Shown);
         Assert.Equal("3 new CRITICAL findings while DefenseClaw was closed", toast.Body);
         Assert.Equal(Nanos(12), Mark);
@@ -165,7 +167,7 @@ public sealed class AlertNotifierTests : IDisposable
         Assert.True(await notifier.LookAsync());
 
         Assert.Equal("HIGH finding", Assert.Single(toasts.Shown).Title);
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(temp.Path);
     }
 
     // ------------------------------------------------------------------ the toggles, read from the store at each look
@@ -242,6 +244,45 @@ public sealed class AlertNotifierTests : IDisposable
         Assert.True(await Notifier(toasts).ResetSeenHistoryAsync());
 
         Assert.Equal("1 CRITICAL finding unacknowledged", Assert.Single(toasts.Shown).Body);
+    }
+
+    // ------------------------------------------------------------------ disposal
+
+    [Fact]
+    public async Task Disposing_the_notifier_while_a_look_is_reading_ends_that_look_quietly()
+    {
+        // A look is a fire-and-forget read when the counts change, and the tray disposes the notifier on exit: a look that is still reading when
+        // that happens used to come back to a semaphore that was gone and fault with an ObjectDisposedException nobody could observe (CUST-323).
+        Finding("a", 1, "CRITICAL");
+        var toasts = new Toasts();
+        var notifier = new AlertNotifier(_services, toasts.Show);
+
+        // The read waits in SQLite's busy handler for as long as this connection holds the database exclusively.
+        using var holder = new SqliteConnection($"Data Source={_services.Paths.AuditDatabasePath};Pooling=False");
+        holder.Open();
+        using (var begin = holder.CreateCommand())
+        {
+            begin.CommandText = "BEGIN EXCLUSIVE";
+            _ = begin.ExecuteNonQuery();
+        }
+
+        var look = notifier.LookAsync();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (_services.AlertQueue.ReadCount == 0)
+        {
+            Assert.True(clock.Elapsed < TestTimeouts.Ceiling, "the look never started its read");
+            await Task.Delay(10);
+        }
+
+        notifier.Dispose();
+        using (var end = holder.CreateCommand())
+        {
+            end.CommandText = "ROLLBACK";
+            _ = end.ExecuteNonQuery();
+        }
+
+        Assert.False(await look.WaitAsync(TestTimeouts.Ceiling));
+        Assert.Empty(toasts.Shown);
     }
 
     // ------------------------------------------------------------------ following the counts

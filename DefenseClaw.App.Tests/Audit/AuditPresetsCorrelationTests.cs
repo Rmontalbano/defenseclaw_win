@@ -20,7 +20,7 @@ public sealed class AuditPresetsCorrelationTests : IDisposable
     public void Dispose()
     {
         _services?.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -60,7 +60,7 @@ public sealed class AuditPresetsCorrelationTests : IDisposable
             });
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _services = TestServices.Create(_temp);
         return new AuditPanelViewModel(_services) { ActionableOnly = false };
     }

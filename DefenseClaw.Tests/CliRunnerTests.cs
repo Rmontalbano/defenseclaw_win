@@ -660,13 +660,19 @@ public class CliRunnerTests
     // Process lifecycle: timeout, cancellation and app-exit shutdown. A hung child used to
     // wedge whatever awaited it, and nothing ever killed a child when the app quit.
     //
-    // The stand-in for "a child that will not exit" is `cmd /c ping -n 30 127.0.0.1`: about
-    // 29 s if left alone, and — importantly — a real tree. cmd is the runner's child and
+    // The stand-in for "a child that will not exit" is `cmd /c ping -n <seconds + 1> 127.0.0.1`:
+    // as long as the longest wait in this class (TestTimeouts.Ceiling) plus a minute if left alone,
+    // so that a slow machine, which makes a test wait for a condition for longer than a person
+    // would, never finds the child gone by itself (it used to live 29 s, and every wait was
+    // shorter than that by luck). And — importantly — a real tree. cmd is the runner's child and
     // ping is cmd's, so a kill that stops at the direct child leaves ping running, which the
     // tree tests detect by watching for the ping process itself.
     // ----------------------------------------------------------------------------------
 
-    private static readonly string[] LongPing = { "/c", "ping", "-n", "30", "127.0.0.1" };
+    private static readonly string[] LongPing =
+    {
+        "/c", "ping", "-n", ((int)(TestTimeouts.Ceiling + TimeSpan.FromMinutes(1)).TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture), "127.0.0.1",
+    };
 
     private static readonly string DefenseClawCli = Path.Combine("C:\\", "bin", "defenseclaw.exe");
 
@@ -719,6 +725,18 @@ public class CliRunnerTests
     /// <param name="run">The run itself, to stop waiting when it is over.</param>
     private static async Task<int> WaitForPingAsync(CliInvocation invocation, Task run)
     {
+        var ping = await FindPingAsync(invocation, run);
+        if (ping == 0)
+        {
+            Assert.Fail("No ping grandchild appeared before the run ended.");
+        }
+
+        return ping;
+    }
+
+    /// <summary><see cref="WaitForPingAsync"/> that says "none" (0) instead of failing: for a test whose own timeout may win the race to the ping.</summary>
+    private static async Task<int> FindPingAsync(CliInvocation invocation, Task run)
+    {
         var clock = Stopwatch.StartNew();
         while (clock.Elapsed < TestTimeouts.Ceiling && !run.IsCompleted)
         {
@@ -730,14 +748,18 @@ public class CliRunnerTests
             await Task.Delay(25);
         }
 
-        Assert.Fail("No ping grandchild appeared before the run ended.");
         return 0;
     }
 
-    private static async Task<bool> WaitUntilGoneAsync(int pid, TimeSpan within)
+    /// <summary>
+    /// Waits for the process to be gone: a condition (the kill was issued and the run has reported it, but Windows takes its time to end a
+    /// process tree on a busy machine), so the bound is only a hang's, <see cref="TestTimeouts.Ceiling"/>, and it is measured on the monotonic clock.
+    /// </summary>
+    private static async Task<bool> WaitUntilGoneAsync(int pid, TimeSpan? within = null)
     {
-        var deadline = DateTime.UtcNow + within;
-        while (DateTime.UtcNow < deadline)
+        var clock = Stopwatch.StartNew();
+        var limit = within ?? TestTimeouts.Ceiling;
+        while (clock.Elapsed < limit)
         {
             if (!IsAlive(pid))
             {
@@ -765,9 +787,11 @@ public class CliRunnerTests
             options: CliRunOptions.WithTimeout(TimeSpan.FromSeconds(2)));
         stopwatch.Stop();
 
-        // Timeout plus generous slack — and nowhere near the ~29 s the ping would have taken.
+        // The timeout is a promise the other way round: the run does not end before it (this one is the product's, and exact enough to keep).
+        // That the run ended by it and not by the ping running out is what the reason and the missing exit code below say. How long a busy
+        // machine takes to kill the tree after the timeout is a condition, not a promise, so its bound is only a hang's.
         Assert.True(
-            stopwatch.Elapsed < TimeSpan.FromSeconds(10),
+            stopwatch.Elapsed < TestTimeouts.Ceiling,
             $"the run took {stopwatch.Elapsed.TotalSeconds:0.0} s; a 2 s timeout should have ended it");
         Assert.True(
             stopwatch.Elapsed >= TimeSpan.FromSeconds(1.5),
@@ -788,28 +812,40 @@ public class CliRunnerTests
     [Fact]
     public async Task Timeout_kills_the_grandchild_too()
     {
-        using var temp = new TempDirectory();
-        var runner = Runner(temp.Path);
-
-        var run = runner.RunExecutableAsync(
-            CmdPath,
-            LongPing,
-            options: CliRunOptions.WithTimeout(TimeSpan.FromSeconds(3)));
-        var grandchild = await WaitForPingAsync(runner.Activity[0], run);
-
-        try
+        // The run's timeout is armed before the launch, and the ping has to exist when it fires for there to be a tree to kill. On a busy machine
+        // cmd.exe can take longer than a short timeout to start its ping; a timeout that wins that race ends the run with no ping seen and
+        // proves nothing about trees, so the test goes again with a timeout four times as long (3 s, 12 s, 48 s) before it calls that a failure.
+        var attempts = new List<string>();
+        for (var timeout = TimeSpan.FromSeconds(3); timeout < TestTimeouts.Ceiling; timeout *= 4)
         {
-            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            using var temp = new TempDirectory();
+            var runner = Runner(temp.Path);
+            var run = runner.RunExecutableAsync(CmdPath, LongPing, options: CliRunOptions.WithTimeout(timeout));
+            var grandchild = await FindPingAsync(runner.Activity[0], run);
+            if (grandchild == 0)
+            {
+                var ended = await run.WaitAsync(TestTimeouts.Ceiling);
+                attempts.Add($"{timeout.TotalSeconds:0} s: the run ended with no ping seen ({ended.FailureReason})");
+                continue;
+            }
 
-            Assert.Contains("timed out", invocation.FailureReason, StringComparison.Ordinal);
-            Assert.True(
-                await WaitUntilGoneAsync(grandchild, TimeSpan.FromSeconds(5)),
-                "ping, the grandchild, survived the kill: only the direct child was terminated");
+            try
+            {
+                var invocation = await run.WaitAsync(TestTimeouts.Ceiling);
+
+                Assert.Contains("timed out", invocation.FailureReason, StringComparison.Ordinal);
+                Assert.True(
+                    await WaitUntilGoneAsync(grandchild),
+                    "ping, the grandchild, survived the kill: only the direct child was terminated");
+                return;
+            }
+            finally
+            {
+                KillIfAlive(grandchild);
+            }
         }
-        finally
-        {
-            KillIfAlive(grandchild);
-        }
+
+        Assert.Fail("The timeout fired before the child had started a ping, every time: " + string.Join("; ", attempts));
     }
 
     [Fact]
@@ -826,11 +862,11 @@ public class CliRunnerTests
         {
             var stopwatch = Stopwatch.StartNew();
             cts.Cancel();
-            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            var invocation = await run.WaitAsync(TestTimeouts.Ceiling);
             stopwatch.Stop();
 
             Assert.True(
-                stopwatch.Elapsed < TimeSpan.FromSeconds(10),
+                stopwatch.Elapsed < TestTimeouts.Ceiling,
                 $"cancelling took {stopwatch.Elapsed.TotalSeconds:0.0} s to end the run");
             Assert.StartsWith("cancelled", invocation.FailureReason, StringComparison.Ordinal);
             Assert.Contains("process tree killed", invocation.FailureReason, StringComparison.Ordinal);
@@ -840,7 +876,7 @@ public class CliRunnerTests
             Assert.NotNull(invocation.FinishedAt);
 
             Assert.True(
-                await WaitUntilGoneAsync(grandchild, TimeSpan.FromSeconds(5)),
+                await WaitUntilGoneAsync(grandchild),
                 "ping, the grandchild, survived cancellation");
         }
         finally
@@ -874,7 +910,7 @@ public class CliRunnerTests
             Assert.False(run.IsCompleted, "the run ended before it was cancelled");
 
             cts.Cancel();
-            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            var invocation = await run.WaitAsync(TestTimeouts.Ceiling);
 
             Assert.StartsWith("cancelled", invocation.FailureReason, StringComparison.Ordinal);
             Assert.Contains("process tree killed", invocation.FailureReason, StringComparison.Ordinal);
@@ -883,7 +919,7 @@ public class CliRunnerTests
             Assert.NotNull(invocation.FinishedAt);
             Assert.Equal(1, Volatile.Read(ref completedEvents));
             Assert.True(
-                await WaitUntilGoneAsync(grandchild, TimeSpan.FromSeconds(5)),
+                await WaitUntilGoneAsync(grandchild),
                 "ping, the grandchild, survived a cancellation that arrived during the stdin write");
         }
         finally
@@ -1010,24 +1046,29 @@ public class CliRunnerTests
 
         try
         {
+            // The product's promise is the bound: Shutdown blocks at most that long, and not for the exempt run (a child meant to outlive the app),
+            // so it comes back as soon as the killed run has reported. The bound given is generous - the killed run reporting is a condition
+            // that a busy machine takes seconds over, not a promise - and a Shutdown that did wait for the exempt run would be told apart
+            // below, by that run being over.
+            var bound = TestTimeouts.Ceiling;
             var stopwatch = Stopwatch.StartNew();
-            var settled = runner.Shutdown(TimeSpan.FromSeconds(10));
+            var settled = runner.Shutdown(bound);
             stopwatch.Stop();
 
             Assert.True(settled, "Shutdown did not see the killed run finish inside its bound");
             Assert.True(
-                stopwatch.Elapsed < TimeSpan.FromSeconds(8),
+                stopwatch.Elapsed < bound,
                 $"Shutdown took {stopwatch.Elapsed.TotalSeconds:0.0} s; app exit must not hang on a child");
             Assert.True(runner.IsShutDown);
 
             // The ordinary run is stopped, says why, and takes its whole tree with it.
-            var doomedResult = await doomed.WaitAsync(TimeSpan.FromSeconds(5));
+            var doomedResult = await doomed.WaitAsync(TestTimeouts.Ceiling);
             Assert.Contains("exiting", doomedResult.FailureReason, StringComparison.Ordinal);
             Assert.Contains("process tree killed", doomedResult.FailureReason, StringComparison.Ordinal);
             Assert.Null(doomedResult.ExitCode);
             Assert.False(doomedResult.IsRunning);
             Assert.True(
-                await WaitUntilGoneAsync(doomedPing, TimeSpan.FromSeconds(5)),
+                await WaitUntilGoneAsync(doomedPing),
                 "the non-exempt run's grandchild survived Shutdown");
 
             // The exempt run — the upgrade installer's stand-in — is untouched: still running,
@@ -1038,7 +1079,7 @@ public class CliRunnerTests
             // Exemption covers app exit only. Its caller's own token still ends it, exactly as
             // for any other run — which is also how this test cleans up after itself.
             release.Cancel();
-            var exemptResult = await exempt.WaitAsync(TimeSpan.FromSeconds(20));
+            var exemptResult = await exempt.WaitAsync(TestTimeouts.Ceiling);
             Assert.StartsWith("cancelled", exemptResult.FailureReason, StringComparison.Ordinal);
             Assert.DoesNotContain("exiting", exemptResult.FailureReason, StringComparison.Ordinal);
         }
@@ -1094,11 +1135,11 @@ public class CliRunnerTests
         {
             runner.Dispose();
 
-            var invocation = await run.WaitAsync(TimeSpan.FromSeconds(10));
+            var invocation = await run.WaitAsync(TestTimeouts.Ceiling);
             Assert.Contains("exiting", invocation.FailureReason, StringComparison.Ordinal);
             Assert.False(invocation.IsRunning);
             Assert.True(
-                await WaitUntilGoneAsync(ping, TimeSpan.FromSeconds(5)),
+                await WaitUntilGoneAsync(ping),
                 "Dispose left the child's process tree running");
             Assert.True(runner.IsShutDown);
         }
@@ -1166,13 +1207,13 @@ public class CliRunnerTests
             Assert.False(string.IsNullOrWhiteSpace(reason));
             Assert.True(invocation.CancelRequested);
 
-            var result = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            var result = await run.WaitAsync(TestTimeouts.Ceiling);
             stopwatch.Stop();
 
-            // The same live instance, ended long before the ~29 s the ping would have taken.
+            // The same live instance, ended by the cancel and not by the ping running out (it has minutes left).
             Assert.Same(invocation, result);
             Assert.True(
-                stopwatch.Elapsed < TimeSpan.FromSeconds(15),
+                stopwatch.Elapsed < TestTimeouts.Ceiling,
                 $"the cancel took {stopwatch.Elapsed.TotalSeconds:0.0} s to end the run");
 
             // Recorded exactly like a caller-token cancellation: a reason, no exit code, and never
@@ -1190,7 +1231,7 @@ public class CliRunnerTests
 
             // Not just cmd.exe: ping, cmd's child, went with it.
             Assert.True(
-                await WaitUntilGoneAsync(ping, TimeSpan.FromSeconds(5)),
+                await WaitUntilGoneAsync(ping),
                 "ping, the grandchild, survived Cancel: only the direct child was terminated");
         }
         finally
@@ -1225,10 +1266,10 @@ public class CliRunnerTests
 
             Assert.True(runner.Cancel(firstInvocation, out var reason), reason);
 
-            var firstResult = await first.WaitAsync(TimeSpan.FromSeconds(20));
+            var firstResult = await first.WaitAsync(TestTimeouts.Ceiling);
             Assert.StartsWith("cancelled", firstResult.FailureReason, StringComparison.Ordinal);
             Assert.True(
-                await WaitUntilGoneAsync(firstPing, TimeSpan.FromSeconds(5)),
+                await WaitUntilGoneAsync(firstPing),
                 "the cancelled run's grandchild survived");
 
             // The sibling is untouched: still running, its tree alive, nothing recorded against it.
@@ -1240,7 +1281,7 @@ public class CliRunnerTests
 
             // By id this time — which is also how the test cleans up after itself.
             Assert.True(runner.Cancel(secondInvocation.Id, out var secondReason), secondReason);
-            var secondResult = await second.WaitAsync(TimeSpan.FromSeconds(20));
+            var secondResult = await second.WaitAsync(TestTimeouts.Ceiling);
             Assert.StartsWith("cancelled", secondResult.FailureReason, StringComparison.Ordinal);
         }
         finally
@@ -1295,7 +1336,7 @@ public class CliRunnerTests
 
             // The caller's own token is unaffected by any of this and still ends it.
             release.Cancel();
-            var result = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            var result = await run.WaitAsync(TestTimeouts.Ceiling);
             Assert.StartsWith("cancelled", result.FailureReason, StringComparison.Ordinal);
         }
         finally
@@ -1349,7 +1390,7 @@ public class CliRunnerTests
             }
 
             Assert.True(runner.Cancel(invocation, out var firstReason), firstReason);
-            var result = await run.WaitAsync(TimeSpan.FromSeconds(20));
+            var result = await run.WaitAsync(TestTimeouts.Ceiling);
             var recorded = result.FailureReason;
             Assert.StartsWith("cancelled", recorded, StringComparison.Ordinal);
 

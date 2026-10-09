@@ -409,15 +409,19 @@ public sealed class AiRuntimePanelTests : IDisposable
         Assert.False(vm.CanPollNow);
 
         vm.NoteGatewayState(AppGatewayState.Running);
-        // Wait for the condition, not for a time: a loaded CI runner is much slower than this machine.
-        for (var i = 0; i < 2000 && vm.IsStale; i++)
+
+        // Wait for the condition, not for a time (a loaded CI runner is much slower than this machine) - and for the whole of it. The panel
+        // clears its stale flag when it applies the read and its loading flag a moment later, when the read's task unwinds, and "Poll now" needs
+        // both: waiting for the flag alone read CanPollNow in between (false, "the snapshot is being read again"), once, on CI.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.Elapsed < TestTimeouts.Ceiling && (vm.IsStale || !vm.CanPollNow))
         {
             await Task.Delay(10);
         }
 
         Assert.False(vm.IsStale);
         Assert.Equal(reads + 1, scene.Gateway.Reads);
-        Assert.True(vm.CanPollNow);
+        Assert.True(vm.CanPollNow, $"Poll now is still off: {vm.PollBlockedReason}");
     }
 
     [Theory]

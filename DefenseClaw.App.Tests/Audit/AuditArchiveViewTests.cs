@@ -40,7 +40,8 @@ public sealed class AuditArchiveViewTests : IDisposable
 
         _theme.Dispose();
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_live.Path);
+        SqlitePools.Release(_archiveDir.Path);
         _live.Dispose();
         _archiveDir.Dispose();
     }

@@ -20,7 +20,7 @@ public sealed class AuditPanelLoadTests : IDisposable
     public void Dispose()
     {
         _services?.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -132,15 +132,19 @@ public sealed class AuditPanelLoadTests : IDisposable
 
         // The older one ends as soon as it is replaced, without waiting for the gate. (It is not released until after this, so an older load
         // that waited for it would never end; the ceiling is a bound on that hang, not on how fast a busy machine is.)
-        await superseded.WaitAsync(TimeSpan.FromMinutes(2));
-        Assert.True(panel.Rows.Count == AuditPanelViewModel.PageSize, "the old rows stay until the newest load replaces them");
+        await superseded.WaitAsync(TestTimeouts.Ceiling);
+
+        // A load never throws: a read it could not do is written to StatusNote and the old rows stay, so the note is part of every message here.
+        // (The one time this failed, a read of the newest load had been disposed under it by another test's ClearAllPools().)
+        Assert.True(
+            panel.Rows.Count == AuditPanelViewModel.PageSize,
+            $"the old rows stay until the newest load replaces them: rows={panel.Rows.Count}, status='{panel.StatusNote}', loading={panel.IsLoading}");
 
         _ = panel.LoadGate.Release();
-        await current;
+        await current.WaitAsync(TestTimeouts.Ceiling);
 
-        // A load never throws: a read it could not do is written to StatusNote and the old rows stay, so the note is part of the message.
         Assert.True(
-            panel.Rows.All(row => row.Details.Contains("synthetic event 2", StringComparison.Ordinal)),
+            panel.Rows.Count > 0 && panel.Rows.All(row => row.Details.Contains("synthetic event 2", StringComparison.Ordinal)),
             $"the newest load's rows should have replaced the old ones: rows={panel.Rows.Count}, first='{panel.Rows.FirstOrDefault()?.Details}', status='{panel.StatusNote}'");
     }
 
@@ -181,7 +185,7 @@ public sealed class AuditPanelLoadTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         await panel.InitializeAsync();
 
         Assert.Equal(string.Empty, panel.StatusNote);

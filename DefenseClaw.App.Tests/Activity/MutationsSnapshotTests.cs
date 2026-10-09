@@ -31,7 +31,7 @@ public sealed class MutationsSnapshotTests : IDisposable
         var database = Database().Activity("a1", before: "{\"a\":1}", after: "{\"a\":2}").Change("c1", connector: "claudecode").Change("c2");
         using var probe = new AuditChangeProbe(database.Path);
         var reader = new MutationReader(database.Path, probe);
-        var model = new ActivityMutationsViewModel(reader);
+        var model = new ActivityMutationsViewModel(reader, TestTimeouts.Ceiling);
 
         await model.LoadAsync();
         var rows = model.Rows.ToArray();
@@ -58,7 +58,7 @@ public sealed class MutationsSnapshotTests : IDisposable
         var database = Database().Activity("a1").Change("c1");
         using var probe = new AuditChangeProbe(database.Path);
         var reader = new MutationReader(database.Path, probe);
-        var model = new ActivityMutationsViewModel(reader);
+        var model = new ActivityMutationsViewModel(reader, TestTimeouts.Ceiling);
         await model.LoadAsync();
         var rows = model.Rows.ToArray();
         var decoded = reader.RowsDecoded;
@@ -79,7 +79,7 @@ public sealed class MutationsSnapshotTests : IDisposable
         var database = Database().Activity("a1");
         using var probe = new AuditChangeProbe(database.Path);
         var reader = new MutationReader(database.Path, probe);
-        var model = new ActivityMutationsViewModel(reader);
+        var model = new ActivityMutationsViewModel(reader, TestTimeouts.Ceiling);
         await model.LoadAsync();
         Assert.Single(model.Rows);
 
@@ -101,7 +101,7 @@ public sealed class MutationsSnapshotTests : IDisposable
         var database = Database().Activity("a1");
         using var probe = new AuditChangeProbe(database.Path);
         var reader = new MutationReader(database.Path, probe);
-        var model = new ActivityMutationsViewModel(reader);
+        var model = new ActivityMutationsViewModel(reader, TestTimeouts.Ceiling);
         await model.LoadAsync();
         var rows = model.Rows.ToArray();
 
@@ -117,7 +117,7 @@ public sealed class MutationsSnapshotTests : IDisposable
     [Fact]
     public async Task A_change_with_a_before_image_too_large_to_show_is_listed_with_the_reason_and_counted()
     {
-        var model = new ActivityMutationsViewModel(new MutationReader(Database().Activity("big", reason: "tighten", before: Big(), after: "{\"mode\":\"action\"}").Path));
+        var model = new ActivityMutationsViewModel(new MutationReader(Database().Activity("big", reason: "tighten", before: Big(), after: "{\"mode\":\"action\"}").Path), TestTimeouts.Ceiling);
 
         await model.LoadAsync();
 
@@ -140,7 +140,7 @@ public sealed class MutationsSnapshotTests : IDisposable
     public async Task A_history_of_only_changes_too_large_to_load_is_not_the_empty_state()
     {
         var database = Database().Activity("a", after: Big()).Activity("b", diff: Big("[\"")).Activity("c", before: Big());
-        var model = new ActivityMutationsViewModel(new MutationReader(database.Path));
+        var model = new ActivityMutationsViewModel(new MutationReader(database.Path), TestTimeouts.Ceiling);
 
         await model.LoadAsync();
 
@@ -155,7 +155,7 @@ public sealed class MutationsSnapshotTests : IDisposable
     [Fact]
     public async Task A_diff_too_large_to_load_says_so_in_place_of_the_diff()
     {
-        var model = new ActivityMutationsViewModel(new MutationReader(Database().Activity("d", diff: Big("[\"")).Path));
+        var model = new ActivityMutationsViewModel(new MutationReader(Database().Activity("d", diff: Big("[\"")).Path), TestTimeouts.Ceiling);
         await model.LoadAsync();
 
         var row = Assert.Single(model.Rows);
@@ -170,7 +170,7 @@ public sealed class MutationsSnapshotTests : IDisposable
     [Fact]
     public async Task An_audit_rows_record_too_large_to_load_takes_the_recorded_section()
     {
-        var model = new ActivityMutationsViewModel(new MutationReader(Database().Change("c", structuredJson: Big()).Path));
+        var model = new ActivityMutationsViewModel(new MutationReader(Database().Change("c", structuredJson: Big()).Path), TestTimeouts.Ceiling);
         await model.LoadAsync();
 
         var row = Assert.Single(model.Rows);
@@ -191,7 +191,7 @@ public sealed class MutationsSnapshotTests : IDisposable
             _ = database.Change("c" + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture));
         }
 
-        var model = new ActivityMutationsViewModel(new MutationReader(database.Path));
+        var model = new ActivityMutationsViewModel(new MutationReader(database.Path), TestTimeouts.Ceiling);
 
         await model.LoadAsync();
 

@@ -465,14 +465,14 @@ public sealed class DefenseClawPaths
             path = cached.Path;
             if (!IsFresh(cached))
             {
-                _ = StartScan(name, out _);
+                _ = StartScan(name, cached, out _);
             }
 
             return true;
         }
 
         path = null;
-        _ = StartScan(name, out _);
+        _ = StartScan(name, seen: null, out _);
         return false;
     }
 
@@ -497,9 +497,11 @@ public sealed class DefenseClawPaths
     private (string? Path, Task<string?>? Flight) Begin(string name, bool waitForFresh)
     {
         var havePrevious = false;
+        ExecutableLookup? seen = null;
 
         if (_lookups.TryGetValue(name, out var cached))
         {
+            seen = cached;
             var fresh = IsFresh(cached);
 
             if (cached.Path is null)
@@ -521,7 +523,7 @@ public sealed class DefenseClawPaths
                 if (!waitForFresh)
                 {
                     // Stale but still there: only PATH precedence could have moved. Answer now, refresh behind.
-                    _ = StartScan(name, out _);
+                    _ = StartScan(name, seen, out _);
                     return (cached.Path, null);
                 }
             }
@@ -529,11 +531,12 @@ public sealed class DefenseClawPaths
             // Otherwise the remembered path has gone: it is not an answer, so the caller waits for a scan.
         }
 
-        var flight = StartScan(name, out var started);
+        var flight = StartScan(name, seen, out var started);
         if (havePrevious && !waitForFresh && !started)
         {
-            // Someone else is already scanning and all we have is the old "not found": say that, in milliseconds.
-            return (null, null);
+            // Someone else is already scanning and all we have is the old "not found": say that, in milliseconds. (Unless that scan has
+            // just finished: its answer is then the one to give.)
+            return flight.IsCompletedSuccessfully ? (flight.Result, null) : (null, null);
         }
 
         return (null, flight);
@@ -543,8 +546,15 @@ public sealed class DefenseClawPaths
         lookup.Generation == Volatile.Read(ref _generation) &&
         _time.GetElapsedTime(lookup.Timestamp) < (lookup.Path is null ? MissingLookupLifetime : FoundLookupLifetime);
 
-    /// <summary>The scan for <paramref name="name"/> that is in flight, or a new one; <paramref name="started"/> says which.</summary>
-    private Task<string?> StartScan(string name, out bool started)
+    /// <summary>
+    /// The scan for <paramref name="name"/> that is in flight, or a new one; <paramref name="started"/> says which.
+    /// </summary>
+    /// <param name="name">What is looked for.</param>
+    /// <param name="seen">
+    /// The remembered answer the caller based its decision on (null: it found none). A scan that finished after the caller looked has
+    /// published a newer one, and then the answer is that, not a second scan.
+    /// </param>
+    private Task<string?> StartScan(string name, ExecutableLookup? seen, out bool started)
     {
         var generation = Volatile.Read(ref _generation);
         var mine = new Lazy<Task<string?>>(
@@ -561,6 +571,19 @@ public sealed class DefenseClawPaths
         }
 
         started = ReferenceEquals(entry, mine);
+
+        // The scan this caller found in flight (or the one that was still to be started when it looked) may have finished since, and then
+        // there is no flight to join and its answer is not the stale one the caller holds but a newer, current one. Starting another scan
+        // would only repeat it - on a dead PATH entry, another pass of probes that each take as long as the first (CUST-323: the test that
+        // counts those probes saw 6 instead of 4 on CI). Looked at after the flights, so that a scan whose flight has gone has published
+        // before this reads: the answer is stored before the flight can complete or be removed.
+        if (started && _lookups.TryGetValue(name, out var published) && IsFresh(published) && published != seen)
+        {
+            started = false;
+            _ = _flights.TryRemove(new KeyValuePair<string, Lazy<Task<string?>>>(name, mine));
+            return Task.FromResult(published.Path);
+        }
+
         var task = entry.Value;
 
         if (started)

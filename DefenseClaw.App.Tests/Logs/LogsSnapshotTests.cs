@@ -28,7 +28,7 @@ public sealed class LogsSnapshotTests : IDisposable
     public void Dispose()
     {
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -61,7 +61,7 @@ public sealed class LogsSnapshotTests : IDisposable
             });
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
     }
 
     private LogsPanelViewModel VerdictsPanel(EventStreamReader reader)

@@ -40,8 +40,8 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     /// <summary>The audit counts are re-read at most this often while the flyout stays open; it is read once when it opens.</summary>
     private static readonly TimeSpan MetricsRefreshInterval = TimeSpan.FromSeconds(15);
 
-    /// <summary>A read that takes longer than this is abandoned: on the live 6.9 GB database it takes a few milliseconds.</summary>
-    private static readonly TimeSpan MetricsTimeout = TimeSpan.FromSeconds(5);
+    /// <summary>A read that takes longer than this is abandoned: on the live 6.9 GB database it takes a few milliseconds (5 s; see <see cref="AppServices.ReaderTimeouts"/>).</summary>
+    private TimeSpan MetricsTimeout => _services.ReaderTimeouts.HookTotals;
 
     private readonly AppServices _services;
     private readonly Action _openDashboard;

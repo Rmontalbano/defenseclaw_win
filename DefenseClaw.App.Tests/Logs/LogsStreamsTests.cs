@@ -67,7 +67,7 @@ public sealed class LogsStreamsTests : IDisposable
             });
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
         return path;
     }
 

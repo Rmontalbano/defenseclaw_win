@@ -51,18 +51,34 @@ public sealed class AlertDetailReader
     /// <summary>The longest finding text kept; descriptions can be whole documents.</summary>
     public const int TextLimit = 2_000;
 
+    /// <summary>How long a lookup may run unless its caller says otherwise (8 s, the app's limit for an inspector's lookups; see <see cref="ReaderTimeouts"/>).</summary>
+    public static readonly TimeSpan DefaultTimeout = ReadOnlyQuery.DefaultTimeout;
+
     private readonly string _databasePath;
     private readonly int _historyWindow;
+    private readonly TimeSpan _readTimeout;
 
     /// <param name="databasePath">Path to <c>audit.db</c>.</param>
     /// <param name="historyWindow">How many newest rows the history lookup searches; <see cref="HistoryWindow"/> in the app, small in a test.</param>
-    public AlertDetailReader(string databasePath, int historyWindow = HistoryWindow)
+    /// <param name="readTimeout">
+    /// How long a lookup may run when its caller names no timeout; <see cref="DefaultTimeout"/> when null. A composition built for a test passes
+    /// its own (<see cref="ReaderTimeouts"/>): the app's 8 s is a bound on how long a person waits, not on how long a loaded machine needs.
+    /// </param>
+    public AlertDetailReader(string databasePath, int historyWindow = HistoryWindow, TimeSpan? readTimeout = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(historyWindow, 1);
         _databasePath = databasePath;
         _historyWindow = historyWindow;
+        _readTimeout = readTimeout ?? DefaultTimeout;
+        if (_readTimeout <= TimeSpan.Zero && _readTimeout != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(readTimeout), _readTimeout, "The timeout must be positive.");
+        }
     }
+
+    /// <summary>How long a lookup that names no timeout may run: <see cref="DefaultTimeout"/> unless this reader was built with another.</summary>
+    public TimeSpan ReadTimeout => _readTimeout;
 
     /// <summary>How many times <see cref="ReadFindingsAsync"/> / <see cref="ReadHistoryAsync"/> were called; the idle tests hold it still.</summary>
     public long ReadCount => Interlocked.Read(ref _reads);
@@ -88,7 +104,7 @@ public sealed class AlertDetailReader
 
         return ReadOnlyQuery.RunAsync<IReadOnlyList<ScanFindingDetail>>(
             _databasePath,
-            timeout,
+            timeout ?? _readTimeout,
             cancellationToken,
             Array.Empty<ScanFindingDetail>(),
             (connection, token) => FindingsCoreAsync(connection, run, key, limit, token));
@@ -237,7 +253,7 @@ public sealed class AlertDetailReader
 
         return ReadOnlyQuery.RunAsync<IReadOnlyList<TargetHistoryEvent>>(
             _databasePath,
-            timeout,
+            timeout ?? _readTimeout,
             cancellationToken,
             Array.Empty<TargetHistoryEvent>(),
             async (connection, token) =>
@@ -310,7 +326,7 @@ public sealed class AlertDetailReader
     public Task<IReadOnlyList<string>> ExplainAsync(CancellationToken cancellationToken = default) =>
         ReadOnlyQuery.RunAsync<IReadOnlyList<string>>(
             _databasePath,
-            ReadOnlyQuery.DefaultTimeout,
+            _readTimeout,
             cancellationToken,
             Array.Empty<string>(),
             async (connection, token) =>

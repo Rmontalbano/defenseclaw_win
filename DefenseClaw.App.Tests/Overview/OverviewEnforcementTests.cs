@@ -126,7 +126,7 @@ public sealed class OverviewEnforcementTests : IDisposable
         Assert.Equal("10", vm.HookCallsTile.Value);
 
         // The file stops being a database: the next read fails, and the tile must not keep claiming 10.
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_scene.Temp.Path);
         File.WriteAllText(_scene.Temp.File("audit.db"), "this is not a sqlite file");
         await vm.RefreshMetricsAsync(force: true, CancellationToken.None);
 
@@ -183,7 +183,7 @@ public sealed class OverviewEnforcementTests : IDisposable
             transaction.Commit();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_scene.Temp.Path);
         var vm = Panel();
         await vm.RefreshMetricsAsync(force: true, CancellationToken.None);
 

@@ -32,12 +32,12 @@ public sealed class AuditArchiveTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_folder);
     }
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_folder);
         _archive.Dispose();
         _live.Dispose();
     }
@@ -89,7 +89,7 @@ public sealed class AuditArchiveTests : IDisposable
         _ = await reader.ListActionsAsync();
         _ = await new AuditCorrelationReader(_archive.Path, immutable: true).RelatedAsync(
             (await reader.GetByIdAsync("old-2"))!);
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_folder);
 
         Assert.True(check.IsUsable, check.Problem);
         Assert.Equal(before, Listing());
@@ -110,12 +110,12 @@ public sealed class AuditArchiveTests : IDisposable
             _ = command.ExecuteScalar();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_folder);
         var before = Listing();
 
         var check = await AuditArchive.InspectAsync(_archive.Path, _live.Path);
         var page = await AuditArchive.OpenReader(_archive.Path).QueryAsync(new AuditQuery { Limit = 10 });
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_folder);
 
         Assert.True(check.IsUsable, check.Problem);
         Assert.Equal(3, page.Events.Count);
@@ -227,7 +227,7 @@ public sealed class AuditArchiveTests : IDisposable
     [Fact]
     public async Task A_corrupt_database_is_an_error_not_an_exception()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_folder);
         var bytes = File.ReadAllBytes(_archive.Path);
         var corrupt = System.IO.Path.Combine(_folder, "corrupt.db");
 
@@ -271,7 +271,7 @@ public sealed class AuditArchiveTests : IDisposable
     public async Task An_archive_whose_name_has_spaces_and_a_hash_can_be_read()
     {
         var odd = System.IO.Path.Combine(_folder, "my archive #1.db");
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_folder);
         File.Copy(_archive.Path, odd);
 
         var check = await AuditArchive.InspectAsync(odd, _live.Path);

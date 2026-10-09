@@ -200,7 +200,12 @@ public sealed class CliRunnerJobTests
         try
         {
             Assert.True(job.TryAssign(child));
-            Assert.Equal(1, job.ActiveProcessCount);
+
+            // The child is a member. It is not the only one, or not for long: a console program started without a window (ping is) gets a
+            // conhost.exe, which Windows puts in the job a moment after the assignment, so the exact count is true at one instant and not at the
+            // next (this asserted "1" and failed once in a full run with "2"; measured 60 of 60 runs within 150 ms).
+            Assert.True(job.ProcessIds.Contains(child.Id), $"the child ({child.Id}) is not in its job; the job holds [{string.Join(", ", job.ProcessIds)}]");
+            Assert.True(job.ActiveProcessCount >= 1, $"the job reports {job.ActiveProcessCount} active processes");
             Assert.False(child.HasExited);
 
             job.Dispose();

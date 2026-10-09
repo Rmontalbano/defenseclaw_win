@@ -25,6 +25,8 @@
     <!-- UseWPF drops these two from the implicit usings (WPF types collide with them); the tests want the BCL ones. -->
     <Using Include="System.IO" />
     <Using Include="System.Net.Http" />
+    <!-- The two helpers linked below (TestTimeouts, SqlitePools) keep the Core suite's namespace, so both suites say them the same way. -->
+    <Using Include="DefenseClaw.Tests.TestSupport" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,6 +37,14 @@
     <None Include="..\DefenseClaw.Tests\Fixtures\runtime-*\**\*" Link="Fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Synthetic payloads shaped like what the 0.8.10 CLI and gateway print; see TestSupport/PayloadFixtures.cs. -->
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The one definition of how long a test lets something that happens on its own take (CUST-301); linked rather than copied, so the
+         Core suite and this one cannot disagree about the ceiling or about what counts as CI. -->
+    <Compile Include="..\DefenseClaw.Tests\TestSupport\TestTimeouts.cs" Link="TestSupport\TestTimeouts.cs" />
+    <!-- How a test lets go of its own SQLite files without disposing the connections another test's reader is taking from the pool (CUST-323). -->
+    <Compile Include="..\DefenseClaw.Tests\TestSupport\SqlitePools.cs" Link="TestSupport\SqlitePools.cs" />
   </ItemGroup>
 
   <ItemGroup>

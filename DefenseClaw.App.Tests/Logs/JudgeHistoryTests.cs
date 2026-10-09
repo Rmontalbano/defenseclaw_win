@@ -31,7 +31,7 @@ public sealed class JudgeHistoryTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _services.Dispose();
         _temp.Dispose();
     }

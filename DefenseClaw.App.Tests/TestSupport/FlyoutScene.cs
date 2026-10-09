@@ -28,7 +28,7 @@ internal sealed class FlyoutScene : IDisposable
             $"config_version: 8\ngateway:\n  api_port: {_listener.Port}\nguardrail:\n  connectors:\n    claudecode:\n      mode: observe\n    copilot:\n      mode: enforce\n");
 
         Audit = new AlertQueueDatabase(_temp.File("audit.db"));
-        Services = AppServices.CreateIsolated(TestServices.IsolatedPaths(_temp.Path), claudeSettingsPath: _temp.File("claude-settings.json"));
+        Services = AppServices.CreateIsolated(TestServices.IsolatedPaths(_temp.Path), claudeSettingsPath: _temp.File("claude-settings.json"), readerTimeouts: TestServices.ReaderTimeouts);
     }
 
     public AlertQueueDatabase Audit { get; }
@@ -123,7 +123,7 @@ internal sealed class FlyoutScene : IDisposable
     {
         Services.Dispose();
         _listener.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 

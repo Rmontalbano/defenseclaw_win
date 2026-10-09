@@ -115,7 +115,7 @@ public sealed partial class AlertsPanelViewModel
     /// <summary>The inspector's findings and history lookups (read-only, cancellable). Settable so a test can aim it at its own database.</summary>
     internal AlertDetailReader DetailReader
     {
-        get => _detailReader ??= new AlertDetailReader(Services.Paths.AuditDatabasePath);
+        get => _detailReader ??= new AlertDetailReader(Services.Paths.AuditDatabasePath, readTimeout: Services.ReaderTimeouts.Audit);
         set => _detailReader = value;
     }
 
@@ -418,7 +418,7 @@ public sealed partial class AlertsPanelViewModel
         try
         {
             var target = item.TargetRef.Length > 0 ? item.TargetRef : item.RawTarget;
-            var rows = await DetailReader.ReadFindingsAsync(item.RunId, target, cancellationToken: cancellationToken).ConfigureAwait(true);
+            var rows = await DetailReader.ReadFindingsAsync(item.RunId, target, timeout: Services.ReaderTimeouts.Audit, cancellationToken: cancellationToken).ConfigureAwait(true);
             detail.Findings = rows
                 .Select(f => new AlertFindingCard(
                     f.Severity.Length > 0 ? f.Severity : "INFO",
@@ -455,6 +455,7 @@ public sealed partial class AlertsPanelViewModel
                 new[] { item.TargetRef, item.RawTarget },
                 item.AuditId,
                 limit: HistoryRows,
+                timeout: Services.ReaderTimeouts.Audit,
                 cancellationToken: cancellationToken).ConfigureAwait(true);
             detail.History = rows
                 .Select(h => new AlertHistoryRow(
@@ -490,7 +491,7 @@ public sealed partial class AlertsPanelViewModel
     {
         try
         {
-            var events = await EgressReader.ReadRecentAsync(NetworkEgressReader.DefaultLimit, TimeSpan.FromSeconds(5)).ConfigureAwait(true);
+            var events = await EgressReader.ReadRecentAsync(NetworkEgressReader.DefaultLimit, Services.ReaderTimeouts.HookTotals).ConfigureAwait(true);
             _egressProblem = string.Empty;
             return events;
         }

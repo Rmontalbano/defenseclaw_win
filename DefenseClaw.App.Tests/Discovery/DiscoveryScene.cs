@@ -155,7 +155,7 @@ internal sealed class DiscoveryScene : IDisposable
             }
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
     }
 
     // ---- audit.db ---------------------------------------------------------------------------------------------
@@ -186,7 +186,7 @@ internal sealed class DiscoveryScene : IDisposable
             }
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
     }
 
     private static SqliteConnection Open(string path)

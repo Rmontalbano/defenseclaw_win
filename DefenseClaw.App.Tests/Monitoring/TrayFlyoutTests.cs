@@ -25,7 +25,8 @@ public class TrayFlyoutTests
         _ = temp.WriteFile("config.yaml", $"config_version: 8\ngateway:\n  api_port: {listener.Port}\n");
         return AppServices.CreateIsolated(
             TestServices.IsolatedPaths(temp.Path),
-            claudeSettingsPath: temp.File("claude-settings.json"));
+            claudeSettingsPath: temp.File("claude-settings.json"),
+            readerTimeouts: TestServices.ReaderTimeouts);
     }
 
     [Fact]

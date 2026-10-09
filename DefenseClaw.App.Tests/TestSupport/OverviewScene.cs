@@ -49,7 +49,7 @@ internal sealed class OverviewScene : IDisposable
             SeedAudit(temp.File("audit.db"));
         }
 
-        var services = AppServices.CreateIsolated(TestServices.IsolatedPaths(temp.Path), claudeSettingsPath: temp.File("claude-settings.json"));
+        var services = AppServices.CreateIsolated(TestServices.IsolatedPaths(temp.Path), claudeSettingsPath: temp.File("claude-settings.json"), readerTimeouts: TestServices.ReaderTimeouts);
         return new OverviewScene(temp, services);
     }
 
@@ -224,13 +224,13 @@ internal sealed class OverviewScene : IDisposable
         Add(hourStart.AddHours(-2).AddMinutes(1), "scan-finding", "claudecode", null, severity: "HIGH", bucket: "security.finding");
         Add(hourStart.AddHours(-2).AddMinutes(2), "scan-finding", "hermes", null, severity: "MEDIUM", bucket: "security.finding");
         transaction.Commit();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
     }
 
     public void Dispose()
     {
         Services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(Temp.Path);
         Temp.Dispose();
     }
 }

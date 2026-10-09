@@ -25,7 +25,8 @@ public sealed class AuditArchiveSettingsTests : IDisposable
     public void Dispose()
     {
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_live.Path);
+        SqlitePools.Release(_archiveDir.Path);
         _live.Dispose();
         _archiveDir.Dispose();
     }

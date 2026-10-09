@@ -1467,6 +1467,13 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     // ---- The audit queue (the primary source) ------------------------------------------------------------
 
     /// <summary>
+    /// Why the last read of the queue failed ("TimeoutException: …"), or null when the last one worked or none has run. A failed read is only
+    /// traced, and shown as a note once the queue is already the source, so without this a panel that could not read it at all is just an
+    /// empty list - which is how a test over a busy machine used to see "there were no findings" (CUST-323).
+    /// </summary>
+    internal string? LastQueueFailure { get; private set; }
+
+    /// <summary>
     /// Reads the unacknowledged queue and, when it is usable, makes it the list. When it is not (a database from before the
     /// queue's schema, no database) the gateway's list stays or comes back; a read that fails while the queue is already the
     /// source keeps the rows and says so in the note. Never throws: it runs fire-and-forget from events and a timer. Reads are
@@ -1479,12 +1486,14 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         try
         {
             await ReadQueueAsync().ConfigureAwait(true);
+            LastQueueFailure = null;
         }
 #pragma warning disable CA1031 // A queue that cannot be read this time (locked, timed out) must not fault the panel; the next tick reads again.
         catch (Exception ex)
 #pragma warning restore CA1031
         {
             Trace.TraceWarning($"alerts: the unacknowledged queue could not be read: {ex.GetType().Name}: {ex.Message}");
+            LastQueueFailure = $"{ex.GetType().Name}: {ex.Message}".ReplaceLineEndings(" ");
             if (_queueActive)
             {
                 SourceNote = QueueNote() + $" · the last refresh failed: {ex.Message}".ReplaceLineEndings(" ");

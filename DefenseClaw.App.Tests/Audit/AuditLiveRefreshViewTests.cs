@@ -264,7 +264,7 @@ public class AuditLiveRefreshViewTests
             });
             _theme.Dispose();
             Services.Dispose();
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(_temp.Path);
             _temp.Dispose();
         }
     }

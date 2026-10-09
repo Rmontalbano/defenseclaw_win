@@ -18,7 +18,13 @@ public sealed class AlertQueueReaderTests : IDisposable
 
     public void Dispose() => _database.Dispose();
 
-    private AlertQueueReader Reader(int window = AlertQueueReader.DefaultWindowLimit) => new(_database.Path, window);
+    /// <summary>
+    /// A read that outlasts the app's 10 s on a loaded machine (the wait for a pool thread counts) throws a TimeoutException, which none of
+    /// these tests is about, so every reader waits as long as a test lets anything happen on its own. The tests of the limit itself name theirs.
+    /// </summary>
+    private AlertQueueReader Reader(int window = AlertQueueReader.DefaultWindowLimit) => new(_database.Path, window, readTimeout: TestTimeouts.Ceiling);
+
+    private static AlertQueueReader ReaderOver(string path) => new(path, readTimeout: TestTimeouts.Ceiling);
 
     private void Finding(string id, int minute, string severity, string connector = "claudecode", string action = "scan-finding") =>
         _database.InsertEvent(id, Base.AddMinutes(minute), action, severity, "security.finding", connector, eventName: "finding.observed");
@@ -358,7 +364,7 @@ public sealed class AlertQueueReaderTests : IDisposable
         using var temp = new TempDirectory();
         var path = temp.File("audit.db");
 
-        var result = await new AlertQueueReader(path).ReadAsync();
+        var result = await ReaderOver(path).ReadAsync();
 
         Assert.Equal(AlertQueueStatus.NoDatabase, result.Status);
         Assert.Same(AlertCounts.Empty, result.Counts);
@@ -378,7 +384,7 @@ public sealed class AlertQueueReaderTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        var result = await new AlertQueueReader(path).ReadAsync();
+        var result = await ReaderOver(path).ReadAsync();
 
         Assert.Equal(AlertQueueStatus.NoDatabase, result.Status);
     }
@@ -401,7 +407,7 @@ public sealed class AlertQueueReaderTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        var result = await new AlertQueueReader(path).ReadAsync();
+        var result = await ReaderOver(path).ReadAsync();
 
         Assert.Equal(AlertQueueStatus.LegacySchema, result.Status);
         Assert.Same(AlertCounts.Empty, result.Counts);
@@ -425,7 +431,7 @@ public sealed class AlertQueueReaderTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        var item = Assert.Single((await new AlertQueueReader(path).ReadAsync()).Counts.Newest);
+        var item = Assert.Single((await ReaderOver(path).ReadAsync()).Counts.Newest);
 
         Assert.Equal("x", item.Id);
         Assert.Null(item.Connector);
@@ -436,7 +442,7 @@ public sealed class AlertQueueReaderTests : IDisposable
     public async Task The_database_is_opened_read_only_and_a_read_only_file_reads_fine()
     {
         Finding("a", 1, "HIGH");
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_database.Path);
         var before = File.GetLastWriteTimeUtc(_database.Path);
         var length = new FileInfo(_database.Path).Length;
         File.SetAttributes(_database.Path, FileAttributes.ReadOnly);
@@ -451,7 +457,7 @@ public sealed class AlertQueueReaderTests : IDisposable
             File.SetAttributes(_database.Path, FileAttributes.Normal);
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_database.Path);
         Assert.Equal(before, File.GetLastWriteTimeUtc(_database.Path));
         Assert.Equal(length, new FileInfo(_database.Path).Length);
     }
@@ -525,28 +531,66 @@ public sealed class AlertQueueReaderTests : IDisposable
 
         var reader = new AlertQueueReader(path);
 
-        // The 1 ms timer fires on the thread pool. On a starved CI runner it can fire only after the statement has finished, and then the
-        // read rightly returns its answer. So a read may finish, but one that is stopped must be stopped as a timeout (anything else
-        // escapes and fails the test), and within a few tries one is.
-        var timedOut = false;
-        for (var attempt = 0; attempt < 10 && !timedOut; attempt++)
-        {
-            try
-            {
-                _ = await reader.ReadAsync(timeout: TimeSpan.FromMilliseconds(1));
-            }
-            catch (TimeoutException)
-            {
-                timedOut = true;
-            }
-        }
+        var (stopped, attempts, spent) = await ReadUntilStoppedAsync(() => reader.ReadAsync(timeout: TimeSpan.FromMilliseconds(1)));
 
-        Assert.True(timedOut, "ten 1 ms reads of 80k rows all finished before their timeout");
+        Assert.True(stopped is not null, $"{attempts} reads of 80k rows with a 1 ms timeout, over {spent.TotalSeconds:0} s, all finished before it");
 
         // The same reader, with room, answers: the interrupted connection left nothing behind.
         var result = await reader.ReadAsync(timeout: Timeout.InfiniteTimeSpan);
         Assert.Equal(0, result.Counts.Total);
-        SqliteConnection.ClearAllPools();
+
+        // A reader built with a limit of its own stops a read that names none at that limit (the seam a test composition uses to lift the app's
+        // 10 s; the same race with the thread pool, the same tries) - and a read that does name one is held to that one, whatever the reader's own.
+        var short1 = new AlertQueueReader(path, readTimeout: TimeSpan.FromMilliseconds(1));
+        Assert.Equal(TimeSpan.FromMilliseconds(1), short1.ReadTimeout);
+
+        (stopped, attempts, spent) = await ReadUntilStoppedAsync(() => short1.ReadAsync());
+
+        Assert.True(stopped is not null, $"{attempts} reads of 80k rows by a reader whose own limit is 1 ms, over {spent.TotalSeconds:0} s, all finished before it");
+        Assert.Contains("within 0 s", stopped.Message, StringComparison.Ordinal);
+        Assert.Equal(0, (await short1.ReadAsync(timeout: Timeout.InfiniteTimeSpan)).Counts.Total);
+        SqlitePools.Release(path);
+    }
+
+    /// <summary>
+    /// Reads until one read is stopped by its timeout, for as long as a test lets anything happen on its own. A 1 ms limit is a race the
+    /// statement can win, and not only on a slow machine: the timer's callback runs on the thread pool, so while every pool thread is held by
+    /// a sibling test (xunit runs classes in parallel, and some of them block threads - CI is where that shows) it runs only after the
+    /// statement has finished, and then the read rightly returns its answer. Measured: with the pool free, 30 of 30 such reads were stopped;
+    /// with it starved, none of 30 were, and the first one stopped came as the starvation ended. A read that finishes first therefore proves
+    /// nothing either way and the next one is another chance, but one that <em>is</em> stopped must be stopped as a timeout (any other
+    /// exception escapes and fails the test). Returns null for the exception if no read was stopped in that time.
+    /// </summary>
+    private static async Task<(TimeoutException? Stopped, int Attempts, TimeSpan Spent)> ReadUntilStoppedAsync(Func<Task> read)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var attempts = 0;
+        while (clock.Elapsed < TestTimeouts.Ceiling)
+        {
+            attempts++;
+            try
+            {
+                await read();
+            }
+            catch (TimeoutException ex)
+            {
+                return (ex, attempts, clock.Elapsed);
+            }
+        }
+
+        return (null, attempts, clock.Elapsed);
+    }
+
+    [Fact]
+    public void A_readers_own_limit_is_the_apps_unless_it_is_given_another_and_has_to_be_a_limit()
+    {
+        Assert.Equal(AlertQueueReader.DefaultTimeout, new AlertQueueReader(_database.Path).ReadTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(10), AlertQueueReader.DefaultTimeout);
+        Assert.Equal(TestTimeouts.Ceiling, Reader().ReadTimeout);
+        Assert.Equal(Timeout.InfiniteTimeSpan, new AlertQueueReader(_database.Path, readTimeout: Timeout.InfiniteTimeSpan).ReadTimeout);
+
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => new AlertQueueReader(_database.Path, readTimeout: TimeSpan.Zero));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => new AlertQueueReader(_database.Path, readTimeout: TimeSpan.FromSeconds(-2)));
     }
 
     [Fact]

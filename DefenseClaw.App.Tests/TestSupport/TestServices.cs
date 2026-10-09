@@ -1,4 +1,5 @@
 using DefenseClaw.App.Services;
+using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Runtime;
 
@@ -11,6 +12,14 @@ namespace DefenseClaw.App.Tests.TestSupport;
 /// </summary>
 internal static class TestServices
 {
+    /// <summary>
+    /// The read limits of a test composition: the suite's ceiling for everything that happens on its own (<see cref="TestTimeouts.Ceiling"/>), for
+    /// every kind of <c>audit.db</c> read. The app's own are 10 s, 8 s and 5 s, and a read that outlasts one is reported as "could not be read",
+    /// which a panel shows as an empty list and a test sees as "there were no findings" - on a machine busy enough, the wait for a thread alone
+    /// can pass that (CUST-323). A test that is about the limit itself builds its own composition with <see cref="ReaderTimeouts.Production"/> or a tiny one.
+    /// </summary>
+    public static ReaderTimeouts ReaderTimeouts { get; } = ReaderTimeouts.Uniform(TestTimeouts.Ceiling);
+
     /// <param name="dataDirectory">The scratch folder the composition treats as the data directory.</param>
     /// <param name="installation">
     /// The installation the composition starts with (CUST-308): null is the permissive, user-owned one every test has always had; a managed or invalid
@@ -42,6 +51,7 @@ internal static class TestServices
         return AppServices.CreateIsolated(
             IsolatedPaths(temp.Path, installation),
             claudeSettingsPath: temp.File("claude-settings.json"),
-            runtimeProbeRunner: runtimeProbeRunner);
+            runtimeProbeRunner: runtimeProbeRunner,
+            readerTimeouts: ReaderTimeouts);
     }
 }

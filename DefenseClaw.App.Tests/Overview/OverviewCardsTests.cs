@@ -76,7 +76,7 @@ public sealed class OverviewCardsTests : IDisposable
     [Fact]
     public async Task A_database_without_the_index_says_why_there_is_no_chart_and_a_broken_one_says_it_could_not_be_read()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_scene.Temp.Path);
         using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _scene.Temp.File("audit.db"), Pooling = false }.ToString()))
         {
             connection.Open();
@@ -90,7 +90,7 @@ public sealed class OverviewCardsTests : IDisposable
         Assert.False(vm.HasHourlyData);
         Assert.Contains(HourlyActivityReader.IndexName, vm.ActivityNote, StringComparison.Ordinal);
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_scene.Temp.Path);
         File.WriteAllText(_scene.Temp.File("audit.db"), "not a database");
         await vm.RefreshHourlyAsync(CancellationToken.None);
         Assert.Contains("could not be read", vm.ActivityNote, StringComparison.Ordinal);

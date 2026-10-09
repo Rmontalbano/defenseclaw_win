@@ -21,7 +21,7 @@ public class InventoryReaderTests : IDisposable
         var path = _directory.File("inventory.db");
         _path = path;
 
-        using (var connection = new SqliteConnection($"Data Source={path}"))
+        using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
@@ -273,7 +273,7 @@ public class InventoryReaderTests : IDisposable
     /// <summary>Runs setup SQL through a separate, writable connection (the reader under test is read-only).</summary>
     private void Execute(string sql)
     {
-        using var connection = new SqliteConnection($"Data Source={_path}");
+        using var connection = new SqliteConnection($"Data Source={_path};Pooling=False");
         connection.Open();
         using var command = connection.CreateCommand();
         // nosemgrep: csharp-sqli -- test helper: the SQL is written by the test and runs on its own temp database
@@ -289,7 +289,7 @@ public class InventoryReaderTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_directory.Path);
         _directory.Dispose();
     }
 }
@@ -603,7 +603,7 @@ public class InventoryScanReaderTests : IDisposable
         // handler (10 s). An inline method would only return after that, already failed; an offloaded
         // one returns at once with a task that cannot finish until the lock is released below.
         var reader = MultiScanDatabase();
-        using var lockHolder = new SqliteConnection($"Data Source={_directory.File("multi.db")}");
+        using var lockHolder = new SqliteConnection($"Data Source={_directory.File("multi.db")};Pooling=False");
         lockHolder.Open();
         RunSql(lockHolder, "BEGIN EXCLUSIVE");
 
@@ -662,7 +662,7 @@ public class InventoryScanReaderTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_directory.Path);
         _directory.Dispose();
     }
 
@@ -673,7 +673,7 @@ public class InventoryScanReaderTests : IDisposable
 
         public Seeder(string path)
         {
-            _connection = new SqliteConnection($"Data Source={path}");
+            _connection = new SqliteConnection($"Data Source={path};Pooling=False");
             _connection.Open();
             Run(Schema);
         }

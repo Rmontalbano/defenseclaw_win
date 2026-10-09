@@ -78,6 +78,6 @@ internal sealed class MutationDatabase
             _ = command.ExecuteNonQuery();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(Path);
     }
 }

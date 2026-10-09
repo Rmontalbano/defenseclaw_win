@@ -314,7 +314,7 @@ public class AuditPanelLayoutTests
             UiThread.Run(Shell.Dispose);
             _theme.Dispose();
             _services.Dispose();
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(_temp.Path);
             _temp.Dispose();
         }
     }

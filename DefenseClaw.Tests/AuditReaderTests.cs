@@ -948,7 +948,7 @@ public class AuditReaderTests : IDisposable
             Assert.Equal(3, await reader.CountAsync(new AuditQuery()));
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(directory.Path);
     }
 
     private static void CopySharedFile(string from, string to)

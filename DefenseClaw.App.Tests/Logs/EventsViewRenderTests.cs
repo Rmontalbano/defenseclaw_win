@@ -52,7 +52,7 @@ public class EventsViewRenderTests
         Add("e-quiet-3", 6, "platform.health", "sink.checked", "INFO", "sink ok", null);
         Add("e-error", 7, "platform.health", "sink.checked", "ERROR", "sink unreachable: connection refused", null);
         Add("e-quiet-4", 8, "diagnostic", "boot.checked", "LOW", "boot checks passed", null);
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
     }
 
     private static ToggleSwitch? Switch(FrameworkElement page) =>
@@ -155,7 +155,7 @@ public class EventsViewRenderTests
 
                 shell?.Dispose();
             });
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(temp.Path);
         }
     }
 

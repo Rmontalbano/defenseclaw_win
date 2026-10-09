@@ -80,7 +80,10 @@ public sealed class AlertQueueReader
     /// <summary>The longest <see cref="AlertQueueItem.Target"/> kept. Targets are paths and URLs; the list needs the start of one.</summary>
     public const int TargetLimit = 512;
 
-    /// <summary>How long <see cref="ReadAsync"/> lets the statement run unless told otherwise; the read itself takes milliseconds.</summary>
+    /// <summary>
+    /// How long <see cref="ReadAsync"/> lets the statement run unless told otherwise; the read itself takes milliseconds. This is the app's
+    /// limit (<see cref="ReaderTimeouts.Production"/>): a reader built with another one (a test composition's) says so in <see cref="ReadTimeout"/>.
+    /// </summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     private const string FindingArm = "e.bucket = 'security.finding' AND e.event_name = 'finding.observed'";
@@ -89,6 +92,7 @@ public sealed class AlertQueueReader
     private readonly string _connectionString;
     private readonly int _windowLimit;
     private readonly AuditChangeProbe? _probe;
+    private readonly TimeSpan _readTimeout;
 
     /// <summary>The finished answers, by <c>newestLimit</c>: the object a repeat read of an unchanged database gets back.</summary>
     private readonly SnapshotMemo<int, AlertQueueResult> _results;
@@ -106,10 +110,25 @@ public sealed class AlertQueueReader
     /// <param name="windowLimit">How many alerts make up the window; <see cref="DefaultWindowLimit"/> (the Mac's) in the app, smaller in a test.</param>
     /// <param name="probe">The change probe of this database, shared with the other readers of it; null reads every time.</param>
     /// <param name="timeProvider">The clock the remembered answers' age is measured on; the system's when null.</param>
-    public AlertQueueReader(string databasePath, int windowLimit = DefaultWindowLimit, AuditChangeProbe? probe = null, TimeProvider? timeProvider = null)
+    /// <param name="readTimeout">
+    /// How long a read may run when its caller names no timeout; <see cref="DefaultTimeout"/> when null, which is what the app uses. A
+    /// composition built for a test passes its own (<see cref="ReaderTimeouts"/>); <see cref="Timeout.InfiniteTimeSpan"/> is no limit.
+    /// </param>
+    public AlertQueueReader(
+        string databasePath,
+        int windowLimit = DefaultWindowLimit,
+        AuditChangeProbe? probe = null,
+        TimeProvider? timeProvider = null,
+        TimeSpan? readTimeout = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(windowLimit, 1);
+        _readTimeout = readTimeout ?? DefaultTimeout;
+        if (_readTimeout <= TimeSpan.Zero && _readTimeout != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(readTimeout), _readTimeout, "The timeout must be positive.");
+        }
+
         DatabasePath = databasePath;
         _windowLimit = windowLimit;
         _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
@@ -119,6 +138,9 @@ public sealed class AlertQueueReader
     }
 
     public string DatabasePath { get; }
+
+    /// <summary>How long a <see cref="ReadAsync"/> that names no timeout lets its statement run: <see cref="DefaultTimeout"/> unless this reader was built with another.</summary>
+    public TimeSpan ReadTimeout => _readTimeout;
 
     /// <summary>How many times <see cref="ReadAsync"/> has been called, counted when the call is made; the idle-cost tests hold it still.</summary>
     public long ReadCount => Interlocked.Read(ref _reads);
@@ -133,7 +155,7 @@ public sealed class AlertQueueReader
     /// Reads the queue: one statement, one snapshot. Never blocks the caller's thread.
     /// </summary>
     /// <param name="newestLimit">How many rows <see cref="AlertCounts.Newest"/> keeps (the tallies always cover the whole window).</param>
-    /// <param name="timeout">How long the statement may run; <see cref="DefaultTimeout"/> when null, <see cref="Timeout.InfiniteTimeSpan"/> for no limit.</param>
+    /// <param name="timeout">How long the statement may run; <see cref="ReadTimeout"/> when null, <see cref="Timeout.InfiniteTimeSpan"/> for no limit.</param>
     /// <param name="cancellationToken">Stops a running statement, not only the wait for it.</param>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
     /// <exception cref="TimeoutException">The statement did not finish in <paramref name="timeout"/> and was interrupted.</exception>
@@ -146,7 +168,7 @@ public sealed class AlertQueueReader
         ArgumentOutOfRangeException.ThrowIfNegative(newestLimit);
         _ = Interlocked.Increment(ref _reads);
 
-        var limit = timeout ?? DefaultTimeout;
+        var limit = timeout ?? _readTimeout;
         if (limit <= TimeSpan.Zero && limit != Timeout.InfiniteTimeSpan)
         {
             throw new ArgumentOutOfRangeException(nameof(timeout), limit, "The timeout must be positive.");

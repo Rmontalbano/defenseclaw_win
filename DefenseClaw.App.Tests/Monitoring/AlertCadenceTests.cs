@@ -24,7 +24,7 @@ public sealed class AlertCadenceTests
             binDirectory: Bin,
             searchPath: Array.Empty<string>(),
             fileExists: p => p.StartsWith(Bin, StringComparison.OrdinalIgnoreCase) || File.Exists(p));
-        return AppServices.CreateIsolated(paths, temp.File("claude-settings.json"));
+        return AppServices.CreateIsolated(paths, temp.File("claude-settings.json"), readerTimeouts: TestServices.ReaderTimeouts);
     }
 
     [Fact]

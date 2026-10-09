@@ -679,7 +679,7 @@ public sealed class AppSettingsStoreTests : IDisposable
 
         var done = Task.Run(() => store.Update(s => s with { Monitoring = s.Monitoring with { Paused = true } }));
 
-        _ = await done.WaitAsync(TimeSpan.FromSeconds(20));   // a TimeoutException here means Update deadlocked on a subscriber that called back in
+        _ = await done.WaitAsync(TestTimeouts.Ceiling);   // a TimeoutException here means Update deadlocked on a subscriber that called back in
         Assert.True(store.Current.Monitoring.Paused);
         Assert.True(store.Current.Startup.GatewayAutoStart);
     }
@@ -823,6 +823,180 @@ public sealed class AppSettingsStoreTests : IDisposable
         Assert.Equal(AppSettingsStore.DefaultPath, FileAppearanceSettingsStore.DefaultPath);
     }
 
+    // ------------------------------------------------------------------ a file another process holds for a moment
+
+    /// <summary>What a virus scanner or an indexer that has the file open for a moment makes a read or a replace of it fail with.</summary>
+    private static IOException SharingViolation() =>
+        new("The process cannot access the file because it is being used by another process.", unchecked((int)0x80070020));
+
+    /// <summary>
+    /// A store whose waits are recorded instead of slept, so the bound on them is read off rather than waited out - each with the operation it
+    /// was a wait for. The faults a test injects are not the only ones: the machine this runs on has a scanner of its own, which now and then
+    /// holds the real file for a moment, and the store rightly waits for that too. A test therefore reads the waits of the operation it holds
+    /// (<see cref="PausesOf"/>), and where its last try is a real one it asks for at least the tries it injected, not exactly those.
+    /// </summary>
+    private static (AppSettingsStore Store, List<(StoreFileOperation Operation, TimeSpan For)> Pauses, Dictionary<StoreFileOperation, int> Tries) Watched(string path)
+    {
+        var store = Fresh(path);
+        var pauses = new List<(StoreFileOperation Operation, TimeSpan For)>();
+        var tries = new Dictionary<StoreFileOperation, int>();
+        var current = StoreFileOperation.Read;
+        store.Pause = duration => pauses.Add((current, duration));
+        store.BeforeFileOperation = (operation, _) =>
+        {
+            current = operation;
+            tries[operation] = tries.GetValueOrDefault(operation) + 1;
+        };
+        return (store, pauses, tries);
+    }
+
+    private static TimeSpan[] PausesOf(IEnumerable<(StoreFileOperation Operation, TimeSpan For)> pauses, StoreFileOperation operation) =>
+        pauses.Where(pause => pause.Operation == operation).Select(pause => pause.For).ToArray();
+
+    [Fact]
+    public void A_replace_that_meets_a_hold_is_tried_again_after_20_40_ms_and_the_save_succeeds()
+    {
+        var path = NewPath();
+        var (store, pauses, tries) = Watched(path);
+        var held = 0;
+        var counter = store.BeforeFileOperation!;
+        store.BeforeFileOperation = (operation, number) =>
+        {
+            counter(operation, number);
+            if (operation == StoreFileOperation.Move && number <= 2)
+            {
+                held++;
+                throw SharingViolation();
+            }
+        };
+
+        Assert.True(store.Update(s => s with { Monitoring = s.Monitoring with { Paused = true } }));
+
+        // Two holds, then a try that is free (a scanner of the machine's own may hold that one too, for a try more).
+        Assert.Equal(2, held);
+        Assert.True(tries[StoreFileOperation.Move] >= 3, $"the replace was tried {tries[StoreFileOperation.Move]} times");
+        Assert.Equal(new[] { TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(40) }, PausesOf(pauses, StoreFileOperation.Move).Take(2));
+        Assert.True(Fresh(path).Current.Monitoring.Paused);
+        Assert.Equal(new[] { path }, Directory.GetFiles(System.IO.Path.GetDirectoryName(path)!));
+    }
+
+    [Fact]
+    public void A_read_that_meets_a_hold_is_tried_again_up_to_the_bound_and_the_save_succeeds()
+    {
+        var path = NewPath();
+        Assert.True(Fresh(path).Update(s => s with { Monitoring = s.Monitoring with { HealthIntervalSeconds = 11 } }));
+        var (store, pauses, tries) = Watched(path);
+        _ = store.Current;      // the first read, so that the one that is held is the save's own
+        tries.Clear();
+        var counter = store.BeforeFileOperation!;
+
+        // Held for the first three tries of the read before the save, free on the fourth - the last one the bound allows.
+        store.BeforeFileOperation = (operation, number) =>
+        {
+            counter(operation, number);
+            if (operation == StoreFileOperation.Read && number <= AppSettingsStore.Attempts - 1)
+            {
+                throw SharingViolation();
+            }
+        };
+
+        Assert.True(store.Update(s => s with { Monitoring = s.Monitoring with { Paused = true } }));
+
+        Assert.Equal(AppSettingsStore.Attempts, tries[StoreFileOperation.Read]);
+        Assert.Equal(
+            new[] { TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(40), TimeSpan.FromMilliseconds(60) },
+            PausesOf(pauses, StoreFileOperation.Read));
+        var saved = Fresh(path).Current;
+        Assert.True(saved.Monitoring.Paused);
+        Assert.Equal(11, saved.Monitoring.HealthIntervalSeconds);
+    }
+
+    [Fact]
+    public void A_hold_that_outlasts_the_bound_fails_that_save_waits_no_longer_than_120_ms_and_the_change_goes_out_with_the_next_one()
+    {
+        var path = NewPath();
+        var (store, pauses, tries) = Watched(path);
+        var counter = store.BeforeFileOperation!;
+        var held = true;
+        store.BeforeFileOperation = (operation, number) =>
+        {
+            counter(operation, number);
+            if (held && operation == StoreFileOperation.Move)
+            {
+                throw SharingViolation();
+            }
+        };
+
+        Assert.False(store.Update(s => s with { Monitoring = s.Monitoring with { Paused = true } }));
+
+        // The bound: four tries of the replace, with 20, 40 and 60 ms between them. Nothing was saved, and the change is still the store's.
+        Assert.Equal(AppSettingsStore.Attempts, tries[StoreFileOperation.Move]);
+        Assert.Equal(TimeSpan.FromMilliseconds(120), PausesOf(pauses, StoreFileOperation.Move).Aggregate(TimeSpan.Zero, (sum, pause) => sum + pause));
+        Assert.True(store.Current.Monitoring.Paused);
+        Assert.False(File.Exists(path));
+        Assert.Equal(Array.Empty<string>(), Directory.GetFiles(System.IO.Path.GetDirectoryName(path)!));
+
+        // The hold passes; the next write - even one that changes nothing - carries the unsaved change out.
+        held = false;
+        Assert.True(store.Update(s => s));
+        Assert.True(Fresh(path).Current.Monitoring.Paused);
+    }
+
+    [Fact]
+    public void A_temp_file_a_scanner_still_holds_is_removed_once_it_lets_go()
+    {
+        var path = NewPath();
+        var (store, _, tries) = Watched(path);
+        var counter = store.BeforeFileOperation!;
+        store.BeforeFileOperation = (operation, number) =>
+        {
+            counter(operation, number);
+            if (operation == StoreFileOperation.Move)
+            {
+                throw SharingViolation();
+            }
+
+            if (operation == StoreFileOperation.RemoveTemp && number <= 2)
+            {
+                throw new UnauthorizedAccessException("access denied: the file is pending deletion");
+            }
+        };
+
+        Assert.False(store.Update(s => s with { Monitoring = s.Monitoring with { Paused = true } }));
+
+        // Two holds, then a try that is free (a scanner of the machine's own may hold that one too, for a try more).
+        Assert.True(tries[StoreFileOperation.RemoveTemp] >= 3, $"the temp file's removal was tried {tries[StoreFileOperation.RemoveTemp]} times");
+        Assert.Equal(Array.Empty<string>(), Directory.GetFiles(System.IO.Path.GetDirectoryName(path)!));
+    }
+
+    [Fact]
+    public void A_read_that_fails_for_another_reason_is_not_waited_for()
+    {
+        var path = NewPath();
+        Assert.True(Fresh(path).Update(s => s with { Monitoring = s.Monitoring with { HealthIntervalSeconds = 11 } }));
+
+        foreach (Exception failure in new Exception[] { new IOException("some other I/O error"), new UnauthorizedAccessException("no permission") })
+        {
+            var (store, pauses, tries) = Watched(path);
+            var counter = store.BeforeFileOperation!;
+            store.BeforeFileOperation = (operation, number) =>
+            {
+                counter(operation, number);
+                if (operation == StoreFileOperation.Read)
+                {
+                    throw failure;
+                }
+            };
+
+            // A file that cannot be read at all: the defaults, and no change is made on a guess about what is in it.
+            Assert.Equal(AppSettings.Defaults, store.Current);
+            Assert.False(store.Update(s => s with { Monitoring = s.Monitoring with { Paused = true } }));
+
+            Assert.Empty(pauses);
+            Assert.All(tries, pair => Assert.Equal(pair.Key == StoreFileOperation.Read ? 2 : 0, pair.Value));
+        }
+    }
+
     // ------------------------------------------------------------------ concurrency
 
     [Fact]
@@ -836,23 +1010,35 @@ public sealed class AppSettingsStoreTests : IDisposable
         const int threads = 6;
         const int perThread = 25;
         var barrier = new Barrier(threads);
+        var unsaved = 0;
         var workers = Enumerable.Range(0, threads).Select(_ => Task.Run(() =>
         {
             barrier.SignalAndWait();
             for (var i = 0; i < perThread; i++)
             {
-                Assert.True(store.Update(s => s with
+                // What this test is about is that no increment is lost, not that the disk never blinks: a scanner holding the file for longer
+                // than the store waits (see AppSettingsStore.Attempts) makes one save report false, and the change then goes out with the next
+                // one. So the saves that failed are counted, and the last word is the final save below.
+                if (!store.Update(s => s with
                 {
                     Notifications = s.Notifications with { HighWaterUnixNano = s.Notifications.HighWaterUnixNano + 1 },
-                }));
+                }))
+                {
+                    _ = Interlocked.Increment(ref unsaved);
+                }
             }
         })).ToArray();
 
-        await Task.WhenAll(workers).WaitAsync(TimeSpan.FromSeconds(60));
+        await Task.WhenAll(workers).WaitAsync(TestTimeouts.Ceiling);
 
-        // Read-modify-write is atomic: no increment was lost, in memory or on disk.
+        // Read-modify-write is atomic: no increment was lost in memory ...
         Assert.Equal(threads * perThread, store.Current.Notifications.HighWaterUnixNano);
         Assert.Equal(threads * perThread, raised);
+
+        // ... and every one reaches the disk: a save that changes nothing writes whatever an earlier one could not.
+        Assert.True(
+            SpinWait.SpinUntil(() => store.Update(s => s), TestTimeouts.Ceiling),
+            $"the file could not be saved even once the updates were over ({unsaved} of {threads * perThread} saves had failed)");
         Assert.Equal(threads * perThread, Fresh(path).Current.Notifications.HighWaterUnixNano);
         Assert.NotNull(JsonNode.Parse(File.ReadAllText(path)));
         Assert.Equal(new[] { path }, Directory.GetFiles(System.IO.Path.GetDirectoryName(path)!));
@@ -885,7 +1071,11 @@ public sealed class AppSettingsStoreTests : IDisposable
             }),
         };
 
-        await Task.WhenAll(workers).WaitAsync(TimeSpan.FromSeconds(60));
+        await Task.WhenAll(workers).WaitAsync(TestTimeouts.Ceiling);
+
+        // A save that met a hold longer than the store waits for reported false (ignored above); the change goes out with the next save, so one
+        // more, even one that changes nothing, leaves the file complete.
+        Assert.True(SpinWait.SpinUntil(() => store.Update(s => s), TestTimeouts.Ceiling), "the file could not be saved even once the updates were over");
 
         var reloaded = Fresh(path).Current;
         Assert.Equal(27, reloaded.Monitoring.HealthIntervalSeconds);
@@ -909,7 +1099,7 @@ public sealed class AppSettingsStoreTests : IDisposable
             Task.Run(() => { barrier.SignalAndWait(); for (var i = 0; i < 30; i++) { b.Save(new AppearanceSettings(AppearanceStyle.Tui, i % 2 == 0 ? AppearanceMode.Light : AppearanceMode.Dark)); } }),
         };
 
-        await Task.WhenAll(workers).WaitAsync(TimeSpan.FromSeconds(60));
+        await Task.WhenAll(workers).WaitAsync(TestTimeouts.Ceiling);
         Assert.NotNull(JsonNode.Parse(File.ReadAllText(path)));
         Assert.Equal(a.Load(), b.Load());
     }

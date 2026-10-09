@@ -16,7 +16,7 @@ public sealed class AuditChangeWiringTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -74,7 +74,7 @@ public sealed class AuditChangeWiringTests : IDisposable
         Assert.True(services.AuditChanges.IsOpen);
 
         services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
 
         Assert.False(services.AuditChanges.IsOpen);
         Assert.False(services.AuditChanges.Sample().IsKnown);

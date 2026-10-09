@@ -27,7 +27,7 @@ public sealed class EventsViewTests : IDisposable
     public void Dispose()
     {
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -64,7 +64,7 @@ public sealed class EventsViewTests : IDisposable
             });
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
     }
 
     /// <summary>Four events the TUI would show (a HIGH, a block, an egress block, an ERROR), three it would hide, and one of telemetry.</summary>

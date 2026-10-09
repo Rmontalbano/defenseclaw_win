@@ -397,6 +397,12 @@ internal sealed class AlertNotifier : IDisposable
     }
 
     /// <summary>
+    /// Why the last look failed ("TimeoutException: …"), or null when the last one worked or none has run. A failed look is only traced and
+    /// answers false like "nothing to say", so a test that expected a toast can say why there was none (CUST-323).
+    /// </summary>
+    internal string? LastFailure { get; private set; }
+
+    /// <summary>
     /// Takes one look now and announces what it finds. Returns true when a toast was shown, false when there was nothing to say
     /// (or the queue could not be read, which is traced and tried again at the next change).
     /// </summary>
@@ -448,6 +454,8 @@ internal sealed class AlertNotifier : IDisposable
                 return false;
             }
 
+            LastFailure = null;
+
             var settings = _services.Settings.Current.Notifications;
             var phase = resetFirst ? AlertToastPhase.Backlog : _launchDone ? AlertToastPhase.Live : AlertToastPhase.Launch;
             var decision = AlertToastPolicy.Decide(window, settings, phase);
@@ -472,11 +480,20 @@ internal sealed class AlertNotifier : IDisposable
 #pragma warning restore CA1031
         {
             Trace.TraceWarning($"notifications: looking at the alert queue failed: {ex.GetType().Name}: {ex.Message}");
+            LastFailure = $"{ex.GetType().Name}: {ex.Message}".ReplaceLineEndings(" ");
             return false;
         }
         finally
         {
-            _ = _gate.Release();
+            try
+            {
+                _ = _gate.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Dispose ran while this look was reading (the tray is exiting): the gate is gone, nobody is waiting on it, and a look that
+                // runs fire-and-forget has no caller for this to reach - it would only be an unobserved task exception.
+            }
         }
     }
 

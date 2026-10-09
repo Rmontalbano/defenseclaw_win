@@ -64,8 +64,9 @@ internal static class AuditTestDatabase
             transaction.Commit();
         }
 
-        // Pooled connections would keep the file locked and stop the scratch directory being removed.
-        SqliteConnection.ClearAllPools();
+        // A pooled connection (a product reader's, from an earlier test over the same path) would keep the file locked and stop the scratch
+        // directory being removed. Only this file's pools: ClearAllPools() would dispose a connection another test is taking from its own.
+        SqlitePools.Release(path);
     }
 
     private static SqliteConnection Open(string path)

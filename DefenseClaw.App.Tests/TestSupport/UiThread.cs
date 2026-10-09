@@ -72,11 +72,16 @@ internal static class UiThread
     /// Polls <paramref name="condition"/> (evaluated on the UI thread) from the calling thread until it holds. The
     /// UI thread stays free between polls, so async view-model work that resumes on its dispatcher can finish.
     /// </summary>
-    public static void WaitFor(Func<bool> condition, string what, int timeoutMilliseconds = 20_000)
+    /// <param name="timeoutMilliseconds">
+    /// How long to wait before calling it a hang. Null: <see cref="TestTimeouts.Ceiling"/>, a condition's bound on any machine this suite runs on
+    /// (it used to be 20 s, which a CI runner with both test projects and xunit's parallel classes on a few cores does not always meet). A test
+    /// that names a number is waiting for something it expects to be quick, and says so.
+    /// </param>
+    public static void WaitFor(Func<bool> condition, string what, int? timeoutMilliseconds = null)
     {
         ArgumentNullException.ThrowIfNull(condition);
 
-        var deadline = Environment.TickCount64 + timeoutMilliseconds;
+        var deadline = Environment.TickCount64 + (timeoutMilliseconds ?? (long)TestTimeouts.Ceiling.TotalMilliseconds);
         while (!Run(condition))
         {
             if (Environment.TickCount64 > deadline)

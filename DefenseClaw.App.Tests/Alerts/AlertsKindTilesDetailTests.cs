@@ -33,8 +33,20 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
     public void Dispose()
     {
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
+    }
+
+    /// <summary>
+    /// A panel over this class's database, initialized. A read of the queue that fails is traced and the panel carries on with an empty list,
+    /// which a test reads as "there were no findings" (it used to say only <c>Actual: []</c>), so this says why instead: it names the failure.
+    /// </summary>
+    private async Task<AlertsPanelViewModel> OpenAsync()
+    {
+        var vm = new AlertsPanelViewModel(_services);
+        await vm.InitializeAsync();
+        Assert.True(vm.LastQueueFailure is null, $"the alert queue could not be read: {vm.LastQueueFailure}");
+        return vm;
     }
 
     private static string[] Ids(AlertsPanelViewModel vm) => vm.Alerts.Select(a => a.Key).ToArray();
@@ -60,8 +72,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
 
             // Newest first; the quiet allowed decision is not an alert.
             Assert.Equal(new[] { "audit:egress-llm", "audit:egress-block", "block1", "scan1" }, Ids(vm));
@@ -94,8 +105,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
 
             vm.KindFilter = kind;
 
@@ -110,8 +120,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
 
             Assert.Equal(
                 new[] { "All kinds", "Blocks", "Audit", "Scans", "Egress" },
@@ -137,8 +146,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
             vm.SelectSeverityCommand.Execute(vm.Tiles[0]);
             vm.FilterText = "xx";
 
@@ -167,8 +175,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
             var critical = vm.Tiles[0];
             var high = vm.Tiles[1];
             Assert.Equal(new[] { "CRITICAL", "HIGH", "MEDIUM", "LOW" }, vm.Tiles.Select(t => t.Severity).ToArray());
@@ -205,8 +212,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
 
             vm.Accept(new AlertsFilter(AuditSeverity.High));
 
@@ -231,8 +237,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
             var row = vm.Alerts.Single();
 
             vm.SelectedAlert = row;
@@ -268,8 +273,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
             var row = vm.Alerts.Single();
             var reads = vm.DetailReader.ReadCount;
 
@@ -292,8 +296,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
             vm.DetailReader = new AlertDetailReader(broken);
             var row = vm.Alerts.Single();
 
@@ -315,8 +318,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
 
             vm.SelectedAlert = vm.Alerts[0];
             vm.SelectedAlert = vm.Alerts[1];
@@ -335,8 +337,7 @@ public sealed class AlertsKindTilesDetailTests : IDisposable
 
         StaThread.Run(async () =>
         {
-            var vm = new AlertsPanelViewModel(_services);
-            await vm.InitializeAsync();
+            var vm = await OpenAsync();
             Assert.False(vm.OpenAcknowledgeSelectionCommand.CanExecute(null));
 
             vm.NoteSelection(new[] { vm.Alerts[0] });
@@ -452,7 +453,7 @@ public sealed class AlertsEnrichedPanelTests
         finally
         {
             UiThread.Run(() => shell?.Dispose());
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(temp.Path);
         }
     }
 }

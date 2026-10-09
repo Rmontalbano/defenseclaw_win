@@ -24,7 +24,7 @@ public sealed class AuditPanelSnapshotTests : IDisposable
     public void Dispose()
     {
         _services?.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -36,7 +36,7 @@ public sealed class AuditPanelSnapshotTests : IDisposable
     private AuditPanelViewModel PanelOver(int rows)
     {
         AuditTestDatabase.Create(DbPath, rows, newest: _clock.GetUtcNow());
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _services = TestServices.Create(_temp);
         return new AuditPanelViewModel(_services) { TimeSource = _clock, ActionableOnly = false };
     }
@@ -61,7 +61,7 @@ public sealed class AuditPanelSnapshotTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(path);
     }
 
     private static string Big(int bytes) => new('d', bytes);

@@ -31,7 +31,7 @@ public sealed class AlertsPanelQueueTests : IDisposable
     public void Dispose()
     {
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -234,7 +234,7 @@ public sealed class AlertsPanelQueueTests : IDisposable
 
             Assert.Equal(new[] { "g1", "g2" }, Ids(vm));
             Assert.Contains("GET /alerts", vm.SourceNote, StringComparison.Ordinal);
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(temp.Path);
         });
     }
 
@@ -268,7 +268,7 @@ public sealed class AlertsPanelQueueTests : IDisposable
 
             // The database goes away (a reinstall): the queue says so, and the gateway's own list is shown again. Nothing of ours still
             // holds the file - the pooled connections and the change probe's kept one both let go.
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(_temp.Path);
             _services.AuditChanges.Release();
             File.Delete(_services.Paths.AuditDatabasePath);
             await vm.InitializeAsync();
@@ -491,10 +491,17 @@ public sealed class AlertsPanelQueueTests : IDisposable
 
             Finding("b", 2, "CRITICAL");
             await _services.AlertCounts.RefreshAsync();
-            var deadline = Environment.TickCount64 + 30_000;
+
+            // A condition, not a time: on a CI runner that took an hour over the suite this waited 30 s and gave up while the reads it was
+            // waiting for were still being retried (CUST-323). What it gave up on is named, so a failure explains itself.
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             while (vm.Alerts.Count < 2)
             {
-                Assert.True(Environment.TickCount64 < deadline, "The panel did not pick up the new finding when the counts changed.");
+                Assert.True(
+                    clock.Elapsed < TestTimeouts.Ceiling,
+                    "The panel did not pick up the new finding when the counts changed: " +
+                    $"rows={vm.Alerts.Count}, panel's last queue failure='{vm.LastQueueFailure}', " +
+                    $"counts={_services.AlertCounts.Current.Total} (unavailable: '{_services.AlertCounts.Unavailable}'), counts running={_services.AlertCounts.IsRunning}");
                 await Task.Delay(20);
             }
 

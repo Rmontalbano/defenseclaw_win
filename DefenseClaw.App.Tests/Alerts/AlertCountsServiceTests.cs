@@ -35,7 +35,7 @@ public sealed class AlertCountsServiceTests : IDisposable
             service.Dispose();
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -78,7 +78,7 @@ public sealed class AlertCountsServiceTests : IDisposable
 
         public async Task<AlertCountsChangedEventArgs> NextAsync()
         {
-            Assert.True(await _signal.WaitAsync(TimeSpan.FromSeconds(30)), "Changed was not raised.");
+            Assert.True(await _signal.WaitAsync(TestTimeouts.Ceiling), "Changed was not raised.");
             lock (_events)
             {
                 return _events[^1];
@@ -229,7 +229,7 @@ public sealed class AlertCountsServiceTests : IDisposable
 
         Assert.Equal(first.Counts.Tally, second.Counts.Tally);
         Assert.Equal("new", second.Counts.Newest[0].Id);
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
     }
 
     [Fact]
@@ -366,7 +366,7 @@ public sealed class AlertCountsServiceTests : IDisposable
         Assert.Equal(2, service.Current.Total);
 
         // Somebody replaces the database with junk (or it is mid-write): the read fails.
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         var good = File.ReadAllBytes(_database.Path);
         File.WriteAllBytes(_database.Path, Enumerable.Repeat((byte)0xFF, 8192).ToArray());
 
@@ -385,7 +385,7 @@ public sealed class AlertCountsServiceTests : IDisposable
         Assert.True(await recorder.QuietForAsync(TimeSpan.FromMilliseconds(300)));
 
         // The database comes back: the counts are current again, and that is news.
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         File.WriteAllBytes(_database.Path, good);
         await service.RefreshAsync();
         var recovered = await recorder.NextAsync();

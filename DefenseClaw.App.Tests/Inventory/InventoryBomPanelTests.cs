@@ -687,7 +687,7 @@ public class InventoryBomPanelTests
             if (components > 0)
             {
                 InventoryFixture.Create(_temp.File("inventory.db"), components);
-                SqliteConnection.ClearAllPools();
+                SqlitePools.Release(_temp.Path);
             }
 
             // A managed installation is read-only from the start (CUST-308); the scratch folder is the one its config.yaml is "found" in.
@@ -863,7 +863,7 @@ public class InventoryBomPanelTests
         {
             UiThread.Run(Shell.Dispose);
             Services.Dispose();
-            SqliteConnection.ClearAllPools();
+            SqlitePools.Release(_temp.Path);
             _temp.Dispose();
         }
     }

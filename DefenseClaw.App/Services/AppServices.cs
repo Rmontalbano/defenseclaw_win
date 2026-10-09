@@ -82,9 +82,11 @@ public sealed class AppServices : IDisposable
         Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
         RuntimeProbeRunner? runtimeProbeRunner = null,
         IDockerProbe? dockerProbe = null,
-        ITerraformProbe? terraformProbe = null)
+        ITerraformProbe? terraformProbe = null,
+        ReaderTimeouts? readerTimeouts = null)
     {
         Paths = startup.Paths;
+        ReaderTimeouts = readerTimeouts ?? ReaderTimeouts.Production;
 
         // What the installation is and whether it may be changed. Before anything that can run a command, because the runner reads it.
         Installation = new InstallationGuard(Paths.Installation, Paths.Runtime, startup.ResolveInstallation);
@@ -154,7 +156,7 @@ public sealed class AppServices : IDisposable
         Settings.Changed += OnSettingsChanged;
 
         Navigation = new ShellNavigation();
-        AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges);
+        AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges, readTimeout: ReaderTimeouts.AlertQueue);
         ConnectorScope = new ConnectorScope(Monitor);
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
 
@@ -187,6 +189,14 @@ public sealed class AppServices : IDisposable
     /// control consults, and <see cref="Cli"/> refuses every state-changing run while it is false. See <see cref="InstallationGuard"/>.
     /// </summary>
     internal InstallationGuard Installation { get; }
+
+    /// <summary>
+    /// How long a read of <c>audit.db</c> may run before the app gives up on it, by kind (<see cref="Core.Audit.ReaderTimeouts"/>). The app's own
+    /// composition always has <see cref="Core.Audit.ReaderTimeouts.Production"/>; only <see cref="CreateIsolated"/> can be handed others, so a
+    /// test over a slow machine is not told "nothing was there" because a read took longer than a person would wait. Every view-model that reads
+    /// the audit database takes its limit from here rather than writing a number of its own.
+    /// </summary>
+    internal ReaderTimeouts ReaderTimeouts { get; }
 
     public ConfigStore ConfigStore { get; }
 
@@ -447,6 +457,10 @@ public sealed class AppServices : IDisposable
     /// scratch data directory and a runner that resolves no executable. Production code uses
     /// <see cref="Initialize"/>, whose defaults are unchanged.
     /// </summary>
+    /// <param name="readerTimeouts">
+    /// How long the audit readers may run (<see cref="ReaderTimeouts"/>); null keeps the app's own limits. A test suite passes its ceiling
+    /// (<c>TestServices.ReaderTimeouts</c>), because on a busy machine a read can wait longer for a thread than the app would ever let it.
+    /// </param>
     internal static AppServices CreateIsolated(
         DefenseClawPaths paths,
         string? claudeSettingsPath = null,
@@ -455,7 +469,8 @@ public sealed class AppServices : IDisposable
         Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
         RuntimeProbeRunner? runtimeProbeRunner = null,
         IDockerProbe? dockerProbe = null,
-        ITerraformProbe? terraformProbe = null)
+        ITerraformProbe? terraformProbe = null,
+        ReaderTimeouts? readerTimeouts = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -472,7 +487,9 @@ public sealed class AppServices : IDisposable
         dockerProbe ??= new FixedDockerProbe(new DockerStatus(DockerState.NotInstalled, "Docker is not looked at in an isolated composition.", Array.Empty<string>()));
         // Likewise the Terraform look would start the real terraform: an isolated composition answers "not installed" unless a test supplies a probe.
         terraformProbe ??= new FixedTerraformProbe(new TerraformStatus(TerraformState.NotInstalled, "Terraform is not looked at in an isolated composition.", string.Empty, string.Empty));
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe);
+        // Unlike those, the read limits stay the app's own unless a test says otherwise: they are not about reaching the real install. A test
+        // suite on a machine that can be arbitrarily busy passes its ceiling (TestServices).
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>

@@ -29,9 +29,16 @@ public sealed class AuditArchiveSourceTests : IDisposable
     public void Dispose()
     {
         _services.Dispose();
-        SqliteConnection.ClearAllPools();
+        ReleasePools();
         _live.Dispose();
         _archiveDir.Dispose();
+    }
+
+    /// <summary>Lets go of whatever the live database's readers (and the archive's) left in the pools, for these two folders only.</summary>
+    private void ReleasePools()
+    {
+        SqlitePools.Release(_live.Path);
+        SqlitePools.Release(_archiveDir.Path);
     }
 
     private string ArchivePath => Path.Combine(_archiveDir.Path, "audit-2026-03-02.db");
@@ -48,7 +55,7 @@ public sealed class AuditArchiveSourceTests : IDisposable
             _ = command.ExecuteNonQuery();
         }
 
-        SqliteConnection.ClearAllPools();
+        ReleasePools();
         return ArchivePath;
     }
 
@@ -373,7 +380,7 @@ public sealed class AuditArchiveSourceTests : IDisposable
         panel.ExportPathPicker = () => exported;
         panel.ExportCommand.Execute(null);
         await panel.LastExport;
-        SqliteConnection.ClearAllPools();
+        ReleasePools();
 
         var after = ArchiveFolder();
         Assert.DoesNotContain(after, name => name.EndsWith("-wal", StringComparison.Ordinal)

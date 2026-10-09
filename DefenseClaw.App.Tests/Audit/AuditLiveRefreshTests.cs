@@ -26,7 +26,7 @@ public sealed class AuditLiveRefreshTests : IDisposable
     public void Dispose()
     {
         _services?.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -42,7 +42,7 @@ public sealed class AuditLiveRefreshTests : IDisposable
     private async Task<AuditPanelViewModel> OpenAsync(int quiet, bool actionableOnly = true)
     {
         AuditTestDatabase.Create(DbPath, quiet, newest: _clock.GetUtcNow());
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _services = TestServices.Create(_temp);
         var panel = new AuditPanelViewModel(_services) { TimeSource = _clock, LiveTimerEnabled = false, ActionableOnly = actionableOnly };
         panel.SetActive(true);
@@ -252,7 +252,7 @@ public sealed class AuditLiveRefreshTests : IDisposable
     public async Task The_platform_only_view_takes_only_platform_rows()
     {
         AuditTestDatabase.Create(DbPath, 6, connectorFor: i => i % 2 == 0 ? null : "claudecode", newest: _clock.GetUtcNow());
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _services = TestServices.Create(_temp);
         var panel = new AuditPanelViewModel(_services) { TimeSource = _clock, LiveTimerEnabled = false, ActionableOnly = false, SelectedConnector = ConnectorOption.PlatformOnlyOption };
         panel.SetActive(true);
@@ -440,7 +440,7 @@ public sealed class AuditLiveRefreshTests : IDisposable
 
         // The gateway records its first events.
         AuditTestDatabase.Create(DbPath, 7, newest: _clock.GetUtcNow());
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         await panel.PollLiveAsync();
 
         Assert.Equal(7, panel.Rows.Count);

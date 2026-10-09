@@ -23,7 +23,7 @@ public sealed class AuditActionableTests : IDisposable
     public void Dispose()
     {
         _services?.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _temp.Dispose();
     }
 
@@ -35,7 +35,7 @@ public sealed class AuditActionableTests : IDisposable
     private AuditPanelViewModel PanelOver(int quiet)
     {
         AuditTestDatabase.Create(DbPath, quiet, newest: _clock.GetUtcNow());
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_temp.Path);
         _services = TestServices.Create(_temp);
         return new AuditPanelViewModel(_services) { TimeSource = _clock, LiveTimerEnabled = false };
     }

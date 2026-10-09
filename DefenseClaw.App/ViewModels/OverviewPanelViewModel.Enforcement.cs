@@ -25,7 +25,8 @@ public sealed partial class OverviewPanelViewModel
     /// <summary>How soon the next read follows one that did not finish the first block scan; only until the tally has caught up once.</summary>
     internal static readonly TimeSpan MetricsCatchUpInterval = TimeSpan.FromSeconds(2);
 
-    private static readonly TimeSpan MetricsTimeout = TimeSpan.FromSeconds(5);
+    /// <summary>How long one totals read may run before the tiles say audit.db did not answer (5 s; see <see cref="AppServices.ReaderTimeouts"/>).</summary>
+    private TimeSpan MetricsTimeout => Services.ReaderTimeouts.HookTotals;
 
     /// <summary>"Updated just now" until a read is this old; after that the age is spelled out.</summary>
     private static readonly TimeSpan JustNow = TimeSpan.FromSeconds(10);

@@ -319,7 +319,7 @@ public class TrayFlyoutViewModelTests
     public void A_database_that_cannot_be_read_is_unavailable_not_zero()
     {
         using var scene = new FlyoutScene();
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(scene.AuditPath);
         File.WriteAllText(scene.AuditPath, "this is not a database");
         var viewModel = UiThread.Run(() => Create(scene));
 

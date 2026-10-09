@@ -64,7 +64,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
 
         try
         {
-            var count = await EgressReader.CountSilentBypassAsync(DateTimeOffset.UtcNow, timeout: TimeSpan.FromSeconds(5), cancellationToken: cancellationToken).ConfigureAwait(true);
+            var count = await EgressReader.CountSilentBypassAsync(DateTimeOffset.UtcNow, timeout: Services.ReaderTimeouts.HookTotals, cancellationToken: cancellationToken).ConfigureAwait(true);
             if (count != _silentBypass)
             {
                 _silentBypass = count;

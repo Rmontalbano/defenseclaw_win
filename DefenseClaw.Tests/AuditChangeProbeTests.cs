@@ -67,7 +67,7 @@ public sealed class AuditChangeProbeTests : IDisposable
     public void A_file_that_is_not_a_database_is_unknown_not_a_crash()
     {
         // The fixture's pooled writer would hold the file open; let it go so the file can be overwritten.
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_database.Path);
         File.WriteAllText(_database.Path, "this is not a sqlite database, just text that is long enough to be a page header of nothing");
         using var probe = Probe();
 
@@ -203,7 +203,7 @@ public sealed class AuditChangeProbeTests : IDisposable
         Assert.False(probe.IsOpen);
 
         // The kept connection is gone, so the file can be renamed (a Windows handle without share-delete would refuse).
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_database.Path);
         File.Move(_database.Path, _database.Path + ".moved");
         File.Move(_database.Path + ".moved", _database.Path);
     }

@@ -35,8 +35,8 @@ public sealed partial class AuditPanelViewModel
     /// <summary>The most events one export writes (the reader's page cap); the note says so when more match.</summary>
     public const int ExportCap = AuditQuery.MaxLimit;
 
-    /// <summary>How long the inspector's correlation queries may run before the section says it gave up.</summary>
-    private static readonly TimeSpan CorrelationTimeout = TimeSpan.FromSeconds(8);
+    /// <summary>How long the inspector's correlation queries may run before the section says it gave up (8 s; see <see cref="AppServices.ReaderTimeouts"/>).</summary>
+    private TimeSpan CorrelationTimeout => Services.ReaderTimeouts.Audit;
 
     private static readonly string[] PresetNames = { PresetAll, PresetRisk, PresetBlocks, PresetScans, PresetCredentials };
 

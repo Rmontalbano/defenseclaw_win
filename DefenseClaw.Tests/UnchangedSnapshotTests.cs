@@ -322,7 +322,7 @@ public sealed class UnchangedSnapshotTests : IDisposable
             Add("e" + i);
         }
 
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_database.Path);
         var directory = Path.GetDirectoryName(_database.Path)!;
         var files = Directory.GetFiles(directory).OrderBy(f => f, StringComparer.Ordinal).ToArray();
         var hash = Hash(_database.Path);

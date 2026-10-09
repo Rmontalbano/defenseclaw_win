@@ -1,5 +1,6 @@
 using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Tests.TestSupport;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.Tests;
@@ -17,7 +18,7 @@ public sealed class JudgeHistoryReaderTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePools.Release(_dir);
         try
         {
             Directory.Delete(_dir, recursive: true);

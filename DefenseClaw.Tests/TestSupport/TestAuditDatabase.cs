@@ -53,11 +53,7 @@ public sealed class TestAuditDatabase : IDisposable
 
     public SqliteConnection OpenWritable()
     {
-        var connection = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = Path,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-        }.ToString());
+        var connection = new SqliteConnection(SqlitePools.WritableConnectionString(Path));
 
         connection.Open();
         return connection;
@@ -120,9 +116,9 @@ public sealed class TestAuditDatabase : IDisposable
 
     public void Dispose()
     {
-        // Microsoft.Data.Sqlite pools connections; without this the file stays locked and
-        // the temp directory cannot be removed.
-        SqliteConnection.ClearAllPools();
+        // Microsoft.Data.Sqlite pools connections; without this the file stays locked and the temp directory cannot be removed. Only this
+        // database's pools are cleared: ClearAllPools() would also dispose a connection another test's reader is taking from its pool.
+        SqlitePools.Release(_directory.Path);
         _directory.Dispose();
     }
 }
