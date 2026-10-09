@@ -300,6 +300,14 @@
 
                                         <Border Style="{StaticResource DcChip}"
                                                 Margin="0,0,8,0"
+                                                ToolTip="This app typed a secret at the command’s hidden prompt, in a pseudo-console. Its value is never recorded."
+                                                AutomationProperties.Name="A secret was typed at the command’s hidden prompt"
+                                                Visibility="{Binding UsedPromptSecret, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="typed secret" />
+                                        </Border>
+
+                                        <Border Style="{StaticResource DcChip}"
+                                                Margin="0,0,8,0"
                                                 ToolTip="{Binding EnvironmentText, StringFormat='{}{0} (set in this run’s environment only; values are never recorded)'}"
                                                 AutomationProperties.Name="{Binding EnvironmentText, StringFormat='Secret supplied by environment: {0}'}"
                                                 Visibility="{Binding UsedEnvironmentSecret, Converter={StaticResource BoolToVisibility}}">

@@ -124,7 +124,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         _terraform = services.Terraform;
 
         Review = new DiscoverActionReview(services);
-        Credentials = new CredentialsViewModel(services);
+        Credentials = new CredentialsViewModel(services, review: Review);
         Readiness = new ReadinessViewModel(services, Credentials, Review);
         Routing = new NotificationRoutingViewModel(services);
         Batch = new ConnectorBatchViewModel(services, applied: _ => RefreshAsync());
@@ -133,7 +133,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         Credentials.Loaded += (_, _) => Readiness.Rebuild();
     }
 
-    /// <summary>The Credentials card (<c>keys list --json</c>, <c>keys check</c>, the terminal route for <c>keys set</c>).</summary>
+    /// <summary>The Credentials card (<c>keys list --json</c>, <c>keys check</c>, <c>keys set</c> typed in the app or in a console window).</summary>
     public CredentialsViewModel Credentials { get; }
 
     /// <summary>The readiness checklist with a Fix per failing row.</summary>
@@ -350,6 +350,9 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
     protected override void OnDeactivated()
     {
+        // A value typed into a credential's box is not left waiting while the page is away.
+        Credentials.CancelEntries();
+
         _catalog.DefinitionChanged -= OnDefinitionChanged;
         Services.Monitor.StateChanged -= OnGatewayStateChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;

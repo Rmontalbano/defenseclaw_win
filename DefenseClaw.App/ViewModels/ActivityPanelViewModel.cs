@@ -597,6 +597,12 @@ public sealed partial class ActivityRow : ObservableObject
     /// <summary><c>env: NAME=•••</c> for the chip's tooltip; never a value.</summary>
     public string EnvironmentText => Invocation.EnvironmentDisplay;
 
+    /// <summary>
+    /// True when this app typed a secret at the command's hidden prompt, in a pseudo-console (<see cref="CliInvocation.UsedPromptSecret"/>,
+    /// CUST-221). The value is on no command line and in no line of the output; the run cannot be run again from here.
+    /// </summary>
+    public bool UsedPromptSecret => Invocation.UsedPromptSecret;
+
     public string TierHelp { get; }
 
     /// <summary>
@@ -951,6 +957,11 @@ public sealed partial class ActivityRow : ObservableObject
         if (invocation.UsedStdinSecret)
         {
             _ = builder.AppendLine("Stdin:    a secret was piped in on stdin; its value is never recorded");
+        }
+
+        if (invocation.UsedPromptSecret)
+        {
+            _ = builder.AppendLine("Prompt:   a secret was typed at the command's hidden prompt by this app; its value is never recorded");
         }
 
         if (invocation.EnvironmentNames.Count > 0)

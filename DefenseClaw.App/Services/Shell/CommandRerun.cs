@@ -118,7 +118,7 @@ internal sealed class CommandRerun
             return RerunAvailability.No("Only DefenseClaw commands can be run again from here.");
         }
 
-        if (invocation.UsedStdinSecret || invocation.EnvironmentNames.Count > 0)
+        if (invocation.UsedStdinSecret || invocation.UsedPromptSecret || invocation.EnvironmentNames.Count > 0)
         {
             return RerunAvailability.No("A secret was supplied to this run and the app never keeps it, so it cannot be run again from here.");
         }

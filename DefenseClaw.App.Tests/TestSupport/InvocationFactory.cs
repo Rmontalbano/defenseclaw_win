@@ -34,6 +34,8 @@ internal static class InvocationFactory
 
     private static readonly PropertyInfo UsedStdinSecret = Property(nameof(CliInvocation.UsedStdinSecret));
 
+    private static readonly PropertyInfo UsedPromptSecret = Property(nameof(CliInvocation.UsedPromptSecret));
+
     private static readonly PropertyInfo SurvivesShutdown = Property(nameof(CliInvocation.SurvivesShutdown));
 
     private static readonly PropertyInfo CancelRequested = Property(nameof(CliInvocation.CancelRequested));
@@ -82,6 +84,9 @@ internal static class InvocationFactory
 
     /// <summary>Marks the run as having been given a secret on stdin (the secret itself is never recorded).</summary>
     public static void UseStdinSecret(CliInvocation invocation) => UsedStdinSecret.SetValue(invocation, true);
+
+    /// <summary>Marks the run as one whose secret the app typed at the command's hidden prompt in a pseudo-console (the secret itself is never recorded).</summary>
+    public static void UsePromptSecret(CliInvocation invocation) => UsedPromptSecret.SetValue(invocation, true);
 
     /// <summary>Marks the run as one that outlives the app (the upgrade installer).</summary>
     public static void SurviveShutdown(CliInvocation invocation) => SurvivesShutdown.SetValue(invocation, true);

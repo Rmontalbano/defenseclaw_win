@@ -472,7 +472,10 @@
 
                 <!--
                     Credentials: `defenseclaw keys list` as JSON, names and set/unset only (the CLI prints no value). Setting a value needs the
-                    CLI's hidden console prompt, which reads the console and not stdin, so Set opens a console window running the exact command.
+                    CLI's hidden console prompt, which reads the console and not stdin. Set opens a masked box under the row; Review shows the
+                    exact command with the value masked; the confirmed run types the value at the prompt in a pseudo-console (CUST-221). Where the
+                    app cannot do that (Windows before 10 1809, a container runtime, or a run that failed) Set opens a console window running the
+                    exact command, as before; the small console button on each row is always that.
                 -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>
@@ -539,7 +542,7 @@
                                     <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
                                     <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
                                     <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
-                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="80" />
+                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="130" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Style="{StaticResource DcStatusText}" Text="Env" />
                                 <TextBlock Grid.Column="1" Style="{StaticResource DcStatusText}" Text="Feature" />
@@ -556,6 +559,7 @@
                                                 Style="{StaticResource DcSubtleRow}"
                                                 ToolTip="{Binding Description}"
                                                 AutomationProperties.Name="{Binding RowAutomationName}">
+                                            <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition SharedSizeGroup="CredEnv" Width="Auto" MinWidth="200" />
@@ -563,7 +567,7 @@
                                                     <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
                                                     <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
                                                     <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
-                                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="80" />
+                                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="130" />
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextMono}" Text="{Binding EnvName}" />
                                                 <TextBlock Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellText}" Text="{Binding Feature}" />
@@ -573,13 +577,68 @@
                                                         Style="{StaticResource DcBadge}" Tag="{Binding SetKey}">
                                                     <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SetText}" />
                                                 </Border>
-                                                <ui:Button Grid.Column="5"
-                                                           Content="Set…"
-                                                           Command="{Binding SetInTerminalCommand}"
-                                                           ToolTipService.ShowOnDisabled="True"
-                                                           ToolTip="{Binding SetToolTip}"
-                                                           AutomationProperties.Name="{Binding SetAutomationName}" />
+                                                <StackPanel Grid.Column="5" Orientation="Horizontal">
+                                                    <!-- Set: the masked box below where the app can type the value itself, a console window where it cannot. -->
+                                                    <ui:Button Content="Set…"
+                                                               Command="{Binding SetCommand}"
+                                                               ToolTipService.ShowOnDisabled="True"
+                                                               ToolTip="{Binding SetButtonToolTip}"
+                                                               AutomationProperties.Name="{Binding SetButtonAutomationName}" />
+                                                    <!-- Always the console: the exact command in a window the operator types into. Drawn beside Set only while Set does not already do that. -->
+                                                    <ui:Button Margin="6,0,0,0"
+                                                               Icon="{ctl:DcSymbolIcon WindowConsole20}"
+                                                               Command="{Binding SetInTerminalCommand}"
+                                                               ToolTipService.ShowOnDisabled="True"
+                                                               ToolTip="{Binding SetToolTip}"
+                                                               AutomationProperties.Name="{Binding SetAutomationName}"
+                                                               Visibility="{Binding ShowTerminalButton, Converter={StaticResource BoolToVisibility}}" />
+                                                </StackPanel>
                                             </Grid>
+
+                                            <!-- The masked box (CUST-221). The value is handed to the row as a SecureString by CredentialEntryBox, never bound. -->
+                                            <StackPanel Margin="0,10,0,4"
+                                                        Visibility="{Binding ShowEditor, Converter={StaticResource BoolToVisibility}}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <PasswordBox Width="420"
+                                                                 panels:CredentialEntryBox.Attach="True"
+                                                                 AutomationProperties.Name="{Binding EntryAutomationName}"
+                                                                 AutomationProperties.HelpText="{Binding EntryStatus}"
+                                                                 ToolTip="Typed here and handed to the CLI’s hidden prompt for one run. Never on a command line, never in Activity.">
+                                                        <!-- Enter goes on to the review (which shows the command and asks), Esc closes the box. -->
+                                                        <PasswordBox.InputBindings>
+                                                            <KeyBinding Key="Return" Command="{Binding ReviewCommand}" />
+                                                            <KeyBinding Key="Escape" Command="{Binding CancelEntryCommand}" />
+                                                        </PasswordBox.InputBindings>
+                                                    </PasswordBox>
+                                                    <ui:Button Margin="8,0,0,0"
+                                                               Content="Review…"
+                                                               Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                                               Command="{Binding ReviewCommand}"
+                                                               ToolTipService.ShowOnDisabled="True"
+                                                               ToolTip="{Binding ReviewToolTip}"
+                                                               AutomationProperties.Name="{Binding ReviewAutomationName}" />
+                                                    <ui:Button Margin="8,0,0,0"
+                                                               Appearance="Secondary"
+                                                               Content="Cancel"
+                                                               Command="{Binding CancelEntryCommand}"
+                                                               ToolTip="Close the box and forget what was typed"
+                                                               AutomationProperties.Name="{Binding CancelAutomationName}" />
+                                                </StackPanel>
+                                                <TextBlock Margin="0,6,0,0"
+                                                           Style="{StaticResource DcToneText}"
+                                                           Tag="Bad"
+                                                           TextWrapping="Wrap"
+                                                           AutomationProperties.LiveSetting="Assertive"
+                                                           Visibility="{Binding HasEntryProblem, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding EntryProblem}" />
+                                                <TextBlock Margin="0,6,0,0"
+                                                           Style="{StaticResource DcCaption}"
+                                                           TextWrapping="Wrap"
+                                                           AutomationProperties.LiveSetting="Polite"
+                                                           Visibility="{Binding HasEntryProblem, Converter={StaticResource InverseBoolToVisibility}}"
+                                                           Text="{Binding EntryStatus}" />
+                                            </StackPanel>
+                                            </StackPanel>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -597,13 +656,39 @@
                                        Command="{Binding Credentials.CheckCommand}"
                                        ToolTip="Run defenseclaw keys check (read-only): exits non-zero when a required key is missing"
                                        AutomationProperties.Name="Check required credentials" />
+                            <!-- Where the app can type values, this opens a masked box on every required credential that is unset; otherwise a console window. -->
                             <ui:Button Content="Fill missing…"
+                                       Icon="{ctl:DcSymbolIcon Key24}"
+                                       Command="{Binding Credentials.BeginFillCommand}"
+                                       IsEnabled="{Binding Credentials.CanChange}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding Credentials.FillMissingButtonToolTip}"
+                                       AutomationProperties.Name="{Binding Credentials.FillMissingAutomationName}" />
+                            <ui:Button Content="Fill missing in a terminal"
                                        Icon="{ctl:DcSymbolIcon WindowConsole20}"
                                        Command="{Binding Credentials.OpenFillMissingInTerminalCommand}"
                                        IsEnabled="{Binding Credentials.CanChange}"
                                        ToolTipService.ShowOnDisabled="True"
                                        ToolTip="{Binding Credentials.FillMissingToolTip}"
+                                       Visibility="{Binding Credentials.ShowFillTerminalButton, Converter={StaticResource BoolToVisibility}}"
                                        AutomationProperties.Name="Fill missing credentials in a terminal" />
+                        </WrapPanel>
+
+                        <!-- Fill missing is open: the boxes of the credentials that are unset are showing; one review stores what was typed. -->
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}"
+                                   Margin="0,4,0,0"
+                                   Visibility="{Binding Credentials.IsFilling, Converter={StaticResource BoolToVisibility}}">
+                            <ui:Button Content="{Binding Credentials.FillReviewText}"
+                                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                       Command="{Binding Credentials.ReviewFillCommand}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding Credentials.FillReviewToolTip}"
+                                       AutomationProperties.Name="Review the commands that store the values typed" />
+                            <ui:Button Appearance="Secondary"
+                                       Content="Cancel"
+                                       Command="{Binding Credentials.CancelFillCommand}"
+                                       ToolTip="Close the boxes and forget what was typed"
+                                       AutomationProperties.Name="Cancel Fill missing" />
                         </WrapPanel>
 
                         <TextBlock Margin="0,8,0,0"
@@ -615,7 +700,7 @@
                         <TextBlock Margin="0,4,0,0"
                                    Style="{StaticResource DcCaption}"
                                    TextWrapping="Wrap"
-                                   Text="Values are never shown or passed through this app. The CLI reads them at a hidden console prompt, so Set and Fill missing open a console window; this list refreshes when you come back." />
+                                   Text="{Binding Credentials.FooterText}" />
                     </StackPanel>
                 </Border>
 

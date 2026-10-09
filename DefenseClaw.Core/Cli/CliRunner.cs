@@ -339,7 +339,7 @@ public sealed record CliRunOptions
 /// <see cref="CliRunOptions"/> for the presets and <see cref="Shutdown"/> for what survival means.
 /// </para>
 /// </summary>
-public sealed class CliRunner : IDisposable
+public sealed partial class CliRunner : IDisposable
 {
     /// <summary>
     /// Ceiling applied to a run that names none: 120 s.

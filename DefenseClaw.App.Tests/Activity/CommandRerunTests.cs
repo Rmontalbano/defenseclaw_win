@@ -114,7 +114,11 @@ public sealed class CommandRerunTests : IDisposable
         var inEnvironment = Finished(Cli, 0, "setup", "splunk", "--accelerator");
         InvocationFactory.UseEnvironmentSecret(inEnvironment, "SPLUNK_ACCESS_TOKEN");
 
-        foreach (var entry in new[] { onStdin, inEnvironment })
+        // Typed at the command's hidden prompt in a pseudo-console (CUST-221): the same rule.
+        var typedAtPrompt = Finished(Cli, 0, "keys", "set", "OPENAI_API_KEY");
+        InvocationFactory.UsePromptSecret(typedAtPrompt);
+
+        foreach (var entry in new[] { onStdin, inEnvironment, typedAtPrompt })
         {
             var state = CommandRerun.StateOf(entry);
             Assert.False(state.Offered);

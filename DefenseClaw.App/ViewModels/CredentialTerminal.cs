@@ -12,7 +12,8 @@ namespace DefenseClaw.App.ViewModels;
 public sealed record CredentialTerminalResult(bool Started, string Message, string? ExecutablePath);
 
 /// <summary>
-/// The interim route for <c>keys set NAME</c> and <c>keys fill-missing</c> (CUST-266; the in-app route is CUST-221's pseudo-console).
+/// The console route for <c>keys set NAME</c> and <c>keys fill-missing</c> (CUST-266): the fallback of the Credentials card's in-app route (CUST-221's
+/// pseudo-console, <see cref="DefenseClaw.Core.Cli.SecretPtyRunner"/>), used where the app cannot type the value itself and whenever the operator presses the console button.
 /// <para>
 /// Both read the secret with <c>click.prompt(hide_input=True)</c>, which on Windows is <c>getpass</c> and reads the console input
 /// buffer, not stdin: a piped value hangs. So the app hands the exact command to a console window the operator types into. The value never

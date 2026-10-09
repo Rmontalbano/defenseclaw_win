@@ -94,6 +94,9 @@ public sealed class ArgvContractTests
             string.Join('\u001f', OverviewPanelViewModel.StatusArgv),
             string.Join('\u001f', ObservabilityPlanReader.Argv),
             string.Join('\u001f', CredentialsViewModel.ListArgv),
+            // the Credentials card's own write (CUST-221): `keys set NAME`, whose value is typed at its prompt and is never an argument
+            // (its console route's `keys fill-missing --yes` is the Overview's FillMissingKeysArgv below)
+            string.Join('\u001f', DefenseClaw.Core.Cli.SecretPtyRunner.SetKeyArgv("SOME_KEY")),
             string.Join('\u001f', OverviewPanelViewModel.DoctorArgv),
             string.Join('\u001f', new[] { "doctor", "--fix", "--dry-run" }),
             string.Join('\u001f', new[] { "doctor", "--fix", "--yes" }),
@@ -162,7 +165,7 @@ public sealed class ArgvContractTests
         Assert.Null(Check(argv));
     }
 
-    /// <summary>What the Overview runs that 0.8.10 has as well: the installed runtime is the default, and these must work on it unchanged.</summary>
+    /// <summary>What the Overview and the Credentials card run that 0.8.10 has as well: the installed runtime is the default, and these must work on it unchanged.</summary>
     public static TheoryData<string> Overview0810Argvs =>
         new()
         {
@@ -173,6 +176,11 @@ public sealed class ArgvContractTests
             string.Join('\u001f', OverviewPanelViewModel.FillMissingKeysArgv),
             string.Join('\u001f', new[] { "policy", "list" }),
             string.Join('\u001f', OverviewPanelViewModel.StatusArgv),
+
+            // the Credentials card (CUST-221), which 0.8.10 has: the read, the check and the store (its console route's fill-missing is the Overview's, above)
+            string.Join('\u001f', CredentialsViewModel.ListArgv),
+            string.Join('\u001f', CredentialsViewModel.CheckArgv),
+            string.Join('\u001f', DefenseClaw.Core.Cli.SecretPtyRunner.SetKeyArgv("SOME_KEY")),
         };
 
     [Theory]

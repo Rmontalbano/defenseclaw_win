@@ -506,6 +506,12 @@ public class ActivityCardListTests
                 {
                     InvocationFactory.UseEnvironmentSecret(invocation, "DEFENSECLAW_TOKEN", "DEFENSECLAW_API_KEY");
                 }
+
+                // A value typed at the command's hidden prompt (CUST-221): its own chip, and it must not follow a recycled card to another entry.
+                if (i % 5 == 0)
+                {
+                    InvocationFactory.UsePromptSecret(invocation);
+                }
             });
 
             // Destructive, state-changing and read-only entries, some failed, one still running: the badge texts differ.
@@ -1111,6 +1117,7 @@ public class ActivityCardListTests
             Assert.Equal(row.ExitBadgeText, VisualTree.Descendants<TextBlock>(card).First(t => t.Text == row.ExitBadgeText).Text);
             Assert.Equal(row.UsedEnvironmentSecret, Chip(card, "env secret").IsVisible);
             Assert.Equal(row.UsedStdinSecret, Chip(card, "stdin secret").IsVisible);
+            Assert.Equal(row.UsedPromptSecret, Chip(card, "typed secret").IsVisible);
             Assert.Same(row.CopyOutputCommand, ButtonIn(card, "Copy output").Command);
 
             var expander = VisualTree.Find<Expander>(card)!;

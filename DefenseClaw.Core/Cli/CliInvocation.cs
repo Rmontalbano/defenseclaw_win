@@ -198,6 +198,14 @@ public sealed class CliInvocation
     /// <summary>True when a secret was piped in on stdin. The secret itself is never stored.</summary>
     public bool UsedStdinSecret { get; internal set; }
 
+    /// <summary>
+    /// True when this app typed a secret at the command's hidden prompt, in a pseudo-console (<see cref="SecretPtyRunner"/>: <c>keys set</c>,
+    /// whose prompt reads the console and so cannot be given a piped value). The value is on no command line and in no transcript line, and
+    /// the app does not keep it, so such an entry cannot be run again from Activity (<see cref="UsedStdinSecret"/> is the same rule for a
+    /// piped one).
+    /// </summary>
+    public bool UsedPromptSecret { get; internal set; }
+
     private int _processId;
 
     /// <summary>
@@ -439,6 +447,7 @@ public sealed class CliInvocation
             ExitCode = ExitCode,
             FailureReason = FailureReason,
             UsedStdinSecret = UsedStdinSecret,
+            UsedPromptSecret = UsedPromptSecret,
             EnvironmentNames = EnvironmentNames,
             SurvivesShutdown = SurvivesShutdown,
             CancelRequested = CancelRequested,

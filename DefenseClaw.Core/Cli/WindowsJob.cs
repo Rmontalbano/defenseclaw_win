@@ -130,6 +130,19 @@ public sealed class WindowsJob : IDisposable
         }
     }
 
+    /// <summary>
+    /// <see cref="TryAssign(Process)"/> for a child its starter holds the handle of and created <b>suspended</b> (<see cref="PseudoConsole"/>
+    /// does): it joins the job before it runs a single instruction, so nothing it starts can be outside it - the launch window described on
+    /// this type does not exist for such a child.
+    /// </summary>
+    internal bool TryAssign(IntPtr processHandle)
+    {
+        lock (_gate)
+        {
+            return _job != IntPtr.Zero && processHandle != IntPtr.Zero && AssignProcessToJobObject(_job, processHandle);
+        }
+    }
+
     /// <summary>Ends every process in the job at once. False if the job is closed or the call failed.</summary>
     public bool Terminate(uint exitCode = 130)
     {

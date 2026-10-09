@@ -9,21 +9,34 @@ using DefenseClaw.Core.Time;
 
 namespace DefenseClaw.App.ViewModels;
 
-/// <summary>One credential row as the card shows it: names and states only, never a value.</summary>
-public sealed class CredentialRowViewModel : ObservableObject
+/// <summary>
+/// One credential row as the card shows it: names and states only, never a value - except while the operator is typing one into the row's own
+/// masked box (<c>CredentialRowViewModel.Entry.cs</c>), where it is held as a <see cref="System.Security.SecureString"/> until the run has used it.
+/// </summary>
+public sealed partial class CredentialRowViewModel : ObservableObject
 {
     private readonly Action<CredentialRowViewModel>? _setInTerminal;
     private readonly Func<string?>? _installationBlockedReason;
+    private readonly CredentialsViewModel? _owner;
 
     /// <param name="row">What <c>keys list</c> said about one variable.</param>
-    /// <param name="setInTerminal">What the Set button does.</param>
+    /// <param name="setInTerminal">What the console button does (and what Set does where the app cannot type the value itself).</param>
     /// <param name="installationBlockedReason">Why nothing may be changed on this installation right now (managed or invalid); null, or one that answers null, means it may.</param>
-    internal CredentialRowViewModel(CredentialRow row, Action<CredentialRowViewModel>? setInTerminal, Func<string?>? installationBlockedReason = null)
+    /// <param name="owner">The card, which knows whether the app can type a value itself (CUST-221) and runs the review; null is a row that only opens a console, as before.</param>
+    internal CredentialRowViewModel(
+        CredentialRow row,
+        Action<CredentialRowViewModel>? setInTerminal,
+        Func<string?>? installationBlockedReason = null,
+        CredentialsViewModel? owner = null)
     {
         Row = row;
         _setInTerminal = setInTerminal;
         _installationBlockedReason = installationBlockedReason;
+        _owner = owner;
         SetInTerminalCommand = new RelayCommand(() => _setInTerminal?.Invoke(this), () => CanSet);
+        SetCommand = new RelayCommand(OnSet, () => CanSet);
+        ReviewCommand = new RelayCommand(() => _owner?.ReviewSet(this), () => CanReview);
+        CancelEntryCommand = new RelayCommand(CancelEntry);
     }
 
     /// <summary>The installation turned read-only (or writable): the Set button and its tooltip are drawn again.</summary>
@@ -32,9 +45,10 @@ public sealed class CredentialRowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanSet));
         OnPropertyChanged(nameof(SetToolTip));
         SetInTerminalCommand.NotifyCanExecuteChanged();
+        RefreshEntryState();
     }
 
-    /// <summary>The Set button's tooltip: what it opens, or why it cannot (a read-only installation).</summary>
+    /// <summary>The console button's tooltip: what it opens, or why it cannot (a read-only installation).</summary>
     public string SetToolTip => _installationBlockedReason?.Invoke() ??
         $"Opens a console window running {SetCommandText}; the value is typed there, never here";
 
@@ -78,26 +92,37 @@ public sealed class CredentialRowViewModel : ObservableObject
     public string RowAutomationName =>
         $"{Row.EnvName}, {Row.Feature}, {Requirement}, source {Source}, {SetText}";
 
+    /// <summary>The console route: opens a console window running the exact command. Always there, and the fallback of <see cref="SetCommand"/>.</summary>
     public IRelayCommand SetInTerminalCommand { get; }
 }
 
 /// <summary>
-/// The Setup panel's Credentials card (CUST-266): <c>defenseclaw keys list --json</c> as a table (env / feature / requirement / source /
-/// set), the missing-required count, <c>keys check</c>, and the terminal route for <c>keys set</c> and <c>keys fill-missing</c>.
+/// The Setup panel's Credentials card (CUST-266, CUST-221): <c>defenseclaw keys list --json</c> as a table (env / feature / requirement /
+/// source / set), the missing-required count, <c>keys check</c>, and <c>keys set</c> / fill missing - typed in the app, or in a console window.
 /// <para>
 /// <b>Reads only names.</b> <c>keys list --json</c> prints a variable's name and whether it is set; a value appears only under
 /// <c>--show-values</c>, which this never passes (0.8.10 <c>cmd_keys.py</c>), and <see cref="CredentialRow"/> has nowhere to hold one. Both
 /// reads are read-only commands the shell's tier table allows without a review; both land in Activity like any run.
 /// </para>
 /// <para>
-/// <b>Writes never run here.</b> <c>keys set</c> and <c>keys fill-missing</c> prompt with a hidden console prompt that reads the console,
-/// not stdin, so there is no headless route until CUST-221's pseudo-console. <see cref="OpenFillMissingInTerminalCommand"/> and each row's
-/// Set button open a console window running the exact command (<see cref="CredentialTerminal"/>) and write an Activity entry for the
-/// hand-off; the list is read again when the operator comes back (<see cref="NotifyReturned"/>) or presses Refresh.
+/// <b>Writes: typed here, stored by the CLI (CUST-221).</b> <c>keys set</c> asks for the value at a hidden console prompt that reads the
+/// console and not stdin, so a piped value hangs. Set opens a masked box in the row; Review shows the exact command with the value masked (and
+/// nothing runs before it is confirmed); the confirmed run types the value at the CLI's own prompt in a pseudo-console
+/// (<see cref="SecretPtyRunner"/>). The value is held as a <see cref="System.Security.SecureString"/> until that run has used it, is on no command
+/// line and in no line of Activity, and is dropped when the run ends, when the box is cancelled, when the installation turns read-only and when the
+/// panel is left. Fill missing opens the box on every required credential that is unset and reviews one <c>keys set</c> per value typed (same prompt,
+/// same store, no second kind of conversation to get wrong); <c>keys fill-missing</c> itself stays a console window. See
+/// <c>CredentialsViewModel.InApp.cs</c>.
+/// </para>
+/// <para>
+/// <b>The console window is the fallback, and it is automatic.</b> Where the app cannot type (Windows before 10 1809, a container runtime), Set and
+/// Fill missing open a console window running the exact command (<see cref="CredentialTerminal"/>) and write an Activity entry for the
+/// hand-off, as before; so does a run that could not use the pseudo-console (it could not start, or the CLI never showed its prompt) with nothing
+/// typed. The list is read again when the operator comes back (<see cref="NotifyReturned"/>) or presses Refresh.
 /// </para>
 /// <para>
 /// <b>When it reads.</b> Never on a timer: when the Setup panel activates and has nothing (or something stale), on Refresh, after a console
-/// was opened and the operator returns, and after <c>keys check</c>.
+/// was opened and the operator returns, after <c>keys check</c>, and after a value was stored.
 /// </para>
 /// </summary>
 public sealed partial class CredentialsViewModel : ObservableObject
@@ -118,10 +143,17 @@ public sealed partial class CredentialsViewModel : ObservableObject
     private bool _awaitingReturn;
     private bool _reading;
 
-    public CredentialsViewModel(AppServices services, CredentialTerminal? terminal = null)
+    /// <param name="services">The app's services.</param>
+    /// <param name="terminal">The console route; null is the real one.</param>
+    /// <param name="review">The confirm-and-run overlay a typed value goes through; the Setup page hosts one and hands it in. Null makes the card its own (a test's).</param>
+    public CredentialsViewModel(AppServices services, CredentialTerminal? terminal = null, DiscoverActionReview? review = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _terminal = terminal ?? new CredentialTerminal(services.Paths);
+        Review = review ?? new DiscoverActionReview(services);
+
+        // The same object lives as long as the card; its boxes' Review buttons follow whether a review is open or running.
+        Review.PropertyChanged += OnReviewChanged;
     }
 
     /// <summary>How the two reads run; a test replaces it so no process starts. Only argv that the classifier calls read-only is ever passed.</summary>
@@ -270,10 +302,13 @@ public sealed partial class CredentialsViewModel : ObservableObject
     internal void ApplyRows(IReadOnlyList<CredentialRow> rows)
     {
         Snapshot = rows;
+
+        // A value typed for a row the list no longer has is dropped with it, and so are the boxes: the new list decides what can be set.
+        ForgetEntries();
         Rows.Clear();
         foreach (var row in rows)
         {
-            Rows.Add(new CredentialRowViewModel(row, OnSetInTerminal, () => _services.Installation.BlockedReason));
+            Rows.Add(new CredentialRowViewModel(row, OnSetInTerminal, () => _services.Installation.BlockedReason, owner: this));
         }
 
         MissingRequiredCount = rows.Count(r => r.IsMissingRequired);
@@ -350,16 +385,23 @@ public sealed partial class CredentialsViewModel : ObservableObject
     /// <summary>The installation turned read-only (or writable): every Set button, and Fill missing, are drawn again.</summary>
     public void RefreshInstallation()
     {
+        // Nothing may be changed now: a value typed for a change that is off is not kept waiting for it.
+        if (ChangesBlockedReason is not null)
+        {
+            ForgetEntries();
+        }
+
         OnPropertyChanged(nameof(ChangesBlockedReason));
         OnPropertyChanged(nameof(CanChange));
         OnPropertyChanged(nameof(FillMissingToolTip));
+        OnPropertyChanged(nameof(CanReviewFill));
         foreach (var row in Rows)
         {
             row.RefreshInstallation();
         }
     }
 
-    /// <summary>Fill missing's tooltip: what it opens, or why it cannot.</summary>
+    /// <summary>The tooltip of the console button for Fill missing: what it opens, or why it cannot.</summary>
     public string FillMissingToolTip => ChangesBlockedReason ??
         "Opens a console window running defenseclaw keys fill-missing --yes: a hidden prompt for each required key that is unset";
 

@@ -18,6 +18,9 @@ namespace DefenseClaw.App.ViewModels;
 /// after it. <see cref="RetainFullOutput"/> keeps the whole transcript for a step whose output <see cref="Verify"/> parses.
 /// <see cref="OutputFilter"/> is applied to every line the command prints before it is stored (<see cref="CliRunOptions.OutputLineFilter"/>):
 /// for a command that prints an address whole, such as a webhook test, so Activity and the review's result never hold it.
+/// <see cref="Run"/> starts a step a plain argv cannot: a command whose secret is typed at its hidden prompt (<c>keys set</c>, CUST-221), which the owner
+/// of the value runs through <see cref="SecretPtyRunner"/>. It is still a <see cref="CliRunner"/> run and returns its invocation; the review gates, shows
+/// and reports it as it does any other (the argv is what the review shows, and it never carries the value).
 /// </summary>
 public sealed record DiscoverStep(
     IReadOnlyList<string> Argv,
@@ -27,7 +30,8 @@ public sealed record DiscoverStep(
     string Executable = CommandReview.DefaultExecutable,
     Func<CliInvocation, string?>? Verify = null,
     bool RetainFullOutput = false,
-    Func<string, string>? OutputFilter = null);
+    Func<string, string>? OutputFilter = null,
+    Func<Task<CliInvocation>>? Run = null);
 
 /// <summary>
 /// What a reviewed action did, handed to the panel so it can re-read its state. <paramref name="Steps"/> says, for each step of the review in
@@ -393,9 +397,11 @@ public sealed partial class DiscoverActionReview : ObservableObject
                         options = (options ?? CliRunOptions.Default) with { OutputLineFilter = filter };
                     }
 
-                    var invocation = await (RunStep is { } run
-                            ? run(step.Executable, step.Argv, options)
-                            : _services.Cli.RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options))
+                    var invocation = await (step.Run is { } own
+                            ? own()
+                            : RunStep is { } run
+                                ? run(step.Executable, step.Argv, options)
+                                : _services.Cli.RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options))
                         .ConfigureAwait(true);
                     invocations.Add(invocation);
 
