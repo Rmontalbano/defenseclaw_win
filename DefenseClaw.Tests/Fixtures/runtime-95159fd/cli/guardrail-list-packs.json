@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "global": {
+    "connector": "global",
+    "pack": "default",
+    "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\default",
+    "source": "default"
+  },
+  "connectors": [],
+  "packs": [
+    {
+      "name": "default",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\default",
+      "kind": "preset",
+      "used_by": [
+        "global"
+      ]
+    },
+    {
+      "name": "strict",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\strict",
+      "kind": "preset",
+      "used_by": []
+    },
+    {
+      "name": "permissive",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\permissive",
+      "kind": "preset",
+      "used_by": []
+    }
+  ]
+}

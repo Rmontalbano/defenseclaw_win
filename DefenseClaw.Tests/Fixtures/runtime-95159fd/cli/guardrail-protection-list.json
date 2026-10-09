@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "name": "privacy-high-assurance",
+      "title": "Privacy high assurance",
+      "summary": "This opt-in guardrail profile extends the embedded balanced defaults and raises the highest-confidence structured PII families to `CRITICAL`, which blocks in balanced, permissive, and strict action postures.",
+      "covers": "SSNs, payment cards, IBANs, medical IDs",
+      "rule_count": 13,
+      "rule_ids": [
+        "ENT-BULK-SSN",
+        "ENT-CC-VISA",
+        "ENT-CC-MC",
+        "ENT-CC-AMEX",
+        "ENT-CC-DISCOVER",
+        "PII-CARD-LABELED",
+        "ENT-IBAN",
+        "ENT-EMAIL-BULK",
+        "ENT-US-PHONE",
+        "ENT-MEDICAL-RECORD",
+        "ENT-DOB-PATTERN",
+        "ENT-BULK-CSV-PII",
+        "ENT-BULK-JSON-PII"
+      ],
+      "status": "selectable",
+      "rules": [
+        {
+          "id": "ENT-BULK-SSN",
+          "severity": "CRITICAL",
+          "title": "US Social Security Number"
+        },
+        {
+          "id": "ENT-CC-VISA",
+          "severity": "CRITICAL",
+          "title": "Visa credit card number"
+        },
+        {
+          "id": "ENT-CC-MC",
+          "severity": "CRITICAL",
+          "title": "Mastercard credit card number"
+        },
+        {
+          "id": "ENT-CC-AMEX",
+          "severity": "CRITICAL",
+          "title": "American Express card number"
+        },
+        {
+          "id": "ENT-CC-DISCOVER",
+          "severity": "CRITICAL",
+          "title": "Discover card number"
+        },
+        {
+          "id": "PII-CARD-LABELED",
+          "severity": "CRITICAL",
+          "title": "Explicitly labeled payment card number"
+        },
+        {
+          "id": "ENT-IBAN",
+          "severity": "CRITICAL",
+          "title": "International Bank Account Number (IBAN)"
+        },
+        {
+          "id": "ENT-EMAIL-BULK",
+          "severity": "CRITICAL",
+          "title": "Email address in a labeled field"
+        },
+        {
+          "id": "ENT-US-PHONE",
+          "severity": "CRITICAL",
+          "title": "Formatted phone number in a labeled field"
+        },
+        {
+          "id": "ENT-MEDICAL-RECORD",
+          "severity": "CRITICAL",
+          "title": "Medical record number"
+        },
+        {
+          "id": "ENT-DOB-PATTERN",
+          "severity": "CRITICAL",
+          "title": "Date of birth with label"
+        },
+        {
+          "id": "ENT-BULK-CSV-PII",
+          "severity": "CRITICAL",
+          "title": "CSV/TSV records with multiple PII columns"
+        },
+        {
+          "id": "ENT-BULK-JSON-PII",
+          "severity": "CRITICAL",
+          "title": "JSON record with multiple PII values"
+        }
+      ]
+    },
+    {
+      "name": "cloud-production-protection",
+      "title": "Cloud production protection",
+      "summary": "This opt-in guardrail profile extends the embedded balanced defaults and blocks statically proven destructive AWS, Google Cloud, and Azure CLI actions. Apply it only to connectors whose cloud credentials or execution context can reach production. DefenseClaw deliberately does not infer production from a resource name such as `prod`; the connector's assigned rule pack is the trust boundary.",
+      "covers": "Cloud data, resource and audit deletion",
+      "rule_count": 4,
+      "rule_ids": [
+        "impact.cloud_bulk_data_delete",
+        "impact.cloud_resource_delete",
+        "impact.cloud_observed_resource_delete",
+        "tamper.cloud_audit_control_destruction"
+      ],
+      "status": "selectable",
+      "rules": [
+        {
+          "id": "impact.cloud_bulk_data_delete",
+          "severity": "CRITICAL",
+          "title": "Bulk deletion of cloud-hosted data"
+        },
+        {
+          "id": "impact.cloud_resource_delete",
+          "severity": "CRITICAL",
+          "title": "Deletion of cloud infrastructure or a managed data service"
+        },
+        {
+          "id": "impact.cloud_observed_resource_delete",
+          "severity": "CRITICAL",
+          "title": "Observed deletion of an exact protected cloud disk or IAM binding"
+        },
+        {
+          "id": "tamper.cloud_audit_control_destruction",
+          "severity": "CRITICAL",
+          "title": "Destroy an exact cloud audit-logging control"
+        }
+      ]
+    },
+    {
+      "name": "database-destruction-protection",
+      "title": "Database destruction protection",
+      "summary": "This opt-in guardrail profile extends the embedded balanced defaults and blocks static destructive SQL passed directly to supported command-line clients or authenticated structured database tools. It also enables the exact same-database, same-table chain from a sensitive SQLite read to a later unbounded delete.",
+      "covers": "Unbounded SQL deletes and schema drops",
+      "rule_count": 3,
+      "rule_ids": [
+        "impact.sql_unbounded_delete",
+        "impact.sql_schema_destroy",
+        "chain.sensitive_sql_read_then_unbounded_delete_same_table"
+      ],
+      "status": "selectable",
+      "rules": [
+        {
+          "id": "impact.sql_unbounded_delete",
+          "severity": "CRITICAL",
+          "title": "SQL DELETE without a WHERE clause"
+        },
+        {
+          "id": "impact.sql_schema_destroy",
+          "severity": "CRITICAL",
+          "title": "SQL schema or table-wide destructive operation"
+        },
+        {
+          "id": "chain.sensitive_sql_read_then_unbounded_delete_same_table",
+          "severity": "HIGH",
+          "title": "Sensitive SQLite read followed by unbounded same-table delete"
+        }
+      ]
+    },
+    {
+      "name": "infrastructure-destruction-protection",
+      "title": "Infrastructure destruction protection",
+      "summary": "This opt-in guardrail profile extends the embedded balanced defaults with five exact protected-environment rules. Assign it only to connectors whose selected host, workspace, or stack can reach production; names are not treated as production evidence.",
+      "covers": "Disk wipes, IaC destroy, kernel binds",
+      "rule_count": 5,
+      "rule_ids": [
+        "impact.protected_filesystem_format",
+        "impact.protected_device_wipe",
+        "impact.protected_access_control_change",
+        "impact.protected_kernel_control_bind_override",
+        "impact.iac_full_destroy"
+      ],
+      "status": "selectable",
+      "rules": [
+        {
+          "id": "impact.protected_filesystem_format",
+          "severity": "CRITICAL",
+          "title": "Protected device filesystem format"
+        },
+        {
+          "id": "impact.protected_device_wipe",
+          "severity": "CRITICAL",
+          "title": "Protected device destructive write"
+        },
+        {
+          "id": "impact.protected_access_control_change",
+          "severity": "CRITICAL",
+          "title": "Protected security material access-control weakening"
+        },
+        {
+          "id": "impact.protected_kernel_control_bind_override",
+          "severity": "CRITICAL",
+          "title": "Protected kernel control bind override"
+        },
+        {
+          "id": "impact.iac_full_destroy",
+          "severity": "CRITICAL",
+          "title": "Full infrastructure-as-code destruction"
+        }
+      ]
+    },
+    {
+      "name": "kubernetes-production-protection",
+      "title": "Kubernetes production protection",
+      "summary": "This opt-in guardrail profile extends the embedded balanced defaults and blocks an exact named Secret content read, statically proven namespace deletion, and closed forms of bulk workload deletion through `kubectl` or `oc`. Assign it only to connectors whose Kubernetes context can reach production; cluster and namespace names are not treated as production evidence.",
+      "covers": "Secret reads, namespace and bulk deletes",
+      "rule_count": 3,
+      "rule_ids": [
+        "credential.protected_kubernetes_named_secret_content_read",
+        "impact.kubernetes_namespace_delete",
+        "impact.kubernetes_bulk_delete"
+      ],
+      "status": "selectable",
+      "rules": [
+        {
+          "id": "credential.protected_kubernetes_named_secret_content_read",
+          "severity": "CRITICAL",
+          "title": "Read a named Secret in a protected Kubernetes cluster"
+        },
+        {
+          "id": "impact.kubernetes_namespace_delete",
+          "severity": "CRITICAL",
+          "title": "Deletion of a Kubernetes namespace"
+        },
+        {
+          "id": "impact.kubernetes_bulk_delete",
+          "severity": "CRITICAL",
+          "title": "Bulk deletion of Kubernetes workloads"
+        }
+      ]
+    },
+    {
+      "name": "ssh-authorized-keys-protection",
+      "title": "SSH authorized keys protection",
+      "summary": "This directory defines the contract for an opt-in SSH `authorized_keys` protection pack. It is intentionally not activatable yet.",
+      "covers": "Unapproved SSH authorized_keys writes",
+      "rule_count": 0,
+      "rule_ids": [],
+      "status": "staged",
+      "rules": []
+    }
+  ],
+  "scopes": [
+    {
+      "scope": "global",
+      "pack": "default",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\default",
+      "enabled": []
+    }
+  ]
+}

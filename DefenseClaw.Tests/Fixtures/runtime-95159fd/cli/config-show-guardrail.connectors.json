@@ -1,0 +1,103 @@
+{
+  "guardrail": {
+    "alert_at": "",
+    "allow_private_upstreams": [],
+    "api_base": "",
+    "api_key_env": "",
+    "block_at": "HIGH",
+    "block_message": "",
+    "connector": "claudecode",
+    "connectors": {
+      "claudecode": {
+        "mode": "",
+        "hilt": null,
+        "hook_fail_mode": "",
+        "block_message": "",
+        "rule_pack_dir": "",
+        "enabled": null,
+        "block_at": "MEDIUM",
+        "alert_at": ""
+      },
+      "codex": {
+        "mode": "observe",
+        "hilt": {
+          "enabled": false,
+          "min_severity": "HIGH"
+        },
+        "hook_fail_mode": "closed",
+        "block_message": "",
+        "rule_pack_dir": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\protected-codex\\strict",
+        "enabled": null,
+        "block_at": "",
+        "alert_at": "LOW"
+      }
+    },
+    "detection_strategy": "regex_judge",
+    "detection_strategy_completion": "",
+    "detection_strategy_prompt": "",
+    "detection_strategy_tool_call": "",
+    "enabled": true,
+    "hilt": {
+      "enabled": true,
+      "min_severity": "HIGH"
+    },
+    "hook_fail_mode": "closed",
+    "host": "localhost",
+    "judge": {
+      "adjudication_timeout": 5.0,
+      "api_base": "",
+      "api_key_env": "",
+      "enabled": false,
+      "exfil": true,
+      "fallbacks": [],
+      "hook_connectors": [],
+      "hook_timeout": 0.0,
+      "injection": true,
+      "llm": {
+        "api_key": "",
+        "api_key_env": "",
+        "azure": null,
+        "base_url": "",
+        "bedrock": null,
+        "instance_name": "",
+        "max_retries": 0,
+        "model": "",
+        "provider": "",
+        "region": "",
+        "timeout": 0,
+        "tls": null,
+        "vertex": null
+      },
+      "model": "",
+      "pii": true,
+      "pii_completion": true,
+      "pii_prompt": true,
+      "timeout": 30.0,
+      "tool_injection": true
+    },
+    "judge_sweep": true,
+    "llm": {
+      "api_key": "",
+      "api_key_env": "",
+      "azure": null,
+      "base_url": "",
+      "bedrock": null,
+      "instance_name": "",
+      "max_retries": 0,
+      "model": "",
+      "provider": "",
+      "region": "",
+      "timeout": 0,
+      "tls": null,
+      "vertex": null
+    },
+    "llm_role": "",
+    "mode": "action",
+    "model": "",
+    "model_name": "",
+    "original_model": "",
+    "port": 4000,
+    "rule_pack_dir": "",
+    "scanner_mode": "local"
+  }
+}

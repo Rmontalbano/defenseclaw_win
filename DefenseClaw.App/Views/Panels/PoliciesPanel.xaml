@@ -20,8 +20,15 @@
         the buttons that change something are off, with the reason as their tooltip (CatalogTrust).
 
         Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the review / form / output / detail in that order.
+
+        This is the panel for 0.8.10. On a runtime that has the Mac's policy model (RuntimeCapability.PolicyModel, CUST-293) the view-model
+        exposes Model and the panel is PolicyModelView, hosted by ModelHost at the end; ClassicHost then collapses and nothing in it changes.
+        (ClassicHost keeps the indentation it had, so the change to this file stays small.)
     -->
-    <Grid Style="{StaticResource DcPage}">
+    <Grid>
+    <Grid x:Name="ClassicHost"
+          Style="{StaticResource DcPage}"
+          Visibility="{Binding UsesClassic, Converter={StaticResource BoolToVisibility}}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -540,5 +547,23 @@
 
         <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
         <panels:DiscoverReviewOverlay Grid.RowSpan="3" DataContext="{Binding Review}" />
+    </Grid>
+
+    <!-- The panel on a runtime that has the policy model. Empty, and collapsed, on every other runtime. -->
+    <ContentControl x:Name="ModelHost"
+                    Content="{Binding Model}"
+                    IsTabStop="False"
+                    Focusable="False"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    Visibility="{Binding UsesModel, Converter={StaticResource BoolToVisibility}}">
+        <!-- Chosen by the content's type, so no content (every runtime without the model) builds nothing: an explicit ContentTemplate
+             would build the view even then. -->
+        <ContentControl.Resources>
+            <DataTemplate DataType="{x:Type vm:PolicyModelViewModel}">
+                <panels:PolicyModelView />
+            </DataTemplate>
+        </ContentControl.Resources>
+    </ContentControl>
     </Grid>
 </UserControl>

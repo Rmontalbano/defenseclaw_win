@@ -65,6 +65,21 @@ internal sealed class RuntimeService : IDisposable
     public Task<RuntimeSnapshot> RefreshAsync(bool force = false, CancellationToken cancellationToken = default) =>
         Detector.RefreshAsync(force, cancellationToken);
 
+    /// <summary>True once <see cref="Start"/> has been called: the background check is running, so a first answer is on its way.</summary>
+    public bool IsStarted => Volatile.Read(ref _timer) is not null;
+
+    /// <summary>
+    /// The answer for a screen that has to choose between two surfaces and so cannot show either until it knows what the runtime is (the Policies
+    /// panel, CUST-293). Once the runtime has been probed, or when nothing is running that would probe it (the service was never started: a tool, a
+    /// test), this is the current snapshot, already complete. In the app, before the first probe has answered, it joins that probe - the single
+    /// flight <see cref="RefreshAsync"/> shares - and returns its answer. Never throws for a failed probe (that is an unknown snapshot); the token
+    /// only stops the caller waiting.
+    /// </summary>
+    public Task<RuntimeSnapshot> WhenProbedAsync(CancellationToken cancellationToken = default) =>
+        IsStarted && ReferenceEquals(Current, RuntimeSnapshot.NotProbed)
+            ? RefreshAsync(cancellationToken: cancellationToken)
+            : Task.FromResult(Current);
+
     /// <summary>Starts the first probe and the background check. Idempotent.</summary>
     public void Start()
     {

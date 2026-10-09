@@ -18,7 +18,8 @@ exactly that gap.
 
 | Fixture group | Files | Derived from |
 |---|---|---|
-| `cli/` | `version-json`, `gateway-version-json`, `version.txt`, `status-json`, `status-json.connectors` (*), `doctor-json`, `doctor-cache` (*), `keys-list`, `policy-list`, `policy-show-default`, `observability-plan`, `guardrail-status` (json and text), `agent-discovery-*`, `alerts`, `mcp-list`, `skill-list`, `plugin-list`, `tool-list`, `aibom-scan`, `config-path`, `config-validate`, `cli-tree` (*) | CLI output of a fresh install |
+| `cli/` | `version-json`, `gateway-version-json`, `version.txt`, `status-json`, `status-json.connectors` (*), `doctor-json`, `doctor-cache` (*), `keys-list`, `policy-list`, `policy-show-default`, `observability-plan`, `guardrail-status` (json and text), `guardrail-list-packs`, `guardrail-protection-list`, `config-show-guardrail` (each also as `.connectors` (*)), `agent-discovery-*`, `alerts`, `mcp-list`, `skill-list`, `plugin-list`, `tool-list`, `aibom-scan`, `config-path`, `config-validate`, `cli-tree` (*) | CLI output of a fresh install |
+| `policy-model/` | `phase2-model.json`, `tool-chains.json` | the runtime's own model document (its catalog read and the rows it rendered from it) and its built-in chain catalog |
 | `rest/` | `health`, `status`, `alerts`, `guardrail-config`, `enforce-blocked/-allowed`, `mcps`, `skills-not-connected`, `tools-catalog-not-connected`, `ai-usage-runtime`, `unauthorized` | the gateway's GET routes |
 | `help/` | `setup`, `setup-windows`, and the pages of `claude-code`, `cursor`, `codex`, `guardrail`, `observability`, `redaction`, `acp`, `gateway`, `trusted-paths`, `rotate-token`, `routing`, `local-observability` | `--help` screens |
 | `audit/` | `audit-schema.sql` (the database's own `.schema`, 38 tables, 53 migrations), `judge-bodies-schema.sql`, `migrations.txt` | the schema only, no rows |
@@ -27,7 +28,9 @@ exactly that gap.
 (*) not a capture. `status-json.connectors` adds two `connectors[]` rows built from the emitting code (`_connector_roster` and
 `connector_fail_mode_report`); `doctor-cache` is the doctor JSON plus the `captured_at` the CLI adds when it writes the cache;
 `cli-tree` is the whole command tree converted to the format the 0.8.10 tree fixture uses (secondary switch spellings such as `--no-restart`
-recovered from the help screens); `config.connectors.yaml` uses the key names of the Go structs.
+recovered from the help screens); `config.connectors.yaml` uses the key names of the Go structs; the three `.connectors` Policies fixtures
+describe two active connectors (one with its own mode, rule pack, alert level and an opt-in pack, one with its own block level), written in the
+shape the capture has and checked against the cases the runtime's own tests pin (`DefenseClaw.Tests/PolicyModelTests.cs`).
 
 The audit database is **not a copied database**. `RuntimeFixtures.CreateAuditDatabase()` builds one at test time from `audit-schema.sql`,
 adds `schema_version` rows 1..53, and the tests insert a few synthetic rows written the way that source's event-history writer writes them.
@@ -44,6 +47,7 @@ adds `schema_version` rows 1..53, and the tests insert a few synthetic rows writ
 | `config.yaml` reader and editor | Compatible as is. |
 | Install layout, gateway-peer trust | **Fixed.** Both layouts resolve; Setup's wins. |
 | Setup tile grid | Compatible as is (35 targets). |
+| Policies panel | **Added** for a runtime that has the policy model: six views (Windows has no Sandbox packs view), the 0.8.10 table is unchanged elsewhere. See below. |
 | Command classifier (review tiers) | Compatible; the new commands were reviewed. One 0.8.10 read verb is gone. |
 | Fixed argv built by the app | Compatible: all 40 still name a command and options that exist. |
 
@@ -153,8 +157,67 @@ The tree has 263 leaves (0.8.10: 179). `CommandTierPinnedTreeTests` runs the 0.8
 each one's help was read and they only list, show, validate or probe. None is on the app's no-review allow-list, so none runs without review; no
 mutating command became read-only. The 40 fixed argv the app builds (`ArgvContractTests`) all name existing commands with existing options.
 
+### Policies: the policy model (CUST-293)
+
+The Policies panel is two surfaces behind one panel. A runtime whose probe finds `RuntimeCapability.PolicyModel` (`guardrail --help` lists
+`protection`) gets the model panel (`PolicyModelViewModel`, `PolicyModelView`); 0.8.10, a runtime that has not been probed, one whose probe failed
+and any runtime that lacks the marker get the CUST-281 table of named policies, **untouched**. The choice is made when the panel is first used (the
+first visit waits for the app's own first probe) and again whenever the probe's answer changes while the panel is on screen. A panel built with an
+explicit backend (`IPolicyBackend.Surface`) keeps that one.
+
+**Six views, not seven, on Windows.** The runtime's model (`PoliciesPanelModel`) has seven views, and drops the last, Sandbox packs, when
+`openshell_sandboxes_supported()` is false: any host that is not Linux or macOS (`platform_support.py`; the CLI's `sandbox` group exits 3 there, and
+`sandbox --help` says "Linux, and macOS on Apple silicon, only"). Windows is on the dropping side of that one rule, so the app shows posture, opt-in
+packs, chains, rule families, policies and rule packs, has no sandbox view and no placeholder for it, never starts a `sandbox` command to build the
+panel, and ignores sandbox data should a model document carry it (the Phase 2 capture does: its seventh view is kept as captured and not read).
+A container runtime on Linux would show seven upstream; this build shows the six there too.
+
+**Data source: the CLI's JSON, not the runtime's Python bridge.** The Mac app asks the runtime's Python model for its catalog through a bridge. This
+app starts no Python of its own: it reads four commands that exist at the pin and print JSON, all read-only, run through one door that refuses
+anything else (`PolicyActionGuard.IsAllowedRead`):
+
+| Command | Gives |
+|---|---|
+| `policy list --json` | the named policies, with their LLM thresholds, which is active, built-in or custom |
+| `guardrail list-packs --json` | the global rule pack, each connector's pack (own or inherited) and every pack on disk |
+| `guardrail protection list --json` | the opt-in packs with their rules, and the packs enabled per scope |
+| `config show --section guardrail --format json` | mode, human approval and the block / alert levels, global and per connector |
+
+and three files from the runtime's own install, never written: the built-in chain catalog (`tool-chains.json`), the rule files of a pack (rule
+families) and a composed pack's `defenseclaw-pack.json`. They are found from the path the runtime prints for a built-in policy; where they cannot
+be reached (a container runtime) those views show the "not found" state. A part that cannot be read empties only its own views and turns the read
+into a partial one (below).
+
+The model itself is a port of the runtime's pure code, not new wording: `policy_state.py` (scopes, the rows of each view, what "weaker" means) and
+`policy_catalog.resolve_levels` (a connector's own level, else the global one, else its rule pack's profile; the alert level clamped to the block
+level), and the consequence text of each change from `policy_panel.py`'s modals. `PolicyModelTests` check it against the rows the runtime itself
+rendered in the capture (all six views, at the width it rendered them) and against the cases the runtime's own tests pin. Each scope's posture is
+composed from the three scope-aware commands above (`PolicyPostureComposer`), because no command prints it whole.
+
+**Tool-call levels and LLM thresholds are different things** and the panel keeps them apart. Posture shows and changes a scope's block and alert
+level for *tool calls* (`guardrail block-at|alert-at`, per connector or global); the Policies view shows and changes a named policy's thresholds for
+*LLM traffic through the guardrail proxy* (`policy edit guardrail --block-threshold|--alert-threshold`). The columns say which (`Blocks at` against
+`LLM block`), and every consequence says which it is about.
+
+**Changes** are limited to `guardrail mode | block-at | alert-at | hilt | use-pack | protection`, `policy activate` and `policy edit guardrail`, each
+in the exact argv shape `PolicyActionGuard.IsAllowedChange` checks. Every one goes through the shared review (the exact command, the tier, the
+gateway-restart bar the `guardrail` verbs need, the runtime's own account of what it does and leaves alone); one the model calls weaker needs the
+acknowledgement tick before the confirm button works. A rule pack is validated (`guardrail validate-pack FOLDER --json`, a read) before `use-pack` is
+offered and must say valid: invalid, validator unavailable and did-not-complete all stop it. `policy validate` runs before `policy activate` the same
+way. A folder the CLI would rewrite (`%VAR%`, `~`, wildcards expand in every argument on Windows) is refused before anything runs.
+
+**When changes are off.** The data must be a complete, recent read (`CatalogTrust`, as in the other panels): a partial read (a part failed), a
+refresh that failed (the last good rows stay, labelled), a read older than its window, or a `config.yaml` / `.env` that changed since the read (checked
+again at the moment of the request) turns every change off with the reason as the button's tooltip. Reads stay on.
+
 ## Not verified
 
+- The model panel against a running pinned runtime. Everything above is built on the fixtures: the single-connector scenario is the Phase 2 capture;
+  the two-connector scenario is synthetic. `guardrail protection enable|disable`, `use-pack`, `hilt`, `block-at|alert-at` and `policy edit guardrail`
+  were never run (the app never starts the pinned runtime; its commands restart a gateway). The posture composition was not cross-checked against a
+  runtime that has several connectors.
+- Chains and rule families read the runtime's own data files; their location is derived from a built-in policy's path, which was seen only in the
+  capture. A different install layout shows those two views as "not found" rather than guessing.
 - A runtime with a connector, findings, scans, hook traffic or history: the readers were exercised with synthetic rows, not with rows from a populated install.
 - `inventory.db`, `gateway.log` / `gateway.jsonl` formats, the Logs panel's tailing, and the agent-config files the runtime plants for a connector.
 - Upgrade and rollback of a real installation (the in-app updater assumes release assets that this source has no release for).
@@ -167,6 +230,9 @@ mutating command became read-only. The 40 fixed argv the app builds (`ArgvContra
 ```
 dotnet test DefenseClaw.Tests -c Release --filter "FullyQualifiedName~Runtime95159fdCompatTests|FullyQualifiedName~CommandTierPinnedTreeTests"
 dotnet test DefenseClaw.App.Tests -c Release --filter "FullyQualifiedName~Runtime."
+# the Policies model (Core model and readers, then the panel)
+dotnet test DefenseClaw.Tests -c Release --filter "FullyQualifiedName~PolicyModel|FullyQualifiedName~PolicyLevels|FullyQualifiedName~PolicyCatalogRead|FullyQualifiedName~PolicyAction"
+dotnet test DefenseClaw.App.Tests -c Release --filter "FullyQualifiedName~Policies"
 # whole Core suite against the 53-migration audit schema
 DEFENSECLAW_TEST_AUDIT_SCHEMA=runtime-95159fd/audit/audit-schema.sql dotnet test DefenseClaw.Tests -c Release
 ```

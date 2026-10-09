@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "global": {
+    "connector": "global",
+    "pack": "default",
+    "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\default",
+    "source": "default"
+  },
+  "connectors": [
+    {
+      "connector": "claudecode",
+      "pack": "default",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\default",
+      "source": "default"
+    },
+    {
+      "connector": "codex",
+      "pack": "protected-codex",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\protected-codex\\strict",
+      "source": "override"
+    }
+  ],
+  "packs": [
+    {
+      "name": "default",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\default",
+      "kind": "preset",
+      "used_by": [
+        "global",
+        "claudecode"
+      ]
+    },
+    {
+      "name": "strict",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\strict",
+      "kind": "preset",
+      "used_by": []
+    },
+    {
+      "name": "permissive",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\permissive",
+      "kind": "preset",
+      "used_by": []
+    },
+    {
+      "name": "protected-codex",
+      "path": "C:\\Users\\operator\\.defenseclaw\\policies\\guardrail\\protected-codex\\strict",
+      "kind": "custom",
+      "used_by": [
+        "codex"
+      ]
+    }
+  ]
+}

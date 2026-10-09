@@ -5,6 +5,8 @@ using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Policy;
+using DefenseClaw.Core.Policy.Model;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -42,17 +44,33 @@ public enum PolicyValidation
 ///   <item><b>Only a trusted list authorizes a change</b> (<see cref="CatalogTrust"/>): a failed or old read keeps its rows on screen and
 ///     turns every change off, with the reason as the tooltip.</item>
 /// </list>
-/// What each command does is in <see cref="IPolicyBackend"/>, so the newer runtime's Policies surface (CUST-293) swaps in behind the same
-/// panel behaviour.
+/// What each command does is in <see cref="IPolicyBackend"/>, so the newer runtime's Policies surface swaps in behind the same panel.
+/// <para>
+/// <b>Two surfaces, one panel (CUST-293).</b> When the connected runtime has the Mac's policy model
+/// (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.PolicyModel"/>, from the runtime probe) the panel is <see cref="Model"/>, the
+/// <see cref="PolicyModelViewModel"/>: posture per scope, opt-in packs, chains, rule families, named policies and rule packs. Everything
+/// else - 0.8.10, a runtime that has not been probed, a probe that failed - is the table of named policies described above, unchanged: the
+/// model is never offered on a guess. The choice is made when the panel is first used (after the first probe has answered), and again
+/// whenever the probe's answer changes (an upgrade, the developer runtime selector) while the panel is on screen.
+/// </para>
 /// </summary>
 public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
 {
     /// <summary>A read this old is read again when the panel comes back into view.</summary>
     internal static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(2);
 
+    private const string ClassicDescription =
+        "Security policies for skills, MCP servers and plugins: which are built in, which you made, and which one is active.";
+
     private readonly IPolicyBackend _backend;
+    private readonly bool _surfaceFixed;
+    private readonly object _surfaceGate = new();
+    private bool _surfaceDecided;
     private readonly List<PolicyRow> _all = new();
     private readonly Dictionary<string, PolicyDetail> _details = new(StringComparer.Ordinal);
+    private PolicyModelViewModel? _model;
+    private IPolicyDataFiles? _dataFiles;
+    private Func<IReadOnlyList<string>, CliRunOptions, Task<CliInvocation>>? _runCli;
     private DateTimeOffset? _lastLoadedAt;
     private bool _loadRunning;
     private int _detailGeneration;
@@ -65,16 +83,42 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
     internal PoliciesPanelViewModel(AppServices services, IPolicyBackend? backend)
         : base(services)
     {
-        _backend = backend ?? PolicyBackends.ForInstalledRuntime();
+        // A backend handed in (a test of one generation of the runtime) fixes the surface; otherwise the connected runtime's probe decides.
+        _surfaceFixed = backend is not null;
+        _backend = backend is { Surface: PolicySurface.NamedPolicies } ? backend : Release0810PolicyBackend.Instance;
         Review = new DiscoverActionReview(services);
         Form = new PolicyFormViewModel();
         Rows = new ObservableCollection<PolicyRow>();
+        ApplySurface(backend?.Surface ?? SurfaceOfRuntime());
     }
 
     public override string Title => "Policies";
 
-    public override string Description =>
-        "Security policies for skills, MCP servers and plugins: which are built in, which you made, and which one is active.";
+    public override string Description => Model?.Description ?? ClassicDescription;
+
+    /// <summary>
+    /// The panel for a runtime that has the policy model; null on 0.8.10 and on a runtime that is not known to have it. While it is not
+    /// null it is the whole panel (<see cref="UsesModel"/>) and the members below that belong to the table of named policies are idle.
+    /// </summary>
+    public PolicyModelViewModel? Model
+    {
+        get => _model;
+        private set
+        {
+            if (SetProperty(ref _model, value))
+            {
+                OnPropertyChanged(nameof(UsesModel));
+                OnPropertyChanged(nameof(UsesClassic));
+                OnPropertyChanged(nameof(Description));
+            }
+        }
+    }
+
+    /// <summary>The connected runtime has the policy model: <see cref="Model"/> is the panel.</summary>
+    public bool UsesModel => Model is not null;
+
+    /// <summary>The table of named policies (0.8.10) is the panel.</summary>
+    public bool UsesClassic => Model is null;
 
     public ObservableCollection<PolicyRow> Rows { get; }
 
@@ -87,8 +131,36 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
     /// <summary>Whether the list may authorize a change; see <see cref="CatalogTrust"/>.</summary>
     public CatalogTrust Trust { get; internal set; } = new();
 
-    /// <summary>Test seam: runs a command instead of <c>Services.Cli.RunAsync</c>, so a test feeds exact output and never starts a process.</summary>
-    internal Func<IReadOnlyList<string>, CliRunOptions, Task<CliInvocation>>? RunCli { get; set; }
+    /// <summary>Test seam: the data files the policy model reads (<see cref="PolicyModelViewModel.DataFiles"/>); handed on to the model, now or when it is created.</summary>
+    internal IPolicyDataFiles? DataFiles
+    {
+        get => _dataFiles;
+        set
+        {
+            _dataFiles = value;
+            if (value is not null && Model is { } model)
+            {
+                model.DataFiles = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Test seam: runs a command instead of <c>Services.Cli.RunAsync</c>, so a test feeds exact output and never starts a process. Handed on to
+    /// the policy model when the panel is one (<see cref="Model"/>).
+    /// </summary>
+    internal Func<IReadOnlyList<string>, CliRunOptions, Task<CliInvocation>>? RunCli
+    {
+        get => _runCli;
+        set
+        {
+            _runCli = value;
+            if (Model is { } model)
+            {
+                model.RunCli = value;
+            }
+        }
+    }
 
     // ---- State ---------------------------------------------------------------------------------------------------------
 
@@ -194,9 +266,74 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
 
     // ---- Lifecycle -----------------------------------------------------------------------------------------------------
 
-    public override Task InitializeAsync(CancellationToken cancellationToken = default) => LoadAsync();
+    public override async Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        // Which surface this is depends on what the runtime is, and on the very first visit the app's own probe may not have answered yet:
+        // wait for it (it is short, never throws, and is bounded by its own timeout). Until it has answered, and whenever it could not tell,
+        // nothing newer than 0.8.10 is assumed. A service nothing started has nothing to wait for and answers at once.
+        if (!_surfaceFixed)
+        {
+            try
+            {
+                _ = await Services.Runtime.WhenProbedAsync(cancellationToken).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // The shell stopped waiting; whatever the probe found is applied below.
+            }
+
+            SyncSurface();
+        }
+
+        _surfaceDecided = true;
+        if (Model is { } model)
+        {
+            await model.InitializeAsync(cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
+        await LoadAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The app's first probe is still on its way, so what this panel is is not known yet: the first visit's <see cref="InitializeAsync"/> is waiting
+    /// for it and will decide, and read. Until then nothing may be read - a table of named policies read from a runtime that turns out to have
+    /// the model would be a read nobody asked for.
+    /// </summary>
+    private bool SurfacePending =>
+        !_surfaceFixed && !_surfaceDecided && Services.Runtime.IsStarted && ReferenceEquals(Services.Runtime.Current, RuntimeSnapshot.NotProbed);
 
     protected override void OnActivated()
+    {
+        if (!_surfaceFixed)
+        {
+            Services.Runtime.Changed += OnRuntimeChanged;
+
+            // An upgrade while the panel was away was not heard: ask again.
+            SyncSurface();
+        }
+
+        if (SurfacePending)
+        {
+            return;
+        }
+
+        if (Model is { } model)
+        {
+            model.SetActive(true);
+            return;
+        }
+
+        CatchUpClassic();
+    }
+
+    protected override void OnDeactivated()
+    {
+        Services.Runtime.Changed -= OnRuntimeChanged;
+        Model?.SetActive(false);
+    }
+
+    private void CatchUpClassic()
     {
         // The bound values only update when something raises PropertyChanged: do it now, so an old list is not offered as fresh.
         NotifyTrust();
@@ -209,8 +346,84 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
         }
     }
 
+    // ---- Which surface -------------------------------------------------------------------------------------------------
+
+    private PolicySurface SurfaceOfRuntime() => PolicyBackends.For(Services.Runtime.Capabilities).Surface;
+
+    private void SyncSurface()
+    {
+        if (!_surfaceFixed)
+        {
+            ApplySurface(SurfaceOfRuntime());
+        }
+    }
+
+    /// <summary>
+    /// Makes the panel the surface of <paramref name="surface"/>: creates the policy model when the runtime has it, drops it (and goes back to
+    /// the table of named policies, read again if the panel is on screen) when it no longer does. Does nothing when it already is.
+    /// </summary>
+    private void ApplySurface(PolicySurface surface)
+    {
+        // Everything here runs on the UI thread in the app; the lock only keeps a second caller (a test, which runs the first visit off the UI
+        // thread while the probe's notification is marshalled to it) from building a second model next to the first.
+        lock (_surfaceGate)
+        {
+            if (surface == PolicySurface.SevenViewModel)
+            {
+                if (Model is not null)
+                {
+                    return;
+                }
+
+                var model = new PolicyModelViewModel(Services) { RunCli = _runCli };
+                if (_dataFiles is not null)
+                {
+                    model.DataFiles = _dataFiles;
+                }
+
+                Model = model;
+                if (IsActive)
+                {
+                    model.SetActive(true);
+                }
+
+                return;
+            }
+
+            if (Model is not { } gone)
+            {
+                return;
+            }
+
+            Model = null;
+            gone.SetActive(false);
+            gone.Dispose();
+
+            // Whatever the table last read may predate what the model panel changed meanwhile: read it again, not when it next goes stale.
+            _lastLoadedAt = null;
+            if (IsActive)
+            {
+                CatchUpClassic();
+            }
+        }
+    }
+
+    private void OnRuntimeChanged(object? sender, EventArgs e)
+    {
+        // Raised on the UI thread when there is one; with none (a test) it is whichever thread finished the probe.
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            SyncSurface();
+        }
+        else if (!dispatcher.HasShutdownStarted)
+        {
+            _ = dispatcher.BeginInvoke(SyncSurface);
+        }
+    }
+
     [RelayCommand]
-    private Task RefreshAsync() => LoadAsync();
+    private Task RefreshAsync() => Model is { } model ? model.RefreshCommand.ExecuteAsync(null) : LoadAsync();
 
     // ---- Reading -------------------------------------------------------------------------------------------------------
 
@@ -514,6 +727,11 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
     /// </summary>
     public bool HandleEscape()
     {
+        if (Model is { } model)
+        {
+            return model.HandleEscape();
+        }
+
         if (Review.HandleEscape())
         {
             return true;

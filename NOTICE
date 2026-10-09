@@ -14,7 +14,11 @@ licensed under the Apache License, Version 2.0:
     Several features follow that app's design and behaviour, and some logic
     was translated from Swift to C#, including the structured audit-detail
     parser, the Overview attention rules and doctor reconciliation, the
-    inspector layout policy, connector onboarding, and egress decoding.
+    inspector layout policy, connector onboarding, and egress decoding. The
+    Policies panel for a runtime with the policy model follows that app's
+    design: scopes with inherited values, tool-call levels kept apart from
+    LLM thresholds, an acknowledgement for a change that protects less, and
+    a rule pack that must validate before it is switched to.
 
   DefenseClaw
   https://github.com/cisco-ai-defense/defenseclaw
@@ -24,6 +28,11 @@ licensed under the Apache License, Version 2.0:
     TUI command registry (tui/registry_data.py: names, arguments and
     descriptions of its commands, and each runtime's Windows platform table),
     by tools/gen-tui-registry.py.
+    The Policies model (how a scope's levels are resolved, what each view
+    lists, what counts as a weaker setting, and the wording of what each
+    change does) is translated from the runtime's own Python policy model
+    and TUI panel (defenseclaw.tui.services.policy_state, policy_catalog and
+    policy_panel), so the app states the same facts the runtime does.
 
 The changes are this project's own: the code is a separate C#/WPF
 implementation for Windows.

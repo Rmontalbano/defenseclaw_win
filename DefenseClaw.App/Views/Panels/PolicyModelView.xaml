@@ -1,0 +1,398 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.PolicyModelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             d:DataContext="{d:DesignInstance Type=vm:PolicyModelViewModel}"
+             mc:Ignorable="d">
+    <!--
+        The Policies panel on a runtime that has the Mac's policy model (CUST-293), hosted by PoliciesPanel in place of the table of named
+        policies. Six views, a list on the left (the runtime's own navigation, with counts): posture, opt-in packs, chains, rule families,
+        named policies, rule packs. Each view is one table whose columns the model gives (the grid is built from them), and the selected row's
+        detail and the changes the model offers for it are in the inspector beside it.
+
+        Nothing runs from here. A choice in the inspector prepares its change (a rule pack is validated before it is switched to, a policy
+        bundle before a policy is activated) and opens the shared review dialog (DiscoverReviewOverlay) with the exact command, the model's own
+        account of the consequences, and, for a change that protects less, a tick to give first. While the data is a failed, partial, old or
+        outdated read the choices are off with the reason as their tooltip (CatalogTrust).
+
+        Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the review / output / notice / detail in that order.
+    -->
+    <Grid Style="{StaticResource DcPage}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="Gavel24"
+                           ctl:DcIcon.Section="Setup"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding CaptionText}"
+                           HasSearch="True"
+                           SearchText="{Binding SearchText}"
+                           SearchDelay="250"
+                           SearchWidth="240"
+                           SearchPlaceholder="Filter rows…"
+                           SearchAutomationName="Filter rows"
+                           SearchHelpText="Matches the row's cells and details. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Read the policies again. Shortcut F5." />
+                </StackPanel>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
+
+        <!-- Banners: the result of the last action, and why the rows on screen may not authorize a change. -->
+        <StackPanel Grid.Row="1">
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="{Binding NoticeTitle}"
+                        Message="{Binding NoticeMessage}"
+                        Severity="{Binding NoticeSeverity}"
+                        IsOpen="{Binding HasNotice, Mode=OneWay}"
+                        IsClosable="True"
+                        AutomationProperties.LiveSetting="Polite" />
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Title="{Binding ReadWarningTitle}"
+                        Message="{Binding ReadWarning}"
+                        Severity="Warning"
+                        IsOpen="{Binding HasReadWarning, Mode=OneWay}"
+                        IsClosable="False"
+                        AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="360" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- The runtime's six views (with their counts) above the table they switch. On a narrow panel the list and its inspector cannot share
+                 the width: both step aside while a row is open. -->
+            <Grid x:Name="ListColumn" Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasSelection}" Value="True" />
+                                    <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+
+                <ctl:DcSegmented x:Name="ViewSwitch"
+                                 Grid.Row="0"
+                                 ItemsSource="{Binding Nav}"
+                                 SelectedItem="{Binding SelectedNav, Mode=TwoWay}"
+                                 AutomationProperties.Name="Policy views"
+                                 AutomationProperties.HelpText="Posture, opt-in packs, chains, rule families, policies and rule packs. The number is how many rows the view has.">
+                    <ctl:DcSegmented.ItemContainerStyle>
+                        <Style TargetType="{x:Type ctl:DcSegment}" BasedOn="{StaticResource {x:Type ctl:DcSegment}}">
+                            <Setter Property="Padding" Value="10,0,10,0" />
+                            <Setter Property="AutomationProperties.Name" Value="{Binding AutomationText}" />
+                        </Style>
+                    </ctl:DcSegmented.ItemContainerStyle>
+                    <ctl:DcSegmented.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock VerticalAlignment="Center" Text="{Binding Title}" />
+                                <!-- No colour of its own: it follows the segment's, so it reads on the accent thumb too. -->
+                                <TextBlock FontSize="12"
+                                           Opacity="0.75"
+                                           Margin="6,1,0,0"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding Badge}"
+                                           Visibility="{Binding HasBadge, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ctl:DcSegmented.ItemTemplate>
+                </ctl:DcSegmented>
+
+            <Border x:Name="ListCard" Grid.Row="1">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+                        <Style.Triggers>
+                            <!-- With the inspector open the list's right edge meets its divider. -->
+                            <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                <Setter Property="CornerRadius" Value="0" />
+                                <Setter Property="BorderThickness" Value="1,1,0,1" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- The view's status line, from the model (a view that could not be read says so here in the error tone), and the scope the
+                         opt-in packs and rule families are shown for. The posture view's rows are the scopes, so it has no chooser. -->
+                    <Grid Grid.Row="0"
+                          Margin="12,8,12,8"
+                          Visibility="{Binding ShowContent, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Style="{StaticResource DcToneText}"
+                                   Tag="{Binding HeadlineTone}"
+                                   FontWeight="Normal"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding Headline}"
+                                   AutomationProperties.Name="View summary" />
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    Margin="12,0,0,0"
+                                    Visibility="{Binding ShowScopeChooser, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcFieldLabel}" VerticalAlignment="Center" Margin="0,0,8,0" Text="Scope" />
+                            <ComboBox MinWidth="150"
+                                      ItemsSource="{Binding Scopes}"
+                                      SelectedItem="{Binding SelectedScope, Mode=TwoWay}"
+                                      AutomationProperties.Name="Scope"
+                                      AutomationProperties.HelpText="The scope whose opt-in packs and rule families are shown: the global default or one connector." />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="1">
+                        <ui:DataGrid x:Name="RowList"
+                                     Style="{StaticResource DcDataGrid}"
+                                     RowStyle="{StaticResource DcDataGridRow}"
+                                     ItemsSource="{Binding Rows}"
+                                     SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                                     SelectionMode="Single"
+                                     CanUserSortColumns="False"
+                                     AutomationProperties.Name="Policy rows"
+                                     Visibility="{Binding ShowContent, Converter={StaticResource BoolToVisibility}}" />
+
+                        <StackPanel Style="{StaticResource DcEmptyState}"
+                                    Visibility="{Binding ShowLoading, Converter={StaticResource BoolToVisibility}}">
+                            <ui:ProgressRing Width="32" Height="32" IsIndeterminate="True" AutomationProperties.Name="Reading policies" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading the policies from the CLI…" />
+                        </StackPanel>
+
+                        <StackPanel Style="{StaticResource DcEmptyState}"
+                                    MaxWidth="460"
+                                    Visibility="{Binding ShowError, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldDismiss24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding ErrorTitle}" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ErrorMessage}" />
+                            <ui:Button Margin="0,12,0,0"
+                                       Content="Try again"
+                                       Appearance="Secondary"
+                                       Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                       Command="{Binding RefreshCommand}" />
+                        </StackPanel>
+
+                        <StackPanel Style="{StaticResource DcEmptyState}"
+                                    MaxWidth="460"
+                                    Visibility="{Binding HasViewError, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="ShieldDismiss24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="This view could not be read" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ViewError}" />
+                        </StackPanel>
+
+                        <StackPanel Style="{StaticResource DcEmptyState}"
+                                    MaxWidth="460"
+                                    Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Gavel24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="Nothing to show" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyText}" />
+                        </StackPanel>
+
+                        <StackPanel Style="{StaticResource DcEmptyState}"
+                                    MaxWidth="460"
+                                    Visibility="{Binding NoMatches, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No rows match the filter" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear the filter to see every row." />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Grid.Row="2"
+                               Style="{StaticResource DcCaption}"
+                               Margin="12,6,12,8"
+                               Text="{Binding ReadOnlyNote}"
+                               Visibility="{Binding HasReadOnlyNote, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- Output of a rule pack validation (or a failed policy validate): selectable, copyable, with a line that explains what it usually means. -->
+                    <Border Grid.Row="3"
+                            Padding="12,8,12,10"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{DynamicResource DcBorderBrush}"
+                            Visibility="{Binding HasOutput, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Style="{StaticResource DcBadge}" Tag="{Binding OutputTone}" Margin="0,0,8,0">
+                                        <TextBlock Style="{StaticResource DcBadgeText}" TextTrimming="CharacterEllipsis" MaxWidth="420" Text="{Binding OutputTitle}" />
+                                    </Border>
+                                </StackPanel>
+                                <ui:Button Grid.Column="1"
+                                           Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                           Appearance="Transparent"
+                                           Command="{Binding CloseOutputCommand}"
+                                           ToolTip="Close the output"
+                                           AutomationProperties.Name="Close output" />
+                            </Grid>
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Warn"
+                                       Margin="0,0,0,6"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding OutputNote}"
+                                       Visibility="{Binding HasOutputNote, Converter={StaticResource BoolToVisibility}}" />
+                            <ctl:DcCommandOutput MaxHeight="180"
+                                                 OutputName="Policy command output"
+                                                 Text="{Binding OutputText, Mode=OneWay}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+            </Grid>
+
+            <!-- Inspector: opens while a row is selected. The detail is the runtime's own; the choices are the changes its model allows. -->
+            <ctl:DcInspector x:Name="Inspector"
+                             Grid.Column="1"
+                             Title="Details"
+                             IsOpen="{Binding HasSelection}"
+                             CloseCommand="{Binding ClearSelectionCommand}"
+                             CloseAutomationName="Close the details"
+                             AutomationProperties.Name="Policy details"
+                             Content="{Binding}">
+                <ctl:DcInspector.ContentTemplate>
+                    <DataTemplate>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource DcSectionHeader}"
+                                       Margin="0,0,0,6"
+                                       Text="{Binding InspectorTitle}" />
+
+                            <ItemsControl ItemsSource="{Binding InspectorLines}" AutomationProperties.Name="Detail lines">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock x:Name="Line"
+                                                   Style="{StaticResource DcTextSecondary}"
+                                                   FontSize="12"
+                                                   Margin="0,0,0,2"
+                                                   Text="{Binding Text}" />
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsIndented}" Value="True">
+                                                <Setter TargetName="Line" Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
+                                                <Setter TargetName="Line" Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsBlank}" Value="True">
+                                                <Setter TargetName="Line" Property="Height" Value="6" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Warn"
+                                       FontSize="12"
+                                       Margin="0,10,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ActionsNote}"
+                                       Visibility="{Binding HasActionsNote, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.LiveSetting="Polite" />
+
+                            <!-- The changes the model offers for this row. Each opens the review of the exact command; the one in force is marked; one that protects less is cautioned. -->
+                            <ItemsControl ItemsSource="{Binding ActionGroups}" AutomationProperties.Name="Changes">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,12,0,0">
+                                            <TextBlock Style="{StaticResource DcCardTitle}" Margin="0,0,0,4" Text="{Binding Name}" />
+                                            <ItemsControl ItemsSource="{Binding Actions}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,0,6,6">
+                                                            <ui:Button x:Name="Choice"
+                                                                       Padding="10,4,10,4"
+                                                                       Appearance="Secondary"
+                                                                       Command="{Binding RunCommand}"
+                                                                       CommandParameter="{Binding}"
+                                                                       IsEnabled="{Binding IsEnabled}"
+                                                                       ToolTip="{Binding ToolTip}"
+                                                                       ToolTipService.ShowOnDisabled="True"
+                                                                       AutomationProperties.Name="{Binding AutomationName}">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock VerticalAlignment="Center" Text="{Binding Title}" />
+                                                                    <!-- A choice that protects less carries the mark; its tooltip and its automation name say so too. -->
+                                                                    <ctl:DcSymbolIcon Symbol="Warning16"
+                                                                                      FontSize="13"
+                                                                                      Margin="6,0,0,0"
+                                                                                      VerticalAlignment="Center"
+                                                                                      Foreground="{DynamicResource DcToneHighBrush}"
+                                                                                      Visibility="{Binding Weakens, Converter={StaticResource BoolToVisibility}}" />
+                                                                </StackPanel>
+                                                            </ui:Button>
+                                                            <!-- The choice already in force is a mark, not a button: there is nothing to press. -->
+                                                            <Border x:Name="InForce"
+                                                                    Visibility="Collapsed"
+                                                                    Padding="10,4,10,4"
+                                                                    CornerRadius="{DynamicResource DcRadiusS}"
+                                                                    Background="{DynamicResource DcAccentBrush}"
+                                                                    ToolTip="{Binding ToolTip}">
+                                                                <TextBlock VerticalAlignment="Center"
+                                                                           Foreground="{DynamicResource DcOnAccentBrush}"
+                                                                           Text="{Binding Title}"
+                                                                           AutomationProperties.Name="{Binding AutomationName}" />
+                                                            </Border>
+                                                        </Grid>
+                                                        <DataTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                                <Setter TargetName="Choice" Property="Visibility" Value="Collapsed" />
+                                                                <Setter TargetName="InForce" Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </DataTemplate.Triggers>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ctl:DcInspector.ContentTemplate>
+            </ctl:DcInspector>
+        </Grid>
+
+        <!-- Confirm-and-run dialog (collapsed until a change is requested) -->
+        <panels:DiscoverReviewOverlay Grid.RowSpan="3" DataContext="{Binding Review}" />
+    </Grid>
+</UserControl>

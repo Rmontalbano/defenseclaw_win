@@ -337,6 +337,13 @@ public sealed class PolicyTests
 
         Assert.Same(backend, PolicyBackends.ForInstalledRuntime());
         Assert.Same(backend, PolicyBackends.Select(PolicyBackends.Available, PolicyRuntimeCapabilities.Release0810));
-        Assert.Null(PolicyBackends.Select(PolicyBackends.Available, new PolicyRuntimeCapabilities(HasSevenViewPanel: true)));
+        Assert.Equal(PolicySurface.NamedPolicies, backend.Surface);
+
+        // A runtime with the seven-view model (CUST-293) gets the other backend, and only it.
+        var withModel = new PolicyRuntimeCapabilities(HasSevenViewPanel: true);
+        Assert.Same(SevenViewPolicyBackend.Instance, PolicyBackends.Select(PolicyBackends.Available, withModel));
+        Assert.False(backend.Supports(withModel));
+        Assert.False(SevenViewPolicyBackend.Instance.Supports(PolicyRuntimeCapabilities.Release0810));
+        Assert.Equal(PolicySurface.SevenViewModel, SevenViewPolicyBackend.Instance.Surface);
     }
 }

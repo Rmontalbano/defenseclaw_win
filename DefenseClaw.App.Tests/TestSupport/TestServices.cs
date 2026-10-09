@@ -1,5 +1,6 @@
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Tests.TestSupport;
 
@@ -16,7 +17,11 @@ internal static class TestServices
             binDirectory: System.IO.Path.Combine(dataDirectory, "no-such-bin"),
             searchPath: Array.Empty<string>());
 
-    public static AppServices Create(TempDirectory temp, string? configYaml = null)
+    /// <param name="runtimeProbeRunner">
+    /// What answers the runtime probes (<c>--version-json</c>, the help screens). Null: nothing does, so the runtime reads as unknown and every
+    /// capability newer than 0.8.10 is absent - the default for the panels that do not care.
+    /// </param>
+    public static AppServices Create(TempDirectory temp, string? configYaml = null, RuntimeProbeRunner? runtimeProbeRunner = null)
     {
         if (configYaml is not null)
         {
@@ -25,6 +30,7 @@ internal static class TestServices
 
         return AppServices.CreateIsolated(
             IsolatedPaths(temp.Path),
-            claudeSettingsPath: temp.File("claude-settings.json"));
+            claudeSettingsPath: temp.File("claude-settings.json"),
+            runtimeProbeRunner: runtimeProbeRunner);
     }
 }

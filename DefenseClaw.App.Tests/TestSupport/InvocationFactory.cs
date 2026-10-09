@@ -30,6 +30,8 @@ internal static class InvocationFactory
 
     private static readonly PropertyInfo EnvironmentNames = Property(nameof(CliInvocation.EnvironmentNames));
 
+    private static readonly PropertyInfo FailureReason = Property(nameof(CliInvocation.FailureReason));
+
     /// <param name="retainFullOutput">True for the ceiling a <see cref="CliRunOptions.JsonRead"/> run gets (200,000 lines).</param>
     public static CliInvocation Create(bool retainFullOutput = false, params string[] argv) =>
         (CliInvocation)Constructor.Invoke(new object[]
@@ -56,6 +58,13 @@ internal static class InvocationFactory
     {
         FinishedAt.SetValue(invocation, DateTimeOffset.UtcNow);
         ExitCode.SetValue(invocation, exitCode);
+    }
+
+    /// <summary>Ends the run without an exit code, as a timeout or a cancel does: the runner records why in <see cref="CliInvocation.FailureReason"/>.</summary>
+    public static void Fail(CliInvocation invocation, string reason)
+    {
+        FinishedAt.SetValue(invocation, DateTimeOffset.UtcNow);
+        FailureReason.SetValue(invocation, reason);
     }
 
     /// <summary>Marks the run as having carried secrets in its environment (names only, as the runner records them).</summary>
