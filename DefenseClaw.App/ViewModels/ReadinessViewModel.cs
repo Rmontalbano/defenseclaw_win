@@ -66,8 +66,9 @@ public sealed class ReadinessRowViewModel
 /// <para>
 /// <b>Nothing new is polled.</b> The inputs are the loaded config.yaml, the gateway monitor's last snapshot, the Credentials card's last read
 /// and the doctor cache file (read once when the panel activates or refreshes, like the Overview does; the Overview's parsed copy is private
-/// to it). The rows are rebuilt when the panel activates, on Refresh, when the gateway state changes and when the credential read lands - never
-/// on a timer, and nothing here runs while the panel is hidden.
+/// to it). The rows are rebuilt when the panel activates, on Refresh, when the gateway state changes, when the credential read lands and when the
+/// restart queue changes (the "Restart Pending" row is <c>Services.RestartQueue</c>'s reasons) - never on a timer, and nothing here runs while the
+/// panel is hidden.
 /// </para>
 /// <para>
 /// <b>Fixes never run by themselves.</b> A <see cref="ReadinessFixKind.Review"/> fix opens the shared review (the exact argv, the tier from
@@ -82,7 +83,6 @@ public sealed partial class ReadinessViewModel : ObservableObject
     private readonly CredentialsViewModel _credentials;
     private readonly DiscoverActionReview _review;
     private IReadOnlyList<string> _doctorMissing = Array.Empty<string>();
-    private string _restartReason = string.Empty;
 
     public ReadinessViewModel(AppServices services, CredentialsViewModel credentials, DiscoverActionReview review)
     {
@@ -103,16 +103,6 @@ public sealed partial class ReadinessViewModel : ObservableObject
     /// <summary>Number of rows that are not passing.</summary>
     [ObservableProperty]
     private int _attentionCount;
-
-    /// <summary>
-    /// Queues a gateway restart (the TUI's <c>RestartQueue</c>): "Restart Pending" shows a Fix until a restart runs. The panel queues one when a
-    /// change it made (a guardrail verb run with <c>--no-restart</c>) is saved but not yet in effect.
-    /// </summary>
-    public void QueueRestart(string reason)
-    {
-        _restartReason = reason ?? string.Empty;
-        Rebuild();
-    }
 
     /// <summary>Re-reads the doctor cache (a small file) and rebuilds. For activation and Refresh, not for a timer.</summary>
     public async Task ReloadAsync()
@@ -167,7 +157,10 @@ public sealed partial class ReadinessViewModel : ObservableObject
             Credentials = _credentials.Snapshot,
             DoctorMissingCredentials = _doctorMissing,
             Config = ReadinessConfig.From(_services.Config),
-            RestartReason = _restartReason,
+
+            // The TUI's "Restart Pending" row is its restart queue's reasons (CUST-267): the app-wide queue, so a save made in the config editor or a
+            // run made from any other panel is here too, until a restart or Clear.
+            RestartReason = _services.RestartQueue.Reason,
         };
 
         Apply(SetupReadiness.Build(inputs));
@@ -221,17 +214,13 @@ public sealed partial class ReadinessViewModel : ObservableObject
             $"Fix: {check.Title}",
             check.Detail,
             steps,
-            onFinished: result => AfterFixAsync(fix, result),
+            onFinished: _ => AfterFixAsync(),
             restartsGateway: fix.RestartsGateway);
     }
 
-    private async Task AfterFixAsync(ReadinessFix fix, DiscoverReviewResult result)
+    private async Task AfterFixAsync()
     {
-        if (result.Succeeded && fix.RestartsGateway)
-        {
-            _restartReason = string.Empty;
-        }
-
+        // A restart the fix ran has already cleared the restart queue: the runner told it (RestartQueue.Note), and the rows read the queue.
         // A fix may change the credential list (doctor --fix) and the config the rows read: take both again.
         await _credentials.RefreshAsync().ConfigureAwait(true);
         await ReloadAsync().ConfigureAwait(true);

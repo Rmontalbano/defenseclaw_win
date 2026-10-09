@@ -169,6 +169,10 @@ public sealed class AppServices : IDisposable
             Cli,
             Monitor);
 
+        // Changes saved and not yet in the running gateway (CUST-267). Listens to the runner for the life of the process (a --no-restart run queues
+        // a line, a restart clears them) and to the monitor's poll only while a line is queued.
+        RestartQueue = new RestartQueue(Monitor, Cli);
+
         // Knows whether a newer runtime is out (the banner and the one toast). Nothing runs until the app calls Start on it.
         UpdateWatcher = updateWatcherFactory?.Invoke(this) ?? UpdateWatcher.Create(this);
 
@@ -287,6 +291,13 @@ public sealed class AppServices : IDisposable
 
     /// <summary>What a panel has read that the status strip repeats (the credentials still missing, the redaction label). Holds, never reads. See <see cref="Services.StatusFacts"/>.</summary>
     internal StatusFacts StatusFacts { get; }
+
+    /// <summary>
+    /// The gateway restarts that are waiting because a change was saved without one (the TUI's restart queue): the Setup hub's banner, its readiness
+    /// row and the Overview's attention row all read it, and any restart - the tray's, the palette's, another app's, a terminal's - clears it. See
+    /// <see cref="Services.RestartQueue"/>.
+    /// </summary>
+    internal RestartQueue RestartQueue { get; }
 
     /// <summary>
     /// Whether a newer DefenseClaw release is out, checked in the background at launch and every 6 h (<c>ShowBanner</c> / <c>Changed</c> for the
@@ -671,6 +682,7 @@ public sealed class AppServices : IDisposable
         Settings.Changed -= OnSettingsChanged;
         UnreadCounts.Dispose();
         AlertCounts.Dispose();
+        RestartQueue.Dispose();
         AuditChanges.Dispose();
         UpdateWatcher.Dispose();
         GatewayAutoStart.Dispose();

@@ -294,6 +294,10 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         Services.Runtime.Changed += OnRuntimeChanged;
         RaiseRedactionTile();
 
+        // The queued gateway restart is app-wide (CUST-267): a save or a run elsewhere may have queued or applied one while the panel was away.
+        Services.RestartQueue.Changed += OnRestartQueueChanged;
+        RefreshRestartBanner();
+
         BuildConnectors();
 
         // Either may have moved while the panel was off screen: the cards behind the catalog, and the Docker and Terraform answers that gate
@@ -332,6 +336,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         _catalog.DefinitionChanged -= OnDefinitionChanged;
         Services.Monitor.StateChanged -= OnGatewayStateChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;
+        Services.RestartQueue.Changed -= OnRestartQueueChanged;
         _localStack.Changed -= OnProbeAnswerChanged;
         _terraform.Changed -= OnProbeAnswerChanged;
     }
@@ -602,6 +607,9 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         BuildConnectors();
         Readiness.Rebuild();
+
+        // Whether the gateway can be asked to restart (Restart now) follows its state.
+        RefreshRestartBanner();
     }
 
     /// <summary>
@@ -850,6 +858,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         OnPropertyChanged(nameof(HasInstallationBlock));
         Credentials.RefreshInstallation();
         RefreshGuardrailReview();
+        RefreshRestartBanner();
     }
 
     partial void OnIsGuardrailBusyChanged(bool value) => OnPropertyChanged(nameof(CanUseGuardrailControls));
@@ -1091,10 +1100,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
             // read, and re-reading it would only show the same thing while hiding the error.
             if (invocation.ExitCode is 0 && invocation.FailureReason is null)
             {
-                // A change saved with --no-restart is not in effect until the gateway restarts: the checklist says so.
-                Readiness.QueueRestart(GuardrailRestartAfter
-                    ? string.Empty
-                    : "A guardrail change was saved without restarting the gateway; it takes effect at the next restart.");
+                // (A change saved with --no-restart is not in effect until the gateway restarts: the runner told Services.RestartQueue as the run
+                // finished, and the banner and the readiness row show it. A restarting one cleared it.)
                 IsGuardrailRunning = false;
                 await LoadGuardrailAsync().ConfigureAwait(true);
             }

@@ -317,6 +317,25 @@
                                                          AutomationProperties.HelpText="Read-only text you can select and copy. The app never runs it for you."
                                                          Text="{Binding Command, Mode=OneWay}" />
                                             </Border>
+
+                                            <!-- The queued gateway restart (CUST-267) is the one row with buttons: a reviewed restart, and forgetting the queue. -->
+                                            <StackPanel Margin="0,6,0,0"
+                                                        Orientation="Horizontal"
+                                                        Visibility="{Binding OffersRestart, Converter={StaticResource BoolToVisibility}}">
+                                                <ui:Button Appearance="Primary"
+                                                           Content="Restart now…"
+                                                           Command="{Binding DataContext.RestartPendingNowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                           ToolTipService.ShowOnDisabled="True"
+                                                           ToolTip="{Binding DataContext.RestartPendingNowTip, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                           AutomationProperties.Name="Restart the gateway now"
+                                                           AutomationProperties.HelpText="{Binding DataContext.RestartPendingNowTip, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                                                <ui:Button Margin="8,0,0,0"
+                                                           Content="Clear"
+                                                           Command="{Binding DataContext.ClearPendingRestartCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                           ToolTip="Forget the queued restart without restarting. What was saved stays saved and applies the next time the gateway restarts."
+                                                           AutomationProperties.Name="Clear the queued restart"
+                                                           AutomationProperties.HelpText="Forgets the queued restart without restarting the gateway. What was saved stays saved and applies the next time the gateway restarts." />
+                                            </StackPanel>
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>

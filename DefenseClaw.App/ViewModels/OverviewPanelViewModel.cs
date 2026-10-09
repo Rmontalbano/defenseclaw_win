@@ -297,6 +297,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         Services.Monitor.PollCompleted += OnPollCompleted;
         Services.ConfigReloaded += OnConfigReloaded;
 
+        // A queued gateway restart is app-wide (CUST-267): a save or a run on another panel queues one, a restart anywhere applies it.
+        Services.RestartQueue.Changed += OnRestartQueueChanged;
+
         // The scope and the unacknowledged-findings count are shared with the rest of the app (the sidebar badge, the tray): the panel
         // follows them only while it is on screen. Subscribing to the counts is what keeps their 30 s read going, which the badge
         // already does; it is one query of a few milliseconds.
@@ -322,6 +325,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     {
         Services.Monitor.PollCompleted -= OnPollCompleted;
         Services.ConfigReloaded -= OnConfigReloaded;
+        Services.RestartQueue.Changed -= OnRestartQueueChanged;
         Services.ConnectorScope.Changed -= OnScopeChanged;
         Services.AlertCounts.Changed -= OnAlertCountsChanged;
 
@@ -735,6 +739,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 break;
         }
 
+        // A saved change the running gateway does not have yet (CUST-267), right after what the gateway itself is doing: it is what Restart now is for.
+        AppendRestartPending(rows);
+
         // Observe + fail-closed: the recurring bad default. config.yaml is the operator's
         // stated intent; /status carries what the running hook contract actually does, and
         // the two disagreeing is itself worth surfacing.
@@ -856,6 +863,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         // Every input of the reviewed buttons (config.yaml, the doctor cache, the snapshot) changes with a rebuild of this list: they follow it.
         ApplyQuickActions();
+        RefreshRestartPendingActions();
     }
 
     /// <summary>How many rows "What needs attention" shows before "Show all": the Mac's top three.</summary>
@@ -1484,6 +1492,12 @@ public sealed record AttentionRow
     public bool HasCommand => !string.IsNullOrWhiteSpace(Command);
 
     /// <summary>
+    /// The row is the queued gateway restart (CUST-267) and carries its two buttons, Restart now (a reviewed <c>defenseclaw-gateway restart</c>) and
+    /// Clear. The one row that is not text to read or a command to copy.
+    /// </summary>
+    public bool OffersRestart { get; init; }
+
+    /// <summary>
     /// The Mac's mono bracket tag for the row: <c>[!]</c> critical, <c>[*]</c> a warning (High, Medium), <c>[OK]</c> all clear, <c>[&gt;]</c> for
     /// information. Drawn in the row's tone beside the severity word, which stays: a bracket is a shape, not a reading.
     /// </summary>
@@ -1504,6 +1518,11 @@ public sealed record AttentionRow
     public override string ToString()
     {
         var text = $"{SeverityKey}: {Title}. {Detail}".TrimEnd();
+        if (OffersRestart)
+        {
+            text += " Restart now and Clear are available.";
+        }
+
         return HasCommand ? text + " A suggested command is available." : text;
     }
 }

@@ -35,5 +35,6 @@ public sealed partial class OverviewPanelViewModel
         OnPropertyChanged(nameof(ScanSkillsTip));
         ApplyGatewayActions(_snapshot);
         ApplyQuickActions();
+        RefreshRestartPendingActions();
     }
 }

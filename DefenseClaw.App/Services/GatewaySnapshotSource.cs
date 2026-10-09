@@ -1,8 +1,8 @@
 namespace DefenseClaw.App.Services;
 
 /// <summary>
-/// What <see cref="ConnectorScope"/> and <see cref="AlertCountsService"/> need from the gateway monitor, so they can be driven
-/// by a fake in a test without a poll loop. <see cref="GatewayMonitor"/> is the only implementation.
+/// What <see cref="ConnectorScope"/>, <see cref="AlertCountsService"/> and <see cref="RestartQueue"/> need from the gateway monitor, so they
+/// can be driven by a fake in a test without a poll loop. <see cref="GatewayMonitor"/> is the only implementation.
 /// </summary>
 internal interface IGatewaySnapshotSource
 {
@@ -14,4 +14,10 @@ internal interface IGatewaySnapshotSource
 
     /// <summary>The alert cadence tick; see <see cref="GatewayMonitor.AlertCadenceElapsed"/>. Raised on a pool thread.</summary>
     event EventHandler<GatewaySnapshotEventArgs>? AlertCadenceElapsed;
+
+    /// <summary>
+    /// Raised on the UI thread after every completed poll, with the volatile detail (the gateway's start time and uptime) that
+    /// <see cref="StateChanged"/> leaves out; see <see cref="GatewayMonitor.PollCompleted"/>. Costs nothing while nothing is subscribed.
+    /// </summary>
+    event EventHandler<GatewaySnapshotEventArgs>? PollCompleted;
 }

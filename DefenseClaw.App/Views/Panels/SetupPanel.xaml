@@ -86,6 +86,75 @@
                             IsOpen="{Binding HasInstallationBlock, Mode=OneWay}"
                             Message="{Binding InstallationBlockedReason}" />
 
+                <!--
+                    A gateway restart is queued (CUST-267; the TUI's "Restart pending: ..., [G] restart now, [C] clear"): a change was saved - in the
+                    config editor, or by a wizard, guardrail or discovery run told not to restart - and the running gateway does not have it yet. The
+                    queue is app-wide, so this stays across panel switches until the gateway restarts (by any route) or Clear. Restart now opens the
+                    review of defenseclaw-gateway restart; nothing restarts from the press alone. Not a Wpf.Ui InfoBar (it has no place for actions):
+                    built like the update banner, from tokens only.
+                -->
+                <Border Margin="{StaticResource DcCardGap}"
+                        Padding="10,8,8,8"
+                        Background="{DynamicResource DcSurfaceBrush}"
+                        BorderBrush="{DynamicResource DcToneMediumBrush}"
+                        BorderThickness="{DynamicResource DcBorderThickness}"
+                        CornerRadius="{DynamicResource DcControlRadius}"
+                        Visibility="{Binding HasRestartPending, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- The edge: the Medium tone, the readiness row's "warn". -->
+                        <Border Grid.Column="0"
+                                Width="3"
+                                Margin="0,0,10,0"
+                                CornerRadius="{DynamicResource DcDotRadius}"
+                                Background="{DynamicResource DcToneMediumBrush}" />
+
+                        <ctl:DcSymbolIcon Grid.Column="1"
+                                          Margin="0,0,10,0"
+                                          VerticalAlignment="Center"
+                                          Symbol="ArrowRepeatAll24"
+                                          FontSize="22"
+                                          Foreground="{DynamicResource DcToneMediumBrush}" />
+
+                        <!-- A polite live region: a screen reader hears it when a save elsewhere queues a restart while this page is open. -->
+                        <StackPanel Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.LiveSetting="Polite">
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding RestartPendingTitle}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding RestartPendingDetail}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="3"
+                                    Margin="12,0,0,0"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <ui:Button Appearance="Primary"
+                                       Content="Restart now…"
+                                       Command="{Binding RestartNowCommand}"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       ToolTip="{Binding RestartNowTip}"
+                                       AutomationProperties.Name="Restart the gateway now"
+                                       AutomationProperties.HelpText="{Binding RestartNowTip}" />
+                            <ui:Button Margin="8,0,0,0"
+                                       Content="Clear"
+                                       Command="{Binding ClearRestartCommand}"
+                                       ToolTip="Forget the queued restart without restarting. What was saved stays saved and applies the next time the gateway restarts."
+                                       AutomationProperties.Name="Clear the queued restart"
+                                       AutomationProperties.HelpText="Forgets the queued restart without restarting the gateway. What was saved stays saved and applies the next time the gateway restarts." />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
                 <!-- Connector roster: what the wizards are acting on right now. -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>

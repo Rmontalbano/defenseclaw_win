@@ -101,7 +101,8 @@ public sealed class ReadinessViewModelTests
     public void The_gateway_fix_is_a_reviewed_gateway_command_with_the_restart_warning()
     {
         using var h = new Harness();
-        h.Readiness.QueueRestart("A guardrail change was saved without restarting the gateway.");
+        _ = h.Services.RestartQueue.Queue("A guardrail change was saved without restarting the gateway.");
+        h.Readiness.Rebuild();
 
         var row = h.Row("Restart Pending");
         Assert.Equal(ReadinessStatus.Warn, row.Status);
@@ -118,15 +119,26 @@ public sealed class ReadinessViewModelTests
     }
 
     [Fact]
-    public void A_queued_restart_can_be_cleared_by_queueing_nothing()
+    public void The_restart_pending_row_is_the_app_wide_queue_and_follows_it_both_ways()
     {
         using var h = new Harness();
-        h.Readiness.QueueRestart("pending");
-        Assert.Equal(ReadinessStatus.Warn, h.Row("Restart Pending").Status);
+        h.Readiness.Rebuild();
+        Assert.Equal(ReadinessStatus.Pass, h.Row("Restart Pending").Status);
+        Assert.Equal("No queued restart.", h.Row("Restart Pending").Detail);
 
-        h.Readiness.QueueRestart(string.Empty);
+        _ = h.Services.RestartQueue.Queue("pending");
+        _ = h.Services.RestartQueue.Queue("config.yaml saved in the config editor (llm)");
+        h.Readiness.Rebuild();
+
+        // The TUI's row: the queue's reasons, joined, as its detail.
+        Assert.Equal(ReadinessStatus.Warn, h.Row("Restart Pending").Status);
+        Assert.Equal("pending; config.yaml saved in the config editor (llm)", h.Row("Restart Pending").Detail);
+
+        Assert.True(h.Services.RestartQueue.Clear());
+        h.Readiness.Rebuild();
 
         Assert.Equal(ReadinessStatus.Pass, h.Row("Restart Pending").Status);
+        Assert.Equal("No queued restart.", h.Row("Restart Pending").Detail);
     }
 
     [Fact]

@@ -938,6 +938,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         {
             var textToSave = RawText;
             var signatureUsed = _loadedSignature;
+
+            // What the file holds now (the save refuses to go on if it is not the text this was read from): the new text is compared with it below.
+            var textBeforeSave = _diskText;
             var outcome = await _saveService.SaveAsync(textToSave, signatureUsed).ConfigureAwait(true);
 
             SaveResultMessage = outcome.Message;
@@ -983,6 +986,13 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             {
                 // The running gateway read config.yaml when it started; the file it will read next is this one.
                 ShowRestartPrompt = true;
+
+                // ... and the bar above is the editor's own, gone with the next edit. A save that changed a value (not a comment, spacing or key
+                // order) also joins the app-wide queue, which the Setup hub and the Overview keep until a restart or Clear (CUST-267).
+                if (RestartQueueRules.ConfigSaveReason(textBeforeSave, textToSave) is { } restartReason)
+                {
+                    _ = _services.RestartQueue.Queue(restartReason);
+                }
 
                 // Typing that happened while the save was in flight is not saved yet.
                 IsRawModified = !string.Equals(RawText, textToSave, StringComparison.Ordinal);
@@ -1055,6 +1065,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             return;
         }
 
+        // What the file held, and whether the gateway can have read it: a file our own save wrote and the CLI rejected never reached a gateway.
+        var textBeforeRestore = _diskText;
+        var replacedAnUnvalidatedFile = UnvalidatedSignature is not null;
+
         var outcome = await _saveService.RestoreFromBackupAsync(LastBackupPath).ConfigureAwait(true);
         SaveResultMessage = outcome.Message;
         SaveResultIsError = !outcome.Success;
@@ -1064,6 +1078,14 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         {
             UnvalidatedSignature = null;
             await LoadAsync().ConfigureAwait(true);
+
+            // A restore is a write to config.yaml like a save is (CUST-267), so it queues a restart when it changed a value of a file the gateway
+            // may be running. Restoring after a rejected save is the usual case, and queues nothing: the file goes back to what the gateway has.
+            if (!replacedAnUnvalidatedFile &&
+                RestartQueueRules.ConfigSaveReason(textBeforeRestore, _diskText, RestartQueueRules.ConfigRestoredText) is { } restartReason)
+            {
+                _ = _services.RestartQueue.Queue(restartReason);
+            }
         }
     }
 
