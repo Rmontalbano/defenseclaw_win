@@ -398,6 +398,11 @@ public sealed class RuntimeSelectorTests : IDisposable
 
         var snapshot = await services.Runtime.RefreshAsync();
 
+        // Once the shared UI thread exists (any earlier test in the process starts it), RuntimeService posts Changed to that thread's dispatcher
+        // at Normal priority rather than raising it here. Let everything at that priority run before counting: a ContextIdle no-op is behind the
+        // post, where a plain Invoke (Send) would jump ahead of it.
+        System.Windows.Application.Current?.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+
         Assert.Equal("1.0.0", snapshot.Identity!.Version);
         foreach (var capability in RuntimeCapabilityCatalog.All)
         {
