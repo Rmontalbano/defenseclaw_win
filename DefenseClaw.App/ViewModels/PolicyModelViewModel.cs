@@ -286,7 +286,21 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
 
     // ---- lifecycle -----------------------------------------------------------------------------------------------------------
 
-    public override Task InitializeAsync(CancellationToken cancellationToken = default) => LoadIfIdleAsync();
+    public override Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        // The model can be on screen before it is initialized: on the Policies panel's first visit the probe's own notification may build and
+        // activate it while the visit is still waiting for that probe, and the activation reads. A good read that has finished is the first read
+        // (one still running is joined below); a failed one is tried again.
+        lock (_loadGate)
+        {
+            if (_lastLoadedAt is not null && !_loadRunning)
+            {
+                return Task.CompletedTask;
+            }
+        }
+
+        return LoadIfIdleAsync();
+    }
 
     protected override void OnActivated()
     {
