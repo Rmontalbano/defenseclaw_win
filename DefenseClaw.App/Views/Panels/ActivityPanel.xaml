@@ -10,7 +10,8 @@
         weight of explaining the panel rather than the list itself.
 
         Each entry shows its review tier (Read-only / State-changing / Destructive), its exit
-        badge, and the actions: Cancel (only while it runs), Copy argv, Copy output, Export log.
+        badge, what it did and what to do next once it has finished (MetaText), and the actions:
+        Cancel (only while it runs), Rerun (reviews the same command again), Copy argv, Copy output, Export log.
         Everything is on the shared Dc* design system; the local styles are the output line
         (stderr and notice tones) and its list row.
 
@@ -326,8 +327,19 @@
                                            Visibility="{Binding HasFailure, Converter={StaticResource BoolToVisibility}}"
                                            Text="{Binding FailureText}" />
 
+                                <!-- What the command did and what to do next, once it has finished (the TUI's Activity footer):
+                                     config reloaded · gateway restarted · doctor cache refreshed · next: rerun readiness. -->
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding MetaText}"
+                                           AutomationProperties.Name="{Binding MetaText, StringFormat='Outcome: {0}'}"
+                                           Visibility="{Binding HasMeta, Converter={StaticResource BoolToVisibility}}" />
+
                                 <!-- Row actions. Cancel exists only while the run does; for the upgrade
-                                     installer it stays visible but disabled, with the reason as its tooltip. -->
+                                     installer it stays visible but disabled, with the reason as its tooltip.
+                                     Rerun reviews the same command again and exists for every DefenseClaw command except
+                                     one that carried a secret; it is off while the run is going. -->
                                 <WrapPanel Margin="0,8,0,0">
                                     <ui:Button Content="Cancel"
                                                Icon="{ctl:DcSymbolIcon Dismiss24}"
@@ -340,6 +352,19 @@
                                                AutomationProperties.Name="Cancel this command"
                                                AutomationProperties.HelpText="{Binding CancelHint}"
                                                Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                                    <ui:Button Content="Rerun"
+                                               Appearance="Secondary"
+                                               Margin="0,0,8,4"
+                                               Command="{Binding RerunCommand}"
+                                               ToolTip="{Binding RerunHint}"
+                                               ToolTipService.ShowOnDisabled="True"
+                                               AutomationProperties.Name="Rerun this command"
+                                               AutomationProperties.HelpText="{Binding RerunHint}"
+                                               Visibility="{Binding CanOfferRerun, Converter={StaticResource BoolToVisibility}}">
+                                        <ui:Button.Icon>
+                                            <ctl:DcSymbolIcon Symbol="ArrowClockwise24" />
+                                        </ui:Button.Icon>
+                                    </ui:Button>
                                     <ui:Button Content="Copy argv"
                                                Appearance="Secondary"
                                                Margin="0,0,8,4"

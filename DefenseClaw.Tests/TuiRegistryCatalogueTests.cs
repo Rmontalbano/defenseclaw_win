@@ -299,10 +299,11 @@ public sealed class TuiRegistryCatalogueTests
     /// </summary>
     private static readonly string[] ReadOnlyBoth =
     {
-        "agent discovery status", "agent signatures list", "config show", "config show effective observability", "config validate", "doctor",
+        "agent discovery status", "agent signatures list", "config show", "config show effective observability", "config validate",
+        "connector list-backups", "connector verify", "doctor",
         "doctor run", "gateway provenance show", "gateway status", "guardrail status", "help", "info plugin", "info skill", "keys check",
         "keys list", "keys list --json", "list mcps", "list plugins", "list skills", "list tools", "mcp list", "mcps", "observability plan",
-        "plugin info", "plugin list", "plugins", "policy list", "policy show", "policy validate", "readiness", "setup local-observability logs",
+        "plugin info", "plugin list", "plugins", "policy domains", "policy list", "policy show", "policy validate", "readiness", "setup local-observability logs",
         "setup local-observability status", "setup local-observability url", "skill info", "skill list",
         "skill search", "skills", "status", "tool list", "tool status", "tools", "uninstall dry-run", "version", "watchdog status",
     };
@@ -337,15 +338,17 @@ public sealed class TuiRegistryCatalogueTests
         // Nothing that changes anything is listed, however its name reads.
         Assert.All(listed, e => Assert.Equal(CommandTier.ReadOnly, CommandTiers.Classify(e.Argv)));
 
-        // And the listed ones are these: bare reads on the allow-list. An entry with an option on it (`keys list --json`) or a gateway verb
-        // beyond `status` and `provenance show` (`watchdog status`) is a read that is still reviewed.
+        // And the listed ones are these: bare reads on the allow-list (the gateway's are `status`, `provenance show` and the four the palette
+        // adds, each read from the 0.8.10 gateway's help: `watchdog status`, `connector verify`, `connector list-backups`, `policy domains`).
+        // An entry with an option on it (`keys list --json`) is a read that is still reviewed.
         var expected = new[]
         {
-            "agent discovery status", "agent signatures list", "config show", "config validate", "doctor", "doctor run", "gateway provenance show",
+            "agent discovery status", "agent signatures list", "config show", "config validate", "connector list-backups", "connector verify",
+            "doctor", "doctor run", "gateway provenance show",
             "gateway status", "guardrail status", "info plugin", "info skill", "keys check", "keys list", "list mcps", "list plugins", "list skills",
-            "list tools", "mcp list", "mcps", "observability plan", "plugin info", "plugin list", "plugins", "policy list", "policy show",
+            "list tools", "mcp list", "mcps", "observability plan", "plugin info", "plugin list", "plugins", "policy domains", "policy list", "policy show",
             "policy validate", "readiness", "setup local-observability logs", "setup local-observability status", "setup local-observability url",
-            "skill info", "skill list", "skill search", "skills", "status", "tool list", "tool status", "tools", "version",
+            "skill info", "skill list", "skill search", "skills", "status", "tool list", "tool status", "tools", "version", "watchdog status",
         };
         Assert.Equal(expected.Order(StringComparer.Ordinal), listed.Select(e => e.Name).Order(StringComparer.Ordinal));
     }

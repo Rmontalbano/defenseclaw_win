@@ -148,6 +148,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     {
         _paletteViewModel.CommandChosen += OnPaletteCommandChosen;
         _paletteViewModel.CloseRequested += (_, _) => ClosePalette();
+
+        // The palette remembers the last commands it ran in settings.json and lists them first while its search is empty.
+        _paletteViewModel.RecentsStore = services.Settings;
         Palette.DataContext = _paletteViewModel;
 
         Shortcuts.DataContext = ShortcutCatalog.Build(_catalog);

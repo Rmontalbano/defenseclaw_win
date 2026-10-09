@@ -96,19 +96,9 @@ internal static class GatewayControl
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        if (snapshot.Install is null)
+        if (InstallProblem(snapshot) is { } problem)
         {
-            return (false, "Still checking the gateway; try again in a moment.");
-        }
-
-        if (snapshot.Install == InstallState.NotInstalled)
-        {
-            return (false, "DefenseClaw is not installed on this machine.");
-        }
-
-        if (snapshot.Install == InstallState.InstalledNotInitialized)
-        {
-            return (false, "DefenseClaw is not initialized yet. Run 'defenseclaw init' first.");
+            return (false, problem);
         }
 
         return action switch
@@ -118,4 +108,30 @@ internal static class GatewayControl
             _ => (true, null),
         };
     }
+
+    /// <summary>
+    /// Whether a command that talks to the running sidecar (<c>defenseclaw-gateway policy reload</c> posts to its API) makes sense for
+    /// <paramref name="snapshot"/>, and if not, why. The same install-state reasons as <see cref="Availability"/>, then
+    /// <paramref name="whenStopped"/> while the gateway is not running.
+    /// </summary>
+    public static (bool Allowed, string? Reason) AvailabilityWhileRunning(GatewaySnapshot snapshot, string whenStopped)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        if (InstallProblem(snapshot) is { } problem)
+        {
+            return (false, problem);
+        }
+
+        return snapshot.IsRunning ? (true, null) : (false, whenStopped);
+    }
+
+    /// <summary>Why nothing can be asked of the gateway yet or at all (not known, not installed, not initialized), or null.</summary>
+    private static string? InstallProblem(GatewaySnapshot snapshot) => snapshot.Install switch
+    {
+        null => "Still checking the gateway; try again in a moment.",
+        InstallState.NotInstalled => "DefenseClaw is not installed on this machine.",
+        InstallState.InstalledNotInitialized => "DefenseClaw is not initialized yet. Run 'defenseclaw init' first.",
+        _ => null,
+    };
 }

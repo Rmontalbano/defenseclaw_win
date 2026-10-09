@@ -157,6 +157,14 @@ internal sealed record CuratedCommand(
             : null;
 
     /// <summary>
+    /// The entry of <see cref="GatewayVerbs"/> this row stands for - <c>watchdog start</c>, <c>connector teardown</c>, <c>policy reload</c> and the
+    /// rest of the gateway's fixed verbs, the exact two-word argv on <c>defenseclaw-gateway</c> - or null. What the review says it does, and
+    /// whether it needs the running sidecar, comes from there; its tier does not (that is <see cref="Tier"/>).
+    /// </summary>
+    public GatewayVerbs.Verb? GatewayVerb =>
+        string.Equals(Executable, GatewayControl.Executable, StringComparison.Ordinal) ? GatewayVerbs.Find(Argv) : null;
+
+    /// <summary>
     /// True when the palette may run it with no review: only a command with nothing to add, on the explicit allow-list of known reads
     /// (<see cref="CommandReview.MayRunUnreviewed(string, IReadOnlyList{string})"/>). A command <see cref="CommandTiers"/> calls read-only by
     /// its first verb but that is not on the list - <c>plan apply</c>, a verb a newer CLI added, <c>skill info</c> once a name is on it - is

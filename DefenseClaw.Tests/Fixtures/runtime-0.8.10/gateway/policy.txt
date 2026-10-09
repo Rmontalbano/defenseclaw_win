@@ -1,0 +1,17 @@
+Validate, inspect, evaluate, and reload DefenseClaw OPA policies.
+
+Usage:
+  defenseclaw-gateway policy [command]
+
+Available Commands:
+  domains           List firewall domain allowlist and blocklist from active policy
+  evaluate          Dry-run the admission policy for a given input
+  evaluate-firewall Dry-run the firewall policy for a given destination
+  reload            Tell the running sidecar daemon to reload OPA policies
+  show              Display the current OPA data.json policy configuration
+  validate          Compile-check all Rego modules and validate data.json
+
+Flags:
+  -h, --help   help for policy
+
+Use "defenseclaw-gateway policy [command] --help" for more information about a command.

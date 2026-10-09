@@ -1,0 +1,32 @@
+Low-level connector lifecycle commands.
+
+These subcommands operate on a single connector adapter (openclaw, codex,
+claudecode, zeptoclaw, or any plugin connector) and intentionally bypass
+the interactive 'defenseclaw setup' flow. They are primarily intended for
+the 'defenseclaw uninstall' flow and for operator debugging when a
+connector handoff (S7) leaves residual state behind.
+
+Each subcommand accepts an optional --connector flag. When omitted, the
+active connector is resolved in this order:
+
+  1. <data-dir>/active_connector.json (written by the sidecar after a
+     successful connector boot).
+  2. guardrail.connector from defenseclaw.yaml.
+  3. "openclaw" (legacy default).
+
+Usage:
+  defenseclaw-gateway connector [command]
+
+Available Commands:
+  list-backups List pristine connector backups stored under the data directory
+  reconcile    Refresh one connector's installed runtime registration
+  teardown     Run the active connector's Teardown (remove its config patches)
+  verify       Verify that the connector left no residual state behind
+
+Flags:
+      --connector string   Connector name (defaults to the active connector resolved from active_connector.json / guardrail.connector / openclaw)
+      --data-dir string    Override the data directory (defaults to cfg.DataDir)
+  -h, --help               help for connector
+      --json               Emit machine-readable JSON instead of the human-readable view
+
+Use "defenseclaw-gateway connector [command] --help" for more information about a command.

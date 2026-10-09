@@ -1,0 +1,34 @@
+DefenseClaw gateway sidecar — connects to the OpenClaw gateway WebSocket,
+monitors tool_call and tool_result events, enforces policy in real time,
+and exposes a local REST API for the Python CLI.
+
+Run without arguments to start the sidecar daemon.
+
+Usage:
+  defenseclaw-gateway [flags]
+  defenseclaw-gateway [command]
+
+Available Commands:
+  audit              Inspect and export the local audit database
+  completion         Generate the autocompletion script for the specified shell
+  connector          Inspect and manage individual connector lifecycle state
+  enterprise         Enterprise deployment maintenance commands
+  help               Help about any command
+  policy             Manage and inspect OPA policies
+  provenance         Print binary and config provenance (v7 quartet)
+  restart            Restart the gateway sidecar daemon
+  sandbox            Manage the openshell-sandbox instance
+  scan               Run security scanners
+  start              Start the gateway sidecar as a background daemon
+  status             Show health of the running sidecar's subsystems
+  stop               Stop the running gateway sidecar daemon
+  watchdog           Health watchdog that notifies when the gateway is down
+
+Flags:
+  -h, --help           help for defenseclaw-gateway
+      --host string    Gateway host (default: from config)
+      --port int       Gateway port (default: from config)
+  -v, --version        version for defenseclaw-gateway
+      --version-json   emit the exact build version as JSON and exit
+
+Use "defenseclaw-gateway [command] --help" for more information about a command.

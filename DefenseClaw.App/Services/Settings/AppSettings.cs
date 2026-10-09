@@ -20,6 +20,7 @@ namespace DefenseClaw.App.Services.Settings;
 /// <param name="Updates">What the update check remembers between runs.</param>
 /// <param name="Developer">The developer runtime selector (Settings -> Advanced); off unless a developer turns it on.</param>
 /// <param name="Archive">The optional archived audit database the Audit panel can show beside the live one (CUST-299).</param>
+/// <param name="Palette">What the command palette remembers between runs: the last few commands it ran (CUST-264).</param>
 internal sealed record AppSettings(
     AppearanceSettings Appearance,
     MonitoringSettings Monitoring,
@@ -28,7 +29,8 @@ internal sealed record AppSettings(
     ConnectionSettings Connection,
     UpdateSettings Updates,
     DeveloperSettings Developer,
-    ArchiveSettings Archive)
+    ArchiveSettings Archive,
+    PaletteSettings Palette)
 {
     /// <summary>A fresh install: every section at its defaults.</summary>
     public static AppSettings Defaults { get; } = new(
@@ -39,7 +41,8 @@ internal sealed record AppSettings(
         new ConnectionSettings(),
         new UpdateSettings(),
         new DeveloperSettings(),
-        new ArchiveSettings());
+        new ArchiveSettings(),
+        new PaletteSettings());
 }
 
 /// <summary>The sections of <see cref="AppSettings"/>, as flags: what <see cref="AppSettingsChangedEventArgs.Sections"/> says changed.</summary>
@@ -55,7 +58,8 @@ internal enum AppSettingsSections
     Updates = 32,
     Developer = 64,
     Archive = 128,
-    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates | Developer | Archive,
+    Palette = 256,
+    All = Appearance | Monitoring | Notifications | Startup | Connection | Updates | Developer | Archive | Palette,
 }
 
 /// <summary>Monitoring: how often the gateway's health is polled, and whether polling is paused (the Mac's "pulse interval").</summary>
@@ -227,6 +231,63 @@ internal sealed record ArchiveSettings
     }
 }
 
+/// <summary>
+/// Palette: the commands the operator last ran from the command palette, newest first, by their stable ids (<c>cli.skill.list</c>,
+/// <c>nav.alerts</c>, <c>gateway.restart</c>), so the palette can show them first when its search is empty. Ids, not titles or command
+/// lines: a title changes with the runtime's registry and a command line can hold a name the operator typed; an id that no longer names a row
+/// is simply not shown. At most <see cref="MaxRecent"/>; the list cleans itself on the way in (blank and repeated ids dropped, the oldest cut).
+/// </summary>
+internal sealed record PaletteSettings
+{
+    /// <summary>How many commands the palette remembers.</summary>
+    public const int MaxRecent = 5;
+
+    /// <summary>The longest id kept. Real ids are well under half of this; a longer string in a hand-edited file is not one.</summary>
+    public const int MaxIdLength = 200;
+
+    private readonly IReadOnlyList<string> _recent = Array.Empty<string>();
+
+    /// <summary>The ids of the last commands run from the palette, most recent first; never more than <see cref="MaxRecent"/>, never repeated.</summary>
+    public IReadOnlyList<string> RecentCommandIds
+    {
+        get => _recent;
+        init => _recent = Clean(value);
+    }
+
+    /// <summary>
+    /// Record equality would compare the list by reference, and two settings holding the same ids are the same settings: a change that
+    /// writes the list it already had must not look like a change (no write, no <see cref="AppSettingsStore.Changed"/>).
+    /// </summary>
+    public bool Equals(PaletteSettings? other) =>
+        other is not null && _recent.SequenceEqual(other._recent, StringComparer.Ordinal);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (var id in _recent)
+        {
+            hash.Add(id, StringComparer.Ordinal);
+        }
+
+        return hash.ToHashCode();
+    }
+
+    internal static IReadOnlyList<string> Clean(IEnumerable<string>? ids)
+    {
+        if (ids is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        return ids
+            .Select(id => id?.Trim() ?? string.Empty)
+            .Where(id => id.Length > 0 && id.Length <= MaxIdLength)
+            .Distinct(StringComparer.Ordinal)
+            .Take(MaxRecent)
+            .ToArray();
+    }
+}
+
 /// <summary>What <see cref="AppSettingsStore.Changed"/> reports.</summary>
 internal sealed class AppSettingsChangedEventArgs : EventArgs
 {
@@ -290,6 +351,11 @@ internal sealed class AppSettingsChangedEventArgs : EventArgs
         if (before.Archive != after.Archive)
         {
             sections |= AppSettingsSections.Archive;
+        }
+
+        if (before.Palette != after.Palette)
+        {
+            sections |= AppSettingsSections.Palette;
         }
 
         return sections;

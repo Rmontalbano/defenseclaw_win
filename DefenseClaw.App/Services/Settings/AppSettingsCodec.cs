@@ -30,6 +30,7 @@ internal static class AppSettingsCodec
     public const string UpdatesKey = "updates";
     public const string DeveloperKey = "developer";
     public const string ArchiveKey = "archive";
+    public const string PaletteKey = "palette";
 
     /// <summary>Reads every section out of <paramref name="root"/>. Never throws.</summary>
     public static AppSettings Read(JsonObject root)
@@ -44,7 +45,8 @@ internal static class AppSettingsCodec
             ReadConnection(Section(root, ConnectionKey)),
             ReadUpdates(Section(root, UpdatesKey)),
             ReadDeveloper(Section(root, DeveloperKey)),
-            ReadArchive(Section(root, ArchiveKey)));
+            ReadArchive(Section(root, ArchiveKey)),
+            ReadPalette(Section(root, PaletteKey)));
     }
 
     /// <summary>Writes the given sections of <paramref name="settings"/> into <paramref name="root"/>, leaving every other member as it is.</summary>
@@ -116,6 +118,12 @@ internal static class AppSettingsCodec
             Put(target, "dismissedVersion", settings.Updates.DismissedVersion);
             Put(target, "notifiedVersion", settings.Updates.NotifiedVersion);
         }
+
+        if ((sections & AppSettingsSections.Palette) != 0)
+        {
+            var target = SectionForWrite(root, PaletteKey);
+            target["recent"] = new JsonArray(settings.Palette.RecentCommandIds.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray());
+        }
     }
 
     // ------------------------------------------------------------------ sections
@@ -138,6 +146,12 @@ internal static class AppSettingsCodec
         section is null
             ? new ArchiveSettings()
             : new ArchiveSettings { Path = ReadString(section["path"]) };
+
+    /// <summary>The remembered ids: the strings of the array, in order. Anything else in it (a number, an object), or a list that is not an array, is skipped.</summary>
+    private static PaletteSettings ReadPalette(JsonObject? section) =>
+        section is null || section["recent"] is not JsonArray recent
+            ? new PaletteSettings()
+            : new PaletteSettings { RecentCommandIds = recent.Select(item => ReadString(item)).OfType<string>().ToArray() };
 
     private static AppearanceSettings ReadAppearance(JsonObject? section) =>
         section is null

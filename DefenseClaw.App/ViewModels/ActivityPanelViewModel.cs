@@ -62,6 +62,15 @@ namespace DefenseClaw.App.ViewModels;
 /// refuses runs that survive app shutdown (the upgrade installer); such a row shows Cancel
 /// disabled with the reason instead of a button that can only fail.
 /// </para>
+/// <para>
+/// <b>Outcome and Rerun (CUST-264).</b> A finished row says what the command did and what to do next under it
+/// (<see cref="ActivityRow.MetaText"/>: <c>config reloaded · gateway restarted · next: rerun readiness</c>, the TUI's footer; see
+/// <see cref="CommandOutcome"/>), and offers Rerun, which opens the shared command review with the same argv and tier (a destructive command's
+/// review opens with focus on Cancel) and runs it once confirmed (<see cref="CommandRerun"/>). Rerun is off while the command runs, and absent for
+/// an entry that carried a secret on stdin or in its environment, a signature check, or anything that is not a DefenseClaw command. On a
+/// read-only installation (CUST-308) it is off for every entry that would change it, with the installation's sentence as the only reason it
+/// gives, and follows the installation when that changes (<see cref="OnInstallationChanged"/>); a read can still be run again.
+/// </para>
 /// </summary>
 public sealed partial class ActivityPanelViewModel : PanelViewModelBase
 {
@@ -260,7 +269,36 @@ public sealed partial class ActivityPanelViewModel : PanelViewModelBase
         HasNotice = message.Length > 0;
     }
 
-    private ActivityRow CreateRow(CliInvocation invocation) => new(invocation, Services.Cli, ShowNotice);
+    /// <summary>
+    /// What a row's Rerun uses to review and run an entry again: the shared dialog over whichever window is active. Built on first use; a test
+    /// reaches the same object to answer the review and to see what would run.
+    /// </summary>
+    internal CommandRerun Rerun => _rerun ??= new CommandRerun(Services);
+
+    private CommandRerun? _rerun;
+
+    /// <summary>The row the panel shows for <paramref name="invocation"/>, wired to the panel's services (a test builds the entries it needs this way).</summary>
+    internal ActivityRow CreateRow(CliInvocation invocation) =>
+        new(
+            invocation,
+            Services.Cli,
+            ShowNotice,
+            doctorCacheWrittenUtc: () => CommandOutcome.StampOf(Services.Paths.DoctorCachePath),
+            rerun: (entry, tier) => Rerun.RunAsync(entry, tier),
+            rerunBlock: entry => CommandRerun.InstallationBlockOf(entry, Services.Installation));
+
+    /// <summary>
+    /// The installation turned read-only (a managed config.yaml) or writable again while the panel was on screen, or while it was away: every
+    /// row's Rerun is worked out again, because a finished row is not ticked and would keep the button it was drawn with. The runner's guard
+    /// holds either way; this is what makes the button say so.
+    /// </summary>
+    protected override void OnInstallationChanged()
+    {
+        foreach (var row in Rows)
+        {
+            row.RefreshRerun();
+        }
+    }
 
     /// <summary>
     /// Reads the runner's in-memory ring buffer. Not file/DB/process I/O - just a snapshot of a
@@ -437,21 +475,76 @@ public sealed partial class ActivityRow : ObservableObject
     [ObservableProperty]
     private string _cancelHint = string.Empty;
 
+    /// <summary>
+    /// The footer under the command once it has finished (CUST-264): <c>config reloaded · gateway restarted · doctor cache refreshed · next: rerun
+    /// readiness</c>, the parts that apply (<see cref="CommandOutcome"/>). Empty while it runs, and for an entry with nothing to say.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMeta))]
+    private string _metaText = string.Empty;
+
+    /// <summary>True when the row has an outcome line to show.</summary>
+    public bool HasMeta => MetaText.Length > 0;
+
+    /// <summary>
+    /// True when the row draws a Rerun button. False for an entry that cannot be run again from here: one that carried a secret on stdin or in
+    /// its environment, the app's own signature checks and the installer, a command handed to a terminal, a refusal (<see cref="CommandRerun"/>);
+    /// and for a row built without a way to run it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _canOfferRerun;
+
+    /// <summary>True when Rerun can be pressed: the command has finished. It is off, with the reason as its tooltip, while the command runs.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RerunCommand))]
+    private bool _canRerun;
+
+    /// <summary>What Rerun does - also the button's tooltip - or why it is off while the command runs, or why the row has none.</summary>
+    [ObservableProperty]
+    private string _rerunHint = string.Empty;
+
     private readonly CliRunner? _runner;
     private readonly Action<string>? _notify;
+    private readonly Func<DateTime?>? _doctorCacheWrittenUtc;
+    private readonly Func<CliInvocation, CommandTier, Task<string>>? _rerun;
+    private readonly Func<CliInvocation, string?>? _rerunBlock;
+    private bool _outcomeSettled;
 
     /// <param name="invocation">The live instance from the runner's activity ring.</param>
     /// <param name="runner">Needed for Cancel; a row built without one simply cannot cancel.</param>
     /// <param name="notify">Receives a one-line result for each row action.</param>
-    public ActivityRow(CliInvocation invocation, CliRunner? runner = null, Action<string>? notify = null)
+    /// <param name="doctorCacheWrittenUtc">
+    /// When <c>doctor_cache.json</c> was last written (UTC), asked once, when a <c>doctor</c> run has finished, to say whether the run refreshed
+    /// it; null leaves that part of the outcome out.
+    /// </param>
+    /// <param name="rerun">
+    /// Reviews and runs an entry again, given the entry and its tier, and returns the sentence to show (empty when the operator declined). A row
+    /// built without one has no Rerun, as it has no Cancel without a runner.
+    /// </param>
+    /// <param name="rerunBlock">
+    /// Asked, for this row's entry, each time Rerun's state is worked out (<see cref="RefreshRerun"/> is how a finished row is asked again): the
+    /// installation's sentence when running the entry again would change a read-only installation (CUST-308), or null. Rerun is then drawn but
+    /// off, and that sentence is its tooltip. A row built without one is never held back by the installation.
+    /// </param>
+    public ActivityRow(
+        CliInvocation invocation,
+        CliRunner? runner = null,
+        Action<string>? notify = null,
+        Func<DateTime?>? doctorCacheWrittenUtc = null,
+        Func<CliInvocation, CommandTier, Task<string>>? rerun = null,
+        Func<CliInvocation, string?>? rerunBlock = null)
     {
         Invocation = invocation;
         _runner = runner;
         _notify = notify;
+        _doctorCacheWrittenUtc = doctorCacheWrittenUtc;
+        _rerun = rerun;
+        _rerunBlock = rerunBlock;
 
         // Fixed for the life of the row: the tier is a function of the argv alone - except for the app's own signature check, whose argv (verify-blob ...)
         // is not a DefenseClaw command and would classify as a change when all it does is read.
         var tier = IsCosignCheck(invocation) ? CommandTier.ReadOnly : CommandTiers.Classify(invocation.Argv);
+        Tier = tier;
         // Words and tone come from the shared command review, so a tier reads the same here as in every dialog.
         TierText = CommandReview.LabelFor(tier);
         TierKey = CommandReview.ToneFor(tier);
@@ -464,6 +557,9 @@ public sealed partial class ActivityRow : ObservableObject
 
         Tick();
     }
+
+    /// <summary>The review tier of the command: what <see cref="CommandTiers"/> says of its argv (read-only for the app's own signature check).</summary>
+    public CommandTier Tier { get; }
 
     /// <summary>
     /// The live, shared instance from <see cref="CliRunner.Activity"/>, still being appended
@@ -555,7 +651,65 @@ public sealed partial class ActivityRow : ObservableObject
 
         ApplyBadge(isRunning, exitCode, failureReason, cancelRequested);
         ApplyCancelState(isRunning, cancelRequested);
+        ApplyRerunState();
+        ApplyOutcome(isRunning);
         SyncOutput();
+    }
+
+    /// <summary>
+    /// Rerun is drawn when the entry can be run again at all and the row has a way to do it, and pressable once the command has finished - and
+    /// unless it would change an installation that is read-only, whose sentence is then the only reason it gives (<see cref="CommandRerun"/>).
+    /// </summary>
+    private void ApplyRerunState()
+    {
+        var state = CommandRerun.StateOf(Invocation, _rerunBlock?.Invoke(Invocation));
+        CanOfferRerun = _rerun is not null && state.Offered;
+        CanRerun = CanOfferRerun && state.Enabled;
+        RerunHint = state.Hint;
+    }
+
+    /// <summary>
+    /// Works Rerun's state out again. A running row does it with every tick; a finished one does not tick, so the panel calls this on each
+    /// row when the installation turns read-only or writable (CUST-308) and the button must follow.
+    /// </summary>
+    public void RefreshRerun() => ApplyRerunState();
+
+    /// <summary>
+    /// Works out the outcome line once, when the command is first seen finished, and keeps it: the doctor cache is asked after the run, and a
+    /// later doctor must not change what this entry said. An entry that is already finished when its row is built (the panel opened after the
+    /// run) gets it at once.
+    /// </summary>
+    private void ApplyOutcome(bool isRunning)
+    {
+        if (isRunning || _outcomeSettled)
+        {
+            return;
+        }
+
+        _outcomeSettled = true;
+        var wroteCache = Invocation.Argv.Count > 0 && Invocation.Argv[0] == "doctor" ? _doctorCacheWrittenUtc?.Invoke() : null;
+        MetaText = CommandOutcome.Of(Invocation, wroteCache).Text;
+    }
+
+    /// <summary>
+    /// Reviews the command again, with the tier it had, and runs it once the operator confirms (<see cref="CommandRerun"/>). Off while the
+    /// command runs; the new run is a new entry at the top of the list, and what happened is reported like any row action. A destructive
+    /// command's review opens with focus on Cancel.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRerun))]
+    private async Task RerunAsync()
+    {
+        if (_rerun is null)
+        {
+            _notify?.Invoke("This entry cannot be run again from here.");
+            return;
+        }
+
+        var message = await _rerun(Invocation, Tier).ConfigureAwait(true);
+        if (message.Length > 0)
+        {
+            _notify?.Invoke(message);
+        }
     }
 
     /// <summary>

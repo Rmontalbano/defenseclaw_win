@@ -27,8 +27,9 @@ public enum CommandTier
 /// destroy), plus <c>unset</c> and <c>dismiss</c>, which also discard configuration or findings.
 /// The first recognised verb in the path decides between read-only and state-changing, so a target
 /// that spells a verb cannot downgrade the tier. Anything unrecognised is
-/// <see cref="CommandTier.StateChanging"/> — the safe default is to ask. The one exception is a short list of
-/// reads under <c>setup</c>, named in full (<see cref="IsReadOnlyLeaf"/>), each read from the CLI's source.
+/// <see cref="CommandTier.StateChanging"/> — the safe default is to ask. The exceptions are a short list of
+/// reads under <c>setup</c>, named in full (<see cref="IsReadOnlyLeaf"/>), each read from the CLI's source, and three leaves of
+/// <c>defenseclaw-gateway</c> (<c>connector verify</c>, <c>connector list-backups</c>, <c>policy domains</c>), each read from its help.
 /// </para>
 /// <para>
 /// Two flag rules sit on top of the path. A read-only flag (<c>--help</c>, <c>--version</c>,
@@ -87,6 +88,21 @@ public static class CommandTiers
     };
 
     /// <summary>
+    /// Leaves of <c>defenseclaw-gateway</c> that only read, named in full by their two-word path. No read verb in the shared vocabulary says so
+    /// (<c>verify</c>, <c>list-backups</c> and <c>domains</c> are not on it, and adding them there would also move any <c>defenseclaw</c> command
+    /// that ever had one of those words in its path), so the rule that an unrecognised verb is a change would make each of them one. Each is read
+    /// from the DefenseClaw 0.8.10 gateway's help screens: <c>connector verify</c> checks that the connector left no residual state behind (exit 1
+    /// is "residual state found", exit 2 "unknown connector"), <c>connector list-backups</c> lists the pristine backups under the data directory,
+    /// and <c>policy domains</c> lists the firewall allowlist and blocklist of the active policy. (<c>watchdog status</c> is a read by its verb.)
+    /// Their options (<c>--connector</c>, <c>--data-dir</c>, <c>--json</c>) do not change what they do. The rest of those groups are not here:
+    /// <c>connector teardown</c> is destructive, and <c>connector reconcile</c>, <c>policy reload</c> and <c>watchdog start | stop</c> change state.
+    /// </summary>
+    private static readonly HashSet<string> ReadOnlyGatewayLeaves = new(StringComparer.Ordinal)
+    {
+        "connector list-backups", "connector verify", "policy domains",
+    };
+
+    /// <summary>
     /// Flags that turn an otherwise read-only verb into a change: <c>doctor --fix</c> repairs state
     /// (the 0.8.10 catalog found it touching PID files and connector setup).
     /// </summary>
@@ -142,14 +158,16 @@ public static class CommandTiers
     };
 
     /// <summary>
-    /// The <c>defenseclaw-gateway</c> commands the app runs with no review: the two reads on the Overview's Diagnostics menu. The
-    /// gateway's other verbs (start, stop, restart …) are never on this list.
+    /// The <c>defenseclaw-gateway</c> commands the app runs with no review: the two reads on the Overview's Diagnostics menu, and the four
+    /// reads the command palette offers beside them (<c>watchdog status</c>, <c>connector verify</c>, <c>connector list-backups</c> and
+    /// <c>policy domains</c>, each read from the 0.8.10 gateway's help; see <see cref="ReadOnlyGatewayLeaves"/>). The gateway's other verbs
+    /// (start, stop, restart, <c>watchdog start | stop</c>, <c>policy reload</c>, <c>connector teardown</c> …) are never on this list.
     /// </summary>
     public static IReadOnlyCollection<string> UnreviewedGatewayReadPaths => UnreviewedGatewayReads;
 
     private static readonly HashSet<string> UnreviewedGatewayReads = new(StringComparer.Ordinal)
     {
-        "status", "provenance show",
+        "status", "provenance show", "watchdog status", "connector list-backups", "connector verify", "policy domains",
     };
 
     /// <summary>
@@ -213,8 +231,9 @@ public static class CommandTiers
             return CommandTier.Destructive;
         }
 
-        // A read under "setup", named in full (the local stack's status, logs, url, env): "setup" would make it a change.
-        if (IsReadOnlyLeafPath(path) && !options.Any(MutatingFlags.Contains) && !options.Any(SensitiveFlags.Contains))
+        // A read under "setup", named in full (the local stack's status, logs, url, env): "setup" would make it a change. So is one of the
+        // gateway's reads that the verb vocabulary does not know (connector verify, connector list-backups, policy domains).
+        if ((IsReadOnlyLeafPath(path) || IsReadOnlyGatewayLeafPath(path)) && !options.Any(MutatingFlags.Contains) && !options.Any(SensitiveFlags.Contains))
         {
             return CommandTier.ReadOnly;
         }
@@ -244,6 +263,9 @@ public static class CommandTiers
 
     private static bool IsReadOnlyLeafPath(string[] path) =>
         path.Length == 3 && ReadOnlySetupLeaves.Contains(string.Join(' ', path));
+
+    private static bool IsReadOnlyGatewayLeafPath(string[] path) =>
+        path.Length == 2 && ReadOnlyGatewayLeaves.Contains(string.Join(' ', path));
 
     private static string[] OptionsOf(IReadOnlyList<string> argv) => argv.TakeWhile(a => a != "--").ToArray();
 

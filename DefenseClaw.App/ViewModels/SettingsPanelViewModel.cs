@@ -764,7 +764,17 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         await RefreshCliAsync().ConfigureAwait(true);
     }
 
-    private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e) => OnUiThread(LoadFromSettings);
+    private void OnSettingsChanged(object? sender, AppSettingsChangedEventArgs e)
+    {
+        // The palette's recents are not on this page, and a command run from the palette while this page is open would write them: copying the
+        // store into the form then would wipe what is half typed in a field that waits for its Apply (the archive path, the developer runtime).
+        if (e.Sections == AppSettingsSections.Palette)
+        {
+            return;
+        }
+
+        OnUiThread(LoadFromSettings);
+    }
 
     private void OnConfigReloaded(object? sender, EventArgs e) => ShowGateway();
 

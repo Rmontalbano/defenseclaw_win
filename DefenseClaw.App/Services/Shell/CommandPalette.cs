@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using DefenseClaw.App.Services.Settings;
 
 namespace DefenseClaw.App.Services;
 
@@ -47,13 +48,19 @@ internal sealed record ShellCommand(
 /// </summary>
 internal sealed partial class PaletteItem : ObservableObject
 {
-    public PaletteItem(ShellCommand command)
+    /// <param name="command">The row.</param>
+    /// <param name="isRecent">True when the row is listed first because the operator ran it lately (<see cref="PaletteRecents"/>).</param>
+    public PaletteItem(ShellCommand command, bool isRecent = false)
     {
         Command = command;
+        IsRecent = isRecent;
         Form = command.Cli?.Form is { } form && command.RunWith is not null ? form : null;
     }
 
     public ShellCommand Command { get; }
+
+    /// <summary>True for a row shown at the top of an empty search because it was one of the last commands run from the palette; the row says "Recent".</summary>
+    public bool IsRecent { get; }
 
     /// <summary>The form that takes this row's one value, or null when the row takes none (or the value is too much for a form: it is copied to complete).</summary>
     public ArgumentForm? Form { get; }
@@ -128,6 +135,11 @@ internal sealed partial class PaletteItem : ObservableObject
         get
         {
             var spoken = $"{Command.Title}, {Command.Category}";
+            if (IsRecent)
+            {
+                spoken += ", recent";
+            }
+
             if (HasShortcut)
             {
                 spoken += $", shortcut {Command.Shortcut}";
@@ -153,6 +165,13 @@ internal sealed partial class PaletteItem : ObservableObject
 internal sealed partial class CommandPaletteViewModel : ObservableObject
 {
     private IReadOnlyList<ShellCommand> _all = Array.Empty<ShellCommand>();
+
+    /// <summary>
+    /// Where the palette remembers what it ran (<c>settings.json</c>, see <see cref="PaletteRecents"/>). With a store, an empty search lists the
+    /// last few commands first and choosing a command adds it to them; without one (a window with no settings, a test) the palette remembers
+    /// nothing and lists the rows in registry order, as before.
+    /// </summary>
+    public AppSettingsStore? RecentsStore { get; set; }
 
     [ObservableProperty]
     private string _query = string.Empty;
@@ -344,21 +363,44 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
             command = command with { Run = () => runWith(value) };
         }
 
+        Remember(command);
         CommandChosen?.Invoke(this, command);
         CloseRequested?.Invoke(this, EventArgs.Empty);
         return true;
+    }
+
+    /// <summary>Adds the command that is about to run to the palette's recents (settings.json), newest first. Never fails the choice: a settings file that cannot be written keeps the change in memory.</summary>
+    private void Remember(ShellCommand command)
+    {
+        if (RecentsStore is not { } store || !PaletteRecents.IsWorthRemembering(command))
+        {
+            return;
+        }
+
+        _ = store.Update(settings => settings with
+        {
+            Palette = settings.Palette with { RecentCommandIds = PaletteRecents.Push(settings.Palette.RecentCommandIds, command.Id) },
+        });
     }
 
     public void RequestClose() => CloseRequested?.Invoke(this, EventArgs.Empty);
 
     private void Refilter()
     {
-        var ranked = Rank(_all, Query);
+        // An empty search lists what was run last first - a row that cannot be chosen now among them, greyed with its reason; a typed one
+        // ranks by what it matches.
+        var browsing = string.IsNullOrWhiteSpace(Query);
+        var recents = 0;
+        var source = browsing && RecentsStore is { } store
+            ? PaletteRecents.Promote(_all, store.Current.Palette.RecentCommandIds, out recents)
+            : _all;
+        var ranked = Rank(source, Query);
 
         Results.Clear();
+        var position = 0;
         foreach (var command in ranked)
         {
-            Results.Add(new PaletteItem(command));
+            Results.Add(new PaletteItem(command, isRecent: position++ < recents));
         }
 
         Selected = Results.FirstOrDefault(item => item.IsEnabled);
@@ -387,7 +429,9 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
     /// <summary>
     /// Ranks <paramref name="commands"/> against <paramref name="query"/>: every whitespace-separated
     /// term has to match somewhere (title, category or keywords, case-insensitive), and a term scores
-    /// higher the closer to the front of the title it lands. Ties keep registry order, which is the
+    /// higher the closer to the front of the title it lands: the start of the title, the start of a word, the
+    /// first letters of the title's words (<c>rg</c> for "Restart gateway", <c>gta</c> for "Go to Alerts"),
+    /// anywhere in the title, then the category, then the keywords. Ties keep registry order, which is the
     /// order a user would expect with no query typed (panels in sidebar order, then actions).
     /// </summary>
     internal static IReadOnlyList<ShellCommand> Rank(IReadOnlyList<ShellCommand> commands, string? query)
@@ -434,6 +478,10 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
             {
                 score = 80;
             }
+            else if (term.Length >= 2 && MatchesInitials(command.Title, term))
+            {
+                score = 70;
+            }
             else if (command.Title.Contains(term, StringComparison.OrdinalIgnoreCase))
             {
                 score = 60;
@@ -455,6 +503,63 @@ internal sealed partial class CommandPaletteViewModel : ObservableObject
         }
 
         return total;
+    }
+
+    /// <summary>
+    /// True when <paramref name="term"/> is the front of the first letters of the title's words, counting a hyphenated word as one word or as
+    /// several: <c>rlc</c> and <c>rrlc</c> both find "Re-run last command", <c>slu</c> and <c>slou</c> both find "setup local-observability up".
+    /// Which of the two an operator means is not for the palette to guess.
+    /// </summary>
+    private static bool MatchesInitials(string title, string term) =>
+        Initials(title).StartsWith(term, StringComparison.OrdinalIgnoreCase) ||
+        SpacedInitials(title).StartsWith(term, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The first letter (or digit) of each word of <paramref name="title"/>, in order: <c>Rgs</c> for "Restart gateway status", <c>ssa</c> for
+    /// "scan skill --all", <c>slou</c> for "setup local-observability up". A word is a run of letters and digits, so a hyphen or a dash ends one.
+    /// A search of two letters or more that is the front of this (<c>rg</c>, <c>gta</c>) finds the row without its words being typed out.
+    /// </summary>
+    internal static string Initials(string title)
+    {
+        var initials = new System.Text.StringBuilder();
+        var inWord = false;
+        foreach (var ch in title)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                if (!inWord)
+                {
+                    _ = initials.Append(ch);
+                }
+
+                inWord = true;
+            }
+            else
+            {
+                inWord = false;
+            }
+        }
+
+        return initials.ToString();
+    }
+
+    /// <summary>
+    /// The same with a word being whatever is between spaces, so a hyphenated word counts once: <c>Rlc</c> for "Re-run last command", <c>slu</c> for
+    /// "setup local-observability up". A word that starts with punctuation (<c>--all</c>) is represented by its first letter or digit.
+    /// </summary>
+    internal static string SpacedInitials(string title)
+    {
+        var initials = new System.Text.StringBuilder();
+        foreach (var word in title.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var first = word.FirstOrDefault(char.IsLetterOrDigit);
+            if (first != default)
+            {
+                _ = initials.Append(first);
+            }
+        }
+
+        return initials.ToString();
     }
 
     private static bool StartsAWord(string text, string term)

@@ -20,6 +20,12 @@ internal static class ShellCommandRegistry
     /// <summary>The chip on the Mac's Monitor / Commands menu entries (health check, scan, diagnose, copy / export output).</summary>
     public const string MonitorCategory = "Monitor";
 
+    /// <summary>The id of "Re-run last command" (CUST-264): the newest command in Activity, reviewed again and run.</summary>
+    public const string RerunLastId = "app.rerun-last";
+
+    /// <summary>The id of "Cancel running command" (CUST-264): the newest command still running in Activity, stopped.</summary>
+    public const string CancelRunningId = "app.cancel-running";
+
     /// <summary>
     /// The "Go to" entry for every panel, in sidebar order, so the first screen of an empty search
     /// matches the sidebar and each row shows the Ctrl+N chord that jumps there (Settings, last, shows Ctrl+,). Split out of
@@ -231,6 +237,35 @@ internal static class ShellCommandRegistry
             DisabledReason: null,
             Run: () => actions.ExportLastOutput()));
 
+        // The TUI's `!` and Ctrl+C, as rows: both act on Activity, and both say which command they would act on (or why they cannot).
+        var (canRerun, rerunReason, rerunLine) = actions.RerunLast;
+        commands.Add(new ShellCommand(
+            Id: RerunLastId,
+            Title: "Re-run last command",
+            Category: MonitorCategory,
+            Description: canRerun
+                ? $"Review {rerunLine} and run it again. Nothing runs until you confirm."
+                : "Review the newest command in Activity and run it again.",
+            Shortcut: null,
+            Keywords: "repeat again retry redo previous activity rerun",
+            IsEnabled: canRerun,
+            DisabledReason: rerunReason,
+            Run: () => _ = actions.RerunLastAsync()));
+
+        var (canCancel, cancelReason, cancelLine) = actions.CancelRunning;
+        commands.Add(new ShellCommand(
+            Id: CancelRunningId,
+            Title: "Cancel running command",
+            Category: MonitorCategory,
+            Description: canCancel
+                ? $"Stop {cancelLine} and everything it started."
+                : "Stop the newest command in Activity that is still running.",
+            Shortcut: null,
+            Keywords: "stop kill abort interrupt running activity ctrl+c",
+            IsEnabled: canCancel,
+            DisabledReason: cancelReason,
+            Run: actions.CancelRunningCommand));
+
         commands.Add(new ShellCommand(
             Id: "app.check-updates",
             Title: "Check for updates",
@@ -360,10 +395,14 @@ internal static class ShellCommandRegistry
             var needsTerraform = WizardWindowsPolicy.CommandNeedsTerraform(command.Argv);
             var gate = needsDocker ? actions.LocalStack.Decision : needsTerraform ? actions.Terraform.Decision : GateDecision.Open;
 
+            // start | stop | restart follow the Gateway rows; the gateway's other fixed verbs follow what each needs (policy reload: a running sidecar,
+            // CUST-264); the rest follow the Docker or Terraform look. The installation's sentence, below, comes before every one of these.
             var captured = command;
             var (allowed, reason) = command.LifecycleAction is { } lifecycle
                 ? GatewayControl.Availability(lifecycle, actions.Snapshot, actions.Installation)
-                : (gate.IsAvailable, gate.Reason);
+                : command.GatewayVerb is not null
+                    ? GatewayVerbs.Availability(command.Argv, actions.Snapshot)
+                    : (gate.IsAvailable, gate.Reason);
 
             // A row that would run a change from here is off on a read-only installation, with the installation's sentence, which comes before
             // any other reason (the Docker look, the gateway's state): nothing about the machine can make it runnable. A row that only copies a

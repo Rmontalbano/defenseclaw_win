@@ -132,6 +132,12 @@
                                             <Border Style="{StaticResource DcChip}" Margin="8,0,0,0">
                                                 <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Category}" />
                                             </Border>
+                                            <!-- One of the last commands run from the palette: listed first while the search is empty. -->
+                                            <Border Style="{StaticResource DcChip}"
+                                                    Margin="6,0,0,0"
+                                                    Visibility="{Binding IsRecent, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="Recent" />
+                                            </Border>
                                         </StackPanel>
                                         <TextBlock Style="{StaticResource DcCaption}"
                                                    TextTrimming="CharacterEllipsis"

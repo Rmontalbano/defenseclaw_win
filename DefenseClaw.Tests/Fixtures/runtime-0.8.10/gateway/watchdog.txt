@@ -1,0 +1,20 @@
+The watchdog polls the gateway /health endpoint and sends desktop
+notifications when the sidecar is unreachable or degraded.
+
+Run in the foreground:  defenseclaw-gateway watchdog
+Run as background:      defenseclaw-gateway watchdog start
+Stop:                   defenseclaw-gateway watchdog stop
+
+Usage:
+  defenseclaw-gateway watchdog [flags]
+  defenseclaw-gateway watchdog [command]
+
+Available Commands:
+  start       Start the watchdog as a background daemon
+  status      Show the watchdog daemon status
+  stop        Stop the running watchdog daemon
+
+Flags:
+  -h, --help   help for watchdog
+
+Use "defenseclaw-gateway watchdog [command] --help" for more information about a command.

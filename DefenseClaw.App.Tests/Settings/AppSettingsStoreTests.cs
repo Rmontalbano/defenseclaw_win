@@ -46,7 +46,8 @@ public sealed class AppSettingsStoreTests : IDisposable
             ContainerName = "dc-next-1",
             HostDataFolder = @"D:\next\data",
         },
-        new ArchiveSettings { Path = @"D:\archive\audit-before-upgrade.db" });
+        new ArchiveSettings { Path = @"D:\archive\audit-before-upgrade.db" },
+        new PaletteSettings { RecentCommandIds = new[] { "cli.doctor", "nav.alerts", "gateway.restart" } });
 
     // ------------------------------------------------------------------ defaults
 

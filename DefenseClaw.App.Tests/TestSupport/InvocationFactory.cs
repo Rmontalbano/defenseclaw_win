@@ -32,6 +32,12 @@ internal static class InvocationFactory
 
     private static readonly PropertyInfo FailureReason = Property(nameof(CliInvocation.FailureReason));
 
+    private static readonly PropertyInfo UsedStdinSecret = Property(nameof(CliInvocation.UsedStdinSecret));
+
+    private static readonly PropertyInfo SurvivesShutdown = Property(nameof(CliInvocation.SurvivesShutdown));
+
+    private static readonly PropertyInfo CancelRequested = Property(nameof(CliInvocation.CancelRequested));
+
     /// <param name="retainFullOutput">True for the ceiling a <see cref="CliRunOptions.JsonRead"/> run gets (200,000 lines).</param>
     public static CliInvocation Create(bool retainFullOutput = false, params string[] argv) =>
         (CliInvocation)Constructor.Invoke(new object[]
@@ -41,6 +47,13 @@ internal static class InvocationFactory
             DateTimeOffset.UtcNow,
             retainFullOutput,
         });
+
+    /// <summary>
+    /// An invocation of <paramref name="executable"/> (a file name or a path: <c>defenseclaw-gateway</c>, <c>C:\tools\cosign.exe</c>), started at
+    /// <paramref name="startedAt"/> (now when null), so a test can say what a run was before and after a file was written.
+    /// </summary>
+    public static CliInvocation CreateFor(string executable, string[] argv, DateTimeOffset? startedAt = null) =>
+        (CliInvocation)Constructor.Invoke(new object[] { executable, argv, startedAt ?? DateTimeOffset.UtcNow, false });
 
     public static void Append(CliInvocation invocation, string text, CliStream stream = CliStream.StandardOutput) =>
         AppendMethod.Invoke(invocation, new object[] { new CliOutputLine(DateTimeOffset.UtcNow, stream, text) });
@@ -59,6 +72,22 @@ internal static class InvocationFactory
         FinishedAt.SetValue(invocation, DateTimeOffset.UtcNow);
         ExitCode.SetValue(invocation, exitCode);
     }
+
+    /// <summary>Ends the run at <paramref name="finishedAt"/> with <paramref name="exitCode"/>.</summary>
+    public static void Finish(CliInvocation invocation, int exitCode, DateTimeOffset finishedAt)
+    {
+        FinishedAt.SetValue(invocation, finishedAt);
+        ExitCode.SetValue(invocation, exitCode);
+    }
+
+    /// <summary>Marks the run as having been given a secret on stdin (the secret itself is never recorded).</summary>
+    public static void UseStdinSecret(CliInvocation invocation) => UsedStdinSecret.SetValue(invocation, true);
+
+    /// <summary>Marks the run as one that outlives the app (the upgrade installer).</summary>
+    public static void SurviveShutdown(CliInvocation invocation) => SurvivesShutdown.SetValue(invocation, true);
+
+    /// <summary>Marks the run as being cancelled: the operator pressed Cancel and the process tree has not finished going.</summary>
+    public static void RequestCancel(CliInvocation invocation) => CancelRequested.SetValue(invocation, true);
 
     /// <summary>Ends the run without an exit code, as a timeout or a cancel does: the runner records why in <see cref="CliInvocation.FailureReason"/>.</summary>
     public static void Fail(CliInvocation invocation, string reason)

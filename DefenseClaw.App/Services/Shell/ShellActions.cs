@@ -37,7 +37,10 @@ internal sealed class ShellActions
     }
 
     /// <summary>The gateway snapshot the availability rules are evaluated against.</summary>
-    public GatewaySnapshot Snapshot => _services.Monitor.Current;
+    public GatewaySnapshot Snapshot => SnapshotSource?.Invoke() ?? _services.Monitor.Current;
+
+    /// <summary>Test seam: the gateway state the rules are judged against, so a test can say it is running or stopped. Null is the monitor's own.</summary>
+    internal Func<GatewaySnapshot>? SnapshotSource { get; set; }
 
     /// <summary>
     /// Whether the installation may be changed (and why not): a palette row that would run a change from here is greyed out with this
@@ -358,6 +361,112 @@ internal sealed class ShellActions
         }
     }
 
+    // ---- "Re-run last command" and "Cancel running command" (CUST-264): the TUI's `!` and Ctrl+C, over the Activity list ----
+
+    private CommandRerun? _rerun;
+
+    /// <summary>Test seam: the entries "Re-run last command" and "Cancel running command" look at. Null is the runner's own activity ring.</summary>
+    internal Func<IReadOnlyList<CliInvocation>>? ActivitySource { get; set; }
+
+    private IReadOnlyList<CliInvocation> Activity => ActivitySource?.Invoke() ?? _services.Cli.Activity;
+
+    /// <summary>
+    /// The re-run the palette and the Activity rows share: the same review dialog (through <see cref="Confirmer"/> when a test set one),
+    /// the same refusals. Built on first use.
+    /// </summary>
+    internal CommandRerun Rerun => _rerun ??= new CommandRerun(_services, _owner) { Confirmer = ConfirmReview };
+
+    private bool ConfirmReview(CommandReview review) => Confirmer is { } confirm ? confirm(review) : GatewayActionDialog.Confirm(_owner(), review);
+
+    /// <summary>
+    /// What "Re-run last command" would do now: whether the newest command in Activity that can be run again is finished (a running one
+    /// has to finish or be cancelled first) and may be run on this installation, why not otherwise, and the command as it reads, for the
+    /// row's description. On a read-only installation the target decides, as it does for its own Rerun: a read is run again, and a change
+    /// is off with the installation's sentence, which comes before "still running" (one reason per control).
+    /// </summary>
+    public (bool Allowed, string? Reason, string Line) RerunLast
+    {
+        get
+        {
+            if (CommandRerun.LastOffered(Activity) is not { } last)
+            {
+                return (false, "There is no command in Activity to run again yet.", string.Empty);
+            }
+
+            var state = CommandRerun.StateOf(last, CommandRerun.InstallationBlockOf(last, Installation));
+            var line = CommandReview.CommandLine(CommandRerun.ToolOf(last)!, last.Argv);
+            return state.Enabled ? (true, null, line) : (false, state.Hint, line);
+        }
+    }
+
+    /// <summary>Reviews the newest command in Activity that can be run again, and runs it again once confirmed. The outcome is a toast.</summary>
+    public async Task RerunLastAsync()
+    {
+        const string title = "Re-run last command";
+        var (allowed, reason, _) = RerunLast;
+        if (!allowed || CommandRerun.LastOffered(Activity) is not { } last)
+        {
+            ShowToast(title, reason ?? "There is no command in Activity to run again yet.");
+            return;
+        }
+
+        var message = await Rerun.RunAsync(last).ConfigureAwait(true);
+        if (message.Length > 0)
+        {
+            ShowToast(title, message);
+        }
+    }
+
+    /// <summary>The newest run still going that Cancel can stop (not the upgrade installer, not one already being cancelled), or null.</summary>
+    private CliInvocation? NewestCancellable() =>
+        Activity.Where(i => i.IsRunning && !i.SurvivesShutdown && !i.CancelRequested).MaxBy(i => i.StartedAt);
+
+    /// <summary>
+    /// What "Cancel running command" would do now: whether some command is running that can be stopped, why not otherwise, and the command
+    /// as it reads, for the row's description.
+    /// </summary>
+    public (bool Allowed, string? Reason, string Line) CancelRunning
+    {
+        get
+        {
+            var running = Activity.Where(i => i.IsRunning).OrderByDescending(i => i.StartedAt).ToArray();
+            if (running.Length == 0)
+            {
+                return (false, "No command is running.", string.Empty);
+            }
+
+            if (NewestCancellable() is { } target)
+            {
+                return (true, null, LineOf(target));
+            }
+
+            return (
+                false,
+                running.All(i => i.SurvivesShutdown)
+                    ? "The upgrade installer cannot be cancelled from here: killing it part-way can leave DefenseClaw half-installed."
+                    : "Already cancelling: waiting for the process tree to exit.",
+                LineOf(running[0]));
+        }
+    }
+
+    private static string LineOf(CliInvocation invocation) =>
+        CommandReview.CommandLine(System.IO.Path.GetFileNameWithoutExtension(invocation.Executable), invocation.Argv);
+
+    /// <summary>Stops the newest command in Activity that is still running and can be stopped, with everything it started. The outcome is a toast.</summary>
+    public void CancelRunningCommand()
+    {
+        const string title = "Cancel running command";
+        var (allowed, reason, _) = CancelRunning;
+        if (!allowed || NewestCancellable() is not { } target)
+        {
+            ShowToast(title, reason ?? "No command is running.");
+            return;
+        }
+
+        var accepted = _services.Cli.Cancel(target, out var why);
+        ShowToast(title, accepted ? $"Cancelling {LineOf(target)}: the process tree is being killed." : why);
+    }
+
     /// <summary>Copies a curated command as text that is safe to paste into PowerShell - with the value the operator typed for it, when there is one.</summary>
     public void CopyCurated(CuratedCommand command, string? argument = null)
     {
@@ -469,10 +578,13 @@ internal sealed class ShellActions
 
                 // The local stack's rows say what the verb really does (the same sentences the Setup wizard's review uses): the registry's one-line
                 // description of the bare `setup local-observability` row is "Show local observability commands", and run bare it starts the stack.
-                // The Splunk dashboards' rows do the same for theirs.
+                // The Splunk dashboards' rows do the same for theirs, and so do the gateway's fixed verbs (watchdog start | stop, policy reload,
+                // connector teardown), in the words of its own help.
                 var summary = LocalStackReview.Summary(argv) is { Length: > 0 } stack
                     ? stack
-                    : SplunkDashboardsReview.Summary(argv) is { Length: > 0 } dashboards ? dashboards : command.Summary;
+                    : SplunkDashboardsReview.Summary(argv) is { Length: > 0 } dashboards
+                        ? dashboards
+                        : command.GatewayVerb is { } verb ? verb.Summary : command.Summary;
                 var review = new CommandReview
                 {
                     Title = $"Run {CommandReview.CommandLine(command.Executable, argv)}?",

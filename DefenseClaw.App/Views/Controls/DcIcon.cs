@@ -96,6 +96,8 @@ public static class DcSections
             "app.diagnose" => (SymbolRegular.Stethoscope24, Overview),
             "app.copy-last-output" => (SymbolRegular.Copy24, Setup),
             "app.export-last-output" => (SymbolRegular.ArrowDownload24, Setup),
+            "app.rerun-last" => (SymbolRegular.ArrowClockwise24, Setup),
+            "app.cancel-running" => (SymbolRegular.Dismiss24, Setup),
             _ when id.StartsWith("cli.", StringComparison.Ordinal) => (SymbolRegular.Code24, Setup),
             "app.check-updates" => (SymbolRegular.ArrowCircleUp24, Updates),
             "app.toggle-autostart" => (SymbolRegular.Power24, Setup),

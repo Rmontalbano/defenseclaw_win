@@ -1,0 +1,123 @@
+=== defenseclaw-gateway watchdog start --help
+Start the watchdog as a background daemon
+
+Usage:
+  defenseclaw-gateway watchdog start [flags]
+
+Flags:
+  -h, --help   help for start
+
+=== defenseclaw-gateway watchdog stop --help
+Stop the running watchdog daemon
+
+Usage:
+  defenseclaw-gateway watchdog stop [flags]
+
+Flags:
+  -h, --help   help for stop
+
+=== defenseclaw-gateway watchdog status --help
+Show the watchdog daemon status
+
+Usage:
+  defenseclaw-gateway watchdog status [flags]
+
+Flags:
+  -h, --help   help for status
+
+=== defenseclaw-gateway connector verify --help
+Run Connector.VerifyClean() for the named connector.
+
+VerifyClean returns nil when the agent framework's configuration is free
+of DefenseClaw artifacts (hooks, env files, config patches, shims) and
+returns a descriptive error listing residual artifacts otherwise. This is
+the same check the sidecar runs before swapping connectors, so it is the
+canonical way to answer "did teardown actually work?".
+
+Exit codes:
+  0   connector is clean
+  1   connector has residual state (details printed to stderr)
+  2   connector unknown / config error
+
+Usage:
+  defenseclaw-gateway connector verify [flags]
+
+Flags:
+  -h, --help   help for verify
+
+Global Flags:
+      --connector string   Connector name (defaults to the active connector resolved from active_connector.json / guardrail.connector / openclaw)
+      --data-dir string    Override the data directory (defaults to cfg.DataDir)
+      --json               Emit machine-readable JSON instead of the human-readable view
+
+=== defenseclaw-gateway connector list-backups --help
+Inspect the data directory and list every connector pristine backup
+that the gateway has written.
+
+These backups are created by Connector.Setup() before the gateway patches
+the agent framework's config. They are the rollback point that
+'connector teardown' uses, so listing them is the safest way to check
+whether 'defenseclaw uninstall' will be able to restore the user's
+original configuration. Both legacy flat backups and managed backups
+under connector_backups/<connector>/ are shown.
+
+The default output is a human-readable table:
+
+  CONNECTOR    PATH                                              SIZE
+  codex        /home/u/.defenseclaw/codex_backup.json            1234
+
+Pass --json for a structured payload suitable for piping into 'jq'.
+
+Usage:
+  defenseclaw-gateway connector list-backups [flags]
+
+Flags:
+  -h, --help   help for list-backups
+
+Global Flags:
+      --connector string   Connector name (defaults to the active connector resolved from active_connector.json / guardrail.connector / openclaw)
+      --data-dir string    Override the data directory (defaults to cfg.DataDir)
+      --json               Emit machine-readable JSON instead of the human-readable view
+
+=== defenseclaw-gateway connector teardown --help
+Tear down the named connector.
+
+Calls Connector.Teardown(opts) which is responsible for:
+  - Restoring the agent framework's config from its pristine backup.
+  - Removing any hook scripts the connector wrote into ~/.defenseclaw.
+  - Clearing any environment shims the connector installed.
+
+This subcommand does NOT touch the sidecar's own systemd unit, the
+gateway token, or the audit DB. It is the idempotent inverse of
+Connector.Setup() for a single connector. It marks that connector inactive in
+the runtime state before removing files so a still-running hook guard cannot
+immediately reinstall the configuration being deliberately torn down.
+
+Usage:
+  defenseclaw-gateway connector teardown [flags]
+
+Flags:
+  -h, --help   help for teardown
+
+Global Flags:
+      --connector string   Connector name (defaults to the active connector resolved from active_connector.json / guardrail.connector / openclaw)
+      --data-dir string    Override the data directory (defaults to cfg.DataDir)
+      --json               Emit machine-readable JSON instead of the human-readable view
+
+=== defenseclaw-gateway policy reload --help
+Tell the running sidecar daemon to reload OPA policies
+
+Usage:
+  defenseclaw-gateway policy reload [flags]
+
+Flags:
+  -h, --help   help for reload
+
+=== defenseclaw-gateway policy domains --help
+List firewall domain allowlist and blocklist from active policy
+
+Usage:
+  defenseclaw-gateway policy domains [flags]
+
+Flags:
+  -h, --help   help for domains
