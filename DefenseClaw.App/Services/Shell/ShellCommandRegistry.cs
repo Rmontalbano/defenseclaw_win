@@ -1,4 +1,5 @@
 using DefenseClaw.App.Services.Appearance;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Services;
@@ -330,6 +331,9 @@ internal static class ShellCommandRegistry
     /// Enter / Run goes through <see cref="ShellActions.RunCuratedAsync"/> (read-only runs, everything else is reviewed first).
     /// An entry whose argv <see cref="CuratedCommandCatalog.Refuses"/> is left out. Searchable by the TUI's name, the command line and
     /// the words of the description; the gateway's start, stop and restart are enabled by the same rule as the Gateway rows above them.
+    /// A command that runs Docker Compose (<see cref="WizardWindowsPolicy.CommandNeedsDocker"/>: <c>setup local-observability up | down |
+    /// status | logs | reset</c>, and the bare group, which is its <c>up</c>) is listed always, and enabled only while the shared Docker look
+    /// says Compose v2 is there and the engine answers - otherwise the row is greyed out with that look's reason, as the Setup card is.
     /// </summary>
     internal static List<ShellCommand> BuildCliCommands(IReadOnlyList<CuratedCommand> curated, ShellActions actions)
     {
@@ -344,10 +348,14 @@ internal static class ShellCommandRegistry
                 continue;
             }
 
+            // A row that runs Docker Compose is as available as the one shared Docker look says (read once, so the flag and the reason agree).
+            var needsDocker = WizardWindowsPolicy.CommandNeedsDocker(command.Argv);
+            var gate = needsDocker ? actions.LocalStack.Decision : GateDecision.Open;
+
             var captured = command;
             var (allowed, reason) = command.LifecycleAction is { } lifecycle
                 ? GatewayControl.Availability(lifecycle, actions.Snapshot)
-                : (true, null);
+                : (gate.IsAvailable, gate.Reason);
 
             rows.Add(new ShellCommand(
                 Id: command.Id,
@@ -355,7 +363,7 @@ internal static class ShellCommandRegistry
                 Category: command.Category,
                 Description: command.Summary,
                 Shortcut: null,
-                Keywords: $"cli command {command.CommandLineText} {command.Summary}",
+                Keywords: $"cli command {command.CommandLineText} {command.Summary}" + (needsDocker ? " docker compose" : string.Empty),
                 IsEnabled: allowed,
                 DisabledReason: reason,
                 Run: () => _ = actions.RunCuratedAsync(captured),

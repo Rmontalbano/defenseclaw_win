@@ -43,6 +43,7 @@ public sealed class MainWindowConstructionTests : IDisposable
             var reloadBefore = Subscribers(services, "ConfigReloaded");
             var faultBefore = Subscribers(catalog, "PanelFaulted");
             var runtimeBefore = Subscribers(services.Runtime, "Changed");
+            var localStackBefore = Subscribers(services.LocalStack, "Changed");
             var windowsBefore = Application.Current.Windows.Count;
 
             MainWindow.ConstructionProbe = () => throw new InvalidOperationException("XAML fault at the very end");
@@ -60,6 +61,7 @@ public sealed class MainWindowConstructionTests : IDisposable
             Assert.Equal(reloadBefore, Subscribers(services, "ConfigReloaded"));
             Assert.Equal(faultBefore, Subscribers(catalog, "PanelFaulted"));
             Assert.Equal(runtimeBefore, Subscribers(services.Runtime, "Changed"));
+            Assert.Equal(localStackBefore, Subscribers(services.LocalStack, "Changed"));
             Assert.Equal(windowsBefore, Application.Current.Windows.Count);
         });
     }
@@ -78,6 +80,7 @@ public sealed class MainWindowConstructionTests : IDisposable
             var reloadBefore = Subscribers(services, "ConfigReloaded");
             var faultBefore = Subscribers(catalog, "PanelFaulted");
             var runtimeBefore = Subscribers(services.Runtime, "Changed");
+            var localStackBefore = Subscribers(services.LocalStack, "Changed");
 
             var window = new MainWindow(services, catalog, UnbuiltTray());
             try
@@ -86,6 +89,7 @@ public sealed class MainWindowConstructionTests : IDisposable
                 Assert.True(Subscribers(services, "ConfigReloaded") > reloadBefore);
                 Assert.True(Subscribers(catalog, "PanelFaulted") > faultBefore);
                 Assert.True(Subscribers(services.Runtime, "Changed") > runtimeBefore);
+                Assert.True(Subscribers(services.LocalStack, "Changed") > localStackBefore);
             }
             finally
             {

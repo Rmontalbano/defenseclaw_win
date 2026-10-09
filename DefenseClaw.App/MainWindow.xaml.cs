@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.Services.Settings;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views.Shell;
 using Wpf.Ui.Controls;
@@ -59,6 +60,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// panel that needs more than 0.8.10 has only while the runtime has it (<see cref="ApplyPanelGates()"/>), and the palette's CLI rows follow it too.
     /// </summary>
     private RuntimeService _runtime = null!;
+
+    /// <summary>The shared Docker look the palette's Compose rows follow; set by <see cref="Wire"/>, which subscribes this window to its changes.</summary>
+    private LocalStackAvailability _localStack = null!;
     private readonly CommandPaletteViewModel _paletteViewModel = new();
 
     /// <summary>The look controls, or null when the app was built without them (only a test host is).</summary>
@@ -193,6 +197,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         services.Runtime.Changed += OnRuntimeChanged;
         _runtime = services.Runtime;
 
+        // The rows that run Docker Compose (setup local-observability ...) are enabled by the shared Docker look: an open palette follows its answers too.
+        services.LocalStack.Changed += OnLocalStackChanged;
+        _localStack = services.LocalStack;
+
         // What Settings asks of the tray (its "Reset seen-alert history" button): the same call the command palette's entry makes.
         _catalog.Hooks.ResetSeenAlertHistory = _tray.ResetSeenAlertHistoryAsync;
 
@@ -223,6 +231,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             _settings.Changed -= OnSettingsChanged;
             services.Navigation.PaletteRequested -= OnPaletteRequested;
             services.Runtime.Changed -= OnRuntimeChanged;
+            services.LocalStack.Changed -= OnLocalStackChanged;
             _catalog.PanelFaulted -= OnPanelFaulted;
             if (_appearance is not null)
             {
@@ -455,6 +464,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _settings.Changed -= OnSettingsChanged;
         _navigation.PaletteRequested -= OnPaletteRequested;
         _runtime.Changed -= OnRuntimeChanged;
+        _localStack.Changed -= OnLocalStackChanged;
         _viewModel.Dispose();
         base.OnClosing(e);
     }
@@ -909,6 +919,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _paletteViewModel.Load(BuildPaletteCommands(), hiddenNote, hiddenDetail);
         _viewModel.IsPaletteOpen = true;
         Palette.FocusSearch();
+
+        // The rows that run Docker Compose follow the shared Docker look: make sure it is not stale (nothing happens while it is fresh).
+        // A different answer arrives through LocalStack.Changed and swaps the rows.
+        _ = _actions.CheckLocalStack();
     }
 
     private IReadOnlyList<ShellCommand> BuildPaletteCommands() =>
@@ -928,7 +942,27 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         }
 
         ApplyPanelGates();
+        ReloadOpenPalette();
+    }
 
+    /// <summary>
+    /// The shared Docker look changed its answer: the rows that run Docker Compose (<c>setup local-observability up</c>, ...) are enabled or
+    /// greyed out by it, so an open palette swaps them in without touching what was typed. Raised on the probe's thread.
+    /// </summary>
+    private void OnLocalStackChanged(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(new Action(() => OnLocalStackChanged(sender, e)));
+            return;
+        }
+
+        ReloadOpenPalette();
+    }
+
+    /// <summary>Builds the palette's rows again if it is open (a closed one reads them when it opens).</summary>
+    private void ReloadOpenPalette()
+    {
         if (_viewModel.IsPaletteOpen)
         {
             var (hiddenNote, hiddenDetail) = _actions.HiddenCommands;

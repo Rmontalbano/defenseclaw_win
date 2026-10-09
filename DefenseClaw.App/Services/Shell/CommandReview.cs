@@ -1,5 +1,6 @@
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Text;
 
@@ -516,6 +517,14 @@ public sealed record CommandReview
         if (argv.Count == 0 || !string.Equals(argv[0], "setup", StringComparison.OrdinalIgnoreCase))
         {
             return false;
+        }
+
+        // The local observability stack's own verbs restart nothing; the `setup` group's result callback does, after a verb that rewrote
+        // config.yaml (up, down --disable-config). Plain down, reset and the reads do not, whatever the general rule below would say of a
+        // `setup` command that is not a read. A verb nobody here knows falls through to it.
+        if (LocalStackReview.RestartsGateway(argv) is { } stack)
+        {
+            return stack;
         }
 
         // Only a flag counts: one that is the value of another option (a webhook named "--show") or the option's

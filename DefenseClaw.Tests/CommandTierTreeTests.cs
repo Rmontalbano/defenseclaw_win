@@ -50,14 +50,19 @@ public sealed class CommandTierTreeTests
         "codeguard status", "config show", "config validate", "doctor",
         "guardrail judge list", "guardrail status", "keys check", "keys list", "mcp list", "migrations status",
         "observability plan", "plugin info", "plugin list", "policy list", "policy show", "policy validate",
-        "registry entries", "registry list", "registry show", "skill info", "skill list", "skill search",
+        "registry entries", "registry list", "registry show",
+
+        // The local observability stack's reads (CUST-311), each read in commands/cmd_setup_local_observability.py: url and env print
+        // constants, status and logs run `docker compose ps` / `logs --tail 200` and probe loopback. `up`, `down` and `reset` are not here.
+        "setup local-observability env", "setup local-observability logs", "setup local-observability status", "setup local-observability url",
+        "skill info", "skill list", "skill search",
         "status", "tool list", "tool status", "version",
     };
 
     private static readonly HashSet<string> ReadVerbs = new(StringComparer.OrdinalIgnoreCase)
     {
         "list", "show", "status", "info", "check", "validate", "version", "search", "doctor", "entries", "processes",
-        "history", "plan",
+        "history", "plan", "url", "env", "logs",
     };
 
     // How a command's own help opens when it changes something. A leaf whose help starts with one of these is a

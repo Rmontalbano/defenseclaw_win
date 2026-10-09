@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -44,9 +45,11 @@ public enum SetupEmptyState
 /// Uncertified cards stay launchable on purpose. The mac app's lesson — and the codex ghost
 /// this project chased — is that hiding the option teaches nothing; the warning travels with
 /// the operator into the wizard and onto its review screen instead. Targets that <i>cannot</i> work
-/// on Windows (unsupported connectors, interactive-only wizards, Docker stacks) are the exception:
+/// on Windows (unsupported connectors, interactive-only wizards) are the exception:
 /// they sit in a last "not available" group, disabled, each with its reason and where to go instead
-/// (<see cref="WizardWindowsPolicy"/>).
+/// (<see cref="WizardWindowsPolicy"/>). The local observability stack joins them only while Docker is not
+/// ready (<see cref="WizardWindowsPolicy.NeedsDocker"/>): its card follows the shared Docker look, with the
+/// probe's reason, and is launchable the rest of the time.
 /// </para>
 /// <para>
 /// <b>Lifecycle.</b> The connector roster is re-derived on every gateway state change, but only
@@ -64,6 +67,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     private static readonly TimeSpan GuardrailFreshFor = TimeSpan.FromMinutes(2);
 
     private readonly WizardCatalog _catalog;
+    private readonly LocalStackAvailability _localStack;
     private readonly List<WizardCardViewModel> _all = new();
 
     [ObservableProperty]
@@ -112,6 +116,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         // No subscriptions here: OnActivated attaches them and OnDeactivated lets go.
         _catalog = WizardCatalog.Shared(services);
+        _localStack = services.LocalStack;
 
         Review = new DiscoverActionReview(services);
         Credentials = new CredentialsViewModel(services);
@@ -254,6 +259,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         _catalog.DefinitionChanged += OnDefinitionChanged;
         Services.Monitor.StateChanged += OnGatewayStateChanged;
+        _localStack.Changed += OnLocalStackChanged;
 
         // Whether the runtime has the redaction editor may have been learned while the panel was away.
         Services.Runtime.Changed += OnRuntimeChanged;
@@ -261,10 +267,16 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
         BuildConnectors();
 
-        if (SyncCardsWithCatalog())
+        // Either may have moved while the panel was off screen: the cards behind the catalog, and the Docker answer that gates the stack's card.
+        var moved = SyncCardsWithCatalog();
+        moved |= SyncLocalStack();
+        if (moved)
         {
             ApplyFilters();
         }
+
+        // Docker is looked at when the hub comes on screen (once per freshness window), not on a timer; the answer arrives through Changed.
+        _ = _localStack.EnsureFreshAsync();
 
         // The checklist is in-memory work; the credential read is a CLI call, so only when there is none yet or it has gone stale.
         Readiness.Rebuild();
@@ -287,6 +299,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         _catalog.DefinitionChanged -= OnDefinitionChanged;
         Services.Monitor.StateChanged -= OnGatewayStateChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;
+        _localStack.Changed -= OnLocalStackChanged;
     }
 
     /// <summary>Replaces the card list with one card per definition.</summary>
@@ -295,7 +308,60 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         _all.Clear();
         foreach (var definition in definitions)
         {
-            _all.Add(new WizardCardViewModel(definition));
+            var card = new WizardCardViewModel(definition);
+
+            // A card that needs Docker starts from what is known now: the held answer, or "Checking for Docker…" before the first.
+            card.ApplyDocker(_localStack.Decision);
+            _all.Add(card);
+        }
+    }
+
+    /// <summary>
+    /// Gates every card that needs Docker (the local observability stack's) on the shared Docker look. Returns true when a card's
+    /// availability moved, which is when its group and the certified filter may have changed too.
+    /// </summary>
+    private bool SyncLocalStack()
+    {
+        var decision = _localStack.Decision;
+        var changed = false;
+        foreach (var card in _all)
+        {
+            changed |= card.ApplyDocker(decision);
+        }
+
+        return changed;
+    }
+
+    private void OnLocalStackChanged(object? sender, EventArgs e)
+    {
+        // Raised from the probe's continuation, which is a pool thread: the cards and the grouped list are bound state.
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            ApplyLocalStack();
+            return;
+        }
+
+        if (dispatcher.HasShutdownStarted)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = dispatcher.BeginInvoke(ApplyLocalStack);
+        }
+        catch (InvalidOperationException)
+        {
+            // Shutdown began between the check and the post; a dropped update on the way out is fine.
+        }
+    }
+
+    private void ApplyLocalStack()
+    {
+        if (SyncLocalStack())
+        {
+            ApplyFilters();
         }
     }
 
@@ -351,15 +417,20 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     }
 
     /// <summary>
-    /// The page-level refresh (F5 and the header button): the guardrail posture and the connector
-    /// roster. Deliberately not the catalog — that is thirty-odd CLI help probes; see
-    /// <see cref="ReloadCatalogCommand"/>.
+    /// The page-level refresh (F5 and the header button): the guardrail posture, the connector
+    /// roster, and the look at Docker that gates the local observability stack's card. Deliberately
+    /// not the catalog — that is thirty-odd CLI help probes; see <see cref="ReloadCatalogCommand"/>.
     /// </summary>
     [RelayCommand]
     private async Task RefreshAsync()
     {
         BuildConnectors();
         Readiness.Rebuild();
+
+        // "I started Docker Desktop": the stack's card is gated on a look at Docker, and this is how it is looked at again now. Not awaited:
+        // a starting engine can take its ten seconds to answer, and the refresh button must not wait on it. The card follows when it lands.
+        _ = _localStack.RefreshAsync();
+
         var credentials = Credentials.RefreshAsync();
         var doctor = Readiness.ReloadAsync();
         await LoadGuardrailAsync().ConfigureAwait(true);
@@ -1088,6 +1159,10 @@ public sealed partial class WizardCardViewModel : ObservableObject
     [ObservableProperty]
     private string _unavailableReason = string.Empty;
 
+    // Why Docker rules a card that needs it out right now (the live probe's sentence), or empty. Held apart from the policy's reason so a
+    // definition that lands later (Apply) neither forgets it nor overrides a reason the policy gives.
+    private string _dockerReason = string.Empty;
+
     public WizardCardViewModel(WizardDefinition definition)
     {
         Target = definition?.Target ?? throw new ArgumentNullException(nameof(definition));
@@ -1149,7 +1224,7 @@ public sealed partial class WizardCardViewModel : ObservableObject
         BadgeKey = PlatformStatusText.Key(definition.PlatformStatus);
         IsDetailLoaded = definition.IsDetailLoaded;
 
-        UnavailableReason = WizardWindowsPolicy.UnavailableReason(Target, definition.PlatformStatus) ?? string.Empty;
+        UnavailableReason = WizardWindowsPolicy.UnavailableReason(Target, definition.PlatformStatus) ?? _dockerReason;
         Group = IsAvailable ? definition.Group : WizardGroups.Unavailable;
 
         StepNote = definition.DetailError is { Length: > 0 } error
@@ -1170,6 +1245,29 @@ public sealed partial class WizardCardViewModel : ObservableObject
         OnPropertyChanged(nameof(TileToolTip));
         OnPropertyChanged(nameof(TileBlurb));
         OnPropertyChanged(nameof(ShowTileBadge));
+    }
+
+    /// <summary>
+    /// Gates the card on the shared Docker look, for a target that needs Docker (<see cref="WizardWindowsPolicy.NeedsDocker"/>; any other
+    /// card ignores this): open, the card is launchable; closed, it moves to the "not available" group and says the look's reason.
+    /// Returns true when that changed, which is when the hub regroups.
+    /// </summary>
+    internal bool ApplyDocker(GateDecision decision)
+    {
+        if (!WizardWindowsPolicy.NeedsDocker(Target))
+        {
+            return false;
+        }
+
+        var reason = decision.IsAvailable ? string.Empty : decision.Reason ?? "Docker is not available.";
+        if (string.Equals(reason, _dockerReason, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        _dockerReason = reason;
+        Apply(Definition);
+        return true;
     }
 
     public bool Matches(string needle) =>

@@ -11,6 +11,7 @@ nothing here starts work until something asks.
 | Alert counts | `Services.AlertCounts` (kept fresh) / `Services.AlertQueue` (raw reader) | `Core/Audit/AlertQueueReader.cs`, `AlertCounts.cs`, `Services/AlertCountsService.cs` |
 | Connector scope | `Services.ConnectorScope` | `Services/ConnectorScope.cs` |
 | TUI command catalogue | `ShellActions.CliCatalogue`, `TuiRegistryCatalogues.For(...)` | `Core/Cli/TuiRegistry*.cs`, `Services/Shell/CuratedCliCommands.cs`, `tools/gen-tui-registry.py` |
+| Docker look (local observability stack) | `Services.LocalStack` | `Services/Wizards/LocalStackAvailability.cs`, `LocalStackReview.cs`, `DockerProbe.cs` |
 
 ## 1. Settings store - `AppSettingsStore`
 
@@ -113,3 +114,21 @@ var all = TuiRegistryCatalogues.For(Services.Runtime.Capabilities).Entries;   //
 - **Tiers and review.** Every row has a tier from `CommandTiers` (unknown is a change). Only a bare read on the allow-list (`CommandTiers.UnreviewedReadPaths`, plus the gateway's `status` and `provenance show`) runs without a review; a read with an option or a typed value on it, and everything else, is shown in `CommandReview` first. Options on an argv are limited to `TuiRegistryCatalogues.ReviewedFlags`; the gateway is never run bare.
 - **Arguments.** A hint that is one word (`<skill-name>`) or one choice (`<observe|action>`) opens a box in the detail pane: Enter asks for the value, a second Enter reviews `... -- <value>` (a name the CLI would rewrite, such as `~`, is refused first). A hint with more in it, and anything that asks questions at a prompt (`keys set`, bare `setup`, the registry's "interactive" commands), is copied for a terminal instead. `start`, `stop` and `restart` of the gateway go the tray's way.
 - **Ids** are `cli.` plus the TUI name with its spaces as dots (`cli.skill.list`), stable across catalogues, so a remembered "last command" can find its row again.
+
+## 7. Docker look for the local observability stack - `Services.LocalStack`
+
+**For:** offering `setup local-observability` (the Setup hub card, and the palette's registry rows for `up | down | reset | status | logs` and the bare group) only while Docker can run it - Compose v2 present and an engine that answers - and saying the probe's reason otherwise. 0.8.10 runs the stack natively on Windows (`platform_support.local_observability_stack_supported`, see the comment on `WizardWindowsPolicy.LocalObservabilityTarget`), which is also why both TUI registries list it there (section 6: `tools/gen-tui-registry.py` reads that function), so nothing about it is hidden by name; the CLI's own preflight stays the authority and the probe's warnings (WSL 2, per-user install, edition, ...) ride along on the review.
+
+```csharp
+var gate = Services.LocalStack.Decision;               // GateDecision: IsAvailable, Reason ("Checking for Docker…" before the first answer)
+_ = Services.LocalStack.EnsureFreshAsync();            // looks only if there is no answer yet or it is old (60 s for a yes, 15 s for a no)
+_ = Services.LocalStack.RefreshAsync();                // looks now (the Setup page's Refresh)
+Services.LocalStack.Changed += (_, _) => OnUiThread(Reapply);   // raised on the probe's thread, and only when the answer changed
+WizardWindowsPolicy.NeedsDocker(target) / .CommandNeedsDocker(argv)   // which card / palette row is gated (url and env are not: they print constants)
+```
+
+- **One look, shared.** `DockerProbe` runs `docker compose version`, then `docker info` (the CLI's preflight order) - read-only, never starts, pulls or runs anything. The Setup card and the palette read the same answer, so they cannot disagree, and Docker is looked at once rather than once per surface.
+- **Not a poll.** No timer. The hub asks when it comes on screen and on Refresh; the palette when it opens (`ShellActions.CheckLocalStack`, which asks only if the palette lists the stack's rows), and `MainWindow` rebuilds an open palette's rows in place when the answer changes. Concurrent callers join the look already running. Once there is an answer it keeps being given while a newer one is fetched, so a card does not flicker into "Checking..." on every visit.
+- **Fail open on "could not look".** A probe that throws or cannot run is `DockerState.Unknown`, which does not close the feature (the CLI checks again); only a definite no (not installed, engine down, no Compose) does.
+- **Rows and tiers.** The registry's `url` row never reaches Docker and is always enabled (`env` has no registry row). The bare group row is the CLI's `up` (its group callback invokes it, whatever the registry's one-line description says), so it is gated and reviewed as `up`. `CommandTiers.IsReadOnlyLeaf` names `status | logs | url | env` by exact path - `setup` would make each a change - and they are on the allow-list (section 6): the three registry reads run without a review, `up`, `down` and the bare group change state, and `reset` is destructive (the registry's argv carries the `--yes` that stands in for the CLI's "Continue?", and the review says so).
+- **Reviews say what the verb does.** `LocalStackReview` is shared by the palette's confirmation and the wizard's last page: the files `up` refreshes, the data `reset` deletes, the destination `down` leaves enabled, the Docker look's cautions, and a gateway restart only for the verbs that rewrite config.yaml (`up` unless `--no-config` or `--no-wait`; `down --disable-config`), from the `setup` group's result callback in the CLI's source.

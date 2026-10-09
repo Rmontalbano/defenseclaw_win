@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.App.Views.Shell;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Install;
@@ -154,6 +155,24 @@ internal sealed class ShellActions
         ArgumentNullException.ThrowIfNull(snapshot);
         return snapshot.Install != InstallState.NotInstalled;
     }
+
+    /// <summary>
+    /// The shared Docker look the gated palette rows (<c>setup local-observability up</c>, ...) apply
+    /// (<see cref="ShellCommandRegistry.BuildCliCommands"/>): the same one the Setup hub's card uses.
+    /// </summary>
+    internal LocalStackAvailability LocalStack => _services.LocalStack;
+
+    /// <summary>
+    /// Makes sure the answer the gated rows apply is not stale, when the palette lists a row that needs it (the registry's
+    /// <c>setup local-observability</c> rows, which are listed unless DefenseClaw is not installed): a palette that has no such row never
+    /// starts a Docker look, and one that has asks at most once per freshness window
+    /// (<see cref="LocalStackAvailability.FreshWhenAvailable"/> / <see cref="LocalStackAvailability.FreshWhenNot"/>). Called when the palette
+    /// opens; returns the look so a test can wait for it.
+    /// </summary>
+    public Task CheckLocalStack() =>
+        CliCommands.Any(c => WizardWindowsPolicy.CommandNeedsDocker(c.Argv))
+            ? LocalStack.EnsureFreshAsync()
+            : Task.CompletedTask;
 
     private void ShowToast(string title, string message)
     {
@@ -386,8 +405,9 @@ internal sealed class ShellActions
             // Judged on the argv that will run: a command with a value on it is never one of the listed bare reads.
             if (!CommandReview.MayRunUnreviewed(command.Executable, argv))
             {
-                // The setup and guardrail verbs restart the gateway by rule; a registry description that says the command restarts it
-                // (agent discovery enable ... "save config, restart, and scan") is the TUI's own word for the same consequence.
+                // The setup and guardrail verbs restart the gateway by rule (the local stack's, by what each verb really rewrites: see
+                // LocalStackReview); a registry description that says the command restarts it (agent discovery enable ... "save config,
+                // restart, and scan") is the TUI's own word for the same consequence.
                 var restarts = ArgvHazards.AppliesTo(command.Executable) &&
                                (CommandReview.RestartsGatewayFor(argv) || command.Summary.Contains("restart", StringComparison.OrdinalIgnoreCase));
 
@@ -398,13 +418,19 @@ internal sealed class ShellActions
                         ? " It names something you typed, so it is reviewed first, even where the command alone is on DefenseClaw for Windows' list of read-only commands."
                         : " It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first."
                     : string.Empty;
+
+                // The local stack's rows say what the verb really does (the same sentences the Setup wizard's review uses): the registry's one-line
+                // description of the bare `setup local-observability` row is "Show local observability commands", and run bare it starts the stack.
+                var summary = LocalStackReview.Summary(argv) is { Length: > 0 } stack ? stack : command.Summary;
                 var review = new CommandReview
                 {
                     Title = $"Run {CommandReview.CommandLine(command.Executable, argv)}?",
-                    Summary = (command.Summary + notListed).Trim(),
+                    Summary = (summary + notListed).Trim(),
                     Steps = new[] { new CommandReviewStep(argv, floor: CommandReview.Stricter(command.Tier, CommandTier.StateChanging), executable: command.Executable) },
                     RestartsGateway = restarts,
-                    Warnings = restarts ? new[] { CommandReviewWarning.GatewayRestart() } : Array.Empty<CommandReviewWarning>(),
+                    Warnings = (restarts ? new[] { CommandReviewWarning.GatewayRestart() } : Array.Empty<CommandReviewWarning>())
+                        .Concat(LocalStackReview.Warnings(argv, LocalStack.Status))
+                        .ToArray(),
                 };
 
                 var confirmed = Confirmer is { } confirm ? confirm(review) : GatewayActionDialog.Confirm(_owner(), review);

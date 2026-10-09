@@ -228,8 +228,9 @@ public sealed class TuiRegistryPaletteTests : IDisposable
                 Assert.DoesNotContain(c.Argv, a => a.StartsWith('-'));
             });
 
-            // The 36 bare reads on the allow-list, less the seven that name a target (a name typed after `--` is never a listed read).
-            Assert.Equal(29, direct.Length);
+            // The 40 bare reads on the allow-list (38 of the CLI's and the gateway's two), less the seven that name a target (a name typed after
+            // `--` is never a listed read) and `setup local-observability env`, which neither registry has an entry for.
+            Assert.Equal(32, direct.Length);
             Assert.All(commands.Where(c => !c.RunsWithoutReview), c => Assert.NotEqual(CommandTier.ReadOnly, c.Tier));
         }
     }

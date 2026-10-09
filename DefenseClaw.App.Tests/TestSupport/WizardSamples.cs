@@ -251,6 +251,174 @@ internal static class WizardSamples
         };
     }
 
+    /// <summary>The 0.8.10 <c>setup local-observability --help</c> screen, verbatim (only the line endings are normalised).</summary>
+    public static readonly string LocalObservabilityHelp = LineEndings.Normalize("""
+        Usage: defenseclaw setup local-observability [OPTIONS] [COMMAND] [ARGS]...
+
+          Drive the bundled local observability stack.
+
+          Provides a one-command path to the same compose stack that historically
+          lived under ``deploy/observability/``. Subcommands:
+
+            up       Start the stack, wait for readiness, wire config.yaml
+            down     Stop containers, keep volumes
+            reset    Stop + wipe all metric / log / trace data volumes
+            status   Show compose ps + per-service readiness probes
+            logs     Tail logs for one or all services
+            url      Print the Grafana / Prometheus / Tempo / Loki URLs
+
+          Bare invocation is an alias for ``up`` so ``defenseclaw setup local-
+          observability`` matches the ergonomics of ``setup splunk --logs``.
+
+        Options:
+          --help  Show this message and exit.
+
+        Commands:
+          down    Stop the stack (volumes preserved).
+          env     Print environment values that point a gateway at the local...
+          logs    Tail logs from the running stack.
+          reset   Stop the stack and drop all persisted metric / log / trace...
+          status  Show compose ps and per-service readiness probes.
+          up      Start the stack, wait for readiness, and wire the gateway config.
+          url     Print the Grafana / Prometheus / Tempo / Loki URLs.
+        """);
+
+    /// <summary>The 0.8.10 <c>--help</c> screen of each <c>setup local-observability</c> subcommand, verbatim, by verb.</summary>
+    public static readonly IReadOnlyDictionary<string, string> LocalObservabilitySubcommandHelp = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["up"] = LineEndings.Normalize("""
+            Usage: defenseclaw setup local-observability up [OPTIONS]
+
+              Start the stack, wait for readiness, and wire the gateway config.
+
+            Options:
+              --timeout INTEGER               Readiness wait budget (seconds) for the
+                                              stack's OTLP + Grafana ports.  [default:
+                                              180]
+              --no-wait                       Skip the readiness wait (container ps only).
+              --no-config                     Do not write config.yaml. Useful for 'just
+                                              start the containers' flows where a
+                                              different canonical destination already owns
+                                              routing.
+              --endpoint TEXT                 Override the OTLP endpoint stamped into
+                                              config.yaml (default: native stack
+                                              contract).
+              --signals TEXT                  Comma-separated canonical signals to enable
+                                              (traces,metrics,logs).  [default:
+                                              traces,metrics,logs]
+              --service-name TEXT             Value to stamp into observability.resource.a
+                                              ttributes.service.name.  [default:
+                                              defenseclaw]
+              --refresh-bundle / --no-refresh-bundle
+                                              Before starting the stack, refresh
+                                              ~/.defenseclaw/observability-stack/ from the
+                                              wheel/repo bundle so newly-shipped
+                                              controller / compose changes take effect.
+                                              Operator-editable surfaces (Grafana
+                                              dashboards, Prometheus rules,
+                                              Loki/Tempo/OTel-Collector configs) are
+                                              refreshed by default; pass --no-refresh-
+                                              config to preserve local edits. If the stack
+                                              is already running, it will be stopped,
+                                              refreshed, and restarted automatically.
+                                              [default: refresh-bundle]
+              --refresh-config / --no-refresh-config
+                                              When refreshing the bundle, overwrite
+                                              operator-editable surfaces (grafana/,
+                                              prometheus/, loki/, tempo/, otel-collector/)
+                                              with the bundled versions. Pass --no-
+                                              refresh-config to preserve local dashboard /
+                                              rule / config edits.  [default: refresh-
+                                              config]
+              --help                          Show this message and exit.
+            """),
+        ["down"] = LineEndings.Normalize("""
+            Usage: defenseclaw setup local-observability down [OPTIONS]
+
+              Stop the stack (volumes preserved).
+
+            Options:
+              --disable-config  Also disable the canonical local-observability
+                                destination.
+              --help            Show this message and exit.
+            """),
+        ["reset"] = LineEndings.Normalize("""
+            Usage: defenseclaw setup local-observability reset [OPTIONS]
+
+              Stop the stack and drop all persisted metric / log / trace volumes.
+
+            Options:
+              --yes   Skip the destructive-action confirmation prompt.
+              --help  Show this message and exit.
+            """),
+        ["status"] = LineEndings.Normalize("""
+            Usage: defenseclaw setup local-observability status [OPTIONS]
+
+              Show compose ps and per-service readiness probes.
+
+            Options:
+              --help  Show this message and exit.
+            """),
+        ["logs"] = LineEndings.Normalize("""
+            Usage: defenseclaw setup local-observability logs [OPTIONS]
+
+              Tail logs from the running stack.
+
+            Options:
+              --service TEXT          Compose service to target (default: all).
+              --follow / --no-follow  Stream logs until Ctrl+C.
+              --help                  Show this message and exit.
+            """),
+        ["url"] = LineEndings.Normalize("""
+            Usage: defenseclaw setup local-observability url [OPTIONS]
+
+              Print the Grafana / Prometheus / Tempo / Loki URLs.
+
+            Options:
+              --json  Emit machine-readable JSON.
+              --help  Show this message and exit.
+            """),
+        ["env"] = LineEndings.Normalize("""
+            Usage: defenseclaw setup local-observability env [OPTIONS]
+
+              Print environment values that point a gateway at the local collector.
+
+            Options:
+              --json  Emit machine-readable JSON.
+              --help  Show this message and exit.
+            """),
+    };
+
+    /// <summary>
+    /// The definition the catalog would build for <c>local-observability</c> from the 0.8.10 help: the group pages over the real
+    /// subcommand screens, then the Windows policy, secret routes and walkthroughs, in the order <c>WizardCatalog.LoadDetailAsync</c> runs them.
+    /// </summary>
+    public static WizardDefinition LocalObservability()
+    {
+        var parsed = SetupHelpParser.Parse(LocalObservabilityHelp);
+        var subcommands = parsed.Commands.ToDictionary(
+            c => c.Name,
+            c => SetupHelpParser.Parse(LocalObservabilitySubcommandHelp[c.Name], commandDepth: 2));
+
+        var steps = WizardStepFactory.BuildGroup(parsed, subcommands);
+        steps = WizardWindowsPolicy.Filter("local-observability", steps);
+        steps = WizardSyntheticSecrets.Add("local-observability", steps);
+        steps = SecretRoutes.Annotate("local-observability", steps);
+        steps = WizardWalkthroughs.Apply("local-observability", steps, LocalObservabilityHelp);
+
+        return new WizardDefinition
+        {
+            Target = "local-observability",
+            Title = "Local observability stack",
+            Group = WizardGroups.Observability,
+            Description = parsed.Summary,
+            Steps = steps,
+            PlatformStatus = parsed.PlatformStatus,
+            IsDetailLoaded = true,
+            HelpText = LocalObservabilityHelp,
+        };
+    }
+
     /// <summary>The curated + filtered + annotated definition the catalog would build for claude-code.</summary>
     public static WizardDefinition ClaudeCode()
     {

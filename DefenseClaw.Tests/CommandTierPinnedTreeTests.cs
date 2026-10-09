@@ -51,6 +51,9 @@ public sealed class CommandTierPinnedTreeTests
         "registry entries", "registry list", "registry show", "skill info", "skill list", "skill search",
         "status", "tool list", "tool status", "version",
 
+        // 0.8.10's local observability reads (CUST-311). The same four leaves, with the same help and options, are in the newer tree.
+        "setup local-observability env", "setup local-observability logs", "setup local-observability status", "setup local-observability url",
+
         // added after 0.8.10; the help of each was read, and each only lists, shows, validates or probes this machine
         "acp status",                         // Show configured ACP posture and editor paths.
         "agent discovery runtime status",     // Show what the runtime planes can and cannot see right now.

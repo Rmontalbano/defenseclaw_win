@@ -39,11 +39,11 @@ public class WizardWindowsPolicyTests
 
     // ------------------------------------------------------------------ which cards are launchable
 
+    // local-observability is not here any more: it is offered behind the Docker probe (LocalObservabilityTests), not refused by name.
     [Theory]
     [InlineData("registry")]
-    [InlineData("local-observability")]
     [InlineData("gateway")]
-    public void Interactive_only_and_docker_targets_are_unavailable_whatever_the_cli_certifies(string target)
+    public void Interactive_only_and_fleet_targets_are_unavailable_whatever_the_cli_certifies(string target)
     {
         foreach (var status in Enum.GetValues<PlatformStatus>())
         {

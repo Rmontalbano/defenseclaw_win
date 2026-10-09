@@ -20,6 +20,13 @@ public enum DockerState
 
     /// <summary>The executable is there but the engine did not answer (Docker Desktop is not running, or it is starting).</summary>
     EngineDown,
+
+    /// <summary>
+    /// The executable is there but <c>docker compose version</c> failed: no Compose v2 plugin. Both local stacks are driven by
+    /// <c>docker compose</c>, and the CLI's preflight refuses first on this, before it asks the engine anything. Appended after
+    /// <see cref="EngineDown"/> so no existing numeric value moves.
+    /// </summary>
+    ComposeMissing,
 }
 
 /// <summary>The answer of one <see cref="IDockerProbe"/> look.</summary>
@@ -34,12 +41,19 @@ public sealed record DockerStatus(DockerState State, string Summary, IReadOnlyLi
 {
     public static DockerStatus Checking { get; } = new(DockerState.Unknown, "Checking for Docker…", Array.Empty<string>());
 
-    /// <summary>True when the local-Splunk option may be chosen: anything but a definite "not here" / "not running".</summary>
-    public bool AllowsLocalSplunk => State is DockerState.Ready or DockerState.Unknown;
+    /// <summary>
+    /// True when a local Docker stack (Splunk's, the observability stack) may be offered: Compose v2 is there and the engine answered,
+    /// or the look itself could not run (the CLI checks again). Anything but a definite "not here", "not running" or "no Compose".
+    /// </summary>
+    public bool AllowsLocalStack => State is DockerState.Ready or DockerState.Unknown;
+
+    /// <summary>True when the local-Splunk option may be chosen; the same answer as <see cref="AllowsLocalStack"/>.</summary>
+    public bool AllowsLocalSplunk => AllowsLocalStack;
 }
 
 /// <summary>
-/// A read-only look at Docker. <b>It never starts, pulls or runs anything</b>: the only command it issues is
+/// A read-only look at Docker. <b>It never starts, pulls or runs anything</b>: the only commands it issues are
+/// <c>docker compose version</c>, which prints the Compose plugin's version without contacting the engine, and
 /// <c>docker info</c>, which asks a running engine to describe itself and does nothing else. Injectable so tests never
 /// touch a real Docker.
 /// </summary>
@@ -52,7 +66,8 @@ public interface IDockerProbe
 public sealed record DockerProcessResult(int ExitCode, string StandardOutput, string StandardError, bool TimedOut);
 
 /// <summary>
-/// <see cref="IDockerProbe"/> over <c>docker info --format "{{json .}}"</c>. Every dependency on the machine is a
+/// <see cref="IDockerProbe"/> over <c>docker compose version</c> and <c>docker info --format "{{json .}}"</c>, in the order the
+/// CLI's own preflight asks them (Compose v2 first, then an engine that answers). Every dependency on the machine is a
 /// delegate, so the logic (and the certification warnings, which mirror the CLI's own checks) is tested with canned
 /// answers.
 /// </summary>
@@ -60,6 +75,9 @@ public sealed class DockerProbe : IDockerProbe
 {
     /// <summary>How long the engine gets to answer. A stopped Docker Desktop fails fast; a starting one can hang.</summary>
     public static readonly TimeSpan InfoTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long <c>docker compose version</c> gets. It never contacts the engine, so it is quick whether or not Docker Desktop is running.</summary>
+    public static readonly TimeSpan ComposeTimeout = TimeSpan.FromSeconds(10);
 
     private readonly Func<Task<string?>> _locate;
     private readonly Func<string, IReadOnlyList<string>, TimeSpan, CancellationToken, Task<DockerProcessResult>> _run;
@@ -107,6 +125,20 @@ public sealed class DockerProbe : IDockerProbe
             if (string.IsNullOrWhiteSpace(docker))
             {
                 return new DockerStatus(DockerState.NotInstalled, "Docker was not found on this machine's PATH.", Array.Empty<string>());
+            }
+
+            // Compose v2 first, as the CLI's preflight does: the plugin is client-side, so it answers whether or not the engine is running,
+            // and a machine without it fails here whatever state Docker Desktop is in.
+            var compose = await _run(docker, new[] { "compose", "version" }, ComposeTimeout, cancellationToken).ConfigureAwait(false);
+            if (compose.TimedOut || compose.ExitCode != 0)
+            {
+                var composeDetail = compose.TimedOut ? string.Empty : FirstLine(string.IsNullOrWhiteSpace(compose.StandardError) ? compose.StandardOutput : compose.StandardError);
+                return new DockerStatus(
+                    DockerState.ComposeMissing,
+                    "Docker Compose v2 is not available (docker compose version " + (compose.TimedOut ? "did not answer" : "failed") + "). " +
+                    "Install or enable the Compose plugin; Docker Desktop includes it." +
+                    (composeDetail.Length > 0 ? " (" + composeDetail + ")" : string.Empty),
+                    Array.Empty<string>());
             }
 
             var result = await _run(docker, new[] { "info", "--format", "{{json .}}" }, InfoTimeout, cancellationToken).ConfigureAwait(false);
@@ -179,12 +211,12 @@ public sealed class DockerProbe : IDockerProbe
 
         if (!string.Equals(info.OsType, "linux", StringComparison.OrdinalIgnoreCase))
         {
-            warnings.Add("Docker is using Windows containers. Local Splunk needs Linux containers: switch Docker Desktop to Linux containers.");
+            warnings.Add("Docker is using Windows containers. The local stacks (Splunk, observability) need Linux containers: switch Docker Desktop to Linux containers.");
         }
 
         if (!_isX64())
         {
-            warnings.Add("The CLI certifies native Windows local Splunk only on x64 systems.");
+            warnings.Add("The CLI certifies the native Windows local stacks (Splunk, observability) only on x64 systems.");
         }
 
         var edition = _windowsEdition() ?? string.Empty;

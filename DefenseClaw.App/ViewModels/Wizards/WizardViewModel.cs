@@ -505,12 +505,41 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         _closeAfterStop = closeAfterStop;
-        StopConfirmMessage = closeAfterStop
-            ? "Closing this window stops the command and everything it started. It may leave setup " +
-              "half-applied — read the output and the Activity panel afterwards before running it again."
-            : "This ends the command and everything it started. It may leave setup half-applied — read " +
-              "the output and the Activity panel afterwards before running it again.";
+        StopConfirmMessage = StopMessage(closeAfterStop, CommandReview?.Tier == CommandTier.ReadOnly);
         IsStopConfirmVisible = true;
+    }
+
+    /// <summary>
+    /// What the result line says after a stop the operator confirmed. The same distinction as <see cref="StopMessage"/>: stopping a command
+    /// that only reads (the local stack's <c>logs --follow</c>, which runs until it is stopped, so stopping it is how it normally ends)
+    /// leaves nothing half-done.
+    /// </summary>
+    internal static string CancelledMessage(string failure, bool preview, bool onlyReads)
+    {
+        if (preview)
+        {
+            return failure + ". A preview writes nothing, so there is nothing to clean up.";
+        }
+
+        return onlyReads
+            ? failure + ". The command only reads, so nothing was left half-done."
+            : failure + ". The command may have left setup half-applied — read the output above and the Activity panel before running it again.";
+    }
+
+    /// <summary>
+    /// What the stop question says. A setup command may be killed partway through writing configuration; one that only reads (the local
+    /// stack's <c>logs --follow</c>, which runs until it is stopped) leaves nothing half-done, and saying otherwise would make stopping it
+    /// look like a risk it is not.
+    /// </summary>
+    internal static string StopMessage(bool closeAfterStop, bool onlyReads)
+    {
+        var lead = closeAfterStop
+            ? "Closing this window stops the command and everything it started."
+            : "This ends the command and everything it started.";
+
+        return lead + (onlyReads
+            ? " It only reads, so nothing is left half-done."
+            : " It may leave setup half-applied — read the output and the Activity panel afterwards before running it again.");
     }
 
     /// <summary>The operator said yes: cancel the run's token, which makes the runner kill its process tree.</summary>
@@ -781,10 +810,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             {
                 ExitBadgeText = prefix + "cancelled";
                 ExitBadgeKey = "Warn";
-                ResultMessage = preview
-                    ? failure + ". A preview writes nothing, so there is nothing to clean up."
-                    : failure + ". The command may have left setup half-applied — read the output " +
-                      "above and the Activity panel before running it again.";
+                ResultMessage = CancelledMessage(failure, preview, CommandReview?.Tier == CommandTier.ReadOnly);
                 return;
             }
 
@@ -980,9 +1006,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
     /// The lowest tier the review of this wizard's command may show. A wizard writes configuration, so it is
     /// never shown as harmless: the classifier alone would call <c>setup webhook add --name --dry-run</c> read-only
     /// when an operator types <c>--dry-run</c> as the name, because the token spells a preview flag. The one
-    /// exception is a preview the operator asked for with the wizard's own <c>--dry-run</c> switch.
+    /// exception is a preview the operator asked for with the wizard's own <c>--dry-run</c> switch, and a command the classifier names
+    /// as a read by its exact path (<see cref="CommandTiers.IsReadOnlyLeaf"/>: <c>setup local-observability status | logs | url | env</c>,
+    /// whose verb comes from a fixed list of choices, not from text the operator types): those change nothing, and say so.
     /// </summary>
-    private CommandTier ReviewFloor() =>
+    private CommandTier ReviewFloor(IReadOnlyList<string> argv) =>
+        CommandTiers.IsReadOnlyLeaf(argv) ||
         Definition.VisibleFields(_values).Any(f =>
             f.Kind == WizardFieldKind.Switch &&
             string.Equals(f.Flag, "--dry-run", StringComparison.Ordinal) &&
@@ -1009,11 +1038,16 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         var review = new CommandReview
         {
             Title = "Command",
-            Steps = new[] { new CommandReviewStep(argv, floor: ReviewFloor()) },
+            Steps = new[] { new CommandReviewStep(argv, floor: ReviewFloor(argv)) },
             RestartsGateway = restartWarning.Length > 0,
-            Warnings = restartWarning.Length > 0
-                ? new[] { CommandReviewWarning.GatewayRestart(restartWarning) }
-                : Array.Empty<CommandReviewWarning>(),
+
+            // The local observability stack says what its verbs really do besides the restart bar above (data deleted, files overwritten, a
+            // destination left enabled), and what the last Docker look says the CLI's own Docker check would refuse; nothing for any other wizard.
+            Warnings = (restartWarning.Length > 0
+                    ? new[] { CommandReviewWarning.GatewayRestart(restartWarning) }
+                    : Array.Empty<CommandReviewWarning>())
+                .Concat(LocalStackReview.Warnings(argv, _services.LocalStack.Status))
+                .ToArray(),
         };
         review = SecretFieldWarnings.AppendTo(review, new[] { WizardReview.SecretValueWarning(argv) });
         CommandReview = review;
@@ -1026,9 +1060,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         }
 
         HasChanges = ReviewChanges.Count > 0;
-        ChangeSummary = HasChanges
-            ? "Changed from the current configuration:"
-            : "Nothing was changed from the current configuration. Running this re-applies it as it stands.";
+        ChangeSummary = SummaryOfChanges(argv, HasChanges, review.Tier);
 
         ReviewCredentials.Clear();
         foreach (var field in _fields.Where(f => f.IsVisible && f.IsSecret))
@@ -1056,6 +1088,27 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         HasPromptWarning = PromptWarning.Length > 0;
 
         RaiseNavigationState();
+    }
+
+    /// <summary>
+    /// The line above the list of what the operator changed. For a setup wizard that is "changed from the current configuration" (or that nothing
+    /// was, and a run re-applies it). A command that only reads — a preview, the local stack's status, logs, url, env — has no configuration to
+    /// re-apply, and the stack's lifecycle verbs are not edits of a setting at all: those say what they do (<see cref="LocalStackReview.Summary"/>).
+    /// </summary>
+    internal static string SummaryOfChanges(IReadOnlyList<string> argv, bool hasChanges, CommandTier tier)
+    {
+        if (LocalStackReview.Summary(argv) is { Length: > 0 } stack)
+        {
+            return hasChanges ? stack + " What you chose:" : stack;
+        }
+
+        return (hasChanges, tier == CommandTier.ReadOnly) switch
+        {
+            (true, true) => "What you chose (this command only reads; it changes nothing):",
+            (true, false) => "Changed from the current configuration:",
+            (false, true) => "This command only reads. Running it changes nothing.",
+            _ => "Nothing was changed from the current configuration. Running this re-applies it as it stands.",
+        };
     }
 
     private void RaiseNavigationState()

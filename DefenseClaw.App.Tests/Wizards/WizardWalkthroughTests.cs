@@ -311,7 +311,10 @@ public class WizardWalkthroughTests
     }
 }
 
-/// <summary>The Docker probe: what a read-only look at <c>docker info</c> says, and that it never asks for anything else.</summary>
+/// <summary>
+/// The Docker probe: what a read-only look at <c>docker compose version</c> and <c>docker info</c> says, and that it never asks for anything
+/// else.
+/// </summary>
 public class DockerProbeTests
 {
     private const string LinuxKitInfo = "{\"OSType\":\"linux\",\"OperatingSystem\":\"Docker Desktop\",\"KernelVersion\":\"5.15.0-linuxkit\"}";
@@ -320,7 +323,11 @@ public class DockerProbeTests
     {
         public string? Docker { get; set; } = @"C:\Program Files\Docker\Docker\resources\bin\docker.exe";
 
+        /// <summary>The answer to <c>docker info</c>.</summary>
         public DockerProcessResult Result { get; set; } = new(0, LinuxKitInfo, string.Empty, false);
+
+        /// <summary>The answer to <c>docker compose version</c>.</summary>
+        public DockerProcessResult Compose { get; set; } = new(0, "Docker Compose version v2.29.1", string.Empty, false);
 
         public Exception? Throws { get; set; }
 
@@ -337,7 +344,8 @@ public class DockerProbeTests
             (exe, args, _, _) =>
             {
                 Runs.Add(args.ToArray());
-                return Throws is null ? Task.FromResult(Result) : Task.FromException<DockerProcessResult>(Throws);
+                var answer = args[0] == "compose" ? Compose : Result;
+                return Throws is null ? Task.FromResult(answer) : Task.FromException<DockerProcessResult>(Throws);
             },
             () => Edition,
             () => Wsl,
@@ -358,7 +366,7 @@ public class DockerProbeTests
     }
 
     [Fact]
-    public async Task A_stopped_engine_is_engine_down_with_the_clis_words_and_still_only_asks_for_info()
+    public async Task A_stopped_engine_is_engine_down_with_the_clis_words_and_still_only_asks_the_two_read_only_questions()
     {
         var rig = new Rig { Result = new DockerProcessResult(1, string.Empty, "failed to connect to the docker API at npipe\n", false) };
 
@@ -366,9 +374,54 @@ public class DockerProbeTests
 
         Assert.Equal(DockerState.EngineDown, status.State);
         Assert.False(status.AllowsLocalSplunk);
+        Assert.False(status.AllowsLocalStack);
         Assert.Contains("not running", status.Summary, StringComparison.Ordinal);
         Assert.Contains("failed to connect", status.Summary, StringComparison.Ordinal);
-        Assert.Equal(new[] { "info", "--format", "{{json .}}" }, Assert.Single(rig.Runs));
+
+        // The CLI's own preflight order: Compose v2 first (a client-side plugin, which answers with the engine stopped), then the engine.
+        Assert.Equal(2, rig.Runs.Count);
+        Assert.Equal(new[] { "compose", "version" }, rig.Runs[0]);
+        Assert.Equal(new[] { "info", "--format", "{{json .}}" }, rig.Runs[1]);
+    }
+
+    [Fact]
+    public async Task A_missing_compose_plugin_is_compose_missing_and_the_engine_is_never_asked()
+    {
+        var rig = new Rig { Compose = new DockerProcessResult(1, string.Empty, "docker: 'compose' is not a docker command.\nSee 'docker --help'\n", false) };
+
+        var status = await rig.Probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(DockerState.ComposeMissing, status.State);
+        Assert.False(status.AllowsLocalStack);
+        Assert.False(status.AllowsLocalSplunk);
+        Assert.Contains("Compose v2", status.Summary, StringComparison.Ordinal);
+        Assert.Contains("is not a docker command", status.Summary, StringComparison.Ordinal);
+        Assert.Empty(status.Warnings);
+        Assert.Equal(new[] { "compose", "version" }, Assert.Single(rig.Runs));
+    }
+
+    [Fact]
+    public async Task A_compose_plugin_that_does_not_answer_is_compose_missing_too()
+    {
+        var rig = new Rig { Compose = new DockerProcessResult(-1, string.Empty, string.Empty, true) };
+
+        var status = await rig.Probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(DockerState.ComposeMissing, status.State);
+        Assert.Contains("did not answer", status.Summary, StringComparison.Ordinal);
+        Assert.Single(rig.Runs);
+    }
+
+    [Fact]
+    public async Task Only_two_read_only_commands_are_ever_run()
+    {
+        var rig = new Rig();
+
+        _ = await rig.Probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(
+            new[] { "compose version", "info --format {{json .}}" },
+            rig.Runs.Select(r => string.Join(' ', r)).ToArray());
     }
 
     [Fact]
@@ -539,6 +592,29 @@ public class WizardGuideViewModelTests
             Assert.True(logs.HasUnavailableReason);
             Assert.Contains("not found", logs.UnavailableReason, StringComparison.Ordinal);
             Assert.Contains("install or start Docker Desktop", logs.UnavailableReason, StringComparison.Ordinal);
+
+            logs.IsSelected = true;
+
+            Assert.False(logs.IsSelected);
+            Assert.False(scene.Field("logs").IsOn);
+        });
+    }
+
+    [Fact]
+    public void A_missing_compose_plugin_keeps_the_local_card_off_with_the_probes_reason_like_a_missing_engine_does()
+    {
+        using var scene = new Scene(new FakeProbe());
+        scene.Probe.Answer(new DockerStatus(
+            DockerState.ComposeMissing,
+            "Docker Compose v2 is not available (docker compose version failed). Install or enable the Compose plugin; Docker Desktop includes it.",
+            Array.Empty<string>()));
+
+        UiThread.WaitFor(() => !scene.Card("logs").IsChecking, "the probe answer");
+        UiThread.Run(() =>
+        {
+            var logs = scene.Card("logs");
+            Assert.False(logs.IsAvailable);
+            Assert.StartsWith("Docker Compose v2 is not available", logs.UnavailableReason, StringComparison.Ordinal);
 
             logs.IsSelected = true;
 

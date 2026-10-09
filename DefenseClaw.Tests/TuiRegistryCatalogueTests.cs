@@ -302,7 +302,8 @@ public sealed class TuiRegistryCatalogueTests
         "agent discovery status", "agent signatures list", "config show", "config show effective observability", "config validate", "doctor",
         "doctor run", "gateway provenance show", "gateway status", "guardrail status", "help", "info plugin", "info skill", "keys check",
         "keys list", "keys list --json", "list mcps", "list plugins", "list skills", "list tools", "mcp list", "mcps", "observability plan",
-        "plugin info", "plugin list", "plugins", "policy list", "policy show", "policy validate", "readiness", "skill info", "skill list",
+        "plugin info", "plugin list", "plugins", "policy list", "policy show", "policy validate", "readiness", "setup local-observability logs",
+        "setup local-observability status", "setup local-observability url", "skill info", "skill list",
         "skill search", "skills", "status", "tool list", "tool status", "tools", "uninstall dry-run", "version", "watchdog status",
     };
 
@@ -343,8 +344,8 @@ public sealed class TuiRegistryCatalogueTests
             "agent discovery status", "agent signatures list", "config show", "config validate", "doctor", "doctor run", "gateway provenance show",
             "gateway status", "guardrail status", "info plugin", "info skill", "keys check", "keys list", "list mcps", "list plugins", "list skills",
             "list tools", "mcp list", "mcps", "observability plan", "plugin info", "plugin list", "plugins", "policy list", "policy show",
-            "policy validate", "readiness", "skill info", "skill list", "skill search", "skills", "status", "tool list", "tool status", "tools",
-            "version",
+            "policy validate", "readiness", "setup local-observability logs", "setup local-observability status", "setup local-observability url",
+            "skill info", "skill list", "skill search", "skills", "status", "tool list", "tool status", "tools", "version",
         };
         Assert.Equal(expected.Order(StringComparer.Ordinal), listed.Select(e => e.Name).Order(StringComparer.Ordinal));
     }

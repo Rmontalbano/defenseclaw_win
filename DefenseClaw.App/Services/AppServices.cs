@@ -15,6 +15,7 @@ using DefenseClaw.Core.Runtime;
 using DefenseClaw.Core.Security;
 using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.Services.Updates;
+using DefenseClaw.App.Services.Wizards;
 
 namespace DefenseClaw.App.Services;
 
@@ -79,7 +80,8 @@ public sealed class AppServices : IDisposable
         string? claudeSettingsPath = null,
         string? settingsPath = null,
         Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
-        RuntimeProbeRunner? runtimeProbeRunner = null)
+        RuntimeProbeRunner? runtimeProbeRunner = null,
+        IDockerProbe? dockerProbe = null)
     {
         Paths = startup.Paths;
 
@@ -153,6 +155,10 @@ public sealed class AppServices : IDisposable
 
         // Opt-in "start the gateway automatically" (off by default). Nothing runs until the app calls Start on it.
         GatewayAutoStart = GatewayAutoStart.Create(this);
+
+        // Whether the local observability stack can be offered: one read-only Docker look, shared by the Setup card and the palette's
+        // rows. Idle (no timer, no process) until one of them asks.
+        LocalStack = new LocalStackAvailability(dockerProbe ?? DockerProbe.CreateDefault(Paths));
     }
 
     /// <summary>The single instance, created by <see cref="Initialize"/> at startup.</summary>
@@ -233,6 +239,13 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The opt-in single automatic <c>defenseclaw-gateway start</c> per launch, and the "operator stopped it" flag that vetoes it. See <see cref="Services.GatewayAutoStart"/>.</summary>
     internal GatewayAutoStart GatewayAutoStart { get; }
+
+    /// <summary>
+    /// Whether the bundled local observability stack (<c>setup local-observability</c>) can be offered: the Setup hub's card and the palette's
+    /// rows apply <c>LocalStack.Decision</c>, which comes from one read-only Docker probe (Compose v2 and an engine that answers) asked only
+    /// when a surface needs it. See <see cref="LocalStackAvailability"/>.
+    /// </summary>
+    internal LocalStackAvailability LocalStack { get; }
 
     /// <summary>
     /// REST port the <see cref="Gateway"/> client is currently built against. Tracks
@@ -391,7 +404,8 @@ public sealed class AppServices : IDisposable
         bool readConfigOnPoolThread = false,
         string? settingsPath = null,
         Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
-        RuntimeProbeRunner? runtimeProbeRunner = null)
+        RuntimeProbeRunner? runtimeProbeRunner = null,
+        IDockerProbe? dockerProbe = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -404,7 +418,9 @@ public sealed class AppServices : IDisposable
             services.Settings, services.Monitor, (_, _) => Task.FromResult(UpdateCheckResult.NotCheckedYet));
         // Likewise the runtime probes would start the real CLI: an isolated composition's detector answers "unknown" unless a test supplies a runner.
         runtimeProbeRunner ??= static (_, _) => Task.FromResult(RuntimeProbeOutput.Fail("not probed in an isolated composition"));
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner);
+        // Likewise the Docker look would start the real docker: an isolated composition answers "not installed" unless a test supplies a probe.
+        dockerProbe ??= new FixedDockerProbe(new DockerStatus(DockerState.NotInstalled, "Docker is not looked at in an isolated composition.", Array.Empty<string>()));
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -555,6 +571,7 @@ public sealed class AppServices : IDisposable
         // App.OnExit has usually already called Shutdown, in which case this is a no-op.
         Cli.Dispose();
         Runtime.Dispose();
+        LocalStack.Dispose();
 
         ConfigWatcher.Changed -= OnConfigChanged;
         _reloadRetry?.Dispose();

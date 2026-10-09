@@ -27,7 +27,8 @@ public enum CommandTier
 /// destroy), plus <c>unset</c> and <c>dismiss</c>, which also discard configuration or findings.
 /// The first recognised verb in the path decides between read-only and state-changing, so a target
 /// that spells a verb cannot downgrade the tier. Anything unrecognised is
-/// <see cref="CommandTier.StateChanging"/> — the safe default is to ask.
+/// <see cref="CommandTier.StateChanging"/> — the safe default is to ask. The one exception is a short list of
+/// reads under <c>setup</c>, named in full (<see cref="IsReadOnlyLeaf"/>), each read from the CLI's source.
 /// </para>
 /// <para>
 /// Two flag rules sit on top of the path. A read-only flag (<c>--help</c>, <c>--version</c>,
@@ -72,6 +73,20 @@ public static class CommandTiers
     };
 
     /// <summary>
+    /// Leaves under <c>setup</c> that only read, named in full. <c>setup</c> is a state-changing verb and the first recognised verb decides,
+    /// so every other <c>setup</c> command is a change; these four are the exception, each read from the DefenseClaw 0.8.10 source
+    /// (<c>commands/cmd_setup_local_observability.py</c>, <c>observability/local_stack.py</c>): <c>url</c> and <c>env</c> print constants,
+    /// <c>status</c> runs <c>docker compose ps</c> and probes loopback ports, and <c>logs</c> runs <c>docker compose logs --tail 200</c>.
+    /// None of them writes config.yaml, starts or stops a container, or keeps an audit record. The rest of that group - <c>up</c>, <c>down</c>,
+    /// <c>reset</c> - are not here: they change state, and <c>reset</c> is destructive. Matched on the exact three-token path, so a fourth
+    /// token, another group, or a longer spelling never inherits the exemption.
+    /// </summary>
+    private static readonly HashSet<string> ReadOnlySetupLeaves = new(StringComparer.Ordinal)
+    {
+        "setup local-observability env", "setup local-observability logs", "setup local-observability status", "setup local-observability url",
+    };
+
+    /// <summary>
     /// Flags that turn an otherwise read-only verb into a change: <c>doctor --fix</c> repairs state
     /// (the 0.8.10 catalog found it touching PID files and connector setup).
     /// </summary>
@@ -107,7 +122,8 @@ public static class CommandTiers
     /// changes state tomorrow (<c>plan apply</c> and <c>validate fix</c> are both "read-only" by that rule), and the palette's argv comes from
     /// a TUI command registry (<see cref="TuiRegistryCatalogues"/>) that a newer runtime extends and a regeneration can change, so it
     /// would run unreviewed the moment one added one. Every entry is a leaf of the
-    /// DefenseClaw 0.8.10 command tree whose help says it lists, shows, checks or validates; <c>CommandTierTreeTests</c> pins this set to
+    /// DefenseClaw 0.8.10 command tree whose help says it lists, shows, checks or validates (or, for the four <c>setup local-observability</c>
+    /// reads, prints or tails - read in the CLI's source, see <see cref="IsReadOnlyLeaf"/>); <c>CommandTierTreeTests</c> pins this set to
     /// the reviewed read-only leaves of that tree, so growing it is a decision made in two places, after reading the new command's help.
     /// Anything not on it goes through a review, whatever <see cref="Classify"/> says.
     /// </summary>
@@ -120,7 +136,8 @@ public static class CommandTiers
         "codeguard status", "config show", "config validate", "doctor",
         "guardrail judge list", "guardrail status", "keys check", "keys list", "mcp list", "migrations status",
         "observability plan", "plugin info", "plugin list", "policy list", "policy show", "policy validate",
-        "registry entries", "registry list", "registry show", "skill info", "skill list", "skill search",
+        "registry entries", "registry list", "registry show", "setup local-observability env", "setup local-observability logs",
+        "setup local-observability status", "setup local-observability url", "skill info", "skill list", "skill search",
         "status", "tool list", "tool status", "version",
     };
 
@@ -196,6 +213,12 @@ public static class CommandTiers
             return CommandTier.Destructive;
         }
 
+        // A read under "setup", named in full (the local stack's status, logs, url, env): "setup" would make it a change.
+        if (IsReadOnlyLeafPath(path) && !options.Any(MutatingFlags.Contains) && !options.Any(SensitiveFlags.Contains))
+        {
+            return CommandTier.ReadOnly;
+        }
+
         // The first recognised verb decides; destructive words anywhere in the path already won above
         // (over-warning is the safe direction). Unrecognised paths default to asking.
         var verb = path.FirstOrDefault(t => ReadOnlyVerbs.Contains(t) || StateChangingVerbs.Contains(t));
@@ -204,6 +227,23 @@ public static class CommandTiers
             ? CommandTier.ReadOnly
             : CommandTier.StateChanging;
     }
+
+    /// <summary>
+    /// True when the path of <paramref name="argv"/> (its leading tokens before the first flag) is exactly one of the leaves under
+    /// <c>setup</c> that only read (<c>setup local-observability status | logs | url | env</c>, read from the 0.8.10 source). By path alone:
+    /// no flag, however spelled, can make a path into one of these, and a flag value never reaches the path. What a surface that builds the
+    /// command itself (a wizard, whose floor is otherwise "a change") uses to know the command it builds is one of these reads.
+    /// </summary>
+    public static bool IsReadOnlyLeaf(IReadOnlyList<string> argv)
+    {
+        ArgumentNullException.ThrowIfNull(argv);
+
+        // Options end at "--", like the classifier's: a positional after it is a target, never part of the path.
+        return IsReadOnlyLeafPath(OptionsOf(argv).TakeWhile(a => !a.StartsWith('-')).Take(MaxPathTokens).ToArray());
+    }
+
+    private static bool IsReadOnlyLeafPath(string[] path) =>
+        path.Length == 3 && ReadOnlySetupLeaves.Contains(string.Join(' ', path));
 
     private static string[] OptionsOf(IReadOnlyList<string> argv) => argv.TakeWhile(a => a != "--").ToArray();
 
