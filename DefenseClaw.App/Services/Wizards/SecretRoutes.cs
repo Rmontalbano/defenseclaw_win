@@ -33,6 +33,13 @@ namespace DefenseClaw.App.Services.Wizards;
 /// flag or not at all — so they keep Route 1 only.
 /// </para>
 /// <para>
+/// A sixth flag, <c>setup splunk dashboards plan | apply | destroy --o11y-api-token</c> (the Splunk Observability Cloud API token, not the
+/// ingest token), is bound to <c>SFX_AUTH_TOKEN</c> by Click's <c>envvar=</c> and its own help tells the operator to prefer the variable "so
+/// the secret never appears in shell history or process listings", so it has Route 2 too — with one difference the card says: the CLI
+/// does not store the value anywhere (it sets <c>TF_VAR_signalfx_auth_token</c> for its Terraform children), so a typed token is used for
+/// that one run and then gone.
+/// </para>
+/// <para>
 /// A fourth secret has a route without ever having been a flag: <c>setup galileo</c> reads <c>GALILEO_API_KEY</c>
 /// from the environment and offers no flag for it, so <see cref="WizardSyntheticSecrets"/> adds a field that stands
 /// for the variable. Unlike the others the CLI keeps such a key only when <c>--persist-api-key</c> is on — see
@@ -292,6 +299,24 @@ public static class SecretRoutes
                         : null,
                     IfMissing = "The destination is still created, but exporting to it fails to authenticate until the token is stored " +
                                 "(the CLI prints a \"not set\" warning).",
+                };
+            }
+
+            // In-app, but only while the installed CLI's own help still names the variable (Click does not print an option's envvar
+            // unless asked to, so the help text is where the 0.8.10 CLI says it: "Prefer the SFX_AUTH_TOKEN environment variable"). A CLI that
+            // stopped saying so may have stopped reading it, and the route quietly falls back to the terminal instead. Never stored by the
+            // CLI: `_prepare_run` copies it into TF_VAR_signalfx_auth_token for its Terraform children and nowhere else.
+            case (SplunkDashboards.Target, SplunkDashboards.TokenFlag):
+            {
+                var advertised = field.Help.Contains(SplunkDashboards.TokenVariable, StringComparison.Ordinal);
+
+                return new SecretRoute
+                {
+                    Purpose = "Splunk Observability Cloud API token (the user API access token, not the ingest token)",
+                    EnvName = _ => SplunkDashboards.TokenVariable,
+                    InAppEnvName = advertised ? _ => SplunkDashboards.TokenVariable : null,
+                    InAppStorage = "the CLI does not store it: it hands it to Terraform for that run and nothing keeps it afterwards.",
+                    IfMissing = "The CLI stops with \"Splunk O11y token not found\" before it copies or runs anything, and changes nothing.",
                 };
             }
 

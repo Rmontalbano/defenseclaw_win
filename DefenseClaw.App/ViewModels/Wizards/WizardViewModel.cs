@@ -1054,11 +1054,14 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             RestartsGateway = restartWarning.Length > 0,
 
             // The local observability stack says what its verbs really do besides the restart bar above (data deleted, files overwritten, a
-            // destination left enabled), and what the last Docker look says the CLI's own Docker check would refuse; nothing for any other wizard.
+            // destination left enabled), and what the last Docker look says the CLI's own Docker check would refuse; the Splunk dashboards
+            // say what theirs do in Splunk (applied without a pause, detectors removed, everything deleted). Nothing for any other wizard.
+            // The token is not judged here: the wizard has a card for it, with its own status and its own box.
             Warnings = (restartWarning.Length > 0
                     ? new[] { CommandReviewWarning.GatewayRestart(restartWarning) }
                     : Array.Empty<CommandReviewWarning>())
                 .Concat(LocalStackReview.Warnings(argv, _services.LocalStack.Status))
+                .Concat(SplunkDashboardsReview.Warnings(argv))
                 .ToArray(),
         };
         review = SecretFieldWarnings.AppendTo(review, new[] { WizardReview.SecretValueWarning(argv) });
@@ -1112,6 +1115,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         if (LocalStackReview.Summary(argv) is { Length: > 0 } stack)
         {
             return hasChanges ? stack + " What you chose:" : stack;
+        }
+
+        // The Splunk dashboards' verbs are not edits of a setting either: they say what they do to Splunk.
+        if (SplunkDashboardsReview.Summary(argv) is { Length: > 0 } dashboards)
+        {
+            return hasChanges ? dashboards + " What you chose:" : dashboards;
         }
 
         return (hasChanges, tier == CommandTier.ReadOnly) switch

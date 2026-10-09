@@ -44,6 +44,12 @@ public sealed class WizardDefinitionChangedEventArgs : EventArgs
 /// the shared result); a caller's token only ends that caller's wait.
 /// </para>
 /// <para>
+/// <b>One target is not in the roster.</b> <c>setup splunk dashboards</c> is a nested group, which <c>setup --help</c> does not list, so
+/// the Setup hub derives a card for it from the <c>splunk</c> one (<see cref="SplunkDashboards"/>) and asks this catalog for its detail
+/// like any other: a <see cref="WizardDefinition.Target"/> of two words is probed, and run, as the two nouns it is. The roster itself
+/// stays what the CLI says it is.
+/// </para>
+/// <para>
 /// <b>The catalog describes one build of the CLI.</b> When the installed CLI changes under a running app — an
 /// in-app upgrade (<see cref="NotifyCliChangedAsync"/>) or the gateway reporting a different binary version
 /// (<see cref="ObserveBinaryVersionAsync"/>) — everything cached is forgotten and, if the catalog was in use,
@@ -206,7 +212,16 @@ public sealed class WizardCatalog
             }
 
             var definitions = await ReloadAsync().ConfigureAwait(false);
-            await Task.WhenAll(definitions.Select(d => EnsureDetailAsync(d.Target))).ConfigureAwait(false);
+
+            // The Splunk dashboards are not in the roster (a nested group), but their card is derived from the splunk one being there, so a
+            // build that changed under the hub changes what that card says too.
+            var targets = definitions.Select(d => d.Target).ToList();
+            if (targets.Contains(SplunkDashboards.ParentTarget, StringComparer.Ordinal))
+            {
+                targets.Add(SplunkDashboards.Target);
+            }
+
+            await Task.WhenAll(targets.Select(t => EnsureDetailAsync(t))).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -358,7 +373,11 @@ public sealed class WizardCatalog
     private async Task LoadDetailAsync(string target, int generation)
     {
         var existing = Find(target);
-        var result = await _probe.HelpAsync(new[] { target }).ConfigureAwait(false);
+
+        // One word for nearly every target; the Splunk dashboards are a nested command (setup splunk dashboards), whose help is asked
+        // for with both words.
+        var path = WizardDefinition.CommandWords(target);
+        var result = await _probe.HelpAsync(path).ConfigureAwait(false);
 
         if (!result.Succeeded)
         {
@@ -368,8 +387,8 @@ public sealed class WizardCatalog
             {
                 Target = target,
                 Title = existing?.Title ?? TitleFor(target),
-                Group = existing?.Group ?? WizardGroups.Other,
-                Description = existing?.Description ?? string.Empty,
+                Group = existing?.Group ?? GroupFor(target, string.Empty),
+                Description = existing?.Description ?? (SplunkDashboards.IsTarget(target) ? SplunkDashboards.Description : string.Empty),
                 PlatformStatus = PlatformStatus.Unknown,
                 IsDetailLoaded = true,
                 DetailError = result.Error,
@@ -379,13 +398,22 @@ public sealed class WizardCatalog
             return;
         }
 
-        var help = SetupHelpParser.Parse(result.Text);
+        var help = SetupHelpParser.Parse(result.Text, commandDepth: path.Length);
+
+        // A CLI that predates the group answers its help with the usage of the group above it and an error: no verbs, nothing to run.
+        // The card stays, disabled, and says so, rather than opening an empty wizard.
+        if (SplunkDashboards.IsTarget(target) && !SplunkDashboards.IsPresentIn(help))
+        {
+            Replace(SplunkDashboards.Missing(), generation);
+            return;
+        }
+
         IReadOnlyList<WizardStep> steps;
         var curated = false;
 
         if (help.HasSubcommands)
         {
-            var subcommands = await LoadSubcommandsAsync(target, help).ConfigureAwait(false);
+            var subcommands = await LoadSubcommandsAsync(path, help).ConfigureAwait(false);
             steps = WizardStepFactory.BuildGroup(help, subcommands);
         }
         else
@@ -414,7 +442,9 @@ public sealed class WizardCatalog
             Target = target,
             Title = TitleFor(target),
             Group = GroupFor(target, help.Summary.Length > 0 ? help.Summary : existing?.Description ?? string.Empty),
-            Description = help.Summary.Length > 0 ? help.Summary : existing?.Description ?? string.Empty,
+
+            // The dashboards' card keeps its own sentence: the CLI's summary of the group does not say "Terraform" or that it can delete.
+            Description = SplunkDashboards.IsTarget(target) ? SplunkDashboards.Description : help.Summary.Length > 0 ? help.Summary : existing?.Description ?? string.Empty,
             Steps = steps,
             PlatformStatus = help.PlatformStatus,
             PlatformNote = help.PlatformNote,
@@ -426,7 +456,7 @@ public sealed class WizardCatalog
     }
 
     private async Task<IReadOnlyDictionary<string, ParsedHelp>> LoadSubcommandsAsync(
-        string target,
+        IReadOnlyList<string> path,
         ParsedHelp help)
     {
         var results = new ConcurrentDictionary<string, ParsedHelp>(StringComparer.Ordinal);
@@ -434,13 +464,13 @@ public sealed class WizardCatalog
         var probes = help.Commands.Select(async command =>
         {
             var probe = await _probe
-                .HelpAsync(new[] { target, command.Name })
+                .HelpAsync(path.Append(command.Name).ToArray())
                 .ConfigureAwait(false);
 
             // A subcommand whose help will not parse simply contributes no fields; the
             // operator can still select it and run it bare.
             results[command.Name] = probe.Succeeded
-                ? SetupHelpParser.Parse(probe.Text, commandDepth: 2)
+                ? SetupHelpParser.Parse(probe.Text, commandDepth: path.Count + 1)
                 : new ParsedHelp { Summary = command.Summary };
         });
 
@@ -495,6 +525,7 @@ public sealed class WizardCatalog
         "local-observability" => "Local observability stack",
         "galileo" => "Galileo",
         "splunk" => "Splunk",
+        SplunkDashboards.Target => SplunkDashboards.Title,
         "rotate-token" => "Rotate gateway token",
         "trusted-paths" => "Trusted binary paths",
         "notifications-set" => "Notification categories",
@@ -517,7 +548,7 @@ public sealed class WizardCatalog
 
         "skill-scanner" or "mcp-scanner" => WizardGroups.Scanners,
 
-        "observability" or "local-observability" or "splunk" or "galileo" or "webhook" or
+        "observability" or "local-observability" or "splunk" or SplunkDashboards.Target or "galileo" or "webhook" or
         "notifications" or "notifications-set" => WizardGroups.Observability,
 
         "llm" or "rotate-token" or "gateway" or "migrate-llm" => WizardGroups.Credentials,

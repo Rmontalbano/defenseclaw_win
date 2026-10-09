@@ -63,6 +63,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
     /// <summary>The shared Docker look the palette's Compose rows follow; set by <see cref="Wire"/>, which subscribes this window to its changes.</summary>
     private LocalStackAvailability _localStack = null!;
+
+    /// <summary>The shared Terraform look the palette's Splunk dashboards rows follow; set by <see cref="Wire"/> the same way.</summary>
+    private TerraformAvailability _terraform = null!;
     private readonly CommandPaletteViewModel _paletteViewModel = new();
 
     /// <summary>The look controls, or null when the app was built without them (only a test host is).</summary>
@@ -199,9 +202,12 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         services.Runtime.Changed += OnRuntimeChanged;
         _runtime = services.Runtime;
 
-        // The rows that run Docker Compose (setup local-observability ...) are enabled by the shared Docker look: an open palette follows its answers too.
-        services.LocalStack.Changed += OnLocalStackChanged;
+        // The rows that run Docker Compose (setup local-observability ...) are enabled by the shared Docker look, and the ones that run Terraform
+        // (setup splunk dashboards ...) by the shared Terraform look: an open palette follows the answers of both.
+        services.LocalStack.Changed += OnProbeAnswerChanged;
         _localStack = services.LocalStack;
+        services.Terraform.Changed += OnProbeAnswerChanged;
+        _terraform = services.Terraform;
 
         // What Settings asks of the tray (its "Reset seen-alert history" button): the same call the command palette's entry makes.
         _catalog.Hooks.ResetSeenAlertHistory = _tray.ResetSeenAlertHistoryAsync;
@@ -233,7 +239,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             _settings.Changed -= OnSettingsChanged;
             services.Navigation.PaletteRequested -= OnPaletteRequested;
             services.Runtime.Changed -= OnRuntimeChanged;
-            services.LocalStack.Changed -= OnLocalStackChanged;
+            services.LocalStack.Changed -= OnProbeAnswerChanged;
+            services.Terraform.Changed -= OnProbeAnswerChanged;
             _catalog.PanelFaulted -= OnPanelFaulted;
             if (_appearance is not null)
             {
@@ -466,7 +473,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _settings.Changed -= OnSettingsChanged;
         _navigation.PaletteRequested -= OnPaletteRequested;
         _runtime.Changed -= OnRuntimeChanged;
-        _localStack.Changed -= OnLocalStackChanged;
+        _localStack.Changed -= OnProbeAnswerChanged;
+        _terraform.Changed -= OnProbeAnswerChanged;
         _viewModel.Dispose();
         base.OnClosing(e);
     }
@@ -922,9 +930,11 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _viewModel.IsPaletteOpen = true;
         Palette.FocusSearch();
 
-        // The rows that run Docker Compose follow the shared Docker look: make sure it is not stale (nothing happens while it is fresh).
-        // A different answer arrives through LocalStack.Changed and swaps the rows.
+        // The rows that run Docker Compose follow the shared Docker look, and the ones that run Terraform the shared Terraform look: make sure
+        // neither is stale (nothing happens while it is fresh). A different answer arrives through LocalStack.Changed / Terraform.Changed and
+        // swaps the rows.
         _ = _actions.CheckLocalStack();
+        _ = _actions.CheckTerraform();
     }
 
     private IReadOnlyList<ShellCommand> BuildPaletteCommands() =>
@@ -948,14 +958,15 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     }
 
     /// <summary>
-    /// The shared Docker look changed its answer: the rows that run Docker Compose (<c>setup local-observability up</c>, ...) are enabled or
-    /// greyed out by it, so an open palette swaps them in without touching what was typed. Raised on the probe's thread.
+    /// A shared look changed its answer - Docker's: the rows that run Docker Compose (<c>setup local-observability up</c>, ...) are enabled or
+    /// greyed out by it; Terraform's: so are the Splunk dashboards' (<c>setup splunk dashboards plan</c>, ...) - so an open palette swaps them in
+    /// without touching what was typed. Raised on the probe's thread.
     /// </summary>
-    private void OnLocalStackChanged(object? sender, EventArgs e)
+    private void OnProbeAnswerChanged(object? sender, EventArgs e)
     {
         if (!Dispatcher.CheckAccess())
         {
-            _ = Dispatcher.BeginInvoke(new Action(() => OnLocalStackChanged(sender, e)));
+            _ = Dispatcher.BeginInvoke(new Action(() => OnProbeAnswerChanged(sender, e)));
             return;
         }
 

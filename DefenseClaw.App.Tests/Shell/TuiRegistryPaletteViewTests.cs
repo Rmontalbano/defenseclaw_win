@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Automation;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.Views.Shell;
 using DefenseClaw.Core.Cli;
@@ -166,6 +167,18 @@ public sealed class TuiRegistryPaletteViewTests : IDisposable
     private static void Select(CommandPaletteViewModel palette, string title) =>
         palette.Selected = palette.Results.First(i => i.Title == title);
 
+    // The Splunk dashboards' three rows (CUST-317) are CLI rows too, listed beside the registry's because neither runtime's registry has a
+    // dashboards command. A count of "the registry's rows" leaves them out, and they are counted on their own: they come with the registry
+    // rows and stay when a runtime's answer swaps those.
+    private static bool IsDashboardsRow(PaletteItem item) =>
+        item.Command.Cli is { } cli && SplunkDashboards.IsCommand(cli.Argv, out _);
+
+    private static int RegistryRows(CommandPaletteViewModel palette) =>
+        palette.Results.Count(i => i.IsCli && !IsDashboardsRow(i));
+
+    private static int DashboardsRows(CommandPaletteViewModel palette) =>
+        palette.Results.Count(IsDashboardsRow);
+
     // ------------------------------------------------------------------ the dashboard window
 
     [Fact]
@@ -184,7 +197,8 @@ public sealed class TuiRegistryPaletteViewTests : IDisposable
 
             // The palette is asked for the way a panel's menu asks for it; the runtime has not answered, so it is the 0.8.10 registry.
             services.Navigation.RequestPalette();
-            Assert.Equal(210, palette.Results.Count(i => i.IsCli));
+            Assert.Equal(210, RegistryRows(palette));
+            Assert.Equal(SplunkDashboardsCommands.Rows.Count, DashboardsRows(palette));
             Assert.Equal("21 hidden on Windows", palette.HiddenNote);
             Assert.DoesNotContain(palette.Results, i => i.Title == "setup kiro");
         });
@@ -194,11 +208,12 @@ public sealed class TuiRegistryPaletteViewTests : IDisposable
             _ = await services.Runtime.RefreshAsync();
 
             // The answer arrives on the dispatcher; the open palette is rebuilt in place.
-            UiThread.WaitFor(() => palette!.Results.Count(i => i.IsCli) == 232, "the extended registry's rows");
+            UiThread.WaitFor(() => RegistryRows(palette!) == 232, "the extended registry's rows");
             UiThread.Run(() =>
             {
                 Assert.Contains(palette!.Results, i => i.Title == "setup kiro");
                 Assert.Contains(palette.Results, i => i.Title == "guardrail mode");
+                Assert.Equal(SplunkDashboardsCommands.Rows.Count, DashboardsRows(palette));
                 Assert.Equal("21 hidden on Windows", palette.HiddenNote);
             });
         }
@@ -231,7 +246,8 @@ public sealed class TuiRegistryPaletteViewTests : IDisposable
 
                 services.Navigation.RequestPalette();
 
-                Assert.Equal(232, palette.Results.Count(i => i.IsCli));
+                Assert.Equal(232, RegistryRows(palette));
+                Assert.Equal(SplunkDashboardsCommands.Rows.Count, DashboardsRows(palette));
                 Assert.Equal("21 hidden on Windows", palette.HiddenNote);
             });
         }

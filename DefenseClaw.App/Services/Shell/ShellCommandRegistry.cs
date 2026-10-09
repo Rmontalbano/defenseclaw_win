@@ -321,6 +321,10 @@ internal static class ShellCommandRegistry
         if (curated is { Count: > 0 })
         {
             commands.AddRange(BuildCliCommands(curated, actions));
+
+            // The Splunk dashboards' verbs are in neither runtime's TUI registry, so they are not in `curated`; both runtimes have them, and
+            // they are listed wherever the registry's rows are (not when DefenseClaw is not installed: there would be no CLI to run them).
+            commands.AddRange(BuildCliCommands(SplunkDashboardsCommands.Rows, actions));
         }
 
         return commands;
@@ -334,6 +338,8 @@ internal static class ShellCommandRegistry
     /// A command that runs Docker Compose (<see cref="WizardWindowsPolicy.CommandNeedsDocker"/>: <c>setup local-observability up | down |
     /// status | logs | reset</c>, and the bare group, which is its <c>up</c>) is listed always, and enabled only while the shared Docker look
     /// says Compose v2 is there and the engine answers - otherwise the row is greyed out with that look's reason, as the Setup card is.
+    /// The same for a command that runs Terraform (<see cref="WizardWindowsPolicy.CommandNeedsTerraform"/>: <c>setup splunk dashboards
+    /// plan | apply | destroy</c>) and the shared Terraform look.
     /// </summary>
     internal static List<ShellCommand> BuildCliCommands(IReadOnlyList<CuratedCommand> curated, ShellActions actions)
     {
@@ -348,9 +354,11 @@ internal static class ShellCommandRegistry
                 continue;
             }
 
-            // A row that runs Docker Compose is as available as the one shared Docker look says (read once, so the flag and the reason agree).
+            // A row that runs Docker Compose is as available as the one shared Docker look says (read once, so the flag and the reason agree);
+            // a row that runs Terraform, as the Terraform look says. No command is both.
             var needsDocker = WizardWindowsPolicy.CommandNeedsDocker(command.Argv);
-            var gate = needsDocker ? actions.LocalStack.Decision : GateDecision.Open;
+            var needsTerraform = WizardWindowsPolicy.CommandNeedsTerraform(command.Argv);
+            var gate = needsDocker ? actions.LocalStack.Decision : needsTerraform ? actions.Terraform.Decision : GateDecision.Open;
 
             var captured = command;
             var (allowed, reason) = command.LifecycleAction is { } lifecycle
@@ -372,7 +380,9 @@ internal static class ShellCommandRegistry
                 Category: command.Category,
                 Description: command.Summary,
                 Shortcut: null,
-                Keywords: $"cli command {command.CommandLineText} {command.Summary}" + (needsDocker ? " docker compose" : string.Empty),
+                Keywords: $"cli command {command.CommandLineText} {command.Summary}" +
+                          (needsDocker ? " docker compose" : string.Empty) +
+                          (needsTerraform ? " terraform splunk observability o11y dashboards detectors" : string.Empty),
                 IsEnabled: allowed,
                 DisabledReason: reason,
                 Run: () => _ = actions.RunCuratedAsync(captured),

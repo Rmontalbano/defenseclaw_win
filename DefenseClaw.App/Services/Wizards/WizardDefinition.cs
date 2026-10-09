@@ -341,7 +341,11 @@ public static class WizardGroups
 /// </summary>
 public sealed class WizardDefinition
 {
-    /// <summary>The CLI noun: the <c>&lt;target&gt;</c> in <c>defenseclaw setup &lt;target&gt;</c>.</summary>
+    /// <summary>
+    /// The CLI noun: the <c>&lt;target&gt;</c> in <c>defenseclaw setup &lt;target&gt;</c>. Words separated by one space name a nested
+    /// command (<c>splunk dashboards</c> is <c>defenseclaw setup splunk dashboards</c>, see <see cref="SplunkDashboards"/>); every other
+    /// target is a single word.
+    /// </summary>
     public required string Target { get; init; }
 
     public required string Title { get; init; }
@@ -362,6 +366,13 @@ public sealed class WizardDefinition
 
     /// <summary>Set when the per-target <c>--help</c> failed; the badge stays neutral.</summary>
     public string? DetailError { get; init; }
+
+    /// <summary>
+    /// Why the installed CLI cannot run this flow at all, from what it told us (its help has no such command): the card sits in the "not
+    /// available" group with this sentence. Empty for every flow the CLI has; whether the machine can run it right now (Docker, Terraform) is
+    /// a different question, asked of a live probe.
+    /// </summary>
+    public string UnavailableReason { get; init; } = string.Empty;
 
     /// <summary>True when steps were hand-curated rather than generated from flags.</summary>
     public bool IsCurated { get; init; }
@@ -401,6 +412,7 @@ public sealed class WizardDefinition
         PlatformNote = PlatformNote,
         IsDetailLoaded = IsDetailLoaded,
         DetailError = DetailError,
+        UnavailableReason = UnavailableReason,
         IsCurated = IsCurated,
         HelpText = HelpText,
         FinalArgvBuilder = FinalArgvBuilder,
@@ -526,16 +538,29 @@ public sealed class WizardDefinition
     }
 
     /// <summary>
+    /// The words of a target's noun path, one command-line argument each: <c>["splunk", "dashboards"]</c> for <c>splunk dashboards</c>,
+    /// <c>["llm"]</c> for <c>llm</c>.
+    /// </summary>
+    public static string[] CommandWords(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        var words = target.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length > 0 ? words : new[] { target };
+    }
+
+    /// <summary>
     /// <c>setup &lt;target&gt; [positionals…] [flags…]</c>. Positionals lead because Click
     /// binds a subcommand before its options; flag order is definition order, which is what
-    /// the review screen shows.
+    /// the review screen shows. A nested target (<c>splunk dashboards</c>) is one argument per word.
     /// </summary>
     public static IReadOnlyList<string> BuildArgvDefault(WizardDefinition definition, WizardValues values)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(values);
 
-        var argv = new List<string> { "setup", definition.Target };
+        var argv = new List<string> { "setup" };
+        argv.AddRange(CommandWords(definition.Target));
         var visible = definition.VisibleFields(values).ToList();
 
         foreach (var field in visible.Where(f => f.IsPositional).OrderBy(f => f.PositionalOrder))

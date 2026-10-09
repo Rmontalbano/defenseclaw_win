@@ -170,6 +170,11 @@ with four spellings (`-y, --yes, --non-interactive, --accept-defaults`), `--work
 (`--hilt-min-severity [high|medium|low|critical]`). New targets (`acp`, `redaction`, `routing`, `rotate-token`, `trusted-paths`, `notifications-set`,
 `provider`) appear as generated cards; none has a curated layout.
 
+The Splunk dashboards (CUST-317) are not a roster entry on either runtime: `setup splunk dashboards plan | apply | destroy` is a nested group, so the
+hub derives its card from the `splunk` one. Nothing about it is gated by runtime, because nothing differs: both trees list the same three leaves with
+the same options (`CommandTierSplunkDashboardsTests`), and at this commit `cli/defenseclaw/commands/cmd_setup_splunk_o11y_dashboards.py`, `bundles/splunk_o11y_dashboards/terraform/main.tf`
+and `detectors.tf` are identical to the installed 0.8.10's, line endings aside (the module's `required_version = ">= 1.5.0"` is what the Terraform look checks).
+
 ### Command classifier and fixed argv
 
 The tree has 263 leaves (0.8.10: 179). `CommandTierPinnedTreeTests` runs the 0.8.10 tree checks over it. The classifier called 11 new leaves read-only (`acp status`,

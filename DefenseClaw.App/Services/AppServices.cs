@@ -81,7 +81,8 @@ public sealed class AppServices : IDisposable
         string? settingsPath = null,
         Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
         RuntimeProbeRunner? runtimeProbeRunner = null,
-        IDockerProbe? dockerProbe = null)
+        IDockerProbe? dockerProbe = null,
+        ITerraformProbe? terraformProbe = null)
     {
         Paths = startup.Paths;
 
@@ -166,6 +167,10 @@ public sealed class AppServices : IDisposable
         // Whether the local observability stack can be offered: one read-only Docker look, shared by the Setup card and the palette's
         // rows. Idle (no timer, no process) until one of them asks.
         LocalStack = new LocalStackAvailability(dockerProbe ?? DockerProbe.CreateDefault(Paths));
+
+        // Likewise whether the Splunk dashboards can be offered: one read-only `terraform version -json`, shared by the Setup card and the
+        // palette's rows, run only when one of them asks.
+        Terraform = new TerraformAvailability(terraformProbe ?? TerraformProbe.CreateDefault(Paths));
     }
 
     /// <summary>The single instance, created by <see cref="Initialize"/> at startup.</summary>
@@ -269,6 +274,13 @@ public sealed class AppServices : IDisposable
     /// when a surface needs it. See <see cref="LocalStackAvailability"/>.
     /// </summary>
     internal LocalStackAvailability LocalStack { get; }
+
+    /// <summary>
+    /// Whether the Splunk dashboards (<c>setup splunk dashboards plan | apply | destroy</c>) can be offered: the Setup hub's card and the
+    /// palette's rows apply <c>Terraform.Decision</c>, which comes from one read-only <c>terraform version -json</c> (Terraform there, and
+    /// new enough for the module the CLI ships) asked only when a surface needs it. See <see cref="TerraformAvailability"/>.
+    /// </summary>
+    internal TerraformAvailability Terraform { get; }
 
     /// <summary>
     /// REST port the <see cref="Gateway"/> client is currently built against. Tracks
@@ -442,7 +454,8 @@ public sealed class AppServices : IDisposable
         string? settingsPath = null,
         Func<AppServices, UpdateWatcher>? updateWatcherFactory = null,
         RuntimeProbeRunner? runtimeProbeRunner = null,
-        IDockerProbe? dockerProbe = null)
+        IDockerProbe? dockerProbe = null,
+        ITerraformProbe? terraformProbe = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -457,7 +470,9 @@ public sealed class AppServices : IDisposable
         runtimeProbeRunner ??= static (_, _) => Task.FromResult(RuntimeProbeOutput.Fail("not probed in an isolated composition"));
         // Likewise the Docker look would start the real docker: an isolated composition answers "not installed" unless a test supplies a probe.
         dockerProbe ??= new FixedDockerProbe(new DockerStatus(DockerState.NotInstalled, "Docker is not looked at in an isolated composition.", Array.Empty<string>()));
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe);
+        // Likewise the Terraform look would start the real terraform: an isolated composition answers "not installed" unless a test supplies a probe.
+        terraformProbe ??= new FixedTerraformProbe(new TerraformStatus(TerraformState.NotInstalled, "Terraform is not looked at in an isolated composition.", string.Empty, string.Empty));
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -613,6 +628,7 @@ public sealed class AppServices : IDisposable
         Cli.Dispose();
         Runtime.Dispose();
         LocalStack.Dispose();
+        Terraform.Dispose();
 
         ConfigWatcher.Changed -= OnConfigChanged;
         _reloadRetry?.Dispose();

@@ -49,7 +49,9 @@ public enum SetupEmptyState
 /// they sit in a last "not available" group, disabled, each with its reason and where to go instead
 /// (<see cref="WizardWindowsPolicy"/>). The local observability stack joins them only while Docker is not
 /// ready (<see cref="WizardWindowsPolicy.NeedsDocker"/>): its card follows the shared Docker look, with the
-/// probe's reason, and is launchable the rest of the time.
+/// probe's reason, and is launchable the rest of the time. The Splunk dashboards card does the same with Terraform
+/// (<see cref="WizardWindowsPolicy.NeedsTerraform"/>); it is the one card the catalog's roster does not list (it is
+/// derived from the Splunk card being there, see <see cref="SplunkDashboards"/>).
 /// </para>
 /// <para>
 /// <b>Lifecycle.</b> The connector roster is re-derived on every gateway state change, but only
@@ -68,6 +70,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
     private readonly WizardCatalog _catalog;
     private readonly LocalStackAvailability _localStack;
+    private readonly TerraformAvailability _terraform;
     private readonly List<WizardCardViewModel> _all = new();
 
     [ObservableProperty]
@@ -117,6 +120,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         // No subscriptions here: OnActivated attaches them and OnDeactivated lets go.
         _catalog = WizardCatalog.Shared(services);
         _localStack = services.LocalStack;
+        _terraform = services.Terraform;
 
         Review = new DiscoverActionReview(services);
         Credentials = new CredentialsViewModel(services);
@@ -259,7 +263,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
     {
         _catalog.DefinitionChanged += OnDefinitionChanged;
         Services.Monitor.StateChanged += OnGatewayStateChanged;
-        _localStack.Changed += OnLocalStackChanged;
+        _localStack.Changed += OnProbeAnswerChanged;
+        _terraform.Changed += OnProbeAnswerChanged;
 
         // Whether the runtime has the redaction editor may have been learned while the panel was away.
         Services.Runtime.Changed += OnRuntimeChanged;
@@ -267,16 +272,20 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
         BuildConnectors();
 
-        // Either may have moved while the panel was off screen: the cards behind the catalog, and the Docker answer that gates the stack's card.
+        // Either may have moved while the panel was off screen: the cards behind the catalog, and the Docker and Terraform answers that gate
+        // the stack's card and the dashboards' card.
         var moved = SyncCardsWithCatalog();
         moved |= SyncLocalStack();
+        moved |= SyncTerraform();
         if (moved)
         {
             ApplyFilters();
         }
 
-        // Docker is looked at when the hub comes on screen (once per freshness window), not on a timer; the answer arrives through Changed.
+        // Docker and Terraform are looked at when the hub comes on screen (once per freshness window each), not on a timer; the answers
+        // arrive through Changed.
         _ = _localStack.EnsureFreshAsync();
+        _ = _terraform.EnsureFreshAsync();
 
         // The checklist is in-memory work; the credential read is a CLI call, so only when there is none yet or it has gone stale.
         Readiness.Rebuild();
@@ -299,21 +308,37 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         _catalog.DefinitionChanged -= OnDefinitionChanged;
         Services.Monitor.StateChanged -= OnGatewayStateChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;
-        _localStack.Changed -= OnLocalStackChanged;
+        _localStack.Changed -= OnProbeAnswerChanged;
+        _terraform.Changed -= OnProbeAnswerChanged;
     }
 
-    /// <summary>Replaces the card list with one card per definition.</summary>
+    /// <summary>
+    /// Replaces the card list with one card per definition, and one more for the Splunk dashboards when the roster has the Splunk card:
+    /// <c>setup splunk dashboards</c> is a nested command, so <c>setup --help</c> does not list it (<see cref="SplunkDashboards"/>).
+    /// </summary>
     private void FillCards(IReadOnlyList<WizardDefinition> definitions)
     {
         _all.Clear();
         foreach (var definition in definitions)
         {
-            var card = new WizardCardViewModel(definition, () => Services.Installation.BlockedReason);
-
-            // A card that needs Docker starts from what is known now: the held answer, or "Checking for Docker…" before the first.
-            card.ApplyDocker(_localStack.Decision);
-            _all.Add(card);
+            AddCard(definition);
         }
+
+        if (definitions.Any(d => string.Equals(d.Target, SplunkDashboards.ParentTarget, StringComparison.Ordinal)))
+        {
+            // What the catalog already read when it has (a re-entered hub, a re-read after it was warmed), the stub before that.
+            AddCard(_catalog.Find(SplunkDashboards.Target) ?? SplunkDashboards.Stub());
+        }
+    }
+
+    private void AddCard(WizardDefinition definition)
+    {
+        var card = new WizardCardViewModel(definition, () => Services.Installation.BlockedReason);
+
+        // A card that needs Docker or Terraform starts from what is known now: the held answer, or "Checking for …" before the first.
+        card.ApplyDocker(_localStack.Decision);
+        card.ApplyTerraform(_terraform.Decision);
+        _all.Add(card);
     }
 
     /// <summary>
@@ -332,13 +357,30 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         return changed;
     }
 
-    private void OnLocalStackChanged(object? sender, EventArgs e)
+    /// <summary>
+    /// Gates every card that needs Terraform (the Splunk dashboards') on the shared Terraform look. Returns true when a card's availability
+    /// moved, which is when its group and the certified filter may have changed too.
+    /// </summary>
+    private bool SyncTerraform()
+    {
+        var decision = _terraform.Decision;
+        var changed = false;
+        foreach (var card in _all)
+        {
+            changed |= card.ApplyTerraform(decision);
+        }
+
+        return changed;
+    }
+
+    /// <summary>One of the shared looks (Docker, Terraform) changed its answer.</summary>
+    private void OnProbeAnswerChanged(object? sender, EventArgs e)
     {
         // Raised from the probe's continuation, which is a pool thread: the cards and the grouped list are bound state.
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.CheckAccess())
         {
-            ApplyLocalStack();
+            ApplyProbeAnswers();
             return;
         }
 
@@ -349,7 +391,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
         try
         {
-            _ = dispatcher.BeginInvoke(ApplyLocalStack);
+            _ = dispatcher.BeginInvoke(ApplyProbeAnswers);
         }
         catch (InvalidOperationException)
         {
@@ -357,9 +399,11 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         }
     }
 
-    private void ApplyLocalStack()
+    private void ApplyProbeAnswers()
     {
-        if (SyncLocalStack())
+        var moved = SyncLocalStack();
+        moved |= SyncTerraform();
+        if (moved)
         {
             ApplyFilters();
         }
@@ -418,7 +462,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
 
     /// <summary>
     /// The page-level refresh (F5 and the header button): the guardrail posture, the connector
-    /// roster, and the look at Docker that gates the local observability stack's card. Deliberately
+    /// roster, and the looks at Docker and Terraform that gate the local observability stack's card and the Splunk dashboards'. Deliberately
     /// not the catalog — that is thirty-odd CLI help probes; see <see cref="ReloadCatalogCommand"/>.
     /// </summary>
     [RelayCommand]
@@ -427,9 +471,16 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase
         BuildConnectors();
         Readiness.Rebuild();
 
+        // "I just installed Terraform": this app's PATH is the one it started with, and the lookups remember where they found (or did not find)
+        // an executable. Forgetting them re-reads the machine and user PATH from the registry, which is what makes an install made since the
+        // app started visible to the looks below.
+        Services.Paths.InvalidateExecutableCache();
+
         // "I started Docker Desktop": the stack's card is gated on a look at Docker, and this is how it is looked at again now. Not awaited:
         // a starting engine can take its ten seconds to answer, and the refresh button must not wait on it. The card follows when it lands.
+        // The same for "I installed Terraform" and the dashboards' card.
         _ = _localStack.RefreshAsync();
+        _ = _terraform.RefreshAsync();
 
         var credentials = Credentials.RefreshAsync();
         var doctor = Readiness.ReloadAsync();
@@ -1180,13 +1231,16 @@ public sealed partial class WizardCardViewModel : ObservableObject
     // definition that lands later (Apply) neither forgets it nor overrides a reason the policy gives.
     private string _dockerReason = string.Empty;
 
+    // The same for Terraform and the card that needs it (the Splunk dashboards').
+    private string _terraformReason = string.Empty;
+
     private readonly Func<string?>? _installationBlockedReason;
 
     /// <param name="definition">What the card shows.</param>
     /// <param name="installationBlockedReason">
     /// Why nothing may be changed on the installation right now (it is managed or invalid), asked each time the card is drawn; null, or one that
-    /// answers null, means the wizard may be opened. A card the platform policy cannot offer at all, or that Docker rules out right now, is a
-    /// different thing (<see cref="UnavailableReason"/>); the installation's reason comes first when both apply.
+    /// answers null, means the wizard may be opened. A card the platform policy cannot offer at all, or that Docker (or Terraform) rules out
+    /// right now, is a different thing (<see cref="UnavailableReason"/>); the installation's reason comes first when both apply.
     /// </param>
     public WizardCardViewModel(WizardDefinition definition, Func<string?>? installationBlockedReason = null)
     {
@@ -1242,17 +1296,23 @@ public sealed partial class WizardCardViewModel : ObservableObject
 
     /// <summary>
     /// The tile's tooltip: the command it runs, then why it cannot be opened when that is so - one reason. A read-only installation (managed or
-    /// invalid) comes first for any wizard the platform offers, including one that only Docker being down rules out right now: Docker coming up
-    /// would not make it runnable. A wizard this platform does not offer at all says that.
+    /// invalid) comes first for any wizard the platform offers, including one that only Docker being down (the local stack's) or Terraform being
+    /// missing (the Splunk dashboards') rules out right now: Docker coming up, or Terraform being installed, would not make it runnable. A wizard
+    /// this platform does not offer at all, or that the installed CLI has no command for, says that.
     /// </summary>
-    public string TileToolTip => InstallationBlockedReason is { } blocked && (IsAvailable || UnavailableOnlyForDocker)
+    public string TileToolTip => InstallationBlockedReason is { } blocked && (IsAvailable || UnavailableOnlyForLook)
         ? CommandHint + Environment.NewLine + blocked
         : !IsAvailable
             ? CommandHint + Environment.NewLine + UnavailableReason
             : ShowTileBadge ? CommandHint + Environment.NewLine + Badge : CommandHint;
 
-    /// <summary>True when the only thing keeping this card from opening is the Docker look (the platform offers the wizard).</summary>
-    private bool UnavailableOnlyForDocker => _dockerReason.Length > 0 && string.Equals(UnavailableReason, _dockerReason, StringComparison.Ordinal);
+    /// <summary>
+    /// True when the only thing keeping this card from opening is a live look at this machine - Docker's or Terraform's - and so the platform
+    /// and the installed CLI offer the wizard.
+    /// </summary>
+    private bool UnavailableOnlyForLook =>
+        (_dockerReason.Length > 0 && string.Equals(UnavailableReason, _dockerReason, StringComparison.Ordinal)) ||
+        (_terraformReason.Length > 0 && string.Equals(UnavailableReason, _terraformReason, StringComparison.Ordinal));
 
     /// <summary>What the tile says under its title: the reason when it cannot be opened, otherwise the CLI's own summary.</summary>
     /// <summary>Certification only says something about a connector; the other wizards' tiles stay unbadged to leave the title its room.</summary>
@@ -1273,7 +1333,11 @@ public sealed partial class WizardCardViewModel : ObservableObject
         BadgeKey = PlatformStatusText.Key(definition.PlatformStatus);
         IsDetailLoaded = definition.IsDetailLoaded;
 
-        UnavailableReason = WizardWindowsPolicy.UnavailableReason(Target, definition.PlatformStatus) ?? _dockerReason;
+        // In order of how final each answer is: the platform's (the CLI says it is unsupported here), the CLI's (it has no such command), then
+        // the live looks (Docker, Terraform), which a card needs at most one of.
+        UnavailableReason = WizardWindowsPolicy.UnavailableReason(Target, definition.PlatformStatus)
+            ?? (definition.UnavailableReason.Length > 0 ? definition.UnavailableReason : null)
+            ?? (_dockerReason.Length > 0 ? _dockerReason : _terraformReason);
         Group = IsAvailable ? definition.Group : WizardGroups.Unavailable;
 
         StepNote = definition.DetailError is { Length: > 0 } error
@@ -1315,6 +1379,29 @@ public sealed partial class WizardCardViewModel : ObservableObject
         }
 
         _dockerReason = reason;
+        Apply(Definition);
+        return true;
+    }
+
+    /// <summary>
+    /// <see cref="ApplyDocker"/> for the card that needs Terraform (<see cref="WizardWindowsPolicy.NeedsTerraform"/>; any other card
+    /// ignores this): open, the card is launchable; closed, it moves to the "not available" group and says the look's reason.
+    /// Returns true when that changed, which is when the hub regroups.
+    /// </summary>
+    internal bool ApplyTerraform(GateDecision decision)
+    {
+        if (!WizardWindowsPolicy.NeedsTerraform(Target))
+        {
+            return false;
+        }
+
+        var reason = decision.IsAvailable ? string.Empty : decision.Reason ?? "Terraform is not available.";
+        if (string.Equals(reason, _terraformReason, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        _terraformReason = reason;
         Apply(Definition);
         return true;
     }

@@ -180,6 +180,38 @@ internal sealed class ShellActions
             ? LocalStack.EnsureFreshAsync()
             : Task.CompletedTask;
 
+    /// <summary>
+    /// The shared Terraform look the gated palette rows (<c>setup splunk dashboards plan | apply | destroy</c>) apply
+    /// (<see cref="ShellCommandRegistry.BuildCliCommands"/>): the same one the Setup hub's Splunk dashboards card uses.
+    /// </summary>
+    internal TerraformAvailability Terraform => _services.Terraform;
+
+    /// <summary>
+    /// <see cref="CheckLocalStack"/> for Terraform: makes sure the answer the dashboards' rows apply is not stale, when the palette lists
+    /// them (they are listed whenever the registry's rows are, that is unless DefenseClaw is not installed), at most once per freshness
+    /// window (<see cref="TerraformAvailability.FreshWhenAvailable"/> / <see cref="TerraformAvailability.FreshWhenNot"/>). Called when the
+    /// palette opens; returns the look so a test can wait for it.
+    /// </summary>
+    public Task CheckTerraform() =>
+        OffersCliCommands(Snapshot)
+            ? Terraform.EnsureFreshAsync()
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// Test seam: whether the variable a command reads its token from has a value (default: this app's environment and
+    /// <c>~/.defenseclaw/.env</c>, names only, see <see cref="WizardCredentials"/>).
+    /// </summary>
+    internal Func<string, CredentialPresence>? CredentialCheck { get; set; }
+
+    /// <summary>
+    /// Whether the Splunk token is set, for a dashboards command - the palette cannot ask for one, so its review says when there is none.
+    /// Null for every other command (nothing to judge).
+    /// </summary>
+    private CredentialPresence? TokenPresenceFor(IReadOnlyList<string> argv) =>
+        SplunkDashboards.IsCommand(argv, out _)
+            ? (CredentialCheck ?? (name => new WizardCredentials(_services.Paths).Check(name, fresh: true)))(SplunkDashboards.TokenVariable)
+            : null;
+
     private void ShowToast(string title, string message)
     {
         if (Toast is { } toast)
@@ -437,7 +469,10 @@ internal sealed class ShellActions
 
                 // The local stack's rows say what the verb really does (the same sentences the Setup wizard's review uses): the registry's one-line
                 // description of the bare `setup local-observability` row is "Show local observability commands", and run bare it starts the stack.
-                var summary = LocalStackReview.Summary(argv) is { Length: > 0 } stack ? stack : command.Summary;
+                // The Splunk dashboards' rows do the same for theirs.
+                var summary = LocalStackReview.Summary(argv) is { Length: > 0 } stack
+                    ? stack
+                    : SplunkDashboardsReview.Summary(argv) is { Length: > 0 } dashboards ? dashboards : command.Summary;
                 var review = new CommandReview
                 {
                     Title = $"Run {CommandReview.CommandLine(command.Executable, argv)}?",
@@ -446,6 +481,7 @@ internal sealed class ShellActions
                     RestartsGateway = restarts,
                     Warnings = (restarts ? new[] { CommandReviewWarning.GatewayRestart() } : Array.Empty<CommandReviewWarning>())
                         .Concat(LocalStackReview.Warnings(argv, LocalStack.Status))
+                        .Concat(SplunkDashboardsReview.Warnings(argv, TokenPresenceFor(argv)))
                         .ToArray(),
                 };
 

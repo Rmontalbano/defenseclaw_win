@@ -28,6 +28,7 @@ internal static class WizardTileIcons
         "webhook" or "webhooks" => SymbolRegular.Link24,
         "local-observability" or "observability" => SymbolRegular.DataBarVertical24,
         "splunk" or "galileo" => SymbolRegular.DataTrending24,
+        SplunkDashboards.Target => SymbolRegular.DataArea24,
         "notifications" or "notifications-set" or "notification-routing" => SymbolRegular.Alert24,
         "ai-discovery" => SymbolRegular.Bot24,
         "provider" or "custom-providers" => SymbolRegular.Flow16,

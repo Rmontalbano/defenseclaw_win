@@ -27,9 +27,18 @@ public static class WizardWindowsPolicy
     /// (<c>--logs</c>, <c>local_splunk.py</c>: argv-only Docker Compose, no bash or WSL), so <c>--logs</c>, its
     /// license acceptance and <c>--refresh-bundle</c> are <b>offered, gated</b> on a read-only Docker probe
     /// (<see cref="IDockerProbe"/>) rather than hidden. Still suppressed: the S3 exporter (its AWS credentials are read
-    /// from the environment with no in-app route, so the wizard could not supply them), <c>--show-credentials</c>
-    /// (prints the generated HEC token and a bootstrap secret into the output), and <c>dashboards</c> (Terraform plus a
-    /// Splunk O11y API token, and not a Docker question, so it cannot be gated the same way).
+    /// from the environment with no in-app route, so the wizard could not supply them) and <c>--show-credentials</c>
+    /// (prints the generated HEC token and a bootstrap secret into the output).
+    /// <para>
+    /// The group's <c>dashboards</c> subcommand (Terraform, plus a Splunk Observability Cloud API token) is no longer suppressed, but it is
+    /// not a page of <i>this</i> wizard either: the pipelines are optional and independent, and Terraform is a question about this machine
+    /// that a page inside a wizard has no way to ask or to show the answer to. It is <b>offered, gated</b> as a card of its own
+    /// (<see cref="SplunkDashboards"/>) on a read-only Terraform probe (<see cref="ITerraformProbe"/>, through
+    /// <see cref="TerraformAvailability"/>): the card and the palette's rows for <c>plan | apply | destroy</c> are available while Terraform
+    /// is there and new enough, and otherwise show the probe's reason (<see cref="NeedsTerraform"/>, <see cref="CommandNeedsTerraform"/>).
+    /// Nothing hid it by name (<see cref="HidesCommand"/> never matched it); what kept it off the screen was this wizard dropping the
+    /// subcommand from its Command page (<see cref="Filter"/>), which it still does.
+    /// </para>
     /// </summary>
     private static readonly IReadOnlySet<string> SplunkSuppressed = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -137,6 +146,25 @@ public static class WizardWindowsPolicy
     }
 
     /// <summary>
+    /// True for a setup target whose card is offered only while Terraform can run it: the Setup hub asks the shared
+    /// <see cref="TerraformAvailability"/> (the live probe) and shows its reason, instead of a fixed one from
+    /// <see cref="UnavailableReason"/>. Only the Splunk dashboards (<see cref="SplunkDashboards.Target"/>) today.
+    /// </summary>
+    public static bool NeedsTerraform(string target) => SplunkDashboards.IsTarget(target);
+
+    /// <summary>
+    /// True for a palette command that runs Terraform and so is enabled only while the probe says it can: every verb of
+    /// <c>setup splunk dashboards</c> (<c>plan</c> and <c>apply</c> and <c>destroy</c> all run <c>terraform init</c> first). A verb a newer CLI
+    /// adds under it is assumed to need Terraform too. The group on its own, or with only an option, prints help and runs nothing.
+    /// </summary>
+    /// <param name="argv">The command's words, e.g. <c>setup splunk dashboards apply --yes</c>.</param>
+    public static bool CommandNeedsTerraform(IReadOnlyList<string> argv)
+    {
+        ArgumentNullException.ThrowIfNull(argv);
+        return SplunkDashboards.IsCommand(argv, out _);
+    }
+
+    /// <summary>
     /// Why a hub card cannot be launched here, or null when it can. A target that needs Docker (<see cref="NeedsDocker"/>) is not
     /// decided here: whether Docker is ready is a fact about this machine right now, not about the platform.
     /// </summary>
@@ -172,6 +200,15 @@ public static class WizardWindowsPolicy
             // A group's subcommand pages are gated on its "subcommand" field; a suppressed subcommand's
             // pages go with it.
             if (target == "splunk" && step.VisibleWhenValues.Contains("dashboards", StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            // The dashboards group offers the verbs somebody has read the source of (SplunkDashboards.Verbs); a page gated on any other
+            // verb belongs to a command that is not offered, and the Command page below no longer lists it.
+            if (SplunkDashboards.IsTarget(target) &&
+                string.Equals(step.VisibleWhenFieldId, "subcommand", StringComparison.Ordinal) &&
+                step.VisibleWhenValues.Any(v => !SplunkDashboards.IsReviewedVerb(v)))
             {
                 continue;
             }
@@ -217,7 +254,11 @@ public static class WizardWindowsPolicy
         }
 
         return SuppressedEverywhere.Contains(flag) ||
-               (target == "splunk" && SplunkSuppressed.Contains(flag));
+               (target == "splunk" && SplunkSuppressed.Contains(flag)) ||
+
+               // The Terraform that runs is the one the look found (TERRAFORM_BIN, or PATH); a different one named on the command line is a
+               // Terraform nobody looked at.
+               (SplunkDashboards.IsTarget(target) && string.Equals(flag, SplunkDashboards.TerraformBinFlag, StringComparison.Ordinal));
     }
 
     private static WizardField TrimChoices(string target, WizardField field)
@@ -225,6 +266,11 @@ public static class WizardWindowsPolicy
         if (target == LocalObservabilityTarget && field is { Id: "subcommand", Kind: WizardFieldKind.Choice })
         {
             return ShapeLocalObservabilityCommand(field);
+        }
+
+        if (SplunkDashboards.IsTarget(target) && field is { Id: "subcommand", Kind: WizardFieldKind.Choice })
+        {
+            return ShapeDashboardsCommand(field);
         }
 
         if (target != "splunk" || field.Id != "subcommand" || !field.Choices.Any(c => c.Value == "dashboards"))
@@ -245,16 +291,38 @@ public static class WizardWindowsPolicy
     /// runs — starting on <c>status</c>, which changes nothing (the TUI's Local OTel wizard starts there too), with <c>reset</c> last.
     /// A verb a newer CLI adds keeps its place after the known ones.
     /// </summary>
-    private static WizardField ShapeLocalObservabilityCommand(WizardField field)
+    private static WizardField ShapeLocalObservabilityCommand(WizardField field) =>
+        ShapeCommandPage(field, LocalObservabilityOrder, "status", keepOthers: true);
+
+    /// <summary>The order the dashboards' verbs are offered in: the preview first, the one that deletes last.</summary>
+    private static readonly string[] DashboardsOrder = SplunkDashboards.Verbs.ToArray();
+
+    /// <summary>
+    /// The "Command" page of the Splunk dashboards wizard: <c>plan</c>, <c>apply</c>, <c>destroy</c>, starting on <c>plan</c>, which
+    /// changes nothing in Splunk. The generator lists the CLI's commands alphabetically and starts on the first, which would put the
+    /// wizard on <c>apply</c>. Only the verbs somebody has read the source of are offered (<see cref="SplunkDashboards.Verbs"/>): the CLI
+    /// is the authority on what runs, but a verb nobody here has read cannot have its consequences told in the review, and this group
+    /// deletes things in a cloud account.
+    /// </summary>
+    private static WizardField ShapeDashboardsCommand(WizardField field) =>
+        ShapeCommandPage(field, DashboardsOrder, SplunkDashboards.Plan, keepOthers: false);
+
+    /// <summary>
+    /// Puts a group's verbs in <paramref name="order"/> and starts the page on <paramref name="preferredStart"/> (the first verb when the
+    /// CLI has none of that name). A verb not in the order keeps its place after the ones that are when <paramref name="keepOthers"/> is
+    /// set, and is left out otherwise. The bare alias (an empty choice) is never offered. Idempotent: a page already shaped comes back as
+    /// the same object.
+    /// </summary>
+    private static WizardField ShapeCommandPage(WizardField field, string[] order, string preferredStart, bool keepOthers)
     {
-        var verbs = field.Choices.Where(c => c.Value.Length > 0).ToArray();
+        var verbs = field.Choices.Where(c => c.Value.Length > 0 && (keepOthers || Array.IndexOf(order, c.Value) >= 0)).ToArray();
         if (verbs.Length == 0)
         {
             return field;
         }
 
         var ordered = verbs.OrderBy(c => Rank(c.Value)).ToArray();
-        var start = ordered.Any(c => c.Value == "status") ? "status" : ordered[0].Value;
+        var start = ordered.Any(c => c.Value == preferredStart) ? preferredStart : ordered[0].Value;
 
         return field.Choices.Count == ordered.Length && field.IsRequired &&
                string.Equals(field.DefaultValue, start, StringComparison.Ordinal) &&
@@ -262,9 +330,9 @@ public static class WizardWindowsPolicy
             ? field
             : Copy(field, ordered, start, isRequired: true);
 
-        static int Rank(string verb)
+        int Rank(string verb)
         {
-            var index = Array.IndexOf(LocalObservabilityOrder, verb);
+            var index = Array.IndexOf(order, verb);
             return index < 0 ? int.MaxValue : index;
         }
     }

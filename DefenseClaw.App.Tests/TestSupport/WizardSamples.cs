@@ -419,6 +419,119 @@ internal static class WizardSamples
         };
     }
 
+    /// <summary>
+    /// The 0.8.10 <c>setup splunk dashboards --help</c> screen: the group's docstring and its three commands, in the alphabetical order Click lists
+    /// them (the wizard has to reorder them). Laid out as Click prints it, built from the option definitions in
+    /// <c>commands/cmd_setup_splunk_o11y_dashboards.py</c>.
+    /// </summary>
+    public static readonly string DashboardsGroupHelp = LineEndings.Normalize("""
+        Usage: defenseclaw setup splunk dashboards [OPTIONS] COMMAND [ARGS]...
+
+          Create or update DefenseClaw Splunk Observability Cloud dashboards.
+
+          The command uses the Terraform bundle shipped with DefenseClaw and stores
+          Terraform working files under ``~/.defenseclaw/splunk-o11y-dashboards`` by
+          default. Re-running from the same state path updates the same O11y objects.
+
+        Options:
+          --help  Show this message and exit.
+
+        Commands:
+          apply    Create or update the O11y dashboards.
+          destroy  Destroy O11y objects managed by the selected Terraform state.
+          plan     Show Terraform changes for the O11y dashboard bundle.
+        """);
+
+    /// <summary>The options <c>plan</c>, <c>apply</c> and <c>destroy</c> share (<c>_dashboard_options</c>), up to where <c>apply</c> and <c>destroy</c> add <c>--yes</c>.</summary>
+    private const string DashboardsOptions =
+        "  --api-url TEXT                  Splunk O11y API URL. Defaults from SFX_API_URL\n" +
+        "                                  or the configured OTLP ingest realm.\n" +
+        "  --o11y-api-token TEXT           Splunk O11y API access token. Prefer the\n" +
+        "                                  SFX_AUTH_TOKEN environment variable so the\n" +
+        "                                  secret never appears in shell history or\n" +
+        "                                  process listings.\n" +
+        "  --name-prefix TEXT              Label dashboard groups, dashboards, and\n" +
+        "                                  detectors. Useful for smoke tests.\n" +
+        "  --with-detectors / --dashboards-only\n" +
+        "                                  Create Splunk detectors in addition to\n" +
+        "                                  dashboards.  [default: dashboards-only]\n" +
+        "  --enable-detectors              Create detector rules enabled. By default\n" +
+        "                                  created detectors are disabled.\n" +
+        "  --detector-notification TEXT    Detector notification target, e.g.\n" +
+        "                                  \"Email,secops@example.com\". Repeatable.\n" +
+        "  --work-dir DIRECTORY            Terraform working directory. Defaults under\n" +
+        "                                  the DefenseClaw data directory.\n" +
+        "  --state FILE                    Terraform state file path. Defaults under the\n" +
+        "                                  DefenseClaw data directory.\n" +
+        "  --terraform-bin TEXT            Terraform executable to run.  [default:\n" +
+        "                                  terraform]\n" +
+        "  --plugin-dir DIRECTORY          Optional Terraform provider plugin directory\n" +
+        "                                  for offline/cached provider installs.\n" +
+        "  --skip-init                     Skip `terraform init` in the working\n" +
+        "                                  directory.\n" +
+        "  --skip-validate                 Skip `terraform validate` after init.\n" +
+        "  --timeout INTEGER               Timeout in seconds for each Terraform\n" +
+        "                                  subprocess.  [default: 900]\n";
+
+    private static string DashboardsVerbScreen(string verb, string summary, string extraOptions) =>
+        LineEndings.Normalize(
+            $"Usage: defenseclaw setup splunk dashboards {verb} [OPTIONS]\n\n  {summary}\n\nOptions:\n{DashboardsOptions}{extraOptions}" +
+            "  --help                          Show this message and exit.\n");
+
+    /// <summary>The <c>--help</c> screen of each <c>setup splunk dashboards</c> command, by verb. Only <c>apply</c> and <c>destroy</c> have <c>--yes</c>.</summary>
+    public static readonly IReadOnlyDictionary<string, string> DashboardsVerbHelp = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["plan"] = DashboardsVerbScreen("plan", "Show Terraform changes for the O11y dashboard bundle.", string.Empty),
+        ["apply"] = DashboardsVerbScreen(
+            "apply",
+            "Create or update the O11y dashboards.",
+            "  --yes                           Apply without an additional confirmation\n                                  prompt.\n"),
+        ["destroy"] = DashboardsVerbScreen(
+            "destroy",
+            "Destroy O11y objects managed by the selected Terraform state.",
+            "  --yes                           Destroy without an additional confirmation\n                                  prompt.\n"),
+    };
+
+    /// <summary>
+    /// The definition the catalog would build for <c>splunk dashboards</c> from the 0.8.10 help: the group pages over the three verbs' real
+    /// screens, then the Windows policy, secret routes and walkthroughs, in the order <c>WizardCatalog.LoadDetailAsync</c> runs them.
+    /// </summary>
+    /// <param name="editHelp">Edits every screen before it is parsed (a CLI that words something differently); null leaves them as they are.</param>
+    /// <param name="extraVerbs">Verbs a newer CLI adds to the group, each with its <c>--help</c> screen; null for none.</param>
+    public static WizardDefinition Dashboards(Func<string, string>? editHelp = null, IReadOnlyDictionary<string, string>? extraVerbs = null)
+    {
+        string Edit(string text) => editHelp is null ? text : editHelp(text);
+
+        var groupHelp = Edit(DashboardsGroupHelp) +
+                        string.Concat((extraVerbs ?? new Dictionary<string, string>()).Keys.Select(v => $"\n  {v,-8} A verb a newer CLI adds."));
+        var screens = new Dictionary<string, string>(DashboardsVerbHelp, StringComparer.Ordinal);
+        foreach (var (verb, screen) in extraVerbs ?? new Dictionary<string, string>())
+        {
+            screens[verb] = screen;
+        }
+
+        var group = SetupHelpParser.Parse(groupHelp, commandDepth: 2);
+        var verbs = group.Commands.ToDictionary(c => c.Name, c => SetupHelpParser.Parse(Edit(screens[c.Name]), commandDepth: 3));
+
+        var steps = WizardStepFactory.BuildGroup(group, verbs);
+        steps = WizardWindowsPolicy.Filter(SplunkDashboards.Target, steps);
+        steps = WizardSyntheticSecrets.Add(SplunkDashboards.Target, steps);
+        steps = SecretRoutes.Annotate(SplunkDashboards.Target, steps);
+        steps = WizardWalkthroughs.Apply(SplunkDashboards.Target, steps, groupHelp);
+
+        return new WizardDefinition
+        {
+            Target = SplunkDashboards.Target,
+            Title = SplunkDashboards.Title,
+            Group = WizardGroups.Observability,
+            Description = SplunkDashboards.Description,
+            Steps = steps,
+            PlatformStatus = group.PlatformStatus,
+            IsDetailLoaded = true,
+            HelpText = groupHelp,
+        };
+    }
+
     /// <summary>The curated + filtered + annotated definition the catalog would build for claude-code.</summary>
     public static WizardDefinition ClaudeCode()
     {

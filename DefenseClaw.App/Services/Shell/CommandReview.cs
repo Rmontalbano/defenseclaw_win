@@ -562,6 +562,13 @@ public sealed record CommandReview
             return stack;
         }
 
+        // The Splunk dashboards' verbs (plan, apply, destroy) write Terraform's files and never config.yaml, so `setup`'s result callback has
+        // nothing to restart the gateway for; the general rule below would say it does for every one of them.
+        if (SplunkDashboardsReview.RestartsGateway(argv) is { } dashboards)
+        {
+            return dashboards;
+        }
+
         // Only a flag counts: one that is the value of another option (a webhook named "--show") or the option's
         // own argument does not turn the restart off, and nothing after a "--" is a flag at all.
         var options = argv.TakeWhile(a => !string.Equals(a, "--", StringComparison.Ordinal)).ToArray();
