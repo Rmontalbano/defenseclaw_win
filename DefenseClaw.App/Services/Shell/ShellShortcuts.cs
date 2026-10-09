@@ -6,17 +6,19 @@ namespace DefenseClaw.App.Services;
 /// The shell's keyboard map, in one place so the key handler, the sidebar tooltips, the command
 /// palette and the shortcuts overlay can never disagree about which chord does what.
 /// <para>
-/// <b>Panels.</b> The 14 panels are numbered in sidebar order: <c>Ctrl+1</c> … <c>Ctrl+9</c> are
-/// panels 1-9, <c>Ctrl+0</c> is panel 10, and <c>Ctrl+Shift+1</c> … <c>Ctrl+Shift+4</c> are panels
-/// 11-14. (A plain <c>Ctrl+digit</c> never types a character, so it is safe inside text boxes; the
+/// <b>Panels.</b> The 15 panels are numbered in <see cref="PanelCatalog.ChordOrder"/>: sidebar order for the 14 that every
+/// runtime has, then the one that needs a newer runtime (Runtime) after them. <c>Ctrl+1</c> … <c>Ctrl+9</c> are
+/// panels 1-9, <c>Ctrl+0</c> is panel 10, and <c>Ctrl+Shift+1</c> … <c>Ctrl+Shift+5</c> are panels
+/// 11-15. (A plain <c>Ctrl+digit</c> never types a character, so it is safe inside text boxes; the
 /// shifted set follows the macOS companion's Cmd-Shift-N convention for the overflow.) A panel
-/// past the 14th simply has no shortcut and is reached through the sidebar or the palette.
+/// past the 15th simply has no shortcut and is reached through the sidebar or the palette. A chord whose panel the connected runtime
+/// does not offer does nothing, and no list shows it.
 /// </para>
 /// </summary>
 internal static class ShellShortcuts
 {
-    /// <summary>How many panels have a number chord (10 plain + 4 shifted).</summary>
-    public const int NumberedPanels = 14;
+    /// <summary>How many panels have a number chord (10 plain + 5 shifted).</summary>
+    public const int NumberedPanels = 15;
 
     public const string PaletteText = "Ctrl+K";
 
@@ -32,7 +34,7 @@ internal static class ShellShortcuts
     public const string CloseText = "Esc";
 
     /// <summary>
-    /// Light/dark toggle. <c>Ctrl+Shift+L</c>: Ctrl+K, F1, F5 and Ctrl+F are taken, Ctrl+digit and Ctrl+Shift+1..3 are
+    /// Light/dark toggle. <c>Ctrl+Shift+L</c>: Ctrl+K, F1, F5 and Ctrl+F are taken, Ctrl+digit and Ctrl+Shift+1..5 are
     /// the panels, and Alt chords belong to the system menu and to screen readers - so this is the free, mnemonic
     /// one (L for light). No panel or text box binds it, and it types no character, so it works from anywhere.
     /// </summary>
@@ -76,7 +78,7 @@ internal static class ShellShortcuts
     };
 
     /// <summary>
-    /// The chord for the panel at <paramref name="index"/> (0-based, sidebar order) as display
+    /// The chord for the panel at <paramref name="index"/> (0-based, in <see cref="PanelCatalog.ChordOrder"/>) as display
     /// text, e.g. <c>Ctrl+3</c>; null when that panel has none.
     /// </summary>
     public static string? PanelChordText(int index)
@@ -112,7 +114,7 @@ internal static class ShellShortcuts
             return digit == 0 ? 9 : digit.Value - 1;
         }
 
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && digit is >= 1 and <= 4)
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && digit is >= 1 and <= 5)
         {
             return 9 + digit.Value;
         }

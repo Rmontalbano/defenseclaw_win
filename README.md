@@ -8,7 +8,7 @@ A native Windows desktop companion for [cisco-ai-defense/defenseclaw](https://gi
 
 ## What it is
 
-A **read-mostly companion** for a local DefenseClaw installation: a system-tray shield with live gateway/alert state, and a dashboard with panels across four groups — **Monitor** (Overview, Alerts, Logs, Audit, Activity), **Govern** (Skills, MCPs, Plugins, Tools), **Discover** (Inventory, AI Discovery, Registries), and **Configure** (Setup wizards, guardrail controls, config editor) — plus Settings and a command palette (Ctrl+K).
+A **read-mostly companion** for a local DefenseClaw installation: a system-tray shield with live gateway/alert state, and a dashboard with panels across four groups — **Monitor** (Overview, Alerts, Logs, Audit, Activity), **Govern** (Skills, MCPs, Plugins, Tools), **Discover** (Inventory, AI Discovery, Registries, and - on a DefenseClaw runtime that has the AI Discovery runtime planes - Runtime), and **Configure** (Setup wizards, guardrail controls, config editor) — plus Settings and a command palette (Ctrl+K).
 
 ## Design principle
 

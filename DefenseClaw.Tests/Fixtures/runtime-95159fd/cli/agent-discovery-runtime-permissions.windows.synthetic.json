@@ -1,0 +1,45 @@
+{
+  "checked_this_host": true,
+  "grants": [
+    {
+      "granted": false,
+      "how": "run the gateway elevated",
+      "needs": "nothing for this user's processes; elevation for all",
+      "plane": "inference heartbeat (A)",
+      "probe": "root",
+      "why": "OpenProcess on another user's process needs an elevated token"
+    },
+    {
+      "granted": false,
+      "how": "run the gateway elevated",
+      "needs": "elevated token",
+      "plane": "shadow egress (B)",
+      "probe": "root",
+      "why": "GetExtendedTcpTable returns owning pids machine-wide only when elevated"
+    },
+    {
+      "granted": null,
+      "how": "auditpol /set /subcategory:\"Process Creation\" /success:enable /failure:enable   (also User Account Management, Sensitive Privilege Use)",
+      "needs": "elevated token AND Advanced Audit Policy",
+      "plane": "agent actions (C), process and identity events",
+      "probe": "win_audit_proc",
+      "why": "the Security channel carries nothing until the subcategories are on"
+    },
+    {
+      "granted": false,
+      "how": "reg add HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Audit /v ProcessCreationIncludeCmdLine_Enabled /t REG_DWORD /d 1 /f",
+      "needs": "the separate command-line audit policy",
+      "plane": "agent actions (C), command lines",
+      "probe": "win_cmdline",
+      "why": "without it lineage still works and every argument-vector tactic goes undetected, which is most of them"
+    },
+    {
+      "granted": null,
+      "how": "set an audit ACE on the credential paths you care about",
+      "needs": "a SACL on each audited object",
+      "plane": "agent actions (C), file events",
+      "why": "event 4663 is only emitted for objects with an audit ACE, so credential reads and persistence writes are not observable without one"
+    }
+  ],
+  "os": "windows"
+}

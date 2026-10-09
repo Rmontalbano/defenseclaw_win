@@ -28,12 +28,14 @@ internal static class ShortcutCatalog
     {
         ArgumentNullException.ThrowIfNull(catalog);
 
+        // In chord order (the panels every runtime has, then the ones that need a newer one), and only those on offer: a chord whose panel the
+        // connected runtime does not have does nothing, so the list must not promise it.
         var panelRows = new List<ShortcutRow>();
-        for (var i = 0; i < catalog.SidebarOrder.Count; i++)
+        for (var i = 0; i < catalog.ChordOrder.Count; i++)
         {
-            if (ShellShortcuts.PanelChordText(i) is { } chord)
+            if (catalog.IsOffered(catalog.ChordOrder[i]) && ShellShortcuts.PanelChordText(i) is { } chord)
             {
-                panelRows.Add(new ShortcutRow(chord, catalog.SidebarOrder[i].Title));
+                panelRows.Add(new ShortcutRow(chord, catalog.ChordOrder[i].Title));
             }
         }
 

@@ -1,0 +1,141 @@
+{
+  "enabled": true,
+  "scanned_at": "2030-01-15T10:04:30Z",
+  "findings": [
+    {
+      "finding_id": "00000000-0000-4000-8000-000000000101",
+      "pid": 4120,
+      "process": "python.exe",
+      "cmdline": "python.exe C:\\Users\\operator\\agents\\sync\\run.py --api-key synthetic-synthetic --target https://uploads.example.test/put",
+      "user": "EXAMPLE\\operator",
+      "agent_name": "claude-code",
+      "score": 100,
+      "severity": "critical",
+      "signals": [
+        {"id": "agent_credential_access", "title": "agent read a credential store", "detail": "C:\\Users\\operator\\.example\\credentials", "weight": 28},
+        {"id": "agent_identity_creation", "title": "agent created an identity", "detail": "net user svc-sync /add", "weight": 42},
+        {"id": "agent_public_exfil_surface", "title": "agent reached a public upload surface", "detail": "uploads.example.test", "weight": 33},
+        {"id": "agent_kill_chain", "title": "agent moved through the kill chain", "detail": "credential_access -> identity_creation -> exfiltration", "weight": 25}
+      ],
+      "correlation": {
+        "verdict": "unaccounted",
+        "reason": "a fresh, complete inventory scan observed nothing that explains this process"
+      },
+      "first_seen": "2030-01-15T10:01:10Z",
+      "last_seen": "2030-01-15T10:04:30Z"
+    },
+    {
+      "finding_id": "00000000-0000-4000-8000-000000000102",
+      "pid": 7788,
+      "process": "node.exe",
+      "cmdline": "node.exe C:\\Users\\operator\\tools\\assistant\\index.js --port 3000",
+      "user": "EXAMPLE\\operator",
+      "agent_name": "",
+      "score": 55,
+      "severity": "high",
+      "signals": [
+        {"id": "shadow_ai_egress", "title": "connection to a known AI provider", "detail": "api.provider-a.example (frontier)", "weight": 30},
+        {"id": "inference_heartbeat", "title": "sustained compute in a scriptable runtime", "detail": "node.exe used 4.2s of CPU over 10s", "weight": 25}
+      ],
+      "providers": [
+        {"hostname": "api.provider-a.example", "address": "203.0.113.10", "port": 443, "category": "frontier", "confidence": 0.95, "attribution_source": "dns answer"},
+        {"hostname": "api.provider-a.example", "address": "203.0.113.10", "port": 8443, "category": "frontier", "confidence": 0.75, "attribution_source": "catalog address"}
+      ],
+      "correlation": {
+        "verdict": "accounted",
+        "reason": "the inventory independently observed this agent",
+        "matched_signal_ids": ["00000000-0000-4000-8000-000000000a01"],
+        "categories": ["coding_assistant"]
+      },
+      "first_seen": "2030-01-15T10:02:00Z",
+      "last_seen": "2030-01-15T10:04:30Z"
+    },
+    {
+      "finding_id": "00000000-0000-4000-8000-000000000103",
+      "pid": 9912,
+      "process": "ollama.exe",
+      "cmdline": "ollama.exe serve",
+      "user": "EXAMPLE\\operator",
+      "score": 60,
+      "severity": "high",
+      "signals": [
+        {"id": "local_model_runtime", "title": "process is a local model runtime", "detail": "ollama.exe", "weight": 30},
+        {"id": "local_model_server_port", "title": "listening on a port reserved to a model runtime", "detail": "ollama", "weight": 30}
+      ],
+      "correlation": {
+        "verdict": "unobserved",
+        "reason": "the discovery inventory is older than 15m0s, so it is not evidence either way"
+      },
+      "first_seen": "2030-01-15T09:40:00Z",
+      "last_seen": "2030-01-15T10:04:30Z"
+    },
+    {
+      "finding_id": "",
+      "pid": 3320,
+      "process": "python.exe",
+      "cmdline": "python.exe -m http.server 8000",
+      "user": "EXAMPLE\\operator",
+      "score": 44,
+      "severity": "medium",
+      "signals": [
+        {"id": "unattributed_tls_egress", "title": "persistent unnamed TLS egress from a scriptable runtime", "weight": 34},
+        {"id": "model_resident_memory", "title": "resident memory large enough to hold model weights", "detail": "python.exe", "weight": 10}
+      ],
+      "correlation": {
+        "verdict": "unobserved",
+        "reason": "the discovery inventory was never scanned, so it is not evidence either way"
+      }
+    },
+    {
+      "finding_id": "00000000-0000-4000-8000-000000000105",
+      "pid": 5504,
+      "process": "node.exe",
+      "cmdline": "",
+      "user": "EXAMPLE\\operator",
+      "agent_name": "editor-assistant",
+      "score": 35,
+      "severity": "medium",
+      "signals": [
+        {"id": "local_inference_client", "title": "process is calling a local model server", "weight": 35}
+      ],
+      "providers": [
+        {"hostname": "localhost", "address": "127.0.0.1", "port": 11434, "category": "", "confidence": 0.6, "attribution_source": "reverse dns"}
+      ],
+      "correlation": {
+        "verdict": "accounted",
+        "reason": "the inventory independently observed this agent",
+        "matched_signal_ids": ["00000000-0000-4000-8000-000000000a02"],
+        "categories": ["local_model"]
+      }
+    },
+    {
+      "finding_id": "00000000-0000-4000-8000-000000000106",
+      "pid": 6001,
+      "process": "python.exe",
+      "cmdline": "python.exe notebook.py",
+      "user": "EXAMPLE\\operator",
+      "score": 18,
+      "severity": "low",
+      "signals": [
+        {"id": "model_resident_memory", "title": "resident memory large enough to hold model weights", "detail": "python.exe", "weight": 10},
+        {"id": "inference_heartbeat", "title": "sustained compute in a scriptable runtime", "detail": "python.exe used 3.6s of CPU over 10s", "weight": 8}
+      ],
+      "correlation": {
+        "verdict": "accounted",
+        "reason": "the inventory independently observed this process"
+      }
+    }
+  ],
+  "planes": [
+    {"plane": "a", "name": "inference heartbeat", "available": true, "running": true, "mechanism": "Toolhelp32 snapshot, GetProcessTimes, GetProcessMemoryInfo"},
+    {"plane": "b", "name": "shadow egress", "available": true, "running": true, "mechanism": "GetExtendedTcpTable and GetExtendedUdpTable; peers named by reverse DNS (dns_capture off)"},
+    {"plane": "c", "name": "agent actions", "available": true, "running": true, "mechanism": "Windows Security event log (wevtapi)"}
+  ],
+  "processes_observed": 212,
+  "processes_skipped": 3,
+  "connections_observed": 148,
+  "connections_unattributed": 6,
+  "host_plane_observations": 57,
+  "host_plane_gated": 41,
+  "degraded": false
+}

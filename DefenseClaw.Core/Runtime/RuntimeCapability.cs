@@ -27,6 +27,12 @@ public enum RuntimeCapability
     /// Windows, against 0.8.10's 231 and 210). It is what chooses the command palette's catalogue (<see cref="Cli.TuiRegistryCatalogues.For"/>).
     /// </summary>
     TuiRegistry,
+
+    /// <summary>
+    /// The AI Discovery runtime planes: <c>agent discovery runtime</c> (status, scan, findings, permissions, enable, disable) and the
+    /// gateway's <c>GET /api/v1/ai-usage/runtime</c>. 0.8.10 has neither the command group nor the route.
+    /// </summary>
+    AiRuntime,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -53,6 +59,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.Sandbox => "Sandboxes",
         RuntimeCapability.CanonicalSchema8 => "Configuration schema 8",
         RuntimeCapability.TuiRegistry => "Extended command registry",
+        RuntimeCapability.AiRuntime => "AI Discovery runtime planes",
         _ => capability.ToString(),
     };
 
@@ -65,6 +72,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.Sandbox => "'sandbox --help' lists 'pack', 'approvals' and 'doctor'",
         RuntimeCapability.CanonicalSchema8 => "'config --help' lists 'get' and the runtime reports version 1.0.0 or later",
         RuntimeCapability.TuiRegistry => "'setup --help' lists 'amp', 'devin' and 'kiro'",
+        RuntimeCapability.AiRuntime => "'agent discovery --help' lists 'runtime' and 'agent discovery runtime --help' lists 'status', 'scan', 'findings' and 'permissions'",
         _ => string.Empty,
     };
 }

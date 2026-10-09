@@ -26,10 +26,12 @@ internal static class ShellCommandRegistry
     /// </summary>
     internal static List<ShellCommand> BuildPanelCommands(PanelCatalog catalog, Action<PanelDescriptor> navigateTo)
     {
+        // Every panel gets a row, in sidebar order; one the connected runtime does not offer is disabled with the standard sentence and shows no
+        // chord (its chord does nothing). The chord is the panel's place in the chord order, not its place in the sidebar.
         var commands = new List<ShellCommand>();
-        for (var i = 0; i < catalog.SidebarOrder.Count; i++)
+        foreach (var panel in catalog.SidebarOrder)
         {
-            commands.Add(GoTo(catalog.SidebarOrder[i], ShellShortcuts.PanelChordText(i), navigateTo, catalog.Gate(catalog.SidebarOrder[i])));
+            commands.Add(GoTo(panel, catalog.ChordFor(panel), navigateTo, catalog.Gate(panel)));
         }
 
         // The footer panel (Settings) is reached by Ctrl+, rather than a number.

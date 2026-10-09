@@ -1,0 +1,16 @@
+Usage: defenseclaw agent discovery [OPTIONS] COMMAND [ARGS]...
+
+  Toggle and inspect the sidecar AI discovery service.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  disable  Disable the sidecar AI discovery service.
+  enable   Turn on AI discovery in the gateway (sidecar).
+  runtime  Inspect the AI discovery runtime planes.
+  scan     Run one AI discovery scan now through the running gateway
+           (sidecar).
+  setup    Walk an interactive wizard for AI discovery settings.
+  status   Show AI discovery settings from config.yaml next to the running
+           gateway's.

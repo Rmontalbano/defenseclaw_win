@@ -34,26 +34,7 @@ public sealed class RuntimeSelectorTests : IDisposable
 
     // ------------------------------------------------------------------ a runner that answers from the fixtures
 
-    private static RuntimeProbeRunner FixtureRunner(string set) => (arguments, _) =>
-    {
-        var file = string.Join(' ', arguments) switch
-        {
-            "--version-json" => "version.json",
-            "--help" => "root.txt",
-            "setup --help" => "setup.txt",
-            "guardrail --help" => "guardrail.txt",
-            "config --help" => "config.txt",
-            "sandbox --help" => "sandbox.txt",
-            "acp --help" => "acp.txt",
-            "setup redaction --help" => "setup-redaction.txt",
-            _ => null,
-        };
-
-        var path = file is null ? null : System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", "runtime-" + set, file);
-        return Task.FromResult(path is not null && File.Exists(path)
-            ? RuntimeProbeOutput.Ok(File.ReadAllText(path))
-            : RuntimeProbeOutput.Fail("exit 2"));
-    };
+    private static RuntimeProbeRunner FixtureRunner(string set) => RuntimeFixtureRunner.For(set);
 
     private AppServices Create(RuntimeProbeRunner? runner = null, DefenseClawPaths? paths = null)
     {
@@ -484,7 +465,7 @@ public sealed class RuntimeSelectorTests : IDisposable
     }
 
     [Fact]
-    public void Every_real_panel_stays_enabled_on_an_unprobed_runtime_so_nothing_regresses()
+    public void Every_panel_0_8_10_has_stays_enabled_on_an_unprobed_runtime_so_nothing_regresses()
     {
         var services = Create();
         var catalog = new PanelCatalog(services);
@@ -492,6 +473,46 @@ public sealed class RuntimeSelectorTests : IDisposable
         var commands = ShellCommandRegistry.BuildPanelCommands(catalog, _ => { });
 
         Assert.NotEmpty(commands);
-        Assert.All(commands, command => Assert.True(command.IsEnabled, command.Title));
+        var needsMore = catalog.Panels.Where(p => p.Requires is not null).Select(p => "nav." + p.Id).ToArray();
+        Assert.Equal(new[] { "nav.ai-runtime" }, needsMore);
+        Assert.All(commands.Where(c => !needsMore.Contains(c.Id)), command => Assert.True(command.IsEnabled, command.Title));
+
+        // The one panel that needs a newer runtime (Runtime, CUST-309) is listed but disabled, with the standard sentence and no chord.
+        var runtime = commands.Single(c => c.Id == "nav.ai-runtime");
+        Assert.False(runtime.IsEnabled);
+        Assert.Equal(RuntimeCapabilityCatalog.UnsupportedMessage, runtime.DisabledReason);
+        Assert.Null(runtime.Shortcut);
+    }
+
+    [Fact]
+    public async Task Against_0_8_10_fixtures_the_runtime_panel_stays_closed_in_every_door()
+    {
+        var services = Create(FixtureRunner("0.8.10"));
+        _ = await services.Runtime.RefreshAsync();
+        var catalog = new PanelCatalog(services);
+        var runtime = catalog.ById("ai-runtime")!;
+
+        Assert.False(catalog.IsOffered(runtime));
+        Assert.Null(catalog.ChordFor(runtime));
+        Assert.Null(catalog.PanelForChord(catalog.ChordOrder.ToList().IndexOf(runtime)));
+        Assert.NotSame(runtime, catalog.InitialPanel);
+        Assert.False(ShellCommandRegistry.BuildPanelCommands(catalog, _ => { }).Single(c => c.Id == "nav.ai-runtime").IsEnabled);
+    }
+
+    [Fact]
+    public async Task Against_the_pin_fixtures_the_runtime_panel_opens_with_the_fifteenth_chord()
+    {
+        var services = Create(FixtureRunner("95159fd"));
+        _ = await services.Runtime.RefreshAsync();
+        var catalog = new PanelCatalog(services);
+        var runtime = catalog.ById("ai-runtime")!;
+
+        Assert.True(catalog.IsOffered(runtime));
+        Assert.Equal("Ctrl+Shift+5", catalog.ChordFor(runtime));
+        Assert.Same(runtime, catalog.PanelForChord(14));
+
+        var row = ShellCommandRegistry.BuildPanelCommands(catalog, _ => { }).Single(c => c.Id == "nav.ai-runtime");
+        Assert.True(row.IsEnabled);
+        Assert.Equal("Ctrl+Shift+5", row.Shortcut);
     }
 }

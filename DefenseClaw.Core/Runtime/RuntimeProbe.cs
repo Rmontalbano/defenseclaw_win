@@ -15,6 +15,8 @@ namespace DefenseClaw.Core.Runtime;
 /// <param name="SandboxHelp"><c>defenseclaw sandbox --help</c>, probed only when the root lists <c>sandbox</c>.</param>
 /// <param name="AcpHelp"><c>defenseclaw acp --help</c>, probed only when the root lists <c>acp</c>.</param>
 /// <param name="RedactionHelp"><c>defenseclaw setup redaction --help</c>, probed only when <c>setup</c> lists <c>redaction</c>.</param>
+/// <param name="DiscoveryHelp"><c>defenseclaw agent discovery --help</c> (0.8.10 has the screen too; what it lists decides whether <c>runtime</c> exists).</param>
+/// <param name="DiscoveryRuntimeHelp"><c>defenseclaw agent discovery runtime --help</c>, probed only when <c>agent discovery --help</c> lists <c>runtime</c>.</param>
 public sealed record RuntimeProbeScreens(
     string? VersionJson,
     string? RootHelp,
@@ -23,7 +25,9 @@ public sealed record RuntimeProbeScreens(
     string? ConfigHelp,
     string? SandboxHelp,
     string? AcpHelp,
-    string? RedactionHelp);
+    string? RedactionHelp,
+    string? DiscoveryHelp = null,
+    string? DiscoveryRuntimeHelp = null);
 
 /// <summary>
 /// Turns probe text into an identity and capability flags. Pure: no process, no clock, no file.
@@ -49,6 +53,12 @@ public static class RuntimeProbe
     internal static readonly string[] SandboxMarkers = ["pack", "approvals", "doctor"];
     internal static readonly string[] ConfigMarkers = ["get"];
     internal static readonly string[] RegistryMarkers = ["amp", "devin", "kiro"];
+
+    /// <summary>What <c>agent discovery --help</c> lists when the runtime planes exist (0.8.10's lists disable, enable, scan, setup and status).</summary>
+    internal static readonly string[] AiRuntimeGroupMarkers = ["runtime"];
+
+    /// <summary>What <c>agent discovery runtime --help</c> lists: the four reads and the poll the Runtime panel is built on.</summary>
+    internal static readonly string[] AiRuntimeMarkers = ["status", "scan", "findings", "permissions"];
 
     /// <summary>The version at which the runtime reports configuration schema 8 (the pin self-reports 1.0.0).</summary>
     internal static readonly Version Schema8Version = new(1, 0, 0);
@@ -241,6 +251,8 @@ public static class RuntimeProbe
         var sandbox = ParseCommands(screens.SandboxHelp);
         var acp = ParseCommands(screens.AcpHelp);
         var redaction = ParseCommands(screens.RedactionHelp);
+        var discovery = ParseCommands(screens.DiscoveryHelp);
+        var discoveryRuntime = ParseCommands(screens.DiscoveryRuntimeHelp);
 
         var present = new List<RuntimeCapability>();
         var notes = new List<string>();
@@ -284,6 +296,13 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.TuiRegistry);
         }
 
+        // The runtime planes need both screens: the group has to list 'runtime' and the group's own screen has to list the commands the panel
+        // is built on. A runtime whose discovery screen was never read has not shown it has them (fail closed), whatever its runtime screen said.
+        if (HasAll(discovery, AiRuntimeGroupMarkers) && HasAll(discoveryRuntime, AiRuntimeMarkers))
+        {
+            present.Add(RuntimeCapability.AiRuntime);
+        }
+
         // A screen the probe wanted but did not get is worth a line: the capability it would have shown is absent for want of evidence.
         AddMissing(notes, screens.GuardrailHelp, "guardrail --help");
         AddMissing(notes, screens.ConfigHelp, "config --help");
@@ -302,7 +321,19 @@ public static class RuntimeProbe
             AddMissing(notes, screens.RedactionHelp, "setup redaction --help");
         }
 
-        return new RuntimeSnapshot(identity, new RuntimeCapabilities(true, present, setup, notes), null, fingerprint, at);
+        if (root.Contains("agent"))
+        {
+            AddMissing(notes, screens.DiscoveryHelp, "agent discovery --help");
+        }
+
+        if (discovery.Contains("runtime"))
+        {
+            AddMissing(notes, screens.DiscoveryRuntimeHelp, "agent discovery runtime --help");
+        }
+
+        // The per-subcommand list is only meaningful when the group exists: a runtime screen read without the group listing it proves nothing.
+        var aiRuntimeCommands = discovery.Contains("runtime") ? discoveryRuntime : new HashSet<string>(StringComparer.Ordinal);
+        return new RuntimeSnapshot(identity, new RuntimeCapabilities(true, present, setup, notes, aiRuntimeCommands), null, fingerprint, at);
     }
 
     private static bool HasAll(IReadOnlySet<string> commands, string[] required) =>

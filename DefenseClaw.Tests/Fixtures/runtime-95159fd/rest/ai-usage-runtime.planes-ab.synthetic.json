@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "scanned_at": "2030-01-15T10:04:30Z",
+  "findings": [],
+  "planes": [
+    {"plane": "a", "name": "inference heartbeat", "available": true, "running": true, "mechanism": "Toolhelp32 snapshot, GetProcessTimes, GetProcessMemoryInfo"},
+    {"plane": "b", "name": "shadow egress", "available": true, "running": true, "mechanism": "GetExtendedTcpTable and GetExtendedUdpTable; peers named by reverse DNS (dns_capture off)"},
+    {"plane": "c", "name": "agent actions", "available": true, "running": false, "reason": "not selected in ai_discovery.runtime.planes"}
+  ],
+  "processes_observed": 205,
+  "processes_skipped": 0,
+  "connections_observed": 131,
+  "connections_unattributed": 0,
+  "host_plane_observations": 0,
+  "host_plane_gated": 0,
+  "degraded": false
+}

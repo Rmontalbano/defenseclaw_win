@@ -32,7 +32,7 @@ namespace DefenseClaw.App;
 /// </para>
 /// <para>
 /// <b>Keyboard map</b> (one handler, <see cref="OnWindowPreviewKeyDown"/>; the chords themselves
-/// live in <see cref="ShellShortcuts"/>): Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…3 jump to the panels in
+/// live in <see cref="ShellShortcuts"/>): Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…5 jump to the panels in
 /// sidebar order, Ctrl+, opens Settings (the pinned footer entry), F5 refreshes the current panel (falling back to a gateway poll), Ctrl+K opens the
 /// command palette, F1 — or <c>?</c> outside a text box — the shortcuts list, Esc closes whichever
 /// overlay is open. Handled at the window's <i>preview</i> stage so a panel's own controls cannot
@@ -54,7 +54,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// <summary>The inbox for deep links; set by <see cref="Wire"/>, which subscribes this window to it.</summary>
     private ShellNavigation _navigation = null!;
 
-    /// <summary>What the app knows about the connected runtime; set by <see cref="Wire"/>, which subscribes this window to its changes.</summary>
+    /// <summary>
+    /// What the app knows about the connected runtime; set by <see cref="Wire"/>, which subscribes this window to its changes. The sidebar shows a
+    /// panel that needs more than 0.8.10 has only while the runtime has it (<see cref="ApplyPanelGates()"/>), and the palette's CLI rows follow it too.
+    /// </summary>
     private RuntimeService _runtime = null!;
     private readonly CommandPaletteViewModel _paletteViewModel = new();
 
@@ -185,7 +188,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         services.Navigation.PaletteRequested += OnPaletteRequested;
         _navigation = services.Navigation;
 
-        // The palette's CLI rows are the connected runtime's TUI registry: an open palette follows the runtime's first answer and any change.
+        // The runtime is probed in the background. Its first answer and any change reach the sidebar (a panel that needs more than 0.8.10 has
+        // appears when the runtime has it and leaves again if it stops having it) and an open palette (its CLI rows are the runtime's TUI registry).
         services.Runtime.Changed += OnRuntimeChanged;
         _runtime = services.Runtime;
 
@@ -510,8 +514,6 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// </summary>
     private void BuildNavigation()
     {
-        var index = 0;
-
         foreach (var group in PanelCatalog.Groups)
         {
             // Tighter than WPF-UI's defaults (entries 34 px high instead of 40, headings with 5 px above their
@@ -528,7 +530,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
             foreach (var panel in _catalog.InGroup(group))
             {
-                var chord = ShellShortcuts.PanelChordText(index++);
+                // The chord is the panel's place in the chord order, not in the sidebar (see PanelCatalog.ChordOrder).
+                var chord = _catalog.ChordTextOf(panel);
                 var item = CreateNavigationItem(panel, chord, $"Opens the {panel.Title} panel in the {group} group.");
 
                 // The count on Alerts and the caution mark on Overview (CUST-201); the view-model feeds them (UpdateNavigationBadges).
@@ -555,6 +558,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
                 $"Opens {panel.Title}: monitoring, notifications, startup, connection and updates."));
         }
 
+        ApplyPanelGates();
         UpdateNavigationBadges();
 
         // Collapsed, the sidebar is a 40 px icon strip and a heading's text would be cut off mid-word
@@ -567,6 +571,25 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         // The panel a navigation request raised before this window existed is waiting for, else the default one.
         RootNavigation.SetPageProviderService(_catalog);
         _ = RootNavigation.Navigate(_catalog.InitialPanel.ViewType);
+    }
+
+    /// <summary>
+    /// Shows the sidebar entry of every panel the connected runtime offers and hides the rest (<see cref="PanelCatalog.IsOffered"/>): on 0.8.10
+    /// the Runtime panel has no entry, and it gets one when the probe says the runtime has the planes. Before the first probe answers every panel
+    /// that needs a newer runtime is hidden, never flashed. The window's own chords and the palette follow the same test.
+    /// </summary>
+    private void ApplyPanelGates() => ApplyPanelGates(_catalog, _navigationItems);
+
+    /// <summary>The same, over any set of sidebar entries by panel id (the window's own, or a test's).</summary>
+    internal static void ApplyPanelGates(PanelCatalog catalog, IReadOnlyDictionary<string, DcNavigationItem> items)
+    {
+        foreach (var panel in catalog.Panels)
+        {
+            if (items.TryGetValue(panel.Id, out var item))
+            {
+                item.Visibility = catalog.IsOffered(panel) ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
     }
 
     /// <summary>One sidebar entry: the panel's title and glyph, its accessible name, help text and accelerator, and its place in <see cref="_navigationItems"/>.</summary>
@@ -687,6 +710,12 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// </summary>
     private void NavigateTo(PanelDescriptor panel)
     {
+        // A panel the connected runtime does not offer has no sidebar entry, so nothing may reach it by chord, palette or deep link either.
+        if (!_catalog.IsOffered(panel))
+        {
+            return;
+        }
+
         _ = RootNavigation.Navigate(panel.ViewType);
 
         if (_navigationItems.TryGetValue(panel.Id, out var item))
@@ -751,9 +780,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             e.Handled = true;
         }
         else if (ShellShortcuts.PanelIndexFor(e.Key, modifiers) is { } index &&
-                 index < _catalog.SidebarOrder.Count)
+                 _catalog.PanelForChord(index) is { } target)
         {
-            NavigateTo(_catalog.SidebarOrder[index]);
+            NavigateTo(target);
             e.Handled = true;
         }
     }
@@ -886,8 +915,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         ShellCommandRegistry.Build(_catalog, _actions, NavigateTo, OpenShortcuts, _appearance, _actions.CliCommands, _connectorScope);
 
     /// <summary>
-    /// The runtime answered (the first probe) or changed its answer (an upgrade): which TUI registry the CLI rows come from follows it, so
-    /// an open palette swaps the rows in without touching what was typed. A closed one reads them when it opens.
+    /// The runtime answered (the first probe) or changed its answer (an upgrade, a downgrade). The sidebar follows it (a panel that needs more
+    /// than 0.8.10 has appears or leaves), and so do the CLI rows, which come from the runtime's TUI registry: an open palette swaps them in
+    /// without touching what was typed. A closed one reads them when it opens.
     /// </summary>
     private void OnRuntimeChanged(object? sender, EventArgs e)
     {
@@ -896,6 +926,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             _ = Dispatcher.BeginInvoke(new Action(() => OnRuntimeChanged(sender, e)));
             return;
         }
+
+        ApplyPanelGates();
 
         if (_viewModel.IsPaletteOpen)
         {
@@ -928,6 +960,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
         ClosePalette(restoreFocus: false);
         RememberFocus();
+
+        // Built when it opens, not once: which panels have a chord depends on what the connected runtime offers, which can change while the window lives.
+        Shortcuts.DataContext = ShortcutCatalog.Build(_catalog);
         _viewModel.IsShortcutsOpen = true;
         Shortcuts.FocusClose();
     }

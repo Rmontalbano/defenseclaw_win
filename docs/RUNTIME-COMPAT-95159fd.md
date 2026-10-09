@@ -18,9 +18,9 @@ exactly that gap.
 
 | Fixture group | Files | Derived from |
 |---|---|---|
-| `cli/` | `version-json`, `gateway-version-json`, `version.txt`, `status-json`, `status-json.connectors` (*), `doctor-json`, `doctor-cache` (*), `keys-list`, `policy-list`, `policy-show-default`, `observability-plan`, `guardrail-status` (json and text), `guardrail-list-packs`, `guardrail-protection-list`, `config-show-guardrail` (each also as `.connectors` (*)), `agent-discovery-*`, `alerts`, `mcp-list`, `skill-list`, `plugin-list`, `tool-list`, `aibom-scan`, `config-path`, `config-validate`, `cli-tree` (*) | CLI output of a fresh install |
+| `cli/` | `version-json`, `gateway-version-json`, `version.txt`, `status-json`, `status-json.connectors` (*), `doctor-json`, `doctor-cache` (*), `keys-list`, `policy-list`, `policy-show-default`, `observability-plan`, `guardrail-status` (json and text), `guardrail-list-packs`, `guardrail-protection-list`, `config-show-guardrail` (each also as `.connectors` (*)), `agent-discovery-*`, `agent-discovery-runtime-permissions.windows.synthetic` (*), `alerts`, `mcp-list`, `skill-list`, `plugin-list`, `tool-list`, `aibom-scan`, `config-path`, `config-validate`, `cli-tree` (*) | CLI output of a fresh install |
 | `policy-model/` | `phase2-model.json`, `tool-chains.json` | the runtime's own model document (its catalog read and the rows it rendered from it) and its built-in chain catalog |
-| `rest/` | `health`, `status`, `alerts`, `guardrail-config`, `enforce-blocked/-allowed`, `mcps`, `skills-not-connected`, `tools-catalog-not-connected`, `ai-usage-runtime`, `unauthorized` | the gateway's GET routes |
+| `rest/` | `health`, `status`, `alerts`, `guardrail-config`, `enforce-blocked/-allowed`, `mcps`, `skills-not-connected`, `tools-catalog-not-connected`, `ai-usage-runtime` (the disabled answer), `ai-usage-runtime.populated.synthetic` (*), `ai-usage-runtime.degraded.synthetic` (*), `ai-usage-runtime.planes-ab.synthetic` (*), `unauthorized` | the gateway's GET routes |
 | `help/` | `setup`, `setup-windows`, and the pages of `claude-code`, `cursor`, `codex`, `guardrail`, `observability`, `redaction`, `acp`, `gateway`, `trusted-paths`, `rotate-token`, `routing`, `local-observability` | `--help` screens |
 | `audit/` | `audit-schema.sql` (the database's own `.schema`, 38 tables, 53 migrations), `judge-bodies-schema.sql`, `migrations.txt` | the schema only, no rows |
 | `config/` | `config.fresh.yaml`, `config.connectors.yaml` (*) | a fresh `config.yaml`; the second is written from the Go config structs |
@@ -31,6 +31,13 @@ exactly that gap.
 recovered from the help screens); `config.connectors.yaml` uses the key names of the Go structs; the three `.connectors` Policies fixtures
 describe two active connectors (one with its own mode, rule pack, alert level and an opt-in pack, one with its own block level), written in the
 shape the capture has and checked against the cases the runtime's own tests pin (`DefenseClaw.Tests/PolicyModelTests.cs`).
+The four `*.synthetic` Runtime-panel fixtures (CUST-309) are **synthetic, not captures** - no populated runtime snapshot exists from a Windows run, so they are written by hand from the emitting code: the wire shape from
+`internal/gateway/ai_runtime_api.go:31-97`, the plane names, mechanisms and reasons from `internal/sensor/platform/windows.go`, `internal/sensor/plane/windows.go`
+and `internal/sensor/service.go` (`degradedReasonsFor`, `planeHealth`), the severities, signal ids, chain wording and verdicts from `internal/sensor/scoring`,
+`agentchain` and `correlate`, and the permissions document from `_RUNTIME_GRANTS["windows"]` in `cli/defenseclaw/commands/cmd_agent.py`. Processes, users, hosts and addresses are
+invented (`EXAMPLE\operator`, `203.0.113.10`, `*.example`); the one credential-looking flag in a command line is the placeholder `synthetic-synthetic`, there to prove it is masked.
+`agent-discovery.txt` and `agent-discovery-runtime.txt` at the root of the set are the two help screens the Runtime capability is decided from, laid out the way `root.txt` was
+(Click's layout over each command's help text in the tree); `runtime-0.8.10/agent-discovery.txt` is the installed 0.8.10's own `agent discovery --help`.
 
 The audit database is **not a copied database**. `RuntimeFixtures.CreateAuditDatabase()` builds one at test time from `audit-schema.sql`,
 adds `schema_version` rows 1..53, and the tests insert a few synthetic rows written the way that source's event-history writer writes them.
@@ -49,7 +56,8 @@ adds `schema_version` rows 1..53, and the tests insert a few synthetic rows writ
 | Setup tile grid | Compatible as is (35 targets). |
 | Policies panel | **Added** for a runtime that has the policy model: six views (Windows has no Sandbox packs view), the 0.8.10 table is unchanged elsewhere. See below. |
 | Command classifier (review tiers) | Compatible; the new commands were reviewed. One 0.8.10 read verb is gone. |
-| Fixed argv built by the app | Compatible: all 40 still name a command and options that exist. |
+| Fixed argv built by the app | Compatible: all 47 still name a command and options that exist. |
+| Runtime planes (`agent discovery runtime`, `GET /api/v1/ai-usage/runtime`) | **New panel** (CUST-309), offered only when `agent discovery --help` lists `runtime` and `agent discovery runtime --help` lists `status`, `scan`, `findings`, `permissions`. Reads the route; runs only `scan`, `enable` and `disable` (each reviewed) and `permissions --json` (read-only, never `--grant`). Synthetic fixtures only (see above). |
 
 ### Gateway HTTP client
 
@@ -155,7 +163,7 @@ with four spellings (`-y, --yes, --non-interactive, --accept-defaults`), `--work
 The tree has 263 leaves (0.8.10: 179). `CommandTierPinnedTreeTests` runs the 0.8.10 tree checks over it. The classifier called 11 new leaves read-only (`acp status`,
 `agent discovery runtime status`, `guardrail protection list`, `sandbox doctor/image list/list/pack list/pack show/pack validate/policy show/status`);
 each one's help was read and they only list, show, validate or probe. None is on the app's no-review allow-list, so none runs without review; no
-mutating command became read-only. The 40 fixed argv the app builds (`ArgvContractTests`) all name existing commands with existing options.
+mutating command became read-only. The 47 fixed argv the app builds (`ArgvContractTests`, the Runtime panel's seven among them) all name existing commands with existing options.
 
 ### Policies: the policy model (CUST-293)
 
@@ -219,6 +227,7 @@ again at the moment of the request) turns every change off with the reason as th
 - Chains and rule families read the runtime's own data files; their location is derived from a built-in policy's path, which was seen only in the
   capture. A different install layout shows those two views as "not found" rather than guessing.
 - A runtime with a connector, findings, scans, hook traffic or history: the readers were exercised with synthetic rows, not with rows from a populated install.
+- A populated runtime-plane snapshot from a Windows run, and the exact reason text the gateway reports for plane C while unelevated (the Runtime panel's fixtures are built from the emitting code and show the text as data, so a different sentence changes nothing but the words).
 - `inventory.db`, `gateway.log` / `gateway.jsonl` formats, the Logs panel's tailing, and the agent-config files the runtime plants for a connector.
 - Upgrade and rollback of a real installation (the in-app updater assumes release assets that this source has no release for).
 - Whether the authenticated 0.8.10 routes accept the new header (see above).

@@ -1,0 +1,607 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.AiRuntimePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             d:DataContext="{d:DesignInstance Type=vm:AiRuntimePanelViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             panels:CompactLayout.Below="960">
+    <!--
+        The Runtime panel (CUST-309; the macOS companion's "AI Discovery Runtime"). On the shared Dc* design system, no local colours.
+
+        Order is deliberate and is the point of the panel: coverage first (what the three planes can and cannot see, with the whole reason
+        for every plane that is not fully up), then the findings, then what can be done, then what this PC needs. A list of findings
+        with no coverage above it reads, for a plane that was never able to look, exactly like a host with nothing to find - so the
+        words "clean host" appear on this page only in "No findings is not a clean host".
+
+        One scrolling page. A ScrollViewer measures its content with unlimited height and a DataGrid measured that way realizes every
+        row, so the findings block has a definite height of its own and the grid inside it virtualizes. Wide: the list and the
+        inspector sit side by side. Compact (CompactLayout, under 960 DIPs): the inspector replaces the list while a finding is
+        selected, as in Alerts. Esc closes the review dialog and then the inspector (code-behind); Ctrl+F focuses the filter.
+    -->
+    <UserControl.Resources>
+        <!-- The list's right edge meets the inspector's divider while a finding is selected; with none the list takes the whole width. -->
+        <Style x:Key="RuntimeListCard" TargetType="Border" BasedOn="{StaticResource DcCardFlush}">
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                    <Setter Property="Grid.ColumnSpan" Value="1" />
+                    <Setter Property="CornerRadius" Value="0" />
+                    <Setter Property="BorderThickness" Value="1,1,0,1" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasSelection}" Value="True" />
+                        <Condition Binding="{Binding Path=(panels:CompactLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource DcPage}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar: name and one line of coverage, the page actions as icons, the filter box. -->
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="Pulse24"
+                           ctl:DcIcon.Section="Discover"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding CaptionText}"
+                           HasSearch="True"
+                           SearchText="{Binding FilterText}"
+                           SearchPlaceholder="Filter findings…"
+                           SearchAutomationName="Filter findings"
+                           SearchHelpText="Shows only findings whose process, command line, user, agent, severity, providers or inventory verdict contain these words. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Leading>
+                <ui:ProgressRing Width="18"
+                                 Height="18"
+                                 Margin="10,0,0,0"
+                                 IsIndeterminate="True"
+                                 AutomationProperties.Name="Reading the runtime snapshot"
+                                 Visibility="{Binding ShowSpinner, Converter={StaticResource BoolToVisibility}}" />
+            </ctl:DcPageToolbar.Leading>
+            <!-- No connector chip: runtime findings belong to processes on this PC, not to a connector, so the shared scope does not filter them. -->
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon Flash24}"
+                               Command="{Binding PollNowCommand}"
+                               ToolTip="Poll now… (agent discovery runtime scan)"
+                               AutomationProperties.Name="Poll now"
+                               AutomationProperties.HelpText="Asks the gateway to poll the runtime planes right now. Shows the exact command first; nothing runs until you confirm. Off while the snapshot is stale or the planes are disabled." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Read the runtime snapshot from the gateway again (F5)." />
+                </StackPanel>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
+
+        <ScrollViewer Grid.Row="1" x:Name="PageScroll" Style="{StaticResource DcPageScroll}">
+            <StackPanel>
+                <!-- STALE: the last good snapshot stays, marked, until a read succeeds. -->
+                <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                            Title="Stale"
+                            Severity="Warning"
+                            IsClosable="False"
+                            IsOpen="{Binding IsStale}"
+                            Message="{Binding StaleBanner}"
+                            AutomationProperties.LiveSetting="Polite" />
+
+                <!-- Loading / unsupported / unavailable / disabled / no poll yet: a card of its own, never an empty table. -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowStateCard, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Style="{StaticResource DcEmptyState}">
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Pulse24" />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}"
+                                   Text="{Binding StateTitle}"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding StateDetail}" />
+                        <ui:Button Margin="0,12,0,0"
+                                   Appearance="Primary"
+                                   Content="Enable…"
+                                   Icon="{ctl:DcSymbolIcon Power24}"
+                                   Command="{Binding EnablePlanesCommand}"
+                                   Visibility="{Binding ShowEnableInState, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.HelpText="Opens a review of the command that turns the runtime planes on. Nothing runs until you confirm." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Coverage: before any finding. -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowCoverage, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ctl:DcCardHeader Symbol="Eye24" Section="Discover" Content="Coverage" />
+                            <Border Style="{StaticResource DcBadge}"
+                                    Tag="{Binding CoverageTone}"
+                                    Margin="10,0,0,8"
+                                    VerticalAlignment="Top"
+                                    AutomationProperties.Name="{Binding CoverageBadgeText, StringFormat='Coverage: {0}'}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ctl:DcStatusGlyph Tone="{Binding CoverageTone}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding CoverageBadgeText}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   Text="{Binding CoverageHeadline}"
+                                   AutomationProperties.LiveSetting="Polite" />
+
+                        <!-- The plane strip: one chip per plane, with the state in a word. -->
+                        <ItemsControl Margin="0,10,0,0"
+                                      Focusable="False"
+                                      ItemsSource="{Binding Planes}"
+                                      AutomationProperties.Name="Runtime planes">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource DcBadge}"
+                                            Tag="{Binding ToneKey}"
+                                            Margin="0,0,8,8"
+                                            ToolTip="{Binding Mechanism}"
+                                            AutomationProperties.Name="{Binding AutomationName}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ctl:DcStatusGlyph Tone="{Binding ToneKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding ChipText}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                   Text="Plane health unavailable: the gateway reported no planes."
+                                   Visibility="{Binding HasNoPlanes, Converter={StaticResource BoolToVisibility}}" />
+
+                        <!-- Every plane that is not fully up says why, in full, as text: never only in a tooltip. -->
+                        <ItemsControl Focusable="False"
+                                      ItemsSource="{Binding Planes}"
+                                      AutomationProperties.Name="Why planes are not fully up">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource DcTextSecondary}"
+                                               Margin="0,0,0,6"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding HasReason, Converter={StaticResource BoolToVisibility}}">
+                                        <Run FontWeight="SemiBold" Text="{Binding Name, Mode=OneWay}" /><Run Text=" — " /><Run Text="{Binding Badge, Mode=OneWay}" /><Run Text=": " /><Run Text="{Binding Reason, Mode=OneWay}" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <ui:InfoBar Margin="0,6,0,0"
+                                    Title="Most connections have no owner"
+                                    Severity="Warning"
+                                    IsClosable="False"
+                                    IsOpen="{Binding HasUnattributedWarning}"
+                                    Message="{Binding UnattributedWarning}" />
+
+                        <ItemsControl Focusable="False"
+                                      ItemsSource="{Binding OtherGaps}"
+                                      AutomationProperties.Name="Other coverage gaps">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource DcTextSecondary}" Margin="0,0,0,6" TextWrapping="Wrap" Text="{Binding}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,8,0,0" Text="{Binding CountsText, StringFormat='Looked at: {0}.'}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,2,0,0"
+                                   Text="{Binding HostPlaneText}"
+                                   Visibility="{Binding HasHostPlaneText, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding ReadText}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Findings. -->
+                <StackPanel Visibility="{Binding ShowFindings, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcSectionHeader}" Text="Findings" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Margin="0,0,0,6"
+                               Text="{Binding FindingsCaption}"
+                               AutomationProperties.LiveSetting="Polite" />
+
+                    <Grid MinHeight="260" MaxHeight="380" Visibility="{Binding ShowFindingsTable, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="360" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border x:Name="ListCard" Style="{StaticResource RuntimeListCard}">
+                            <ui:DataGrid x:Name="FindingList"
+                                         Style="{StaticResource DcDataGrid}"
+                                         ItemsSource="{Binding Rows}"
+                                         SelectedItem="{Binding SelectedFinding, Mode=TwoWay}"
+                                         SelectionMode="Single"
+                                         VirtualizingPanel.ScrollUnit="Pixel"
+                                         ctl:DcGridColumns.Fit="True"
+                                         panels:NestedScroll.ForwardWheel="True"
+                                         AutomationProperties.Name="Runtime findings, worst first">
+                                <ui:DataGrid.Columns>
+                                    <DataGridTemplateColumn Width="0.9*" MinWidth="84" Header="Severity" SortMemberPath="SeverityRank">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ctl:DcSeverityBadge Text="{Binding Severity}" Tone="{Binding SeverityTone}" Margin="0,0,8,0" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Width="0.5*" MinWidth="52" Header="Score"
+                                                        SortMemberPath="Score"
+                                                        ElementStyle="{StaticResource DcCellText}"
+                                                        Binding="{Binding ScoreText}" />
+                                    <DataGridTextColumn Width="1.3*" MinWidth="80" Header="Process"
+                                                        SortMemberPath="Process"
+                                                        ElementStyle="{StaticResource DcCellText}"
+                                                        Binding="{Binding Process}" />
+                                    <DataGridTextColumn Width="0.6*" MinWidth="52" Header="PID"
+                                                        SortMemberPath="Pid"
+                                                        ElementStyle="{StaticResource DcCellTextMono}"
+                                                        Binding="{Binding PidText}" />
+                                    <DataGridTextColumn Width="1*" MinWidth="64" Header="Agent"
+                                                        SortMemberPath="Agent"
+                                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                        Binding="{Binding Agent}" />
+                                    <DataGridTextColumn Width="1.5*" MinWidth="80" Header="Providers"
+                                                        SortMemberPath="Providers"
+                                                        ElementStyle="{StaticResource DcCellTextQuiet}"
+                                                        Binding="{Binding Providers}" />
+                                    <DataGridTemplateColumn Width="1*" MinWidth="80" Header="Inventory" SortMemberPath="Verdict">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Style="{StaticResource DcToneText}"
+                                                           Tag="{Binding VerdictTone}"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding Verdict}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </ui:DataGrid.Columns>
+                            </ui:DataGrid>
+                        </Border>
+
+                        <!-- The inspector: opens while a finding is selected. The inventory verdict is always shown, "unobserved" included. -->
+                        <ctl:DcInspector x:Name="Inspector"
+                                         Title="Finding details"
+                                         IsOpen="{Binding HasSelection}"
+                                         CloseCommand="{Binding ClearSelectionCommand}"
+                                         CloseAutomationName="Close finding details"
+                                         AutomationProperties.Name="Finding details"
+                                         Content="{Binding SelectedFinding}">
+                            <ctl:DcInspector.Badges>
+                                <ctl:DcSeverityBadge Text="{Binding SelectedFinding.Severity}" Tone="{Binding SelectedFinding.SeverityTone}" />
+                            </ctl:DcInspector.Badges>
+                            <ctl:DcInspector.ContentTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0" Text="{Binding Process}" />
+                                        <TextBlock Style="{StaticResource DcTextSecondary}" Margin="0,2,0,0" Text="{Binding Headline}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,8,0,0">
+                                            <Run Text="pid " /><Run Text="{Binding PidText, Mode=OneWay}" /><Run Text=", user " /><Run Text="{Binding User, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Agent, StringFormat='agent: {0}'}" Visibility="{Binding HasAgent, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding SeenText}" Visibility="{Binding HasSeen, Converter={StaticResource BoolToVisibility}}" />
+
+                                        <StackPanel Visibility="{Binding HasCmdline, Converter={StaticResource BoolToVisibility}}">
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Code24" Section="Discover" Content="Command line" />
+                                            <Border Style="{StaticResource DcCodeBlock}">
+                                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="Command line, credentials masked"
+                                                         Text="{Binding Cmdline, Mode=OneWay}" />
+                                            </Border>
+                                        </StackPanel>
+
+                                        <StackPanel Visibility="{Binding HasChain, Converter={StaticResource BoolToVisibility}}">
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="BranchFork24" Section="Discover" Content="Observed sequence" />
+                                            <Border Style="{StaticResource DcCodeBlock}">
+                                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="Observed sequence, in order"
+                                                         Text="{Binding Chain, Mode=OneWay}" />
+                                            </Border>
+                                        </StackPanel>
+
+                                        <StackPanel Visibility="{Binding HasProviders, Converter={StaticResource BoolToVisibility}}">
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Link24" Section="Discover" Content="Providers" />
+                                            <ItemsControl Focusable="False" ItemsSource="{Binding ProviderRows}" AutomationProperties.Name="Providers this process reached">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Margin="0,0,0,6">
+                                                            <TextBlock Style="{StaticResource DcMono}" Text="{Binding Display}" />
+                                                            <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Detail}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <StackPanel Visibility="{Binding HasSignals, Converter={StaticResource BoolToVisibility}}">
+                                            <ctl:DcCardHeader Margin="0,14,0,4" Symbol="TextBulletList24" Section="Discover" Content="Signals" />
+                                            <ItemsControl Focusable="False" ItemsSource="{Binding SignalRows}" AutomationProperties.Name="Weighted signals">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Margin="0,0,0,6">
+                                                            <TextBlock Style="{StaticResource DcMono}" TextWrapping="Wrap">
+                                                                <Run Text="{Binding WeightText, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Id, Mode=OneWay}" />
+                                                            </TextBlock>
+                                                            <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding Title}" Visibility="{Binding HasTitle, Converter={StaticResource BoolToVisibility}}" />
+                                                            <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding Detail}" Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <ctl:DcCardHeader Margin="0,14,0,4" Symbol="DocumentSearch24" Section="Discover" Content="Inventory" />
+                                        <TextBlock Style="{StaticResource DcToneText}" Tag="{Binding VerdictTone}" Text="{Binding Verdict}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding VerdictReason}" Visibility="{Binding HasVerdictReason, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding VerdictMatches, StringFormat='matched inventory signals: {0}'}" Visibility="{Binding HasVerdictMatches, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding VerdictCategories, StringFormat='categories: {0}'}" Visibility="{Binding HasVerdictCategories, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ctl:DcInspector.ContentTemplate>
+                        </ctl:DcInspector>
+                    </Grid>
+
+                    <!-- Nothing listed: the caveat is the content. -->
+                    <Border Style="{StaticResource DcCard}"
+                            Margin="{StaticResource DcCardGap}"
+                            Visibility="{Binding ShowNoFindings, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}">
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{x:Static vm:AiRuntimePanelViewModel.NoFindingsTitle}" AutomationProperties.LiveSetting="Polite" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding NoFindingsDetail}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Findings exist and the filter hides them all. -->
+                    <Border Style="{StaticResource DcCard}"
+                            Margin="{StaticResource DcCardGap}"
+                            Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Style="{StaticResource DcEmptyState}">
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No finding matches the filter" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Clear or change the filter above to see the others." />
+                            <ui:Button Margin="0,12,0,0" Content="Clear filter" Command="{Binding ClearFilterCommand}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- What can be done. Each button opens the shared review; none runs by itself. -->
+                <TextBlock Style="{StaticResource DcSectionHeader}" Text="Runtime planes" />
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcTextSecondary}"
+                                   Text="Poll the planes now, or turn them on or off. Each opens a review with the exact command first; nothing runs until you confirm." />
+
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,12,0,0">
+                            <ui:Button Appearance="Primary"
+                                       Content="Poll now…"
+                                       Icon="{ctl:DcSymbolIcon Flash24}"
+                                       Command="{Binding PollNowCommand}"
+                                       ToolTip="defenseclaw agent discovery runtime scan: asks the gateway to poll the planes immediately."
+                                       AutomationProperties.HelpText="Asks the gateway to poll the runtime planes right now. Shows the exact command first." />
+                            <ui:Button Content="{Binding EnableButtonText}"
+                                       Icon="{ctl:DcSymbolIcon Power24}"
+                                       Command="{Binding EnablePlanesCommand}"
+                                       ToolTip="defenseclaw agent discovery runtime enable: turns the planes on, or applies the settings below."
+                                       AutomationProperties.HelpText="Turns the runtime planes on, or applies the plane settings below. Shows the exact command first." />
+                            <ui:Button Content="Disable…"
+                                       Icon="{ctl:DcSymbolIcon PauseCircle24}"
+                                       Command="{Binding DisablePlanesCommand}"
+                                       ToolTip="defenseclaw agent discovery runtime disable: turns the planes off. Recorded findings are kept."
+                                       AutomationProperties.HelpText="Turns the runtime planes off. Shows the exact command first." />
+                        </WrapPanel>
+
+                        <!-- Why a button is off, as text. -->
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ActionsNote}"
+                                   Visibility="{Binding HasActionsNote, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding LastRunSummary}"
+                                   Visibility="{Binding HasLastRun, Converter={StaticResource BoolToVisibility}}" />
+
+                        <Expander Margin="0,12,0,0" Header="Plane settings used by Enable…">
+                            <StackPanel Margin="0,8,0,0">
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           TextWrapping="Wrap"
+                                           Text="Leave a setting on 'Keep as it is' (or blank) and the command does not mention it, so the runtime keeps what it has." />
+
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Agent actions (plane C)" />
+                                        <ComboBox SelectedIndex="{Binding HostPlaneIndex, Mode=TwoWay}"
+                                                  HorizontalAlignment="Left"
+                                                  MinWidth="200"
+                                                  AutomationProperties.Name="Agent actions, plane C"
+                                                  AutomationProperties.HelpText="On adds --enable-host-plane, off adds --no-enable-host-plane. Plane C needs an elevated gateway and the audit policy listed under Prerequisites.">
+                                            <ComboBoxItem Content="Keep as it is" />
+                                            <ComboBoxItem Content="On" />
+                                            <ComboBoxItem Content="Off" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="DNS capture" />
+                                        <ComboBox SelectedIndex="{Binding DnsCaptureIndex, Mode=TwoWay}"
+                                                  HorizontalAlignment="Left"
+                                                  MinWidth="200"
+                                                  AutomationProperties.Name="DNS capture"
+                                                  AutomationProperties.HelpText="On adds --dns-capture so peers are named from the answers this PC resolved; off adds --no-dns-capture.">
+                                            <ComboBoxItem Content="Keep as it is" />
+                                            <ComboBoxItem Content="On" />
+                                            <ComboBoxItem Content="Off" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Poll interval, seconds (5 to 3600)" />
+                                        <ui:TextBox Width="200"
+                                                    HorizontalAlignment="Left"
+                                                    PlaceholderText="Keep the current one"
+                                                    AutomationProperties.Name="Poll interval in seconds"
+                                                    Text="{Binding PollIntervalText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Style="{StaticResource DcField}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Text="Reporting floor, score (1 to 100)" />
+                                        <ui:TextBox Width="200"
+                                                    HorizontalAlignment="Left"
+                                                    PlaceholderText="Keep the current one"
+                                                    AutomationProperties.Name="Reporting floor"
+                                                    Text="{Binding MinRiskText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <CheckBox Margin="0,4,0,0"
+                                          Content="Restart the gateway now"
+                                          IsChecked="{Binding RestartOnChange}"
+                                          ToolTip="On: the gateway restarts so the change takes effect. Off: only config.yaml changes (--no-restart); it applies at the next restart."
+                                          AutomationProperties.HelpText="Applies to Enable, Change settings and Disable." />
+
+                                <ui:InfoBar Margin="0,8,0,0"
+                                            Severity="Error"
+                                            IsClosable="False"
+                                            IsOpen="{Binding HasOptionsError}"
+                                            Message="{Binding OptionsError}"
+                                            AutomationProperties.LiveSetting="Assertive" />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </Border>
+
+                <!-- What this PC needs. Read-only: the lines are text to copy, never run by this app. -->
+                <TextBlock Style="{StaticResource DcSectionHeader}" Text="Prerequisites on this PC" />
+                <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ctl:DcCardHeader Symbol="ShieldLock24" Section="Setup" Content="What each plane needs" />
+                            <ui:ProgressRing Width="18"
+                                             Height="18"
+                                             Margin="10,0,0,8"
+                                             IsIndeterminate="True"
+                                             AutomationProperties.Name="Asking the runtime what each plane needs"
+                                             Visibility="{Binding IsReadingPrerequisites, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource DcTextSecondary}" TextWrapping="Wrap" Text="{x:Static vm:AiRuntimePanelViewModel.WindowsNote}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding GuidanceOsNote}"
+                                   Visibility="{Binding HasGuidanceOs, Converter={StaticResource BoolToVisibility}}" />
+
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   Margin="0,10,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding PrerequisitesMessage}"
+                                   Visibility="{Binding ShowPrerequisitesMessage, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.LiveSetting="Polite" />
+
+                        <ItemsControl Margin="0,10,0,0"
+                                      Focusable="False"
+                                      ItemsSource="{Binding Grants}"
+                                      Visibility="{Binding ShowGrants, Converter={StaticResource BoolToVisibility}}"
+                                      AutomationProperties.Name="Plane prerequisites">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,12" AutomationProperties.Name="{Binding AutomationName}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Style="{StaticResource DcBadge}" Tag="{Binding ToneKey}" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ctl:DcStatusGlyph Tone="{Binding ToneKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StateText}" />
+                                                </StackPanel>
+                                            </Border>
+                                            <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" VerticalAlignment="Center" Text="{Binding Plane}" />
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource DcTextSecondary}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding Needs, StringFormat='Needs: {0}'}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding Why}" />
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   Margin="0,2,0,0"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding How, StringFormat='To grant: {0}'}"
+                                                   Visibility="{Binding HasHow, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding PrerequisitesSummary}"
+                                   Visibility="{Binding ShowGrants, Converter={StaticResource BoolToVisibility}}" />
+
+                        <!-- Copy-only. -->
+                        <StackPanel Visibility="{Binding HasCommands, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Style="{StaticResource DcBody}" Margin="0,12,0,4" FontWeight="SemiBold" Text="Commands to run yourself, in an elevated prompt" />
+                            <Border Style="{StaticResource DcCodeBlock}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         TextWrapping="NoWrap"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="Commands to copy (this app does not run them)"
+                                         Text="{Binding CommandsText, Mode=OneWay}" />
+                            </Border>
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap" Text="{x:Static vm:AiRuntimePanelViewModel.CopyOnlyNote}" />
+                        </StackPanel>
+
+                        <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,12,0,0">
+                            <ui:Button Content="Copy commands"
+                                       Icon="{ctl:DcSymbolIcon Copy24}"
+                                       Command="{Binding CopyCommandsCommand}"
+                                       Visibility="{Binding HasCommands, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.HelpText="Puts the command lines on the clipboard. Nothing is run." />
+                            <ui:Button Content="Check again"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                       Command="{Binding CheckPrerequisitesCommand}"
+                                       ToolTip="defenseclaw agent discovery runtime permissions --json (read-only)"
+                                       AutomationProperties.HelpText="Asks the runtime again what each plane needs. Read-only." />
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="{Binding CopyNote}"
+                                   Visibility="{Binding HasCopyNote, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.LiveSetting="Polite" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Confirm-and-run dialog (collapsed until a change is requested). -->
+        <panels:DiscoverReviewOverlay Grid.RowSpan="2" DataContext="{Binding Review}" />
+    </Grid>
+</UserControl>

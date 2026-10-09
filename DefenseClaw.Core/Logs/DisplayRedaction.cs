@@ -77,6 +77,13 @@ public static partial class DisplayRedaction
         TimeoutMilliseconds)]
     private static partial Regex Assignment();
 
+    // The same pass without its whitespace form, for sentences (see Prose): "an elevated token to read the log" is prose, not "token = to".
+    [GeneratedRegex(
+        "(?<![A-Za-z0-9])((?:" + KeyWords + @")\s*[=:]\s*|(?:" + ExplicitWords + @")\s*[=:]\s*|bearer\s+)" + AssignedValue,
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        TimeoutMilliseconds)]
+    private static partial Regex ProseAssignment();
+
     // A name that runs straight into the word - mysecret=, csrftoken=, authToken:, dbpassword= - which the pass above does not see
     // because a letter or digit stands in front of it. Only "=" or ":", and only when something precedes the word, so the two passes
     // never cover the same text.
@@ -117,7 +124,19 @@ public static partial class DisplayRedaction
     /// </summary>
     /// <param name="value">The text to display.</param>
     /// <param name="limit">The most characters to keep, after masking; <see cref="int.MaxValue"/> for no limit.</param>
-    public static string Text(string? value, int limit = DefaultLimit)
+    public static string Text(string? value, int limit = DefaultLimit) => Redact(value, limit, bareWordAssignments: true);
+
+    /// <summary>
+    /// <see cref="Text"/> for a sentence a program wrote for a person (a plane's reason, a degraded line, guidance), as opposed to a
+    /// command line or a log record. Every pass runs except one: a credential word followed by a space and a word is <i>not</i> taken as an
+    /// assignment. Without that, "the gateway needs an elevated token to read the Security channel" comes out as "an elevated token
+    /// [redacted] read the Security channel" - the reason is the whole point of showing it, and "token" is an ordinary word in prose. What
+    /// still goes: <c>name=value</c> and <c>name: value</c> for the credential names, JSON members, <c>Authorization</c> and cookie headers, a
+    /// bearer credential, PEM blocks, webhook URLs, the token shapes with a published prefix, and the password of a URL.
+    /// </summary>
+    public static string Prose(string? value, int limit = DefaultLimit) => Redact(value, limit, bareWordAssignments: false);
+
+    private static string Redact(string? value, int limit, bool bareWordAssignments)
     {
         if (string.IsNullOrEmpty(value))
         {
@@ -134,7 +153,7 @@ public static partial class DisplayRedaction
 
             // JSON members before assignments: the assignment pass would otherwise take the closing quote and brace of a value with it.
             masked = JsonMember().Replace(masked, "$1\"" + Mask + "\"");
-            masked = Assignment().Replace(masked, "$1" + Mask);
+            masked = (bareWordAssignments ? Assignment() : ProseAssignment()).Replace(masked, "$1" + Mask);
             masked = RunOnAssignment().Replace(masked, "$1" + Mask);
 
             // What a secret looks like wherever it stands, with no name in front of it to give it away.

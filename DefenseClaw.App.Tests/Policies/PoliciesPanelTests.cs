@@ -522,7 +522,7 @@ public sealed class PoliciesPanelTests : IDisposable
         Assert.NotNull(descriptor);
         Assert.Equal("Configure", descriptor.Group);
         Assert.Equal(typeof(DefenseClaw.App.Views.Panels.PoliciesPanel), descriptor.ViewType);
-        Assert.Equal("Ctrl+Shift+4", ShellShortcuts.PanelChordText(catalog.SidebarOrder.ToList().FindIndex(p => p.Id == "policies")));
+        Assert.Equal("Ctrl+Shift+4", catalog.ChordTextOf(descriptor));
         Assert.Contains(ShellCommandRegistry.BuildPanelCommands(catalog, _ => { }), c => c.Title == "Go to Policies");
     }
 }

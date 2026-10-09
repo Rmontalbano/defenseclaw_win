@@ -1,0 +1,20 @@
+Usage: defenseclaw agent discovery runtime [OPTIONS] COMMAND [ARGS]...
+
+  Inspect the AI discovery runtime planes.
+
+  Where the surrounding ``discovery`` commands inventory what is present,
+  these report what actually ran: sustained inference compute, per-process
+  egress to a provider, and -- when the host plane is enabled -- the sequence
+  of actions an agent took.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  disable      Turn off the runtime planes. Recorded findings are preserved.
+  enable       Turn on the runtime planes.
+  findings     List scored runtime findings.
+  permissions  What each runtime plane needs, and how to grant it.
+  scan         Poll the runtime planes immediately.
+  selftest     Report what this host's planes can and cannot see, and why.
+  status       Show what the runtime planes can and cannot see right now.

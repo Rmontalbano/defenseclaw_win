@@ -14,6 +14,7 @@ public sealed class RuntimeCapabilities
 {
     private readonly FrozenSet<RuntimeCapability> _present;
     private readonly FrozenSet<string> _setupCommands;
+    private readonly FrozenSet<string> _aiRuntimeCommands;
 
     /// <summary>Nothing known: every capability is absent.</summary>
     public static RuntimeCapabilities Unknown { get; } = new(
@@ -26,11 +27,15 @@ public sealed class RuntimeCapabilities
         bool isKnown,
         IEnumerable<RuntimeCapability> present,
         IEnumerable<string> setupCommands,
-        IEnumerable<string> notes)
+        IEnumerable<string> notes,
+        IEnumerable<string>? aiRuntimeCommands = null)
     {
         IsKnown = isKnown;
         _present = isKnown ? present.ToFrozenSet() : FrozenSet<RuntimeCapability>.Empty;
         _setupCommands = isKnown ? setupCommands.ToFrozenSet(StringComparer.Ordinal) : FrozenSet<string>.Empty;
+        _aiRuntimeCommands = isKnown && aiRuntimeCommands is not null
+            ? aiRuntimeCommands.ToFrozenSet(StringComparer.Ordinal)
+            : FrozenSet<string>.Empty;
         Notes = notes.ToArray();
     }
 
@@ -54,6 +59,17 @@ public sealed class RuntimeCapabilities
 
     /// <summary>Every <c>setup</c> subcommand the probe saw.</summary>
     public IReadOnlyCollection<string> SetupCommands => _setupCommands.Items.ToArray();
+
+    /// <summary>
+    /// True when <c>defenseclaw agent discovery runtime --help</c> listed <paramref name="name"/> (<c>status</c>, <c>scan</c>, <c>findings</c>,
+    /// <c>selftest</c>, <c>permissions</c>, <c>enable</c>, <c>disable</c>). The per-subcommand gate behind the Runtime panel's buttons, the way
+    /// the macOS companion keeps its <c>runtimeDiscoveryCommands</c>: a runtime that lists <c>scan</c> but not <c>enable</c> offers Poll now and
+    /// not Enable. Unknown, and a runtime without the group, mean false.
+    /// </summary>
+    public bool HasAiRuntimeCommand(string name) => name is not null && _aiRuntimeCommands.Contains(name);
+
+    /// <summary>Every <c>agent discovery runtime</c> subcommand the probe saw (empty unless the runtime has the group).</summary>
+    public IReadOnlyCollection<string> AiRuntimeCommands => _aiRuntimeCommands.Items.ToArray();
 }
 
 /// <summary>Who the connected runtime says it is: <c>defenseclaw --version-json</c>, and which executable answered.</summary>

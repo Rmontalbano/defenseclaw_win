@@ -1,0 +1,13 @@
+Usage: defenseclaw agent discovery [OPTIONS] COMMAND [ARGS]...
+
+  Toggle and inspect the sidecar AI discovery service.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  disable  Disable the sidecar AI discovery service.
+  enable   Enable the sidecar AI discovery service.
+  scan     Trigger one immediate AI discovery scan via the sidecar.
+  setup    Walk an interactive wizard for AI discovery settings.
+  status   Show on-disk + live AI discovery status.

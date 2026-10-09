@@ -58,10 +58,14 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// <summary>
     /// Whether <paramref name="panel"/> may be offered right now: open for a panel that requires nothing, and for one whose required
     /// capability the connected runtime has; closed (with the standard sentence) otherwise, including before the runtime has been probed.
-    /// The command palette uses it today; a panel that sets <see cref="PanelDescriptor.Requires"/> is a one-line change there.
+    /// The command palette shows a closed panel's "Go to" row disabled with the sentence; the sidebar hides its entry, its number chord
+    /// does nothing, and <c>MainWindow</c> will not navigate to it (the Runtime panel, CUST-309, is the first to require anything).
     /// </summary>
     internal GateDecision Gate(PanelDescriptor panel) =>
         RuntimeGate.Check(_services.Runtime.Capabilities, panel.Requires);
+
+    /// <summary>True when <paramref name="panel"/> is on offer right now (see <see cref="Gate"/>).</summary>
+    internal bool IsOffered(PanelDescriptor panel) => Gate(panel).IsAvailable;
 
     /// <summary>Sidebar groups, in display order.</summary>
     public static readonly IReadOnlyList<string> Groups = new[]
@@ -134,6 +138,8 @@ public sealed class PanelCatalog : INavigationViewPageProvider
                 typeof(InventoryPanel), s => new InventoryPanelViewModel(s)),
             new("ai-discovery", "AI Discovery", "Discover", SymbolRegular.Bot24,
                 typeof(AiDiscoveryPanel), s => new AiDiscoveryPanelViewModel(s)),
+            new("ai-runtime", "Runtime", "Discover", SymbolRegular.Pulse24,
+                typeof(AiRuntimePanel), s => new AiRuntimePanelViewModel(s), RuntimeCapability.AiRuntime),
             new("registries", "Registries", "Discover", SymbolRegular.Library24,
                 typeof(RegistriesPanel), s => new RegistriesPanelViewModel(s)),
 
@@ -177,13 +183,51 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// <summary>
     /// Every panel in the order the sidebar shows them: group by group (<see cref="Groups"/>),
     /// catalog order within a group. This — not <see cref="Panels"/>, which only happens to be
-    /// grouped already — is the order the Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…3 chords count in.
-    /// The footer panels (<see cref="FooterPanels"/>) are not in it.
+    /// grouped already — is the order the sidebar and the command palette list them in; the number
+    /// chords (Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…5) count in <see cref="ChordOrder"/>, which is this order
+    /// with the panels that need a newer runtime moved after the others.
+    /// The footer panels (<see cref="FooterPanels"/>) are not in it. A panel the connected runtime does not
+    /// offer is in it all the same (see <see cref="IsOffered"/>): the sidebar hides its entry, this list does not.
     /// </summary>
     public IReadOnlyList<PanelDescriptor> SidebarOrder =>
         _sidebarOrder ??= Groups.SelectMany(InGroup).ToArray();
 
     private PanelDescriptor[]? _sidebarOrder;
+
+    /// <summary>
+    /// The order the number chords count in: the panels that need nothing first, in sidebar order, then the ones that need a newer runtime
+    /// (<see cref="PanelDescriptor.Requires"/>), in sidebar order. Every chord a panel has today therefore stays where it is whether or not the
+    /// connected runtime has a panel in the middle of the sidebar: an upgrade must not re-bind Ctrl+Shift+2. The Runtime panel is
+    /// the fifteenth, Ctrl+Shift+5.
+    /// </summary>
+    public IReadOnlyList<PanelDescriptor> ChordOrder =>
+        _chordOrder ??= SidebarOrder.Where(p => p.Requires is null).Concat(SidebarOrder.Where(p => p.Requires is not null)).ToArray();
+
+    private PanelDescriptor[]? _chordOrder;
+
+    /// <summary>
+    /// The chord text of <paramref name="panel"/> (<c>Ctrl+3</c>) whether or not it is on offer right now, or null when it has none (a footer
+    /// panel, or past the last numbered one). What a sidebar entry's tooltip says; it is hidden while the panel is not offered.
+    /// </summary>
+    internal string? ChordTextOf(PanelDescriptor panel)
+    {
+        for (var i = 0; i < ChordOrder.Count; i++)
+        {
+            if (ReferenceEquals(ChordOrder[i], panel))
+            {
+                return ShellShortcuts.PanelChordText(i);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary><see cref="ChordTextOf"/> for a panel that is on offer; null for one that is not (its chord does nothing, so no row lists it).</summary>
+    internal string? ChordFor(PanelDescriptor panel) => IsOffered(panel) ? ChordTextOf(panel) : null;
+
+    /// <summary>The panel the chord at <paramref name="index"/> (0-based in <see cref="ChordOrder"/>) selects, or null when there is none or it is not on offer.</summary>
+    internal PanelDescriptor? PanelForChord(int index) =>
+        index >= 0 && index < ChordOrder.Count && IsOffered(ChordOrder[index]) ? ChordOrder[index] : null;
 
     /// <summary>The panel the shell opens on first launch.</summary>
     public PanelDescriptor Default => Panels[0];
@@ -306,19 +350,20 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// <summary>
     /// The panel the window should open on: the one a navigation request is waiting for (a request raised while no window
     /// existed, which built it), else the last one shown when the operator asked to reopen on it (<c>startup.rememberLastPanel</c>;
-    /// a panel that no longer exists is ignored), else <see cref="Default"/>.
+    /// a panel that no longer exists is ignored), else <see cref="Default"/>. A panel that is not on offer (<see cref="IsOffered"/>) is
+    /// never the answer: its sidebar entry is hidden, so the window would open on a page nothing in the shell can reach.
     /// </summary>
     public PanelDescriptor InitialPanel
     {
         get
         {
-            if (_services.Navigation.Pending is { } request && ById(request.PanelId) is { } requested)
+            if (_services.Navigation.Pending is { } request && ById(request.PanelId) is { } requested && IsOffered(requested))
             {
                 return requested;
             }
 
             var startup = _services.Settings.Current.Startup;
-            return startup.RememberLastPanel && startup.LastPanelId is { Length: > 0 } last && ById(last) is { } remembered
+            return startup.RememberLastPanel && startup.LastPanelId is { Length: > 0 } last && ById(last) is { } remembered && IsOffered(remembered)
                 ? remembered
                 : Default;
         }

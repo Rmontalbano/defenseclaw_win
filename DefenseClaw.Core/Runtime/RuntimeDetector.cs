@@ -216,7 +216,8 @@ public sealed class RuntimeDetector
         a.Capabilities.IsKnown == b.Capabilities.IsKnown &&
         a.Capabilities.Present.SequenceEqual(b.Capabilities.Present) &&
         a.Capabilities.Notes.SequenceEqual(b.Capabilities.Notes, StringComparer.Ordinal) &&
-        a.Capabilities.SetupCommands.Order(StringComparer.Ordinal).SequenceEqual(b.Capabilities.SetupCommands.Order(StringComparer.Ordinal));
+        a.Capabilities.SetupCommands.Order(StringComparer.Ordinal).SequenceEqual(b.Capabilities.SetupCommands.Order(StringComparer.Ordinal)) &&
+        a.Capabilities.AiRuntimeCommands.Order(StringComparer.Ordinal).SequenceEqual(b.Capabilities.AiRuntimeCommands.Order(StringComparer.Ordinal));
 
     private async Task<RuntimeProbeScreens> CollectAsync(string source, CancellationToken token)
     {
@@ -245,27 +246,34 @@ public sealed class RuntimeDetector
             }
         }
 
-        // The version document first: without it nothing else matters, and a CLI that is gone or wedged costs one probe, not eight.
+        // The version document first: without it nothing else matters, and a CLI that is gone or wedged costs one probe, not all of them.
         var version = await Run("--version-json").ConfigureAwait(false);
         if (RuntimeProbe.ParseVersionJson(version, source) is null)
         {
-            return new RuntimeProbeScreens(version, null, null, null, null, null, null, null);
+            return new RuntimeProbeScreens(version, null, null, null, null, null, null, null, null, null);
         }
 
         var rootTask = Run("--help");
         var setupTask = Run("setup", "--help");
         var guardrailTask = Run("guardrail", "--help");
         var configTask = Run("config", "--help");
-        await Task.WhenAll(rootTask, setupTask, guardrailTask, configTask).ConfigureAwait(false);
+
+        // 0.8.10 has this screen too (it lists disable, enable, scan, setup and status); what it lists decides whether the runtime planes exist.
+        var discoveryTask = Run("agent", "discovery", "--help");
+        await Task.WhenAll(rootTask, setupTask, guardrailTask, configTask, discoveryTask).ConfigureAwait(false);
 
         var root = RuntimeProbe.ParseCommands(rootTask.Result);
         var setup = RuntimeProbe.ParseCommands(setupTask.Result);
+        var discovery = RuntimeProbe.ParseCommands(discoveryTask.Result);
 
-        // Second round, only for what the first one says exists: a runtime without 'acp' is never asked about it.
+        // Second round, only for what the first one says exists: a runtime without 'acp' is never asked about it, and the runtime planes'
+        // own screen is asked for when (and only when) 'agent discovery --help' lists 'runtime'. 0.8.10's does not, so it costs that
+        // runtime nothing.
         var acpTask = root.Contains("acp") ? Run("acp", "--help") : Task.FromResult<string?>(null);
         var sandboxTask = root.Contains("sandbox") ? Run("sandbox", "--help") : Task.FromResult<string?>(null);
         var redactionTask = setup.Contains("redaction") ? Run("setup", "redaction", "--help") : Task.FromResult<string?>(null);
-        await Task.WhenAll(acpTask, sandboxTask, redactionTask).ConfigureAwait(false);
+        var discoveryRuntimeTask = discovery.Contains("runtime") ? Run("agent", "discovery", "runtime", "--help") : Task.FromResult<string?>(null);
+        await Task.WhenAll(acpTask, sandboxTask, redactionTask, discoveryRuntimeTask).ConfigureAwait(false);
 
         return new RuntimeProbeScreens(
             version,
@@ -275,7 +283,9 @@ public sealed class RuntimeDetector
             configTask.Result,
             sandboxTask.Result,
             acpTask.Result,
-            redactionTask.Result);
+            redactionTask.Result,
+            discoveryTask.Result,
+            discoveryRuntimeTask.Result);
     }
 }
 

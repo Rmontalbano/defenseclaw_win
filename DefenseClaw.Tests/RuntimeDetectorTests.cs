@@ -45,6 +45,8 @@ public class RuntimeDetectorTests
                 "sandbox --help" => "sandbox.txt",
                 "acp --help" => "acp.txt",
                 "setup redaction --help" => "setup-redaction.txt",
+                "agent discovery --help" => "agent-discovery.txt",
+                "agent discovery runtime --help" => "agent-discovery-runtime.txt",
                 _ => null,
             };
 
@@ -63,7 +65,7 @@ public class RuntimeDetectorTests
         };
 
     [Fact]
-    public async Task Against_0_8_10_it_asks_six_questions_and_never_about_acp_or_redaction()
+    public async Task Against_0_8_10_it_asks_seven_questions_and_never_about_acp_redaction_or_the_runtime_planes()
     {
         var runtime = new FixtureRuntime("0.8.10");
         var detector = Detector(runtime.Run, () => "fp1");
@@ -74,7 +76,7 @@ public class RuntimeDetectorTests
         Assert.Equal("0.8.10", snapshot.Identity!.Version);
         Assert.Empty(snapshot.Capabilities.Present);
         Assert.Equal(
-            new[] { "--help", "--version-json", "config --help", "guardrail --help", "sandbox --help", "setup --help" },
+            new[] { "--help", "--version-json", "agent discovery --help", "config --help", "guardrail --help", "sandbox --help", "setup --help" },
             runtime.Asked.Order(StringComparer.Ordinal).ToArray());
         Assert.Same(snapshot, detector.Current);
     }
@@ -91,7 +93,11 @@ public class RuntimeDetectorTests
         Assert.Equal(RuntimeCapabilityCatalog.All, snapshot.Capabilities.Present.ToArray());
         Assert.Contains("acp --help", runtime.Asked);
         Assert.Contains("setup redaction --help", runtime.Asked);
-        Assert.Equal(8, runtime.Asked.Count);
+
+        // The planes' own screen is asked for only because 'agent discovery --help' listed 'runtime'.
+        Assert.Contains("agent discovery --help", runtime.Asked);
+        Assert.Contains("agent discovery runtime --help", runtime.Asked);
+        Assert.Equal(10, runtime.Asked.Count);
 
         // Read-only by construction: help screens and the version document, nothing else.
         Assert.All(runtime.Asked, probe => Assert.True(
@@ -257,7 +263,7 @@ public class RuntimeDetectorTests
         gate.SetResult();
 
         Assert.Same(await a, await b);
-        Assert.Equal(6, calls);
+        Assert.Equal(7, calls);
     }
 
     [Fact]
@@ -298,6 +304,11 @@ public class RuntimeDetectorTests
     [InlineData("setup --help", true)]
     [InlineData("setup redaction --help", true)]
     [InlineData("setup redaction apply", false)]
+    [InlineData("agent discovery --help", true)]
+    [InlineData("agent discovery runtime --help", true)]
+    [InlineData("agent discovery runtime permissions --json", false)]
+    [InlineData("agent discovery runtime permissions --grant", false)]
+    [InlineData("agent discovery runtime scan", false)]
     [InlineData("setup --yes --help", false)]
     [InlineData("keys set --help", true)]
     [InlineData("--version-json extra", false)]

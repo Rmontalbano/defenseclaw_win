@@ -1,0 +1,60 @@
+{
+  "enabled": true,
+  "scanned_at": "2030-01-15T10:04:30Z",
+  "findings": [
+    {
+      "finding_id": "00000000-0000-4000-8000-000000000201",
+      "pid": 7788,
+      "process": "node.exe",
+      "cmdline": "node.exe C:\\Users\\operator\\tools\\assistant\\index.js",
+      "user": "EXAMPLE\\operator",
+      "score": 44,
+      "severity": "medium",
+      "signals": [
+        {"id": "shadow_ai_egress", "title": "connection to a known AI provider", "detail": "api.provider-a.example (frontier)", "weight": 30},
+        {"id": "model_resident_memory", "title": "resident memory large enough to hold model weights", "detail": "node.exe", "weight": 14}
+      ],
+      "providers": [
+        {"hostname": "api.provider-a.example", "address": "203.0.113.10", "port": 443, "category": "frontier", "confidence": 0.6, "attribution_source": "reverse dns"}
+      ],
+      "correlation": {
+        "verdict": "unobserved",
+        "reason": "the discovery inventory was never scanned, so it is not evidence either way"
+      },
+      "first_seen": "2030-01-15T10:03:00Z",
+      "last_seen": "2030-01-15T10:04:30Z"
+    },
+    {
+      "finding_id": "00000000-0000-4000-8000-000000000202",
+      "pid": 6001,
+      "process": "python.exe",
+      "cmdline": "python.exe notebook.py",
+      "user": "EXAMPLE\\operator",
+      "score": 32,
+      "severity": "medium",
+      "signals": [
+        {"id": "local_inference_client", "title": "process is calling a local model server", "weight": 32}
+      ],
+      "correlation": {
+        "verdict": "unobserved",
+        "reason": "the discovery inventory was never scanned, so it is not evidence either way"
+      }
+    }
+  ],
+  "planes": [
+    {"plane": "a", "name": "inference heartbeat", "available": true, "running": true, "mechanism": "Toolhelp32 snapshot, GetProcessTimes, GetProcessMemoryInfo"},
+    {"plane": "b", "name": "shadow egress", "available": true, "running": true, "mechanism": "GetExtendedTcpTable and GetExtendedUdpTable; peers named by reverse DNS (dns_capture off)", "reason": "egress attribution is limited to this process's own sockets; run the gateway elevated for machine-wide coverage"},
+    {"plane": "c", "name": "agent actions", "available": false, "running": false, "reason": "plane: Security event log unreadable: Access is denied. (the gateway needs an elevated token to read the Security channel)"}
+  ],
+  "processes_observed": 198,
+  "processes_skipped": 41,
+  "connections_observed": 96,
+  "connections_unattributed": 52,
+  "host_plane_observations": 0,
+  "host_plane_gated": 0,
+  "degraded": true,
+  "degraded_reasons": [
+    "agent actions unavailable: plane: Security event log unreadable: Access is denied. (the gateway needs an elevated token to read the Security channel)",
+    "shadow egress partially covered: egress attribution is limited to this process's own sockets; run the gateway elevated for machine-wide coverage"
+  ]
+}

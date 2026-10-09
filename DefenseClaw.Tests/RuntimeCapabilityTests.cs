@@ -22,7 +22,9 @@ public class RuntimeCapabilityTests
         ConfigHelp: Fixture(set, "config.txt"),
         SandboxHelp: Fixture(set, "sandbox.txt"),
         AcpHelp: Has(set, "acp.txt") ? Fixture(set, "acp.txt") : null,
-        RedactionHelp: Has(set, "setup-redaction.txt") ? Fixture(set, "setup-redaction.txt") : null);
+        RedactionHelp: Has(set, "setup-redaction.txt") ? Fixture(set, "setup-redaction.txt") : null,
+        DiscoveryHelp: Has(set, "agent-discovery.txt") ? Fixture(set, "agent-discovery.txt") : null,
+        DiscoveryRuntimeHelp: Has(set, "agent-discovery-runtime.txt") ? Fixture(set, "agent-discovery-runtime.txt") : null);
 
     private static RuntimeSnapshot Evaluate(RuntimeProbeScreens screens) =>
         RuntimeProbe.Evaluate(screens, "defenseclaw.exe", "fp", DateTimeOffset.UnixEpoch);
@@ -90,6 +92,114 @@ public class RuntimeCapabilityTests
         var noGuardrail = Evaluate(pin with { GuardrailHelp = null }).Capabilities;
         Assert.False(noGuardrail.Has(RuntimeCapability.PolicyModel));
         Assert.Contains(noGuardrail.Notes, n => n.Contains("guardrail --help", StringComparison.Ordinal));
+
+        var noRuntimePlanes = Evaluate(pin with { DiscoveryRuntimeHelp = null }).Capabilities;
+        Assert.False(noRuntimePlanes.Has(RuntimeCapability.AiRuntime));
+        Assert.True(noRuntimePlanes.Has(RuntimeCapability.AcpGuard));
+        Assert.True(noRuntimePlanes.Has(RuntimeCapability.Sandbox));
+    }
+
+    // ------------------------------------------------------------------ the runtime planes (CUST-309)
+
+    [Fact]
+    public void The_runtime_planes_are_absent_on_0_8_10_whose_discovery_screen_lists_no_runtime_group()
+    {
+        var snapshot = Evaluate(Screens("0.8.10") with { AcpHelp = null, RedactionHelp = null });
+
+        Assert.Contains("scan", RuntimeProbe.ParseCommands(Fixture("0.8.10", "agent-discovery.txt")));
+        Assert.DoesNotContain("runtime", RuntimeProbe.ParseCommands(Fixture("0.8.10", "agent-discovery.txt")));
+        Assert.False(snapshot.Capabilities.Has(RuntimeCapability.AiRuntime));
+        Assert.Empty(snapshot.Capabilities.AiRuntimeCommands);
+        Assert.False(snapshot.Capabilities.HasAiRuntimeCommand("scan"));
+        Assert.Empty(snapshot.Capabilities.Notes);
+    }
+
+    [Fact]
+    public void The_pinned_runtime_has_the_runtime_planes_and_every_subcommand_of_them()
+    {
+        var capabilities = Evaluate(Screens("95159fd")).Capabilities;
+
+        Assert.True(capabilities.Has(RuntimeCapability.AiRuntime));
+        Assert.Equal(
+            new[] { "disable", "enable", "findings", "permissions", "scan", "selftest", "status" },
+            capabilities.AiRuntimeCommands.Order(StringComparer.Ordinal).ToArray());
+        foreach (var command in new[] { "status", "scan", "findings", "permissions", "selftest", "enable", "disable" })
+        {
+            Assert.True(capabilities.HasAiRuntimeCommand(command), command);
+        }
+
+        Assert.False(capabilities.HasAiRuntimeCommand("grant"));
+        Assert.False(capabilities.HasAiRuntimeCommand(string.Empty));
+    }
+
+    [Fact]
+    public void Each_runtime_subcommand_is_judged_on_its_own_so_a_runtime_without_enable_still_offers_the_poll()
+    {
+        const string withoutEnable = """
+            Usage: defenseclaw agent discovery runtime [OPTIONS] COMMAND [ARGS]...
+
+            Commands:
+              findings     List scored runtime findings.
+              permissions  What each runtime plane needs.
+              scan         Poll the runtime planes immediately.
+              status       Show what the runtime planes can see.
+            """;
+
+        var capabilities = Evaluate(Screens("95159fd") with { DiscoveryRuntimeHelp = withoutEnable }).Capabilities;
+
+        Assert.True(capabilities.Has(RuntimeCapability.AiRuntime));
+        Assert.True(capabilities.HasAiRuntimeCommand("scan"));
+        Assert.False(capabilities.HasAiRuntimeCommand("enable"));
+        Assert.False(capabilities.HasAiRuntimeCommand("disable"));
+    }
+
+    [Theory]
+    [InlineData("status", "scan")]
+    [InlineData("status", "findings")]
+    [InlineData("scan", "permissions")]
+    public void A_runtime_screen_that_lacks_one_of_the_four_marker_commands_does_not_open_the_panel(string first, string second)
+    {
+        var help = $"Commands:\n  {first}  one\n  {second}  two\n";
+
+        var capabilities = Evaluate(Screens("95159fd") with { DiscoveryRuntimeHelp = help }).Capabilities;
+
+        Assert.False(capabilities.Has(RuntimeCapability.AiRuntime));
+        Assert.True(capabilities.Has(RuntimeCapability.AcpGuard));
+    }
+
+    [Fact]
+    public void A_runtime_screen_that_was_read_does_not_count_unless_the_discovery_screen_lists_the_group()
+    {
+        var capabilities = Evaluate(Screens("95159fd") with { DiscoveryHelp = Fixture("0.8.10", "agent-discovery.txt") }).Capabilities;
+
+        Assert.False(capabilities.Has(RuntimeCapability.AiRuntime));
+        Assert.Empty(capabilities.AiRuntimeCommands);
+    }
+
+    [Fact]
+    public void The_group_is_listed_but_its_screen_could_not_be_read_so_the_planes_stay_hidden_with_a_note()
+    {
+        var capabilities = Evaluate(Screens("95159fd") with { DiscoveryRuntimeHelp = null }).Capabilities;
+
+        Assert.False(capabilities.Has(RuntimeCapability.AiRuntime));
+        Assert.Contains(capabilities.Notes, n => n.Contains("agent discovery runtime --help", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_unreadable_discovery_screen_hides_the_planes_whatever_the_runtime_screen_says()
+    {
+        var capabilities = Evaluate(Screens("95159fd") with { DiscoveryHelp = null }).Capabilities;
+
+        Assert.False(capabilities.Has(RuntimeCapability.AiRuntime));
+        Assert.Empty(capabilities.AiRuntimeCommands);
+        Assert.Contains(capabilities.Notes, n => n.Contains("agent discovery --help", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_unknown_runtime_has_no_runtime_subcommands()
+    {
+        Assert.False(RuntimeCapabilities.Unknown.HasAiRuntimeCommand("scan"));
+        Assert.Empty(RuntimeCapabilities.Unknown.AiRuntimeCommands);
     }
 
     [Fact]

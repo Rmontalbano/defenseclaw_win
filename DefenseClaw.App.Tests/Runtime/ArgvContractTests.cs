@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DefenseClaw.App.Services.Guardrail;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.Core.AiRuntime;
 
 namespace DefenseClaw.App.Tests.Runtime;
 
@@ -101,6 +102,14 @@ public sealed class ArgvContractTests
             string.Join('\u001f', new[] { "agent", "discovery", "status", "--json" }),
             string.Join('\u001f', new[] { "agent", "discovery", "scan" }),
             string.Join('\u001f', new[] { "agent", "discover", "--refresh", "--no-emit-otel" }),
+            // the Runtime panel (CUST-309): the poll, the read-only prerequisites check, enable with every option, and disable
+            string.Join('\u001f', AiRuntimeCommands.PollNow),
+            string.Join('\u001f', AiRuntimeCommands.ReadPermissions),
+            string.Join('\u001f', AiRuntimeCommands.Enable(new AiRuntimeEnableOptions())),
+            string.Join('\u001f', AiRuntimeCommands.Enable(new AiRuntimeEnableOptions(HostPlane: true, DnsCapture: false, PollIntervalSeconds: 30, MinRiskToReport: 40, Restart: false))),
+            string.Join('\u001f', AiRuntimeCommands.Enable(new AiRuntimeEnableOptions(HostPlane: false, DnsCapture: true))),
+            string.Join('\u001f', AiRuntimeCommands.Disable()),
+            string.Join('\u001f', AiRuntimeCommands.Disable(restart: false)),
             string.Join('\u001f', new[] { "guardrail", "status" }),
             // alerts
             string.Join('\u001f', new[] { "alerts", "acknowledge", "--severity", "HIGH", "--before", "2030-01-15T00:00:00Z", "--dry-run" }),
