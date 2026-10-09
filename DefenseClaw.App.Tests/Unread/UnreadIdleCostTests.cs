@@ -105,13 +105,19 @@ public sealed class UnreadIdleCostTests : IDisposable
     {
         var scene = Scene(auditRows: 5);
 
+        // Other services of the composition listen to the runner on their own (the restart queue, CUST-267, follows finished runs); count
+        // only what starting this service adds.
+        var started = Subscribers(scene.Services.Cli, "InvocationStarted");
+        var completed = Subscribers(scene.Services.Cli, "InvocationCompleted");
+        var output = Subscribers(scene.Services.Cli, "OutputReceived");
+
         await scene.StartAsync();
 
         Assert.Equal(1, scene.Tick.CadenceSubscribers);
         Assert.Equal(0, scene.Tick.StateChangedSubscribers);
-        Assert.Equal(1, Subscribers(scene.Services.Cli, "InvocationStarted"));
-        Assert.Equal(0, Subscribers(scene.Services.Cli, "InvocationCompleted"));
-        Assert.Equal(0, Subscribers(scene.Services.Cli, "OutputReceived"));
+        Assert.Equal(started + 1, Subscribers(scene.Services.Cli, "InvocationStarted"));
+        Assert.Equal(completed, Subscribers(scene.Services.Cli, "InvocationCompleted"));
+        Assert.Equal(output, Subscribers(scene.Services.Cli, "OutputReceived"));
     }
 
     [Fact]
