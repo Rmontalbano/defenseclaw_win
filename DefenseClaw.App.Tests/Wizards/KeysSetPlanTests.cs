@@ -442,7 +442,9 @@ public sealed class KeysSetPlanTests
 
             services.Installation.Replace(TestInstallations.ManagedAt(temp.Path));
 
-            // The wizard follows the guard on the dispatcher; with no application in this body it runs at once.
+            // The wizard follows the guard on the dispatcher. Once the suite's shared UI thread exists, Changed is posted to it rather than
+            // raised here: let everything at Normal priority run first (a ContextIdle no-op sits behind it; a plain Invoke at Send would not).
+            System.Windows.Application.Current?.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
             Assert.False(key.OffersKeysSetEntry);
             Assert.False(key.HasEntry);
         });
