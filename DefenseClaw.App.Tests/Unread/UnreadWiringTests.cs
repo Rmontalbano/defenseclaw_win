@@ -85,7 +85,8 @@ public sealed class UnreadViewModelTests : IDisposable
             _ = _services.Cli.RecordHandOff("defenseclaw", new[] { "keys", "set" }, "synthetic entry");
         }
 
-        await WaitUntilAsync(() => vm.UnreadFor(Activity).IsShown && vm.UnreadFor(Ai).IsShown, "the capsules to be set");
+        // The capsule shows once the first runs are counted; wait for the full count, as the 99+ test does.
+        await WaitUntilAsync(() => vm.UnreadFor(Activity).Text == "7" && vm.UnreadFor(Ai).IsShown, "the capsules to reach their counts");
 
         Assert.Equal("7", vm.UnreadFor(Activity).Text);
         Assert.Equal("7 new since last visit", vm.UnreadFor(Activity).Description);
