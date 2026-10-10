@@ -44,6 +44,24 @@ public sealed record DataDirectoryResolution(string Path, DataDirectorySource So
     }
 }
 
+/// <summary>A value <see cref="DefenseClawPaths.SetCliPathOverride"/> refused, and the sentence that says why.</summary>
+public sealed class CliPathOverrideRefusedEventArgs(string path, string reason) : EventArgs
+{
+    public string Path { get; } = path;
+
+    public string Reason { get; } = reason;
+}
+
+/// <summary>The file that answers for <see cref="Name"/> changed from <see cref="Previous"/> to <see cref="Current"/>.</summary>
+public sealed class ExecutableResolutionChangedEventArgs(string name, string previous, string current) : EventArgs
+{
+    public string Name { get; } = name;
+
+    public string Previous { get; } = previous;
+
+    public string Current { get; } = current;
+}
+
 /// <summary>
 /// Every filesystem location the companion app touches. All roots are constructor
 /// injectable so tests can point at a temp directory instead of the live install.
@@ -151,12 +169,16 @@ public sealed class DefenseClawPaths
     /// </summary>
     private volatile string? _cliPathOverride;
 
+    // What SetCliPathOverride was last given (trimmed), accepted or not, so an unchanged value is a no-op; and why it was refused, if it was.
+    private volatile string? _requestedCliPathOverride;
+    private volatile string? _cliPathOverrideRefusal;
+
     /// <summary>One remembered <see cref="FindExecutable"/> answer, when it was taken, and under which generation.</summary>
     private readonly record struct ExecutableLookup(string? Path, long Timestamp, int Generation);
 
     /// <param name="dataDirectory">Defaults to <c>%DEFENSECLAW_HOME%</c>, else <c>%USERPROFILE%\.defenseclaw</c> (see <see cref="ResolveDataDirectory"/>).</param>
     /// <param name="binDirectory">Defaults to <c>%LOCALAPPDATA%\Programs\DefenseClaw\bin</c>.</param>
-    /// <param name="searchPath">PATH entries probed before <paramref name="binDirectory"/>. Defaults to this process's PATH.</param>
+    /// <param name="searchPath">PATH entries probed after <paramref name="binDirectory"/>. Defaults to this process's PATH.</param>
     /// <param name="fileExists">Filesystem probe; overridable for tests.</param>
     /// <param name="timeProvider">Clock for the lookup cache; overridable for tests.</param>
     /// <param name="environment">Environment reader (PATH, DEFENSECLAW_HOME); overridable for tests.</param>
@@ -241,7 +263,7 @@ public sealed class DefenseClawPaths
     /// <summary>Where <see cref="DataDirectory"/> came from, for showing the operator which install the app is reading.</summary>
     public DataDirectoryResolution DataDirectoryOrigin { get; }
 
-    /// <summary>Installer bin directory used as the fallback when PATH misses.</summary>
+    /// <summary>Installer bin directory: probed ahead of PATH, which is only the fallback when it misses.</summary>
     public string BinDirectory { get; }
 
     /// <summary>
@@ -358,6 +380,21 @@ public sealed class DefenseClawPaths
     public string? CliPathOverride => _cliPathOverride;
 
     /// <summary>
+    /// Why the last value handed to <see cref="SetCliPathOverride"/> is being ignored (not a local, fully rooted path to <c>defenseclaw.exe</c>), or
+    /// null when it was accepted or none was set. While this is set <see cref="CliPathOverride"/> is null and the automatic lookup is in force.
+    /// </summary>
+    public string? CliPathOverrideRefusal => _cliPathOverrideRefusal;
+
+    /// <summary>Raised when <see cref="SetCliPathOverride"/> refuses a value; the app records it in Activity. May fire on any thread.</summary>
+    public event EventHandler<CliPathOverrideRefusedEventArgs>? CliPathOverrideRefused;
+
+    /// <summary>
+    /// Raised when the copy that answers for a name changes while the app is running (a new scan picked a different file than the last one did).
+    /// The app records it in Activity; it never switches quietly. May fire on any thread.
+    /// </summary>
+    public event EventHandler<ExecutableResolutionChangedEventArgs>? ExecutableResolutionChanged;
+
+    /// <summary>
     /// Pins (or, with null or blank, releases) the <c>defenseclaw</c> executable. While the file exists it is the answer to every
     /// lookup of <c>defenseclaw</c> — <see cref="CliPath"/>, <see cref="FindExecutable"/>, <see cref="FindExecutableAsync"/>,
     /// <see cref="TryGetKnownExecutable"/> and so what <c>CliRunner</c> starts and what every review shows — ahead of PATH and the
@@ -369,12 +406,23 @@ public sealed class DefenseClawPaths
     public void SetCliPathOverride(string? path)
     {
         var chosen = string.IsNullOrWhiteSpace(path) ? null : path.Trim();
-        if (string.Equals(_cliPathOverride, chosen, StringComparison.Ordinal))
+        if (string.Equals(_requestedCliPathOverride, chosen, StringComparison.Ordinal))
         {
             return;
         }
 
-        _cliPathOverride = chosen;
+        _requestedCliPathOverride = chosen;
+
+        // The syntactic check runs here as well as in Settings: the value also arrives from the settings file at start and on a live reload, and
+        // a hand-edited file must not be able to point every CLI run at a network share or a lookalike name. A refused choice is ignored (the
+        // lookup carries on as if nothing were set) and says why; whether the file exists is not part of this, a missing one is just skipped.
+        var refusal = chosen is null ? null : CheckCliPathOverrideSyntax(chosen);
+        _cliPathOverrideRefusal = refusal;
+        _cliPathOverride = refusal is null ? chosen : null;
+        if (refusal is not null)
+        {
+            CliPathOverrideRefused?.Invoke(this, new CliPathOverrideRefusedEventArgs(chosen!, refusal));
+        }
 
         // A scan already running answers for the old choice and must not publish: the bump sees to that. And what is remembered for the CLI is
         // forgotten outright, not left to be served stale while a refresh runs behind it (which is what a remembered answer that is merely
@@ -399,13 +447,38 @@ public sealed class DefenseClawPaths
             return null;
         }
 
+        if (CheckCliPathOverrideSyntax(path) is { } problem)
+        {
+            return problem;
+        }
+
+        return (fileExists ?? File.Exists)(path.Trim()) ? null : "That file does not exist.";
+    }
+
+    /// <summary>
+    /// The part of <see cref="CheckCliPathOverride"/> that needs no filesystem: fully rooted on a local drive (UNC paths, <c>\\server\share</c> and
+    /// <c>\\?\UNC\</c>, are refused: the file would be fetched from another machine each time it runs, and that machine decides what it is), and
+    /// named <c>defenseclaw.exe</c> (or <c>defenseclaw</c>). Null for a blank one. <see cref="SetCliPathOverride"/> applies it to every value it is given.
+    /// </summary>
+    private static string? CheckCliPathOverrideSyntax(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
         var candidate = path.Trim();
         string name;
         try
         {
             if (!Path.IsPathRooted(candidate) || Path.GetPathRoot(candidate) is not { Length: > 0 } root || root is "\\" or "/")
             {
-                return "Use the full path to defenseclaw.exe, starting with a drive letter or a network share.";
+                return "Use the full path to defenseclaw.exe, starting with a drive letter.";
+            }
+
+            if (IsNetworkOrDevicePath(candidate))
+            {
+                return "Network (UNC) paths are not accepted for defenseclaw.exe. Copy it to a local drive and choose that copy.";
             }
 
             name = Path.GetFileName(candidate);
@@ -423,7 +496,22 @@ public sealed class DefenseClawPaths
                 : $"The file must be named defenseclaw.exe (this one is \"{name}\").";
         }
 
-        return (fileExists ?? File.Exists)(candidate) ? null : "That file does not exist.";
+        return null;
+    }
+
+    /// <summary><c>\\server\share</c>, <c>//server/share</c>, <c>\\?\UNC\…</c> and the <c>\\.\</c> device namespace; a local <c>\\?\C:\…</c> is not one.</summary>
+    private static bool IsNetworkOrDevicePath(string path)
+    {
+        var normalized = path.Replace('/', '\\');
+        if (!normalized.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // The extended-length prefix is fine in front of a drive letter; only its UNC form leaves the machine.
+        return !normalized.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+               normalized.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase) ||
+               !(normalized.Length > 5 && char.IsAsciiLetter(normalized[4]) && normalized[5] == ':');
     }
 
     public string? SkillScannerPath => FindExecutable("skill-scanner");
@@ -431,8 +519,8 @@ public sealed class DefenseClawPaths
     public string? McpScannerPath => FindExecutable("mcp-scanner");
 
     /// <summary>
-    /// Resolves an executable by bare name. PATH entries win; the installer bin
-    /// directory is the documented fallback. Returns null when nothing is found.
+    /// Resolves an executable by bare name. The installer bin directory wins; PATH entries
+    /// (then the other install layouts) are the fallback. Returns null when nothing is found.
     /// <para>
     /// Cached and single-flight — see the type documentation. Safe to call from any thread, but
     /// <b>not for the UI thread</b>: with nothing remembered (or a remembered "missing" gone stale) the
@@ -618,7 +706,15 @@ public sealed class DefenseClawPaths
         // A scan that began before an invalidation describes a PATH the caller asked us to forget.
         if (generation == Volatile.Read(ref _generation))
         {
+            _lookups.TryGetValue(name, out var before);
             _lookups[name] = new ExecutableLookup(found, _time.GetTimestamp(), generation);
+
+            // Which copy answers for a name moved while the app was running (a copy earlier in the order appeared, or the one in use went away
+            // and another took over): say so instead of quietly switching what the app starts.
+            if (before.Path is { } was && found is { } now && !string.Equals(was, now, StringComparison.OrdinalIgnoreCase))
+            {
+                ExecutableResolutionChanged?.Invoke(this, new ExecutableResolutionChangedEventArgs(name, was, now));
+            }
         }
 
         return found;
@@ -689,25 +785,33 @@ public sealed class DefenseClawPaths
         string.Equals(name, CliExecutableName, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(name, CliExecutableName + ".exe", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The file names probed for <paramref name="name"/> in each directory. On Windows a bare name is only ever tried with <c>.exe</c>:
+    /// an extensionless file is not something the shell or <c>CreateProcess</c> will run, so a stray <c>defenseclaw</c> (a text file, a
+    /// directory-named leftover) must never be resolved as the CLI. A name that already carries an executable extension is probed as is.
+    /// </summary>
     private static string[] FileNamesFor(string name) =>
         OperatingSystem.IsWindows() && !HasExecutableExtension(name)
-            ? new[] { name + ".exe", name }
+            ? new[] { name + ".exe" }
             : new[] { name };
 
-    /// <summary>PATH entries in order, then the installer bin directory (flagged), blanks dropped.</summary>
+    /// <summary>
+    /// The installer bin directory first (flagged), then PATH entries in order, then the other install layouts, blanks dropped. The installer's own
+    /// directory is where the product put its executables; PATH is writable by more parties than that directory, so it is the fallback, not the rule.
+    /// </summary>
     private IEnumerable<(string Directory, bool IsBinDirectory)> SearchDirectories()
     {
+        if (!string.IsNullOrWhiteSpace(BinDirectory))
+        {
+            yield return (BinDirectory, true);
+        }
+
         foreach (var directory in CurrentSearchPath())
         {
             if (!string.IsNullOrWhiteSpace(directory))
             {
                 yield return (directory, false);
             }
-        }
-
-        if (!string.IsNullOrWhiteSpace(BinDirectory))
-        {
-            yield return (BinDirectory, true);
         }
 
         foreach (var directory in FallbackBinDirectories)
@@ -814,7 +918,8 @@ public sealed class DefenseClawPaths
     private static bool HasExecutableExtension(string name) =>
         name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
         name.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
-        name.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
+        name.EndsWith(".bat", StringComparison.OrdinalIgnoreCase) ||
+        name.EndsWith(".com", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Splits a PATH-style value into directories: entries trimmed, blanks dropped, and the quotes the shell strips

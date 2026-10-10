@@ -508,7 +508,13 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         CliFound = found is not null;
         CliResolvedPath = found ?? "Not found (looked on PATH and in the install directory)";
 
-        if (found is null)
+        if (paths.CliPathOverrideRefusal is { } refused)
+        {
+            // A saved choice the paths would not take (a hand-edited settings file): ignored, and said so where the operator looks.
+            CliOverrideProblem = "The saved defenseclaw.exe path is ignored: " + refused;
+            CliSourceNote = "The automatic lookup is used instead. " + (found is null ? "Nothing was found." : IsUnder(found, paths.BinDirectory) ? "Found in the install directory." : "Found on PATH.");
+        }
+        else if (found is null)
         {
             CliSourceNote = pinned is null
                 ? "Install DefenseClaw, or choose defenseclaw.exe below."

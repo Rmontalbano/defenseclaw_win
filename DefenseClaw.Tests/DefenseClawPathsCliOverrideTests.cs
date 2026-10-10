@@ -110,7 +110,7 @@ public class DefenseClawPathsCliOverrideTests
         var candidates = paths.CandidatesFor("defenseclaw").ToList();
 
         Assert.Equal(Chosen, candidates[0]);
-        Assert.Equal(Path.Combine(FakePathEntry, "defenseclaw.exe"), candidates[1]);
+        Assert.Equal(Path.Combine(FakeBin, "defenseclaw.exe"), candidates[1]);
 
         // Another executable's list is not touched.
         Assert.DoesNotContain(Chosen, paths.CandidatesFor("defenseclaw-gateway"));
@@ -130,9 +130,78 @@ public class DefenseClawPathsCliOverrideTests
     [InlineData(@"D:\tools\dc\DefenseClaw.EXE")]
     [InlineData(@"D:\tools\dc\defenseclaw")]
     [InlineData(@"  D:\tools\dc\defenseclaw.exe  ")]
-    [InlineData(@"\\server\share\dc\defenseclaw.exe")]
+    [InlineData(@"\\?\D:\tools\dc\defenseclaw.exe")]
     public void An_existing_file_named_defenseclaw_is_accepted(string path) =>
         Assert.Null(DefenseClawPaths.CheckCliPathOverride(path, _ => true));
+
+    [Theory]
+    [InlineData(@"\\server\share\dc\defenseclaw.exe")]
+    [InlineData(@"//server/share/dc/defenseclaw.exe")]
+    [InlineData(@"\\?\UNC\server\share\dc\defenseclaw.exe")]
+    [InlineData(@"\\?\unc\server\share\dc\defenseclaw.exe")]
+    [InlineData(@"\\.\pipe\defenseclaw.exe")]
+    public void A_network_path_is_refused_even_when_the_file_is_there(string path)
+    {
+        var problem = DefenseClawPaths.CheckCliPathOverride(path, _ => true);
+
+        Assert.NotNull(problem);
+        Assert.Contains("UNC", problem, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------ the same check on every way in (CUST-248)
+
+    [Theory]
+    [InlineData(@"\\server\share\dc\defenseclaw.exe", "UNC")]
+    [InlineData(@"\\?\UNC\server\share\defenseclaw.exe", "UNC")]
+    [InlineData(@"tools\defenseclaw.exe", "full path")]
+    [InlineData(@"D:\tools\dc\notepad.exe", "notepad.exe")]
+    [InlineData(@"D:\tools\dc\", "folder")]
+    public void A_refused_override_is_ignored_with_a_visible_reason_and_the_lookup_carries_on(string bad, string reasonContains)
+    {
+        // The file "exists" (a share is reachable, a lookalike is there): the refusal is about the value, not the disk.
+        var onPath = Path.Combine(FakePathEntry, "defenseclaw.exe");
+        var paths = Create(new HashSet<string> { onPath, bad });
+        var refused = new List<CliPathOverrideRefusedEventArgs>();
+        paths.CliPathOverrideRefused += (_, e) => refused.Add(e);
+
+        paths.SetCliPathOverride(bad);
+
+        Assert.Null(paths.CliPathOverride);
+        Assert.NotNull(paths.CliPathOverrideRefusal);
+        Assert.Contains(reasonContains, paths.CliPathOverrideRefusal, StringComparison.Ordinal);
+        Assert.Equal(onPath, paths.CliPath);
+        Assert.DoesNotContain(bad.Trim(), paths.CandidatesFor("defenseclaw"));
+
+        var raised = Assert.Single(refused);
+        Assert.Equal(bad, raised.Path);
+        Assert.Equal(paths.CliPathOverrideRefusal, raised.Reason);
+
+        // Setting the same value again says nothing new; a good one lifts the refusal; clearing does too.
+        paths.SetCliPathOverride(bad);
+        Assert.Single(refused);
+
+        paths.SetCliPathOverride(Chosen);
+        Assert.Null(paths.CliPathOverrideRefusal);
+        Assert.Equal(Chosen, paths.CliPathOverride);
+
+        paths.SetCliPathOverride(bad);
+        Assert.NotNull(paths.CliPathOverrideRefusal);
+        paths.SetCliPathOverride(null);
+        Assert.Null(paths.CliPathOverrideRefusal);
+    }
+
+    [Fact]
+    public void A_good_override_raises_no_refusal()
+    {
+        var paths = Create(new HashSet<string> { Chosen });
+        var refused = 0;
+        paths.CliPathOverrideRefused += (_, _) => refused++;
+
+        paths.SetCliPathOverride(Chosen);
+
+        Assert.Equal(0, refused);
+        Assert.Null(paths.CliPathOverrideRefusal);
+    }
 
     [Fact]
     public void A_file_that_is_not_there_is_refused()

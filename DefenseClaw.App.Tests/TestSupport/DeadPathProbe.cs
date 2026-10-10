@@ -36,11 +36,14 @@ internal sealed class DeadPathProbe : IDisposable
     }
 
     /// <summary>Paths whose only PATH entry is the dead one, so every lookup has to get past it.</summary>
-    public DefenseClawPaths PathsFor(TempDirectory temp, string binDirectory) =>
+    /// <param name="temp">Data directory.</param>
+    /// <param name="binDirectory">The installer directory, which is probed BEFORE PATH (CUST-248): anything installed there is found without meeting the dead entry.</param>
+    /// <param name="afterDead">A second PATH entry, behind the dead one, for a test that wants the lookup to get past it to find something.</param>
+    public DefenseClawPaths PathsFor(TempDirectory temp, string binDirectory, string? afterDead = null) =>
         new(
             dataDirectory: temp.Path,
             binDirectory: binDirectory,
-            searchPath: new[] { DeadEntry },
+            searchPath: afterDead is null ? new[] { DeadEntry } : new[] { DeadEntry, afterDead },
             fileExists: Exists);
 
     public void WaitUntilBlocked() =>

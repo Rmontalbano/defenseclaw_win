@@ -36,7 +36,7 @@ public class DefenseClawPathsTests
     }
 
     [Fact]
-    public void Path_entries_win_over_the_installer_bin_directory()
+    public void The_installer_bin_directory_wins_over_path_entries()
     {
         var onPath = Path.Combine(FakePathEntry, "defenseclaw.exe");
         var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
@@ -46,20 +46,36 @@ public class DefenseClawPathsTests
             searchPath: new[] { FakePathEntry },
             fileExists: p => p == onPath || p == inBin);
 
-        Assert.Equal(onPath, paths.CliPath);
+        Assert.Equal(inBin, paths.CliPath);
     }
 
     [Fact]
-    public void Falls_back_to_the_installer_bin_directory()
+    public void Path_is_the_fallback_when_the_installer_bin_directory_misses()
     {
-        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var onPath = Path.Combine(FakePathEntry, "defenseclaw.exe");
 
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
             searchPath: new[] { FakePathEntry },
-            fileExists: p => p == inBin);
+            fileExists: p => p == onPath);
 
-        Assert.Equal(inBin, paths.CliPath);
+        Assert.Equal(onPath, paths.CliPath);
+    }
+
+    [Fact]
+    public void A_bare_extensionless_name_is_never_a_candidate_or_a_match()
+    {
+        var bareInBin = Path.Combine(FakeBin, "defenseclaw");
+        var paths = new DefenseClawPaths(
+            binDirectory: FakeBin,
+            searchPath: new[] { FakePathEntry },
+            fileExists: p => p == bareInBin || p == Path.Combine(FakePathEntry, "defenseclaw"));
+
+        Assert.Null(paths.CliPath);
+        Assert.All(paths.CandidatesFor("defenseclaw"), c => Assert.EndsWith(".exe", c, StringComparison.OrdinalIgnoreCase));
+
+        // A name that already carries an executable extension is probed exactly as given.
+        Assert.Equal(new[] { Path.Combine(FakeBin, "tool.cmd"), Path.Combine(FakePathEntry, "tool.cmd") }, paths.CandidatesFor("tool.cmd").ToArray());
     }
 
     [Fact]
@@ -88,7 +104,7 @@ public class DefenseClawPathsTests
     }
 
     [Fact]
-    public void Candidate_list_probes_path_before_bin()
+    public void Candidate_list_probes_bin_before_path()
     {
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
@@ -97,11 +113,10 @@ public class DefenseClawPathsTests
 
         var candidates = paths.CandidatesFor("defenseclaw").ToList();
 
-        Assert.Equal(Path.Combine(FakePathEntry, "defenseclaw.exe"), candidates[0]);
-        Assert.Contains(Path.Combine(FakeBin, "defenseclaw.exe"), candidates);
+        Assert.Equal(Path.Combine(FakeBin, "defenseclaw.exe"), candidates[0]);
         Assert.True(
-            candidates.IndexOf(Path.Combine(FakePathEntry, "defenseclaw.exe")) <
-            candidates.IndexOf(Path.Combine(FakeBin, "defenseclaw.exe")));
+            candidates.IndexOf(Path.Combine(FakeBin, "defenseclaw.exe")) <
+            candidates.IndexOf(Path.Combine(FakePathEntry, "defenseclaw.exe")));
     }
 
     /// <summary>A clock the test moves by hand; timestamps are plain ticks.</summary>
@@ -119,7 +134,7 @@ public class DefenseClawPathsTests
     [Fact]
     public void A_cached_hit_is_revalidated_with_one_probe_instead_of_walking_path()
     {
-        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var inBin = Path.Combine(FakePathEntry, "defenseclaw.exe");
         var probes = new List<string>();
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
@@ -133,7 +148,7 @@ public class DefenseClawPathsTests
 
         Assert.Equal(inBin, paths.CliPath);
         var scanCost = probes.Count;
-        Assert.True(scanCost > 1, "the first lookup should have walked the PATH entry before the bin directory");
+        Assert.True(scanCost > 1, "the first lookup should have missed in the bin directory before the PATH entry");
 
         probes.Clear();
         Assert.Equal(inBin, paths.CliPath);
@@ -163,26 +178,34 @@ public class DefenseClawPathsTests
         var clock = new ManualTimeProvider();
         var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
         var onPath = Path.Combine(FakePathEntry, "defenseclaw.exe");
-        var pathCopyInstalled = false;
+        var binCopyInstalled = false;
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
             searchPath: new[] { FakePathEntry },
-            fileExists: p => p == inBin || (pathCopyInstalled && p == onPath),
+            fileExists: p => p == onPath || (binCopyInstalled && p == inBin),
             timeProvider: clock);
+        var changes = new List<ExecutableResolutionChangedEventArgs>();
+        paths.ExecutableResolutionChanged += (_, e) => changes.Add(e);
 
-        Assert.Equal(inBin, paths.CliPath);
+        Assert.Equal(onPath, paths.CliPath);
 
-        // A copy earlier on PATH appears. The trusted result stands until the lifetime is up...
-        pathCopyInstalled = true;
+        // The installer's own copy appears. The trusted result stands until the lifetime is up...
+        binCopyInstalled = true;
         clock.Advance(DefenseClawPaths.FoundLookupLifetime - TimeSpan.FromSeconds(1));
-        Assert.Equal(inBin, paths.CliPath);
+        Assert.Equal(onPath, paths.CliPath);
 
-        // ...and PATH precedence is honoured again after it. The caller is answered at once with the copy that is
+        // ...and the installer directory's precedence is honoured again after it. The caller is answered at once with the copy that is
         // still there, and the rescan that corrects the precedence runs behind it.
         clock.Advance(TimeSpan.FromSeconds(2));
-        Assert.Equal(inBin, paths.CliPath);
-        Assert.Equal(onPath, await paths.FindExecutableAsync("defenseclaw"));
         Assert.Equal(onPath, paths.CliPath);
+        Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
+        Assert.Equal(inBin, paths.CliPath);
+
+        // The switch is reported, once, with both paths: the app never changes what it runs without saying so.
+        var change = Assert.Single(changes);
+        Assert.Equal("defenseclaw", change.Name);
+        Assert.Equal(onPath, change.Previous);
+        Assert.Equal(inBin, change.Current);
     }
 
     [Fact]
@@ -316,17 +339,17 @@ public class DefenseClawPathsTests
     public async Task A_lookup_during_a_slow_scan_gets_the_previous_answer_at_once_and_the_probe_runs_once()
     {
         var clock = new ManualTimeProvider();
-        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var inBin = Path.Combine(FakePathEntry, "defenseclaw.exe");
         var probe = new DeadDirectoryProbe { Installed = inBin };
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
-            searchPath: new[] { DeadEntry },
+            searchPath: new[] { DeadEntry, FakePathEntry },
             fileExists: probe.Exists,
             timeProvider: clock);
 
         Assert.Equal(inBin, paths.CliPath);
         var deadProbesInFirstScan = probe.DeadProbes;
-        Assert.Equal(2, deadProbesInFirstScan);
+        Assert.Equal(1, deadProbesInFirstScan);
 
         // The remembered answer goes stale and the dead entry stops answering.
         probe.Blocks = true;
@@ -348,21 +371,21 @@ public class DefenseClawPathsTests
 
         // Let it go and wait for it. Its answer is stored before the wait ends, and a lookup that comes in while it finishes - after it has
         // published, before its flight is gone, or after both - must not start a scan of its own: the dead entry is probed by this one scan
-        // (two file names) and no other, however the lookup and the end of the scan interleave. (It used to be: 6 probes on CI, not 4.)
+        // (one file name) and no other, however the lookup and the end of the scan interleave. (It used to be: 3 probes on CI, not 2.)
         probe.Release();
         Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
-        Assert.Equal(deadProbesInFirstScan + 2, probe.DeadProbes);
+        Assert.Equal(deadProbesInFirstScan + 1, probe.DeadProbes);
     }
 
     [Fact]
     public async Task A_caller_that_looked_before_a_scan_finished_takes_the_answer_it_published_instead_of_scanning_again()
     {
         var clock = new ManualTimeProvider();
-        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var inBin = Path.Combine(FakePathEntry, "defenseclaw.exe");
         var probe = new DeadDirectoryProbe { Installed = inBin };
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
-            searchPath: new[] { DeadEntry },
+            searchPath: new[] { DeadEntry, FakePathEntry },
             fileExists: probe.Exists,
             timeProvider: clock);
 
@@ -385,13 +408,13 @@ public class DefenseClawPathsTests
         // is over and published - the interleaving CI hit by chance, made certain.
         probe.Release();
         Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
-        Assert.Equal(deadProbesInFirstScan + 2, probe.DeadProbes);
+        Assert.Equal(deadProbesInFirstScan + 1, probe.DeadProbes);
 
         // The held caller goes on with the stale answer in hand, finds no scan in flight and something newer than it has published:
         // that is its answer. A scan of its own would probe the dead entry twice more.
         parked.Resume.Set();
         Assert.Equal(inBin, await late);
-        Assert.Equal(deadProbesInFirstScan + 2, probe.DeadProbes);
+        Assert.Equal(deadProbesInFirstScan + 1, probe.DeadProbes);
     }
 
     [Fact]
@@ -401,7 +424,7 @@ public class DefenseClawPathsTests
         var probe = new DeadDirectoryProbe();
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
-            searchPath: new[] { DeadEntry },
+            searchPath: new[] { DeadEntry, FakePathEntry },
             fileExists: probe.Exists,
             timeProvider: clock);
 
@@ -422,16 +445,16 @@ public class DefenseClawPathsTests
 
         probe.Release();
         Assert.Null(await starter);
-        Assert.Equal(4, probe.DeadProbes);
+        Assert.Equal(2, probe.DeadProbes);
     }
 
     [Fact]
     public async Task First_ever_lookups_share_one_scan()
     {
-        var probe = new DeadDirectoryProbe { Blocks = true, Installed = Path.Combine(FakeBin, "defenseclaw.exe") };
+        var probe = new DeadDirectoryProbe { Blocks = true, Installed = Path.Combine(FakePathEntry, "defenseclaw.exe") };
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
-            searchPath: new[] { DeadEntry },
+            searchPath: new[] { DeadEntry, FakePathEntry },
             fileExists: probe.Exists,
             timeProvider: new ManualTimeProvider());
 
@@ -444,19 +467,19 @@ public class DefenseClawPathsTests
         Assert.False(second.IsCompleted);
 
         probe.Release();
-        Assert.Equal(Path.Combine(FakeBin, "defenseclaw.exe"), await first);
-        Assert.Equal(Path.Combine(FakeBin, "defenseclaw.exe"), await second);
-        Assert.Equal(2, probe.DeadProbes);
+        Assert.Equal(Path.Combine(FakePathEntry, "defenseclaw.exe"), await first);
+        Assert.Equal(Path.Combine(FakePathEntry, "defenseclaw.exe"), await second);
+        Assert.Equal(1, probe.DeadProbes);
     }
 
     [Fact]
     public async Task TryGetKnownExecutable_never_waits_for_the_filesystem()
     {
-        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var inBin = Path.Combine(FakePathEntry, "defenseclaw.exe");
         var probe = new DeadDirectoryProbe { Blocks = true, Installed = inBin };
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
-            searchPath: new[] { DeadEntry },
+            searchPath: new[] { DeadEntry, FakePathEntry },
             fileExists: probe.Exists,
             timeProvider: new ManualTimeProvider());
 
@@ -476,7 +499,7 @@ public class DefenseClawPathsTests
 
         Assert.True(paths.TryGetKnownExecutable("defenseclaw", out path));
         Assert.Equal(inBin, path);
-        Assert.Equal(2, probe.DeadProbes);
+        Assert.Equal(1, probe.DeadProbes);
     }
 
     [Fact]
@@ -484,31 +507,31 @@ public class DefenseClawPathsTests
     {
         var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
         var onPath = Path.Combine(FakePathEntry, "defenseclaw.exe");
-        var pathCopyInstalled = false;
+        var binCopyInstalled = false;
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
             searchPath: new[] { FakePathEntry },
-            fileExists: p => p == inBin || (pathCopyInstalled && p == onPath),
+            fileExists: p => p == onPath || (binCopyInstalled && p == inBin),
             timeProvider: new ManualTimeProvider());
 
-        Assert.Equal(inBin, paths.CliPath);
+        Assert.Equal(onPath, paths.CliPath);
 
-        pathCopyInstalled = true;
+        binCopyInstalled = true;
         paths.InvalidateExecutableCache();
 
         Assert.True(paths.TryGetKnownExecutable("defenseclaw", out var stale));
-        Assert.Equal(inBin, stale);
+        Assert.Equal(onPath, stale);
 
-        Assert.Equal(onPath, await paths.FindExecutableAsync("defenseclaw"));
+        Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
         Assert.True(paths.TryGetKnownExecutable("defenseclaw", out var fresh));
-        Assert.Equal(onPath, fresh);
+        Assert.Equal(inBin, fresh);
     }
 
     [Fact]
     public async Task A_directory_that_was_slow_to_probe_is_skipped_until_the_quarantine_ends()
     {
         var clock = new ManualTimeProvider();
-        var inBin = Path.Combine(FakeBin, "defenseclaw.exe");
+        var onPath = Path.Combine(FakePathEntry, "defenseclaw.exe");
         var deadProbes = 0;
         var paths = new DefenseClawPaths(
             binDirectory: FakeBin,
@@ -522,22 +545,22 @@ public class DefenseClawPathsTests
                     return false;
                 }
 
-                return p == inBin;
+                return p == onPath;
             },
             timeProvider: clock);
 
-        Assert.Equal(inBin, paths.CliPath);
-        Assert.Equal(2, deadProbes);
+        Assert.Equal(onPath, paths.CliPath);
+        Assert.Equal(1, deadProbes);
 
         // The next scan does not pay for it again...
         clock.Advance(DefenseClawPaths.FoundLookupLifetime + TimeSpan.FromSeconds(1));
-        Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
-        Assert.Equal(2, deadProbes);
+        Assert.Equal(onPath, await paths.FindExecutableAsync("defenseclaw"));
+        Assert.Equal(1, deadProbes);
 
         // ...until the quarantine is over.
         clock.Advance(DefenseClawPaths.SlowDirectoryQuarantine + TimeSpan.FromSeconds(1));
-        Assert.Equal(inBin, await paths.FindExecutableAsync("defenseclaw"));
-        Assert.Equal(4, deadProbes);
+        Assert.Equal(onPath, await paths.FindExecutableAsync("defenseclaw"));
+        Assert.Equal(2, deadProbes);
     }
 
     [Fact]
@@ -563,7 +586,7 @@ public class DefenseClawPathsTests
 
         clock.Advance(DefenseClawPaths.MissingLookupLifetime + TimeSpan.FromSeconds(1));
         Assert.Equal(slowBin, await paths.FindExecutableAsync("defenseclaw"));
-        Assert.True(binProbes >= 3);
+        Assert.True(binProbes >= 2);
     }
 
     // ------------------------------------------------------------------ PATH handling
@@ -633,7 +656,7 @@ public class DefenseClawPathsTests
 
         var directories = paths.CandidatesFor("defenseclaw").Where(c => c.EndsWith("defenseclaw.exe", StringComparison.Ordinal)).Select(Path.GetDirectoryName).ToList();
 
-        Assert.Equal(new[] { @"C:\venv\Scripts", FakePathEntry, @"C:\machine\bin", @"C:\user\bin", FakeBin }, directories);
+        Assert.Equal(new[] { FakeBin, @"C:\venv\Scripts", FakePathEntry, @"C:\machine\bin", @"C:\user\bin" }, directories);
     }
 
     [Fact]
@@ -648,7 +671,7 @@ public class DefenseClawPathsTests
         _ = paths.CliPath;
 
         Assert.Equal(
-            new[] { Path.Combine(FakePathEntry, "defenseclaw.exe"), Path.Combine(FakePathEntry, "defenseclaw"), Path.Combine(FakeBin, "defenseclaw.exe"), Path.Combine(FakeBin, "defenseclaw") },
+            new[] { Path.Combine(FakeBin, "defenseclaw.exe"), Path.Combine(FakePathEntry, "defenseclaw.exe") },
             paths.CandidatesFor("defenseclaw").ToArray());
     }
 

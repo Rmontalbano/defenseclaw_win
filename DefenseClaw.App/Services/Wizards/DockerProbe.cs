@@ -320,12 +320,8 @@ public sealed class DockerProbe : IDockerProbe
         return null;
     }
 
-    /// <summary>Runs <c>docker</c> with an argument list (no shell), a hard timeout, and the whole tree killed when it fires.</summary>
-    private static async Task<DockerProcessResult> RunProcessAsync(
-        string executable,
-        IReadOnlyList<string> arguments,
-        TimeSpan timeout,
-        CancellationToken cancellationToken)
+    /// <summary>The start info of one <c>docker</c> look: no shell, no window, all three streams redirected, and the neutral working directory the CLI runner uses.</summary>
+    internal static ProcessStartInfo CreateStartInfo(string executable, IReadOnlyList<string> arguments)
     {
         var info = new ProcessStartInfo(executable)
         {
@@ -335,10 +331,28 @@ public sealed class DockerProbe : IDockerProbe
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        if (SetupHelpProbe.NeutralWorkingDirectory() is { } workingDirectory)
+        {
+            info.WorkingDirectory = workingDirectory;
+        }
+
         foreach (var argument in arguments)
         {
             info.ArgumentList.Add(argument);
         }
+
+        return info;
+    }
+
+    /// <summary>Runs <c>docker</c> with an argument list (no shell), a hard timeout, and the whole tree killed when it fires.</summary>
+    private static async Task<DockerProcessResult> RunProcessAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var info = CreateStartInfo(executable, arguments);
 
         using var process = new Process { StartInfo = info };
         _ = process.Start();

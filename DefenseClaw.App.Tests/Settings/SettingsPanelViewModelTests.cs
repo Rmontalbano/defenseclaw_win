@@ -790,6 +790,30 @@ public sealed class SettingsPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task A_saved_network_choice_is_ignored_at_start_and_on_a_live_reload_and_both_say_why()
+    {
+        const string share = @"\\fileserver\tools\defenseclaw.exe";
+        var first = Create();
+
+        // A hand-edited settings file: the value never went through the Settings page's check.
+        Assert.True(first.Settings.Update(s => s with { Connection = s.Connection with { CliPathOverride = share } }));
+        Assert.Null(first.Paths.CliPathOverride);
+        Assert.Contains("UNC", first.Paths.CliPathOverrideRefusal, StringComparison.Ordinal);
+        Assert.Contains(first.Cli.Activity, row => row.OutputLines.Any(line => line.Text.Contains("ignored", StringComparison.Ordinal) && line.Text.Contains(share, StringComparison.Ordinal)));
+
+        // "The app was restarted" over the same file: refused at start as well.
+        var second = Create();
+        Assert.Null(second.Paths.CliPathOverride);
+        Assert.NotNull(second.Paths.CliPathOverrideRefusal);
+        Assert.Contains(second.Cli.Activity, row => row.OutputLines.Any(line => line.Text.Contains(share, StringComparison.Ordinal)));
+
+        var model = Build(second);
+        await UiThread.Run(model.RefreshMachineFactsAsync);
+        Assert.True(model.HasCliOverrideProblem);
+        Assert.Contains("ignored", model.CliOverrideProblem, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Copying_and_showing_the_cli_work_on_what_is_in_use()
     {
         var platform = new FakePlatform();

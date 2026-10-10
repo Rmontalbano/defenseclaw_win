@@ -26,12 +26,14 @@ public sealed class WizardExecutablePathTests : IDisposable
     [Fact]
     public void Opening_a_wizard_does_not_wait_for_the_PATH_lookup_and_shows_the_answer_when_it_lands()
     {
+        // The CLI is on a PATH entry behind the dead one: the installer's own directory is probed first and would answer without meeting it.
         var bin = _temp.File("bin");
-        var cli = Path.Combine(bin, "defenseclaw.exe");
+        var onPath = _temp.File("on-path");
+        var cli = Path.Combine(onPath, "defenseclaw.exe");
         _ = _probe.Install(cli);
 
         using var services = AppServices.CreateIsolated(
-            _probe.PathsFor(_temp, bin),
+            _probe.PathsFor(_temp, bin, onPath),
             claudeSettingsPath: _temp.File("claude-settings.json"));
         using var warmServices = TestServices.Create(_warmTemp);
 

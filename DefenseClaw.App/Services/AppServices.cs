@@ -148,6 +148,11 @@ public sealed class AppServices : IDisposable
         // "Use this defenseclaw.exe" (Settings → Connection) reaches every CLI lookup through the paths, before anything has looked one
         // up (the monitor and the tray start later) and again whenever the setting changes.
         // A runtime chosen in Settings -> Advanced has pinned its own CLI already (see RuntimeEnvironment.CreatePaths) and keeps it.
+        // A refused override and a changed resolution are both shown in Activity (subscribed first, so a bad value in the settings file is
+        // reported at start too): nothing about which file the app runs changes without a visible line.
+        Paths.CliPathOverrideRefused += OnCliPathOverrideRefused;
+        Paths.ExecutableResolutionChanged += OnExecutableResolutionChanged;
+
         if (Paths.Runtime.IsDefault)
         {
             Paths.SetCliPathOverride(Settings.Current.Connection.CliPathOverride);
@@ -757,6 +762,29 @@ public sealed class AppServices : IDisposable
                 _reloadRetry ??= new Timer(_ => ReloadForWatcher());
                 _ = _reloadRetry.Change(delay, Timeout.InfiniteTimeSpan);
             }
+        }
+    }
+
+    private void OnCliPathOverrideRefused(object? sender, CliPathOverrideRefusedEventArgs e) =>
+        RecordResolutionNote(
+            "connection.cliPathOverride",
+            $"The saved defenseclaw.exe path \"{e.Path}\" is ignored: {e.Reason} The automatic lookup is used instead.");
+
+    private void OnExecutableResolutionChanged(object? sender, ExecutableResolutionChangedEventArgs e) =>
+        RecordResolutionNote(
+            e.Name,
+            $"The {e.Name} the app runs changed while it was running: from {e.Previous} to {e.Current}. Check that this is the copy you expect.");
+
+    /// <summary>One Activity row (no process, nothing run) for a change in which executable the app resolves.</summary>
+    private void RecordResolutionNote(string subject, string note)
+    {
+        try
+        {
+            _ = Cli.RecordHandOff("(executable resolution)", new[] { subject }, note);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A note that cannot be written must not take a lookup down with it.
         }
     }
 

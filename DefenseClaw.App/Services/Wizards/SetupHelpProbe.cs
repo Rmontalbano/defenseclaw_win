@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Paths;
 
 namespace DefenseClaw.App.Services.Wizards;
@@ -264,10 +265,16 @@ public sealed class SetupHelpProbe
         return ExecuteAsync(executable, arguments, cancellationToken);
     }
 
-    private static async Task<HelpProbeResult> ExecuteAsync(
-        string executable,
-        IReadOnlyList<string> arguments,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// The empty directory <see cref="Core.Cli.CliRunner"/> runs the CLI in (<see cref="CliWorkingDirectory"/>), created if need be, or null when it cannot
+    /// be (the child then inherits the app's own, as it always did). Every read-only child this app starts outside the runner uses it too: a
+    /// process started in a directory somebody else can write to would load whatever it finds there, and Click expands wildcards against it.
+    /// </summary>
+    internal static string? NeutralWorkingDirectory() =>
+        CliWorkingDirectory.TryEnsure(CliWorkingDirectory.DefaultPath) ? CliWorkingDirectory.DefaultPath : null;
+
+    /// <summary>The start info of one help or version probe: no shell, no window, output captured, the neutral working directory, the pinned terminal.</summary>
+    internal static ProcessStartInfo CreateStartInfo(string executable, IReadOnlyList<string> arguments)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -280,6 +287,11 @@ public sealed class SetupHelpProbe
             StandardErrorEncoding = Encoding.UTF8,
         };
 
+        if (NeutralWorkingDirectory() is { } workingDirectory)
+        {
+            startInfo.WorkingDirectory = workingDirectory;
+        }
+
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -291,6 +303,15 @@ public sealed class SetupHelpProbe
         startInfo.Environment["COLUMNS"] = "80";
         startInfo.Environment["NO_COLOR"] = "1";
         startInfo.Environment["TERM"] = "dumb";
+        return startInfo;
+    }
+
+    private static async Task<HelpProbeResult> ExecuteAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var startInfo = CreateStartInfo(executable, arguments);
 
         using var process = new Process { StartInfo = startInfo };
 
