@@ -337,6 +337,19 @@ public sealed class RestartQueueTests
         Assert.True(rig.Queue.IsPending);
     }
 
+    [Fact]
+    public void A_version_claimed_by_an_unverified_port_owner_neither_applies_nor_keeps_lines()
+    {
+        // CUST-341: the queue decides on TrustedBinaryVersion, so a stranger on the port cannot apply the restart lines by claiming a new version.
+        using var rig = new Rig();
+        rig.Source.Current = new GatewaySnapshot { BinaryVersion = "0.8.10" };
+        _ = rig.Queue.Queue("a");
+
+        rig.Source.Poll(new GatewaySnapshot { State = AppGatewayState.Running, Health = new GatewayHealth(), BinaryVersion = "9.9.9", PeerUnverified = true, PolledAt = rig.Now });
+
+        Assert.True(rig.Queue.IsPending);
+    }
+
     // ------------------------------------------------------------------ the app's own commands (the runner's finished runs)
 
     [Fact]

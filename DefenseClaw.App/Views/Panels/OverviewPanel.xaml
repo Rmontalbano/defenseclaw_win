@@ -371,6 +371,9 @@
                     <Border Style="{StaticResource OverviewHeroServices}">
                         <StackPanel>
                             <ctl:DcCardHeader Symbol="Layer24" Section="Overview" Content="Services" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding HealthTrustNote}" />
                             <ItemsControl ItemsSource="{Binding ServiceRows}"
                                           Grid.IsSharedSizeScope="True"
                                           AutomationProperties.Name="Services">
@@ -424,6 +427,9 @@
                     <Border Style="{StaticResource OverviewHeroScanners}">
                         <StackPanel>
                             <ctl:DcCardHeader Symbol="ScanText24" Section="Govern" Content="{Binding ScannersTitle}" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding HealthTrustNote}" />
                             <ItemsControl ItemsSource="{Binding ScannerRows}"
                                           AutomationProperties.Name="Scanners">
                                 <ItemsControl.ItemTemplate>
@@ -736,6 +742,9 @@
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel Grid.IsSharedSizeScope="True">
                         <ctl:DcCardHeader Symbol="PlugConnected24" Section="Discover" Content="Connectors" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding HealthTrustNote}" />
 
                         <Grid Margin="6,0,0,4">
                             <Grid.ColumnDefinitions>

@@ -124,7 +124,7 @@ public sealed partial class OverviewPanelViewModel
 
         if (health is { UptimeMs: > 0 })
         {
-            detail.Add("up " + FormatDuration(health.Uptime));
+            detail.Add(HealthTrustPresentation.Mark("up " + FormatDuration(health.Uptime), snapshot));
         }
 
         if (uplink is not null)

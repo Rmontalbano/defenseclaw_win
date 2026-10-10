@@ -95,6 +95,13 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     /// </summary>
     private bool _statusUnavailable;
 
+    /// <summary>
+    /// The "unverified" note above the Services, Scanners and Connectors boxes (<see cref="HealthTrustPresentation"/>): empty when the
+    /// <c>/health</c> answer is from the verified gateway, so the boxes show nothing extra then.
+    /// </summary>
+    [ObservableProperty]
+    private string _healthTrustNote = string.Empty;
+
     [ObservableProperty]
     private string _gatewayHeadline = "Checking…";
 
@@ -642,7 +649,8 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             _ => "Bad",
         };
 
-        UptimeText = health is { UptimeMs: > 0 } ? FormatDuration(health.Uptime) : "—";
+        UptimeText = health is { UptimeMs: > 0 } ? HealthTrustPresentation.Mark(FormatDuration(health.Uptime), snapshot) : "—";
+        HealthTrustNote = HealthTrustPresentation.NoteFor(snapshot);
         VersionText = string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
             ? "—"
             : snapshot.PeerUnverified

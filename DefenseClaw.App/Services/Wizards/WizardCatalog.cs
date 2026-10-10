@@ -79,7 +79,8 @@ public sealed class WizardCatalog
     // asked us to forget; it must not write its answer into the fresh catalog when it lands.
     private int _generation;
 
-    // The last non-empty gateway BinaryVersion seen; a different one means the CLI was replaced.
+    // The last non-empty trusted gateway version seen (TrustedBinaryVersion: an unverified port owner's claim is never fed in);
+    // a different one means the CLI was replaced.
     private string? _observedBinaryVersion;
 
     public WizardCatalog(DefenseClawPaths paths)
@@ -120,8 +121,8 @@ public sealed class WizardCatalog
                 var catalog = new WizardCatalog(services.Paths);
 
                 // Seeded with what is running now, so only a later, different version counts as a change.
-                _ = catalog.ObserveBinaryVersionAsync(services.Monitor.Current.BinaryVersion);
-                services.Monitor.StateChanged += (_, e) => _ = catalog.ObserveBinaryVersionAsync(e.Snapshot.BinaryVersion);
+                _ = catalog.ObserveBinaryVersionAsync(services.Monitor.Current.TrustedBinaryVersion);
+                services.Monitor.StateChanged += (_, e) => _ = catalog.ObserveBinaryVersionAsync(e.Snapshot.TrustedBinaryVersion);
                 _shared = catalog;
             }
 

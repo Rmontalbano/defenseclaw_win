@@ -435,8 +435,8 @@ public sealed class DefenseClawPaths
 
     /// <summary>
     /// Why <paramref name="path"/> cannot be the CLI override, in a sentence for the operator, or null when it can (and null for a
-    /// blank one, which clears the override): an absolute path to an existing file named <c>defenseclaw.exe</c> (or
-    /// <c>defenseclaw</c>). The name is what makes it the CLI and not any program at all.
+    /// blank one, which clears the override): an absolute path to an existing file named <c>defenseclaw.exe</c>. The name is what
+    /// makes it the CLI and not any program at all.
     /// </summary>
     /// <param name="path">What the operator chose.</param>
     /// <param name="fileExists">Filesystem probe; <see cref="File.Exists(string)"/> when null.</param>
@@ -458,7 +458,8 @@ public sealed class DefenseClawPaths
     /// <summary>
     /// The part of <see cref="CheckCliPathOverride"/> that needs no filesystem: fully rooted on a local drive (UNC paths, <c>\\server\share</c> and
     /// <c>\\?\UNC\</c>, are refused: the file would be fetched from another machine each time it runs, and that machine decides what it is), and
-    /// named <c>defenseclaw.exe</c> (or <c>defenseclaw</c>). Null for a blank one. <see cref="SetCliPathOverride"/> applies it to every value it is given.
+    /// named <c>defenseclaw.exe</c> (case-insensitive; an extensionless <c>defenseclaw</c> is refused, as lookup never picks it). Null for a blank one.
+    /// <see cref="SetCliPathOverride"/> applies it to every value it is given.
     /// </summary>
     private static string? CheckCliPathOverrideSyntax(string? path)
     {
@@ -488,12 +489,20 @@ public sealed class DefenseClawPaths
             return "That is not a valid file path.";
         }
 
-        if (!string.Equals(name, CliExecutableName + ".exe", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(name, CliExecutableName, StringComparison.OrdinalIgnoreCase))
+        if (name.Length == 0)
         {
-            return name.Length == 0
-                ? "Choose the defenseclaw.exe file itself, not a folder."
-                : $"The file must be named defenseclaw.exe (this one is \"{name}\").";
+            return "Choose the defenseclaw.exe file itself, not a folder.";
+        }
+
+        // Lookup only ever picks "defenseclaw.exe", so an extensionless "defenseclaw" would be a choice the lookup never makes: refused, with the reason.
+        if (string.Equals(name, CliExecutableName, StringComparison.OrdinalIgnoreCase))
+        {
+            return "The file must be named defenseclaw.exe, with the .exe extension (a name without it is not accepted).";
+        }
+
+        if (!string.Equals(name, CliExecutableName + ".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"The file must be named defenseclaw.exe (this one is \"{name}\").";
         }
 
         return null;

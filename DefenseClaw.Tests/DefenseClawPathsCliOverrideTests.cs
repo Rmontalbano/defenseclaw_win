@@ -128,11 +128,22 @@ public class DefenseClawPathsCliOverrideTests
     [Theory]
     [InlineData(@"D:\tools\dc\defenseclaw.exe")]
     [InlineData(@"D:\tools\dc\DefenseClaw.EXE")]
-    [InlineData(@"D:\tools\dc\defenseclaw")]
     [InlineData(@"  D:\tools\dc\defenseclaw.exe  ")]
     [InlineData(@"\\?\D:\tools\dc\defenseclaw.exe")]
-    public void An_existing_file_named_defenseclaw_is_accepted(string path) =>
+    public void An_existing_file_named_defenseclaw_exe_is_accepted(string path) =>
         Assert.Null(DefenseClawPaths.CheckCliPathOverride(path, _ => true));
+
+    [Theory]
+    [InlineData(@"D:\tools\dc\defenseclaw")]
+    [InlineData(@"D:\tools\dc\DEFENSECLAW")]
+    public void An_extensionless_defenseclaw_is_refused_with_the_reason_even_when_the_file_is_there(string path)
+    {
+        var problem = DefenseClawPaths.CheckCliPathOverride(path, _ => true);
+
+        Assert.NotNull(problem);
+        Assert.Contains("defenseclaw.exe", problem, StringComparison.Ordinal);
+        Assert.Contains(".exe extension", problem, StringComparison.Ordinal);
+    }
 
     [Theory]
     [InlineData(@"\\server\share\dc\defenseclaw.exe")]
@@ -155,6 +166,7 @@ public class DefenseClawPathsCliOverrideTests
     [InlineData(@"\\?\UNC\server\share\defenseclaw.exe", "UNC")]
     [InlineData(@"tools\defenseclaw.exe", "full path")]
     [InlineData(@"D:\tools\dc\notepad.exe", "notepad.exe")]
+    [InlineData(@"D:\tools\dc\defenseclaw", ".exe extension")]
     [InlineData(@"D:\tools\dc\", "folder")]
     public void A_refused_override_is_ignored_with_a_visible_reason_and_the_lookup_carries_on(string bad, string reasonContains)
     {
@@ -213,6 +225,7 @@ public class DefenseClawPathsCliOverrideTests
 
     [Theory]
     [InlineData(@"D:\tools\dc\notepad.exe", "notepad.exe")]
+    [InlineData(@"D:\tools\dc\defenseclaw.exe.exe", "defenseclaw.exe.exe")]
     [InlineData(@"D:\tools\dc\defenseclaw-gateway.exe", "defenseclaw-gateway.exe")]
     [InlineData(@"D:\tools\dc\defenseclaw.exe.bak", "defenseclaw.exe.bak")]
     [InlineData(@"D:\tools\dc\defenseclaw.cmd", "defenseclaw.cmd")]

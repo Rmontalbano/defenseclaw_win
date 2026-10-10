@@ -340,8 +340,12 @@ internal sealed class RestartQueue : IDisposable
         }
     }
 
+    /// <summary>
+    /// The version the queue may decide on: the trusted one (<see cref="GatewaySnapshot.TrustedBinaryVersion"/>), so a version claimed by an
+    /// unverified port owner never applies or keeps lines (CUST-341). Null when unknown or unverified.
+    /// </summary>
     private static string? VersionOf(GatewaySnapshot snapshot) =>
-        string.IsNullOrWhiteSpace(snapshot.BinaryVersion) ? null : snapshot.BinaryVersion.Trim();
+        string.IsNullOrWhiteSpace(snapshot.TrustedBinaryVersion) ? null : snapshot.TrustedBinaryVersion.Trim();
 
     private void RaiseChanged()
     {
