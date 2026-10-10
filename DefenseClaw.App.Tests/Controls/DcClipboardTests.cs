@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Windows;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.App.Views.Controls;
@@ -175,5 +176,14 @@ public sealed class DcClipboardTests : IDisposable
         });
 
         Assert.Empty(_notices);
+    }
+
+    [Fact]
+    public void The_copy_data_carries_the_format_that_keeps_it_out_of_clipboard_history()
+    {
+        var data = DcClipboard.CreateDataObject("ENV=1");
+
+        Assert.True(data.GetDataPresent(DcClipboard.ExcludeFromMonitorFormat));
+        Assert.Equal("ENV=1", data.GetData(DataFormats.UnicodeText));
     }
 }

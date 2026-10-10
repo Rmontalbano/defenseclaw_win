@@ -55,7 +55,7 @@ public partial class DcCommandOutput : UserControl
         CopyButton.IsEnabled = false;
     }
 
-    /// <summary>Replaces what writes to the clipboard (tests); the default is <see cref="Clipboard.SetText(string)"/>.</summary>
+    /// <summary>Replaces what writes to the clipboard (tests); the default is <see cref="DcClipboard"/>.</summary>
     public Action<string>? ClipboardWriter { get; set; }
 
     /// <summary>The output, as it should be displayed (already scrubbed).</summary>

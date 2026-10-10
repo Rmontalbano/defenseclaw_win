@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -523,6 +524,7 @@ public static class ShieldIconFactory
 
     private const int SmCxSmIcon = 49;
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
 }

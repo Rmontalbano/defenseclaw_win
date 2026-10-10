@@ -274,8 +274,40 @@ public sealed partial class PluginsPanelViewModel : GovernPanelViewModelBase
                     target,
                     "'plugin install' has no option to read it from elsewhere, and the CLI also records the install source in its own " +
                     "log. Download and extract the archive yourself, then install from the folder (an absolute path) instead."),
+                InstallSourceWarning(target),
             });
         }
+    }
+
+    /// <summary>The heading of <see cref="InstallSourceWarning"/>.</summary>
+    internal const string InstallSourceTitle = "The install source is not protected";
+
+    /// <summary>
+    /// The bar a plugin install carries when its source is a plain <c>http://</c> address (the download is neither encrypted nor
+    /// checked, so anyone on the network path can change what is installed) or a network share (<c>\\server\share</c>: whoever
+    /// controls the share controls what is installed, and an unreachable share can stall the install). Null for any other source.
+    /// </summary>
+    internal static CommandReviewWarning? InstallSourceWarning(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (target.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            return new CommandReviewWarning(
+                InstallSourceTitle,
+                "The source is a plain http:// address: the download is not encrypted or checked, so anyone on the network path can change " +
+                "what gets installed. Prefer an https:// address or a folder on this machine.");
+        }
+
+        if (target.StartsWith(@"\\", StringComparison.Ordinal) || target.StartsWith("//", StringComparison.Ordinal))
+        {
+            return new CommandReviewWarning(
+                InstallSourceTitle,
+                "The source is a network share (UNC path). Whoever controls the share controls what gets installed, and an unreachable " +
+                "share can stall the install. Prefer a copy of the folder on this machine.");
+        }
+
+        return null;
     }
 
     /// <summary>

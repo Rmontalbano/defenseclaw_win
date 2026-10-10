@@ -12,7 +12,7 @@ A **read-mostly companion** for a local DefenseClaw installation: a system-tray 
 
 ## Design principle
 
-**All state changes go through the `defenseclaw` CLI.** The app never writes DefenseClaw state directly; every mutation is executed as a logged CLI invocation whose exact argv, live output, and exit status appear in the Activity panel. Secrets never go on argv: they reach the CLI through its own console prompt, stdin, or, for commands with an environment-variable fallback (Splunk and observability tokens), that one child process's environment.
+**All state changes go through the `defenseclaw` CLI.** The app never writes DefenseClaw state directly; every mutation is executed as a logged CLI invocation whose exact argv, live output, and exit status appear in the Activity panel. The app refuses known secrets on argv: a value it recognises as a secret is never put on the command line. Other secrets reach the CLI through its own console prompt, stdin, or, for commands with an environment-variable fallback (Splunk and observability tokens), that one child process's environment. Three routes can still carry a secret on argv, because the CLI takes the value there: `mcp set --env`, `mcp set --url` and `plugin install <url>`. The review warns when a value typed into one of those forms looks like a secret; the warning does not stop the command.
 
 ## Data sources
 

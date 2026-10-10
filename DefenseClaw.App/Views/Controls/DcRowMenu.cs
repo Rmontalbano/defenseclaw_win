@@ -168,6 +168,12 @@ public static class DcClipboard
     /// <summary>The most characters one copy puts on the clipboard (8 MB as UTF-16; the TUI refuses anything over 16 MiB).</summary>
     public const int MaxChars = 4_000_000;
 
+    /// <summary>
+    /// The clipboard format that asks clipboard history and cloud clipboard sync not to keep the copy (Windows 10 1809 and later). Every
+    /// copy carries it: what is copied here is often command output, argv, environment or log text, which can hold a secret.
+    /// </summary>
+    public const string ExcludeFromMonitorFormat = "ExcludeClipboardContentFromMonitorProcessing";
+
     /// <summary>What a failed copy says.</summary>
     public const string FailureText = "Could not use the clipboard: another program is holding it. Try again.";
 
@@ -182,7 +188,7 @@ public static class DcClipboard
     /// </summary>
     public static event Action<string>? Notice;
 
-    /// <summary>Test seam: what writes to the clipboard (default: <see cref="Clipboard.SetText(string)"/>). Throws like the real one when it is held.</summary>
+    /// <summary>Test seam: what writes to the clipboard (default: <see cref="SetClipboard"/>, the text with <see cref="ExcludeFromMonitorFormat"/>). Throws like the real one when it is held.</summary>
     internal static Action<string>? Writer { get; set; }
 
     /// <summary>Test seam: what waits between retries (default: <see cref="Thread.Sleep(TimeSpan)"/>).</summary>
@@ -244,9 +250,26 @@ public static class DcClipboard
         }
     }
 
+    /// <summary>
+    /// The data a copy puts on the clipboard: the text, and <see cref="ExcludeFromMonitorFormat"/> (its value is ignored; the format's presence is
+    /// the request). Built without touching the clipboard, so a test can check it.
+    /// </summary>
+    internal static DataObject CreateDataObject(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var data = new DataObject();
+        data.SetText(text);
+        data.SetData(ExcludeFromMonitorFormat, new byte[] { 0, 0, 0, 0 });
+        return data;
+    }
+
+    /// <summary>The real clipboard write: <see cref="CreateDataObject"/>, kept on the clipboard after the app exits (copy: true).</summary>
+    private static void SetClipboard(string text) => Clipboard.SetDataObject(CreateDataObject(text), copy: true);
+
     private static bool WriteWithRetry(string text)
     {
-        var write = Writer ?? Clipboard.SetText;
+        var write = Writer ?? SetClipboard;
         var sleep = Sleeper ?? Thread.Sleep;
         var started = Stopwatch.StartNew();
         while (true)

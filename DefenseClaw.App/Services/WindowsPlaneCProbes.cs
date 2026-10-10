@@ -119,6 +119,7 @@ internal sealed class WindowsPlaneCProbes : IPlaneCProbes
 #pragma warning restore CA1031
     }
 
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [DllImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetTokenInformation(IntPtr token, int informationClass, IntPtr information, int length, out int returnLength);
