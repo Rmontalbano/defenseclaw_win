@@ -139,15 +139,23 @@ public sealed class ConnectorHookTotalsReader
     private long _scanned;
     private DateTime _lastRebuild = DateTime.MinValue;
     private long _reads;
+    private readonly HookTotalsCacheStore? _cache;
+    private HookTotalsFingerprint? _fingerprint;
+    private bool _cacheLoaded;
 
     /// <param name="databasePath">Path to <c>audit.db</c>.</param>
     /// <param name="chunk">How many hook rows one scan statement covers; smaller in a test so a catch-up spans reads.</param>
-    public ConnectorHookTotalsReader(string databasePath, int chunk = 2_000)
+    /// <param name="cache">
+    /// Where the block tally is kept between launches (CUST-279); null keeps it in memory only. Consulted on the first read, not at construction,
+    /// so a reader nobody reads from (a tray-only launch) touches neither the database nor the cache.
+    /// </param>
+    public ConnectorHookTotalsReader(string databasePath, int chunk = 2_000, HookTotalsCacheStore? cache = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(chunk, 1);
         DatabasePath = databasePath;
         _chunk = chunk;
+        _cache = cache;
         _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
     }
 
@@ -368,6 +376,11 @@ public sealed class ConnectorHookTotalsReader
                 total += count;
             }
 
+            if (_cache is not null)
+            {
+                await AdoptCacheAsync(connection, snapshot, total, cancellationToken).ConfigureAwait(false);
+            }
+
             await ScanAsync(connection, snapshot, columns, total, clock, limit, cancellationToken).ConfigureAwait(false);
             var recent = await RecentAsync(connection, snapshot, columns, cancellationToken).ConfigureAwait(false);
 
@@ -395,6 +408,66 @@ public sealed class ConnectorHookTotalsReader
     }
 
     private bool _scanIncomplete;
+
+    private void ResetTally()
+    {
+        _blocks.Clear();
+        _markTimestamp = string.Empty;
+        _markRowId = -1;
+        _scanned = 0;
+    }
+
+    /// <summary>
+    /// First read: resumes from the saved tally when it belongs to this very database (same path, creation time and schema version) and is not
+    /// ahead of what the cheap total says exists (retention pruned rows). Later reads: starts over if the database became another one under us.
+    /// </summary>
+    private async Task AdoptCacheAsync(SqliteConnection connection, SqliteTransaction transaction, long total, CancellationToken cancellationToken)
+    {
+        var fingerprint = await FingerprintAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        if (!_cacheLoaded)
+        {
+            _cacheLoaded = true;
+            var saved = _cache!.Load();
+            if (saved is not null && saved.Fingerprint.Matches(fingerprint) && saved.Scanned <= total)
+            {
+                ResetTally();
+                foreach (var (connector, count) in saved.Blocks)
+                {
+                    _blocks[connector] = count;
+                }
+
+                _markTimestamp = saved.MarkTimestamp;
+                _markRowId = saved.MarkRowId;
+                _scanned = saved.Scanned;
+            }
+        }
+        else if (_fingerprint is not null && !_fingerprint.Matches(fingerprint))
+        {
+            ResetTally();
+        }
+
+        _fingerprint = fingerprint;
+    }
+
+    private async Task<HookTotalsFingerprint> FingerprintAsync(SqliteConnection connection, SqliteTransaction transaction, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "PRAGMA schema_version";
+        var version = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        return new HookTotalsFingerprint(Path.GetFullPath(DatabasePath), File.GetCreationTimeUtc(DatabasePath).Ticks, version);
+    }
+
+    /// <summary>Writes the tally and its watermark after a completed slice; a no-op without a cache.</summary>
+    private void SaveTally()
+    {
+        if (_cache is null || _fingerprint is null)
+        {
+            return;
+        }
+
+        _ = _cache.Save(new HookTotalsCacheState(_fingerprint, _markTimestamp, _markRowId, _scanned, new Dictionary<string, long>(_blocks, StringComparer.OrdinalIgnoreCase)));
+    }
 
     /// <summary>The all-time hook-call counts per connector: a covering-index group count.</summary>
     private static async Task<Dictionary<string, long>> CallsAsync(SqliteConnection connection, SqliteTransaction transaction, HashSet<string> columns, CancellationToken cancellationToken)
@@ -457,6 +530,11 @@ public sealed class ConnectorHookTotalsReader
                 }
             }
 
+            if (rows > 0)
+            {
+                SaveTally();   // a completed slice: the tally and the watermark agree on exactly the rows read
+            }
+
             if (rows < _chunk)
             {
                 // Caught up. The tally must cover exactly the rows the cheap count sees; if it does not, start over once.
@@ -464,10 +542,7 @@ public sealed class ConnectorHookTotalsReader
                 {
                     _lastRebuild = DateTime.UtcNow;
                     resetIfStale = false;
-                    _blocks.Clear();
-                    _markTimestamp = string.Empty;
-                    _markRowId = -1;
-                    _scanned = 0;
+                    ResetTally();
                     continue;
                 }
 

@@ -83,7 +83,8 @@ public sealed class AppServices : IDisposable
         RuntimeProbeRunner? runtimeProbeRunner = null,
         IDockerProbe? dockerProbe = null,
         ITerraformProbe? terraformProbe = null,
-        ReaderTimeouts? readerTimeouts = null)
+        ReaderTimeouts? readerTimeouts = null,
+        string? hookTotalsCacheDirectory = null)
     {
         Paths = startup.Paths;
         ReaderTimeouts = readerTimeouts ?? ReaderTimeouts.Production;
@@ -163,7 +164,9 @@ public sealed class AppServices : IDisposable
         Navigation = new ShellNavigation();
         AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges, readTimeout: ReaderTimeouts.AlertQueue);
         ConnectorScope = new ConnectorScope(Monitor);
-        HookTotals = new ConnectorHookTotalsReader(Paths.AuditDatabasePath);
+        HookTotals = new ConnectorHookTotalsReader(
+            Paths.AuditDatabasePath,
+            cache: hookTotalsCacheDirectory is null ? null : new HookTotalsCacheStore(hookTotalsCacheDirectory));
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
         StatusFacts = new StatusFacts();
         InventoryBom = new InventoryBomStore();
@@ -220,10 +223,17 @@ public sealed class AppServices : IDisposable
 
     /// <summary>
     /// The one all-time hook-call / block reader of the process, shared by the Overview tiles and the tray flyout so both show the same numbers
-    /// and the incremental block scan runs once, not once per surface. It holds a connection string and nothing else until a surface reads
+    /// and the incremental block scan runs once, not once per surface. Its tally is kept under <see cref="DefaultHookTotalsCacheDirectory"/>
+    /// between launches (CUST-279). It holds a connection string and nothing else until a surface reads
     /// from it: a tray-only launch starts no catch-up until the flyout is first opened.
     /// </summary>
     internal ConnectorHookTotalsReader HookTotals { get; }
+
+    /// <summary>Where the app keeps the block tally between launches: its own folder under <c>%LOCALAPPDATA%</c>, never the DefenseClaw data directory.</summary>
+    internal static string DefaultHookTotalsCacheDirectory { get; } = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "DefenseClaw.App",
+        "cache");
 
     public ConfigStore ConfigStore { get; }
 
@@ -438,7 +448,7 @@ public sealed class AppServices : IDisposable
         {
             var startup = _pendingStartup ?? BeginLoad(CreateStartup(), onPoolThread: false);
             _pendingStartup = null;
-            Instance = new AppServices(startup);
+            Instance = new AppServices(startup, hookTotalsCacheDirectory: DefaultHookTotalsCacheDirectory);
         }
 
         return Instance;
@@ -508,6 +518,7 @@ public sealed class AppServices : IDisposable
     /// How long the audit readers may run (<see cref="ReaderTimeouts"/>); null keeps the app's own limits. A test suite passes its ceiling
     /// (<c>TestServices.ReaderTimeouts</c>), because on a busy machine a read can wait longer for a thread than the app would ever let it.
     /// </param>
+    /// <param name="hookTotalsCacheDirectory">Where the block tally is persisted; null (the default here) keeps it in memory so a test never touches the real <c>%LOCALAPPDATA%</c>.</param>
     internal static AppServices CreateIsolated(
         DefenseClawPaths paths,
         string? claudeSettingsPath = null,
@@ -517,7 +528,8 @@ public sealed class AppServices : IDisposable
         RuntimeProbeRunner? runtimeProbeRunner = null,
         IDockerProbe? dockerProbe = null,
         ITerraformProbe? terraformProbe = null,
-        ReaderTimeouts? readerTimeouts = null)
+        ReaderTimeouts? readerTimeouts = null,
+        string? hookTotalsCacheDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -536,7 +548,7 @@ public sealed class AppServices : IDisposable
         terraformProbe ??= new FixedTerraformProbe(new TerraformStatus(TerraformState.NotInstalled, "Terraform is not looked at in an isolated composition.", string.Empty, string.Empty));
         // Unlike those, the read limits stay the app's own unless a test says otherwise: they are not about reaching the real install. A test
         // suite on a machine that can be arbitrarily busy passes its ceiling (TestServices).
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts);
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
