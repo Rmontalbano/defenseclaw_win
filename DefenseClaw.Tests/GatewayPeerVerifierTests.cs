@@ -52,12 +52,13 @@ public class GatewayPeerVerifierTests
     }
 
     [Fact]
-    public void A_gateway_beside_the_one_the_path_resolves_to_is_trusted_too()
+    public void A_gateway_beside_the_one_the_path_resolves_to_is_not_trusted()
     {
+        // CUST-247: trust follows the installer's directory, not an environment variable.
         var onPath = @"D:\tools\defenseclaw-gateway.exe";
         var verifier = Verifier(Paths(searchPath: new[] { @"D:\tools" }, fileExists: p => p == onPath));
 
-        Assert.Equal(PortOwnerTrust.Gateway, verifier.Classify(Owner("defenseclaw-gateway", onPath)));
+        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Owner("defenseclaw-gateway", onPath)));
     }
 
     [Theory]

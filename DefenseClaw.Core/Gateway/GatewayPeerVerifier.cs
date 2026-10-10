@@ -1,3 +1,4 @@
+using System.Net;
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Runtime;
@@ -34,8 +35,9 @@ public enum PortOwnerTrust
 /// <c>Authorization: Bearer …</c> on every <c>/alerts</c> and <c>/status</c> poll — and a 404 on
 /// <c>/health</c> used to count as "the gateway is running". So the token goes out only when the
 /// port's owner is <c>defenseclaw-gateway</c> <i>and</i> the executable it runs is in the
-/// installer's bin directory (or beside the gateway the PATH resolves to): a name alone is
-/// anyone's to pick. The caller adds the second half, that <c>/health</c> parsed as a
+/// installer's bin directory (never a directory PATH happens to name): a name alone is
+/// anyone's to pick. The authority is <see cref="ForConnection"/>, which judges the owner of the very connection the token rides on;
+/// <see cref="ForPort"/> is the cheap listener pre-check ahead of it. The caller adds the second half, that <c>/health</c> parsed as a
 /// <see cref="Models.GatewayHealth"/> — <see cref="GatewayClient"/> does.
 /// </para>
 /// <para>
@@ -50,10 +52,17 @@ public sealed class GatewayPeerVerifier
     private readonly DefenseClawPaths _paths;
     private readonly IPortOwnerInspector _inspector;
 
-    public GatewayPeerVerifier(DefenseClawPaths paths, IPortOwnerInspector inspector)
+    private readonly IConnectionOwnerInspector? _connections;
+
+    /// <param name="connections">
+    /// Where the owner of one connection is looked up; defaults to <paramref name="inspector"/> when that is one too (the real
+    /// <see cref="PortOwnerInspector"/> is). With none, <see cref="ForConnection"/> refuses everything.
+    /// </param>
+    public GatewayPeerVerifier(DefenseClawPaths paths, IPortOwnerInspector inspector, IConnectionOwnerInspector? connections = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
+        _connections = connections ?? inspector as IConnectionOwnerInspector;
     }
 
     /// <summary>Classifies <paramref name="owner"/>.</summary>
@@ -90,7 +99,71 @@ public sealed class GatewayPeerVerifier
             return () => PortOwnerTrust.Gateway;
         }
 
-        return () => Classify(_inspector.FindListener(port));
+        return () => ClassifyAll(_inspector.FindListeners(port));
+    }
+
+    /// <summary>
+    /// Several sockets can listen on one wildcard-bound port (SO_REUSEADDR), so the verdict is the worst of all of them: nothing
+    /// listening is <see cref="PortOwnerTrust.Unknown"/>, and the port is the gateway's only when every row on it is.
+    /// </summary>
+    public PortOwnerTrust ClassifyAll(IReadOnlyList<PortOwner> owners)
+    {
+        if (owners.Count == 0)
+        {
+            return PortOwnerTrust.Unknown;
+        }
+
+        var verdicts = owners.Select(Classify).ToArray();
+        if (verdicts.Contains(PortOwnerTrust.Other) || verdicts.Contains(PortOwnerTrust.Unknown))
+        {
+            return PortOwnerTrust.Other;
+        }
+
+        return verdicts.Contains(PortOwnerTrust.WslRelay) ? PortOwnerTrust.WslRelay : PortOwnerTrust.Gateway;
+    }
+
+    /// <summary>How many times a connection's table row is looked for, and the pause between looks: the row of a connection that has just completed can lag it by a moment.</summary>
+    public const int ConnectionLookupAttempts = 4;
+
+    public static readonly TimeSpan ConnectionLookupPause = TimeSpan.FromMilliseconds(25);
+
+    /// <summary>
+    /// The per-connection check for <see cref="GatewayClient"/>'s connect callback: given the two ends of a connection that was just made
+    /// to <paramref name="port"/>, finds the TCP-table row for <i>that</i> connection and classifies the process that owns the far end.
+    /// Unlike <see cref="ForPort"/> there is no gap between the lookup and the connection it is about: a listener swapped in after the
+    /// last poll is the owner of its own connection and is judged as such. No row, or no way to read the table, is
+    /// <see cref="PortOwnerTrust.Unknown"/> - the caller refuses it too (fail closed).
+    /// </summary>
+    public Func<IPEndPoint, IPEndPoint, PortOwnerTrust> ForConnection(int port)
+    {
+        // Container mode (see ForPort): the published port is Docker's relay, trusted by the operator's explicit choice.
+        if (_paths.Runtime.Kind == RuntimeKind.Container && _paths.Runtime.TryGetGatewayPort(out var selected) && selected == port)
+        {
+            return (_, _) => PortOwnerTrust.Gateway;
+        }
+
+        return (server, client) =>
+        {
+            if (_connections is null)
+            {
+                return PortOwnerTrust.Unknown;
+            }
+
+            for (var attempt = 0; attempt < ConnectionLookupAttempts; attempt++)
+            {
+                if (_connections.FindConnectionOwner(server, client) is { } owner)
+                {
+                    return Classify(owner);
+                }
+
+                if (attempt + 1 < ConnectionLookupAttempts)
+                {
+                    Thread.Sleep(ConnectionLookupPause);
+                }
+            }
+
+            return PortOwnerTrust.Unknown;
+        };
     }
 
     /// <summary>One-line reason a listener is not trusted, for the banner and the alerts note.</summary>
@@ -139,7 +212,10 @@ public sealed class GatewayPeerVerifier
         return InstallDirectories().Any(directory => string.Equals(directory, imageDirectory, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>The installer's bin directory, and the directory of the gateway PATH resolves to.</summary>
+    /// <summary>
+    /// The installer's directories only. The directory of whichever <c>defenseclaw-gateway</c> PATH resolves to used to count too, which
+    /// made trust follow an environment variable any process of the user can edit; it no longer does.
+    /// </summary>
     private IEnumerable<string> InstallDirectories()
     {
         if (NormalizeDirectory(_paths.BinDirectory) is { } bin)
@@ -155,11 +231,6 @@ public sealed class GatewayPeerVerifier
             {
                 yield return normalized;
             }
-        }
-
-        if (_paths.GatewayCliPath is { } resolved && NormalizeDirectory(Path.GetDirectoryName(resolved)) is { } beside)
-        {
-            yield return beside;
         }
     }
 

@@ -572,7 +572,7 @@ public sealed class AppServices : IDisposable
         Paths.Runtime.TryGetGatewayPort(out var selected) ? selected : configured;
 
     private GatewayClient CreateGatewayClient(int port) =>
-        GatewayClient.Create(port, CurrentToken, verifyPeer: _peerVerifier.ForPort(port));
+        GatewayClient.Create(port, CurrentToken, verifyPeer: _peerVerifier.ForPort(port), verifyConnection: _peerVerifier.ForConnection(port));
 
     /// <summary>
     /// Re-reads config.yaml and the .env file, then re-resolves the token ladder, and

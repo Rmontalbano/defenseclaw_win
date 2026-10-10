@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using DefenseClaw.Core.Config;
@@ -76,6 +77,9 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
     private readonly Func<PortOwnerTrust>? _verifyPeer;
     private readonly bool _ownsHttpClient;
 
+    /// <summary>True when the handler verifies the peer of each connection (<see cref="Create"/> with a <c>verifyConnection</c>): authenticated requests then ask for a connection of their own.</summary>
+    private readonly bool _bindsConnection;
+
     /// <summary>
     /// True while the last <c>/health</c> through this client answered and parsed. Half of the
     /// "may this peer have the token" check; see the type documentation.
@@ -99,8 +103,10 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         HttpClient httpClient,
         Func<SecretValue?>? tokenProvider = null,
         bool ownsHttpClient = false,
-        Func<PortOwnerTrust>? verifyPeer = null)
+        Func<PortOwnerTrust>? verifyPeer = null,
+        bool bindsConnection = false)
     {
+        _bindsConnection = bindsConnection;
         _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _tokenProvider = tokenProvider ?? (static () => null);
         _ownsHttpClient = ownsHttpClient;
@@ -114,16 +120,78 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
     /// exempt loopback - measured: with HTTP_PROXY set, a request for <c>http://127.0.0.1:PORT/</c> goes to the proxy, bearer header
     /// included, in the clear, and never reaches the gateway.
     /// </summary>
-    internal static SocketsHttpHandler CreateHandler() => new() { AllowAutoRedirect = false, UseProxy = false };
+    internal static SocketsHttpHandler CreateHandler(Func<IPEndPoint, IPEndPoint, PortOwnerTrust>? verifyConnection = null)
+    {
+        var handler = new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false };
+        if (verifyConnection is not null)
+        {
+            handler.ConnectCallback = (context, cancellationToken) => ConnectAsync(context, verifyConnection, cancellationToken);
+        }
 
-    /// <summary>Builds a client for the loopback sidecar on <paramref name="port"/>.</summary>
+        return handler;
+    }
+
+    /// <summary>Request option set on every request that carries the token: the connect callback verifies the peer of the connection it opens for it.</summary>
+    internal static readonly HttpRequestOptionsKey<bool> RequiresVerifiedPeerOption = new("DefenseClaw.RequiresVerifiedPeer");
+
+    /// <summary>
+    /// The connect callback behind <c>verifyConnection</c>: the same connection SocketsHttpHandler would make, then - for a request that
+    /// carries the token - the owner of the far end of <i>this</i> socket is looked up in the TCP table (matched on both endpoints) and
+    /// judged before any byte is written. A request without the option (<c>/health</c>) is not held to it. A request with no request
+    /// message at all is held to it: fail closed.
+    /// </summary>
+    private static async ValueTask<Stream> ConnectAsync(
+        SocketsHttpConnectionContext context,
+        Func<IPEndPoint, IPEndPoint, PortOwnerTrust> verifyConnection,
+        CancellationToken cancellationToken)
+    {
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+        try
+        {
+            await socket.ConnectAsync(context.DnsEndPoint, cancellationToken).ConfigureAwait(false);
+
+            var guarded = context.InitialRequestMessage is not { } initial ||
+                          (initial.Options.TryGetValue(RequiresVerifiedPeerOption, out var required) && required);
+            if (guarded)
+            {
+                // From the socket's point of view the far end is "server"; the table row to find has those two as local and remote.
+                var trust = socket.RemoteEndPoint is IPEndPoint server && socket.LocalEndPoint is IPEndPoint client
+                    ? await Task.Run(() => verifyConnection(server, client), cancellationToken).ConfigureAwait(false)
+                    : PortOwnerTrust.Unknown;
+                if (trust != PortOwnerTrust.Gateway)
+                {
+                    throw new GatewayPeerRejectedException(trust);
+                }
+            }
+
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Thrown out of the connect callback for a connection whose far end is not the gateway; surfaces as the inner exception of the request's <see cref="HttpRequestException"/>.</summary>
+    internal sealed class GatewayPeerRejectedException(PortOwnerTrust trust) : IOException("the process on the far end of the connection is not the DefenseClaw gateway")
+    {
+        public PortOwnerTrust Trust { get; } = trust;
+    }
+
+    /// <summary>
+    /// Builds a client for the loopback sidecar on <paramref name="port"/>. With <paramref name="verifyConnection"/> every request that
+    /// carries the token is sent on a connection of its own (never a pooled one) and only after the owner of that connection's far end
+    /// passed the check - see <see cref="GatewayPeerVerifier.ForConnection"/>.
+    /// </summary>
     public static GatewayClient Create(
         int port,
         Func<SecretValue?>? tokenProvider = null,
         TimeSpan? timeout = null,
-        Func<PortOwnerTrust>? verifyPeer = null)
+        Func<PortOwnerTrust>? verifyPeer = null,
+        Func<IPEndPoint, IPEndPoint, PortOwnerTrust>? verifyConnection = null)
     {
-        var handler = CreateHandler();
+        var handler = CreateHandler(verifyConnection);
         var http = new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = new Uri($"http://127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}/"),
@@ -131,7 +199,7 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
             MaxResponseContentBufferSize = DefenseClaw.Core.IO.ReadLimits.HttpBodyBytes,
         };
 
-        return new GatewayClient(http, tokenProvider, ownsHttpClient: true, verifyPeer);
+        return new GatewayClient(http, tokenProvider, ownsHttpClient: true, verifyPeer, bindsConnection: verifyConnection is not null);
     }
 
     public async Task<GatewayResult<GatewayHealth>> GetHealthAsync(CancellationToken cancellationToken = default)
@@ -210,6 +278,14 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
                 return refused;
             }
 
+            if (_bindsConnection)
+            {
+                // The connect callback judges the owner of the connection it opens for this request. A pooled connection was judged for
+                // an earlier request (and /health, which is not held to the check, may have opened it), so this one is never pooled.
+                request.Options.Set(RequiresVerifiedPeerOption, true);
+                request.Headers.ConnectionClose = true;
+            }
+
             var token = _tokenProvider();
             if (token is { IsEmpty: false })
             {
@@ -240,6 +316,10 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
                     maxBodyBytes is null ? HttpCompletionOption.ResponseContentRead : HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken)
                 .ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (FindRejection(ex) is { } rejection)
+        {
+            return GatewayResult<T>.Error(rejection.Trust == PortOwnerTrust.Unknown ? ConnectionUnverifiedMessage : PeerRefusedMessage);
         }
         catch (HttpRequestException ex)
         {
@@ -338,6 +418,22 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
 
     public const string PeerRefusedMessage =
         "the process listening on the gateway port is not the DefenseClaw gateway, so nothing was sent";
+
+    public const string ConnectionUnverifiedMessage =
+        "the connection to the gateway port could not be tied to a process, so nothing was sent";
+
+    private static GatewayPeerRejectedException? FindRejection(Exception ex)
+    {
+        for (var inner = ex; inner is not null; inner = inner.InnerException)
+        {
+            if (inner is GatewayPeerRejectedException rejection)
+            {
+                return rejection;
+            }
+        }
+
+        return null;
+    }
 
     public const string HealthRefusedMessage =
         "the gateway's /health did not answer as expected, so nothing was sent";

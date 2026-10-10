@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Runtime.InteropServices;
 
 namespace DefenseClaw.Core.Net;
@@ -29,6 +30,28 @@ public interface IPortOwnerInspector
 {
     /// <summary>Returns the process listening on <paramref name="port"/>, or null.</summary>
     PortOwner? FindListener(int port);
+
+    /// <summary>
+    /// Every listener row on <paramref name="port"/>. A wildcard-bound port can be shared by several sockets (SO_REUSEADDR), and the
+    /// first row is not necessarily the one that answers, so a trust decision looks at all of them. The default is the single
+    /// <see cref="FindListener"/> answer, for inspectors that only know one.
+    /// </summary>
+    IReadOnlyList<PortOwner> FindListeners(int port) =>
+        FindListener(port) is { } owner ? new[] { owner } : Array.Empty<PortOwner>();
+}
+
+/// <summary>
+/// Finds the process on the far side of one established loopback connection, from the TCP table's row for that very connection
+/// (<c>TCP_TABLE_OWNER_PID_CONNECTIONS</c>) - not from whoever happens to be listening on the port.
+/// </summary>
+public interface IConnectionOwnerInspector
+{
+    /// <summary>
+    /// The owner of the socket whose local end is <paramref name="server"/> and whose remote end is <paramref name="client"/>
+    /// (the connecting side's own endpoints, swapped). Null when there is no such row, or more than one row with different owners:
+    /// an answer that cannot be tied to exactly one process is no answer.
+    /// </summary>
+    PortOwner? FindConnectionOwner(IPEndPoint server, IPEndPoint client);
 }
 
 /// <summary>
@@ -44,7 +67,7 @@ public interface IPortOwnerInspector
 /// times instead; every retry sizes the table afresh.
 /// </para>
 /// </summary>
-public sealed class PortOwnerInspector : IPortOwnerInspector
+public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerInspector
 {
     private const int AfInet = 2;
     private const int AfInet6 = 23;
@@ -60,10 +83,14 @@ public sealed class PortOwnerInspector : IPortOwnerInspector
     /// <summary>How many size-then-fetch rounds are tried before the table is given up on.</summary>
     public const int MaxTableReadAttempts = 5;
 
+    /// <summary>TCP_TABLE_OWNER_PID_CONNECTIONS: every non-listening socket with its owner, both ends of a loopback connection included.</summary>
+    private const int TcpTableOwnerPidConnections = 4;
+
     private readonly TcpTableReader _readTable;
+    private readonly TcpTableReader _readConnectionTable;
 
     public PortOwnerInspector()
-        : this(NativeReadTable)
+        : this(NativeReadTable, NativeReadConnectionTable)
     {
     }
 
@@ -72,8 +99,15 @@ public sealed class PortOwnerInspector : IPortOwnerInspector
     /// query and the fetch.
     /// </param>
     public PortOwnerInspector(TcpTableReader readTable)
+        : this(readTable, NativeReadConnectionTable)
+    {
+    }
+
+    /// <param name="readConnectionTable">The same call for the connections table (a test hands it a synthetic buffer).</param>
+    public PortOwnerInspector(TcpTableReader readTable, TcpTableReader readConnectionTable)
     {
         _readTable = readTable ?? throw new ArgumentNullException(nameof(readTable));
+        _readConnectionTable = readConnectionTable ?? throw new ArgumentNullException(nameof(readConnectionTable));
     }
 
     /// <summary>
@@ -103,6 +137,49 @@ public sealed class PortOwnerInspector : IPortOwnerInspector
 
         return null;
     }
+
+    public IReadOnlyList<PortOwner> FindListeners(int port)
+    {
+        if (port is <= 0 or > 65535 || !OperatingSystem.IsWindows())
+        {
+            return Array.Empty<PortOwner>();
+        }
+
+        return Enumerate(AfInet)
+            .Concat(Enumerate(AfInet6))
+            .Where(entry => entry.Port == port)
+            .Select(Describe)
+            .ToArray();
+    }
+
+    public PortOwner? FindConnectionOwner(IPEndPoint server, IPEndPoint client)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        ArgumentNullException.ThrowIfNull(client);
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        var serverAddress = Unmap(server.Address);
+        var clientAddress = Unmap(client.Address);
+        var pids = new HashSet<int>();
+        foreach (var row in EnumerateConnections(AfInet).Concat(EnumerateConnections(AfInet6)))
+        {
+            if (row.LocalPort == server.Port && row.RemotePort == client.Port &&
+                Unmap(row.LocalAddress).Equals(serverAddress) && Unmap(row.RemoteAddress).Equals(clientAddress))
+            {
+                pids.Add(row.Pid);
+            }
+        }
+
+        // Exactly one owner, or none: a row set that names two processes cannot say who is on the other end.
+        return pids.Count == 1
+            ? Describe((pids.First(), server.Port, server.Address.ToString()))
+            : null;
+    }
+
+    private static IPAddress Unmap(IPAddress address) => address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
 
     /// <summary>All listening sockets, for a diagnostics view.</summary>
     public IReadOnlyList<PortOwner> ListListeners()
@@ -207,24 +284,64 @@ public sealed class PortOwnerInspector : IPortOwnerInspector
         }
     }
 
+    private IEnumerable<(int Pid, IPAddress LocalAddress, int LocalPort, IPAddress RemoteAddress, int RemotePort)> EnumerateConnections(int addressFamily)
+    {
+        var buffer = ReadTable(_readConnectionTable, addressFamily);
+        if (buffer == IntPtr.Zero)
+        {
+            yield break;
+        }
+
+        try
+        {
+            var count = Marshal.ReadInt32(buffer);
+            var rowSize = addressFamily == AfInet
+                ? Marshal.SizeOf<MibTcpRowOwnerPid>()
+                : Marshal.SizeOf<MibTcp6RowOwnerPid>();
+
+            var cursor = buffer + sizeof(int);
+            for (var i = 0; i < count; i++, cursor += rowSize)
+            {
+                if (addressFamily == AfInet)
+                {
+                    var row = Marshal.PtrToStructure<MibTcpRowOwnerPid>(cursor);
+                    yield return ((int)row.OwningPid, new IPAddress(BitConverter.GetBytes(row.LocalAddr)), DecodePort(row.LocalPort),
+                        new IPAddress(BitConverter.GetBytes(row.RemoteAddr)), DecodePort(row.RemotePort));
+                }
+                else
+                {
+                    var row = Marshal.PtrToStructure<MibTcp6RowOwnerPid>(cursor);
+                    yield return ((int)row.OwningPid, new IPAddress(row.LocalAddr), DecodePort(row.LocalPort),
+                        new IPAddress(row.RemoteAddr), DecodePort(row.RemotePort));
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
     /// <summary>
     /// The size-then-fetch pair, retried while the table outgrows the buffer between the two
     /// calls. Returns an unmanaged buffer holding the table (the caller frees it), or
     /// <see cref="IntPtr.Zero"/> when there is none to read.
     /// </summary>
-    private IntPtr ReadTable(int addressFamily)
+    private IntPtr ReadTable(int addressFamily) => ReadTable(_readTable, addressFamily);
+
+    private static IntPtr ReadTable(TcpTableReader readTable, int addressFamily)
     {
         for (var attempt = 0; attempt < MaxTableReadAttempts; attempt++)
         {
             var size = 0;
-            var status = _readTable(IntPtr.Zero, ref size, addressFamily);
+            var status = readTable(IntPtr.Zero, ref size, addressFamily);
             if ((status != ErrorInsufficientBuffer && status != NoError) || size <= 0)
             {
                 return IntPtr.Zero;
             }
 
             var buffer = Marshal.AllocHGlobal(size);
-            status = _readTable(buffer, ref size, addressFamily);
+            status = readTable(buffer, ref size, addressFamily);
             if (status == NoError)
             {
                 return buffer;
@@ -242,6 +359,9 @@ public sealed class PortOwnerInspector : IPortOwnerInspector
 
     private static uint NativeReadTable(IntPtr table, ref int size, int addressFamily) =>
         GetExtendedTcpTable(table, ref size, false, addressFamily, TcpTableOwnerPidListener, 0);
+
+    private static uint NativeReadConnectionTable(IntPtr table, ref int size, int addressFamily) =>
+        GetExtendedTcpTable(table, ref size, false, addressFamily, TcpTableOwnerPidConnections, 0);
 
     /// <summary>The port sits in the low two bytes of the dword, in network byte order.</summary>
     private static int DecodePort(uint value) => (int)(((value & 0xFF) << 8) | ((value >> 8) & 0xFF));
