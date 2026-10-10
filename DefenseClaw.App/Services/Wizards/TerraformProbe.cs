@@ -326,6 +326,7 @@ public sealed class TerraformProbe : ITerraformProbe
             info.ArgumentList.Add(argument);
         }
 
+        _ = ChildEnvironment.StripSecrets(info);
         info.Environment["CHECKPOINT_DISABLE"] = "1";
         return info;
     }

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace DefenseClaw.App.Services.Wizards;
@@ -57,7 +58,11 @@ internal sealed record CliIdentity(string ExePath, long Length, long LastWriteUt
 internal sealed class SetupHelpDiskCache
 {
     /// <summary>Bump when the file's shape changes; a file with any other value is discarded.</summary>
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
+
+    private const int KeyBytes = 32;
+
+    private static readonly byte[] KeyEntropy = Encoding.UTF8.GetBytes("DefenseClaw.App.SetupHelpDiskCache.v1");
 
     /// <summary>How long stores are coalesced before the file is rewritten.</summary>
     public static readonly TimeSpan DefaultFlushDelay = TimeSpan.FromSeconds(1);
@@ -69,6 +74,10 @@ internal sealed class SetupHelpDiskCache
     private readonly TimeSpan _flushDelay;
     private readonly object _gate = new();
     private readonly object _writeGate = new();
+    private readonly object _keyGate = new();
+    private readonly Func<byte[]?>? _macKeyOverride;
+    private byte[]? _macKey;
+    private bool _macKeyResolved;
 
     private bool _loaded;
     private bool _readEnabled = true;
@@ -99,14 +108,20 @@ internal sealed class SetupHelpDiskCache
     /// Coalescing window for writes. <see cref="Timeout.InfiniteTimeSpan"/> never flushes on its
     /// own; the caller must call <see cref="Flush"/> (tests).
     /// </param>
+    /// <param name="macKey">
+    /// The HMAC key source; a test replaces it. Default: a DPAPI-protected key file beside <paramref name="filePath"/>. Null from the
+    /// source means no key: nothing is served from disk.
+    /// </param>
     public SetupHelpDiskCache(
         string filePath,
         Func<string, CancellationToken, Task<string?>> resolveVersion,
-        TimeSpan? flushDelay = null)
+        TimeSpan? flushDelay = null,
+        Func<byte[]?>? macKey = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(filePath);
         ArgumentNullException.ThrowIfNull(resolveVersion);
 
+        _macKeyOverride = macKey;
         _filePath = filePath;
         _resolveVersion = resolveVersion;
         _flushDelay = flushDelay ?? DefaultFlushDelay;
@@ -361,10 +376,117 @@ internal sealed class SetupHelpDiskCache
             return;
         }
 
-        _fileIdentity = new CliIdentity(model.Cli!.Exe!, model.Cli.Length, model.Cli.LastWriteUtcTicks, model.Cli.Version!);
-        _fileScreens = model.Screens!
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var identity = new CliIdentity(model.Cli!.Exe!, model.Cli.Length, model.Cli.LastWriteUtcTicks, model.Cli.Version!);
+
+        // Only an entry whose MAC verifies under this user's key is believed: a file edited or dropped in by anything that
+        // does not hold the key (another program writing the file, a copy from another account) is a cache miss, entry by entry.
+        var key = MacKey();
+        var screens = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (key is not null && model.Macs is { } macs)
+        {
+            foreach (var (screenKey, text) in model.Screens!)
+            {
+                if (!string.IsNullOrWhiteSpace(text) &&
+                    macs.TryGetValue(screenKey, out var mac) &&
+                    MacMatches(key, identity, screenKey, text, mac))
+                {
+                    screens[screenKey] = text;
+                }
+            }
+        }
+
+        if (screens.Count == 0)
+        {
+            return;
+        }
+
+        _fileIdentity = identity;
+        _fileScreens = screens;
+    }
+
+    // ------------------------------------------------------------------ integrity (CUST-251)
+
+    private static string ComputeMac(byte[] key, CliIdentity identity, string screenKey, string text)
+    {
+        // Length-prefixed fields: no value can be shifted into its neighbour to make two different entries hash alike.
+        var payload = string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"{SchemaVersion}|{identity.ExePath.Length}:{identity.ExePath}|{identity.Length}|{identity.LastWriteUtcTicks}|{identity.Version.Length}:{identity.Version}|{screenKey.Length}:{screenKey}|{text.Length}:{text}");
+        return Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(payload)));
+    }
+
+    private static bool MacMatches(byte[] key, CliIdentity identity, string screenKey, string text, string? claimed) =>
+        claimed is not null &&
+        CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(ComputeMac(key, identity, screenKey, text)),
+            Encoding.ASCII.GetBytes(claimed.ToUpperInvariant()));
+
+    /// <summary>
+    /// The HMAC key: 32 random bytes, protected for the current Windows user with DPAPI and kept beside the cache file. Created on first use;
+    /// a key file that cannot be unprotected (a copy from another account, a forged file) is replaced, which retires every entry that
+    /// carried the old one. Null when no key can be had at all - nothing is then trusted on read, and entries are written without a MAC.
+    /// <para>
+    /// This stops a file that was merely edited or planted (by a script, a sync tool, another account) from putting forged help text in front of the
+    /// operator. It does not stop code running as this same user, which can ask DPAPI for the key just as this app does.
+    /// </para>
+    /// </summary>
+    private byte[]? MacKey()
+    {
+        lock (_keyGate)
+        {
+            if (_macKeyResolved)
+            {
+                return _macKey;
+            }
+
+            _macKeyResolved = true;
+            _macKey = _macKeyOverride is not null ? _macKeyOverride() : LoadOrCreateKey(_filePath + ".key");
+            return _macKey;
+        }
+    }
+
+    private static byte[]? LoadOrCreateKey(string keyPath)
+    {
+        try
+        {
+            if (File.Exists(keyPath))
+            {
+                try
+                {
+                    var key = ProtectedData.Unprotect(File.ReadAllBytes(keyPath), KeyEntropy, DataProtectionScope.CurrentUser);
+                    if (key.Length == KeyBytes)
+                    {
+                        return key;
+                    }
+                }
+                catch (CryptographicException)
+                {
+                    // Not ours (or damaged): replaced below.
+                }
+            }
+
+            var fresh = RandomNumberGenerator.GetBytes(KeyBytes);
+            var directory = Path.GetDirectoryName(keyPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                _ = Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllBytes(keyPath, ProtectedData.Protect(fresh, KeyEntropy, DataProtectionScope.CurrentUser));
+            return fresh;
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -475,6 +597,9 @@ internal sealed class SetupHelpDiskCache
                     Version = identity.Version,
                 },
                 Screens = screens,
+                Macs = MacKey() is { } key
+                    ? screens.ToDictionary(pair => pair.Key, pair => ComputeMac(key, identity, pair.Key, pair.Value), StringComparer.Ordinal)
+                    : null,
             };
 
             File.WriteAllText(temp, JsonSerializer.Serialize(model, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -526,6 +651,9 @@ internal sealed class SetupHelpDiskCache
         public FileCli? Cli { get; set; }
 
         public Dictionary<string, string>? Screens { get; set; }
+
+        /// <summary>Hex HMAC-SHA256 per screen key (see <see cref="MacKey"/>); an entry without a matching one is not served.</summary>
+        public Dictionary<string, string>? Macs { get; set; }
     }
 
     private sealed class FileCli

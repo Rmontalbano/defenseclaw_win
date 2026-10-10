@@ -42,7 +42,8 @@ public sealed class SetupHelpDiskCacheTests : IDisposable
         string? version = "0.8.10",
         Func<IReadOnlyList<string>, HelpProbeResult>? answer = null,
         TimeSpan? flushDelay = null,
-        string? cacheFile = null)
+        string? cacheFile = null,
+        Func<byte[]?>? macKey = null)
     {
         var cache = new SetupHelpDiskCache(
             cacheFile ?? _cacheFile,
@@ -51,7 +52,8 @@ public sealed class SetupHelpDiskCacheTests : IDisposable
                 _ = Interlocked.Increment(ref _versionCalls);
                 return Task.FromResult(version);
             },
-            flushDelay ?? Timeout.InfiniteTimeSpan);
+            flushDelay ?? Timeout.InfiniteTimeSpan,
+            macKey);
 
         var probe = new SetupHelpProbe(
             Paths(),
@@ -463,7 +465,7 @@ public sealed class SetupHelpDiskCacheTests : IDisposable
         Assert.True(await FlushAsync(cache));
 
         Assert.Equal(new[] { "claude-code", "llm" }, KeysInFile());
-        Assert.Equal(new[] { _cacheFile }, Directory.GetFiles(Path.GetDirectoryName(_cacheFile)!));
+        Assert.Equal(new[] { _cacheFile }, CacheFiles());
     }
 
     [Fact]
@@ -477,7 +479,132 @@ public sealed class SetupHelpDiskCacheTests : IDisposable
         Assert.True(await FlushAsync(cache));
 
         Assert.Equal(new[] { "claude-code" }, KeysInFile());
-        Assert.Equal(new[] { _cacheFile }, Directory.GetFiles(Path.GetDirectoryName(_cacheFile)!));
+        Assert.Equal(new[] { _cacheFile }, CacheFiles());
+    }
+
+    // ------------------------------------------------------------------ integrity (CUST-251)
+
+    private static byte[] Key(byte fill) => Enumerable.Repeat(fill, 32).ToArray();
+
+    /// <summary>The files beside the cache other than its key file.</summary>
+    private string[] CacheFiles() =>
+        Directory.GetFiles(Path.GetDirectoryName(_cacheFile)!).Where(f => !f.EndsWith(".key", StringComparison.Ordinal)).ToArray();
+
+    [Fact]
+    public async Task Every_entry_carries_a_mac_and_a_relaunch_with_the_same_key_serves_it()
+    {
+        var (first, firstCache) = Launch(macKey: () => Key(1));
+        await Help(first, "claude-code");
+        Assert.True(await FlushAsync(firstCache));
+
+        using (var document = ReadFile())
+        {
+            var mac = document.RootElement.GetProperty("macs").GetProperty("claude-code").GetString();
+            Assert.Equal(64, mac!.Length);
+        }
+
+        _probed.Clear();
+        var (second, _) = Launch(macKey: () => Key(1));
+        await Help(second, "claude-code");
+        Assert.Empty(_probed);
+    }
+
+    [Fact]
+    public async Task An_entry_whose_text_was_edited_in_the_file_is_a_miss_and_is_probed_again()
+    {
+        var (seed, seedCache) = Launch(macKey: () => Key(1));
+        await Help(seed, "claude-code");
+        await Help(seed, "llm");
+        Assert.True(await FlushAsync(seedCache));
+
+        // A forged help screen with a valid identity, as a same-user script could write it without the key.
+        string original;
+        using (var document = ReadFile())
+        {
+            original = document.RootElement.GetProperty("screens").GetProperty("llm").GetString()!;
+        }
+
+        var forged = File.ReadAllText(_cacheFile).Replace(
+            JsonSerializer.Serialize(original).Trim('"'),
+            "Usage: defenseclaw setup llm --run-this-instead",
+            StringComparison.Ordinal);
+        File.WriteAllText(_cacheFile, forged);
+
+        _probed.Clear();
+        var (after, _) = Launch(macKey: () => Key(1));
+        var claude = await Help(after, "claude-code");
+        var llm = await Help(after, "llm");
+
+        Assert.Equal(new[] { "llm" }, _probed.ToArray());
+        Assert.DoesNotContain("run-this-instead", llm.Text, StringComparison.Ordinal);
+        Assert.True(claude.Succeeded);
+    }
+
+    [Fact]
+    public async Task A_file_with_no_macs_or_with_a_mac_made_under_another_key_serves_nothing()
+    {
+        var (seed, seedCache) = Launch(macKey: () => Key(1));
+        await Help(seed, "claude-code");
+        Assert.True(await FlushAsync(seedCache));
+
+        // Another key (another account's copy, or a forger guessing): every entry misses.
+        _probed.Clear();
+        var (otherKey, _) = Launch(macKey: () => Key(2));
+        await Help(otherKey, "claude-code");
+        Assert.Equal(new[] { "claude-code" }, _probed.ToArray());
+
+        // Macs stripped: the same.
+        var withoutMacs = System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(_cacheFile), "\"macs\":\\{[^}]*\\}", "\"macs\":{}");
+        File.WriteAllText(_cacheFile, withoutMacs);
+        _probed.Clear();
+        var (stripped, _) = Launch(macKey: () => Key(1));
+        await Help(stripped, "claude-code");
+        Assert.Equal(new[] { "claude-code" }, _probed.ToArray());
+    }
+
+    [Fact]
+    public async Task A_cache_with_no_key_available_serves_nothing_from_disk()
+    {
+        var (seed, seedCache) = Launch(macKey: () => Key(1));
+        await Help(seed, "claude-code");
+        Assert.True(await FlushAsync(seedCache));
+
+        _probed.Clear();
+        var (noKey, _) = Launch(macKey: () => null);
+        await Help(noKey, "claude-code");
+
+        Assert.Equal(new[] { "claude-code" }, _probed.ToArray());
+    }
+
+    [Fact]
+    public async Task The_default_key_is_dpapi_protected_beside_the_file_and_a_forged_key_file_retires_the_entries()
+    {
+        var (first, firstCache) = Launch();
+        await Help(first, "claude-code");
+        Assert.True(await FlushAsync(firstCache));
+
+        var keyFile = _cacheFile + ".key";
+        Assert.True(File.Exists(keyFile));
+        var stored = File.ReadAllBytes(keyFile);
+        Assert.NotEqual(32, stored.Length);   // protected, not the raw 32 key bytes
+
+        _probed.Clear();
+        var (same, _) = Launch();
+        await Help(same, "claude-code");
+        Assert.Empty(_probed);
+
+        // A key file that is not DPAPI output is replaced, which retires what the old key signed.
+        File.WriteAllBytes(keyFile, new byte[64]);
+        _probed.Clear();
+        var (forged, forgedCache) = Launch();
+        await Help(forged, "claude-code");
+        Assert.Equal(new[] { "claude-code" }, _probed.ToArray());
+        Assert.True(await FlushAsync(forgedCache));
+
+        _probed.Clear();
+        var (after, _) = Launch();
+        await Help(after, "claude-code");
+        Assert.Empty(_probed);
     }
 
     [Fact]

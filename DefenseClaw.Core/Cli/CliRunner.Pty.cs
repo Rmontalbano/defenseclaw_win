@@ -407,6 +407,10 @@ public sealed partial class CliRunner
 
             ApplyInstallationIdentity(startInfo, baseline: null);
         }
+        else
+        {
+            _ = ChildEnvironment.StripSecrets(startInfo);
+        }
 
         return startInfo.Environment;
     }

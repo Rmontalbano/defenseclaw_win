@@ -96,10 +96,17 @@ public partial class App : Application
         _instanceGuard = SingleInstanceGuard.Acquire();
         if (!_instanceGuard.IsFirstInstance)
         {
-            // Hand the request to the instance that already owns the tray icon.
-            _instanceGuard.SignalFirstInstance();
-            _instanceGuard.Dispose();
+            // Hand the request to the instance that already owns the tray icon, and say so when nothing answers (a squatter on the mutex
+            // name, a hung instance, an elevated one this session cannot reach) instead of exiting without a word.
+            var guard = _instanceGuard;
+            var outcome = new SecondLaunchHandshake(guard.SignalFirstInstance, guard.WaitForAcknowledgement).Run();
+            guard.Dispose();
             _instanceGuard = null;
+            if (SecondLaunchHandshake.MessageFor(outcome) is { } message)
+            {
+                _ = MessageBox.Show(message, "DefenseClaw for Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+
             Shutdown();
             return;
         }

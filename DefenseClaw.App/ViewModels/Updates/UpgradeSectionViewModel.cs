@@ -864,11 +864,13 @@ public sealed partial class UpgradeSectionViewModel : ObservableObject, IDisposa
 
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe")
+            var start = new ProcessStartInfo("explorer.exe")
             {
                 ArgumentList = { "/select,", _staged.FilePath },
                 UseShellExecute = false,
-            });
+            };
+            _ = ChildEnvironment.StripSecrets(start);
+            Process.Start(start);
         }
         catch (System.ComponentModel.Win32Exception)
         {

@@ -376,16 +376,35 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
     internal static string BuildSetupCommand(ReleaseAsset? setupAsset) =>
         UpdateChecker.TrustedRepoUrl(setupAsset?.DownloadUrl) is { } url
             ? $"curl.exe -LO {UpdateChecker.PowerShellSingleQuoted(url)}\n" +
+              ChecksumVerificationLines(url, UpgradeRunner.InstallerAssetName) +
               $".\\{UpgradeRunner.InstallerAssetName} {string.Join(' ', UpgradeRunner.BuildInstallerArgv())}"
             : "No Setup exe asset was found on this release.";
 
     /// <summary>The copyable resolver-script command, quoted and restricted like <see cref="BuildSetupCommand"/>.</summary>
     internal static string BuildUpgradeScriptCommand(ReleaseAsset? scriptAsset) =>
         UpdateChecker.TrustedRepoUrl(scriptAsset?.DownloadUrl) is { } url
-            ? $"Invoke-WebRequest -Uri {UpdateChecker.PowerShellSingleQuoted(url)} -OutFile {UpgradeRunner.ScriptAssetName}; " +
+            ? $"Invoke-WebRequest -Uri {UpdateChecker.PowerShellSingleQuoted(url)} -OutFile {UpgradeRunner.ScriptAssetName}\n" +
+              ChecksumVerificationLines(url, UpgradeRunner.ScriptAssetName) +
               $".\\{UpgradeRunner.ScriptAssetName}\n" +
               "# (known broken on Setup-based installs — see the upgrade section)"
             : "No defenseclaw-upgrade.ps1 asset was found on this release.";
+
+    /// <summary>
+    /// The lines that sit between a copied download and the line that runs it: fetch the same release's <c>checksums.txt</c> and stop unless
+    /// a line of it names this file with the file's SHA-256. This is the same comparison the in-app Download &amp; verify makes - without the
+    /// sigstore signature check, which only the in-app path (with cosign installed) does - so the copied text no longer runs an
+    /// unchecked download. The text uses single quotes only, and the checksums link is the downloaded asset's own folder, vetted again.
+    /// </summary>
+    private static string ChecksumVerificationLines(string assetUrl, string assetName)
+    {
+        var checksumsUrl = UpdateChecker.TrustedRepoUrl(new Uri(new Uri(assetUrl), UpgradeRunner.ChecksumsAssetName).AbsoluteUri)
+            ?? assetUrl;
+        var name = UpdateChecker.PowerShellSingleQuoted(assetName);
+        return
+            $"curl.exe -LO {UpdateChecker.PowerShellSingleQuoted(checksumsUrl)}\n" +
+            $"$h = (Get-FileHash .\\{assetName} -Algorithm SHA256).Hash\n" +
+            $"if (-not (Get-Content .\\{UpgradeRunner.ChecksumsAssetName} | Where-Object {{ $_.IndexOf($h, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $_.Contains({name}) }})) {{ throw 'SHA-256 does not match checksums.txt - do not run this file' }}\n";
+    }
 
     internal void ApplyProvenance(ProvenanceReport report)
     {

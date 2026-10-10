@@ -403,6 +403,24 @@ public sealed class TerraformProbeTests
     // ------------------------------------------------------------------ the process it starts
 
     [Fact]
+    public void The_process_does_not_inherit_secret_looking_variables()
+    {
+        const string Name = "DCTEST_TFPROBE_API_KEY";
+        Environment.SetEnvironmentVariable(Name, "synthetic");
+        try
+        {
+            var info = TerraformProbe.CreateStartInfo(Exe, new[] { "version" });
+
+            Assert.False(info.Environment.ContainsKey(Name));
+            Assert.True(info.Environment.ContainsKey("PATH") || info.Environment.ContainsKey("Path"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(Name, null);
+        }
+    }
+
+    [Fact]
     public void The_process_is_an_argument_list_with_no_shell_no_window_and_no_update_check()
     {
         var info = TerraformProbe.CreateStartInfo(Exe, new[] { "version", "-json" });

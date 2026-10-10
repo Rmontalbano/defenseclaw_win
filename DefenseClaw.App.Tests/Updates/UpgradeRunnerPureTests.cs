@@ -147,8 +147,40 @@ public class UpgradeRunnerPureTests
             "https://github.com/cisco-ai-defense/defenseclaw/releases/download/v0.8.10/DefenseClawSetup-x64.exe",
             UpgradeRunner.AssetUrl("v0.8.10", "DefenseClawSetup-x64.exe").AbsoluteUri);
         Assert.Equal(
-            "https://github.com/cisco-ai-defense/defenseclaw/releases/download/v1%2F..%2Fx/checksums.txt",
-            UpgradeRunner.AssetUrl(" v1/../x ", "checksums.txt").AbsoluteUri);
+            "https://github.com/cisco-ai-defense/defenseclaw/releases/download/v1.2.3-rc.1/checksums.txt",
+            UpgradeRunner.AssetUrl(" v1.2.3-rc.1 ", "checksums.txt").AbsoluteUri);
+    }
+
+    [Theory]
+    [InlineData("v0.8.10")]
+    [InlineData("0.8.10")]
+    [InlineData("1.0.0-rc.1")]
+    [InlineData("v1.2.3+build.5")]
+    [InlineData("12")]
+    public void A_plain_version_is_accepted(string version) => Assert.True(UpgradeRunner.IsValidReleaseVersion(version));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("latest")]
+    [InlineData("v1/../x")]
+    [InlineData("v1%2f..%2fx")]
+    [InlineData("v1\\x")]
+    [InlineData("1.2.3.4.5")]
+    [InlineData("v1.2.3 ; rm")]
+    [InlineData("v1.2.3-")]
+    [InlineData("v1.2.3?x=1")]
+    [InlineData("v1.2.3#frag")]
+    [InlineData("..")]
+    [InlineData("v1.2.3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public void Anything_else_is_not_a_version(string? version)
+    {
+        Assert.False(UpgradeRunner.IsValidReleaseVersion(version));
+        if (!string.IsNullOrWhiteSpace(version))
+        {
+            Assert.Throws<ArgumentException>(() => UpgradeRunner.AssetUrl(version, "checksums.txt"));
+        }
     }
 
     // ------------------------------------------------------------------ which channel to recommend

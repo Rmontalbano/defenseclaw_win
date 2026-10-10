@@ -58,6 +58,10 @@ public class UpdateLinkSafetyTests
     [InlineData("https://github.com/cisco-ai-defense/other-repo/releases")]
     [InlineData("https://github.com/cisco-ai-defense/defenseclaw/../../evil/repo/x.exe")]
     [InlineData("https://github.com/cisco-ai-defense/defenseclaw/%2e%2e/%2e%2e/evil/repo/x.exe")]
+    [InlineData("https://github.com/cisco-ai-defense/defenseclaw/releases/download/v1%2f..%2f..%2fevil/x.exe")]
+    [InlineData("https://github.com/cisco-ai-defense/defenseclaw/releases/download/v1%2F..%2Fx/x.exe")]
+    [InlineData("https://github.com/cisco-ai-defense/defenseclaw/releases/download/v1%5c..%5cx/x.exe")]
+    [InlineData("https://github.com/cisco-ai-defense/defenseclaw/releases/download/v1%5C..%5Cx/x.exe")]
     [InlineData("https://github.com/evil/repo/cisco-ai-defense/defenseclaw/x")]
     [InlineData("https://github.com/")]
     [InlineData("not a url at all")]
@@ -140,6 +144,59 @@ public class UpdateLinkSafetyTests
         Assert.StartsWith($"curl.exe -LO '{url}'\n", text, StringComparison.Ordinal);
         Assert.DoesNotContain('"', text);
         Assert.Contains("/quiet /norestart INSTALLSCOPE=user", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Both_copied_commands_check_the_download_against_checksums_txt_before_running_it()
+    {
+        var installer = UpgradeRunner.InstallerAssetName;
+        var setup = UpdatesWindowViewModel.BuildSetupCommand(Asset(installer, Repo + "releases/download/v0.8.10/" + installer));
+        var script = UpdatesWindowViewModel.BuildUpgradeScriptCommand(Asset("defenseclaw-upgrade.ps1", Repo + "releases/download/v0.8.10/defenseclaw-upgrade.ps1"));
+
+        foreach (var (text, runLine) in new[] { (setup, $".\\{installer} /quiet"), (script, ".\\defenseclaw-upgrade.ps1\n") })
+        {
+            Assert.Contains($"curl.exe -LO '{Repo}releases/download/v0.8.10/checksums.txt'", text, StringComparison.Ordinal);
+            Assert.Contains("Get-FileHash", text, StringComparison.Ordinal);
+            Assert.Contains("throw 'SHA-256 does not match checksums.txt", text, StringComparison.Ordinal);
+
+            // The check comes first; the line that runs the file comes after it.
+            Assert.True(text.IndexOf("throw 'SHA-256", StringComparison.Ordinal) < text.IndexOf(runLine, StringComparison.Ordinal), text);
+        }
+    }
+
+    [Fact]
+    public void The_copied_commands_are_valid_powershell()
+    {
+        var texts = new[]
+        {
+            UpdatesWindowViewModel.BuildSetupCommand(Asset("DefenseClawSetup.exe", Repo + "releases/download/v0.8.10/DefenseClawSetup.exe")),
+            UpdatesWindowViewModel.BuildUpgradeScriptCommand(Asset("defenseclaw-upgrade.ps1", Repo + "releases/download/v0.8.10/defenseclaw-upgrade.ps1")),
+        };
+
+        foreach (var text in texts)
+        {
+            // Parsed, never run: the command text is passed as a here-string-free base64 payload and only its syntax errors are counted.
+            var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
+            var script = "$t=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + payload + "'));" +
+                         "$e=$null;$null=[System.Management.Automation.Language.Parser]::ParseInput($t,[ref]$null,[ref]$e);" +
+                         "Write-Output $e.Count";
+            var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+            var start = new ProcessStartInfo(
+                Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"),
+                new[] { "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded })
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var process = Process.Start(start)!;
+            var stdout = process.StandardOutput.ReadToEnd();
+            _ = process.StandardError.ReadToEnd();
+            Assert.True(process.WaitForExit(60_000), "powershell.exe did not finish");
+            Assert.Equal("0", stdout.Trim());
+        }
     }
 
     [Fact]

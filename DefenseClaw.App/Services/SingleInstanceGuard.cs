@@ -26,17 +26,20 @@ public sealed class SingleInstanceGuard : IDisposable
 {
     private const string MutexName = @"Local\DefenseClaw.App.SingleInstance";
     private const string ActivateEventName = @"Local\DefenseClaw.App.Activate";
+    private const string AcknowledgeEventName = @"Local\DefenseClaw.App.Activated";
 
     private readonly Mutex? _mutex;
     private readonly EventWaitHandle? _activate;
+    private readonly EventWaitHandle? _acknowledge;
     private readonly CancellationTokenSource _stop = new();
     private Thread? _listener;
     private bool _disposed;
 
-    private SingleInstanceGuard(Mutex? mutex, EventWaitHandle? activate, bool isFirstInstance)
+    private SingleInstanceGuard(Mutex? mutex, EventWaitHandle? activate, EventWaitHandle? acknowledge, bool isFirstInstance)
     {
         _mutex = mutex;
         _activate = activate;
+        _acknowledge = acknowledge;
         IsFirstInstance = isFirstInstance;
     }
 
@@ -59,40 +62,44 @@ public sealed class SingleInstanceGuard : IDisposable
         {
             // The mutex exists and belongs to a process we may not open — an elevated first
             // instance. Someone else is running; this launch is the loser.
-            return new SingleInstanceGuard(mutex: null, OpenActivateEvent(), isFirstInstance: false);
+            return new SingleInstanceGuard(mutex: null, OpenExistingEvent(ActivateEventName), OpenExistingEvent(AcknowledgeEventName), isFirstInstance: false);
         }
 
         if (!first)
         {
-            return new SingleInstanceGuard(mutex, OpenActivateEvent(), isFirstInstance: false);
+            return new SingleInstanceGuard(mutex, OpenExistingEvent(ActivateEventName), OpenExistingEvent(AcknowledgeEventName), isFirstInstance: false);
         }
 
         // The first instance creates the event. If that is somehow denied (a stale event left
         // by an elevated process that already released the mutex) it keeps running without the
         // raise-the-window nudge, which is better than not running at all.
         EventWaitHandle? activate;
+        EventWaitHandle? acknowledge;
         try
         {
             activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
+            acknowledge = new EventWaitHandle(false, EventResetMode.AutoReset, AcknowledgeEventName);
         }
         catch (UnauthorizedAccessException)
         {
             activate = null;
+            acknowledge = null;
         }
 
-        return new SingleInstanceGuard(mutex, activate, isFirstInstance: true);
+        return new SingleInstanceGuard(mutex, activate, acknowledge, isFirstInstance: true);
     }
 
     /// <summary>
-    /// Opens the event the first instance listens on. Null when it does not exist (the first
-    /// instance is already gone) or may not be opened (it is elevated and this process is not).
+    /// Opens an event the first instance created. Null when it does not exist (the first
+    /// instance is already gone, or never made it: a process that only took the mutex) or may not be
+    /// opened (it is elevated and this process is not).
     /// It opens rather than creates: creating here would conjure an event nobody listens on.
     /// </summary>
-    private static EventWaitHandle? OpenActivateEvent()
+    private static EventWaitHandle? OpenExistingEvent(string name)
     {
         try
         {
-            return EventWaitHandle.OpenExisting(ActivateEventName);
+            return EventWaitHandle.OpenExisting(name);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or WaitHandleCannotBeOpenedException)
         {
@@ -121,15 +128,35 @@ public sealed class SingleInstanceGuard : IDisposable
     /// Asks the already-running instance to show its window. Called by the loser. Does nothing
     /// when the event could not be opened — see the type documentation.
     /// </summary>
-    public void SignalFirstInstance()
+    public bool SignalFirstInstance()
     {
         try
         {
-            _ = _activate?.Set();
+            // Clear an acknowledgement nobody collected, so the wait below hears only the answer to this request.
+            _ = _acknowledge?.Reset();
+            return _activate?.Set() ?? false;
         }
         catch (ObjectDisposedException)
         {
             // The first instance exited between our mutex check and this signal.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Waits for the first instance to say it heard <see cref="SignalFirstInstance"/>. False when no acknowledgement
+    /// event could be opened, or nothing answered in <paramref name="timeout"/>: the mutex is held by something that
+    /// is not a listening DefenseClaw (a process that squatted on the name) or by an instance that is not responding.
+    /// </summary>
+    public bool WaitForAcknowledgement(TimeSpan timeout)
+    {
+        try
+        {
+            return _acknowledge?.WaitOne(timeout) ?? false;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
         }
     }
 
@@ -171,6 +198,7 @@ public sealed class SingleInstanceGuard : IDisposable
         }
 
         _activate?.Dispose();
+        _acknowledge?.Dispose();
         _mutex?.Dispose();
         _stop.Dispose();
     }
@@ -201,6 +229,16 @@ public sealed class SingleInstanceGuard : IDisposable
             }
 
             ActivationRequested?.Invoke(this, EventArgs.Empty);
+
+            // Tell the launch that asked that something is listening here.
+            try
+            {
+                _ = _acknowledge?.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
         }
     }
 }

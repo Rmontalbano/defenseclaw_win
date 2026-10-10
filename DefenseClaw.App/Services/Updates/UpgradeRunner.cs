@@ -339,11 +339,40 @@ public sealed class UpgradeRunner
         "DefenseClaw.App",
         "upgrades");
 
-    /// <summary>Release-asset URL for <paramref name="assetName"/> at <paramref name="version"/>.</summary>
+    /// <summary>
+    /// True for a release tag the app will build a download URL from: an optional <c>v</c>, one to four dotted numbers, and an optional
+    /// <c>-prerelease</c> / <c>+build</c> tail of letters, digits, dots and hyphens. Anything else (a slash, a dot segment, a space,
+    /// a percent escape) is refused rather than escaped, so a tag read from GitHub's JSON or a cache file cannot steer the URL.
+    /// </summary>
+    public static bool IsValidReleaseVersion(string? version) =>
+        !string.IsNullOrEmpty(version) &&
+        version.Length <= 64 &&
+        ReleaseVersionPattern.IsMatch(version.Trim());
+
+    private static readonly System.Text.RegularExpressions.Regex ReleaseVersionPattern = new(
+        @"^v?[0-9]{1,5}(\.[0-9]{1,5}){0,3}(-[0-9A-Za-z][0-9A-Za-z.-]{0,31})?(\+[0-9A-Za-z][0-9A-Za-z.-]{0,31})?$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.ExplicitCapture,
+        TimeSpan.FromSeconds(1));
+
+    /// <summary>The staging result for a version that failed <see cref="IsValidReleaseVersion"/>: nothing is requested or written.</summary>
+    private static UpgradeStagingResult InvalidVersionResult(string version) => new()
+    {
+        Outcome = UpgradeStagingOutcome.DownloadFailed,
+        Summary = "Aborted: the release tag is not a version number.",
+        ErrorMessage =
+            $"The release tag \"{(version.Length > 40 ? version[..40] + "…" : version)}\" is not a plain version (digits and dots, an optional v and an " +
+            "optional -suffix), so no download URL was built from it. Nothing was requested and nothing was written to disk.",
+    };
+
+    /// <summary>Release-asset URL for <paramref name="assetName"/> at <paramref name="version"/>. Throws <see cref="ArgumentException"/> for a version that fails <see cref="IsValidReleaseVersion"/>.</summary>
     public static Uri AssetUrl(string version, string assetName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
         ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
+        if (!IsValidReleaseVersion(version))
+        {
+            throw new ArgumentException("The release tag is not a plain version number.", nameof(version));
+        }
 
         return new Uri(
             $"https://github.com/{UpdateChecker.RepoOwner}/{UpdateChecker.RepoName}/releases/download/" +
@@ -565,6 +594,10 @@ public sealed class UpgradeRunner
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        if (!IsValidReleaseVersion(version))
+        {
+            return InvalidVersionResult(version);
+        }
 
         var scriptUrl = AssetUrl(version, ScriptAssetName);
         var checksumsUrl = AssetUrl(version, ChecksumsAssetName);
@@ -748,6 +781,10 @@ public sealed class UpgradeRunner
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        if (!IsValidReleaseVersion(version))
+        {
+            return InvalidVersionResult(version);
+        }
 
         var installerUrl = AssetUrl(version, InstallerAssetName);
         var checksumsUrl = AssetUrl(version, ChecksumsAssetName);

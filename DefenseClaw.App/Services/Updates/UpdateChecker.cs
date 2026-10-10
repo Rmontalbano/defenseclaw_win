@@ -159,6 +159,13 @@ public sealed class UpdateChecker : IDisposable
             {
                 return null;
             }
+
+            // An encoded slash or backslash inside a segment is read as a separator by some servers and shells, so one segment
+            // of the checked path can be several of the path actually requested.
+            if (segment.Contains("%2f", StringComparison.OrdinalIgnoreCase) || segment.Contains("%5c", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
         }
 
         return uri.AbsoluteUri;

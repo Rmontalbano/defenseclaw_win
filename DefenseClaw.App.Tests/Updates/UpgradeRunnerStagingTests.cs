@@ -191,12 +191,17 @@ public sealed class UpgradeRunnerStagingTests : IDisposable
         var script = Bytes(20 * 1024);
         _http.Serve(Script, script).Serve(Checksums, $"{Sha256(script)}  {Script}\n");
 
+        // A tag that is not a plain version is refused before any URL is built: nothing is requested and nothing is staged.
         var result = await Runner().DownloadAndVerifyAsync("v0.8.9/../../../escaped");
 
-        Assert.True(result.Succeeded);
-        var staged = Path.GetFullPath(result.Asset!.FilePath);
-        Assert.StartsWith(Path.GetFullPath(StagingRoot) + Path.DirectorySeparatorChar, staged, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(StagingRoot, Path.GetDirectoryName(Path.GetDirectoryName(staged)));
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpgradeStagingOutcome.DownloadFailed, result.Outcome);
+        Assert.Empty(_http.Requested);
+        Assert.Empty(StagedFiles());
+
+        var installer = await Runner().DownloadAndVerifyInstallerAsync("v1%2f..%2fx");
+        Assert.Equal(UpgradeStagingOutcome.DownloadFailed, installer.Outcome);
+        Assert.Empty(_http.Requested);
     }
 
     // ------------------------------------------------------------------ the Setup installer

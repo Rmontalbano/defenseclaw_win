@@ -342,6 +342,8 @@ public sealed class DockerProbe : IDockerProbe
             info.ArgumentList.Add(argument);
         }
 
+        // docker has no use for the gateway token or provider keys this app inherited.
+        _ = DefenseClaw.Core.Cli.ChildEnvironment.StripSecrets(info);
         return info;
     }
 

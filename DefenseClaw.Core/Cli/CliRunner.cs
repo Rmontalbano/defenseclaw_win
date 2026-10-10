@@ -1166,6 +1166,13 @@ public sealed partial class CliRunner : IDisposable
                 StringComparer.OrdinalIgnoreCase)
             : null;
 
+        // Anything that is not DefenseClaw's own CLI or gateway (a resolver script's PowerShell, the Setup exe, cosign, a test stand-in) does not get
+        // the gateway token or the provider keys this app was started with. Before the overlay, so a secret the caller passes on purpose still arrives.
+        if (!IsDefenseClawExecutable(executablePath))
+        {
+            _ = ChildEnvironment.StripSecrets(startInfo);
+        }
+
         // Touched only when there is something to overlay: reading Environment copies the whole
         // parent environment into the start info, which a plain run has no reason to do. This sets
         // the child's block and nothing else — Environment.SetEnvironmentVariable is never called, so

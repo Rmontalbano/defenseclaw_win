@@ -114,6 +114,7 @@ internal sealed class SettingsPlatform
             }
 
             start.ArgumentList.Add(Path.GetFullPath(path));
+            _ = DefenseClaw.Core.Cli.ChildEnvironment.StripSecrets(start);
             Process.Start(start)?.Dispose();
             return true;
         }
