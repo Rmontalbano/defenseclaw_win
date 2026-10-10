@@ -128,6 +128,7 @@ public sealed class GatewayClient : IGatewayClient, IDisposable
         {
             BaseAddress = new Uri($"http://127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}/"),
             Timeout = timeout ?? TimeSpan.FromSeconds(10),
+            MaxResponseContentBufferSize = DefenseClaw.Core.IO.ReadLimits.HttpBodyBytes,
         };
 
         return new GatewayClient(http, tokenProvider, ownsHttpClient: true, verifyPeer);

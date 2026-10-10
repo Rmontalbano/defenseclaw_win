@@ -50,7 +50,14 @@ public sealed class ConfigStore
                 new Dictionary<string, string>(StringComparer.Ordinal), DateTimeOffset.UtcNow);
         }
 
-        return Parse(DefenseClaw.Core.IO.SharedFile.ReadAllText(path), path);
+        try
+        {
+            return Parse(DefenseClaw.Core.IO.SharedFile.ReadAllText(path, DefenseClaw.Core.IO.ReadLimits.ConfigYamlBytes), path);
+        }
+        catch (DefenseClaw.Core.IO.FileTooLargeException ex)
+        {
+            throw new ConfigParseException(path, $"config.yaml was not read: {ex.Message}", ex);
+        }
     }
 
     public async Task<ConfigDocument> LoadAsync(CancellationToken cancellationToken = default)
@@ -62,7 +69,16 @@ public sealed class ConfigStore
                 new Dictionary<string, string>(StringComparer.Ordinal), DateTimeOffset.UtcNow);
         }
 
-        var text = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+        string text;
+        try
+        {
+            text = await DefenseClaw.Core.IO.SharedFile.ReadAllTextAsync(path, cancellationToken, DefenseClaw.Core.IO.ReadLimits.ConfigYamlBytes).ConfigureAwait(false);
+        }
+        catch (DefenseClaw.Core.IO.FileTooLargeException ex)
+        {
+            throw new ConfigParseException(path, $"config.yaml was not read: {ex.Message}", ex);
+        }
+
         return Parse(text, path);
     }
 
@@ -81,6 +97,12 @@ public sealed class ConfigStore
     public static ConfigDocument Parse(string yaml, string path = "<memory>")
     {
         ArgumentNullException.ThrowIfNull(yaml);
+
+        // YamlDotNet is quadratic on nested flow collections: an oversize or too-deep file is refused here, with the reason, instead of hanging startup.
+        if (ConfigYamlGuard.Refusal(yaml) is { } refusal)
+        {
+            throw new ConfigParseException(path, refusal);
+        }
 
         DefenseClawConfig config;
         try

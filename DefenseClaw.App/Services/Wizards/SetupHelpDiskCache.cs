@@ -423,7 +423,7 @@ internal sealed class SetupHelpDiskCache
                 return null;
             }
 
-            var model = JsonSerializer.Deserialize<FileModel>(File.ReadAllText(path, Encoding.UTF8), JsonOptions);
+            var model = JsonSerializer.Deserialize<FileModel>(DefenseClaw.Core.IO.SharedFile.ReadAllText(path), JsonOptions);
             return IsUsable(model) ? model : null;
         }
         catch (JsonException)

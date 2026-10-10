@@ -1204,8 +1204,7 @@ public sealed partial class CliRunner : IDisposable
         // reporting "invalid key: <key>" — would put the very value the wizard promised to keep out
         // of the Activity panel straight into it.
         var callSecrets = CallSecrets(stdinSecret, environment);
-        process.OutputDataReceived += (_, e) => Capture(invocation, CliStream.StandardOutput, e.Data, stdoutDone, callSecrets, lineFilter);
-        process.ErrorDataReceived += (_, e) => Capture(invocation, CliStream.StandardError, e.Data, stderrDone, callSecrets, lineFilter);
+        // Lines are read by BoundedLineReader, not Process.BeginOutputReadLine (which buffers a newline-less line whole): see PumpAsync.
 
         // One token for everything that may end this run early. The timeout is armed here, before
         // the launch, so the clock covers the whole life of the child. Shutdown is linked in only
@@ -1259,8 +1258,8 @@ public sealed partial class CliRunner : IDisposable
 
         try
         {
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            _ = PumpAsync(process.StandardOutput, invocation, CliStream.StandardOutput, stdoutDone, callSecrets, lineFilter);
+            _ = PumpAsync(process.StandardError, invocation, CliStream.StandardError, stderrDone, callSecrets, lineFilter);
 
             // Inside the supervised section on purpose: a child that never reads stdin leaves this
             // write blocked once the pipe is full, and a cancellation or timeout that lands then
@@ -1603,6 +1602,36 @@ public sealed partial class CliRunner : IDisposable
 
         secrets.AddRange(environment.Select(e => e.Value));
         return secrets.ToArray();
+    }
+
+    /// <summary>
+    /// Reads one of the child's streams to its end, a line at a time, keeping at most <see cref="ReadLimits.CliLineChars"/> of any line
+    /// (<see cref="BoundedLineReader"/>), and completes <paramref name="completion"/> when the stream is over (closed, or the child was killed).
+    /// </summary>
+    private async Task PumpAsync(
+        StreamReader source,
+        CliInvocation invocation,
+        CliStream stream,
+        TaskCompletionSource completion,
+        IReadOnlyList<SecretValue> callSecrets,
+        Func<string, string>? lineFilter)
+    {
+        try
+        {
+            var lines = new BoundedLineReader(source);
+            while (await lines.ReadLineAsync().ConfigureAwait(false) is { } text)
+            {
+                Capture(invocation, stream, text, completion, callSecrets, lineFilter);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The pipe broke or the process object went away with the run: the stream is over, whatever was read is kept.
+        }
+        finally
+        {
+            Capture(invocation, stream, null, completion, callSecrets, lineFilter);
+        }
     }
 
     private void Capture(

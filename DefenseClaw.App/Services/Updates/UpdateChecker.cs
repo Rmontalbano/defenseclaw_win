@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.IO;
 
 namespace DefenseClaw.App.Services.Updates;
 
@@ -215,7 +216,7 @@ public sealed class UpdateChecker : IDisposable
     /// <summary>Builds an <see cref="HttpClient"/> with the headers GitHub's API requires/prefers.</summary>
     public static HttpClient CreateHttpClient(TimeSpan? timeout = null)
     {
-        var http = new HttpClient { Timeout = timeout ?? TimeSpan.FromSeconds(15) };
+        var http = new HttpClient { Timeout = timeout ?? TimeSpan.FromSeconds(15) }.WithBodyCap();
         http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgentValue);
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         http.DefaultRequestHeaders.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
@@ -563,7 +564,16 @@ public sealed class UpdateChecker : IDisposable
 
         using (response)
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            string body;
+            try
+            {
+                body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex)
+            {
+                // Over the client's body cap (ReadLimits.HttpBodyBytes) or cut off mid-body.
+                return (null, false, $"GitHub's answer could not be read: {ex.Message}");
+            }
 
             if (response.StatusCode is HttpStatusCode.Forbidden or (HttpStatusCode)429)
             {
@@ -660,7 +670,7 @@ public sealed class UpdateChecker : IDisposable
                 return null;
             }
 
-            var json = File.ReadAllText(_cacheFilePath);
+            var json = DefenseClaw.Core.IO.SharedFile.ReadAllText(_cacheFilePath);
             var cached = JsonSerializer.Deserialize<CachedRelease>(json, JsonOptions);
 
             // Not "fresh forever": see CacheClockSkew. Ignored altogether, so it is not even a stale fallback.

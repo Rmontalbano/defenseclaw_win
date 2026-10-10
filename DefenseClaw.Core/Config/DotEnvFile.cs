@@ -76,7 +76,7 @@ public static class DotEnvFile
 
         try
         {
-            return Parse(DefenseClaw.Core.IO.SharedFile.ReadAllText(path));
+            return Parse(DefenseClaw.Core.IO.SharedFile.ReadAllText(path, DefenseClaw.Core.IO.ReadLimits.DotEnvBytes));
         }
         catch (IOException)
         {
