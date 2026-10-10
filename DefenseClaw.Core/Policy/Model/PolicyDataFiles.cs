@@ -213,7 +213,8 @@ public sealed class FileSystemPolicyData : IPolicyDataFiles
     private static (string Category, int Declared, int Enabled)? CountRules(string file)
     {
         var text = ReadText(file);
-        if (text is null)
+        // Rule files may be up to MaxFileBytes; the flow-depth limit is what keeps YamlDotNet from hanging (CUST-341).
+        if (text is null || DefenseClaw.Core.Config.ConfigYamlGuard.Refusal(text, MaxFileBytes) is not null)
         {
             return null;
         }

@@ -203,21 +203,107 @@ public sealed class ReadLimitsTests : IDisposable
     [Fact]
     public async Task A_line_longer_than_the_cap_keeps_a_prefix_and_the_marker_and_the_next_line_is_intact()
     {
-        var lines = await ReadAll(new string('z', 50_000) + "\nnext\n", maxChars: 10);
+        var lines = await ReadAll(string.Concat(Enumerable.Repeat("z ", 25_000)) + "\nnext\n", maxChars: 10);
 
         Assert.Equal(2, lines.Count);
-        Assert.Equal(new string('z', 10) + ReadLimits.CliLineTruncatedMarker, lines[0]);
+        Assert.Equal("z z z z z " + ReadLimits.CliLineTruncatedMarker, lines[0]);
         Assert.Equal("next", lines[1]);
     }
 
     [Fact]
     public async Task A_newline_less_stream_is_capped_at_end_of_input_and_a_line_at_the_cap_is_not_marked()
     {
-        var capped = await ReadAll(new string('q', 30_000), maxChars: 100);
+        var capped = await ReadAll(string.Concat(Enumerable.Repeat("q ", 15_000)), maxChars: 100);
         var exact = await ReadAll(new string('q', 100) + "\n", maxChars: 100);
 
-        Assert.Equal(new string('q', 100) + ReadLimits.CliLineTruncatedMarker, Assert.Single(capped));
+        Assert.Equal(string.Concat(Enumerable.Repeat("q ", 50)) + ReadLimits.CliLineTruncatedMarker, Assert.Single(capped));
         Assert.Equal(new string('q', 100), Assert.Single(exact));
+    }
+
+    // CUST-341: a secret straddling the cut must not leave its front behind.
+
+    [Fact]
+    public async Task A_token_like_tail_at_the_cut_is_dropped_whole()
+    {
+        // 'note: ' then a token-like run that the cut lands inside.
+        var lines = await ReadAll("note: " + new string('t', 40) + "\nnext\n", maxChars: 16);
+
+        Assert.Equal("note: " + ReadLimits.CliLineTruncatedMarker, lines[0]);
+        Assert.Equal("next", lines[1]);
+    }
+
+    [Fact]
+    public async Task A_token_run_longer_than_the_bound_is_kept_rather_than_emptying_the_line()
+    {
+        var run = new string('a', BoundedLineReader.MaxTokenTailChars + 50);
+        var reader = new BoundedLineReader(new StringReader("x " + run + "\n"), maxChars: run.Length);
+
+        var line = await reader.ReadLineAsync();
+
+        Assert.NotNull(line);
+        Assert.Contains("aaaa", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_cut_text_goes_through_the_sanitizer_before_the_tail_is_dropped()
+    {
+        var reader = new BoundedLineReader(
+            new StringReader("pw is s3cret! and more padding here\n"),
+            maxChars: 16,
+            sanitizeCut: kept => kept.Replace("s3cret!", "<x>", StringComparison.Ordinal));
+
+        var line = await reader.ReadLineAsync();
+
+        // "pw is s3cret! an" -> "pw is <x> an" -> the token tail "an" is dropped.
+        Assert.Equal("pw is <x> " + ReadLimits.CliLineTruncatedMarker, line);
+    }
+
+    [Theory]
+    [InlineData("see: p@ss:w", "see: ")]            // partial secret of non-token characters is dropped by prefix
+    [InlineData("see: p@ss:w0rd!", "see: ***REDACTED***")]  // a whole secret is scrubbed
+    [InlineData("see: p", "see: ")]
+    [InlineData("see: x", "see: x")]
+    public void The_runner_drops_a_trailing_partial_secret_and_scrubs_a_whole_one(string kept, string expected)
+    {
+        var runner = new CliRunner(new DefenseClaw.Core.Paths.DefenseClawPaths(dataDirectory: _dir));
+        runner.RegisterSecret(new SecretValue("p@ss:w0rd!"));
+
+        Assert.Equal(expected, runner.ScrubCut(kept, Array.Empty<SecretValue>()));
+    }
+
+    [Fact]
+    public void The_runner_drops_a_partial_per_call_secret_too()
+    {
+        var runner = new CliRunner(new DefenseClaw.Core.Paths.DefenseClawPaths(dataDirectory: _dir));
+
+        Assert.Equal("a ", runner.ScrubCut("a (!", new[] { new SecretValue("(!tail-end") }));
+    }
+
+    // --- every YamlDotNet entry point refuses a too-deep text (CUST-341) ----------------------------------------------------------------------
+
+    private static string TooDeep() => "a: " + new string('[', 5000) + new string(']', 5000) + "\n";
+
+    [Fact]
+    public void Every_core_yaml_reader_refuses_a_too_deep_text_quickly_like_an_unparseable_one()
+    {
+        var yaml = TooDeep();
+        var section = "asset_policy:\n  skill:\n    registry_required: " + new string('[', 5000) + new string(']', 5000) + "\n";
+        var clock = Stopwatch.StartNew();
+
+        Assert.Same(ConfigYamlReader.Empty, ConfigYamlReader.Parse(yaml));
+        Assert.Same(OverviewConfigFacts.Empty, OverviewConfigFacts.FromYaml(yaml));
+        Assert.Same(DefenseClaw.Core.Observability.ObservabilityConfigFacts.Empty, DefenseClaw.Core.Observability.ObservabilityConfigFacts.FromYaml(yaml));
+        Assert.Same(RegistryAttribution.Empty, RegistryAttribution.FromAssetPolicy(section));
+
+        // ConfigStore.Parse refuses such a text itself, so the document is built around the sections directly.
+        var document = new ConfigDocument(
+            "config.yaml",
+            section,
+            new DefenseClawConfig(),
+            new Dictionary<string, string> { ["asset_policy"] = section, ["llm"] = "llm:\n  provider: " + new string('[', 5000) + new string(']', 5000) + "\n" },
+            DateTimeOffset.UtcNow);
+        Assert.Equal(ReadinessConfig.Empty, ReadinessConfig.From(document));
+        Assert.True(clock.Elapsed < TestSupport.TestTimeouts.Ceiling, "refusals must not run the parser");
     }
 
     [Fact]

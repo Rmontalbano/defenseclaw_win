@@ -777,7 +777,7 @@ public sealed partial class RegistriesPanelViewModel : PanelViewModelBase
     /// <summary><c>asset_policy.&lt;type&gt;.registry_required</c> from the raw section text; absent means off.</summary>
     internal static bool ReadRegistryRequired(string? sectionYaml, string type)
     {
-        if (string.IsNullOrWhiteSpace(sectionYaml))
+        if (string.IsNullOrWhiteSpace(sectionYaml) || DefenseClaw.Core.Config.ConfigYamlGuard.Refusal(sectionYaml) is not null)
         {
             return false;
         }

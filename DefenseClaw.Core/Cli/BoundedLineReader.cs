@@ -8,10 +8,18 @@ namespace DefenseClaw.Core.Cli;
 /// or a lone <c>\r</c>), but keeps at most <c>maxChars</c> of any one line (CUST-250). Process's own reader buffers a line whole, so a child that
 /// writes hundreds of MB without a newline is held in memory until the run's timeout; here the rest of such a line is read and dropped, and the
 /// line that is returned ends with <see cref="ReadLimits.CliLineTruncatedMarker"/> so nobody mistakes it for the whole.
+/// <para>
+/// Secret scrubbing runs on each returned line, after the cut, so a secret that straddles the cut would leave its first part behind (CUST-341).
+/// A cut therefore (1) passes the kept text through <c>sanitizeCut</c> (the caller's scrubber, which also drops a trailing partial secret) and
+/// (2) drops a trailing run of token-like characters (at most <see cref="MaxTokenTailChars"/>), which covers a secret the caller never registered.
+/// </para>
 /// </summary>
-internal sealed class BoundedLineReader(TextReader reader, int maxChars = ReadLimits.CliLineChars)
+internal sealed class BoundedLineReader(TextReader reader, int maxChars = ReadLimits.CliLineChars, Func<string, string>? sanitizeCut = null)
 {
     private const int ChunkChars = 8192;
+
+    /// <summary>The longest run of token-like characters dropped at a cut (a real API key or token is far shorter).</summary>
+    internal const int MaxTokenTailChars = 1024;
 
     private readonly char[] _chunk = new char[ChunkChars];
     private int _position;
@@ -33,7 +41,7 @@ internal sealed class BoundedLineReader(TextReader reader, int maxChars = ReadLi
                 _position = 0;
                 if (_length == 0)
                 {
-                    return any ? Finish(line, truncated) : null;
+                    return any ? Finish(line, truncated, sanitizeCut) : null;
                 }
             }
 
@@ -72,25 +80,49 @@ internal sealed class BoundedLineReader(TextReader reader, int maxChars = ReadLi
             {
                 var terminator = _chunk[_position++];
                 _skipLineFeed = terminator == '\r';
-                return Finish(line, truncated);
+                return Finish(line, truncated, sanitizeCut);
             }
 
             // The chunk ended mid-line: whatever of it counts is in the builder, the next read continues the line.
         }
     }
 
-    private static string Finish(StringBuilder? line, bool truncated)
+    private static string Finish(StringBuilder? line, bool truncated, Func<string, string>? sanitizeCut)
     {
         if (line is null)
         {
             return string.Empty;
         }
 
-        if (truncated)
+        if (!truncated)
         {
-            _ = line.Append(ReadLimits.CliLineTruncatedMarker);
+            return line.ToString();
         }
 
-        return line.ToString();
+        var kept = line.ToString();
+        if (sanitizeCut is not null)
+        {
+            kept = sanitizeCut(kept);
+        }
+
+        // What the scrubber cannot know about: a token-like run ending at the cut may be the front of a longer secret.
+        var end = kept.Length;
+        var floor = Math.Max(0, end - MaxTokenTailChars);
+        while (end > floor && IsTokenChar(kept[end - 1]))
+        {
+            end--;
+        }
+
+        // A run longer than the bound is not a token: keep it rather than empty the line.
+        if (end == floor && floor > 0)
+        {
+            end = kept.Length;
+        }
+
+        return string.Concat(kept.AsSpan(0, end), ReadLimits.CliLineTruncatedMarker);
     }
+
+    /// <summary>The characters API keys, bearer tokens, JWTs and base64 are made of.</summary>
+    private static bool IsTokenChar(char c) =>
+        char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '~' or '+' or '/' or '=';
 }

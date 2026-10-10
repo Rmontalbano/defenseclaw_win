@@ -85,6 +85,12 @@ public static class ConfigFormBuilder
         profile ??= ConfigChoiceProfile.ForHost();
 
         var warnings = new List<string>();
+        if (ConfigYamlGuard.Refusal(sourceYaml) is { } refusal)
+        {
+            warnings.Add($"Could not parse the configuration the CLI returned: {refusal}");
+            return new BuildResult(Array.Empty<FormSection>(), warnings);
+        }
+
         var stream = new YamlStream();
         try
         {

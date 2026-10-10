@@ -72,7 +72,7 @@ public sealed class RegistryAttribution
     /// </summary>
     public static RegistryAttribution FromAssetPolicy(string? sectionYaml)
     {
-        if (string.IsNullOrWhiteSpace(sectionYaml))
+        if (string.IsNullOrWhiteSpace(sectionYaml) || ConfigYamlGuard.Refusal(sectionYaml) is not null)
         {
             return Empty;
         }

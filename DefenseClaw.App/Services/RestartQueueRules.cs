@@ -217,6 +217,12 @@ internal static class RestartQueueRules
             return null;
         }
 
+        // A refused text reads like one that does not parse: the caller reports the change as unknown (CUST-341).
+        if (DefenseClaw.Core.Config.ConfigYamlGuard.Refusal(text) is { } refusal)
+        {
+            throw new YamlException(refusal);
+        }
+
         var stream = new YamlStream();
         using var reader = new StringReader(text);
         stream.Load(reader);

@@ -63,7 +63,7 @@ public sealed record ObservabilityConfigFacts(
     /// <summary>The facts in config.yaml's text. Never throws: text that is not a YAML mapping, or is too large, is <see cref="Empty"/>.</summary>
     public static ObservabilityConfigFacts FromYaml(string? yaml)
     {
-        if (string.IsNullOrWhiteSpace(yaml) || yaml.Length > MaxLength)
+        if (string.IsNullOrWhiteSpace(yaml) || yaml.Length > MaxLength || ConfigYamlGuard.Refusal(yaml) is not null)
         {
             return Empty;
         }

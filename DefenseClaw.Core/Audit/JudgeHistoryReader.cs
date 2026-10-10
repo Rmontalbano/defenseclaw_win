@@ -165,7 +165,8 @@ public sealed partial class JudgeHistoryReader
 
     private static (string? JudgeBodies, string? Audit) ConfiguredPaths(string? configYaml)
     {
-        if (string.IsNullOrWhiteSpace(configYaml))
+        // An oversize or too-deep file is not parsed (CUST-341): YamlDotNet is quadratic on nested flow collections.
+        if (string.IsNullOrWhiteSpace(configYaml) || DefenseClaw.Core.Config.ConfigYamlGuard.Refusal(configYaml) is not null)
         {
             return (null, null);
         }

@@ -375,7 +375,7 @@ public static class WizardBaseline
 
         public static ConfigYaml Parse(string? text)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            if (string.IsNullOrWhiteSpace(text) || ConfigYamlGuard.Refusal(text) is not null)
             {
                 return new ConfigYaml(null);
             }

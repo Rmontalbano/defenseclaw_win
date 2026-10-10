@@ -1625,7 +1625,7 @@ public sealed partial class CliRunner : IDisposable
     {
         try
         {
-            var lines = new BoundedLineReader(source);
+            var lines = new BoundedLineReader(source, sanitizeCut: kept => ScrubCut(kept, callSecrets));
             while (await lines.ReadLineAsync().ConfigureAwait(false) is { } text)
             {
                 Capture(invocation, stream, text, completion, callSecrets, lineFilter);
@@ -1719,6 +1719,37 @@ public sealed partial class CliRunner : IDisposable
         }
 
         return text;
+    }
+
+    /// <summary>
+    /// What <see cref="BoundedLineReader"/> keeps of a line it cut short (CUST-341): scrubbed, and with a trailing partial secret removed. A
+    /// secret that begins before the cut and ends after it is not a whole match, so <c>Scrub</c> alone would leave its front.
+    /// </summary>
+    internal string ScrubCut(string kept, IReadOnlyList<SecretValue> callSecrets)
+    {
+        kept = Scrub(kept, callSecrets);
+
+        List<SecretValue> all;
+        lock (_gate)
+        {
+            all = new List<SecretValue>(_knownSecrets);
+        }
+
+        all.AddRange(callSecrets);
+        foreach (var secret in all)
+        {
+            var value = secret.Reveal().AsSpan();
+            for (var k = Math.Min(value.Length - 1, kept.Length); k > 0; k--)
+            {
+                if (kept.AsSpan().EndsWith(value[..k], StringComparison.Ordinal))
+                {
+                    kept = kept[..^k];
+                    break;
+                }
+            }
+        }
+
+        return kept;
     }
 
     private void Record(CliInvocation invocation)

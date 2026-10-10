@@ -39,7 +39,7 @@ public sealed class ConfigYamlReader
     /// <summary>The reader of <paramref name="yaml"/>; <see cref="Empty"/> for anything it cannot read as a mapping.</summary>
     public static ConfigYamlReader Parse(string? yaml)
     {
-        if (string.IsNullOrWhiteSpace(yaml) || yaml.Length > MaxLength)
+        if (string.IsNullOrWhiteSpace(yaml) || yaml.Length > MaxLength || ConfigYamlGuard.Refusal(yaml) is not null)
         {
             return Empty;
         }

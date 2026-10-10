@@ -72,7 +72,7 @@ public sealed record ReadinessConfig(
 
     private static Dictionary<object, object>? Section(ConfigDocument document, string name)
     {
-        if (document.SectionText(name) is not { Length: > 0 } text)
+        if (document.SectionText(name) is not { Length: > 0 } text || ConfigYamlGuard.Refusal(text) is not null)
         {
             return null;
         }

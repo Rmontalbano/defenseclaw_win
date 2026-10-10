@@ -1606,6 +1606,11 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     /// </summary>
     private static YamlNode? TryNavigate(string sectionText, IReadOnlyList<string> path)
     {
+        if (ConfigYamlGuard.Refusal(sectionText) is not null)
+        {
+            return null;
+        }
+
         try
         {
             var stream = new YamlStream();

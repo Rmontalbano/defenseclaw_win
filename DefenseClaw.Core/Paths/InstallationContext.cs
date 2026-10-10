@@ -631,6 +631,11 @@ public sealed record InstallationContext
                 return Empty;
             }
 
+            if (DefenseClaw.Core.Config.ConfigYamlGuard.Refusal(text) is { } refusal)
+            {
+                return new ConfigFacts(refusal, null);
+            }
+
             var stream = new YamlStream();
             try
             {
