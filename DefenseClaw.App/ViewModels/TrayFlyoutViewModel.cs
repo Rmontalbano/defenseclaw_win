@@ -28,7 +28,8 @@ namespace DefenseClaw.App.ViewModels;
 /// screen and monitoring is not paused</b> (<see cref="SetVisible"/>, driven by the window): <see cref="GatewayMonitor.PollCompleted"/> (one
 /// dispatcher hop per poll; it carries the uptime and the per-connector counters), <see cref="AlertCountsService.Changed"/> (which keeps the
 /// Findings row and the recent list fresh and, as the only subscriber, is what starts that service), and the read-only audit query behind Hook Calls and
-/// Blocks (<see cref="RecentAuditMetricsReader"/>: the newest 500 rows by an index walk, a few milliseconds, cancelled the moment the flyout hides).
+/// Blocks (<see cref="ConnectorHookTotalsReader"/>: the same all-time totals, and the same one instance, as the Overview, <see cref="AppServices.HookTotals"/>;
+/// the first read after launch is what starts its block catch-up, so a tray-only launch never does; cancelled the moment the flyout hides).
 /// While monitoring is paused none of them runs: the flyout shows the last known numbers and says when they are from.
 /// </para>
 /// </summary>
@@ -40,13 +41,16 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     /// <summary>The audit counts are re-read at most this often while the flyout stays open; it is read once when it opens.</summary>
     private static readonly TimeSpan MetricsRefreshInterval = TimeSpan.FromSeconds(15);
 
-    /// <summary>A read that takes longer than this is abandoned: on the live 6.9 GB database it takes a few milliseconds (5 s; see <see cref="AppServices.ReaderTimeouts"/>).</summary>
-    private TimeSpan MetricsTimeout => _services.ReaderTimeouts.RecentAuditMetrics;
+    /// <summary>While the block catch-up is still running the counts are re-read at the Overview's pace (every poll), not every 15 s.</summary>
+    private static readonly TimeSpan MetricsCatchUpInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>A read that takes longer than this is abandoned: the hook totals are one covering-index count plus a bounded scan slice (5 s; see <see cref="AppServices.ReaderTimeouts"/>).</summary>
+    private TimeSpan MetricsTimeout => _services.ReaderTimeouts.HookTotals;
 
     private readonly AppServices _services;
     private readonly Action _openDashboard;
     private readonly Action _exit;
-    private readonly RecentAuditMetricsReader _metricsReader;
+    private readonly ConnectorHookTotalsReader _metricsReader;
     private readonly TimeProvider _time;
 
     private bool _visible;
@@ -57,7 +61,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _live;
     private Task _lastRefresh = Task.CompletedTask;
 
-    private RecentAuditMetrics? _metrics;
+    private ConnectorHookTotals? _metrics;
     private string? _metricsFailure;
     private bool _metricsInFlight;
 
@@ -140,19 +144,19 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     /// <param name="services">The composition the flyout reads.</param>
     /// <param name="openDashboard">Shows the dashboard (Open Dashboard).</param>
     /// <param name="exit">Quits the app for real.</param>
-    /// <param name="metricsReader">The audit-count reader; one over <c>audit.db</c> when null. A test hands in one over a scratch database.</param>
+    /// <param name="metricsReader">The audit-count reader; the app's one shared instance (<see cref="AppServices.HookTotals"/>) when null. A test hands in one over a scratch database.</param>
     /// <param name="timeProvider">The clock for the refresh gate and "Updated …"; the system one when null.</param>
     internal TrayFlyoutViewModel(
         AppServices services,
         Action openDashboard,
         Action exit,
-        RecentAuditMetricsReader? metricsReader,
+        ConnectorHookTotalsReader? metricsReader,
         TimeProvider? timeProvider)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _openDashboard = openDashboard ?? throw new ArgumentNullException(nameof(openDashboard));
         _exit = exit ?? throw new ArgumentNullException(nameof(exit));
-        _metricsReader = metricsReader ?? new RecentAuditMetricsReader(services.Paths.AuditDatabasePath);
+        _metricsReader = metricsReader ?? services.HookTotals;
         _time = timeProvider ?? TimeProvider.System;
 
         Metrics = new[]
@@ -198,7 +202,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     internal bool IsLive => _live is not null;
 
     /// <summary>The audit reader, for a test to count its reads.</summary>
-    internal RecentAuditMetricsReader MetricsReader => _metricsReader;
+    internal ConnectorHookTotalsReader MetricsReader => _metricsReader;
 
     /// <summary>Completes when the read the flyout started last (on showing, on a resume) has finished; for tests.</summary>
     internal Task WhenRefreshedAsync() => _lastRefresh;
@@ -315,7 +319,8 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     {
         Apply(e.Snapshot);
 
-        if (_live is { } live && !_metricsInFlight && _lastMetricsRead.HasElapsed(MetricsRefreshInterval, _time))
+        var catchingUp = _metrics is { Status: ConnectorHookTotalsStatus.Ok, BlocksComplete: false };
+        if (_live is { } live && !_metricsInFlight && _lastMetricsRead.HasElapsed(catchingUp ? MetricsCatchUpInterval : MetricsRefreshInterval, _time))
         {
             _lastRefresh = RefreshMetricsAsync(live.Token);
         }
@@ -490,6 +495,8 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         // instead, so the flyout never opens on numbers from half a minute ago.
         var alreadyRunning = _services.AlertCounts.IsRunning;
         _services.AlertCounts.Changed += OnAlertCountsChanged;
+        _services.ConnectorScope.Changed += OnScopeChanged;
+        RenderMetrics();
         ApplyAlerts(_services.AlertCounts.Current, _services.AlertCounts.HasData, _services.AlertCounts.Unavailable);
 
         _lastRefresh = RefreshLiveAsync(live.Token, refreshAlerts: alreadyRunning);
@@ -504,6 +511,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
 
         _live = null;
         _services.AlertCounts.Changed -= OnAlertCountsChanged;
+        _services.ConnectorScope.Changed -= OnScopeChanged;
 
         // The read in flight is abandoned (its result is dropped), so it no longer blocks the next session's read; see _metricsToken.
         _metricsInFlight = false;
@@ -541,6 +549,9 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         ApplyAlerts(e.Counts, _services.AlertCounts.HasData, e.Unavailable);
         MarkUpdated();
     }
+
+    /// <summary>The shared connector scope moved: the same totals, a different slice of them. No read.</summary>
+    private void OnScopeChanged(object? sender, EventArgs e) => RenderMetrics();
 
     private async Task RefreshMetricsAsync(CancellationToken token)
     {
@@ -595,36 +606,48 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
 
     // ------------------------------------------------------------------ rendering the numbers
 
-    /// <summary>Hook Calls and Blocks from the last audit read (or "—" before there is one).</summary>
+    /// <summary>
+    /// Hook Calls and Blocks from the last totals read (or "—" before there is one): the Overview's numbers for the Overview's scope, the whole
+    /// fleet unless the shared connector scope narrows it. Blocks carry a "+" and the catch-up percentage until the tally has covered every row.
+    /// </summary>
     private void RenderMetrics()
     {
-        var window = RecentAuditMetricsReader.DefaultWindow.ToString(CultureInfo.InvariantCulture);
         var hooks = Metrics[0];
         var blocks = Metrics[1];
 
-        if (_metrics is { } metrics)
+        if (_metrics is { Status: ConnectorHookTotalsStatus.Ok } metrics)
         {
-            hooks.Value = metrics.HookCalls.ToString("N0", CultureInfo.CurrentCulture);
-            hooks.ValueTone = metrics.HookCalls > 0 ? "Primary" : "Neutral";
-            hooks.Detail = $"latest {window} audit events";
-            hooks.SetProgress(TrayFlyoutText.ActivityProgress(metrics.HookCalls), metrics.HookCalls);
+            var scope = _services.ConnectorScope.Current;
+            var counts = scope is null ? metrics.Fleet : metrics.For(scope);
+            var where = scope is null ? "all time" : $"all time · {scope}";
+            var calls = (int)Math.Min(counts.Calls, int.MaxValue);
+            var blocked = (int)Math.Min(counts.Blocks, int.MaxValue);
 
-            blocks.Value = metrics.Blocks.ToString("N0", CultureInfo.CurrentCulture);
-            blocks.ValueTone = metrics.Blocks > 0 ? "Bad" : "Neutral";
-            blocks.Detail = $"latest {window} decisions · {TrayFlyoutText.BlockRate(metrics.Blocks, metrics.HookCalls)}";
-            blocks.SetProgress(TrayFlyoutText.BlockProgress(metrics.Blocks, metrics.HookCalls), metrics.Blocks);
+            hooks.Value = counts.Calls.ToString("N0", CultureInfo.CurrentCulture);
+            hooks.ValueTone = counts.Calls > 0 ? "Primary" : "Neutral";
+            hooks.Detail = where;
+            hooks.SetProgress(TrayFlyoutText.ActivityProgress(calls), calls);
+
+            blocks.Value = counts.Blocks.ToString("N0", CultureInfo.CurrentCulture) + (metrics.BlocksComplete ? string.Empty : "+");
+            blocks.ValueTone = counts.Blocks > 0 ? "Bad" : "Neutral";
+            blocks.Detail = metrics.BlocksComplete
+                ? $"{where} · {TrayFlyoutText.BlockRate(blocked, calls)}"
+                : $"counting… {(metrics.HookRows <= 0 ? 0 : (int)Math.Min(99, 100 * metrics.BlocksScanned / metrics.HookRows)).ToString(CultureInfo.InvariantCulture)}%";
+            blocks.SetProgress(TrayFlyoutText.BlockProgress(blocked, calls), blocked);
         }
         else
         {
-            var why = _metricsFailure is null ? $"latest {window} audit events" : "audit database unavailable";
-            hooks.Value = "—";
+            var noDatabase = _metrics is { Status: ConnectorHookTotalsStatus.NoDatabase };
+            var why = _metricsFailure is not null ? "audit database unavailable" : noDatabase ? "no audit database yet" : "all time";
+            var value = noDatabase ? "0" : "—";
+            hooks.Value = value;
             hooks.ValueTone = "Neutral";
             hooks.Detail = why;
             hooks.SetProgress(0, 0);
 
-            blocks.Value = "—";
+            blocks.Value = value;
             blocks.ValueTone = "Neutral";
-            blocks.Detail = _metricsFailure is null ? $"latest {window} decisions" : "audit database unavailable";
+            blocks.Detail = why;
             blocks.SetProgress(0, 0);
         }
 

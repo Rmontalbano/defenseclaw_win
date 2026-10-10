@@ -154,8 +154,8 @@ public class TrayFlyoutWindowTests
             Assert.Equal(
                 new[]
                 {
-                    "Hook Calls 46, latest 500 audit events. Opens Logs.",
-                    "Blocks 4, latest 500 decisions · 9% block rate. Opens Audit.",
+                    "Hook Calls 46, all time. Opens Logs.",
+                    "Blocks 4, all time · 9% block rate. Opens Audit.",
                     "Findings 12, unacknowledged. Opens Alerts.",
                     "Review acknowledge",
                 },

@@ -207,8 +207,8 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         DataDirectoryText = Services.Paths.DataDirectory;
         DataDirectorySourceText = Services.Paths.DataDirectoryOrigin.Description;
 
-        // Readers only hold a connection string: nothing is opened until a read is asked for.
-        _metricsReader = new ConnectorHookTotalsReader(Services.Paths.AuditDatabasePath);
+        // Readers only hold a connection string: nothing is opened until a read is asked for. The totals reader is the app's shared one.
+        _metricsReader = Services.HookTotals;
         _hourlyReader = new HourlyActivityReader(Services.Paths.AuditDatabasePath);
         Review = new DiscoverActionReview(Services);
         BuildEnforcementCards();

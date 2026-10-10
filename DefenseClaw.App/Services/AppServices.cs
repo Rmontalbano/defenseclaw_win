@@ -163,6 +163,7 @@ public sealed class AppServices : IDisposable
         Navigation = new ShellNavigation();
         AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges, readTimeout: ReaderTimeouts.AlertQueue);
         ConnectorScope = new ConnectorScope(Monitor);
+        HookTotals = new ConnectorHookTotalsReader(Paths.AuditDatabasePath);
         AlertCounts = new AlertCountsService(AlertQueue, Monitor);
         StatusFacts = new StatusFacts();
         InventoryBom = new InventoryBomStore();
@@ -216,6 +217,13 @@ public sealed class AppServices : IDisposable
     /// the audit database takes its limit from here rather than writing a number of its own.
     /// </summary>
     internal ReaderTimeouts ReaderTimeouts { get; }
+
+    /// <summary>
+    /// The one all-time hook-call / block reader of the process, shared by the Overview tiles and the tray flyout so both show the same numbers
+    /// and the incremental block scan runs once, not once per surface. It holds a connection string and nothing else until a surface reads
+    /// from it: a tray-only launch starts no catch-up until the flyout is first opened.
+    /// </summary>
+    internal ConnectorHookTotalsReader HookTotals { get; }
 
     public ConfigStore ConfigStore { get; }
 

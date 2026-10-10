@@ -199,16 +199,16 @@ public class TrayFlyoutViewModelTests
                 var hooks = viewModel.Metrics[0];
                 Assert.Equal("Hook Calls", hooks.Title);
                 Assert.Equal("46", hooks.Value);
-                Assert.Equal("latest 500 audit events", hooks.Detail);
+                Assert.Equal("all time", hooks.Detail);
                 Assert.Equal("Accent", hooks.BarTone);
                 Assert.Equal("Primary", hooks.ValueTone);
                 Assert.True(hooks.Fill.Value > 0);
-                Assert.Equal("Hook Calls 46, latest 500 audit events. Opens Logs.", hooks.AutomationName);
+                Assert.Equal("Hook Calls 46, all time. Opens Logs.", hooks.AutomationName);
 
                 var blocks = viewModel.Metrics[1];
                 Assert.Equal("Blocks", blocks.Title);
                 Assert.Equal("4", blocks.Value);
-                Assert.Equal("latest 500 decisions · 9% block rate", blocks.Detail);
+                Assert.Equal("all time · 9% block rate", blocks.Detail);
                 Assert.Equal("Bad", blocks.BarTone);
                 Assert.Equal("Bad", blocks.ValueTone);
 

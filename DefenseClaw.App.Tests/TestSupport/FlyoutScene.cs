@@ -62,7 +62,7 @@ internal sealed class FlyoutScene : IDisposable
             "VALUES ($id, $at, 'connector-hook', '', 'audit_logger', $details, 'INFO', 'claudecode')",
             ("$id", NextId("hook")),
             ("$at", AlertQueueDatabase.Format(at)),
-            ("$details", $"connector=claudecode result=ok action={decision} raw_action={decision} severity=NONE mode=observe"));
+            ("$details", $"connector=claudecode result=ok action={decision} raw_action={decision} severity=NONE mode={(decision == "block" ? "enforce" : "observe")}"));
     }
 
     /// <summary>A row of some other kind (telemetry, a scan): in the window, but neither a hook call nor a block.</summary>
