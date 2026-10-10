@@ -645,7 +645,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         UptimeText = health is { UptimeMs: > 0 } ? FormatDuration(health.Uptime) : "—";
         VersionText = string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
             ? "—"
-            : $"DefenseClaw {snapshot.BinaryVersion}";
+            : snapshot.PeerUnverified
+                ? $"DefenseClaw {snapshot.BinaryVersion} (unverified)"
+                : $"DefenseClaw {snapshot.BinaryVersion}";
         LastUpdatedText = snapshot.PolledAt == DateTimeOffset.MinValue
             ? string.Empty
             : $"Polled {snapshot.PolledAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)}";

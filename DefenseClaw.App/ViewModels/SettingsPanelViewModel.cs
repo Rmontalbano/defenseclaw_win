@@ -632,7 +632,11 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     private void ShowUpdates()
     {
         var snapshot = Services.Monitor.Current;
-        RuntimeVersionText = string.IsNullOrWhiteSpace(snapshot.BinaryVersion) ? "Not detected" : snapshot.BinaryVersion.Trim();
+        RuntimeVersionText = string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
+            ? "Not detected"
+            : snapshot.PeerUnverified
+                ? $"{snapshot.BinaryVersion.Trim()} (unverified)"
+                : snapshot.BinaryVersion.Trim();
 
         var watcher = Services.UpdateWatcher;
         if (watcher.AvailableVersion is { } available)

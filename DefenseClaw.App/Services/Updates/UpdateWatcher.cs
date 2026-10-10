@@ -221,7 +221,7 @@ internal sealed class UpdateWatcher : IDisposable
             }
 
             _started = true;
-            _lastInstalled = Normalized(_source.Current.BinaryVersion);
+            _lastInstalled = Normalized(_source.Current.TrustedBinaryVersion);
         }
 
         _source.StateChanged += OnMonitorStateChanged;
@@ -567,7 +567,7 @@ internal sealed class UpdateWatcher : IDisposable
     /// </summary>
     private void OnMonitorStateChanged(object? sender, GatewaySnapshotEventArgs e)
     {
-        var installed = Normalized(e.Snapshot.BinaryVersion);
+        var installed = Normalized(e.Snapshot.TrustedBinaryVersion);
         if (installed is null)
         {
             return;

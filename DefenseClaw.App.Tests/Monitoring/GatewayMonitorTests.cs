@@ -255,4 +255,63 @@ public class GatewayMonitorTests
         Assert.Contains("WSL relay", snapshot.AlertsUnavailable, StringComparison.Ordinal);
         Assert.All(listener.Requests, r => Assert.Null(r.Authorization));
     }
+
+    // ---- CUST-249: a version claimed by an unverified port owner is shown as such, and never trusted --------------
+
+    [Fact]
+    public async Task A_stranger_claiming_a_version_is_shown_as_unverified_and_its_version_is_not_trusted()
+    {
+        using var temp = new TempDirectory();
+        using var listener = Quiet();
+        using var services = Create(temp, listener.Port);
+        var inspector = new FixedPortInspector
+        {
+            Owner = new PortOwner(4242, "SomeRandomServer", "127.0.0.1", listener.Port, @"C:\tools\server.exe"),
+        };
+        var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
+        using var monitor = new GatewayMonitor(services, new ManualClock(), detector);
+
+        var snapshot = await monitor.RefreshAsync();
+
+        // The claim is still visible (it is what the stranger said), but it is marked and never used for updates.
+        Assert.Equal("9.9.9", snapshot.BinaryVersion);
+        Assert.True(snapshot.PeerUnverified);
+        Assert.Null(snapshot.TrustedBinaryVersion);
+        Assert.Equal("DefenseClaw 9.9.9 (unverified)", GatewayPresentation.VersionText(snapshot));
+        Assert.Equal(0, monitor.AlertsFetchCount);
+    }
+
+    [Fact]
+    public async Task The_verified_gateways_version_is_trusted_and_shown_plainly()
+    {
+        using var temp = new TempDirectory();
+        using var listener = new RawHttpListener(request =>
+            request.Path == "/health"
+                ? RawHttpListener.Response(200, HealthBody)
+                : RawHttpListener.Response(401, "{\"error\":\"unauthorized\"}"));
+        using var services = Create(temp, listener.Port);
+        var inspector = new FixedPortInspector
+        {
+            Owner = new PortOwner(4242, "defenseclaw-gateway", "127.0.0.1", listener.Port, GatewayImage),
+        };
+        var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
+        using var monitor = new GatewayMonitor(services, new ManualClock(), detector);
+
+        var snapshot = await monitor.RefreshAsync();
+
+        Assert.Equal("9.9.9", snapshot.BinaryVersion);
+        Assert.False(snapshot.PeerUnverified);
+        Assert.Equal("9.9.9", snapshot.TrustedBinaryVersion);
+        Assert.Equal("DefenseClaw 9.9.9", GatewayPresentation.VersionText(snapshot));
+    }
+
+    [Fact]
+    public void A_change_only_in_the_verification_flag_is_a_visible_change_for_every_subscriber()
+    {
+        var verified = new GatewaySnapshot { BinaryVersion = "9.9.9" };
+        var unverified = verified with { PeerUnverified = true };
+
+        Assert.False(verified.RendersSameAs(unverified));
+        Assert.False(unverified.RendersSameAs(verified));
+    }
 }

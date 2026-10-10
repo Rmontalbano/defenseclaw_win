@@ -265,8 +265,9 @@ internal static class StripPresentation
     public static string AlertsName(GatewaySnapshot snapshot) => "Alerts: " + GatewayPresentation.AlertDetail(snapshot);
 
     /// <summary>The version chip's tooltip.</summary>
-    public static string VersionDetail(GatewaySnapshot snapshot) =>
-        $"The running gateway reports DefenseClaw version {snapshot.BinaryVersion}.";
+    public static string VersionDetail(GatewaySnapshot snapshot) => snapshot.PeerUnverified
+        ? $"Something that is not the verified gateway answers on the port and reports DefenseClaw version {snapshot.BinaryVersion}. Unverified."
+        : $"The running gateway reports DefenseClaw version {snapshot.BinaryVersion}.";
 
     // ---- Running and stale --------------------------------------------------------------------------------------------------------------
 

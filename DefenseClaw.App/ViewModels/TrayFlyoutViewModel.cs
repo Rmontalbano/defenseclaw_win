@@ -341,7 +341,9 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         HeaderCaption = paused ? GatewaySnapshot.PausedLabel : Caption(view);
 
         LastPolled = FormatPolledAt(view.PolledAt);
-        var version = string.IsNullOrWhiteSpace(view.BinaryVersion) ? "version unknown" : $"v{view.BinaryVersion}";
+        var version = string.IsNullOrWhiteSpace(view.BinaryVersion)
+            ? "version unknown"
+            : view.PeerUnverified ? $"v{view.BinaryVersion} (unverified)" : $"v{view.BinaryVersion}";
         var port = view.ApiPort > 0 ? view.ApiPort : _services.ApiPort;
         FactsLine = $"{version} · 127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)} · polled {LastPolled}";
 

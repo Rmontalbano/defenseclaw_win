@@ -398,14 +398,16 @@ public sealed class UpdateChecker : IDisposable
 
     /// <summary>
     /// Best-effort, read-only. Prefers the gateway's own answer (already polled, no extra
-    /// process). Falls back to a CLI call only when the gateway has never reported a version —
+    /// process), but only when the port owner verified as the gateway: an unverified peer's
+    /// <c>/health</c> version is never used (<see cref="GatewaySnapshot.TrustedBinaryVersion"/>).
+    /// Falls back to a CLI call only when the gateway has never reported a trusted version —
     /// and within that fallback, prefers <c>defenseclaw --version-json</c> (0.8.10+) since it is
     /// structured and unambiguous; only when that misses (older CLIs predate the flag) does it
     /// fall back further to the human-readable <c>--version</c> text and regex extraction.
     /// </summary>
     private async Task<string?> ResolveInstalledVersionAsync(CancellationToken cancellationToken)
     {
-        var fromHealth = _services.Monitor.Current.BinaryVersion;
+        var fromHealth = _services.Monitor.Current.TrustedBinaryVersion;
         if (!string.IsNullOrWhiteSpace(fromHealth))
         {
             return fromHealth.Trim();

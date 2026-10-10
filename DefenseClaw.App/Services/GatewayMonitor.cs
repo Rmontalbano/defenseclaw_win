@@ -98,6 +98,20 @@ public sealed record GatewaySnapshot
     /// <summary>e.g. <c>0.8.7</c>, from <c>/health</c> provenance.</summary>
     public string? BinaryVersion { get; init; }
 
+    /// <summary>
+    /// True when the port owner did not verify as the gateway (<see cref="InstallStatus.OwnerTrust"/> is not
+    /// <see cref="PortOwnerTrust.Gateway"/>). Then <see cref="BinaryVersion"/> and <see cref="Health"/> came from a process that
+    /// only answers on the port, so every surface that shows them says so, and <see cref="TrustedBinaryVersion"/> is withheld.
+    /// Part of <see cref="RendersSameAs"/>.
+    /// </summary>
+    public bool PeerUnverified { get; init; }
+
+    /// <summary>
+    /// The version the update check may use: <see cref="BinaryVersion"/>, unless the peer is unverified. A process on the port
+    /// can claim any version, so an unverified claim must never suppress or trigger an update prompt; callers fall back to the CLI.
+    /// </summary>
+    public string? TrustedBinaryVersion => PeerUnverified ? null : BinaryVersion;
+
     public int ApiPort { get; init; }
 
     public string? CliPath { get; init; }
@@ -275,6 +289,7 @@ public sealed record GatewaySnapshot
                CriticalAlertCount == other.CriticalAlertCount &&
                string.Equals(Detail, other.Detail, StringComparison.Ordinal) &&
                string.Equals(BinaryVersion, other.BinaryVersion, StringComparison.Ordinal) &&
+               PeerUnverified == other.PeerUnverified &&
                string.Equals(CliPath, other.CliPath, StringComparison.Ordinal) &&
                string.Equals(AlertsUnavailable, other.AlertsUnavailable, StringComparison.Ordinal) &&
                string.Equals(SubsystemReading, other.SubsystemReading, StringComparison.Ordinal) &&
@@ -1154,6 +1169,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
             PortRefused = health.Status == GatewayStatus.Unreachable &&
                           string.Equals(health.ErrorMessage, GatewayClient.RefusedMessage, StringComparison.Ordinal),
             BinaryVersion = status.BinaryVersion ?? health.Value?.Provenance?.BinaryVersion,
+            PeerUnverified = status.OwnerTrust != PortOwnerTrust.Gateway,
             ApiPort = status.Port,
             CliPath = status.CliPath,
             RecentAlerts = alerts,

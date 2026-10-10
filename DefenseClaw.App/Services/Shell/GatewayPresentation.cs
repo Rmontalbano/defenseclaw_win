@@ -117,13 +117,21 @@ internal static class GatewayPresentation
         };
     }
 
-    /// <summary>"DefenseClaw 0.8.10", or empty before the version is known.</summary>
+    /// <summary>
+    /// "DefenseClaw 0.8.10", or empty before the version is known. A version from an unverified port owner
+    /// (<see cref="GatewaySnapshot.PeerUnverified"/>) reads "DefenseClaw 0.8.10 (unverified)".
+    /// </summary>
     public static string VersionText(GatewaySnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return string.IsNullOrWhiteSpace(snapshot.BinaryVersion)
-            ? string.Empty
+        if (string.IsNullOrWhiteSpace(snapshot.BinaryVersion))
+        {
+            return string.Empty;
+        }
+
+        return snapshot.PeerUnverified
+            ? $"DefenseClaw {snapshot.BinaryVersion} (unverified)"
             : $"DefenseClaw {snapshot.BinaryVersion}";
     }
 
