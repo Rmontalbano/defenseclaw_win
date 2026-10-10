@@ -132,7 +132,7 @@ public sealed class HookTotalsCacheStore
             {
                 _ = System.IO.Directory.CreateDirectory(Directory);
                 File.WriteAllText(temp, JsonSerializer.Serialize(dto, Json));
-                File.Move(temp, FilePath, overwrite: true);
+                ReplaceWithRetry(temp, FilePath);
             }
 
             return true;
@@ -146,6 +146,29 @@ public sealed class HookTotalsCacheStore
             return false;
         }
     }
+
+    /// <summary>
+    /// Moves the temp file over the cache. A scanner or indexer that has the old file open for a moment makes the replace fail with a
+    /// sharing violation; a few short retries ride that out instead of losing the slice (the next launch would rescan it).
+    /// </summary>
+    private static void ReplaceWithRetry(string temp, string target)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temp, target, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < ReplaceAttempts && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(ReplaceRetryDelay);
+            }
+        }
+    }
+
+    private const int ReplaceAttempts = 5;
+    private static readonly TimeSpan ReplaceRetryDelay = TimeSpan.FromMilliseconds(25);
 
     private static void TryDelete(string path)
     {
