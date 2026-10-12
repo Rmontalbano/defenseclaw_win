@@ -189,6 +189,9 @@ public sealed class AppServices : IDisposable
         // Opt-in "start the gateway automatically" (off by default). Nothing runs until the app calls Start on it.
         GatewayAutoStart = GatewayAutoStart.Create(this);
 
+        // The one start / stop / restart path: the tray, the palette and every "Start gateway" button go through it.
+        GatewayLifecycle = GatewayLifecycle.Create(this);
+
         // Whether the local observability stack can be offered: one read-only Docker look, shared by the Setup card and the palette's
         // rows. Idle (no timer, no process) until one of them asks.
         LocalStack = new LocalStackAvailability(dockerProbe ?? DockerProbe.CreateDefault(Paths));
@@ -334,6 +337,9 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The opt-in single automatic <c>defenseclaw-gateway start</c> per launch, and the "operator stopped it" flag that vetoes it. See <see cref="Services.GatewayAutoStart"/>.</summary>
     internal GatewayAutoStart GatewayAutoStart { get; }
+
+    /// <summary>The shared gate, review and run behind every gateway start / stop / restart control. See <see cref="GatewayLifecycle"/>.</summary>
+    internal GatewayLifecycle GatewayLifecycle { get; set; }
 
     /// <summary>
     /// Whether the bundled local observability stack (<c>setup local-observability</c>) can be offered: the Setup hub's card and the palette's

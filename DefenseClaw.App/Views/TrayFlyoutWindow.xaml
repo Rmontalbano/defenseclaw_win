@@ -179,6 +179,19 @@
                        Visibility="{Binding HasFailModeNote, Converter={StaticResource BoolToVisibility}}"
                        Text="{Binding FailModeNote}" />
 
+            <!-- Shown only while the gateway is down. The shared reviewed start; disabled with the reason as its tooltip. -->
+            <ui:Button Style="{StaticResource FooterButton}"
+                       Appearance="Primary"
+                       Margin="0,8,0,0"
+                       Content="Start gateway"
+                       Icon="{ctl:DcSymbolIcon Play24}"
+                       Command="{Binding StartGatewayCommand}"
+                       Visibility="{Binding ShowStartGateway, Converter={StaticResource BoolToVisibility}}"
+                       ToolTipService.ShowOnDisabled="True"
+                       ToolTip="{Binding StartGatewayTip}"
+                       AutomationProperties.Name="Start gateway"
+                       AutomationProperties.HelpText="{Binding StartGatewayTip}" />
+
             <Border Style="{StaticResource FlyoutRule}" />
 
             <!-- One line per connector: state dot, name, mode, and on the right what the gateway counted. -->

@@ -148,7 +148,7 @@ public class TrayFlyoutWindowTests
         {
             using var host = new OffscreenHost(card, 360, 900);
 
-            var buttons = VisualTree.Descendants<Button>(card).ToList();
+            var buttons = VisualTree.Descendants<Button>(card).Where(b => b.Visibility == Visibility.Visible).ToList();
             var names = buttons.Select(NameOf).ToList();
 
             Assert.Equal(

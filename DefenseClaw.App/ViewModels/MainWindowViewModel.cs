@@ -80,6 +80,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _degradedMessage = string.Empty;
 
+    /// <summary>The degraded banner's "Start gateway" is drawn: the banner is up and the gateway is down in a way a start answers (stopped or degraded; not a missing install).</summary>
+    [ObservableProperty]
+    private bool _showStartGateway;
+
+    /// <summary>The button's tooltip and help text: what it does, or why it is off (the installation's sentence first).</summary>
+    [ObservableProperty]
+    private string _startGatewayTip = string.Empty;
+
+    private bool _startGatewayAllowed;
+
     [ObservableProperty]
     private bool _showWslBanner;
 
@@ -141,6 +151,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Strip = new StatusStripViewModel(_services);
         _services.Monitor.StateChanged += OnStateChanged;
         _services.ConfigReloaded += OnConfigReloaded;
+        _services.GatewayLifecycle.OfferChanged += OnGatewayOfferChanged;
 
         // Subscribing starts the counts service if nothing else has (the tray normally has), and a window built later than the
         // first read never hears about it: so the current counts are taken now, and the subscription only carries changes.
@@ -167,7 +178,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>The command the not-initialized banner offers. Shown, never executed.</summary>
     public static string InitCommandText => GatewaySnapshot.InitCommand;
 
-    /// <summary>The command the degraded banner offers. Shown, never executed.</summary>
+    /// <summary>The command the degraded banner's Start gateway button runs, after a review (also what a tooltip or a copy shows).</summary>
     public static string StartGatewayCommandText => GatewaySnapshot.StartGatewayCommand;
 
     public void Dispose()
@@ -179,11 +190,42 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _disposed = true;
         _services.Monitor.StateChanged -= OnStateChanged;
+        _services.GatewayLifecycle.OfferChanged -= OnGatewayOfferChanged;
         _services.ConfigReloaded -= OnConfigReloaded;
         _services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
         _services.AlertCounts.Changed -= OnAlertCountsChanged;
         Strip.Dispose();
         _services.UnreadCounts.Changed -= OnUnreadChanged;
+    }
+
+    /// <summary>
+    /// The degraded banner's "Start gateway": the shared path (<see cref="GatewayLifecycle"/>), so the gate, the review and the run are the tray's.
+    /// Nothing runs until the review is confirmed.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanStartGateway))]
+    private Task StartGateway() => _services.GatewayLifecycle.RunAsync(GatewayAction.Start);
+
+    private bool CanStartGateway() => _startGatewayAllowed;
+
+    private void OnGatewayOfferChanged(object? sender, EventArgs e)
+    {
+        if (!_disposed)
+        {
+            ApplyStartOffer(_services.GatewayLifecycle.Snapshot);
+        }
+    }
+
+    private void ApplyStartOffer(GatewaySnapshot snapshot)
+    {
+        var offer = GatewayLifecycle.StartOffer(snapshot, _services.Installation);
+        var allowed = offer.Enabled && !_services.GatewayLifecycle.IsRunning;
+        ShowStartGateway = offer.Visible && snapshot.IsDegraded;
+        StartGatewayTip = offer.Tip;
+        if (allowed != _startGatewayAllowed)
+        {
+            _startGatewayAllowed = allowed;
+            StartGatewayCommand.NotifyCanExecuteChanged();
+        }
     }
 
     /// <summary>
@@ -276,6 +318,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ? snapshot.Detail
             : snapshot.Detail +
               " The audit database and the log tail still work, so Audit, Logs and Activity stay usable.";
+
+        ApplyStartOffer(snapshot);
 
         ShowWslBanner = snapshot.WslGatewayDetected;
         WslMessage = snapshot.PortOwner is { } owner

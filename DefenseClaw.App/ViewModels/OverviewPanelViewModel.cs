@@ -716,6 +716,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                     Detail = snapshot.Detail + " Audit, Logs and Activity still work from disk.",
                     SeverityKey = "High",
                     Command = GatewaySnapshot.StartGatewayCommand,
+                    OffersStart = true,
                 });
                 break;
 
@@ -876,6 +877,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // Every input of the reviewed buttons (config.yaml, the doctor cache, the snapshot) changes with a rebuild of this list: they follow it.
         ApplyQuickActions();
         RefreshRestartPendingActions();
+        RefreshStartGatewayAttention();
     }
 
     /// <summary>How many rows "What needs attention" shows before "Show all": the Mac's top three.</summary>
@@ -1498,7 +1500,7 @@ public sealed record AttentionRow
     /// <summary>Critical / High / Medium / Low / Info / Ok — drives the accent colour.</summary>
     public string SeverityKey { get; init; } = "Info";
 
-    /// <summary>Suggested command. Displayed and copyable; the app never runs it.</summary>
+    /// <summary>Suggested command. Displayed and copyable; the app runs it only through a button's review (<see cref="OffersStart"/>), never on its own.</summary>
     public string? Command { get; init; }
 
     public bool HasCommand => !string.IsNullOrWhiteSpace(Command);
@@ -1508,6 +1510,9 @@ public sealed record AttentionRow
     /// Clear. The one row that is not text to read or a command to copy.
     /// </summary>
     public bool OffersRestart { get; init; }
+
+    /// <summary>The row is the stopped gateway and carries Start gateway: the shared, reviewed <c>defenseclaw-gateway start</c> beside the copyable command.</summary>
+    public bool OffersStart { get; init; }
 
     /// <summary>
     /// The Mac's mono bracket tag for the row: <c>[!]</c> critical, <c>[*]</c> a warning (High, Medium), <c>[OK]</c> all clear, <c>[&gt;]</c> for
@@ -1533,6 +1538,11 @@ public sealed record AttentionRow
         if (OffersRestart)
         {
             text += " Restart now and Clear are available.";
+        }
+
+        if (OffersStart)
+        {
+            text += " Start gateway is available.";
         }
 
         return HasCommand ? text + " A suggested command is available." : text;

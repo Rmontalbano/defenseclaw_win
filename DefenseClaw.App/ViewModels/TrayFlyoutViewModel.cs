@@ -136,6 +136,16 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(PauseAutomationName))]
     private bool _isPaused;
 
+    /// <summary>True while the gateway is down and a start is offered: stopped, degraded or not yet known (never for a WSL relay or a missing install).</summary>
+    [ObservableProperty]
+    private bool _showStartGateway;
+
+    /// <summary>The Start gateway button's tooltip and help text: what it does, or why it is off (the installation's sentence first).</summary>
+    [ObservableProperty]
+    private string _startGatewayTip = string.Empty;
+
+    private bool _startGatewayAllowed;
+
     public TrayFlyoutViewModel(AppServices services, Action openDashboard, Action exit)
         : this(services, openDashboard, exit, metricsReader: null, timeProvider: null)
     {
@@ -167,6 +177,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         };
 
         _services.Monitor.StateChanged += OnStateChanged;
+        _services.GatewayLifecycle.OfferChanged += OnGatewayOfferChanged;
 
         // What is known without asking anyone: the last snapshot and the last alert counts (which may be from the dashboard's own reads).
         ApplyAlerts(_services.AlertCounts.Current, _services.AlertCounts.HasData, _services.AlertCounts.Unavailable);
@@ -253,6 +264,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         StopLive();
         _services.Monitor.StateChanged -= OnStateChanged;
         _services.Monitor.PollCompleted -= OnPollCompleted;
+        _services.GatewayLifecycle.OfferChanged -= OnGatewayOfferChanged;
     }
 
     // ------------------------------------------------------------------ commands
@@ -261,6 +273,40 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
     private void OpenDashboard() => _openDashboard();
 
     /// <summary>The gear: the dashboard, on its Settings page.</summary>
+    /// <summary>
+    /// Start gateway: the shared path (<see cref="GatewayLifecycle"/>: the gate, the review, the run, the poll). The flyout goes away first so the
+    /// review is the only thing on screen: it hides on losing focus anyway, and a dialog owned by a hidden window would not be seen.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanStartGateway))]
+    private async Task StartGateway()
+    {
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+        await _services.GatewayLifecycle.RunAsync(GatewayAction.Start).ConfigureAwait(true);
+    }
+
+    private bool CanStartGateway() => _startGatewayAllowed;
+
+    private void OnGatewayOfferChanged(object? sender, EventArgs e)
+    {
+        if (!_disposed)
+        {
+            ApplyStartOffer(_services.GatewayLifecycle.Snapshot);
+        }
+    }
+
+    private void ApplyStartOffer(GatewaySnapshot snapshot)
+    {
+        var offer = GatewayLifecycle.StartOffer(snapshot, _services.Installation);
+        var allowed = offer.Enabled && !_services.GatewayLifecycle.IsRunning;
+        ShowStartGateway = offer.Visible;
+        StartGatewayTip = offer.Tip;
+        if (allowed != _startGatewayAllowed)
+        {
+            _startGatewayAllowed = allowed;
+            StartGatewayCommand.NotifyCanExecuteChanged();
+        }
+    }
+
     [RelayCommand]
     private void OpenSettings() => Navigate("settings", null);
 
@@ -343,6 +389,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
             ? "Monitoring is paused: nothing is polling the gateway and no audit queries run. The gateway itself is not affected."
             : view.Detail;
         StateTone = GatewayPresentation.StateTone(view);
+        ApplyStartOffer(view);
         HeaderCaption = paused ? GatewaySnapshot.PausedLabel : Caption(view);
 
         LastPolled = FormatPolledAt(view.PolledAt);

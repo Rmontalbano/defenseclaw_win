@@ -59,7 +59,6 @@ public sealed class TrayIconService : IDisposable
     /// </summary>
     private readonly BalloonClickTarget _balloonTarget = new();
 
-    private bool _gatewayActionRunning;
     private bool _disposed;
 
     public TrayIconService(AppServices services)
@@ -69,6 +68,8 @@ public sealed class TrayIconService : IDisposable
         // Before the menu is built, so the checkmark it shows is the repaired state: a Run
         // entry left pointing at an exe that has since moved is fixed here, once per launch.
         AutostartManager.RepairIfStale();
+
+        _services.GatewayLifecycle.Notice += OnGatewayNotice;
 
         _flyoutViewModel = new TrayFlyoutViewModel(
             services,
@@ -219,6 +220,7 @@ public sealed class TrayIconService : IDisposable
         _alertNotifier.Dispose();
         _icon.TrayLeftMouseUp -= OnTrayLeftMouseUp;
         _icon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
+        _services.GatewayLifecycle.Notice -= OnGatewayNotice;
 
         _flyout?.ForceClose();
         _flyoutViewModel.Dispose();
@@ -385,63 +387,15 @@ public sealed class TrayIconService : IDisposable
     /// this one path. The run itself is a <see cref="CliRunner"/> call, so the argv, output and exit
     /// code land in the Activity panel, and the result is toasted. The busy flag is held from the
     /// moment the review opens until the run and its follow-up poll finish, so a second click cannot
-    /// stack a second dialog or a second command.
+    /// stack a second dialog or a second command. The implementation is <see cref="GatewayLifecycle"/>'s, shared with the "Start gateway" buttons.
     /// </para>
     /// </summary>
     /// <param name="action">Start, stop or restart.</param>
     /// <param name="owner">The visible dashboard to centre the review over, or null.</param>
-    public async Task RunGatewayActionAsync(GatewayAction action, Window? owner = null)
-    {
-        if (_disposed || _gatewayActionRunning)
-        {
-            return;
-        }
+    public Task RunGatewayActionAsync(GatewayAction action, Window? owner = null) =>
+        _disposed ? Task.CompletedTask : _services.GatewayLifecycle.RunAsync(action, owner);
 
-        var title = GatewayControl.Title(action);
-
-        var (allowed, reason) = GatewayControl.Availability(action, _services.Monitor.Current, _services.Installation);
-        if (!allowed)
-        {
-            Notify(title, reason ?? "Not available right now.", NotificationIcon.Info);
-            return;
-        }
-
-        var argv = GatewayControl.Argv(action);
-
-        _gatewayActionRunning = true;
-        try
-        {
-            if (CommandTiers.Classify(argv) != CommandTier.ReadOnly && !GatewayActionDialog.Confirm(owner, action))
-            {
-                return;
-            }
-
-            // A confirmed Stop is the operator's word for the rest of the session: no automatic start follows it.
-            if (action == GatewayAction.Stop)
-            {
-                _services.GatewayAutoStart.MarkUserStopped();
-            }
-
-            var invocation = await _services.Cli.RunGatewayAsync(argv);
-            Notify(
-                title,
-                invocation.ExitCode == 0
-                    ? GatewayControl.SucceededText(action)
-                    : invocation.ExitCode is { } code
-                        ? $"Exit code {code} — see the Activity panel for output."
-                        : $"{invocation.FailureReason ?? "The command did not finish"} — see the Activity panel.",
-                invocation.ExitCode == 0 ? NotificationIcon.Info : NotificationIcon.Warning);
-            _ = await _services.Monitor.RefreshAsync();
-        }
-        catch (Exception ex)
-        {
-            Notify("Gateway control failed", ex.Message, NotificationIcon.Error);
-        }
-        finally
-        {
-            _gatewayActionRunning = false;
-        }
-    }
+    private void OnGatewayNotice(object? sender, GatewayLifecycleNotice notice) => Notify(notice.Title, notice.Message, IconFor(notice.Level));
 
     /// <summary>
     /// Pushes a gateway snapshot onto the tray: shield, tooltip, toasts, menu text.
@@ -481,7 +435,7 @@ public sealed class TrayIconService : IDisposable
         // While the operator's own start / stop / restart is running the state is expected to bounce, and that action has
         // its own toast, so neither edge is announced then. (The recovery that lands after the command returns — the
         // gateway finishing its start — still is.)
-        if (_gatewayToasts.Observe(snapshot, _gatewayActionRunning, _services.Settings.Current.Notifications.Gateway) is { } toast)
+        if (_gatewayToasts.Observe(snapshot, _services.GatewayLifecycle.IsRunning, _services.Settings.Current.Notifications.Gateway) is { } toast)
         {
             Notify(toast.Title, toast.Body, IconFor(toast.Level));
         }

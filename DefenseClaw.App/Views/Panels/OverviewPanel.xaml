@@ -314,9 +314,22 @@
                                                     Visibility="{Binding HasCommand, Converter={StaticResource BoolToVisibility}}">
                                                 <TextBox Style="{StaticResource DcMonoTextBox}"
                                                          AutomationProperties.Name="Suggested command"
-                                                         AutomationProperties.HelpText="Read-only text you can select and copy. The app never runs it for you."
+                                                         AutomationProperties.HelpText="Read-only text you can select and copy."
                                                          Text="{Binding Command, Mode=OneWay}" />
                                             </Border>
+
+                                            <!-- The stopped gateway: the shared, reviewed start (GatewayLifecycle), beside the command to copy. -->
+                                            <ui:Button Margin="0,6,0,0"
+                                                       HorizontalAlignment="Left"
+                                                       Appearance="Primary"
+                                                       Content="Start gateway"
+                                                       Icon="{ctl:DcSymbolIcon Play24}"
+                                                       Visibility="{Binding OffersStart, Converter={StaticResource BoolToVisibility}}"
+                                                       Command="{Binding DataContext.StartGatewayFromRowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                       ToolTipService.ShowOnDisabled="True"
+                                                       ToolTip="{Binding DataContext.StartGatewayTip, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                       AutomationProperties.Name="Start the gateway"
+                                                       AutomationProperties.HelpText="{Binding DataContext.StartGatewayTip, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
 
                                             <!-- The queued gateway restart (CUST-267) is the one row with buttons: a reviewed restart, and forgetting the queue. -->
                                             <StackPanel Margin="0,6,0,0"

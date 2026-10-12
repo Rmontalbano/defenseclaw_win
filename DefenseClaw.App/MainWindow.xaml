@@ -223,6 +223,18 @@
                         IsOpen="{Binding ShowDegradedBanner}"
                         Message="{Binding DegradedMessage}" />
 
+            <!-- The reviewed start (GatewayLifecycle): drawn only while the gateway is down; disabled with the reason as its tooltip. -->
+            <ui:Button Margin="0,8,0,0"
+                       Appearance="Primary"
+                       Content="Start gateway"
+                       Icon="{ctl:DcSymbolIcon Play24}"
+                       Command="{Binding StartGatewayCommand}"
+                       Visibility="{Binding ShowStartGateway, Converter={StaticResource BoolToVisibility}}"
+                       ToolTipService.ShowOnDisabled="True"
+                       ToolTip="{Binding StartGatewayTip}"
+                       AutomationProperties.Name="Start gateway"
+                       AutomationProperties.HelpText="{Binding StartGatewayTip}" />
+
             <!--
                 A panel whose InitializeAsync threw (PanelCatalog.PanelFaulted). Driven from
                 MainWindow.xaml.cs rather than the view-model: it is shell plumbing, not
