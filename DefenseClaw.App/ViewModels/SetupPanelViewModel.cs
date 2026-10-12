@@ -128,6 +128,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         Readiness = new ReadinessViewModel(services, Credentials, Review);
         Routing = new NotificationRoutingViewModel(services);
         Batch = new ConnectorBatchViewModel(services, applied: _ => RefreshAsync());
+        Monitoring = new RuntimeMonitoringViewModel(services);
 
         // The credential read feeds the "Required Credentials" row.
         Credentials.Loaded += (_, _) => Readiness.Rebuild();
@@ -150,6 +151,18 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     /// <summary>The connector batch dialog (CUST-271): several connectors in one reviewed <c>setup --yes --connector ...</c>, opened from the roster card.</summary>
     public ConnectorBatchViewModel Batch { get; }
+
+    /// <summary>
+    /// The Runtime monitoring card (CUST-348): AI Discovery's runtime planes, on DefenseClaw 1.0 only. Opened by its tile, or by the Overview's row
+    /// (<see cref="RuntimeMonitoringLink"/>). Its elevation hook (<see cref="IGatewayElevationStatus"/>) is the constructor's second argument.
+    /// </summary>
+    public RuntimeMonitoringViewModel Monitoring { get; }
+
+    /// <summary>The "Runtime monitoring" tile: the runtime has the planes. Hidden entirely on 0.8.10, which does not.</summary>
+    public bool HasRuntimeMonitoringTile => Monitoring.IsSupported;
+
+    [RelayCommand(CanExecute = nameof(HasRuntimeMonitoringTile))]
+    private void OpenRuntimeMonitoringTile() => Monitoring.Open();
 
     /// <summary>"Set up several…": opens the batch dialog on what config.yaml says now.</summary>
     [RelayCommand]
@@ -219,6 +232,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     {
         OnPropertyChanged(nameof(HasRedactionTile));
         OpenRedactionTileCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(HasRuntimeMonitoringTile));
+        OpenRuntimeMonitoringTileCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -307,6 +322,11 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         if (payload is CredentialSet set)
         {
             _ = Credentials.BeginSetForAsync(set.EnvName);
+        }
+        else if (payload is RuntimeMonitoringLink)
+        {
+            // The Overview's Runtime monitoring row (CUST-348): opens the card. Nothing is changed by it; the dialog still reviews every change.
+            Monitoring.Open();
         }
     }
 

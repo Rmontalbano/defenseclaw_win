@@ -312,6 +312,8 @@ public sealed partial class OverviewPanelViewModel
         ShowEnableAiDiscovery = !discoveryOn;
         ShowScanAiDiscovery = discoveryOn;
 
+        ApplyRuntimeMonitoring();
+
         var enableAllowed = unavailable is null;
         EnableAiDiscoveryTip = unavailable ??
             "Turn on AI discovery: defenseclaw agent discovery enable --yes. It restarts the gateway and asks for a first scan. Asks for confirmation first.";

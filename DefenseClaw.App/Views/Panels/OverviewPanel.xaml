@@ -1404,6 +1404,20 @@
                                        Command="{Binding SeeAllAgentsCommand}"
                                        Visibility="{Binding HasAgents, Converter={StaticResource BoolToVisibility}}"
                                        AutomationProperties.HelpText="Opens the AI Discovery panel, with every signal." />
+
+                            <!-- Runtime monitoring (CUST-348): the state of AI Discovery's runtime planes; DefenseClaw 1.0 only, absent on 0.8.10. -->
+                            <StackPanel Margin="0,12,0,0"
+                                        Visibility="{Binding ShowRuntimeMonitoring, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.Name="Runtime monitoring state"
+                                           Text="{Binding RuntimeMonitoringText}" />
+                                <ui:Button Content="Runtime monitoring →"
+                                           Appearance="Secondary"
+                                           Margin="0,6,0,0"
+                                           Command="{Binding OpenRuntimeMonitoringCommand}"
+                                           AutomationProperties.HelpText="Opens the Setup page's Runtime monitoring card: the state of each plane, what it needs, and the switches. Nothing is changed by opening it." />
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </Grid>

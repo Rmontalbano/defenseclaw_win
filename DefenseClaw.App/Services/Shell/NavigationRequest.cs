@@ -95,6 +95,12 @@ public sealed record RegistryFocus(string EntryType, string Name, string? Source
 /// <param name="EnvName">The variable's NAME, already checked as an environment variable name.</param>
 public sealed record CredentialSet(string EnvName);
 
+/// <summary>
+/// Payload for <c>setup</c> (CUST-348, the Overview's Runtime monitoring row): open the Runtime monitoring card. Nothing is changed or run by it; the card reviews
+/// every change before it runs.
+/// </summary>
+public sealed record RuntimeMonitoringLink;
+
 /// <summary>What <see cref="ShellNavigation.Requested"/> carries.</summary>
 public sealed class NavigationRequestedEventArgs : EventArgs
 {

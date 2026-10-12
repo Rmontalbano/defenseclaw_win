@@ -1,0 +1,31 @@
+# SYNTHETIC. Written by hand from the DefenseClaw 1.0.0 source (internal/config/config.go AIRuntimeConfig, cli/defenseclaw/config.py AIRuntimeConfig),
+# not captured from a machine. Every value is made up; nothing here describes a real install.
+cisco_ai_defense:
+  api_key_env: CISCO_AI_DEFENSE_API_KEY
+claw:
+  mode: claudecode
+gateway:
+  api_port: 18970
+  token_env: DEFENSECLAW_GATEWAY_TOKEN
+guardrail:
+  scanner_mode: local
+llm:
+  api_key_env: DEFENSECLAW_LLM_KEY
+config_version: 9
+observability: {}
+ai_discovery:
+  enabled: true
+  mode: enhanced
+  scan_interval_min: 5
+  process_interval_s: 60
+  runtime:
+    enabled: true
+    poll_interval_s: 30
+    min_risk_to_report: 40
+    planes:
+    - a
+    - b
+    - c
+    enable_host_plane: true
+    dns_capture: true
+    acquisition: auto

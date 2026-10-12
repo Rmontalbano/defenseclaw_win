@@ -143,6 +143,14 @@ public sealed class GatewayHealth
     [JsonPropertyName("ai_discovery")]
     public ServiceState? AiDiscovery { get; init; }
 
+    /// <summary>
+    /// The AI Discovery runtime planes (<c>SetAIRuntime</c> in the 1.0 gateway's <c>health.go</c>): <c>disabled</c> when off; otherwise <c>starting</c> or
+    /// <c>running</c> with <c>details.planes.{a,b,c}.{available,running,mechanism,reason}</c>. Absent on 0.8.10. Deliberately not in <see cref="Services"/>: the
+    /// Overview's Services card is the TUI's nine, by name.
+    /// </summary>
+    [JsonPropertyName("ai_runtime")]
+    public ServiceState? AiRuntime { get; init; }
+
     [JsonPropertyName("application_protection")]
     public ServiceState? ApplicationProtection { get; init; }
 

@@ -60,7 +60,8 @@ public sealed class Runtime95159fdCompatTests
         // Subsystems that appeared after 0.8.10 land in the extension bag instead of being dropped or throwing.
         Assert.NotNull(health.AdditionalData);
         Assert.Contains("routing", health.AdditionalData!.Keys);
-        Assert.Contains("ai_runtime", health.AdditionalData.Keys);
+        Assert.DoesNotContain("ai_runtime", health.AdditionalData.Keys); // modelled since CUST-348 (GatewayHealth.AiRuntime)
+        Assert.Equal("disabled", health.AiRuntime?.State);
         Assert.Contains("acp", health.AdditionalData.Keys);
     }
 

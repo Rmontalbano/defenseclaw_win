@@ -789,6 +789,33 @@
                                        Text="What is collected, and how it is redacted." />
                         </StackPanel>
                     </Button>
+
+                    <!-- Runtime monitoring (CUST-348): AI Discovery's runtime planes, on a runtime that has them; hidden entirely on 0.8.10. -->
+                    <Button Width="233"
+                            Height="92"
+                            Margin="0,0,12,12"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource DcInteractiveTile}"
+                            Command="{Binding OpenRuntimeMonitoringTileCommand}"
+                            Visibility="{Binding HasRuntimeMonitoringTile, Converter={StaticResource BoolToVisibility}}"
+                            AutomationProperties.Name="Runtime monitoring"
+                            AutomationProperties.HelpText="Opens the runtime monitoring card: whether DefenseClaw is watching running processes and connections for AI use, plane by plane, and what each plane needs. Changes are reviewed first.">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcSymbolIcon Margin="0,0,8,0"
+                                                  Style="{StaticResource DcIconNav}"
+                                                  ctl:DcIcon.Section="Setup"
+                                                  Symbol="Pulse24" />
+                                <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Runtime monitoring" />
+                            </StackPanel>
+                            <TextBlock Margin="0,6,0,0"
+                                       MaxHeight="34"
+                                       Style="{StaticResource DcCaption}"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="Wrap"
+                                       Text="Watch running AI processes and connections." />
+                        </StackPanel>
+                    </Button>
                 </WrapPanel>
 
                 <!-- Tile grid, grouped -->
@@ -998,5 +1025,8 @@
 
         <!-- Connector batch (CUST-271): the roster card's "Set up several…" dialog, with a review of its own. -->
         <panels:ConnectorBatchDialog Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Batch}" />
+
+        <!-- Runtime monitoring (CUST-348): the tile's dialog (and the Overview row's), with a review of its own. -->
+        <panels:RuntimeMonitoringDialog Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Monitoring}" />
     </Grid>
 </UserControl>
