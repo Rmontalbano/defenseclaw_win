@@ -268,7 +268,18 @@
                             IsClosable="False"
                             IsOpen="True"
                             Message="This app keeps its old-version assumptions (panel layouts, CLI flags, health fields) until you restart it. Restart DefenseClaw for Windows after the upgrade."
-                            Severity="Warning" />
+                            Severity="Warning">
+                    <StackPanel Margin="0,8,0,0">
+                        <ui:Button Appearance="Primary"
+                                   AutomationProperties.HelpText="Starts a new copy of DefenseClaw for Windows and closes this one."
+                                   AutomationProperties.Name="Restart DefenseClaw for Windows"
+                                   Command="{Binding RestartAppCommand}"
+                                   Content="Restart DefenseClaw for Windows"
+                                   Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                   ToolTip="{Binding RestartAppBlockedReason}" />
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource DcCaption}" Text="{Binding RestartNote}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </ui:InfoBar>
             </StackPanel>
         </StackPanel>
     </Border>

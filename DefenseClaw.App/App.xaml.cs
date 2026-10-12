@@ -93,7 +93,8 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        _instanceGuard = SingleInstanceGuard.Acquire();
+        // A restarted copy waits for the instance it replaces to exit before taking the guard (AppRestart); any other launch just takes it.
+        _instanceGuard = AppRestart.AcquireAfterRestart(e.Args, AppRestart.WaitForProcessExit, SingleInstanceGuard.Acquire);
         if (!_instanceGuard.IsFirstInstance)
         {
             // Hand the request to the instance that already owns the tray icon, and say so when nothing answers (a squatter on the mutex
@@ -133,6 +134,11 @@ public partial class App : Application
         _tray = new TrayIconService(_services);
         _tray.OpenDashboardRequested += (_, _) => ShowDashboard();
         _tray.ExitRequested += (_, _) => ExitApplication();
+
+        // "Restart app" (tray menu, Updates window): the usual exit checks, then the successor is started just before shutdown.
+        _services.AppRestart.StartedMinimized = e.Args.Contains(AppRestart.MinimizedFlag, StringComparer.OrdinalIgnoreCase);
+        _services.AppRestart.WindowShown = () => _dashboard?.Current?.IsVisible == true;
+        _services.AppRestart.RestartRequested += (_, _) => ExitApplication(restart: true);
 
         // A copy that failed (another program holds the clipboard) or was cut short says so, wherever it was started from.
         Views.Controls.DcClipboard.Notice += message => _tray?.Notify("Clipboard", message, NotificationIcon.Warning);
@@ -280,7 +286,7 @@ public partial class App : Application
     /// silently abandoned. So nothing escapes: a fault is logged and said in a tray toast, and so is an exit that
     /// cannot go ahead because the config editor is busy (see <see cref="ClearEditorForExitAsync"/>).
     /// </summary>
-    private async void ExitApplication()
+    private async void ExitApplication(bool restart = false)
     {
         try
         {
@@ -316,6 +322,13 @@ public partial class App : Application
 
             if (!clearance.MayExit)
             {
+                return;
+            }
+
+            // A restart starts its successor only now that nothing can stop the exit; if it cannot start, this copy stays up.
+            if (restart && _services is { } services && !services.AppRestart.TryLaunch(out var launchError))
+            {
+                _tray?.Notify("DefenseClaw", launchError ?? "The app could not be restarted.", NotificationIcon.Warning);
                 return;
             }
 

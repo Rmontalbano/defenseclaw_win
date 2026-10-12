@@ -292,6 +292,23 @@ public sealed class TrayIconService : IDisposable
 
         _ = menu.Items.Add(new Separator());
 
+        // Always available (unless a state-changing run is in flight): the same service as the Updates window's button.
+        var restartApp = new MenuItem { Header = "Restart app" };
+        restartApp.Click += (_, _) =>
+        {
+            if (_services.AppRestart.Request() is { } reason)
+            {
+                Notify("DefenseClaw", reason, NotificationIcon.Warning);
+            }
+        };
+        _ = menu.Items.Add(restartApp);
+        menu.Opened += (_, _) =>
+        {
+            var blocked = _services.AppRestart.BlockedReason;
+            restartApp.IsEnabled = blocked is null;
+            restartApp.ToolTip = blocked;
+        };
+
         var exit = new MenuItem { Header = "Exit" };
         exit.Click += (_, _) => OnExitRequested();
         _ = menu.Items.Add(exit);

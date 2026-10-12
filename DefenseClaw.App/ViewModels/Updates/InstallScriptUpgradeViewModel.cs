@@ -373,6 +373,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         OpenUpgradeReviewCommand.NotifyCanExecuteChanged();
         DownloadAndVerifyCommand.NotifyCanExecuteChanged();
         OpenRollbackReviewCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(RestartAppBlockedReason));
+        RestartAppCommand.NotifyCanExecuteChanged();
     }
 
     private void OnInstallationChanged(object? sender, EventArgs e)
@@ -812,6 +814,22 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             OnPropertyChanged(nameof(CanStartGateway));
         }
     }
+
+    // ------------------------------------------------------------------------------------------------ restart
+
+    /// <summary>Why "Restart DefenseClaw for Windows" is off (this card's own run, or any state-changing run in Activity), or null. Also the button's tooltip.</summary>
+    public string? RestartAppBlockedReason =>
+        IsRunning ? "The installer is still running. Restart the app when it finishes." : _services.AppRestart.BlockedReason;
+
+    /// <summary>What the last click said when it did not restart (the run that started since the bar was drawn).</summary>
+    [ObservableProperty]
+    private string _restartNote = string.Empty;
+
+    private bool CanRestartApp() => RestartAppBlockedReason is null;
+
+    /// <summary>Starts a new copy of this app and exits this one (the shell's usual exit checks first). See <see cref="AppRestart"/>.</summary>
+    [RelayCommand(CanExecute = nameof(CanRestartApp))]
+    private void RestartApp() => RestartNote = _services.AppRestart.Request() ?? string.Empty;
 
     /// <summary>The Start gateway button: the post-flight found the gateway down.</summary>
     public bool CanStartGateway => HasPostFlight && GatewayDown && !IsRunning && BlockedReason is null;

@@ -172,6 +172,7 @@ public sealed class AppServices : IDisposable
         Settings.Changed += OnSettingsChanged;
 
         Navigation = new ShellNavigation();
+        AppRestart = new AppRestart(() => Cli.Activity);
         AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges, readTimeout: ReaderTimeouts.AlertQueue);
         ConnectorScope = new ConnectorScope(Monitor);
         HookTotals = new ConnectorHookTotalsReader(
@@ -316,6 +317,9 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The inbox for "show this panel, and tell it this" requests (deep links). See <see cref="ShellNavigation"/>.</summary>
     public ShellNavigation Navigation { get; }
+
+    /// <summary>"Restart this app" (the Updates window's post-upgrade bar and the tray menu). See <see cref="AppRestart"/>.</summary>
+    internal AppRestart AppRestart { get; }
 
     /// <summary>The alert queue read straight from <c>audit.db</c> (the Mac's "unacknowledged findings"). See <see cref="AlertQueueReader"/>; most callers want <see cref="AlertCounts"/>.</summary>
     public AlertQueueReader AlertQueue { get; }
