@@ -1,0 +1,275 @@
+<UserControl x:Class="DefenseClaw.App.Views.Updates.InstallScriptUpgradeCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             IsTabStop="False"
+             Focusable="False">
+    <!--
+        The in-app upgrade to DefenseClaw 1.0 through the release's install.ps1 (CUST-346). DataContext is an InstallScriptUpgradeViewModel.
+        Order is the order of the workflow: what changes, the read-only pre-flight, download and verify, review and run (the review is the
+        shared CommandReviewControl in InstallScriptReviewOverlay), then the post-flight panel. Nothing here starts on its own.
+    -->
+    <Border Style="{StaticResource DcCard}"
+            Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ctl:DcCardHeader Grid.Column="0" Symbol="ArrowCircleUp24" Section="Updates" Content="{Binding Headline}" />
+                <TextBlock Grid.Column="1"
+                           Margin="0,0,0,8"
+                           FontFamily="{DynamicResource DcMonoFontFamily}"
+                           Style="{StaticResource DcCaption}"
+                           Text="install.ps1 channel" />
+            </Grid>
+
+            <TextBlock Margin="0,0,0,12" Style="{StaticResource DcCaption}" Text="{Binding ChannelNote}"
+                       Visibility="{Binding ShowUpgradeSteps, Converter={StaticResource BoolToVisibility}}" />
+
+            <ui:InfoBar Title="Upgrade is off"
+                        Margin="0,0,0,12"
+                        IsClosable="False"
+                        IsOpen="{Binding HasBlockedReason, Mode=OneWay}"
+                        Message="{Binding BlockedReason, Mode=OneWay}"
+                        Severity="Warning" />
+
+            <StackPanel Visibility="{Binding ShowUpgradeSteps, Converter={StaticResource BoolToVisibility}}">
+            <!-- What changes -->
+            <ctl:DcCardHeader Margin="0,0,0,4" Symbol="Info24" Section="Updates" Content="What changes" />
+            <ItemsControl Margin="0,0,0,12" ItemsSource="{Binding WhatChanges}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Margin="0,0,0,4" Style="{StaticResource DcCaption}" Text="{Binding StringFormat='•  {0}'}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Pre-flight -->
+            <Grid Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ctl:DcCardHeader Grid.Column="0" Margin="0" Symbol="Checkmark24" Section="Updates" Content="Pre-flight (read-only)" />
+                <ui:Button Grid.Column="1"
+                           Appearance="Secondary"
+                           AutomationProperties.HelpText="Runs the read-only checks again."
+                           Command="{Binding RefreshPreflightCommand}"
+                           Content="Re-check"
+                           Icon="{ctl:DcSymbolIcon ArrowSync24}" />
+            </Grid>
+            <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding PreflightSummary}" />
+            <ItemsControl Margin="0,0,0,12" ItemsSource="{Binding PreflightRows}" AutomationProperties.Name="Pre-flight checks">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="86" />
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Style="{StaticResource DcBadge}"
+                                    Tag="{Binding ToneKey}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ctl:DcStatusGlyph Tone="{Binding ToneKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                    <TextBlock AutomationProperties.Name="{Binding StatusLabel}"
+                                               Style="{StaticResource DcBadgeText}"
+                                               Text="{Binding StatusLabel}" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Grid.Column="1" Margin="10,2,0,0" FontWeight="SemiBold" Style="{StaticResource DcBody}" Text="{Binding Title}" />
+                            <TextBlock Grid.Column="2" Margin="10,2,0,0" Style="{StaticResource DcCaption}" Text="{Binding Reason}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            </StackPanel>
+
+            <!-- Download (also how a rollback gets a verified script on a machine already on 1.0) -->
+            <ctl:DcCardHeader Margin="0,0,0,2" Symbol="ArrowDownload24" Section="Updates" Content="Download and verify" />
+            <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}"
+                       Text="Fetches install.ps1 and checksums.txt (with the signature files, when the release publishes them) into this app's staging folder, compares install.ps1's SHA-256 with checksums.txt, and verifies that file's sigstore signature when cosign is installed. Nothing on this machine changes." />
+            <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
+                <ui:Button Appearance="Primary"
+                           Command="{Binding DownloadAndVerifyCommand}"
+                           Content="Download &amp; verify install.ps1"
+                           Icon="{ctl:DcSymbolIcon ArrowDownload24}" />
+                <TextBlock Margin="12,0,0,0" MaxWidth="470" VerticalAlignment="Center" Style="{StaticResource DcCaption}" Text="{Binding StagingSummary}" />
+            </StackPanel>
+            <ui:InfoBar Title="Verification failed - nothing was staged"
+                        Margin="0,0,0,12"
+                        IsClosable="False"
+                        IsOpen="{Binding HasStagingError, Mode=OneWay}"
+                        Message="{Binding StagingError}"
+                        Severity="Error" />
+            <Border Margin="0,0,0,12"
+                    Padding="12"
+                    Style="{StaticResource DcSubtleRow}"
+                    Visibility="{Binding IsStaged, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Staged at" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,4"
+                             AutomationProperties.Name="Path of the staged install.ps1"
+                             Style="{StaticResource DcMonoTextBox}"
+                             Text="{Binding StagedPath, Mode=OneWay}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="SHA-256" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,4"
+                             AutomationProperties.Name="SHA-256 of the staged install.ps1"
+                             Style="{StaticResource DcMonoTextBox}"
+                             Text="{Binding StagedHash, Mode=OneWay}" />
+                    <ui:Button Grid.Row="2" Grid.Column="1" Margin="0,4,0,0" HorizontalAlignment="Left"
+                               Appearance="Secondary"
+                               Command="{Binding ShowStagedFileCommand}"
+                               Content="Show staged file"
+                               Icon="{ctl:DcSymbolIcon FolderOpen24}" />
+                </Grid>
+            </Border>
+
+            <!-- Run -->
+            <StackPanel Visibility="{Binding ShowUpgradeSteps, Converter={StaticResource BoolToVisibility}}">
+            <ctl:DcCardHeader Margin="0,0,0,2" Symbol="Play24" Section="Updates" Content="Review and run" />
+            <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}"
+                       Text="Opens a review of the exact command. install.ps1 then runs in a console window of its own, where it asks its own questions. It keeps running if you close this app." />
+            <CheckBox Margin="0,0,0,8"
+                      AutomationProperties.HelpText="Adds -Yes: the installer answers its own confirmation prompts instead of asking you in its console."
+                      Content="Add -Yes (the installer will not ask its confirmation questions)"
+                      IsChecked="{Binding UseYes, Mode=TwoWay}" />
+            <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
+                <ui:Button x:Name="RunButton"
+                           Appearance="Primary"
+                           AutomationProperties.HelpText="Opens a review of the exact command. Nothing runs until you confirm."
+                           Command="{Binding OpenUpgradeReviewCommand}"
+                           Content="Review and run…"
+                           Icon="{ctl:DcSymbolIcon ArrowCircleUp24}" />
+                <ui:ProgressRing Width="20" Height="20" Margin="12,0,0,0" IsIndeterminate="True"
+                                 AutomationProperties.Name="install.ps1 is running"
+                                 Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Margin="12,0,0,0" MaxWidth="520" VerticalAlignment="Center" Style="{StaticResource DcCaption}" Text="{Binding RunStatus}" />
+            </StackPanel>
+
+            </StackPanel>
+
+            <!-- Post-flight: after a run, or on a machine already on 1.0 -->
+            <StackPanel Margin="0,8,0,0" Visibility="{Binding ShowPostFlight, Converter={StaticResource BoolToVisibility}}">
+                <ctl:DcCardHeader Margin="0,0,0,4" Symbol="CheckmarkCircle24" Section="Updates" Content="Install state (read-only)" />
+                <StackPanel Margin="0,0,0,8" Orientation="Horizontal" Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}">
+                    <Border VerticalAlignment="Center" Style="{StaticResource DcBadge}" Tag="{Binding ExitToneKey}">
+                        <TextBlock AutomationProperties.Name="{Binding ExitLabel, StringFormat='Run result: {0}'}"
+                                   Style="{StaticResource DcBadgeText}" Text="{Binding ExitLabel}" />
+                    </Border>
+                    <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcCaption}" Text="{Binding DurationText, StringFormat='took {0}'}" />
+                </StackPanel>
+                <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding ExitMessage}" Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}" />
+
+                <Border Margin="0,0,0,8" Padding="12" Style="{StaticResource DcSubtleRow}"
+                        Visibility="{Binding HasPostFlight, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="CLI" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,4" TextWrapping="Wrap" Style="{StaticResource DcFieldValueInline}" Text="{Binding CliPathText}" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Version" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,4" TextWrapping="Wrap" Style="{StaticResource DcFieldValueInline}" Text="{Binding RuntimeText}" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Features" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,4" TextWrapping="Wrap" Style="{StaticResource DcFieldValueInline}" Text="{Binding FeaturesText}" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Gateway" />
+                        <StackPanel Grid.Row="3" Grid.Column="1" Margin="0,0,0,4" Orientation="Horizontal">
+                            <Border Style="{StaticResource DcBadge}" Tag="{Binding GatewayToneKey}">
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding GatewayText}" />
+                            </Border>
+                            <ui:Button Margin="10,0,0,0"
+                                       Appearance="Secondary"
+                                       AutomationProperties.HelpText="Opens a review of defenseclaw-gateway start."
+                                       Command="{Binding OpenStartGatewayReviewCommand}"
+                                       Content="Start gateway…"
+                                       Icon="{ctl:DcSymbolIcon Play24}"
+                                       Visibility="{Binding CanStartGateway, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Migration" />
+                        <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Style="{StaticResource DcFieldValueInline}" Text="{Binding MigrationText}" />
+                            <ui:Button Margin="10,0,0,0"
+                                       Appearance="Secondary"
+                                       AutomationProperties.HelpText="Shows migration-v9.json in Explorer."
+                                       Command="{Binding ShowMigrationFileCommand}"
+                                       Content="Show file"
+                                       Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                       Visibility="{Binding HasMigration, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- What the upgrade left behind: read-only warnings, this app changes neither. -->
+                <ItemsControl Margin="0,0,0,8" ItemsSource="{Binding LeftoverRows}" AutomationProperties.Name="Left behind by the upgrade">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="86" />
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource DcBadge}" Tag="{Binding ToneKey}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="{Binding ToneKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusLabel}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Grid.Column="1" Margin="10,2,0,0" FontWeight="SemiBold" Style="{StaticResource DcBody}" Text="{Binding Title}" />
+                                <TextBlock Grid.Column="2" Margin="10,2,0,0" Style="{StaticResource DcCaption}" Text="{Binding Reason}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
+                    <ui:Button Appearance="Secondary"
+                               AutomationProperties.HelpText="Opens the installer's transcript."
+                               Command="{Binding OpenLogCommand}"
+                               Content="Open install log"
+                               Icon="{ctl:DcSymbolIcon DocumentText24}"
+                               Visibility="{Binding HasLog, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Margin="8,0,0,0"
+                               Appearance="Secondary"
+                               AutomationProperties.HelpText="Opens a review of install.ps1 -Rollback."
+                               Command="{Binding OpenRollbackReviewCommand}"
+                               Content="Roll back…"
+                               Icon="{ctl:DcSymbolIcon ArrowUndo24}" />
+                </StackPanel>
+                <TextBlock Margin="0,0,0,4" Style="{StaticResource DcCaption}" Text="{Binding LogPath}" />
+                <TextBlock Style="{StaticResource DcCaption}" Text="{Binding RollbackNote}" />
+                <ui:InfoBar Title="Restart this app"
+                            Margin="0,8,0,0"
+                            IsClosable="False"
+                            IsOpen="True"
+                            Message="This app keeps its old-version assumptions (panel layouts, CLI flags, health fields) until you restart it. Restart DefenseClaw for Windows after the upgrade."
+                            Severity="Warning" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

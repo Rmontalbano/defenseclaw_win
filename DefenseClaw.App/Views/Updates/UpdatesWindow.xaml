@@ -4,6 +4,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
                  xmlns:cfg="clr-namespace:DefenseClaw.App.Views.ConfigEditor"
+                 xmlns:local="clr-namespace:DefenseClaw.App.Views.Updates"
                  Title="DefenseClaw Updates"
                  Width="820"
                  Height="820"
@@ -56,19 +57,26 @@
             is: while an upgrade run is in flight UpdatesWindow.OnClosing refuses to close, and this is
             where the operator learns why. Collapsed (zero height) the rest of the time.
         -->
-        <ui:InfoBar Title="Upgrade in progress — this window stays open until it finishes"
-                    Grid.Row="1"
-                    Margin="24,4,24,0"
-                    IsClosable="False"
-                    IsOpen="{Binding Upgrade.IsCloseBlocked, Mode=OneWay}"
-                    Message="{Binding Upgrade.CloseBlockedNotice, Mode=OneWay}"
-                    Severity="Warning" />
+        <StackPanel Grid.Row="1">
+            <ui:InfoBar Title="Upgrade in progress — this window stays open until it finishes"
+                        Margin="24,4,24,0"
+                        IsClosable="False"
+                        IsOpen="{Binding Upgrade.IsCloseBlocked, Mode=OneWay}"
+                        Message="{Binding Upgrade.CloseBlockedNotice, Mode=OneWay}"
+                        Severity="Warning" />
+            <ui:InfoBar Title="install.ps1 is running — this window stays open until it finishes"
+                        Margin="24,4,24,0"
+                        IsClosable="False"
+                        IsOpen="{Binding InstallScript.IsRunning, Mode=OneWay}"
+                        Message="The installer is in a console window of its own and carries on whether or not this window is open. Closing here would only lose the result panel, so it waits."
+                        Severity="Warning" />
+        </StackPanel>
 
         <!-- The page. Disabled while the confirm overlay is open so keyboard focus stays in the dialog. -->
         <ScrollViewer x:Name="PageScroll"
                       Grid.Row="2"
                       Padding="24,8,24,16"
-                      IsEnabled="{Binding Upgrade.IsConfirmVisible, Converter={StaticResource InverseBoolean}}"
+                      IsEnabled="{Binding IsPageEnabled}"
                       Style="{StaticResource DcPageScroll}">
             <StackPanel>
 
@@ -303,9 +311,17 @@
                     preference. Then the gated steps: cosign preflight (required on the resolver channel, optional on the installer one),
                     download+verify, and a confirm overlay before anything runs.
                 -->
+                <!-- The 1.0.0+ channel: the release's install.ps1 (CUST-346). Visible only when it is the channel for the target release. -->
+                <local:InstallScriptUpgradeCard Margin="{StaticResource DcCardGap}" DataContext="{Binding InstallScript}" />
+                <CheckBox Margin="0,-4,0,12"
+                          Content="Show the Setup-exe / resolver upgrade card anyway"
+                          IsChecked="{Binding ShowLegacyChannels, Mode=TwoWay}"
+                          Visibility="{Binding InstallScript.IsVisible, Converter={StaticResource BoolToVisibility}}" />
+
                 <Border Margin="{StaticResource DcCardGap}"
                         DataContext="{Binding Upgrade}"
-                        Style="{StaticResource DcCard}">
+                        Style="{StaticResource DcCard}"
+                        Visibility="{Binding DataContext.ShowLegacyUpgrade, RelativeSource={RelativeSource AncestorType=ScrollViewer}, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -635,6 +651,9 @@
             Warn badge. There is no danger styling because nothing is deleted from this machine's
             data: %USERPROFILE%\.defenseclaw is preserved (see ResolverPlan).
         -->
+        <!-- Review dialog of the install.ps1 upgrade, its rollback and the post-flight gateway start (the shared CommandReviewControl). -->
+        <local:InstallScriptReviewOverlay Grid.Row="1" Grid.RowSpan="2" DataContext="{Binding InstallScript}" />
+
         <Grid x:Name="ConfirmOverlay"
               Grid.Row="1"
               Grid.RowSpan="2"

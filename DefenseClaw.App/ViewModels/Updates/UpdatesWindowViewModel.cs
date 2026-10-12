@@ -145,6 +145,47 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         Upgrade = new UpgradeSectionViewModel(_services, _upgradeRunner);
         Upgrade.UpgradeSucceeded += OnUpgradeSucceeded;
         Upgrade.SignatureChecked += OnSignatureChecked;
+
+        InstallScript = new InstallScriptUpgradeViewModel(
+            _services,
+            _upgradeRunner,
+            new InstallScriptRunner(_services.Cli, new ConsoleInstallerLauncher(), new AppUpgradeSession(_services)));
+        InstallScript.UpgradeSucceeded += OnUpgradeSucceeded;
+        InstallScript.PropertyChanged += OnInstallScriptPropertyChanged;
+        Upgrade.PropertyChanged += OnInstallScriptPropertyChanged;
+    }
+
+    /// <summary>The upgrade to 1.0 through the release's install.ps1 (CUST-346): chosen automatically for 1.0.0 and later, or a release with no Setup exe.</summary>
+    public InstallScriptUpgradeViewModel InstallScript { get; }
+
+    /// <summary>
+    /// The Setup-exe / resolver upgrade card shows unless install.ps1 is the channel for the target release. A release that is upgraded with
+    /// install.ps1 has nothing for those two to download, so their card is out of the way (and a Setup-exe verification attempt against it,
+    /// which could only end in "no checksum entry", is never offered) unless the operator asks for it.
+    /// </summary>
+    public bool ShowLegacyUpgrade => !InstallScript.IsVisible || ShowLegacyChannels;
+
+    /// <summary>The operator's choice to see the Setup-exe / resolver card anyway.</summary>
+    [ObservableProperty]
+    private bool _showLegacyChannels;
+
+    partial void OnShowLegacyChannelsChanged(bool value) => OnPropertyChanged(nameof(ShowLegacyUpgrade));
+
+    /// <summary>The page is disabled behind either overlay so keyboard focus stays in the dialog.</summary>
+    public bool IsPageEnabled => !Upgrade.IsConfirmVisible && !InstallScript.IsReviewVisible;
+
+    private void OnInstallScriptPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(InstallScriptUpgradeViewModel.IsVisible):
+                OnPropertyChanged(nameof(ShowLegacyUpgrade));
+                break;
+            case nameof(InstallScriptUpgradeViewModel.IsReviewVisible):
+            case nameof(UpgradeSectionViewModel.IsConfirmVisible):
+                OnPropertyChanged(nameof(IsPageEnabled));
+                break;
+        }
     }
 
     /// <summary>Individual stub-asset warnings for the trust panel's detail list.</summary>
@@ -216,6 +257,10 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         _disposed = true;
         Upgrade.UpgradeSucceeded -= OnUpgradeSucceeded;
         Upgrade.SignatureChecked -= OnSignatureChecked;
+        Upgrade.PropertyChanged -= OnInstallScriptPropertyChanged;
+        InstallScript.UpgradeSucceeded -= OnUpgradeSucceeded;
+        InstallScript.PropertyChanged -= OnInstallScriptPropertyChanged;
+        InstallScript.Dispose();
         Upgrade.Dispose();
         _cts.Cancel();
         _cts.Dispose();
@@ -363,6 +408,7 @@ public sealed partial class UpdatesWindowViewModel : ObservableObject, IDisposab
         UpgradeScriptCommandText = BuildUpgradeScriptCommand(scriptAsset);
 
         Upgrade.ApplyCheck(result);
+        InstallScript.ApplyCheck(result, Upgrade.SelectedChannel);
 
         OpenReleasePageCommand.NotifyCanExecuteChanged();
     }

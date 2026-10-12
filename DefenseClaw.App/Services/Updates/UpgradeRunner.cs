@@ -61,6 +61,13 @@ public enum UpgradeChannel
     /// venv layout it assumes actually exists — see <see cref="UpgradeRunner.DetectResolverLayout"/>.
     /// </summary>
     ResolverScript,
+
+    /// <summary>
+    /// The release's <c>install.ps1</c> (1.0.0 and later, where <c>DefenseClawSetup-x64.exe</c> is no longer published), run through
+    /// <c>powershell.exe -File</c> in its own visible console so the installer can ask its questions. Staged and verified here; started by
+    /// <see cref="InstallScriptRunner"/>, never by <see cref="UpgradeRunner.RunAsync"/>.
+    /// </summary>
+    InstallScript,
 }
 
 /// <summary>
@@ -279,6 +286,63 @@ public sealed class UpgradeRunner
     public const string InstallerAssetName = ProvenanceInspector.SetupAssetName;
 
     public const string ChecksumsAssetName = "checksums.txt";
+
+    /// <summary>The 1.0.0 release's installer: a PowerShell script, listed in checksums.txt and covered by its signature.</summary>
+    public const string InstallScriptAssetName = "install.ps1";
+
+    /// <summary>First release whose Windows channel is <see cref="InstallScriptAssetName"/> (no Setup exe is published from it on).</summary>
+    public static readonly Version InstallScriptFirstVersion = new(1, 0, 0);
+
+    /// <summary>
+    /// The channel a release is upgraded through, decided <b>before</b> any verification is attempted: <see cref="UpgradeChannel.InstallScript"/>
+    /// for 1.0.0 and later, or for any release whose asset list has no <c>DefenseClawSetup-x64.exe</c> (a Setup-exe download against it could
+    /// only end in "no checksum entry", which reads as a verification failure and is not one). Otherwise <paramref name="layoutDefault"/>
+    /// (the Setup exe or the resolver, from <see cref="DetectResolverLayout"/>) stands.
+    /// </summary>
+    /// <param name="targetVersion">The release tag; a tag that is not a version number selects nothing special.</param>
+    /// <param name="assetNames">The release's asset names when known; null or empty means the list is not known and only the version decides.</param>
+    public static UpgradeChannel SelectChannel(string? targetVersion, IEnumerable<string>? assetNames, UpgradeChannel layoutDefault)
+    {
+        if (TryParseReleaseVersion(targetVersion, out var version) && version >= InstallScriptFirstVersion)
+        {
+            return UpgradeChannel.InstallScript;
+        }
+
+        var names = assetNames?.ToArray();
+        if (names is { Length: > 0 } &&
+            !names.Any(n => string.Equals(n, InstallerAssetName, StringComparison.OrdinalIgnoreCase)) &&
+            names.Any(n => string.Equals(n, InstallScriptAssetName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return UpgradeChannel.InstallScript;
+        }
+
+        return layoutDefault;
+    }
+
+    /// <summary>Parses the numeric part of a valid release tag (<c>v1.0.0</c>, <c>1.0.0-rc1</c> → 1.0.0); false for anything else.</summary>
+    public static bool TryParseReleaseVersion(string? tag, out Version version)
+    {
+        version = new Version(0, 0);
+        if (!IsValidReleaseVersion(tag))
+        {
+            return false;
+        }
+
+        var core = tag!.Trim().TrimStart('v', 'V');
+        var end = core.IndexOfAny(['-', '+']);
+        if (end >= 0)
+        {
+            core = core[..end];
+        }
+
+        var parts = core.Split('.');
+        while (parts.Length < 2)
+        {
+            parts = [.. parts, "0"];
+        }
+
+        return Version.TryParse(string.Join('.', parts), out version!);
+    }
 
     /// <summary>
     /// Anything smaller than this is a stub, not a resolver. The real 0.8.9 script is 216,432
@@ -588,10 +652,28 @@ public sealed class UpgradeRunner
     /// Absolute path of a cosign to verify the signature on checksums.txt with; null when there is none. Without one the staged
     /// record says the signature was not verified (published or not), never that it was.
     /// </param>
-    public async Task<UpgradeStagingResult> DownloadAndVerifyAsync(
+    public Task<UpgradeStagingResult> DownloadAndVerifyAsync(
         string version,
         string? cosignPath = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        DownloadAndVerifyScriptAsync(version, ScriptAssetName, UpgradeChannel.ResolverScript, cosignPath, cancellationToken);
+
+    /// <summary>
+    /// <see cref="DownloadAndVerifyAsync"/> for the 1.0.0 release's <c>install.ps1</c>: the same size floor, SHA-256 comparison with the
+    /// same release's checksums.txt and (given a cosign) signature check on that file, staged as <see cref="UpgradeChannel.InstallScript"/>.
+    /// </summary>
+    public Task<UpgradeStagingResult> DownloadAndVerifyInstallScriptAsync(
+        string version,
+        string? cosignPath = null,
+        CancellationToken cancellationToken = default) =>
+        DownloadAndVerifyScriptAsync(version, InstallScriptAssetName, UpgradeChannel.InstallScript, cosignPath, cancellationToken);
+
+    private async Task<UpgradeStagingResult> DownloadAndVerifyScriptAsync(
+        string version,
+        string assetName,
+        UpgradeChannel channel,
+        string? cosignPath,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
         if (!IsValidReleaseVersion(version))
@@ -599,7 +681,7 @@ public sealed class UpgradeRunner
             return InvalidVersionResult(version);
         }
 
-        var scriptUrl = AssetUrl(version, ScriptAssetName);
+        var scriptUrl = AssetUrl(version, assetName);
         var checksumsUrl = AssetUrl(version, ChecksumsAssetName);
 
         var (bytes, downloadError) = await DownloadAsync(scriptUrl, cancellationToken).ConfigureAwait(false);
@@ -614,10 +696,10 @@ public sealed class UpgradeRunner
             {
                 Outcome = UpgradeStagingOutcome.StubDetected,
                 SizeBytes = bytes.Length,
-                Summary = $"Aborted: {ScriptAssetName} came back as only {bytes.Length:N0} bytes.",
+                Summary = $"Aborted: {assetName} came back as only {bytes.Length:N0} bytes.",
                 ErrorMessage =
-                    $"{ScriptAssetName} on release {version} is {bytes.Length:N0} bytes; the real resolver is " +
-                    $"around 216 KB. This is the placeholder-stub pattern seen on some releases — a tiny file " +
+                    $"{assetName} on release {version} is {bytes.Length:N0} bytes; the real script is " +
+                    $"over 100 KB. This is the placeholder-stub pattern seen on some releases — a tiny file " +
                     "published under a real asset name, whose hash is still listed in the release's " +
                     "checksums.txt. Nothing was written to disk. Check the release page before upgrading.",
             };
@@ -629,9 +711,9 @@ public sealed class UpgradeRunner
             {
                 Outcome = UpgradeStagingOutcome.DownloadFailed,
                 SizeBytes = bytes.Length,
-                Summary = $"Aborted: {ScriptAssetName} came back as {bytes.Length:N0} bytes.",
+                Summary = $"Aborted: {assetName} came back as {bytes.Length:N0} bytes.",
                 ErrorMessage =
-                    $"{ScriptAssetName} is {bytes.Length:N0} bytes, far larger than any published upgrade " +
+                    $"{assetName} is {bytes.Length:N0} bytes, far larger than any published upgrade " +
                     "script. Nothing was written to disk.",
             };
         }
@@ -656,7 +738,7 @@ public sealed class UpgradeRunner
             };
         }
 
-        var expected = FindChecksumEntry(Encoding.UTF8.GetString(checksums), ScriptAssetName);
+        var expected = FindChecksumEntry(Encoding.UTF8.GetString(checksums), assetName);
         if (expected is null)
         {
             return new UpgradeStagingResult
@@ -664,9 +746,9 @@ public sealed class UpgradeRunner
                 Outcome = UpgradeStagingOutcome.ChecksumUnavailable,
                 ComputedSha256 = computed,
                 SizeBytes = bytes.Length,
-                Summary = $"Aborted: {ChecksumsAssetName} carries no entry for {ScriptAssetName}.",
+                Summary = $"Aborted: {ChecksumsAssetName} carries no entry for {assetName}.",
                 ErrorMessage =
-                    $"Release {version} publishes {ChecksumsAssetName}, but it has no line for {ScriptAssetName}, " +
+                    $"Release {version} publishes {ChecksumsAssetName}, but it has no line for {assetName}, " +
                     $"so the downloaded bytes (SHA-256 {computed}) cannot be compared with anything. Nothing " +
                     "was written to disk.",
             };
@@ -675,7 +757,7 @@ public sealed class UpgradeRunner
         var signature = await _verifier.VerifyAsync(version, checksums, cosignPath, cancellationToken).ConfigureAwait(false);
         if (signature.BlocksUpgrade)
         {
-            return SignatureRejected(ScriptAssetName, version, signature, computed, expected, bytes.Length, nothingDownloaded: false);
+            return SignatureRejected(assetName, version, signature, computed, expected, bytes.Length, nothingDownloaded: false);
         }
 
         if (!string.Equals(expected, computed, StringComparison.OrdinalIgnoreCase))
@@ -689,7 +771,7 @@ public sealed class UpgradeRunner
                 Signature = signature,
                 Summary = "Aborted: the download's SHA-256 does not match the release's checksums.txt.",
                 ErrorMessage =
-                    $"{ScriptAssetName} downloaded from release {version} hashes to {computed}, but " +
+                    $"{assetName} downloaded from release {version} hashes to {computed}, but " +
                     $"{ChecksumsAssetName} lists {expected}. Nothing was written to disk. Do not run this script; " +
                     "re-check later, and treat a persistent mismatch as a supply-chain problem worth reporting.",
             };
@@ -700,7 +782,7 @@ public sealed class UpgradeRunner
         {
             var directory = Path.Combine(StagingRoot, SanitizeVersionForPath(version));
             Directory.CreateDirectory(directory);
-            filePath = Path.Combine(directory, ScriptAssetName);
+            filePath = Path.Combine(directory, assetName);
             await File.WriteAllBytesAsync(filePath, bytes, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -720,8 +802,8 @@ public sealed class UpgradeRunner
 
         var script = new StagedUpgradeAsset
         {
-            Channel = UpgradeChannel.ResolverScript,
-            AssetName = ScriptAssetName,
+            Channel = channel,
+            AssetName = assetName,
             Version = version,
             FilePath = filePath,
             SourceUrl = scriptUrl.ToString(),
@@ -805,17 +887,25 @@ public sealed class UpgradeRunner
             };
         }
 
-        var expected = FindChecksumEntry(Encoding.UTF8.GetString(checksums), InstallerAssetName);
+        var checksumsText = Encoding.UTF8.GetString(checksums);
+        var expected = FindChecksumEntry(checksumsText, InstallerAssetName);
         if (expected is null)
         {
+            // Not a verification failure: from 1.0.0 the release ships no Setup exe at all, and says so by listing install.ps1 instead.
+            var hasInstallScript = FindChecksumEntry(checksumsText, InstallScriptAssetName) is not null;
             return new UpgradeStagingResult
             {
                 Outcome = UpgradeStagingOutcome.ChecksumUnavailable,
-                Summary = $"Aborted before downloading: {ChecksumsAssetName} carries no entry for {InstallerAssetName}.",
+                Summary = $"Release {version} ships no {InstallerAssetName}" +
+                          (hasInstallScript ? $"; it is upgraded with {InstallScriptAssetName}." : "."),
                 ErrorMessage =
-                    $"Release {version} publishes {ChecksumsAssetName}, but it has no line for " +
-                    $"{InstallerAssetName}, so a download could not be compared with anything. Nothing was " +
-                    "downloaded.",
+                    $"Release {version} does not ship {InstallerAssetName} (its {ChecksumsAssetName} has no line for it), so there is " +
+                    "nothing to verify or run on the Setup installer channel. " +
+                    (hasInstallScript
+                        ? $"This release is upgraded with its {InstallScriptAssetName} instead: switch to the install.ps1 channel in this card " +
+                          "(it is chosen automatically for 1.0.0 and later)."
+                        : "Check the release page for how it is installed.") +
+                    " This is not a verification failure and nothing was downloaded.",
             };
         }
 
@@ -1206,6 +1296,12 @@ public sealed class UpgradeRunner
         if (IsRunning)
         {
             return new UpgradeRunResult { FailureReason = "An upgrade run is already in flight." };
+        }
+
+        if (asset.Channel == UpgradeChannel.InstallScript)
+        {
+            // install.ps1 asks its questions in a console of its own, which this runner's piped process cannot give it: InstallScriptRunner starts it.
+            return new UpgradeRunResult { FailureReason = "install.ps1 is started by the install.ps1 workflow (a console window of its own), not by this runner." };
         }
 
         var noun = asset.Channel == UpgradeChannel.SetupInstaller ? "installer" : "script";

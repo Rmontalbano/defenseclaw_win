@@ -1,0 +1,23 @@
+<UserControl x:Class="DefenseClaw.App.Views.Updates.InstallScriptReviewOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
+             IsTabStop="False"
+             Focusable="False">
+    <!--
+        The review dialog for the install.ps1 upgrade, its rollback and the post-flight gateway start: the shared CommandReviewControl in a scrim.
+        DataContext is an InstallScriptUpgradeViewModel; the control owns focus, Esc and Copy.
+    -->
+    <Grid x:Name="Scrim"
+          Style="{StaticResource DcScrim}"
+          KeyboardNavigation.TabNavigation="Cycle"
+          KeyboardNavigation.ControlTabNavigation="Cycle"
+          Visibility="{Binding IsReviewVisible, Converter={StaticResource BoolToVisibility}}">
+        <Border MaxWidth="700" Margin="24" Style="{StaticResource DcDialogCard}">
+            <shell:CommandReviewControl Review="{Binding Review}"
+                                        Phase="{Binding ReviewPhase}"
+                                        ConfirmCommand="{Binding ConfirmReviewCommand}"
+                                        CancelCommand="{Binding CancelReviewCommand}" />
+        </Border>
+    </Grid>
+</UserControl>

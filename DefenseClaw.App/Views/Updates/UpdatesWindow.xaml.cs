@@ -79,6 +79,11 @@ public sealed partial class UpdatesWindow : FluentWindow
             _viewModel.Upgrade.CancelConfirmCommand.Execute(null);
             e.Handled = true;
         }
+        else if (e.Key == Key.Escape && _viewModel.InstallScript.IsReviewVisible && _viewModel.InstallScript.ReviewPhase == DefenseClaw.App.Services.CommandReviewPhase.Review)
+        {
+            _viewModel.InstallScript.CancelReviewCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     /// <summary>
@@ -153,7 +158,7 @@ public sealed partial class UpdatesWindow : FluentWindow
     /// </summary>
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (_viewModel.Upgrade.IsRunning && !Dispatcher.HasShutdownStarted)
+        if ((_viewModel.Upgrade.IsRunning || _viewModel.InstallScript.IsRunning) && !Dispatcher.HasShutdownStarted)
         {
             e.Cancel = true;
             _viewModel.Upgrade.NoteCloseRefused();

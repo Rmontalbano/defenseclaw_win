@@ -680,6 +680,55 @@ public sealed partial class CliRunner : IDisposable
     }
 
     /// <summary>
+    /// Records, in <see cref="Activity"/>, a run this app started itself in its own console window (the in-app install.ps1 upgrade: the
+    /// installer asks its questions there, so its output cannot be piped through this runner). The entry is running until
+    /// <see cref="CompleteExternalRun"/> finishes it; <paramref name="note"/> is its first output line. The argv is checked like any run's (a
+    /// secret on it is refused and nothing is recorded). The caller owns the process; the runner neither supervises nor kills it.
+    /// </summary>
+    public CliInvocation BeginExternalRun(string executable, IReadOnlyList<string> argv, string note)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(executable);
+        ArgumentNullException.ThrowIfNull(argv);
+
+        GuardArguments(argv, null, Array.Empty<EnvironmentEntry>());
+
+        var now = DateTimeOffset.UtcNow;
+        var invocation = new CliInvocation(executable, argv.ToArray(), now) { SurvivesShutdown = true };
+        invocation.Append(new CliOutputLine(now, CliStream.Notice, note ?? string.Empty));
+        Record(invocation);
+        InvocationStarted?.Invoke(this, invocation);
+        return invocation;
+    }
+
+    /// <summary>
+    /// Finishes an entry <see cref="BeginExternalRun"/> made: the exit code (null when it is not known), a failure reason when the run
+    /// never produced one, and a closing output line. Raises <see cref="InvocationCompleted"/> once; a second call does nothing.
+    /// </summary>
+    public void CompleteExternalRun(CliInvocation invocation, int? exitCode, string? failureReason, string? note)
+    {
+        ArgumentNullException.ThrowIfNull(invocation);
+
+        lock (_gate)
+        {
+            if (invocation.FinishedAt is not null)
+            {
+                return;
+            }
+
+            invocation.FinishedAt = DateTimeOffset.UtcNow;
+        }
+
+        invocation.ExitCode = exitCode;
+        invocation.FailureReason = failureReason;
+        if (!string.IsNullOrEmpty(note))
+        {
+            invocation.Append(new CliOutputLine(DateTimeOffset.UtcNow, CliStream.Notice, note));
+        }
+
+        InvocationCompleted?.Invoke(this, invocation);
+    }
+
+    /// <summary>
     /// The prefix of <see cref="CliInvocation.FailureReason"/> on an entry <see cref="RecordRefusal"/> made. The Activity panel badges such an
     /// entry "refused" rather than "failed": the command never started.
     /// </summary>
