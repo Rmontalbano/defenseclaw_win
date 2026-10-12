@@ -93,6 +93,9 @@ internal static class AppSettingsCodec
         {
             var target = SectionForWrite(root, ConnectionKey);
             Put(target, "cliPathOverride", settings.Connection.CliPathOverride);
+
+            // Written only while on, so a file that never used the feature is byte-for-byte what it was.
+            Put(target, "gatewayAdministratorMode", settings.Connection.GatewayAdministratorMode ? JsonValue.Create(true) : null);
         }
 
         if ((sections & AppSettingsSections.Developer) != 0)
@@ -236,7 +239,11 @@ internal static class AppSettingsCodec
     private static ConnectionSettings ReadConnection(JsonObject? section) =>
         section is null
             ? new ConnectionSettings()
-            : new ConnectionSettings { CliPathOverride = ReadString(section["cliPathOverride"]) };
+            : new ConnectionSettings
+            {
+                CliPathOverride = ReadString(section["cliPathOverride"]),
+                GatewayAdministratorMode = ReadBool(section["gatewayAdministratorMode"], false),
+            };
 
     private static UpdateSettings ReadUpdates(JsonObject? section) =>
         section is null

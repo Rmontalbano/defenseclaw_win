@@ -49,6 +49,8 @@
     <Compile Include="..\DefenseClaw.Tests\TestSupport\TestTimeouts.cs" Link="TestSupport\TestTimeouts.cs" />
     <!-- How a test lets go of its own SQLite files without disposing the connections another test's reader is taking from the pool (CUST-323). -->
     <Compile Include="..\DefenseClaw.Tests\TestSupport\SqlitePools.cs" Link="TestSupport\SqlitePools.cs" />
+    <!-- The in-memory disk with owners, access lists and links that the administrator helper's tests use (Run gateway as administrator): no test here touches Program Files. -->
+    <Compile Include="..\DefenseClaw.GatewayAdmin.Tests\Fakes.cs" Link="TestSupport\AdminFakeFs.cs" />
   </ItemGroup>
 
   <ItemGroup>

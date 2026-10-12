@@ -128,7 +128,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         Readiness = new ReadinessViewModel(services, Credentials, Review);
         Routing = new NotificationRoutingViewModel(services);
         Batch = new ConnectorBatchViewModel(services, applied: _ => RefreshAsync());
-        Monitoring = new RuntimeMonitoringViewModel(services);
+        Monitoring = new RuntimeMonitoringViewModel(services, services.GatewayAdmin);
 
         // The credential read feeds the "Required Credentials" row.
         Credentials.Loaded += (_, _) => Readiness.Rebuild();

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The administrator helper: a small console exe that runs elevated and accepts only the fixed verbs of AdminVerbs (install-copy, start,
+    restart, stop, repair-ownership, status). It takes no other argument; every path is derived inside it. See docs/PARITY-FOUNDATIONS.md,
+    "Run gateway as administrator" for the trust chain.
+
+    asInvoker, not requireAdministrator: the app starts it with ShellExecute "runas" (the only thing that raises a UAC prompt), and the
+    helper itself refuses every changing verb unless it is elevated, so a copy started without elevation can do nothing but report status.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>DefenseClaw.GatewayAdmin</RootNamespace>
+    <AssemblyName>DefenseClaw.GatewayAdmin</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!--
+      An elevated process must not load code the user chose. DOTNET_STARTUP_HOOKS names assemblies the runtime loads before Main; this
+      switch (runtimeconfig System.StartupHookProvider.IsSupported=false) turns the feature off in this exe. The profiler variables
+      cannot be switched off this way; the helper refuses to run when they are set (see EnvironmentGuard).
+    -->
+    <StartupHookSupport>false</StartupHookSupport>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Release publish: self-contained single file, no native libraries to extract to a temp folder (an elevated exe must never unpack into one). -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and '$(SelfContained)' == 'true' and '$(PublishSingleFile)' == 'true'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRunComposite>false</PublishReadyToRunComposite>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DefenseClaw.GatewayAdmin.Contract\DefenseClaw.GatewayAdmin.Contract.csproj" />
+    <InternalsVisibleTo Include="DefenseClaw.GatewayAdmin.Tests" />
+  </ItemGroup>
+
+</Project>

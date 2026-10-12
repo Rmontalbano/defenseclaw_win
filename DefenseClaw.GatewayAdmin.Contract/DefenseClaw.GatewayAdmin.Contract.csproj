@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The contract between the companion app (not elevated) and the administrator helper (elevated): the fixed verbs, the paths that are
+    derived and never passed, the admin-only ACL policy and the copy inspector both sides run, the manifest and record formats, and the
+    minimal environment the gateway is started with. Nothing in here starts a process or changes an ACL; the effects are interfaces
+    (IAdminFileSystem) that the helper implements for real and the tests implement with fakes.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>DefenseClaw.GatewayAdmin.Contract</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

@@ -13,6 +13,7 @@ using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Runtime;
 using DefenseClaw.Core.Security;
+using DefenseClaw.GatewayAdmin.Contract;
 using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.Services.Updates;
 using DefenseClaw.App.Services.Wizards;
@@ -84,7 +85,10 @@ public sealed class AppServices : IDisposable
         IDockerProbe? dockerProbe = null,
         ITerraformProbe? terraformProbe = null,
         ReaderTimeouts? readerTimeouts = null,
-        string? hookTotalsCacheDirectory = null)
+        string? hookTotalsCacheDirectory = null,
+        Func<AppServices, GatewayAdminDependencies>? gatewayAdminFactory = null,
+        IAdminLayoutSource? adminLayout = null,
+        IAdminFileSystem? adminFileSystem = null)
     {
         Paths = startup.Paths;
         ReaderTimeouts = readerTimeouts ?? ReaderTimeouts.Production;
@@ -106,7 +110,13 @@ public sealed class AppServices : IDisposable
         ConfigLoadError = initial.Error;
 
         PortInspector = new PortOwnerInspector();
-        _peerVerifier = new GatewayPeerVerifier(Paths, PortInspector);
+
+        // "Run gateway as administrator": the administrator copy of the gateway is the one place besides the installer's directories whose
+        // gateway may be sent the token, and only while it passes its checks at that moment (AdminCopyTrust). Nothing is read until a
+        // gateway whose image is that exact path answers on the port.
+        var adminSource = adminLayout ?? new WindowsAdminLayoutSource();
+        var adminFs = adminFileSystem ?? new ReadOnlyAdminFileSystem();
+        _peerVerifier = new GatewayPeerVerifier(Paths, PortInspector, adminCopy: new AdminCopyTrust(adminSource, adminFs));
 
         var apiPort = EffectiveApiPort(_config.Config.Gateway.ApiPort);
         _endpoint = new GatewayEndpoint(apiPort, CreateGatewayClient(apiPort));
@@ -188,6 +198,13 @@ public sealed class AppServices : IDisposable
 
         // Opt-in "start the gateway automatically" (off by default). Nothing runs until the app calls Start on it.
         GatewayAutoStart = GatewayAutoStart.Create(this);
+
+        // "Run gateway as administrator": the status the Runtime card and the two toggles read, and the plans the lifecycle below reviews and
+        // runs. Built before the lifecycle, which asks it. Nothing is read or elevated until a surface asks (RequestRefresh) or a plan is confirmed.
+        GatewayAdmin = new GatewayAdminService(gatewayAdminFactory?.Invoke(this) ?? CreateGatewayAdminDependencies(this, adminSource, adminFs));
+        Monitor.StateChanged += OnMonitorStateForAdmin;
+        Runtime.Changed += OnRuntimeChangedForAdmin;
+        Settings.Changed += OnSettingsChangedForAdmin;
 
         // The one start / stop / restart path: the tray, the palette and every "Start gateway" button go through it.
         GatewayLifecycle = GatewayLifecycle.Create(this);
@@ -340,6 +357,50 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The shared gate, review and run behind every gateway start / stop / restart control. See <see cref="GatewayLifecycle"/>.</summary>
     internal GatewayLifecycle GatewayLifecycle { get; set; }
+
+    /// <summary>
+    /// "Run gateway as administrator" (Mac parity, 1.0 runtimes): <c>Status</c> is what a card shows (mode on or off, helper installed, copy matches the
+    /// installed gateway, gateway running elevated, state-ownership problem), read without elevation; <c>TrySetMode</c> is the switch; the lifecycle
+    /// reviews and runs the plans. <c>Changed</c> is raised on a pool thread. See <see cref="GatewayAdminService"/>.
+    /// </summary>
+    internal GatewayAdminService GatewayAdmin { get; }
+
+    private static GatewayAdminDependencies CreateGatewayAdminDependencies(AppServices s, IAdminLayoutSource layout, IAdminFileSystem fs) => new()
+    {
+        Supported = () =>
+        {
+            var gate = s.Runtime.Check(RuntimeCapability.AiRuntime);
+            return new GateDecisionLike(
+                gate.IsAvailable,
+                gate.IsAvailable
+                    ? string.Empty
+                    : "Needs DefenseClaw 1.0. The installed runtime has no runtime monitoring, which is what administrator rights are for here.");
+        },
+        ModeOn = () => s.Settings.Current.Connection.GatewayAdministratorMode,
+        SaveMode = on => _ = s.Settings.Update(settings => settings with { Connection = settings.Connection with { GatewayAdministratorMode = on } }),
+        Snapshot = () => s.Monitor.Current,
+        InstalledVersion = () => s.Runtime.Current.Identity?.Version,
+        Layout = layout,
+        Fs = fs,
+        Account = new WindowsAdminAccountProbe(),
+        Elevation = new WindowsProcessElevationProbe(),
+        Elevator = new ShellExecuteElevator(),
+        Release = new LazyReleaseGatewaySource(() => ReleaseGatewaySource.CreateDefault(s.Cli)),
+        Manifest = new FileManifestWriter(),
+        Stage = new FileHelperStage(),
+    };
+
+    private void OnMonitorStateForAdmin(object? sender, GatewaySnapshotEventArgs e) => GatewayAdmin.RequestRefresh();
+
+    private void OnRuntimeChangedForAdmin(object? sender, EventArgs e) => GatewayAdmin.RequestRefresh();
+
+    private void OnSettingsChangedForAdmin(object? sender, AppSettingsChangedEventArgs e)
+    {
+        if (e.Affects(AppSettingsSections.Connection))
+        {
+            GatewayAdmin.RequestRefresh();
+        }
+    }
 
     /// <summary>
     /// Whether the bundled local observability stack (<c>setup local-observability</c>) can be offered: the Setup hub's card and the palette's
@@ -535,7 +596,10 @@ public sealed class AppServices : IDisposable
         IDockerProbe? dockerProbe = null,
         ITerraformProbe? terraformProbe = null,
         ReaderTimeouts? readerTimeouts = null,
-        string? hookTotalsCacheDirectory = null)
+        string? hookTotalsCacheDirectory = null,
+        Func<AppServices, GatewayAdminDependencies>? gatewayAdminFactory = null,
+        IAdminLayoutSource? adminLayout = null,
+        IAdminFileSystem? adminFileSystem = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -554,7 +618,12 @@ public sealed class AppServices : IDisposable
         terraformProbe ??= new FixedTerraformProbe(new TerraformStatus(TerraformState.NotInstalled, "Terraform is not looked at in an isolated composition.", string.Empty, string.Empty));
         // Unlike those, the read limits stay the app's own unless a test says otherwise: they are not about reaching the real install. A test
         // suite on a machine that can be arbitrarily busy passes its ceiling (TestServices).
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory);
+
+        // Likewise nothing of "Run gateway as administrator" looks at the real Program Files, the real profile or the real token unless a test supplies it.
+        adminLayout ??= new NoAdminLayoutSource();
+        adminFileSystem ??= new ReadOnlyAdminFileSystem();
+        gatewayAdminFactory ??= services => InertGatewayAdmin.Dependencies(services, adminLayout, adminFileSystem);
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory, gatewayAdminFactory, adminLayout, adminFileSystem);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -715,6 +784,9 @@ public sealed class AppServices : IDisposable
         ConfigWatcher.Changed -= OnConfigChanged;
         _reloadRetry?.Dispose();
         Settings.Changed -= OnSettingsChanged;
+        Settings.Changed -= OnSettingsChangedForAdmin;
+        Monitor.StateChanged -= OnMonitorStateForAdmin;
+        Runtime.Changed -= OnRuntimeChangedForAdmin;
         UnreadCounts.Dispose();
         AlertCounts.Dispose();
         RestartQueue.Dispose();

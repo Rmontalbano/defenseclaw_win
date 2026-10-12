@@ -301,6 +301,11 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
 
     // ------------------------------------------------------------------ connection: the gateway
 
+    private GatewayAdminToggleViewModel? _adminGateway;
+
+    /// <summary>"Run gateway as administrator": the same switch, words and buttons as the Overview's Quick Actions (<see cref="GatewayAdminToggleViewModel"/>).</summary>
+    public GatewayAdminToggleViewModel AdminGateway => _adminGateway ??= new GatewayAdminToggleViewModel(Services);
+
     /// <summary><c>http://127.0.0.1:18970</c>: where the app talks to the gateway (the port is config.yaml's <c>gateway.api_port</c>).</summary>
     [ObservableProperty]
     private string _endpointText = string.Empty;
@@ -728,6 +733,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         Services.Monitor.StateChanged += OnMonitorStateChanged;
         Services.UpdateWatcher.Changed += OnUpdateWatcherChanged;
         Services.Runtime.Changed += OnRuntimeChanged;
+        AdminGateway.Attach();
 
         LoadFromSettings();
         ShowGateway();
@@ -747,6 +753,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         Services.Monitor.StateChanged -= OnMonitorStateChanged;
         Services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;
+        AdminGateway.Detach();
 
         // A slider moved a moment before the page went away is saved, not lost with the timer.
         if (_intervalTimer is { IsEnabled: true })

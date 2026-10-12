@@ -5,6 +5,17 @@ using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.Core.Gateway;
 
+/// <summary>
+/// Whether a gateway image that is not in the installer's directories may still be sent the token: the administrator copy of the gateway
+/// that the "Run gateway as administrator" helper keeps in Program Files. The app answers it only while that file sits in an admin-only
+/// folder, is the file the helper recorded and the mode is on. See <c>docs/PARITY-FOUNDATIONS.md</c>, "Run gateway as administrator".
+/// </summary>
+public interface IAdminCopyTrust
+{
+    /// <summary>True when <paramref name="imagePath"/> is the trusted administrator copy, judged now.</summary>
+    bool IsTrustedImage(string imagePath);
+}
+
 /// <summary>What the process holding the API port is, as far as sending it a credential goes.</summary>
 public enum PortOwnerTrust
 {
@@ -53,16 +64,26 @@ public sealed class GatewayPeerVerifier
     private readonly IPortOwnerInspector _inspector;
 
     private readonly IConnectionOwnerInspector? _connections;
+    private readonly IAdminCopyTrust? _adminCopy;
 
+    /// <param name="adminCopy">
+    /// Also trusts the administrator copy of the gateway while it is judged trusted (see <see cref="IAdminCopyTrust"/>); null (the default) trusts
+    /// only the installer's directories, exactly as before.
+    /// </param>
     /// <param name="connections">
     /// Where the owner of one connection is looked up; defaults to <paramref name="inspector"/> when that is one too (the real
     /// <see cref="PortOwnerInspector"/> is). With none, <see cref="ForConnection"/> refuses everything.
     /// </param>
-    public GatewayPeerVerifier(DefenseClawPaths paths, IPortOwnerInspector inspector, IConnectionOwnerInspector? connections = null)
+    public GatewayPeerVerifier(
+        DefenseClawPaths paths,
+        IPortOwnerInspector inspector,
+        IConnectionOwnerInspector? connections = null,
+        IAdminCopyTrust? adminCopy = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
         _connections = connections ?? inspector as IConnectionOwnerInspector;
+        _adminCopy = adminCopy;
     }
 
     /// <summary>Classifies <paramref name="owner"/>.</summary>
@@ -209,7 +230,13 @@ public sealed class GatewayPeerVerifier
             return false;
         }
 
-        return InstallDirectories().Any(directory => string.Equals(directory, imageDirectory, StringComparison.OrdinalIgnoreCase));
+        if (InstallDirectories().Any(directory => string.Equals(directory, imageDirectory, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        // The one other place a gateway may run from: the helper's administrator copy, and only while it passes its own checks right now.
+        return _adminCopy is not null && _adminCopy.IsTrustedImage(owner.ImagePath);
     }
 
     /// <summary>

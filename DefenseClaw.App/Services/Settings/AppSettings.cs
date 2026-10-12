@@ -137,6 +137,13 @@ internal sealed record ConnectionSettings
         get => _cliPathOverride;
         init => _cliPathOverride = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+
+    /// <summary>
+    /// "Run gateway as administrator" (the Mac app's <c>gatewayAdministratorMode</c>): start, restart and stop go through the elevated helper.
+    /// Off by default; flipping it starts and stops nothing. Honoured only on a runtime that has the feature and on a local administrator account
+    /// (<see cref="GatewayAdminService"/>), whatever this file says.
+    /// </summary>
+    public bool GatewayAdministratorMode { get; init; }
 }
 
 /// <summary>Updates: what the release check remembers.</summary>

@@ -304,6 +304,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         Services.Monitor.PollCompleted += OnPollCompleted;
         Services.ConfigReloaded += OnConfigReloaded;
+        AttachAdminGateway();
 
         // A queued gateway restart is app-wide (CUST-267): a save or a run on another panel queues one, a restart anywhere applies it.
         Services.RestartQueue.Changed += OnRestartQueueChanged;
@@ -334,6 +335,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
     {
         Services.Monitor.PollCompleted -= OnPollCompleted;
         Services.ConfigReloaded -= OnConfigReloaded;
+        DetachAdminGateway();
         Services.RestartQueue.Changed -= OnRestartQueueChanged;
         Services.ConnectorScope.Changed -= OnScopeChanged;
         Services.AlertCounts.Changed -= OnAlertCountsChanged;

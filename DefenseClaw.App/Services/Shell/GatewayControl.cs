@@ -47,6 +47,14 @@ internal static class GatewayControl
         _ => "Restart gateway",
     };
 
+    /// <summary>The same actions' names while "Run gateway as administrator" is on, as the Mac app words them: "Start Gateway as Administrator".</summary>
+    public static string AdministratorTitle(GatewayAction action) => action switch
+    {
+        GatewayAction.Start => "Start Gateway as Administrator",
+        GatewayAction.Stop => "Stop Gateway as Administrator",
+        _ => "Restart Gateway as Administrator",
+    };
+
     /// <summary>What a tooltip or palette row says the action does, before any review.</summary>
     public static string Summary(GatewayAction action) => action switch
     {

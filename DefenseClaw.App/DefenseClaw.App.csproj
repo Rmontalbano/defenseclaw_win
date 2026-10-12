@@ -59,6 +59,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DefenseClaw.Core\DefenseClaw.Core.csproj" />
+    <!-- The fixed verbs, derived paths, admin-only ACL policy and copy inspector shared with the elevated helper (Run gateway as administrator). -->
+    <ProjectReference Include="..\DefenseClaw.GatewayAdmin.Contract\DefenseClaw.GatewayAdmin.Contract.csproj" />
   </ItemGroup>
 
   <ItemGroup>

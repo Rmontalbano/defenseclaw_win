@@ -61,6 +61,14 @@ jobs:
           dotnet publish DefenseClaw.App/DefenseClaw.App.csproj -c Release -r win-x64
           --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -o publish
+      # The elevated helper of "Run gateway as administrator" (DefenseClaw.GatewayAdmin.exe), published next to the app so it is covered by the
+      # same checksums.txt and attestation (publish/*.exe). The app finds it in its own folder and shows the operator its SHA-256 before the
+      # one Windows prompt that installs it in Program Files. Self-contained single file, no native libraries to unpack; not trimmed.
+      - name: Publish administrator helper
+        run: >
+          dotnet publish DefenseClaw.GatewayAdmin/DefenseClaw.GatewayAdmin.csproj -c Release -r win-x64
+          --self-contained true -p:PublishSingleFile=true
+          -o publish
       - name: Checksums
         shell: pwsh
         run: |

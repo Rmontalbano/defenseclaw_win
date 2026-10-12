@@ -21,7 +21,7 @@ public sealed record DiagnosticCommand(string Title, string Executable, IReadOnl
 /// state without the shared review: Scan Skills and every gateway action open the in-panel <see cref="CommandReview"/> overlay (the exact argv,
 /// its tier from <see cref="CommandTiers"/>, a confirm that must be pressed); the Diagnostics commands are read-only by the same classifier,
 /// run straight away, and leave their full output in the Activity panel (the runner records every run). The Mac's "Run gateway as
-/// administrator" is not offered. The buttons the TUI offers by text (Enable AI discovery or Scan, notifications on or off, Fill missing keys;
+/// administrator" is the switch under the buttons (<see cref="AdminGateway"/>). The buttons the TUI offers by text (Enable AI discovery or Scan, notifications on or off, Fill missing keys;
 /// CUST-274) are below the gateway actions: drawn only while they apply, reviewed the same way, and off on a read-only installation.
 /// </summary>
 public sealed partial class OverviewPanelViewModel
@@ -158,6 +158,20 @@ public sealed partial class OverviewPanelViewModel
             return;
         }
 
+        // "Run gateway as administrator" is on: the shared lifecycle plans, reviews and runs it (the helper, one Windows prompt per step).
+        if (Services.GatewayAdmin.IsActive)
+        {
+            _ = Services.GatewayLifecycle.RunAsync(action);
+            return;
+        }
+
+        // Files an elevated gateway left owned by Administrators: the ordinary start would be refused by the 1.x gateway, so say why first.
+        if (Services.GatewayAdmin.NormalPathBlockedReason(action) is { } blocked)
+        {
+            ShowDiagnosticMessage(GatewayControl.Title(action), "Neutral", blocked, string.Empty);
+            return;
+        }
+
         Review.Open(
             GatewayControl.Title(action) + "?",
             GatewayControl.ReviewNote(action),
@@ -195,8 +209,13 @@ public sealed partial class OverviewPanelViewModel
         var (allowed, reason) = GatewayControl.Availability(_gatewayAction, snapshot, Services.Installation);
         var (stopAllowed, stopReason) = GatewayControl.Availability(GatewayAction.Stop, snapshot, Services.Installation);
 
-        GatewayActionLabel = GatewayControl.Title(_gatewayAction).Replace("gateway", "Gateway", StringComparison.Ordinal);
-        GatewayActionTip = allowed ? GatewayControl.Summary(_gatewayAction) + " Asks for confirmation first." : reason ?? string.Empty;
+        var asAdministrator = Services.GatewayAdmin.IsActive;
+        GatewayActionLabel = asAdministrator
+            ? GatewayControl.AdministratorTitle(_gatewayAction)
+            : GatewayControl.Title(_gatewayAction).Replace("gateway", "Gateway", StringComparison.Ordinal);
+        GatewayActionTip = allowed
+            ? (asAdministrator ? "Runs the gateway with administrator rights; Windows asks you to approve it. " : GatewayControl.Summary(_gatewayAction) + " ") + "Asks for confirmation first."
+            : reason ?? string.Empty;
         StopGatewayTip = stopAllowed ? GatewayControl.Summary(GatewayAction.Stop) + " Asks for confirmation first." : stopReason ?? string.Empty;
 
         var changed = allowed != _gatewayActionAllowed || stopAllowed != _stopAllowed;

@@ -659,6 +659,52 @@
                             </ui:DropDownButton>
                         </WrapPanel>
 
+                        <!--
+                            "Run gateway as administrator", under the buttons as on the Mac. Flipping it starts and stops nothing; the gateway actions above
+                            then read "Start / Restart Gateway as Administrator" and ask Windows for approval after their review. Disabled, with the reason
+                            as its status line, on a runtime without runtime monitoring (0.8.10) and on an account that is not a local administrator.
+                        -->
+                        <StackPanel Margin="0,4,0,8">
+                            <ui:ToggleSwitch Content="Run gateway as administrator"
+                                             IsChecked="{Binding AdminGateway.IsOn, Mode=TwoWay}"
+                                             IsEnabled="{Binding AdminGateway.CanToggle}"
+                                             ToolTip="{Binding AdminGateway.ToggleTip}"
+                                             ToolTipService.ShowOnDisabled="True"
+                                             AutomationProperties.Name="Run gateway as administrator"
+                                             AutomationProperties.HelpText="Runs your installed gateway with administrator rights, one Windows prompt per start. Turning it on or off starts and stops nothing." />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Text="Runs your installed gateway with administrator rights (one Windows prompt per start). Needed only for runtime monitoring's agent-actions plane." />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Text="{Binding AdminGateway.StatusText}"
+                                       AutomationProperties.LiveSetting="Polite" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Text="{Binding AdminGateway.DetailText}"
+                                       Visibility="{Binding AdminGateway.HasDetail, Converter={StaticResource BoolToVisibility}}" />
+                            <WrapPanel Margin="0,6,0,0">
+                                <ui:Button Content="Repair ownership…"
+                                           Margin="0,0,8,0"
+                                           Icon="{ctl:DcSymbolIcon Wrench24}"
+                                           Command="{Binding AdminGateway.RepairOwnershipCommand}"
+                                           ToolTip="{Binding AdminGateway.ActionsTip}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           Visibility="{Binding AdminGateway.ShowRepair, Converter={StaticResource BoolToVisibility}}"
+                                           AutomationProperties.HelpText="Gives the files in your .defenseclaw folder that the elevated gateway made as Administrators back to your account, after you confirm and approve the Windows prompt." />
+                                <ui:Button Content="Prepare administrator copy…"
+                                           Icon="{ctl:DcSymbolIcon ShieldKeyhole24}"
+                                           Command="{Binding AdminGateway.PrepareCopyCommand}"
+                                           ToolTip="{Binding AdminGateway.ActionsTip}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           Visibility="{Binding AdminGateway.ShowPrepare, Converter={StaticResource BoolToVisibility}}"
+                                           AutomationProperties.HelpText="Installs the helper and a copy of your installed gateway in Program Files, after you confirm and approve the Windows prompt. Starts nothing." />
+                            </WrapPanel>
+                        </StackPanel>
+
                         <!-- What a Diagnostics command did: a live region, so a screen reader hears the result without hunting for it. -->
                         <StackPanel AutomationProperties.LiveSetting="Polite"
                                     Visibility="{Binding HasDiagnosticMessage, Converter={StaticResource BoolToVisibility}}">
