@@ -288,6 +288,7 @@ public sealed class InstallStateTests : IDisposable
         Assert.StartsWith("config 8 → 9 on ", state.MigrationText, StringComparison.Ordinal);
         Assert.Contains(": 1 value moved, 0 conflicts, 2 removed", state.MigrationText, StringComparison.Ordinal);
         Assert.EndsWith(" Last upgrade made no config changes.", state.MigrationText, StringComparison.Ordinal);
+        Assert.Matches(@"\. Last upgrade made no config changes\.$", state.MigrationText);
         Assert.StartsWith("Upgrade 1.0.0 → 1.0.1, ", state.LastInstallText, StringComparison.Ordinal);
         Assert.EndsWith("installed", state.LastInstallText, StringComparison.Ordinal);
         Assert.EndsWith("install-20261012T164027.log", state.LastInstallLogPath, StringComparison.Ordinal);

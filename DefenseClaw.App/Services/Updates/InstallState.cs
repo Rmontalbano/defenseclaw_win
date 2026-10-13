@@ -443,7 +443,7 @@ public sealed record InstallStateSnapshot(
         if (migration is not null && run is { ConfigAlreadyCurrent: true } &&
             (migration.MigratedAt is not { } migrated || run.StartedAt is not { } started || started > migrated))
         {
-            migrationText += " Last upgrade made no config changes.";
+            migrationText += (migrationText.EndsWith('.') ? " " : ". ") + "Last upgrade made no config changes.";
         }
 
         return new InstallStateSnapshot(
