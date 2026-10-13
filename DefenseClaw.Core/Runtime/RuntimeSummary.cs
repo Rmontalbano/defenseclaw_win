@@ -14,7 +14,7 @@ public static class RuntimeSummary
 
     /// <summary>
     /// "Policy model, ACP guard, ..." for a runtime that has newer features; "No features beyond the installed 0.8.10 baseline" for
-    /// one that has none; "Features unknown until the runtime answers" when nothing is known.
+    /// one that has none (a feature the runtime has but this operating system cannot use, such as sandboxes on Windows, is left out); "Features unknown until the runtime answers" when nothing is known.
     /// </summary>
     public static string Features(RuntimeSnapshot snapshot)
     {
@@ -24,7 +24,7 @@ public static class RuntimeSummary
             return "Features unknown until the runtime answers";
         }
 
-        var present = snapshot.Capabilities.Present.Select(RuntimeCapabilityCatalog.DisplayName).ToArray();
+        var present = snapshot.Capabilities.Present.Where(RuntimeCapabilityCatalog.IsUsableHere).Select(RuntimeCapabilityCatalog.DisplayName).ToArray();
         return present.Length == 0 ? "No features beyond the 0.8.10 baseline" : string.Join(", ", present);
     }
 }

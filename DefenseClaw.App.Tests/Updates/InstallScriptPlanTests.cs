@@ -359,10 +359,10 @@ public sealed class InstallScriptPlanTests : IDisposable
         Assert.Equal(1, summary.Conflicts);
         Assert.Equal(2, summary.Removed);
         Assert.Equal(7, summary.ActionRowsMoved);
-        Assert.Contains("3 value(s) moved", summary.Text, StringComparison.Ordinal);
-        Assert.Contains("1 conflict(s)", summary.Text, StringComparison.Ordinal);
+        Assert.Contains("3 values moved", summary.Text, StringComparison.Ordinal);
+        Assert.Contains("1 conflict", summary.Text, StringComparison.Ordinal);
         Assert.Contains("2 removed", summary.Text, StringComparison.Ordinal);
-        Assert.Contains("7 action row(s) moved", summary.Text, StringComparison.Ordinal);
+        Assert.Contains("7 action rows moved", summary.Text, StringComparison.Ordinal);
         Assert.Equal(Path.Combine(_temp.Path, "migration-v9.json"), summary.FilePath);
     }
 

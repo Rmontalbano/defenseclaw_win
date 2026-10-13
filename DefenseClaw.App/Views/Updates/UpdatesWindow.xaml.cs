@@ -125,6 +125,9 @@ public sealed partial class UpdatesWindow : FluentWindow
         if (_current is not null)
         {
             _current.Activate();
+
+            // Bringing an open window forward is opening it again: the install state is read off the machine once more, not shown from before.
+            _current._viewModel.InstallScript.RefreshStateCommand.Execute(null);
             return _current;
         }
 

@@ -176,7 +176,7 @@ public static class InstallScriptPlan
     /// is the installer's own; this reads it tolerantly (an array counts its items, an object its members, a number is the count) and, when it
     /// finds neither a moved nor a conflict entry, says only how many top-level fields there are rather than guess.
     /// </summary>
-    public static MigrationSummary? ReadMigrationSummary(string dataDirectory)
+    public static MigrationSummary? ReadMigrationSummary(string dataDirectory, DateTimeOffset? now = null)
     {
         string? path;
         try
@@ -210,6 +210,9 @@ public static class InstallScriptPlan
             int? conflicts = null;
             int? removed = null;
             int? actionRows = null;
+            int? fromVersion = null;
+            int? toVersion = null;
+            DateTimeOffset? migratedAt = null;
             var fields = 0;
             foreach (var property in document.RootElement.EnumerateObject())
             {
@@ -228,40 +231,64 @@ public static class InstallScriptPlan
                     case "actions_rows_moved":
                         actionRows = CountOf(property.Value);
                         break;
+                    case "from_version":
+                        fromVersion = property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt32(out var f) ? f : null;
+                        break;
+                    case "to_version":
+                        toVersion = property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt32(out var t) ? t : null;
+                        break;
+                    case "migrated_at":
+                        migratedAt = property.Value.ValueKind == JsonValueKind.String &&
+                            DateTimeOffset.TryParse(property.Value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at) ? at : null;
+                        break;
                 }
             }
 
             var parts = new List<string>();
             if (moved is { } m)
             {
-                parts.Add($"{m.ToString(CultureInfo.InvariantCulture)} value(s) moved");
+                parts.Add(Counted(m, "value moved", "values moved"));
             }
 
             if (conflicts is { } c)
             {
-                parts.Add($"{c.ToString(CultureInfo.InvariantCulture)} conflict(s)");
+                parts.Add(Counted(c, "conflict", "conflicts"));
             }
 
             if (removed is { } r)
             {
-                parts.Add($"{r.ToString(CultureInfo.InvariantCulture)} removed");
+                parts.Add(Counted(r, "removed", "removed"));
             }
 
-            if (actionRows is { } a)
+            if (actionRows is { } a && a > 0)
             {
-                parts.Add($"{a.ToString(CultureInfo.InvariantCulture)} action row(s) moved");
+                parts.Add(Counted(a, "action row moved", "action rows moved"));
             }
 
-            var text = parts.Count == 0
-                ? $"migration-v9.json has {fields} top-level field(s); open it to read them."
-                : string.Join(", ", parts) + ".";
-            return new MigrationSummary(path, moved, conflicts, fields, text) { Removed = removed, ActionRowsMoved = actionRows };
+            string text;
+            if (parts.Count == 0)
+            {
+                text = $"migration-v9.json has {fields} top-level field(s); open it to read them.";
+            }
+            else
+            {
+                var what = fromVersion is { } fv && toVersion is { } tv
+                    ? $"config {fv.ToString(CultureInfo.InvariantCulture)} → {tv.ToString(CultureInfo.InvariantCulture)}"
+                    : "config migration";
+                var when = migratedAt is { } at ? " on " + InstallRunReader.FormatWhen(at, now ?? DateTimeOffset.Now) : string.Empty;
+                text = $"{what}{when}: {string.Join(", ", parts)}";
+            }
+
+            return new MigrationSummary(path, moved, conflicts, fields, text) { Removed = removed, ActionRowsMoved = actionRows, FromVersion = fromVersion, ToVersion = toVersion, MigratedAt = migratedAt };
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             return new MigrationSummary(path, null, null, 0, "migration-v9.json could not be read (" + ex.GetType().Name + "); open it to read it.");
         }
     }
+
+    private static string Counted(int n, string one, string many) =>
+        n.ToString(CultureInfo.InvariantCulture) + " " + (n == 1 ? one : many);
 
     private static int? CountOf(JsonElement value) => value.ValueKind switch
     {
@@ -282,7 +309,7 @@ public static class InstallScriptPlan
             var previous = Path.Combine(dataDirectory, "previous");
             if (!File.Exists(Path.Combine(previous, "VERSION")))
             {
-                return new RollbackAvailability(false, "There is no previous install to go back to (previous\\VERSION is missing).");
+                return new RollbackAvailability(false, "No previous install is kept.");
             }
 
             if (Directory.Exists(Path.Combine(previous, "legacy-setup")))
@@ -323,6 +350,14 @@ public sealed record MigrationSummary(string FilePath, int? Moved, int? Conflict
     public int? Removed { get; init; }
 
     public int? ActionRowsMoved { get; init; }
+
+    /// <summary>The config versions the migration went between (<c>from_version</c>, <c>to_version</c>), when the file says.</summary>
+    public int? FromVersion { get; init; }
+
+    public int? ToVersion { get; init; }
+
+    /// <summary>When the installer migrated (<c>migrated_at</c>, UTC in the file), when the file says.</summary>
+    public DateTimeOffset? MigratedAt { get; init; }
 }
 
 /// <summary>An Add/Remove Programs entry as the post-flight needs it.</summary>

@@ -113,7 +113,7 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
 
     private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
-    private Rig Build(InstallationContext? installation = null, bool serveScript = true)
+    private Rig Build(InstallationContext? installation = null, bool serveScript = true, TimeProvider? time = null)
     {
         var services = TestServices.Create(_temp, installation: installation);
         _owned.Add(services);
@@ -144,7 +144,8 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
             () => Task.FromResult(Ready),
             reveal: _ => { },
             open: _ => { },
-            leftovers: new Leftovers()));
+            leftovers: new Leftovers(),
+            time: time));
         return new Rig(vm, services, launcher, probes, postFlight);
     }
 
@@ -291,8 +292,8 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
             Assert.Equal("Ok", rig.Vm.ExitToneKey);
             Assert.True(rig.Vm.HasPostFlight);
             Assert.Contains("defenseclaw-cli 1.0.0", rig.Vm.RuntimeText, StringComparison.Ordinal);
-            Assert.Contains("2 value(s) moved", rig.Vm.MigrationText, StringComparison.Ordinal);
-            Assert.Contains("4 action row(s) moved", rig.Vm.MigrationText, StringComparison.Ordinal);
+            Assert.Contains("2 values moved", rig.Vm.MigrationText, StringComparison.Ordinal);
+            Assert.Contains("4 action rows moved", rig.Vm.MigrationText, StringComparison.Ordinal);
             Assert.True(rig.Vm.HasMigration);
             Assert.True(rig.Vm.GatewayDown);
             Assert.True(rig.Vm.CanStartGateway);
@@ -541,6 +542,185 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
         });
     }
 
+    // ------------------------------------------------------------------ the install state is read fresh
+
+    private sealed class ClockAt : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = new(2026, 10, 12, 14, 5, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => Now;
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+    }
+
+    private void KeepPrevious(string version, bool legacy = false)
+    {
+        _ = Directory.CreateDirectory(Path.Combine(_temp.Path, "previous"));
+        File.WriteAllText(Path.Combine(_temp.Path, "previous", "VERSION"), version);
+        if (legacy)
+        {
+            _ = Directory.CreateDirectory(Path.Combine(_temp.Path, "previous", "legacy-setup"));
+        }
+    }
+
+    private static void ApplyOn1_0AndWait(Rig rig, int reads)
+    {
+        UiThread.Run(() => rig.Vm.ApplyCheck(Check("1.0.1", "1.0.1", withSetupExe: false, update: false), UpgradeChannel.SetupInstaller));
+        UiThread.WaitFor(() => rig.PostFlight.Reads >= reads && !rig.Vm.IsReadingPostFlight, "the install state read");
+    }
+
+    [Fact]
+    public void The_rollback_button_names_its_target_and_the_state_rows_show_the_real_config_version_and_last_install()
+    {
+        var clock = new ClockAt();
+        var rig = Build(time: clock);
+        KeepPrevious("1.0.0");
+        File.WriteAllText(Path.Combine(_temp.Path, "config.yaml"), "config_version: 9\n");
+        _ = Directory.CreateDirectory(Path.Combine(_temp.Path, "logs"));
+        File.WriteAllText(
+            Path.Combine(_temp.Path, "logs", "install-20261012T164027.log"),
+            "Start time: 20261012164027\r\nHost Application: powershell -Version 1.0.1\r\n  + Installed DefenseClaw 1.0.1\r\n  Upgraded from 1.0.0. Undo with: defenseclaw rollback\r\n");
+
+        ApplyOn1_0AndWait(rig, 1);
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal("Roll back to 1.0.0…", rig.Vm.RollbackLabel);
+            Assert.Equal("Config version 9", rig.Vm.ConfigVersionText);
+            Assert.StartsWith("Upgrade 1.0.0 → 1.0.1, ", rig.Vm.LastInstallText, StringComparison.Ordinal);
+            Assert.EndsWith("installed", rig.Vm.LastInstallText, StringComparison.Ordinal);
+            Assert.Equal("Ok", rig.Vm.LastInstallToneKey);
+            Assert.True(rig.Vm.HasLastInstallLog);
+            Assert.Equal("Read at 14:05", rig.Vm.ReadAtText);
+            Assert.Equal("Download and verify install.ps1 first (Download and verify, above); the rollback runs that verified script.", rig.Vm.RollbackBlockedReason);
+        });
+    }
+
+    [Fact]
+    public async Task Rollback_is_enabled_once_the_script_is_verified_and_has_no_reason_then()
+    {
+        var rig = Build();
+        KeepPrevious("1.0.0");
+        ApplyOn1_0AndWait(rig, 1);
+
+        await StageAsync(rig);
+
+        UiThread.Run(() =>
+        {
+            Assert.True(rig.Vm.CanRollback);
+            Assert.Null(rig.Vm.RollbackBlockedReason);
+        });
+    }
+
+    [Fact]
+    public void A_kept_setup_install_keeps_the_installers_explanation_and_a_missing_previous_install_says_none_is_kept()
+    {
+        var rig = Build();
+        KeepPrevious("0.8.9", legacy: true);
+        ApplyOn1_0AndWait(rig, 1);
+
+        UiThread.Run(() =>
+        {
+            Assert.False(rig.Vm.CanRollback);
+            Assert.Equal("Roll back to 0.8.9…", rig.Vm.RollbackLabel);
+            Assert.Contains("cannot restore", rig.Vm.RollbackBlockedReason, StringComparison.Ordinal);
+        });
+
+        // The installer removes previous\ (or another tool does) while the window is open: Refresh sees it.
+        Directory.Delete(Path.Combine(_temp.Path, "previous"), recursive: true);
+        UiThread.Run(() => rig.Vm.RefreshStateCommand.Execute(null));
+        UiThread.WaitFor(() => rig.PostFlight.Reads >= 2 && !rig.Vm.IsReadingPostFlight, "the refresh");
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal("Roll back…", rig.Vm.RollbackLabel);
+            Assert.False(rig.Vm.RollbackAvailable);
+            Assert.Equal("No previous install is kept.", rig.Vm.RollbackNote);
+            Assert.Equal("No previous install is kept.", rig.Vm.RollbackBlockedReason);
+        });
+    }
+
+    [Fact]
+    public void The_installation_guards_reason_comes_before_any_rollback_reason()
+    {
+        var rig = Build(TestInstallations.Managed());
+        KeepPrevious("1.0.0");
+        ApplyOn1_0AndWait(rig, 1);
+
+        UiThread.Run(() =>
+        {
+            Assert.False(rig.Vm.CanRollback);
+            Assert.NotNull(rig.Vm.BlockedReason);
+            Assert.Equal(rig.Vm.BlockedReason, rig.Vm.RollbackBlockedReason);
+        });
+    }
+
+    [Fact]
+    public void Every_check_and_the_refresh_button_read_the_state_again_and_the_clock_moves()
+    {
+        var clock = new ClockAt();
+        var rig = Build(time: clock);
+        KeepPrevious("1.0.0");
+        File.WriteAllText(Path.Combine(_temp.Path, "migration-v9.json"), "{\"moved\":[1],\"conflicts\":[],\"removed\":[]}");
+        ApplyOn1_0AndWait(rig, 1);
+        UiThread.Run(() => Assert.Contains("1 value moved", rig.Vm.MigrationText, StringComparison.Ordinal));
+
+        // "Check again" while the window stays open: the card does not keep what it read before.
+        File.WriteAllText(Path.Combine(_temp.Path, "migration-v9.json"), "{\"moved\":[1,2],\"conflicts\":[],\"removed\":[]}");
+        clock.Now = clock.Now.AddMinutes(7);
+        ApplyOn1_0AndWait(rig, 2);
+        UiThread.Run(() =>
+        {
+            Assert.Contains("2 values moved", rig.Vm.MigrationText, StringComparison.Ordinal);
+            Assert.Equal("Read at 14:12", rig.Vm.ReadAtText);
+        });
+
+        // Refresh, and the window being brought forward (the same command).
+        File.WriteAllText(Path.Combine(_temp.Path, "config.yaml"), "config_version: 10\n");
+        clock.Now = clock.Now.AddMinutes(3);
+        UiThread.Run(() => rig.Vm.RefreshStateCommand.Execute(null));
+        UiThread.WaitFor(() => rig.PostFlight.Reads >= 3 && !rig.Vm.IsReadingPostFlight, "the refresh");
+        UiThread.Run(() =>
+        {
+            Assert.Equal("Config version 10", rig.Vm.ConfigVersionText);
+            Assert.Equal("Read at 14:15", rig.Vm.ReadAtText);
+        });
+    }
+
+    [Fact]
+    public void Refresh_does_nothing_on_a_card_that_shows_no_install_state()
+    {
+        var rig = Build();
+
+        UiThread.Run(() => rig.Vm.RefreshStateCommand.Execute(null));
+        UiThread.Run(UiThread.Settle);
+
+        Assert.Equal(0, rig.PostFlight.Reads);
+    }
+
+    [Fact]
+    public async Task A_finished_run_reads_the_state_and_shows_the_run_as_the_last_install_from_activity()
+    {
+        var rig = Build();
+        ApplyAndWait(rig, Check("1.0.0", "0.8.10", withSetupExe: false));
+        KeepPrevious("0.8.10");
+        await StageAsync(rig);
+
+        UiThread.Run(() => rig.Vm.OpenUpgradeReviewCommand.Execute(null));
+        await UiThread.Run(() => rig.Vm.ConfirmReviewAsync());
+        UiThread.Run(UiThread.Settle);
+        UiThread.WaitFor(() => rig.Vm.HasPostFlight && !rig.Vm.IsReadingPostFlight, "the post-run read");
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal(1, rig.PostFlight.Reads);
+            Assert.StartsWith("Install run unknown → 1.0.0, ", rig.Vm.LastInstallText, StringComparison.Ordinal);
+            Assert.EndsWith("installed", rig.Vm.LastInstallText, StringComparison.Ordinal);
+            Assert.False(rig.Vm.HasLastInstallLog);
+            Assert.Equal("Roll back to 0.8.10…", rig.Vm.RollbackLabel);
+        });
+    }
+
     // ------------------------------------------------------------------ how it looks
 
     private static OffscreenHost Host(FrameworkElement content, double height) => new(content, 900, height);
@@ -595,10 +775,14 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
             Assert.Contains("Install state (read-only)", texts);
             Assert.Contains("Gateway autostart", texts);
             Assert.Contains("Add/Remove Programs entry", texts);
-            Assert.Contains(texts, t => t.Contains("3 value(s) moved", StringComparison.Ordinal));
+            Assert.Contains(texts, t => t.Contains("3 values moved", StringComparison.Ordinal));
             var buttons = ButtonTexts(host);
             Assert.Contains("Start gateway…", buttons);
-            Assert.Contains("Roll back…", buttons);
+            Assert.Contains("Roll back to 0.8.10…", buttons);
+            Assert.Contains("Refresh", buttons);
+            Assert.Contains("Config", texts);
+            Assert.Contains("Last install", texts);
+            Assert.Contains(texts, t => t.StartsWith("Read at ", StringComparison.Ordinal));
         });
     }
 

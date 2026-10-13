@@ -19,7 +19,10 @@ public enum RuntimeCapability
     /// <summary>The OpenShell sandbox CLI and the gateway's <c>/api/v1/sandbox/*</c> routes (the runtime says it targets Linux and macOS).</summary>
     Sandbox,
 
-    /// <summary>Configuration schema 8, the canonical observability configuration.</summary>
+    /// <summary>
+    /// The canonical observability configuration (introduced with config schema 8): the app can read and edit it. It says nothing about the
+    /// version of the config file on disk (that is <c>config_version</c> in config.yaml, 9 on a 1.0.x machine).
+    /// </summary>
     CanonicalSchema8,
 
     /// <summary>
@@ -56,12 +59,19 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.PolicyModel => "Policy model (seven views)",
         RuntimeCapability.AcpGuard => "ACP guard",
         RuntimeCapability.RedactionAdvanced => "Advanced redaction",
-        RuntimeCapability.Sandbox => "Sandboxes",
-        RuntimeCapability.CanonicalSchema8 => "Configuration schema 8",
+        RuntimeCapability.Sandbox => "Sandboxes (Linux/macOS only)",
+        RuntimeCapability.CanonicalSchema8 => "Canonical observability config editing",
         RuntimeCapability.TuiRegistry => "Extended command registry",
         RuntimeCapability.AiRuntime => "AI Discovery runtime planes",
         _ => capability.ToString(),
     };
+
+    /// <summary>
+    /// Whether the user can use the feature on this machine. The runtime's sandbox commands exist on Windows but the runtime itself says it
+    /// targets Linux and macOS, so a summary of "what you have here" leaves them out.
+    /// </summary>
+    public static bool IsUsableHere(RuntimeCapability capability) =>
+        !(capability == RuntimeCapability.Sandbox && OperatingSystem.IsWindows());
 
     /// <summary>The marker the probe looks for, in a sentence (About's tooltip and the docs).</summary>
     public static string Marker(RuntimeCapability capability) => capability switch

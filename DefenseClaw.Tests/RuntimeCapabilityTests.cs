@@ -356,4 +356,22 @@ public class RuntimeCapabilityTests
             Assert.False(string.IsNullOrWhiteSpace(RuntimeCapabilityCatalog.Marker(capability)));
         }
     }
+
+    [Fact]
+    public void The_features_line_names_what_the_user_can_use_here_and_never_states_a_config_schema()
+    {
+        var older = RuntimeSummary.Features(Evaluate(Screens("0.8.10") with { AcpHelp = null, RedactionHelp = null }));
+        var pin = Evaluate(Screens("95159fd"));
+        var features = RuntimeSummary.Features(pin);
+
+        Assert.Equal("No features beyond the 0.8.10 baseline", older);
+        Assert.Contains("Advanced redaction", features, StringComparison.Ordinal);
+        Assert.Contains("Canonical observability config editing", features, StringComparison.Ordinal);
+        Assert.DoesNotContain("schema 8", features, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sandboxes", features, StringComparison.Ordinal);
+        Assert.True(pin.Capabilities.Has(RuntimeCapability.Sandbox));
+        Assert.False(RuntimeCapabilityCatalog.IsUsableHere(RuntimeCapability.Sandbox));
+        Assert.Contains("Linux/macOS only", RuntimeCapabilityCatalog.DisplayName(RuntimeCapability.Sandbox), StringComparison.Ordinal);
+        Assert.True(RuntimeCapabilityCatalog.IsUsableHere(RuntimeCapability.AcpGuard));
+    }
 }

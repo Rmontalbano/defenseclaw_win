@@ -111,7 +111,16 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
     private readonly Action<string> _reveal;
     private readonly Action<string> _open;
     private readonly ILeftoverProbes _leftovers;
+    private readonly TimeProvider _time;
     private readonly CancellationTokenSource _cts = new();
+
+    // Bumped by every read of the install state; a read that finds it changed was overtaken by a newer one and drops its answer.
+    private int _readGeneration;
+
+    // What the last run in this window says about the Roll back button: install.ps1 offers none after a usage error or a rollback.
+    private bool _resultOffersRollback = true;
+    private string? _resultRollbackNote;
+    private string? _previousVersion;
     private string _installedVersion = string.Empty;
 
     private StagedUpgradeAsset? _staged;
@@ -236,6 +245,25 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
     private bool _rollbackAvailable;
 
     [ObservableProperty]
+    private string _configVersionText = string.Empty;
+
+    [ObservableProperty]
+    private string _lastInstallText = string.Empty;
+
+    [ObservableProperty]
+    private string _lastInstallToneKey = "Neutral";
+
+    [ObservableProperty]
+    private string _lastInstallLogPath = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasLastInstallLog;
+
+    /// <summary>"Read at 14:05": when the install state below was last read off the machine.</summary>
+    [ObservableProperty]
+    private string _readAtText = string.Empty;
+
+    [ObservableProperty]
     private string _rollbackNote = string.Empty;
 
     [ObservableProperty]
@@ -253,8 +281,10 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         Func<Task<CosignStatus>>? cosignProbe = null,
         Action<string>? reveal = null,
         Action<string>? open = null,
-        ILeftoverProbes? leftovers = null)
+        ILeftoverProbes? leftovers = null,
+        TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _leftovers = leftovers ?? new RegistryLeftoverProbes();
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _upgrade = upgrade ?? throw new ArgumentNullException(nameof(upgrade));
@@ -317,6 +347,17 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
 
     public bool CanReview => IsStaged && !IsRunning && !IsStaging && !HasPreflightBlock && BlockedReason is null;
 
+    /// <summary>"Roll back to 1.0.0…": the button names the install it goes back to (<c>previous\VERSION</c>); plain "Roll back…" when that is not known.</summary>
+    public string RollbackLabel => _previousVersion is { } v ? $"Roll back to {v}…" : "Roll back…";
+
+    /// <summary>Why Roll back is off (also its tooltip), or null when it is on. The installation guard's reason comes before any other.</summary>
+    public string? RollbackBlockedReason =>
+        BlockedReason is { } blocked ? blocked
+        : IsRunning ? "The installer is still running."
+        : !RollbackAvailable ? RollbackNote
+        : _staged is null ? "Download and verify install.ps1 first (Download and verify, above); the rollback runs that verified script."
+        : null;
+
     public bool CanRollback => (HasResult || IsPostUpgradeMode) && !IsRunning && RollbackAvailable && _staged is not null && BlockedReason is null;
 
     /// <summary>Keeps the card on screen after a run, when the update check no longer lists an update.</summary>
@@ -366,6 +407,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         OnPropertyChanged(nameof(ScriptVersion));
         OnPropertyChanged(nameof(CanReview));
         OnPropertyChanged(nameof(CanRollback));
+        OnPropertyChanged(nameof(RollbackBlockedReason));
         OnPropertyChanged(nameof(IsVisible));
         OnPropertyChanged(nameof(IsConfirmable));
         OnPropertyChanged(nameof(BlockedReason));
@@ -410,18 +452,29 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         }
 
         // Already on 1.0 and still holding the install it replaced: offer the post-upgrade checks and the reviewed rollback.
-        var wasPostUpgrade = IsPostUpgradeMode;
         IsPostUpgradeMode = !IsApplicable && !IsRunning && !HasResult &&
             UpgradeRunner.TryParseReleaseVersion(installed, out var installedVersion) &&
             installedVersion >= UpgradeRunner.InstallScriptFirstVersion &&
             File.Exists(Path.Combine(_services.Paths.DataDirectory, "previous", "VERSION"));
-        if (IsPostUpgradeMode && !wasPostUpgrade)
+        if (IsPostUpgradeMode)
         {
-            var rollback = InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory);
-            RollbackAvailable = rollback.IsAvailable;
-            RollbackNote = rollback.Note;
+            // Every check re-reads the state (the first one after the window opens, Check again, the one after a run): nothing is kept from
+            // the last time, because previous\, migration-v9.json and the install log are changed by the installer, not by this app.
+            ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory));
             _ = ReadPostFlightAsync();
         }
+    }
+
+    /// <summary>Re-reads the install state: the Refresh button, and the window being brought to the front again.</summary>
+    [RelayCommand]
+    public Task RefreshState() => ShowPostFlight ? ReadPostFlightAsync() : Task.CompletedTask;
+
+    /// <summary>Sets the Roll back button's availability and its explanation, folding in what the last run in this window said.</summary>
+    private void ApplyRollbackState(RollbackAvailability rollback)
+    {
+        RollbackAvailable = rollback.IsAvailable && (!HasResult || _resultOffersRollback);
+        RollbackNote = HasResult && _resultRollbackNote is { } note ? note : rollback.Note;
+        OnPropertyChanged(nameof(RollbackBlockedReason));
     }
 
     private void ClearStaging()
@@ -762,21 +815,33 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         LogPath = result.LogPath ?? string.Empty;
         HasLog = result.LogPath is not null;
 
-        var rollback = InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory);
-        RollbackAvailable = rollback.IsAvailable && result.Exit.OffersRollback;
-        RollbackNote = result.Exit.Outcome == InstallOutcome.UsageError
+        _resultOffersRollback = result.Exit.OffersRollback;
+        _resultRollbackNote = result.Exit.Outcome == InstallOutcome.UsageError
             ? "Nothing was changed, so there is nothing to roll back."
             : result.Rollback
                 ? "The rollback has run. Running it again goes forward to the newer install."
-                : rollback.Note;
+                : null;
+        ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory));
     }
 
     private async Task ReadPostFlightAsync()
     {
+        var generation = ++_readGeneration;
         IsReadingPostFlight = true;
         try
         {
             var facts = await _postFlight.ReadAsync(_disposed ? new CancellationToken(canceled: true) : _cts.Token).ConfigureAwait(true);
+
+            // The files the installer leaves are read in one go, off the UI thread, after the CLI and the gateway answered.
+            var dataDirectory = _services.Paths.DataDirectory;
+            var activity = _services.Cli.Activity;
+            var now = _time.GetLocalNow();
+            var state = await Task.Run(() => InstallStateSnapshot.Read(dataDirectory, activity, now)).ConfigureAwait(true);
+            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers)).ConfigureAwait(true);
+            if (generation != _readGeneration)
+            {
+                return;
+            }
 
             CliPathText = facts.CliPath is null
                 ? "defenseclaw was not found. Open a new terminal or restart this app so the updated PATH is read."
@@ -790,11 +855,19 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             GatewayDown = facts.GatewayRunning == false;
             GatewayToneKey = facts.GatewayRunning switch { true => "Ok", false => "Bad", _ => "Neutral" };
 
-            var migration = InstallScriptPlan.ReadMigrationSummary(_services.Paths.DataDirectory);
-            _migrationFile = migration?.FilePath;
-            HasMigration = migration is not null;
-            MigrationText = migration?.Text ?? "No migration-v9.json was found.";
-            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers)).ConfigureAwait(true);
+            ConfigVersionText = state.ConfigVersionText;
+            _migrationFile = state.Migration?.FilePath;
+            HasMigration = state.Migration is not null;
+            MigrationText = state.MigrationText;
+            LastInstallText = state.LastInstallText;
+            LastInstallToneKey = state.LastInstallToneKey;
+            LastInstallLogPath = state.LastInstallLogPath ?? string.Empty;
+            HasLastInstallLog = state.LastInstallLogPath is not null;
+
+            _previousVersion = state.PreviousVersion;
+            OnPropertyChanged(nameof(RollbackLabel));
+            ApplyRollbackState(state.Rollback);
+
             LeftoverRows.Clear();
             foreach (var row in leftovers)
             {
@@ -802,6 +875,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             }
 
             OnPropertyChanged(nameof(HasLeftovers));
+            ReadAtText = "Read at " + now.ToString("HH:mm", CultureInfo.CurrentCulture);
             HasPostFlight = true;
         }
         catch (OperationCanceledException)
@@ -810,7 +884,11 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         }
         finally
         {
-            IsReadingPostFlight = false;
+            if (generation == _readGeneration)
+            {
+                IsReadingPostFlight = false;
+            }
+
             OnPropertyChanged(nameof(CanStartGateway));
         }
     }
@@ -855,6 +933,15 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         if (HasLog && File.Exists(LogPath))
         {
             _open(LogPath);
+        }
+    }
+
+    [RelayCommand]
+    private void OpenLastInstallLog()
+    {
+        if (HasLastInstallLog && File.Exists(LastInstallLogPath))
+        {
+            _open(LastInstallLogPath);
         }
     }
 
