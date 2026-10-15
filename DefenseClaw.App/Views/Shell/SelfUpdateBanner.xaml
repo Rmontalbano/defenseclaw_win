@@ -1,0 +1,79 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.SelfUpdateBanner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             IsTabStop="False">
+    <!--
+        "DefenseClaw for Windows X is available": this app's own update offer, in the same slim bar as the runtime's UpdateBanner and built from
+        the same tokens. Its DataContext is the SelfUpdateViewModel (set where it is placed in MainWindow). It only offers: Update now opens the
+        review (version, size, SHA-256, how it is verified) and nothing is downloaded or replaced until Install is pressed there. Later hides the
+        bar until the app restarts; Skip this version is remembered, and a newer release shows it again.
+    -->
+    <Border Margin="0,12,0,0"
+            Padding="10,8,8,8"
+            Background="{DynamicResource DcSurfaceBrush}"
+            BorderBrush="{DynamicResource DcAccentBrush}"
+            BorderThickness="{DynamicResource DcBorderThickness}"
+            CornerRadius="{DynamicResource DcControlRadius}"
+            Visibility="{Binding ShowBanner, Converter={StaticResource BoolToVisibility}}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Width="3"
+                    Margin="0,0,10,0"
+                    CornerRadius="{DynamicResource DcDotRadius}"
+                    Background="{DynamicResource DcAccentBrush}" />
+
+            <ctl:DcSymbolIcon Grid.Column="1"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Center"
+                              Symbol="ArrowCircleUp24"
+                              FontSize="22"
+                              Foreground="{DynamicResource DcSectionUpdatesBrush}" />
+
+            <StackPanel Grid.Column="2"
+                        VerticalAlignment="Center"
+                        ToolTip="{Binding BannerMessage}">
+                <TextBlock Style="{StaticResource DcBody}"
+                           FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"
+                           AutomationProperties.LiveSetting="Polite"
+                           Text="{Binding BannerTitle}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding BannerMessage}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3"
+                        Margin="12,0,0,0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <ui:Button Appearance="Primary"
+                           Content="Update now"
+                           Command="{Binding UpdateNowCommand}"
+                           ToolTip="Review this release, then install it"
+                           AutomationProperties.Name="Update now"
+                           AutomationProperties.HelpText="Opens the review. Nothing is downloaded or replaced until you confirm there." />
+                <ui:Button Margin="8,0,0,0"
+                           Content="Later"
+                           Command="{Binding LaterCommand}"
+                           ToolTip="Hide this until the app restarts"
+                           AutomationProperties.Name="Later"
+                           AutomationProperties.HelpText="Hides this banner until the app is restarted." />
+                <ui:Button Margin="8,0,0,0"
+                           Content="Skip this version"
+                           Command="{Binding SkipCommand}"
+                           ToolTip="Stop offering this version. A newer one is offered again."
+                           AutomationProperties.Name="Skip this version"
+                           AutomationProperties.HelpText="Remembered across restarts. A newer release shows this banner again." />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

@@ -602,6 +602,56 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+                <!-- This app's own updates (Rmontalbano/defenseclaw_win), separate from the runtime's above. -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel DataContext="{Binding AppUpdate}">
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="ArrowCircleUp24"
+                                          Section="Updates"
+                                          Content="DefenseClaw for Windows (this app)" />
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Installed">
+                            <TextBlock Style="{StaticResource DcMono}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding RunningText}"
+                                       AutomationProperties.Name="{Binding RunningText, StringFormat=Installed app version: {0}}" />
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Status"
+                                                local:SettingsRow.Caption="{Binding DetailText}">
+                            <Border Style="{StaticResource DcBadge}"
+                                    VerticalAlignment="Center"
+                                    Tag="{Binding StatusTone}">
+                                <TextBlock Style="{StaticResource DcBadgeText}"
+                                           FontSize="12"
+                                           Text="{Binding StatusText}"
+                                           AutomationProperties.Name="{Binding StatusText, StringFormat=App update status: {0}}" />
+                            </Border>
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Last checked">
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding LastCheckedText}" />
+                        </HeaderedContentControl>
+
+                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                            <ui:Button Content="Check for Updates…"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                       Command="{Binding CheckNowCommand}"
+                                       AutomationProperties.HelpText="Asks GitHub for the newest release of DefenseClaw for Windows. A development build says what the latest release is but is never offered it." />
+                            <ui:Button Margin="8,0,0,0"
+                                       Content="Review update…"
+                                       Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
+                                       Command="{Binding UpdateNowCommand}"
+                                       AutomationProperties.HelpText="Shows the version, size and SHA-256 of the newer release before anything is downloaded or replaced." />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
                 <!-- Audit archive: a copy of an earlier DefenseClaw's audit.db the Audit panel can show, read-only (CUST-299). -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>

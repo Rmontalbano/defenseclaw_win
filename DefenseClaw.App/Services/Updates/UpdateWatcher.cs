@@ -704,7 +704,7 @@ internal sealed class UpdateWatcher : IDisposable
     /// The application's dispatcher, the way <c>AppServices.RaiseConfigReloaded</c> does it: in place on the UI thread (and when there
     /// is no WPF application, as in a headless run), queued otherwise, and nothing once shutdown has begun.
     /// </summary>
-    private static void PostToDispatcher(Action action)
+    internal static void PostToDispatcher(Action action)
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.CheckAccess())

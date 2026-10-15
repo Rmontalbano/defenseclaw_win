@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using DefenseClaw.App.Services.Updates;
+using DefenseClaw.App.Services.Updates.SelfUpdate;
 using DefenseClaw.Core.Cli;
 
 namespace DefenseClaw.App.Services;
@@ -130,35 +131,105 @@ internal sealed class AppRestart
     }
 
     /// <summary>
+    /// Set by a self-update once the new files are in place: the next launch starts the new exe with the hand-off flag, waits for it to say
+    /// it started, and restores the old files (and stays up) when it does not. Cleared when the launch is over.
+    /// </summary>
+    internal UpdateHandoff? PendingHandoff { get; set; }
+
+    /// <summary>
     /// Starts the successor. Called by the shell once it has decided to exit; false (with the reason) when nothing was started, in which
-    /// case the shell stays up.
+    /// case the shell stays up. With a <see cref="PendingHandoff"/> this also waits (bounded) for the successor to report it started.
     /// </summary>
     public bool TryLaunch(out string? error)
+    {
+        var plan = Prepare(out error);
+        return plan is not null && Launch(plan, out error);
+    }
+
+    /// <summary>
+    /// <see cref="TryLaunch"/> without holding the UI thread through the hand-off wait: what reads the window runs on the caller, the start and
+    /// the wait on the pool.
+    /// </summary>
+    public async Task<(bool Launched, string? Error)> TryLaunchAsync()
+    {
+        var plan = Prepare(out var error);
+        if (plan is null)
+        {
+            return (false, error);
+        }
+
+        return await Task.Run(() =>
+        {
+            var launched = Launch(plan, out var launchError);
+            return (launched, launchError);
+        }).ConfigureAwait(true);
+    }
+
+    private sealed record LaunchPlan(string Path, bool Minimized, int ProcessId, UpdateHandoff? Handoff);
+
+    private LaunchPlan? Prepare(out string? error)
     {
         error = BlockedReason;
         if (error is not null)
         {
-            return false;
+            return null;
         }
 
-        var path = _processPath();
+        var handoff = PendingHandoff;
+        var path = handoff?.ExecutablePath ?? _processPath();
         if (string.IsNullOrEmpty(path))
         {
             error = "This app cannot tell where its own program file is, so it cannot start a new copy.";
-            return false;
+            return null;
         }
 
-        var minimized = StartedMinimized && !(WindowShown?.Invoke() ?? false);
+        return new LaunchPlan(path, StartedMinimized && !(WindowShown?.Invoke() ?? false), _processId(), handoff);
+    }
+
+    private bool Launch(LaunchPlan plan, out string? error)
+    {
+        error = null;
+        var arguments = BuildArguments(plan.Minimized, plan.ProcessId).ToList();
+        if (plan.Handoff is { } handoff)
+        {
+            arguments.Add(SelfUpdateHandshake.Flag);
+            arguments.Add(handoff.Signal.Name);
+        }
+
         try
         {
-            _launcher.Start(path, BuildArguments(minimized, _processId()));
-            return true;
+            _launcher.Start(plan.Path, arguments);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
         {
             error = "A new copy of the app could not be started: " + ex.Message;
-            return false;
+            return plan.Handoff is not null ? FailHandoff(plan.Handoff, ref error) : false;
         }
+
+        if (plan.Handoff is { } waiting)
+        {
+            if (!waiting.Signal.Wait(waiting.Timeout))
+            {
+                error = $"The new version did not report that it started within {(int)waiting.Timeout.TotalSeconds} seconds.";
+                return FailHandoff(waiting, ref error);
+            }
+
+            PendingHandoff = null;
+            waiting.Signal.Dispose();
+        }
+
+        return true;
+    }
+
+    private bool FailHandoff(UpdateHandoff handoff, ref string? error)
+    {
+        var problems = handoff.Rollback();
+        PendingHandoff = null;
+        handoff.Signal.Dispose();
+        error += problems.Count == 0
+            ? " The previous version was restored and keeps running."
+            : " Putting the previous version back failed for: " + string.Join("; ", problems);
+        return false;
     }
 
     /// <summary>The successor's arguments: <c>--minimized</c> only when it should stay in the tray, then <c>--after-restart &lt;pid&gt;</c>.</summary>

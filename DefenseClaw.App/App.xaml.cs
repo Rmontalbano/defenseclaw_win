@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Threading;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Updates.SelfUpdate;
 using DefenseClaw.App.Services.Appearance;
 using H.NotifyIcon.Core;
 using Microsoft.Win32;
@@ -93,6 +94,10 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        // A copy started by a self-update tells the old one it is alive before anything else: the old one does not exit (and keeps its own
+        // files) until it hears this. See SelfUpdateService / UpdateHandoff.
+        _ = SelfUpdateHandshake.SignalStarted(e.Args);
+
         // A restarted copy waits for the instance it replaces to exit before taking the guard (AppRestart); any other launch just takes it.
         _instanceGuard = AppRestart.AcquireAfterRestart(e.Args, AppRestart.WaitForProcessExit, SingleInstanceGuard.Acquire);
         if (!_instanceGuard.IsFirstInstance)
@@ -160,6 +165,14 @@ public partial class App : Application
         // update check: Start returns at once and the work runs on the pool, after the monitor's first poll, so nothing is added to the launch.
         _services.UpdateWatcher.NewVersionAvailable += (_, e) => _tray?.Notify("DefenseClaw update", e.Text + ". Open the dashboard to review it.", NotificationIcon.Info);
         _services.UpdateWatcher.Start();
+
+        // Updating this app itself: one toast per release, a notice when the last update took, and the background check (30 s after launch,
+        // then every 6 h). Nothing is downloaded or replaced without the operator's review.
+        _services.AppUpdate.Watcher.Announced += (_, version) => _tray?.Notify("DefenseClaw for Windows update", $"DefenseClaw for Windows {version} is available. Open the dashboard to review it.", NotificationIcon.Info);
+        _services.AppUpdate.Notice += (_, text) => _ = Dispatcher.BeginInvoke(() => _tray?.Notify("DefenseClaw for Windows", text, NotificationIcon.Info));
+        _services.AppUpdate.ViewModel.ReviewRequested += (_, _) => Views.Updates.SelfUpdateWindow.Show(_services.AppUpdate.ViewModel);
+        _services.AppUpdate.Watcher.Start();
+        _ = _services.AppUpdate.CompletePendingUpdateAsync();
 
         // Opt-in automatic gateway start: decides once, on the monitor's first settled snapshot (off unless Settings turned it on).
         _services.GatewayAutoStart.NoticeRaised += (_, e) => _tray?.Notify(e.Title, e.Body, e.IsFailure ? NotificationIcon.Warning : NotificationIcon.Info);
@@ -326,10 +339,15 @@ public partial class App : Application
             }
 
             // A restart starts its successor only now that nothing can stop the exit; if it cannot start, this copy stays up.
-            if (restart && _services is { } services && !services.AppRestart.TryLaunch(out var launchError))
+            // After a self-update this also waits (off the UI thread) for the new copy to report it started, and puts the old files back if it does not.
+            if (restart && _services is { } services)
             {
-                _tray?.Notify("DefenseClaw", launchError ?? "The app could not be restarted.", NotificationIcon.Warning);
-                return;
+                var (launched, launchError) = await services.AppRestart.TryLaunchAsync();
+                if (!launched)
+                {
+                    _tray?.Notify("DefenseClaw", launchError ?? "The app could not be restarted.", NotificationIcon.Warning);
+                    return;
+                }
             }
 
             _dashboard?.CloseForExit();

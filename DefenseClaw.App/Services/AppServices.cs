@@ -16,6 +16,7 @@ using DefenseClaw.Core.Security;
 using DefenseClaw.GatewayAdmin.Contract;
 using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.Services.Updates;
+using DefenseClaw.App.Services.Updates.SelfUpdate;
 using DefenseClaw.App.Services.Wizards;
 
 namespace DefenseClaw.App.Services;
@@ -88,7 +89,8 @@ public sealed class AppServices : IDisposable
         string? hookTotalsCacheDirectory = null,
         Func<AppServices, GatewayAdminDependencies>? gatewayAdminFactory = null,
         IAdminLayoutSource? adminLayout = null,
-        IAdminFileSystem? adminFileSystem = null)
+        IAdminFileSystem? adminFileSystem = null,
+        Func<AppServices, SelfUpdateService>? appUpdateFactory = null)
     {
         Paths = startup.Paths;
         ReaderTimeouts = readerTimeouts ?? ReaderTimeouts.Production;
@@ -196,6 +198,9 @@ public sealed class AppServices : IDisposable
 
         // Knows whether a newer runtime is out (the banner and the one toast). Nothing runs until the app calls Start on it.
         UpdateWatcher = updateWatcherFactory?.Invoke(this) ?? UpdateWatcher.Create(this);
+
+        // Updating this app itself (Rmontalbano/defenseclaw_win releases): the banner, the reviewed install, the clean-up after a restart. Nothing runs until the app calls Start.
+        AppUpdate = appUpdateFactory?.Invoke(this) ?? SelfUpdateService.Create(AppRestart);
 
         // Opt-in "start the gateway automatically" (off by default). Nothing runs until the app calls Start on it.
         GatewayAutoStart = GatewayAutoStart.Create(this);
@@ -355,6 +360,9 @@ public sealed class AppServices : IDisposable
     /// banner, <c>NewVersionAvailable</c> for the tray toast). It only asks; the upgrade stays the Updates window's. See <see cref="Updates.UpdateWatcher"/>.
     /// </summary>
     internal UpdateWatcher UpdateWatcher { get; }
+
+    /// <summary>Updating DefenseClaw for Windows itself: check, reviewed install, swap with rollback. Separate from <see cref="UpdateWatcher"/>, which is about the DefenseClaw runtime. See <see cref="SelfUpdateService"/>.</summary>
+    internal SelfUpdateService AppUpdate { get; }
 
     /// <summary>The opt-in single automatic <c>defenseclaw-gateway start</c> per launch, and the "operator stopped it" flag that vetoes it. See <see cref="Services.GatewayAutoStart"/>.</summary>
     internal GatewayAutoStart GatewayAutoStart { get; }
@@ -603,7 +611,8 @@ public sealed class AppServices : IDisposable
         string? hookTotalsCacheDirectory = null,
         Func<AppServices, GatewayAdminDependencies>? gatewayAdminFactory = null,
         IAdminLayoutSource? adminLayout = null,
-        IAdminFileSystem? adminFileSystem = null)
+        IAdminFileSystem? adminFileSystem = null,
+        Func<AppServices, SelfUpdateService>? appUpdateFactory = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -614,6 +623,8 @@ public sealed class AppServices : IDisposable
         // Likewise the release check would go to GitHub and use the real cache file: an isolated composition's watcher answers "not checked".
         updateWatcherFactory ??= services => new UpdateWatcher(
             services.Settings, services.Monitor, (_, _) => Task.FromResult(UpdateCheckResult.NotCheckedYet));
+        // Likewise this app's own update check would go to GitHub and read the real state file: an isolated composition's is inert (nothing checked, nothing installable).
+        appUpdateFactory ??= services => SelfUpdateService.CreateInert(services.AppRestart, Path.Combine(paths.DataDirectory, "DefenseClaw.App", "self-update", "state.json"));
         // Likewise the runtime probes would start the real CLI: an isolated composition's detector answers "unknown" unless a test supplies a runner.
         runtimeProbeRunner ??= static (_, _) => Task.FromResult(RuntimeProbeOutput.Fail("not probed in an isolated composition"));
         // Likewise the Docker look would start the real docker: an isolated composition answers "not installed" unless a test supplies a probe.
@@ -627,7 +638,7 @@ public sealed class AppServices : IDisposable
         adminLayout ??= new NoAdminLayoutSource();
         adminFileSystem ??= new ReadOnlyAdminFileSystem();
         gatewayAdminFactory ??= services => InertGatewayAdmin.Dependencies(services, adminLayout, adminFileSystem);
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory, gatewayAdminFactory, adminLayout, adminFileSystem);
+        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory, gatewayAdminFactory, adminLayout, adminFileSystem, appUpdateFactory);
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>
@@ -796,6 +807,7 @@ public sealed class AppServices : IDisposable
         RestartQueue.Dispose();
         AuditChanges.Dispose();
         UpdateWatcher.Dispose();
+        AppUpdate.Dispose();
         GatewayAutoStart.Dispose();
         ConnectorScope.Dispose();
         Monitor.Dispose();

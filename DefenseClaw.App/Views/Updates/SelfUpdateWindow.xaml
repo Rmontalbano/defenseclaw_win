@@ -1,0 +1,121 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.Updates.SelfUpdateWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+                 Title="Update DefenseClaw for Windows"
+                 Width="640"
+                 Height="640"
+                 MinWidth="520"
+                 MinHeight="480"
+                 AutomationProperties.Name="Update DefenseClaw for Windows"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterScreen">
+    <!--
+        The review before an update of this app: what version, how big, its SHA-256, and the honest sentence about how it is verified (not
+        Authenticode-signed). Install and restart is the one click that downloads and replaces files. Esc cancels (code-behind).
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Update DefenseClaw for Windows" />
+
+        <ScrollViewer Grid.Row="1" Padding="24,8,24,8" Style="{StaticResource DcPageScroll}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource DcBody}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="{Binding ReviewTitle}"
+                           AutomationProperties.HeadingLevel="Level1" />
+                <TextBlock Margin="0,2,0,12"
+                           Style="{StaticResource DcCaption}"
+                           Text="{Binding RunningText, StringFormat=Installed: {0}}" />
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource DcCaption}" Text="Download size" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource DcBody}" Text="{Binding SizeText}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,6,0,0" Style="{StaticResource DcCaption}" Text="SHA-256" />
+                    <TextBox Grid.Row="1"
+                             Grid.Column="1"
+                             Margin="0,4,0,0"
+                             Style="{StaticResource DcMonoTextBox}"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             Text="{Binding ShaText, Mode=OneWay}"
+                             AutomationProperties.Name="Expected SHA-256 of the download" />
+                </Grid>
+
+                <ui:InfoBar Margin="0,4,0,8"
+                            IsClosable="False"
+                            IsOpen="True"
+                            Severity="Informational"
+                            Title="How this is verified"
+                            Message="{Binding TrustText}" />
+
+                <TextBlock Margin="0,0,0,8"
+                           Style="{StaticResource DcCaption}"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding HasInstallNotes, Converter={StaticResource BoolToVisibility}}"
+                           Text="{Binding NotesAboutInstall}" />
+
+                <ui:InfoBar Margin="0,0,0,8"
+                            IsClosable="False"
+                            Severity="Error"
+                            Title="The update did not go ahead"
+                            IsOpen="{Binding HasError, Mode=OneWay}"
+                            Message="{Binding ErrorText}" />
+
+                <TextBlock Style="{StaticResource DcCaption}" Text="Release notes" />
+                <TextBox Margin="0,4,0,0"
+                         MinHeight="140"
+                         MaxHeight="260"
+                         IsReadOnly="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         Text="{Binding NotesText, Mode=OneWay}"
+                         AutomationProperties.Name="Release notes" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2" Margin="24,8,24,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource DcCaption}"
+                       TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite"
+                       Text="{Binding ProgressText}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <ui:Button Content="Release page"
+                           Command="{Binding OpenReleasePageCommand}"
+                           AutomationProperties.HelpText="Opens this release on GitHub in your browser." />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Primary"
+                           Content="Install and restart"
+                           Command="{Binding InstallCommand}"
+                           AutomationProperties.HelpText="Downloads the update, checks its SHA-256, replaces the program files and restarts the app. The previous version is kept until the new one has started." />
+                <ui:Button Margin="8,0,0,0"
+                           Content="Cancel"
+                           Command="{Binding CancelCommand}"
+                           AutomationProperties.HelpText="Closes this window. Nothing is installed." />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

@@ -636,6 +636,9 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     [NotifyCanExecuteChangedFor(nameof(CheckNowCommand))]
     private bool _isCheckingUpdates;
 
+    /// <summary>This app's own update status and actions (the "DefenseClaw for Windows" card). See <see cref="Services.Updates.SelfUpdate.SelfUpdateViewModel"/>.</summary>
+    internal Services.Updates.SelfUpdate.SelfUpdateViewModel AppUpdate => Services.AppUpdate.ViewModel;
+
     /// <summary>
     /// Shows what the runtime version and the update watcher know, from memory (no network, no I/O): the watcher's last answer, the time of the last
     /// check that got one, and why the most recent one failed, if it did.

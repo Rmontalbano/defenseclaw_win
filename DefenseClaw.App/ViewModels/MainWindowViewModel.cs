@@ -347,6 +347,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // update (the existing Updates window: nothing is installed from here), to read the release notes and to stop being told about
     // this release; it never runs anything itself.
 
+    /// <summary>Updating this app itself (its own banner; the review is opened by the application). See <see cref="Services.Updates.SelfUpdate.SelfUpdateViewModel"/>.</summary>
+    internal Services.Updates.SelfUpdate.SelfUpdateViewModel SelfUpdate => _services.AppUpdate.ViewModel;
+
     private readonly Action _reviewUpdate;
     private readonly Action<string>? _openReleasePage;
 

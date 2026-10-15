@@ -92,7 +92,7 @@ public sealed class SettingsPanelViewTests : IDisposable
             Assert.True(scroller.ExtentWidth <= scroller.ViewportWidth + 0.5, $"content is {scroller.ExtentWidth} wide in a {scroller.ViewportWidth} viewport");
 
             var headers = VisualTree.Descendants<DcCardHeader>(page).Select(h => h.Content as string).ToArray();
-            Assert.Equal(new[] { "Monitoring", "Notifications", "Startup", "Connection", "Files", "defenseclaw CLI", "Updates", "Audit archive", "Advanced" }, headers);
+            Assert.Equal(new[] { "Monitoring", "Notifications", "Startup", "Connection", "Files", "defenseclaw CLI", "Updates", "DefenseClaw for Windows (this app)", "Audit archive", "Advanced" }, headers);
 
             RenderTo.Png(shell.Host, "settings-940x620");
         });
@@ -175,7 +175,7 @@ public sealed class SettingsPanelViewTests : IDisposable
         UiThread.Run(() =>
         {
             // Tall enough for every card, the Installation block (CUST-308) included.
-            const double TallWindow = 3300;
+            const double TallWindow = 3600;
             using var shell = Open(1200, TallWindow, out var page);
             var scroller = ScrollerOf(page);
 

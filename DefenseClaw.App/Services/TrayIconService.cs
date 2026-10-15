@@ -1,3 +1,4 @@
+using DefenseClaw.App.Services.Updates.SelfUpdate;
 using System.Windows;
 using System.Windows.Controls;
 using DefenseClaw.App.ViewModels;
@@ -292,6 +293,11 @@ public sealed class TrayIconService : IDisposable
 
         _ = menu.Items.Add(new Separator());
 
+        // This app's own update (Rmontalbano/defenseclaw_win), not the DefenseClaw runtime's: asks GitHub now; a newer release opens the review.
+        var checkApp = new MenuItem { Header = "Check for app updates…" };
+        checkApp.Click += async (_, _) => await CheckAppUpdatesAsync();
+        _ = menu.Items.Add(checkApp);
+
         // Always available (unless a state-changing run is in flight): the same service as the Updates window's button.
         var restartApp = new MenuItem { Header = "Restart app" };
         restartApp.Click += (_, _) =>
@@ -314,6 +320,29 @@ public sealed class TrayIconService : IDisposable
         _ = menu.Items.Add(exit);
 
         return menu;
+    }
+
+    /// <summary>"Check for app updates…": a manual check. A newer release opens the review window; anything else is said in a toast, including why a check failed.</summary>
+    private async Task CheckAppUpdatesAsync()
+    {
+        try
+        {
+            var check = await _services.AppUpdate.CheckManuallyAsync().ConfigureAwait(true);
+            var update = _services.AppUpdate.ViewModel.UpdateNowCommand;
+            if (check.IsUpdateAvailable && update.CanExecute(null))
+            {
+                update.Execute(null);
+                return;
+            }
+
+            Notify("DefenseClaw for Windows", check.Message, check.State == AppUpdateState.Failed ? NotificationIcon.Warning : NotificationIcon.Info);
+        }
+#pragma warning disable CA1031 // A menu handler must not fault the dispatcher; the check itself reports failures as a result.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Notify("DefenseClaw for Windows", $"The update check failed: {ex.Message}", NotificationIcon.Warning);
+        }
     }
 
     private string PauseHeader() => _services.Monitor.IsPaused ? "Resume monitoring" : "Pause monitoring";

@@ -134,7 +134,10 @@ public sealed class UpdateChecker : IDisposable
     /// another host or another repository. Checked on the parsed address rather than the text, so dot segments,
     /// user-info tricks (<c>https://github.com@evil.example/…</c>) and a non-default port cannot pass a prefix test.
     /// </summary>
-    public static string? TrustedRepoUrl(string? url)
+    public static string? TrustedRepoUrl(string? url) => TrustedRepoUrl(url, RepoOwner, RepoName);
+
+    /// <summary>The same vetting for another repository on github.com (this app's own releases use it).</summary>
+    internal static string? TrustedRepoUrl(string? url, string owner, string repo)
     {
         if (string.IsNullOrWhiteSpace(url) || url.Length > 2048 ||
             !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
@@ -146,7 +149,7 @@ public sealed class UpdateChecker : IDisposable
             !uri.IsDefaultPort ||
             uri.UserInfo.Length > 0 ||
             !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase) ||
-            !uri.AbsolutePath.StartsWith($"/{RepoOwner}/{RepoName}/", StringComparison.Ordinal))
+            !uri.AbsolutePath.StartsWith($"/{owner}/{repo}/", StringComparison.Ordinal))
         {
             return null;
         }

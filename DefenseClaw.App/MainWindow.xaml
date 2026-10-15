@@ -161,6 +161,9 @@
             <!-- "DefenseClaw X is available" (UpdateWatcher): informational, so it leads the region and the warnings stay visible below it. -->
             <shell:UpdateBanner />
 
+            <!-- "DefenseClaw for Windows X is available" (SelfUpdateService): this app's own update; Update now opens the review. -->
+            <shell:SelfUpdateBanner DataContext="{Binding SelfUpdate}" />
+
             <ui:InfoBar Margin="0,12,0,0"
                         IsClosable="False"
                         Severity="Warning"
