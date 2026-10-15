@@ -110,16 +110,17 @@ jobs:
         run: |
           # The runner image may already carry Inno Setup. Use it only when it is exactly the pinned version; otherwise install the pin
           # (forcing over a newer or older copy), so an image update can neither break the build nor change the compiler silently.
-          $candidates = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
-          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $iscc -or -not (Get-Item $iscc).VersionInfo.ProductVersion.StartsWith($env:INNO_SETUP_VERSION)) {
+          # ISCC.exe carries no version resource (it reads 0.0.0.0), so the version is Chocolatey's record of the package it installed.
+          function Get-InnoVersion { ((choco list innosetup --exact --limit-output) -split '\|')[1] }
+          $found = Get-InnoVersion
+          if ($found -ne $env:INNO_SETUP_VERSION) {
             choco install innosetup --version $env:INNO_SETUP_VERSION --allow-downgrade --force --no-progress --yes --limit-output
             if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed ($LASTEXITCODE)." }
-            $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            $found = Get-InnoVersion
           }
+          if ($found -ne $env:INNO_SETUP_VERSION) { throw "Inno Setup $found is installed, expected $env:INNO_SETUP_VERSION." }
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $iscc) { throw 'ISCC.exe was not found after the install.' }
-          $found = (Get-Item $iscc).VersionInfo.ProductVersion
-          if (-not $found.StartsWith($env:INNO_SETUP_VERSION)) { throw "ISCC reports version $found, expected $env:INNO_SETUP_VERSION." }
           "ISCC=$iscc" >> $env:GITHUB_ENV
           Write-Host "Inno Setup $found at $iscc"
       # Assets, exact names (the updater and install.ps1 rely on them): Setup, a zip with exactly the two exes at its root,
