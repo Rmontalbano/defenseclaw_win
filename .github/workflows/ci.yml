@@ -50,7 +50,7 @@ jobs:
       # installer it downloads against the SHA-256 recorded in that (moderated, versioned) package, and fails the install on a
       # mismatch; the step below then checks the compiler that was installed reports this same version. To upgrade: change the
       # version here and read the package page's verification notes first.
-      INNO_SETUP_VERSION: '6.6.1'
+      INNO_SETUP_VERSION: '6.7.1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -108,9 +108,15 @@ jobs:
       - name: Install Inno Setup (pinned)
         shell: pwsh
         run: |
-          choco install innosetup --version $env:INNO_SETUP_VERSION --no-progress --yes --limit-output
-          if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed ($LASTEXITCODE)." }
-          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          # The runner image may already carry Inno Setup. Use it only when it is exactly the pinned version; otherwise install the pin
+          # (forcing over a newer or older copy), so an image update can neither break the build nor change the compiler silently.
+          $candidates = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc -or -not (Get-Item $iscc).VersionInfo.ProductVersion.StartsWith($env:INNO_SETUP_VERSION)) {
+            choco install innosetup --version $env:INNO_SETUP_VERSION --allow-downgrade --force --no-progress --yes --limit-output
+            if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed ($LASTEXITCODE)." }
+            $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
           if (-not $iscc) { throw 'ISCC.exe was not found after the install.' }
           $found = (Get-Item $iscc).VersionInfo.ProductVersion
           if (-not $found.StartsWith($env:INNO_SETUP_VERSION)) { throw "ISCC reports version $found, expected $env:INNO_SETUP_VERSION." }
