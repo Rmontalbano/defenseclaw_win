@@ -89,8 +89,9 @@ public class AuditLiveRefreshViewTests
             viewModel.SelectedRow = reading;
         });
 
-        // Six new events arrive above everything on the list.
-        for (var i = 0; i < 6; i++)
+        // Six new events arrive above everything on the list, oldest first: each is stamped relative to the moment it is added, so on a slow
+        // runner adding new-0 first could leave it older than new-5. Added in this order, new-0 is the newest by either measure.
+        for (var i = 5; i >= 0; i--)
         {
             scene.Add($"new-{i}", secondsAgo: 0.1 * (i + 1), action: "hook_decision");
         }
