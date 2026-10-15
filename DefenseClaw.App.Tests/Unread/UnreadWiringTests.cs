@@ -85,11 +85,17 @@ public sealed class UnreadViewModelTests : IDisposable
             _ = _services.Cli.RecordHandOff("defenseclaw", new[] { "keys", "set" }, "synthetic entry");
         }
 
-        // The capsule shows once the first runs are counted; wait for the full count, as the 99+ test does.
-        await WaitUntilAsync(() => vm.UnreadFor(Activity).Text == "7" && vm.UnreadFor(Ai).IsShown, "the capsules to reach their counts");
+        // The capsule shows once the first runs are counted; wait until it matches the runner's whole list. That list can hold an entry the
+        // services recorded on their own (on a CI runner, for one), so the expected count is the list's, and at least the seven added here.
+        int Listed() => _services.Cli.Activity.Count;
+        await WaitUntilAsync(
+            () => vm.UnreadFor(Activity).Text == Listed().ToString(CultureInfo.InvariantCulture) && vm.UnreadFor(Ai).IsShown,
+            $"the capsules to reach their counts (Activity capsule '{vm.UnreadFor(Activity).Text}', list {Listed()})");
 
-        Assert.Equal("7", vm.UnreadFor(Activity).Text);
-        Assert.Equal("7 new since last visit", vm.UnreadFor(Activity).Description);
+        var count = Listed();
+        Assert.True(count >= 7, $"the runner lists {count} entries");
+        Assert.Equal(count.ToString(CultureInfo.InvariantCulture), vm.UnreadFor(Activity).Text);
+        Assert.Equal($"{count} new since last visit", vm.UnreadFor(Activity).Description);
         Assert.Equal("1", vm.UnreadFor(Ai).Text);
         Assert.Equal("1 new since last visit", vm.UnreadFor(Ai).Description);
         Assert.False(vm.UnreadFor(Audit).IsShown);
