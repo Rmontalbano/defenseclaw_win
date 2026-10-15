@@ -149,7 +149,7 @@ public class RepositoryHardeningTests
                 Assert.Contains("github.event_name == 'push'", condition, StringComparison.Ordinal);
                 Assert.Contains("refs/tags/v", condition, StringComparison.Ordinal);
                 Assert.Contains("!github.event.repository.fork", condition, StringComparison.Ordinal);
-                Assert.Equal("build", Text(Child(job, "needs")));
+                Assert.Equal("package", Text(Child(job, "needs")));
             }
         }
 
@@ -193,9 +193,12 @@ public class RepositoryHardeningTests
     }
 
     [Fact]
-    public void The_release_publishes_the_exe_with_its_checksums_and_a_signed_provenance_attestation()
+    public void The_release_publishes_every_asset_with_its_checksums_and_a_signed_provenance_attestation()
     {
-        var release = Jobs(Load(RepositoryFile(".github", "workflows", "ci.yml"))).Single(j => j.Id == "release").Job;
+        var workflow = Load(RepositoryFile(".github", "workflows", "ci.yml"));
+        var jobs = Jobs(workflow);
+        var release = jobs.Single(j => j.Id == "release").Job;
+        var package = jobs.Single(j => j.Id == "package").Job;
         var steps = Steps(release);
 
         var permissions = Child(release, "permissions");
@@ -203,21 +206,74 @@ public class RepositoryHardeningTests
         Assert.Equal("write", Text(Child(permissions, "id-token")));
         Assert.Equal("write", Text(Child(permissions, "attestations")));
 
-        var checksums = steps.Single(s => Text(Child(s, "name")) == "Checksums");
-        Assert.Contains("checksums.txt", Text(Child(checksums, "run")), StringComparison.Ordinal);
+        // The package job builds with the read-only token and writes checksums.txt over every asset; the release job only attests
+        // and publishes what it downloaded, after checking it again.
+        var packageSteps = Steps(package);
+        var checksums = packageSteps.Single(s => Text(Child(s, "name")) == "Checksums");
+        Assert.Contains("dist/checksums.txt", Text(Child(checksums, "run")), StringComparison.Ordinal);
+        Assert.Contains(packageSteps, s => Uses(s, "actions/upload-artifact"));
+
+        var verify = steps.Single(s => Text(Child(s, "name")) == "Verify release assets");
+        Assert.Contains("Test-ReleaseAssets.ps1", Text(Child(verify, "run")), StringComparison.Ordinal);
 
         var attest = steps.Single(s => Uses(s, "actions/attest-build-provenance"));
-        var subjects = Text(Child(Child(attest, "with"), "subject-path")) ?? string.Empty;
-        Assert.Contains("publish/*.exe", subjects, StringComparison.Ordinal);
-        Assert.Contains("publish/checksums.txt", subjects, StringComparison.Ordinal);
+        Assert.Contains("dist/*", Text(Child(Child(attest, "with"), "subject-path")) ?? string.Empty, StringComparison.Ordinal);
 
         var publish = steps.Single(s => Uses(s, "softprops/action-gh-release"));
-        var files = Text(Child(Child(publish, "with"), "files")) ?? string.Empty;
-        Assert.Contains("publish/*.exe", files, StringComparison.Ordinal);
-        Assert.Contains("publish/checksums.txt", files, StringComparison.Ordinal);
+        Assert.Contains("dist/*", Text(Child(Child(publish, "with"), "files")) ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal("release-notes.md", Text(Child(Child(publish, "with"), "body_path")));
 
-        Assert.True(steps.IndexOf(checksums) < steps.IndexOf(attest), "The checksums file exists before it is attested.");
+        Assert.True(steps.IndexOf(verify) < steps.IndexOf(attest), "The artifact is re-checked before it is attested.");
         Assert.True(steps.IndexOf(attest) < steps.IndexOf(publish), "The attestation is made before the release is created.");
+    }
+
+    [Fact]
+    public void Both_exes_are_published_with_the_version_of_the_tag_by_a_job_that_cannot_write()
+    {
+        var workflow = Load(RepositoryFile(".github", "workflows", "ci.yml"));
+        var package = Jobs(workflow).Single(j => j.Id == "package").Job;
+        Assert.Null(Child(package, "permissions"));
+
+        var publishes = Steps(package).Select(s => Text(Child(s, "run")) ?? string.Empty)
+            .Where(r => r.Contains("dotnet publish", StringComparison.Ordinal)).ToList();
+        Assert.Equal(2, publishes.Count);
+        Assert.All(publishes, run =>
+        {
+            Assert.Contains("-p:Version=${{ steps.version.outputs.version }}", run, StringComparison.Ordinal);
+            Assert.Contains("-p:InformationalVersion=", run, StringComparison.Ordinal);
+        });
+
+        // Untagged builds are the -dev default, so they never look newer than a release.
+        Assert.Contains("0.0.0-dev", File.ReadAllText(RepositoryFile("Directory.Build.props")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_installer_is_per_user_with_a_fixed_id_and_never_touches_the_cisco_uninstall_key()
+    {
+        var script = File.ReadAllText(RepositoryFile("installer", "DefenseClawWin.iss"));
+
+        Assert.Contains("PrivilegesRequired=lowest", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivilegesRequired=admin", script, StringComparison.Ordinal);
+        Assert.Contains("AppId={{290C7D59-D43A-4CF8-BE38-60332DD563EC}", script, StringComparison.Ordinal);
+        Assert.Contains(@"DefaultDirName={localappdata}\Programs\DefenseClawWin", script, StringComparison.Ordinal);
+        Assert.Contains("ValueName: \"{#RunValueName}\"", script, StringComparison.Ordinal);
+        // The only Uninstall key the script may name is its own (by AppId, implicitly); Cisco's is ...\Uninstall\DefenseClaw.
+        Assert.DoesNotContain(@"Uninstall\DefenseClaw", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_changelog_keeps_an_unreleased_section_and_the_release_template_has_its_sections()
+    {
+        var changelog = File.ReadAllText(RepositoryFile("CHANGELOG.md"));
+        Assert.Contains("## [Unreleased]", changelog, StringComparison.Ordinal);
+
+        var template = File.ReadAllText(RepositoryFile(".github", "release-notes-template.md"));
+        foreach (var section in new[] { "## Highlights", "## Downloads", "## Verification", "## SHA-256" })
+        {
+            Assert.Contains(section, template, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("not Authenticode-signed", template, StringComparison.Ordinal);
     }
 
     [Fact]

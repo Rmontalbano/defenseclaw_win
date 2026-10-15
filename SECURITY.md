@@ -60,16 +60,24 @@ Security fixes go into the latest release and `main`. Older releases do not get 
 
 ## Verifying a release
 
-Each release publishes `DefenseClaw.App.exe` (a self-contained single file) and `checksums.txt`.
+Each release (tag `vX.Y.Z`) publishes these assets, all built by the release workflow from the tagged commit:
 
-- **Checksum.** `checksums.txt` has one `<sha256>  <file name>` line per file. Compare it with
-  `Get-FileHash .\DefenseClaw.App.exe -Algorithm SHA256`.
+- `DefenseClawWin-X.Y.Z-Setup-x64.exe`: the per-user installer (no administrator rights).
+- `DefenseClawWin-X.Y.Z-win-x64.zip`: the portable build and the in-app update download. It holds exactly
+  `DefenseClaw.App.exe` and `DefenseClaw.GatewayAdmin.exe` (the administrator helper), both self-contained single files.
+- `install.ps1`: the one-line installer script. It verifies the Setup it downloads before running it.
+- `checksums.txt`: one `<sha256>  <file name>` line per asset above (not for itself).
+
+How to check a download:
+
+- **Checksum.** Compare the file with its line in `checksums.txt`, for example
+  `Get-FileHash .\DefenseClawWin-X.Y.Z-Setup-x64.exe -Algorithm SHA256`. GitHub also shows a SHA-256 digest for each asset.
 - **Provenance.** The release workflow signs a build-provenance attestation (Sigstore, using the workflow's own identity) for
-  both files. `gh attestation verify .\DefenseClaw.App.exe --repo Rmontalbano/defenseclaw_win` confirms the file was built by
-  this repository's release workflow from a tagged commit. Older releases, built before the attestation step existed, have
-  the checksum only.
-- The exe is not Authenticode-signed, so Windows SmartScreen may warn the first time it runs. The two checks above are how to
-  tell a genuine release from a copy.
+  every asset, `checksums.txt` included. `gh attestation verify <file> --repo Rmontalbano/defenseclaw_win` confirms the file was
+  built by this repository's release workflow from a tagged commit.
+- **Not Authenticode-signed.** The installer and the exes carry no code-signing certificate, so Windows SmartScreen may warn about
+  an unknown publisher. The checks above are how to tell a genuine release from a copy. The app's own update check verifies the
+  zip's SHA-256 against `checksums.txt` and GitHub's digest before it replaces anything.
 
 ## How the repository protects itself
 

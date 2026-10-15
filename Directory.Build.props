@@ -23,4 +23,14 @@
     <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
 
+  <!--
+    Version. A release build gets its version from the tag: CI passes -p:Version=X.Y.Z (and -p:InformationalVersion=X.Y.Z+sha) to every
+    dotnet publish, and verifies that the published exes say exactly that before anything is released (tools/release/Test-ReleaseAssets.ps1).
+    Any build that is not told a version (a local build, a pull request, a push to main) is 0.0.0-dev: lower than every release, so a dev
+    build can never look newer than a release to the updater.
+  -->
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+  </PropertyGroup>
+
 </Project>
