@@ -262,6 +262,25 @@ public class RepositoryHardeningTests
     }
 
     [Fact]
+    public void The_installer_keeps_the_raw_app_version_out_of_the_numeric_version_resource_and_names_its_uninstall_event_the_way_inno_does()
+    {
+        var script = File.ReadAllText(RepositoryFile("installer", "DefenseClawWin.iss"));
+
+        // ISCC cannot be run on every machine, so what it rejected once is held here. Untagged builds are 0.0.0-dev, and the numeric
+        // VersionInfo fields take digits and dots only: the text version carries "-dev".
+        foreach (var directive in new[] { "VersionInfoVersion", "VersionInfoProductVersion" })
+        {
+            Assert.Matches(new Regex("^" + directive + @"=\{#NumericVersion\}\.0\s*$", RegexOptions.Multiline), script);
+        }
+
+        Assert.Matches(new Regex(@"^VersionInfoProductTextVersion=\{#AppVersion\}\s*$", RegexOptions.Multiline), script);
+
+        // Inno calls an uninstall event only by its own name; a procedure named anything else compiles and never runs.
+        Assert.Contains("procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("CurrentUninstallStep", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_changelog_keeps_an_unreleased_section_and_the_release_template_has_its_sections()
     {
         var changelog = File.ReadAllText(RepositoryFile("CHANGELOG.md"));

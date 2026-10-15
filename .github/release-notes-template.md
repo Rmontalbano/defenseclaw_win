@@ -18,8 +18,8 @@ Windows 10 1809 or later, x64. Both exes are self-contained: no separate .NET in
 These files are **not Authenticode-signed**, so Windows SmartScreen may warn about an unknown publisher. Trust comes from the checks below, which are the only proof a file is the one this repository's workflow built.
 
 - SHA-256: `Get-FileHash .\<file> -Algorithm SHA256` must equal the file's line in `checksums.txt` (GitHub also shows each asset's digest).
-- Provenance: every asset, `checksums.txt` included, has a GitHub build-provenance attestation. With the GitHub CLI: `gh attestation verify <file> --repo {{REPO}}`.
-- Install in one step, with the checks done for you: `irm https://github.com/{{REPO}}/releases/download/v{{VERSION}}/install.ps1 | iex`
+- Provenance: every asset, `checksums.txt` included, has a GitHub build-provenance attestation. With the GitHub CLI, signed in (`gh auth login`): `gh attestation verify <file> --repo {{REPO}}`.
+- Install this version in one step, with the checks done for you: `& ([scriptblock]::Create((irm https://github.com/{{REPO}}/releases/download/v{{VERSION}}/install.ps1))) -Version {{VERSION}}`
 
 ## SHA-256
 

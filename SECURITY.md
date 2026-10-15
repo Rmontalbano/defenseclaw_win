@@ -74,7 +74,8 @@ How to check a download:
   `Get-FileHash .\DefenseClawWin-X.Y.Z-Setup-x64.exe -Algorithm SHA256`. GitHub also shows a SHA-256 digest for each asset.
 - **Provenance.** The release workflow signs a build-provenance attestation (Sigstore, using the workflow's own identity) for
   every asset, `checksums.txt` included. `gh attestation verify <file> --repo Rmontalbano/defenseclaw_win` confirms the file was
-  built by this repository's release workflow from a tagged commit.
+  built by this repository's release workflow from a tagged commit. It needs the GitHub CLI signed in (`gh auth login`, or a
+  `GH_TOKEN`).
 - **Not Authenticode-signed.** The installer and the exes carry no code-signing certificate, so Windows SmartScreen may warn about
   an unknown publisher. The checks above are how to tell a genuine release from a copy. The app's own update check verifies the
   zip's SHA-256 against `checksums.txt` and GitHub's digest before it replaces anything.

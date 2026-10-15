@@ -10,7 +10,8 @@
 ;     DefenseClawWin = "<dir>\DefenseClaw.App.exe" --minimized
 ;   - an Add/Remove Programs entry under this script's own AppId. It NEVER touches the Add/Remove Programs entry of Cisco's DefenseClaw Setup,
 ;     %USERPROFILE%\.defenseclaw, DefenseClaw itself, or %ProgramFiles%\DefenseClaw Companion (the administrator helper's copy)
-;   - closes a running copy first; offers "Launch DefenseClaw for Windows" at the end
+;   - asks a running copy in the install folder to close first (and, if it stays in the tray, asks the person to exit it; an
+;     unattended /SILENT run cannot ask, so it stops instead of waiting); offers "Launch DefenseClaw for Windows" at the end
 ;   - the uninstaller removes the program files, the shortcut and the Run value, and ASKS (default: keep) before deleting the
 ;     app's own data folder %LOCALAPPDATA%\DefenseClaw.App
 ;
@@ -50,7 +51,10 @@ AppSupportURL={#RepoUrl}/issues
 AppUpdatesURL={#RepoUrl}/releases
 VersionInfoVersion={#NumericVersion}.0
 VersionInfoProductName={#AppName}
-VersionInfoProductVersion={#AppVersion}
+; VersionInfoProductVersion is numeric-only like VersionInfoVersion (it feeds the Win32 version resource), so an untagged "0.0.0-dev"
+; build would abort the compile. The full text, "-dev" included, goes in VersionInfoProductTextVersion.
+VersionInfoProductVersion={#NumericVersion}.0
+VersionInfoProductTextVersion={#AppVersion}
 VersionInfoDescription={#AppName} Setup
 VersionInfoCompany=DefenseClaw for Windows (community)
 
@@ -84,7 +88,7 @@ SolidCompression=yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-WelcomeLabel2=This installs [name/ver] for your Windows account only. It does not need administrator rights and does not change DefenseClaw itself.%n%nThis installer and the app are NOT Authenticode-signed, so Windows SmartScreen may warn about an unknown publisher. Check the download against checksums.txt (SHA-256) or the GitHub build attestation on the release page before you run it.%n%nClose DefenseClaw for Windows first if it is running; Setup will offer to close it.
+WelcomeLabel2=This installs [name/ver] for your Windows account only. It does not need administrator rights and does not change DefenseClaw itself.%n%nThis installer and the app are NOT Authenticode-signed, so Windows SmartScreen may warn about an unknown publisher. Check the download against checksums.txt (SHA-256) or the GitHub build attestation on the release page before you run it.%n%nExit DefenseClaw for Windows first if it is running (right-click its tray icon and choose Exit). Setup asks a copy in the install folder to close and, if it stays, asks you to exit it from the tray; a copy running from another folder (for example an unzipped portable copy) is not touched, so exit that one yourself.
 
 [Tasks]
 ; On by default (no "unchecked" flag). Unchecking it on an upgrade removes the sign-in value that was there.
@@ -147,8 +151,10 @@ begin
 end;
 
 // Asks the running app to close (WM_CLOSE, not a kill), waits a few seconds, and if it is still there asks the person to exit it
-// from the tray icon. Returns True when nothing of ours is running any more.
-function CloseRunningApp(const Dir: String; const Why: String): Boolean;
+// from the tray icon. Returns True when nothing of ours is running any more. The app hides to the tray on WM_CLOSE, so it usually
+// stays: when Silent (an unattended run), nobody can answer the box, and MsgBox is not suppressed by /SUPPRESSMSGBOXES, so it
+// returns False instead of hanging.
+function CloseRunningApp(const Dir: String; const Why: String; const Silent: Boolean): Boolean;
 var
   Pids: array of Integer;
   I, Waited, ResultCode: Integer;
@@ -171,6 +177,11 @@ begin
     end;
     if GetArrayLength(RunningAppPids(Dir)) = 0 then
       Exit;
+    if Silent then
+    begin
+      Result := False;
+      Exit;
+    end;
     if MsgBox('{#AppName} is still running.' + #13#10 + #13#10 +
               'Exit it (right-click its tray icon and choose Exit), then click Retry to ' + Why + ', or Cancel to stop.',
               mbConfirmation, MB_RETRYCANCEL) <> IDRETRY then
@@ -184,25 +195,26 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if not CloseRunningApp(WizardDirValue, 'continue installing') then
+  if not CloseRunningApp(WizardDirValue, 'continue installing', WizardSilent) then
     Result := '{#AppName} is running from the install folder. Exit it and run Setup again.';
 end;
 
 function InitializeUninstall(): Boolean;
 begin
-  Result := CloseRunningApp(ExpandConstant('{app}'), 'continue uninstalling');
+  Result := CloseRunningApp(ExpandConstant('{app}'), 'continue uninstalling', UninstallSilent);
 end;
 
-procedure CurrentUninstallStep(CurrentStep: TUninstallStep);
+// Must carry exactly this name and parameter list: Inno calls an uninstall event by name, and ignores any other procedure.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir: String;
 begin
-  if CurrentStep = usUninstall then
+  if CurUninstallStep = usUninstall then
   begin
     // Belt and braces next to uninsdeletevalue: the value is removed even if Setup was run with the autostart task unchecked.
     RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Run', '{#RunValueName}');
   end
-  else if CurrentStep = usPostUninstall then
+  else if CurUninstallStep = usPostUninstall then
   begin
     DataDir := ExpandConstant('{localappdata}\DefenseClaw.App');
     // A silent uninstall keeps the data. Interactively the default button is No (keep).
@@ -211,8 +223,8 @@ begin
       if MsgBox('Also delete the app''s own data folder?' + #13#10 + #13#10 + DataDir + #13#10 + #13#10 +
                 'It holds this app''s settings, caches and logs. It does NOT hold DefenseClaw itself: your ~\.defenseclaw folder and the ' +
                 'DefenseClaw installation are never touched by this uninstaller.' + #13#10 + #13#10 +
-                'If you turned on "Run gateway as administrator", its copy in Program Files\DefenseClaw Companion is also left in place; ' +
-                'turn that mode off in the app before uninstalling to remove it, or delete that folder by hand.',
+                'If you turned on "Run gateway as administrator", its copy in Program Files\DefenseClaw Companion is also left in place. ' +
+                'To remove it, turn that mode off in the app, then delete that folder from an elevated prompt.',
                 mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
         DelTree(DataDir, True, True, True);
     end;

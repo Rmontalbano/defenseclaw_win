@@ -7,7 +7,7 @@ This page covers updating the companion app itself. The DefenseClaw runtime (CLI
 The app asks GitHub for the latest release:
 
 - at launch, and then every six hours (the time of the last check is kept, so restarts do not re-check);
-- on demand, from "Check for Updates…" in the tray menu or in Settings.
+- on demand, from "Check for app updates…" in the tray menu or "Check for Updates…" in Settings.
 
 The request is `GET https://api.github.com/repos/Rmontalbano/defenseclaw_win/releases/latest`. It uses ETag conditional requests, so an unchanged release costs no API quota.
 
@@ -39,7 +39,7 @@ For an installer install, the Add/Remove Programs version is updated to match.
 
 ## Manual update
 
-- **Installer:** run the new `DefenseClawWin-X.Y.Z-Setup-x64.exe`. It closes the running app first, then installs over the old version. Check the download first ([README, "Verify a download"](../README.md#verify-a-download)).
+- **Installer:** run the new `DefenseClawWin-X.Y.Z-Setup-x64.exe`. It asks a copy of the app running from the install folder to close first (the app hides to the tray, so you may be asked to exit it from the tray icon), then installs over the old version. A copy running from another folder, such as an unzipped portable copy, is not touched: exit it yourself. Check the download first ([README, "Verify a download"](../README.md#verify-a-download)).
 - **Portable zip:** close the app, unzip the new release over the folder, and keep both executables together. Check the download first.
 
 ## Rollback
@@ -60,4 +60,4 @@ Select-String -Path .\checksums.txt -Pattern 'DefenseClawWin-X.Y.Z-win-x64.zip'
 gh attestation verify .\DefenseClawWin-X.Y.Z-win-x64.zip --repo Rmontalbano/defenseclaw_win
 ```
 
-The two hashes must match. The attestation check needs the GitHub CLI and shows that the file was built by this repository's release workflow.
+The two hashes must match. The attestation check needs the GitHub CLI, signed in (`gh auth login` or a `GH_TOKEN`), and shows that the file was built by this repository's release workflow.

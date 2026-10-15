@@ -33,7 +33,7 @@ Each release at [Releases](https://github.com/Rmontalbano/defenseclaw_win/releas
 
 1. Download the Setup installer from the latest release, and check it (see [Verify a download](#verify-a-download)).
 2. Run it. It installs to `%LOCALAPPDATA%\Programs\DefenseClawWin\` without asking for administrator rights.
-3. Leave "Start with Windows" ticked if you want the tray app at sign-in (see below).
+3. Leave "Start DefenseClaw for Windows when I sign in" ticked if you want the tray app at sign-in (see below).
 4. Start **DefenseClaw for Windows** from the Start menu, or tick "Launch" at the end of the installer.
 
 Or, in PowerShell, run the one-liner. It downloads the latest Setup installer, checks it, and runs it for the current user:
@@ -42,7 +42,13 @@ Or, in PowerShell, run the one-liner. It downloads the latest Setup installer, c
 irm https://github.com/Rmontalbano/defenseclaw_win/releases/latest/download/install.ps1 | iex
 ```
 
-To pin a version, download `install.ps1` and run it with `-Version X.Y.Z`. The script never elevates. It checks the installer's SHA-256 against `checksums.txt`, and checks the GitHub attestation when `gh` is installed.
+To pin a version, run the script as a script block, which works under any PowerShell execution policy (a piped script cannot take parameters, and a downloaded `.ps1` file is blocked by the default policy on a stock Windows client). `-Yes` runs Setup silently; DefenseClaw for Windows must not be running then, so exit it from its tray icon first:
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/Rmontalbano/defenseclaw_win/releases/latest/download/install.ps1))) -Version X.Y.Z
+```
+
+The script never elevates. It checks the installer's SHA-256 against `checksums.txt`, and checks the GitHub attestation when `gh` is installed and signed in (`gh auth login`); without a signed-in `gh` it says the attestation was skipped and relies on the SHA-256 checks.
 
 For the portable zip, unzip it into a folder you can write to and run `DefenseClaw.App.exe` from there. Keep `DefenseClaw.GatewayAdmin.exe` in the same folder if you want administrator mode.
 
@@ -56,13 +62,13 @@ Some runtime monitoring (agent actions, DefenseClaw 1.0) reads the Windows Secur
 
 ### Updates
 
-The app checks GitHub for a newer release at launch and every six hours, and on "Check for Updates…" in the tray menu or in Settings. It downloads the portable zip and `checksums.txt`, verifies them, swaps the files and relaunches. The rules, the rollback copy and how to update by hand are in [docs/UPDATING.md](docs/UPDATING.md). A failed or unavailable check does not mean you are up to date.
+The app checks GitHub for a newer release at launch and every six hours, and on demand: "Check for app updates…" in the tray menu, or "Check for Updates…" in Settings. It downloads the portable zip and `checksums.txt`, verifies them, swaps the files and relaunches. The rules, the rollback copy and how to update by hand are in [docs/UPDATING.md](docs/UPDATING.md). A failed or unavailable check does not mean you are up to date.
 
 DefenseClaw's own runtime is upgraded separately, from the Updates window (see "DefenseClaw 1.0" below).
 
 ### Uninstall
 
-Use Settings > Apps > DefenseClaw for Windows, or the uninstaller in the install folder. It removes the program files, the Start menu entry and the "Start with Windows" entry. It asks before it deletes your app data in `%LOCALAPPDATA%\DefenseClaw.App`; the default is to keep it. It never touches `%USERPROFILE%\.defenseclaw` or DefenseClaw itself.
+Use Settings > Apps > DefenseClaw for Windows, or the uninstaller in the install folder. It removes the program files, the Start menu entry and the start-at-sign-in entry. It asks before it deletes your app data in `%LOCALAPPDATA%\DefenseClaw.App`; the default is to keep it. It never touches `%USERPROFILE%\.defenseclaw` or DefenseClaw itself.
 
 If administrator mode was ever used, turn it off first, then remove `%ProgramFiles%\DefenseClaw Companion` from an elevated prompt. The uninstaller does not remove that folder. For the portable zip, delete the folder.
 
@@ -79,7 +85,7 @@ The release is **not Authenticode-signed**. Windows SmartScreen may show "Window
 
    The two hashes must match. The hash is also in the release notes.
 
-2. Check the GitHub build-provenance attestation, which ties the file to a build from this repository's workflow (needs the [GitHub CLI](https://cli.github.com/)):
+2. Check the GitHub build-provenance attestation, which ties the file to a build from this repository's workflow (needs the [GitHub CLI](https://cli.github.com/), signed in with `gh auth login` or a `GH_TOKEN`):
 
    ```powershell
    gh attestation verify .\DefenseClawWin-X.Y.Z-Setup-x64.exe --repo Rmontalbano/defenseclaw_win
