@@ -278,7 +278,7 @@ public sealed class InstallStateTests : IDisposable
         _ = Log(
             "install-20261012T164027.log",
             Transcript(
-                "20261012164027", "-Version 1.0.1", "  > Installed: 1.0.0", "  OK Configuration is current (config_version 9).",
+                "20261013164027", "-Version 1.0.1", "  > Installed: 1.0.0", "  OK Configuration is current (config_version 9).",
                 "  + Installed DefenseClaw 1.0.1", "  Upgraded from 1.0.0. Undo with: defenseclaw rollback"));
 
         var state = InstallStateSnapshot.Read(_temp.Path, [], Now);

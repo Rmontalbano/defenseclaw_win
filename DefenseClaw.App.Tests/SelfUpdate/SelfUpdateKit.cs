@@ -23,6 +23,9 @@ internal static class SelfUpdateKit
             foreach (var (name, data) in entries)
             {
                 var entry = archive.CreateEntry(name);
+                // A fixed timestamp keeps the bytes (and so the SHA-256) the same however often a test builds the zip;
+                // with the default "now" two builds a second apart hash differently.
+                entry.LastWriteTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
                 using var output = entry.Open();
                 output.Write(data);
             }
