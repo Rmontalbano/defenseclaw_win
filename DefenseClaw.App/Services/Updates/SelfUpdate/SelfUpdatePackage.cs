@@ -151,17 +151,35 @@ internal static class SelfUpdatePackage
 
     /// <summary>
     /// Unpacks the two validated entries into <paramref name="destination"/> (which must exist), counting what is really written: an entry that
-    /// inflates past its cap is stopped, whatever its header said. Null on success, otherwise why not.
+    /// inflates past its cap is stopped, whatever its header said. Only the two known names are written, and only directly inside
+    /// <paramref name="destination"/>: the target is built from our own constant, never from the entry's name, so no entry can land
+    /// elsewhere even if <see cref="ValidateEntries"/> was skipped. Null on success, otherwise why not.
     /// </summary>
     public static string? Extract(string zipPath, string destination, SelfUpdateLimits limits)
     {
         try
         {
+            var root = Path.GetFullPath(destination);
             using var archive = ZipFile.OpenRead(zipPath);
             foreach (var entry in archive.Entries)
             {
-                var cap = entry.FullName == AppExeName ? limits.AppExeBytes : limits.HelperExeBytes;
-                var target = Path.Combine(destination, entry.FullName);
+                var (fileName, cap) = entry.FullName switch
+                {
+                    AppExeName => (AppExeName, limits.AppExeBytes),
+                    HelperExeName => (HelperExeName, limits.HelperExeBytes),
+                    _ => (null, 0L),
+                };
+                if (fileName is null)
+                {
+                    return $"The zip has an unexpected entry '{Shown(entry.FullName)}'; it must hold exactly {AppExeName} and {HelperExeName}.";
+                }
+
+                var target = Path.GetFullPath(Path.Combine(root, fileName));
+                if (!string.Equals(Path.GetDirectoryName(target), Path.TrimEndingDirectorySeparator(root), StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"{fileName} would unpack outside the update folder.";
+                }
+
                 using var source = entry.Open();
                 using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 var buffer = new byte[81920];

@@ -213,6 +213,25 @@ public sealed class SelfUpdateInstallerTests : IDisposable
         Assert.Contains("MiB limit", result.Refusal ?? string.Empty, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(@"..\" + SelfUpdatePackage.AppExeName)]
+    [InlineData("../" + SelfUpdatePackage.AppExeName)]
+    [InlineData(@"sub\..\..\evil.exe")]
+    [InlineData(@"C:\evil.exe")]
+    [InlineData("evil.exe")]
+    public void Unpacking_on_its_own_never_writes_an_entry_outside_the_folder_or_under_another_name(string hostile)
+    {
+        var zipPath = Path.Combine(_temp.Path, "hostile.zip");
+        File.WriteAllBytes(zipPath, SelfUpdateKit.Zip((hostile, SelfUpdateKit.Bytes("evil")), (SelfUpdatePackage.HelperExeName, SelfUpdateKit.Bytes("helper"))));
+        var destination = Directory.CreateDirectory(Path.Combine(_temp.Path, "unpack", "inner")).FullName;
+
+        var problem = SelfUpdatePackage.Extract(zipPath, destination, SelfUpdateLimits.Default);
+
+        Assert.Contains("unexpected entry", problem ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(Directory.GetFiles(Path.Combine(_temp.Path, "unpack"), "*", SearchOption.AllDirectories));
+        Assert.False(File.Exists(Path.Combine(_temp.Path, "evil.exe")));
+    }
+
     [Fact]
     public async Task A_busy_state_changing_run_blocks_the_update()
     {
