@@ -36,6 +36,14 @@ public enum RuntimeCapability
     /// gateway's <c>GET /api/v1/ai-usage/runtime</c>. 0.8.10 has neither the command group nor the route.
     /// </summary>
     AiRuntime,
+
+    /// <summary>
+    /// The gateway's read-only correlation ledger (<c>GET /api/v1/correlation/{graph,explain,timeline,conflicts}</c>) and agent directory
+    /// (<c>GET /api/v1/agents/identities</c>), which the Agents panel reads. Judged from the runtime's version (1.0.0 or later, the source the panel's
+    /// shapes were written from); the panel itself still treats a 404 or 405 from the gateway as "not supported", so a version label alone never
+    /// makes it look populated.
+    /// </summary>
+    CorrelationApi,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -63,6 +71,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.CanonicalSchema8 => "Canonical observability config editing",
         RuntimeCapability.TuiRegistry => "Extended command registry",
         RuntimeCapability.AiRuntime => "AI Discovery runtime planes",
+        RuntimeCapability.CorrelationApi => "Agent view (correlation ledger)",
         _ => capability.ToString(),
     };
 
@@ -83,6 +92,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.CanonicalSchema8 => "'config --help' lists 'get' and the runtime reports version 1.0.0 or later",
         RuntimeCapability.TuiRegistry => "'setup --help' lists 'amp', 'devin' and 'kiro'",
         RuntimeCapability.AiRuntime => "'agent discovery --help' lists 'runtime' and 'agent discovery runtime --help' lists 'status', 'scan', 'findings' and 'permissions'",
+        RuntimeCapability.CorrelationApi => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/correlation/* and /api/v1/agents/identities)",
         _ => string.Empty,
     };
 }

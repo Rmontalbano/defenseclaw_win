@@ -1,0 +1,20 @@
+{
+  "events": [
+    {"semantic_event_id": "01950000-0000-7000-8000-0000000000f1", "logical_event_id": "01950000-0000-7000-8000-0000000001f1", "connector": "codex", "connector_instance_id": "01950000-0000-7000-8000-00000000c001", "source_rail": "hook", "event_name": "subagent_start", "received_time": "2026-10-01T10:00:03.600000000Z", "completeness": "complete"},
+    {"semantic_event_id": "01950000-0000-7000-8000-0000000000f2", "logical_event_id": "01950000-0000-7000-8000-0000000001f2", "connector": "codex", "connector_instance_id": "01950000-0000-7000-8000-00000000c001", "source_rail": "hook", "event_name": "tool_start", "received_time": "2026-10-01T10:00:03.700000000Z", "completeness": "complete"}
+  ],
+  "observations": [
+    {"record_id": "rec-f1", "semantic_event_id": "01950000-0000-7000-8000-0000000000f1", "signal": "logs", "bucket": "agent.lifecycle", "event_name": "subagent_start", "observed_at": "2026-10-01T10:00:03.650000000Z", "session_id": "session-0002", "agent_id": "agent-child-0001-bbbbbbbbbbbbbbb", "status": "export_eligible"},
+    {"record_id": "rec-f2", "semantic_event_id": "01950000-0000-7000-8000-0000000000f2", "signal": "logs", "bucket": "tool.activity", "event_name": "tool.invocation.started", "observed_at": "2026-10-01T10:00:03.750000000Z", "session_id": "session-0002", "turn_id": "turn-c1", "agent_id": "agent-child-0001-bbbbbbbbbbbbbbb", "tool_invocation_id": "tool-c1", "status": "export_eligible"}
+  ],
+  "relationships": [
+    {"relationship_id": "rel-root-c1", "from_kind": "agent", "from_id": "agent-root-0001-aaaaaaaaaaaaaaaa", "to_kind": "agent", "to_id": "agent-child-0001-bbbbbbbbbbbbbbb", "type": "parent_of", "method": "reported", "confidence": 100, "rule_id": "reported-agent-lineage", "rule_version": "1", "evidence_count": 1, "status": "active", "created_at": "2026-10-01T10:00:03.500000000Z", "last_seen_at": "2026-10-01T10:00:03.500000000Z"},
+    {"relationship_id": "rel-c1-g1", "from_kind": "agent", "from_id": "agent-child-0001-bbbbbbbbbbbbbbb", "to_kind": "agent", "to_id": "agent-grand-0001-ddddddddddddddd", "type": "parent_of", "method": "trace_exact", "confidence": 100, "rule_id": "trace-exact-agent-lineage", "rule_version": "1", "evidence_count": 2, "status": "active", "created_at": "2026-10-01T10:00:03.800000000Z", "last_seen_at": "2026-10-01T10:00:03.800000000Z"}
+  ],
+  "evidence": [],
+  "as_of": "2026-10-01T10:05:00.000000000Z",
+  "ingest_watermark": "2026-10-01T10:00:11.000000000Z",
+  "next_after_time": "0001-01-01T00:00:00Z",
+  "next_after_id": "",
+  "truncated": false
+}

@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "persisted": true,
+  "identities": [
+    {"agent_id": "agt-0000000000000001", "user_id": "u-1", "user_name": "example-user", "connector": "codex", "install_fp": "fp1", "machine_hash": "m1", "first_seen": "2026-09-20T08:00:00.000000000Z", "last_seen": "2026-10-01T10:00:10.000000000Z", "last_session_id": "session-0001", "sessions_seen": 14, "install_hint": "ignored"},
+    {"agent_id": "agt-0000000000000002", "user_id": "u-1", "user_name": "example-user", "connector": "claudecode", "machine_hash": "m1", "first_seen": "2026-09-22T08:00:00.000000000Z", "last_seen": "2026-09-30T17:30:00.000000000Z", "last_session_id": "session-0900", "sessions_seen": 3},
+    {"agent_id": "agt-0000000000000003", "user_id": "u-2", "user_name": "former-user", "connector": "codex", "machine_hash": "m1", "first_seen": "2026-08-01T08:00:00.000000000Z", "last_seen": "2026-08-15T09:00:00.000000000Z", "sessions_seen": 1, "retired": true}
+  ],
+  "total": 3,
+  "next_cursor": ""
+}

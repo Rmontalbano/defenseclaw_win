@@ -6,17 +6,20 @@ namespace DefenseClaw.App.Tests.Shell;
 
 public sealed class ShellShortcutsTests : IDisposable
 {
-    /// <summary>The sidebar, top to bottom. "ai-runtime" (CUST-309) sits after AI Discovery but needs a newer runtime, so it is not among the chord order's first fourteen.</summary>
+    /// <summary>
+    /// The sidebar, top to bottom. "ai-runtime" (CUST-309) and "agents" (CUST-355) sit after AI Discovery but need a newer runtime, so they are not among the
+    /// chord order's first thirteen; the fifteen number chords are used up by the time "agents" is reached, so it has none.
+    /// </summary>
     private static readonly string[] SidebarIds =
     {
         "overview", "alerts", "logs", "audit", "activity",
         "skills", "mcps", "plugins", "tools",
-        "inventory", "ai-discovery", "ai-runtime", "registries",
+        "inventory", "ai-discovery", "ai-runtime", "agents", "registries",
         "setup", "policies",
     };
 
     /// <summary>The panels every runtime has, in sidebar order: the ones that keep their chord whatever the connected runtime can do.</summary>
-    private static readonly string[] BaseIds = SidebarIds.Where(id => id != "ai-runtime").ToArray();
+    private static readonly string[] BaseIds = SidebarIds.Where(id => id is not ("ai-runtime" or "agents")).ToArray();
 
     private static readonly string[] ChordTexts =
     {
@@ -162,17 +165,20 @@ public sealed class ShellShortcutsTests : IDisposable
     // ------------------------------------------------------------------ the chords against the real sidebar
 
     [Fact]
-    public void All_fifteen_panels_are_in_the_sidebar_and_the_chords_count_the_fourteen_every_runtime_has_first()
+    public void All_sixteen_panels_are_in_the_sidebar_and_the_chords_count_the_fourteen_every_runtime_has_first()
     {
         var catalog = new PanelCatalog(_services);
 
         Assert.Equal(SidebarIds, catalog.SidebarOrder.Select(p => p.Id).ToArray());
-        Assert.Equal(ShellShortcuts.NumberedPanels, catalog.SidebarOrder.Count);
 
-        // The chord order: the panels that need nothing in sidebar order (so every chord of 0.8.10 is where it was), then the one that needs a
-        // newer runtime. Putting Runtime in the middle of the sidebar moved no existing chord.
-        Assert.Equal(BaseIds.Append("ai-runtime").ToArray(), catalog.ChordOrder.Select(p => p.Id).ToArray());
-        Assert.Equal(new[] { "ai-runtime" }, catalog.Panels.Where(p => p.Requires is not null).Select(p => p.Id).ToArray());
+        // The Agents panel (CUST-355) is the sixteenth in the sidebar, one past the fifteen number chords: it is reached from the sidebar and the palette.
+        Assert.Equal(ShellShortcuts.NumberedPanels + 1, catalog.SidebarOrder.Count);
+
+        // The chord order: the panels that need nothing in sidebar order (so every chord of 0.8.10 is where it was), then the ones that need a
+        // newer runtime. Putting Runtime and Agents in the middle of the sidebar moved no existing chord.
+        Assert.Equal(BaseIds.Append("ai-runtime").Append("agents").ToArray(), catalog.ChordOrder.Select(p => p.Id).ToArray());
+        Assert.Equal(new[] { "ai-runtime", "agents" }, catalog.Panels.Where(p => p.Requires is not null).Select(p => p.Id).ToArray());
+        Assert.Null(catalog.ChordTextOf(catalog.ById("agents")!));
     }
 
     [Fact]
@@ -207,12 +213,12 @@ public sealed class ShellShortcutsTests : IDisposable
 
         Assert.Equal(new[] { "Monitor", "Govern", "Discover", "Configure" }, PanelCatalog.Groups.ToArray());
         Assert.Equal(
-            new[] { "Monitor", "Monitor", "Monitor", "Monitor", "Monitor", "Govern", "Govern", "Govern", "Govern", "Discover", "Discover", "Discover", "Discover", "Configure", "Configure" },
+            new[] { "Monitor", "Monitor", "Monitor", "Monitor", "Monitor", "Govern", "Govern", "Govern", "Govern", "Discover", "Discover", "Discover", "Discover", "Discover", "Configure", "Configure" },
             catalog.SidebarOrder.Select(p => p.Group).ToArray());
-        Assert.Equal(16, catalog.Panels.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(17, catalog.Panels.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("overview", catalog.Default.Id);
 
-        // Settings is the sixteenth: pinned below the groups, in no group, and outside the numbered order (Ctrl+, reaches it).
+        // Settings is the seventeenth: pinned below the groups, in no group, and outside the numbered order (Ctrl+, reaches it).
         Assert.Equal(new[] { "settings" }, catalog.FooterPanels.Select(p => p.Id).ToArray());
         Assert.DoesNotContain(catalog.SidebarOrder, p => p.Id == "settings");
         Assert.Equal(PanelCatalog.FooterGroup, catalog.ById("settings")!.Group);
@@ -251,24 +257,24 @@ public sealed class ShellShortcutsTests : IDisposable
 
         var commands = ShellCommandRegistry.BuildPanelCommands(catalog, panel => navigated.Add(panel.Id));
 
-        // Every panel in sidebar order, then Settings with its own chord. Runtime (needs a newer runtime) is listed, disabled and without a chord;
+        // Every panel in sidebar order, then Settings with its own chord. Runtime and Agents (need a newer runtime) are listed, disabled and without a chord;
         // every other panel keeps the chord it always had.
-        Assert.Equal(16, commands.Count);
+        Assert.Equal(17, commands.Count);
         Assert.Equal(
             catalog.SidebarOrder.Select(p => "nav." + p.Id).Append("nav.settings").ToArray(),
             commands.Select(c => c.Id).ToArray());
         Assert.Equal(
-            ChordTexts.Take(11).Append(null).Concat(ChordTexts.Skip(11).Take(3)).Append(ShellShortcuts.SettingsText).ToArray(),
+            ChordTexts.Take(11).Append(null).Append(null).Concat(ChordTexts.Skip(11).Take(3)).Append(ShellShortcuts.SettingsText).ToArray(),
             commands.Select(c => c.Shortcut).ToArray());
         Assert.All(commands, c =>
         {
             Assert.StartsWith("Go to ", c.Title, StringComparison.Ordinal);
             Assert.Equal(ShellCommandRegistry.PanelCategory, c.Category);
-            Assert.Equal(c.Id != "nav.ai-runtime", c.IsEnabled);
+            Assert.Equal(c.Id is not ("nav.ai-runtime" or "nav.agents"), c.IsEnabled);
         });
 
-        commands[12].Run();
-        commands[15].Run();
+        commands[13].Run();
+        commands[16].Run();
         Assert.Equal(new[] { "registries", "settings" }, navigated);
     }
 

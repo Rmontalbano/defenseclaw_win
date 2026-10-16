@@ -1,0 +1,366 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.AgentsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:AgentsPanelViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <!--
+        The Agents panel (CUST-355): an in-app agent view over the gateway's correlation ledger, with no Docker stack behind it. On the shared Dc*
+        design system, no local colours. Read-only: there is no button here that changes anything.
+
+        Left: the lookup box and the directory, grouped by connector. Right, for the agent picked: the counts (a figure the ledger does not carry says
+        "Not reported" and is never estimated), the tree of its subagents with the method and status of every edge on show, and the timeline in time
+        order grouped by turn, paged from the gateway.
+    -->
+    <UserControl.Resources>
+        <!-- One timeline line: a turn header, or an entry with its time, kind badge, title and detail. -->
+        <DataTemplate x:Key="TimelineRowTemplate" DataType="{x:Type vm:TimelineRowVm}">
+            <Grid AutomationProperties.Name="{Binding AutomationName}">
+                <TextBlock Style="{StaticResource DcCaption}"
+                           FontWeight="SemiBold"
+                           Margin="0,8,0,2"
+                           Text="{Binding HeaderText}"
+                           Visibility="{Binding IsHeader, Converter={StaticResource BoolToVisibility}}" />
+                <Grid Visibility="{Binding IsEntry, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="108" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Style="{StaticResource DcMono}" Text="{Binding TimeText}" />
+                    <Border Grid.Column="1"
+                            Style="{StaticResource DcBadge}"
+                            Tag="{Binding KindTone}"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding KindLabel}" />
+                    </Border>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource DcBody}" Text="{Binding Title}" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Detail}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource DcPage}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="PeopleTeam24"
+                           ctl:DcIcon.Section="Discover"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding CaptionText}"
+                           HasSearch="True"
+                           SearchText="{Binding FilterText}"
+                           SearchPlaceholder="Filter agents…"
+                           SearchAutomationName="Filter agents"
+                           SearchHelpText="Shows only agents whose connector, user, id or last session contain these words. Shortcut Ctrl+F; Esc clears it.">
+            <ctl:DcPageToolbar.Leading>
+                <ui:ProgressRing Width="18"
+                                 Height="18"
+                                 Margin="10,0,0,0"
+                                 IsIndeterminate="True"
+                                 AutomationProperties.Name="Reading from the gateway"
+                                 Visibility="{Binding ShowSpinner, Converter={StaticResource BoolToVisibility}}" />
+            </ctl:DcPageToolbar.Leading>
+            <ctl:DcPageToolbar.Actions>
+                <StackPanel Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                               Command="{Binding RefreshCommand}"
+                               ToolTip="Refresh (F5)"
+                               AutomationProperties.Name="Refresh"
+                               AutomationProperties.AcceleratorKey="F5"
+                               AutomationProperties.HelpText="Read the agent directory and the open agent from the gateway again (F5). Nothing is changed." />
+                </StackPanel>
+            </ctl:DcPageToolbar.Actions>
+        </ctl:DcPageToolbar>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340" />
+                <ColumnDefinition Width="{StaticResource DcColumnGap}" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: lookup, then the directory (or the card that says why there is none). -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <ui:InfoBar Grid.Row="0"
+                            Margin="{StaticResource DcCardGap}"
+                            Title="Stale"
+                            Severity="Warning"
+                            IsClosable="False"
+                            IsOpen="{Binding IsStale}"
+                            Message="{Binding StaleBanner}"
+                            AutomationProperties.LiveSetting="Polite" />
+
+                <Border Grid.Row="1" Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="Search24" Section="Discover" Content="Open an agent by id" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="For an agent the directory does not list, such as a subagent id seen in a log." />
+                        <ui:TextBox Margin="0,8,0,0"
+                                    PlaceholderText="agent id"
+                                    Text="{Binding LookupText, UpdateSourceTrigger=PropertyChanged}"
+                                    AutomationProperties.Name="Agent id to open"
+                                    AutomationProperties.HelpText="Type an agent id from a log or the ledger, then press Open. Only reads; nothing is changed.">
+                            <ui:TextBox.InputBindings>
+                                <KeyBinding Key="Return" Command="{Binding OpenLookupCommand}" />
+                            </ui:TextBox.InputBindings>
+                        </ui:TextBox>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding LookupProblem}"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <ui:Button Margin="0,8,0,0"
+                                   Content="Open"
+                                   Icon="{ctl:DcSymbolIcon ArrowRight24}"
+                                   Command="{Binding OpenLookupCommand}"
+                                   AutomationProperties.Name="Open agent by id" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2" Style="{StaticResource DcCardFlush}">
+                    <Grid>
+                        <ListBox x:Name="AgentList"
+                                 ItemsSource="{Binding AgentsView}"
+                                 SelectedItem="{Binding SelectedAgent, Mode=TwoWay}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 HorizontalContentAlignment="Stretch"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                 VirtualizingPanel.VirtualizationMode="Recycling"
+                                 AutomationProperties.Name="Agents, grouped by connector"
+                                 Visibility="{Binding ShowDirectory, Converter={StaticResource BoolToVisibility}}">
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Style="{StaticResource DcSectionHeader}"
+                                                       Margin="12,10,12,4"
+                                                       Text="{Binding Name}" />
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                    <Setter Property="Padding" Value="12,6,12,6" />
+                                    <Setter Property="MinHeight" Value="0" />
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource DcMono}" Text="{Binding ShortId}" ToolTip="{Binding AgentId}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding LastSeenText}" />
+                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding MetaText}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock Style="{StaticResource DcEmptyDetail}"
+                                   Margin="16"
+                                   Text="No agent matches the filter."
+                                   Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}" />
+
+                        <StackPanel Style="{StaticResource DcEmptyState}"
+                                    Visibility="{Binding ShowStateCard, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="PeopleTeam24" />
+                            <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding StateTitle}" AutomationProperties.LiveSetting="Polite" />
+                            <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding StateDetail}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Right: the agent picked. -->
+            <ScrollViewer Grid.Column="2" Style="{StaticResource DcPageScroll}">
+                <StackPanel>
+                    <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource DcSectionHeader}" Text="{Binding SelectedTitle}" Margin="0,0,0,2" />
+                            <TextBlock Style="{StaticResource DcTextSecondary}" Text="{Binding SelectedSubtitle}" TextWrapping="Wrap" />
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       Margin="0,8,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding OpenMessage}"
+                                       Visibility="{Binding HasOpenMessage, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.LiveSetting="Polite" />
+                            <TextBlock Style="{StaticResource DcTextSecondary}"
+                                       Margin="0,8,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="Pick an agent on the left to see its subagents, what it did in order, and what the gateway blocked."
+                                       Visibility="{Binding ShowPickHint, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Counts. A figure the ledger does not carry is "Not reported" and says why: nothing here is estimated. -->
+                    <Border Style="{StaticResource DcCard}"
+                            Margin="{StaticResource DcCardGap}"
+                            Visibility="{Binding ShowTimeline, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Symbol="ShieldCheckmark24" Section="Govern" Content="Blocks and usage" />
+                            <TextBlock Style="{StaticResource DcCaption}" Text="{Binding KpiCaption}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <ItemsControl ItemsSource="{Binding Kpis}" Focusable="False" AutomationProperties.Name="Counts for the selected agent">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:KpiTile}">
+                                        <Border Style="{StaticResource DcToneTile}"
+                                                Tag="{Binding Tone}"
+                                                Width="210"
+                                                Margin="0,0,8,8"
+                                                ToolTip="{Binding Note}"
+                                                AutomationProperties.Name="{Binding AutomationName}">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource DcTileLabel}" Margin="0,0,0,2" Text="{Binding Label}" />
+                                                <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Value}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Text="Hover a tile for what it counts. A tile that says Not reported is a figure the correlation ledger does not hold; nothing is estimated in its place." />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- The tree. Every edge wears its method and status badges, whatever they are. -->
+                    <Border Style="{StaticResource DcCard}"
+                            Margin="{StaticResource DcCardGap}"
+                            Visibility="{Binding ShowTree, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Symbol="Flow24" Section="Discover" Content="Agent and subagents" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,6"
+                                       Text="Each subagent shows how it was linked to its parent (reported, trace exact, derived or inferred) and where that link stands (active, unresolved, conflicted, superseded or rejected). Pick one to see its own timeline." />
+                            <TreeView x:Name="AgentTree"
+                                      ItemsSource="{Binding TreeRoots}"
+                                      BorderThickness="0"
+                                      Background="Transparent"
+                                      MaxHeight="300"
+                                      AutomationProperties.Name="Agent tree"
+                                      SelectedItemChanged="OnTreeSelectionChanged">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="{x:Type TreeViewItem}" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                        <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
+                                <TreeView.ItemTemplate>
+                                    <HierarchicalDataTemplate DataType="{x:Type vm:AgentTreeNodeVm}" ItemsSource="{Binding Children}">
+                                        <StackPanel Orientation="Horizontal" ToolTip="{Binding EdgeSentence}">
+                                            <TextBlock Style="{StaticResource DcMono}" VerticalAlignment="Center" Text="{Binding ShortId}" />
+                                            <Border Style="{StaticResource DcBadge}"
+                                                    Tag="{Binding MethodTone}"
+                                                    Margin="10,0,0,0"
+                                                    Visibility="{Binding HasEdge, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding MethodLabel}" />
+                                            </Border>
+                                            <Border Style="{StaticResource DcBadge}"
+                                                    Tag="{Binding StatusTone}"
+                                                    Margin="6,0,0,0"
+                                                    Visibility="{Binding HasEdge, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusLabel}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </HierarchicalDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
+                            <CheckBox Margin="0,8,0,0"
+                                      Content="Include subagents in the timeline and counts"
+                                      IsChecked="{Binding IncludeSubagents}"
+                                      AutomationProperties.Name="Include subagents in the timeline and counts" />
+                        </StackPanel>
+                    </Border>
+
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                Title="Conflicts"
+                                Severity="Informational"
+                                IsClosable="False"
+                                IsOpen="{Binding HasConflicts}"
+                                Message="{Binding ConflictsText}" />
+
+                    <ItemsControl ItemsSource="{Binding Notes}" Focusable="False" Margin="{StaticResource DcCardGap}" AutomationProperties.Name="Notes about what could not be read">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,4" TextWrapping="Wrap" Text="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- The timeline: time order, grouped by turn, paged from the gateway. -->
+                    <Border Style="{StaticResource DcCard}"
+                            Margin="{StaticResource DcCardGap}"
+                            Visibility="{Binding ShowTimeline, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <ctl:DcCardHeader Symbol="History24" Section="Observe" Content="Timeline" />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding TimelineCaption}"
+                                       AutomationProperties.LiveSetting="Polite" />
+                            <CheckBox Margin="0,6,0,6"
+                                      Content="Show metric points"
+                                      IsChecked="{Binding ShowMetrics}"
+                                      AutomationProperties.Name="Show metric points in the timeline" />
+                            <ListBox x:Name="TimelineList"
+                                     ItemsSource="{Binding Timeline}"
+                                     ItemTemplate="{StaticResource TimelineRowTemplate}"
+                                     Height="420"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.VirtualizationMode="Recycling"
+                                     AutomationProperties.Name="Timeline entries, in time order">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                        <Setter Property="Padding" Value="4,3,4,3" />
+                                        <Setter Property="MinHeight" Value="0" />
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+                            <ui:Button Margin="0,8,0,0"
+                                       HorizontalAlignment="Left"
+                                       Content="Load more"
+                                       Icon="{ctl:DcSymbolIcon ArrowDown24}"
+                                       Command="{Binding LoadMoreCommand}"
+                                       AutomationProperties.Name="Load more events"
+                                       AutomationProperties.HelpText="Reads the next page of events from the gateway and adds them to the timeline. Only reads." />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

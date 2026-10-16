@@ -479,7 +479,7 @@ public sealed class RuntimeSelectorTests : IDisposable
 
         Assert.NotEmpty(commands);
         var needsMore = catalog.Panels.Where(p => p.Requires is not null).Select(p => "nav." + p.Id).ToArray();
-        Assert.Equal(new[] { "nav.ai-runtime" }, needsMore);
+        Assert.Equal(new[] { "nav.ai-runtime", "nav.agents" }, needsMore);
         Assert.All(commands.Where(c => !needsMore.Contains(c.Id)), command => Assert.True(command.IsEnabled, command.Title));
 
         // The one panel that needs a newer runtime (Runtime, CUST-309) is listed but disabled, with the standard sentence and no chord.

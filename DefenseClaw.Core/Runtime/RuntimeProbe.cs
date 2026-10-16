@@ -291,6 +291,14 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.CanonicalSchema8);
         }
 
+        // The correlation ledger and agent directory are gateway routes with no CLI surface to probe, so the version decides, as for the schema 8 config,
+        // provided the runtime could also list its own commands (a runtime that cannot has not shown it is one). No process is run for it; the Agents
+        // panel's own first read still turns a 404 into "not supported".
+        if (identity.ParsedVersion is { } gateway && gateway >= Schema8Version && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.CorrelationApi);
+        }
+
         if (HasAll(setup, RegistryMarkers))
         {
             present.Add(RuntimeCapability.TuiRegistry);

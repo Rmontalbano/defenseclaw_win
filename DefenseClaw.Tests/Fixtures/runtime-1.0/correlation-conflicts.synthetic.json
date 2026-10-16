@@ -1,0 +1,12 @@
+{
+  "relationships": [
+    {"relationship_id": "rel-root-c3", "from_kind": "agent", "from_id": "agent-root-0001-aaaaaaaaaaaaaaaa", "to_kind": "agent", "to_id": "agent-child-0003-eeeeeeeeeeeeeee", "type": "parent_of", "method": "derived", "confidence": 70, "rule_id": "derived-from-tool-result", "rule_version": "1", "evidence_count": 3, "status": "conflicted", "created_at": "2026-10-01T10:00:05.500000000Z", "last_seen_at": "2026-10-01T10:00:06.500000000Z"}
+  ],
+  "receipts": [
+    {"connector_instance_id": "01950000-0000-7000-8000-00000000c001", "source_key_digest": "k1", "fingerprint_sha256": "f9", "semantic_event_id": "01950000-0000-7000-8000-0000000000e6", "conflicts_with_semantic_event_id": "01950000-0000-7000-8000-0000000000e5", "first_received_at": "2026-10-01T10:00:05.000000000Z", "last_received_at": "2026-10-01T10:00:05.500000000Z", "delivery_count": 2},
+    {"connector_instance_id": "01950000-0000-7000-8000-00000000c001", "semantic_event_id": "01950000-0000-7000-8000-0000000000e7", "conflicts_with_semantic_event_id": "01950000-0000-7000-8000-0000000000e5", "delivery_count": 1}
+  ],
+  "as_of": "2026-10-01T10:05:00.000000000Z",
+  "ingest_watermark": "2026-10-01T10:00:11.000000000Z",
+  "truncated": false
+}

@@ -1,0 +1,20 @@
+{
+  "events": [
+    {"semantic_event_id": "01950000-0000-7000-8000-0000000000e9", "logical_event_id": "01950000-0000-7000-8000-0000000001e9", "connector": "codex", "connector_instance_id": "01950000-0000-7000-8000-00000000c001", "source_rail": "proxy", "event_name": "model_end", "received_time": "2026-10-01T10:00:08.000000000Z", "completeness": "partial"},
+    {"semantic_event_id": "01950000-0000-7000-8000-0000000000ea", "logical_event_id": "01950000-0000-7000-8000-0000000001ea", "connector": "codex", "connector_instance_id": "01950000-0000-7000-8000-00000000c001", "source_rail": "internal", "event_name": "enforcement.block.applied", "received_time": "2026-10-01T10:00:09.000000000Z", "completeness": "complete"},
+    {"semantic_event_id": "01950000-0000-7000-8000-0000000000eb", "logical_event_id": "01950000-0000-7000-8000-0000000001eb", "connector": "codex", "connector_instance_id": "01950000-0000-7000-8000-00000000c001", "source_rail": "hook", "event_name": "turn_end", "received_time": "2026-10-01T10:00:10.000000000Z", "completeness": "complete"}
+  ],
+  "observations": [
+    {"record_id": "rec-e9", "semantic_event_id": "01950000-0000-7000-8000-0000000000e9", "signal": "logs", "bucket": "model.io", "event_name": "model.response", "observed_at": "2026-10-01T10:00:08.100000000Z", "session_id": "session-0001", "turn_id": "turn-0001", "agent_id": "agent-root-0001-aaaaaaaaaaaaaaaa", "model_request_id": "mreq-1", "model_response_id": "mresp-1", "status": "export_eligible"},
+    {"record_id": "rec-e9-metric", "semantic_event_id": "01950000-0000-7000-8000-0000000000e9", "signal": "metrics", "bucket": "model.io", "event_name": "gen_ai.client.token.usage", "observed_at": "2026-10-01T10:00:08.200000000Z", "session_id": "session-0001", "turn_id": "turn-0001", "agent_id": "agent-root-0001-aaaaaaaaaaaaaaaa", "status": "export_eligible"},
+    {"record_id": "rec-ea", "semantic_event_id": "01950000-0000-7000-8000-0000000000ea", "signal": "logs", "bucket": "enforcement.action", "event_name": "enforcement.block.applied", "observed_at": "2026-10-01T10:00:09.100000000Z", "session_id": "session-0001", "turn_id": "turn-0002", "agent_id": "agent-root-0001-aaaaaaaaaaaaaaaa", "status": "export_eligible"},
+    {"record_id": "rec-eb", "semantic_event_id": "01950000-0000-7000-8000-0000000000eb", "signal": "logs", "bucket": "agent.lifecycle", "event_name": "turn_end", "observed_at": "2026-10-01T10:00:10.100000000Z", "session_id": "session-0001", "turn_id": "turn-0001", "agent_id": "agent-root-0001-aaaaaaaaaaaaaaaa", "status": "export_eligible"}
+  ],
+  "relationships": null,
+  "evidence": null,
+  "as_of": "2026-10-01T10:05:01.000000000Z",
+  "ingest_watermark": "2026-10-01T10:00:11.000000000Z",
+  "next_after_time": "0001-01-01T00:00:00Z",
+  "next_after_id": "",
+  "truncated": false
+}

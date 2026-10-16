@@ -140,6 +140,8 @@ public sealed class PanelCatalog : INavigationViewPageProvider
                 typeof(AiDiscoveryPanel), s => new AiDiscoveryPanelViewModel(s)),
             new("ai-runtime", "Runtime", "Discover", SymbolRegular.Pulse24,
                 typeof(AiRuntimePanel), s => new AiRuntimePanelViewModel(s), RuntimeCapability.AiRuntime),
+            new("agents", "Agents", "Discover", SymbolRegular.PeopleTeam24,
+                typeof(AgentsPanel), s => new AgentsPanelViewModel(s), RuntimeCapability.CorrelationApi),
             new("registries", "Registries", "Discover", SymbolRegular.Library24,
                 typeof(RegistriesPanel), s => new RegistriesPanelViewModel(s)),
 

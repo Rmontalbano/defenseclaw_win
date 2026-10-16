@@ -40,6 +40,7 @@ public static class DcSections
         ("inventory", typeof(InventoryPanel), Discover, SymbolRegular.BookDatabase24),
         ("ai-discovery", typeof(AiDiscoveryPanel), Discover, SymbolRegular.Bot24),
         ("ai-runtime", typeof(AiRuntimePanel), Discover, SymbolRegular.Pulse24),
+        ("agents", typeof(AgentsPanel), Discover, SymbolRegular.PeopleTeam24),
         ("registries", typeof(RegistriesPanel), Discover, SymbolRegular.Library24),
         ("setup", typeof(SetupPanel), Setup, SymbolRegular.ShieldSettings24),
         ("policies", typeof(PoliciesPanel), Setup, SymbolRegular.Gavel24),

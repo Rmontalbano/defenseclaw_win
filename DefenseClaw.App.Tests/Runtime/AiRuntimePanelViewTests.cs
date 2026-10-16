@@ -490,7 +490,7 @@ public sealed class AiRuntimePanelViewTests : IDisposable
                 var items = catalog.Panels.ToDictionary(p => p.Id, p => new DcNavigationItem { Content = p.Title }, StringComparer.Ordinal);
                 MainWindow.ApplyPanelGates(catalog, items);
 
-                var others = items.Where(kv => kv.Key != "ai-runtime").Select(kv => kv.Value.Visibility).Distinct().ToArray();
+                var others = items.Where(kv => kv.Key is not ("ai-runtime" or "agents")).Select(kv => kv.Value.Visibility).Distinct().ToArray();
                 return (items["ai-runtime"].Visibility, Assert.Single(others));
             });
         }
