@@ -32,6 +32,10 @@ internal sealed class SelfUpdateStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
+    private const int MoveAttempts = 5;
+
+    private static readonly TimeSpan MoveRetryDelay = TimeSpan.FromMilliseconds(25);
+
     private readonly string _path;
     private readonly object _gate = new();
     private SelfUpdateState? _cached;
@@ -89,7 +93,21 @@ internal sealed class SelfUpdateStore
 
             var temp = _path + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(state, JsonOptions));
-            File.Move(temp, _path, overwrite: true);
+
+            // A scanner or indexer that briefly holds the new or the old file makes the replace fail with a sharing violation; without a retry
+            // "Skip this version" was lost now and then. A few short tries ride that out; a file that stays locked still falls through below.
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    File.Move(temp, _path, overwrite: true);
+                    break;
+                }
+                catch (Exception ex) when (attempt < MoveAttempts && ex is IOException or UnauthorizedAccessException)
+                {
+                    Thread.Sleep(MoveRetryDelay * attempt);
+                }
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

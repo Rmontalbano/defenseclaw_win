@@ -108,6 +108,27 @@ public sealed class AppUpdateWatcherTests : IDisposable
     }
 
     [Fact]
+    public async Task A_skip_is_saved_even_when_another_program_briefly_holds_the_file()
+    {
+        var path = _temp.File("s.json");
+        var watcher = Watch(new SelfUpdateStore(path), () => Available("1.2.0"));
+        _ = await watcher.CheckNowAsync(manual: false);
+
+        // A scanner that has the file open without delete sharing makes the replace fail until it lets go.
+        var holder = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite);
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(40);
+            holder.Dispose();
+        });
+
+        watcher.Skip();
+        await release;
+
+        Assert.Equal("1.2.0", new SelfUpdateStore(path).Current.SkippedVersion);
+    }
+
+    [Fact]
     public async Task A_development_build_never_shows_a_banner()
     {
         var watcher = Watch(
