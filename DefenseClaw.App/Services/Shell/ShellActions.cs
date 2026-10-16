@@ -142,6 +142,29 @@ internal sealed class ShellActions
         }
     }
 
+    /// <summary>The shared look at the local Grafana that the "Open Agent360" row applies (the Overview card's and the connector rows' button follow the same one).</summary>
+    internal Observability.Agent360Availability Agent360 => _services.Agent360;
+
+    /// <summary>Makes sure the answer the "Open Agent360" row applies is not stale (nothing happens while it is fresh). Called when the palette opens.</summary>
+    public Task CheckAgent360() => Agent360.EnsureFreshAsync();
+
+    /// <summary>
+    /// Opens the Agent360 dashboard in the default browser, narrowed to <paramref name="connector"/> when one is named. Does nothing unless the local
+    /// Grafana answered; says so in a toast when no browser opened.
+    /// </summary>
+    public void OpenAgent360(string? connector)
+    {
+        if (Agent360.UrlFor(connector, agent: null) is not { } url)
+        {
+            return;
+        }
+
+        if (!Observability.Agent360Launcher.TryOpen(url, UrlOpener))
+        {
+            ShowToast("Agent360", "No browser opened. The dashboard is at " + url);
+        }
+    }
+
     // ---- The Mac's Monitor / Commands menus (CUST-224) ----
 
     private int _diagnosing;

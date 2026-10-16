@@ -66,6 +66,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
     /// <summary>The shared Terraform look the palette's Splunk dashboards rows follow; set by <see cref="Wire"/> the same way.</summary>
     private TerraformAvailability _terraform = null!;
+
+    /// <summary>The shared look at the local Grafana the palette's "Open Agent360" row follows; set by <see cref="Wire"/> the same way.</summary>
+    private Services.Observability.Agent360Availability _agent360 = null!;
     private readonly CommandPaletteViewModel _paletteViewModel = new();
 
     /// <summary>The look controls, or null when the app was built without them (only a test host is).</summary>
@@ -216,6 +219,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _localStack = services.LocalStack;
         services.Terraform.Changed += OnProbeAnswerChanged;
         _terraform = services.Terraform;
+        services.Agent360.Changed += OnProbeAnswerChanged;
+        _agent360 = services.Agent360;
 
         // What Settings asks of the tray (its "Reset seen-alert history" button): the same call the command palette's entry makes.
         _catalog.Hooks.ResetSeenAlertHistory = _tray.ResetSeenAlertHistoryAsync;
@@ -249,6 +254,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             services.Runtime.Changed -= OnRuntimeChanged;
             services.LocalStack.Changed -= OnProbeAnswerChanged;
             services.Terraform.Changed -= OnProbeAnswerChanged;
+            services.Agent360.Changed -= OnProbeAnswerChanged;
             _catalog.PanelFaulted -= OnPanelFaulted;
             if (_appearance is not null)
             {
@@ -419,6 +425,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _runtime.Changed -= OnRuntimeChanged;
         _localStack.Changed -= OnProbeAnswerChanged;
         _terraform.Changed -= OnProbeAnswerChanged;
+        _agent360.Changed -= OnProbeAnswerChanged;
         _viewModel.Dispose();
         base.OnClosing(e);
     }
@@ -883,6 +890,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         // swaps the rows.
         _ = _actions.CheckLocalStack();
         _ = _actions.CheckTerraform();
+        _ = _actions.CheckAgent360();
     }
 
     private IReadOnlyList<ShellCommand> BuildPaletteCommands() =>

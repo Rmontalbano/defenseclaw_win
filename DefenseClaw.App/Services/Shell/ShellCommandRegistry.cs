@@ -341,6 +341,22 @@ internal static class ShellCommandRegistry
             DisabledReason: null,
             Run: actions.OpenDocs));
 
+        // Agent360 (CUST-354): listed always, enabled while the one shared look says the local Grafana answers; otherwise greyed out with the
+        // sentence that points to the Local OTel wizard. Narrowed to the connector the dashboard is scoped to.
+        var agent360 = actions.Agent360.Decision;
+        commands.Add(new ShellCommand(
+            Id: "app.open-agent360",
+            Title: "Open Agent360",
+            Category: MonitorCategory,
+            Description: connectorScope?.Current is { } scopedConnector
+                ? $"Opens the Agent360 Grafana dashboard for {scopedConnector} in your default browser."
+                : "Opens the Agent360 Grafana dashboard of the local observability stack in your default browser.",
+            Shortcut: null,
+            Keywords: "agent360 agent 360 grafana dashboard local observability otel stack drill-down",
+            IsEnabled: agent360.IsAvailable,
+            DisabledReason: agent360.Reason,
+            Run: () => actions.OpenAgent360(connectorScope?.Current)));
+
         if (appearance is not null)
         {
             commands.AddRange(BuildAppearanceCommands(appearance));

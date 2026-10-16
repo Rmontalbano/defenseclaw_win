@@ -287,6 +287,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         // The compiled observability plan has its own age limit (and is read again when config.yaml changes), so this is a comparison unless it is due.
         await RefreshObservabilityPlanAsync(forceStatus, cancellationToken).ConfigureAwait(true);
+
+        // Whether Agent360 can be offered (CUST-354): one cheap look at the local Grafana when the answer is due, not waited for.
+        _ = RefreshAgent360Async(forceStatus, cancellationToken);
     }
 
     /// <summary>
@@ -322,6 +325,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         // A config.yaml change while the panel was away: the plan on screen was compiled from the old one (a comparison unless it is stale).
         _ = RefreshObservabilityPlanAsync(force: false, ActiveToken);
+        _ = RefreshAgent360Async(force: false, ActiveToken);
 
         // One file read per activation: a doctor run from a terminal (or the TUI) while the panel
         // was away rewrote the cache, and this is the only time it is picked up without a Refresh.

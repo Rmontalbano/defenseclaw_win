@@ -531,6 +531,9 @@ public sealed partial class OverviewPanelViewModel
         _observabilityPlan = read.Plan;
         BuildObservability(_snapshot.Health);
         BuildConfiguration();
+
+        // The Agent360 link says when this plan narrows the local route (CUST-354).
+        ApplyAgent360();
     }
 
     /// <summary>How long ago a plan was read, as the note says it: <c>just now</c> for the first few seconds (the poll's clock would say <c>0s ago</c>), then <c>3m ago</c>.</summary>

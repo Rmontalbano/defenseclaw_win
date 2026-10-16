@@ -14,6 +14,7 @@ using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Runtime;
 using DefenseClaw.Core.Security;
 using DefenseClaw.GatewayAdmin.Contract;
+using DefenseClaw.App.Services.Observability;
 using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.Services.Updates;
 using DefenseClaw.App.Services.Updates.SelfUpdate;
@@ -222,6 +223,10 @@ public sealed class AppServices : IDisposable
         // Likewise whether the Splunk dashboards can be offered: one read-only `terraform version -json`, shared by the Setup card and the
         // palette's rows, run only when one of them asks.
         Terraform = new TerraformAvailability(terraformProbe ?? TerraformProbe.CreateDefault(Paths));
+
+        // Likewise whether Agent360 (the per-agent Grafana dashboard of the local stack, CUST-354) can be offered: one GET of the local Grafana's
+        // health endpoint, made only when a surface asks. An isolated composition replaces it with one that opens no socket.
+        Agent360 = new Agent360Availability(GrafanaEndpoint.ForCli(Cli), new HttpGrafanaProbe());
     }
 
     /// <summary>The single instance, created by <see cref="Initialize"/> at startup.</summary>
@@ -429,6 +434,12 @@ public sealed class AppServices : IDisposable
     /// when a surface needs it. See <see cref="LocalStackAvailability"/>.
     /// </summary>
     internal LocalStackAvailability LocalStack { get; }
+
+    /// <summary>
+    /// Whether the local Grafana answers, so "Open Agent360" can be offered (the Overview card, its connector rows and the palette). A test swaps
+    /// it for one over a fake probe; <see cref="CreateIsolated"/> gives one that never reaches the network.
+    /// </summary>
+    internal Agent360Availability Agent360 { get; set; }
 
     /// <summary>
     /// Whether the Splunk dashboards (<c>setup splunk dashboards plan | apply | destroy</c>) can be offered: the Setup hub's card and the
@@ -651,6 +662,8 @@ public sealed class AppServices : IDisposable
         // Likewise nothing looks at the real process list: an isolated composition sees no Codex running unless a test says it is.
         var isolated = new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory, gatewayAdminFactory, adminLayout, adminFileSystem, appUpdateFactory);
         isolated.AgentProcesses = agentProcesses ?? AgentProcessProbe.None;
+        isolated.Agent360.Dispose();
+        isolated.Agent360 = new Agent360Availability(null, new FixedGrafanaProbe(false));
         return isolated;
     }
 
@@ -808,6 +821,7 @@ public sealed class AppServices : IDisposable
         Runtime.Dispose();
         LocalStack.Dispose();
         Terraform.Dispose();
+        Agent360.Dispose();
 
         ConfigWatcher.Changed -= OnConfigChanged;
         _reloadRetry?.Dispose();

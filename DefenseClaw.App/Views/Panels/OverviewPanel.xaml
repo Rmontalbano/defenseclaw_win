@@ -970,6 +970,24 @@
                                                        Text="{Binding Counters}" />
                                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Surface}" />
                                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding LastActivity}" />
+
+                                            <!-- Agent360 for this connector (CUST-354): the button only while the local Grafana answers, else why not. -->
+                                            <ui:Button Content="Open Agent360"
+                                                       Appearance="Transparent" BorderThickness="0"
+                                                       Foreground="{DynamicResource DcAccentBrush}"
+                                                       HorizontalAlignment="Left"
+                                                       Margin="-6,2,0,0"
+                                                       Padding="6,2,6,2"
+                                                       Command="{Binding DataContext.OpenConnectorAgent360Command, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                       CommandParameter="{Binding}"
+                                                       Visibility="{Binding DataContext.CanOpenAgent360, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVisibility}}"
+                                                       AutomationProperties.Name="{Binding Name, StringFormat='Open Agent360 for {0}'}"
+                                                       AutomationProperties.HelpText="Opens the Agent360 Grafana dashboard for this connector in your browser." />
+                                            <TextBlock Style="{StaticResource DcCaption}"
+                                                       Margin="0,2,0,0"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding DataContext.HasAgent360Hint, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVisibility}}"
+                                                       Text="{Binding DataContext.Agent360Hint, RelativeSource={RelativeSource AncestorType=ListBox}}" />
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
@@ -1033,6 +1051,34 @@
                                     Title="Event history is failing"
                                     IsOpen="{Binding HasEventHistoryFailure}"
                                     Message="{Binding EventHistoryFailure}" />
+
+                        <!--
+                            Agent360 (CUST-354): the per-agent Grafana dashboard of the local observability stack. The button is drawn only while the
+                            local Grafana answers; otherwise a hint says so and points to the Local OTel wizard. The note says when the plan narrows the route.
+                        -->
+                        <StackPanel Margin="6,0,0,10">
+                            <ui:Button Content="Open Agent360"
+                                       Appearance="Transparent" BorderThickness="0"
+                                       Foreground="{DynamicResource DcAccentBrush}"
+                                       HorizontalAlignment="Left"
+                                       Margin="-6,0,0,0"
+                                       Padding="6,3,6,3"
+                                       Command="{Binding OpenAgent360Command}"
+                                       Visibility="{Binding CanOpenAgent360, Converter={StaticResource BoolToVisibility}}"
+                                       AutomationProperties.Name="Open Agent360"
+                                       AutomationProperties.HelpText="Opens the Agent360 Grafana dashboard of the local observability stack in your browser." />
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Visibility="{Binding HasAgent360Hint, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding Agent360Hint}" />
+                            <TextBlock Style="{StaticResource DcToneText}"
+                                       Tag="Warn"
+                                       FontSize="12"
+                                       FontWeight="Normal"
+                                       TextWrapping="Wrap"
+                                       Visibility="{Binding HasAgent360Note, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding Agent360Note}" />
+                        </StackPanel>
 
                         <!-- Local SQLite: the store the gateway always writes. Retention and the files are config.yaml's; the controller is the gateway's word. -->
                         <StackPanel Margin="6,0,0,10"
