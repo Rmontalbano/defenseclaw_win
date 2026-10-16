@@ -6,7 +6,7 @@ using DefenseClaw.App.ViewModels;
 namespace DefenseClaw.App.Services.Updates.SelfUpdate;
 
 /// <summary>Where the reviewed install is.</summary>
-internal enum SelfUpdatePhase
+public enum SelfUpdatePhase
 {
     Idle,
 
@@ -30,12 +30,12 @@ internal enum SelfUpdatePhase
 /// What the banner, the review window and the Settings card show for updating this app, and the commands behind them. All of it follows
 /// <see cref="AppUpdateWatcher"/> (whose events arrive on the UI thread); nothing here installs without <see cref="InstallCommand"/>.
 /// </summary>
-internal sealed partial class SelfUpdateViewModel : ObservableObject, IDisposable
+public sealed partial class SelfUpdateViewModel : ObservableObject, IDisposable
 {
     private readonly SelfUpdateService _service;
     private CancellationTokenSource? _cts;
 
-    public SelfUpdateViewModel(SelfUpdateService service)
+    internal SelfUpdateViewModel(SelfUpdateService service)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         service.Watcher.Changed += OnWatcherChanged;
