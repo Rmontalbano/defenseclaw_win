@@ -32,6 +32,8 @@ internal sealed class GatewayLifecycle
     private readonly Func<Task> _refresh;
     private readonly Action _markUserStopped;
     private readonly IGatewayAdministrator? _administrator;
+    private readonly Func<bool>? _codexRunning;
+    private readonly Action<string, string>? _recordActivity;
     private int _running;
 
     /// <param name="administrator">
@@ -43,13 +45,17 @@ internal sealed class GatewayLifecycle
     /// <param name="run">Runs <c>defenseclaw-gateway</c> with an argv: <c>CliRunner.RunGatewayAsync</c>, or a fake. Never a real start in a test.</param>
     /// <param name="refresh">One monitor poll, so the headline follows the run.</param>
     /// <param name="markUserStopped">Remembers that the operator stopped the gateway, which vetoes the automatic start for the session.</param>
+    /// <param name="codexRunning">Whether Codex is running now (null: never asked). While it is, every review carries the "Codex is running" warning (CUST-352).</param>
+    /// <param name="recordActivity">Writes a line to Activity (title, text) for a start that did not hold; null where there is no Activity.</param>
     public GatewayLifecycle(
         Func<GatewaySnapshot> snapshot,
         InstallationGuard installation,
         Func<IReadOnlyList<string>, Task<CliInvocation>> run,
         Func<Task> refresh,
         Action markUserStopped,
-        IGatewayAdministrator? administrator = null)
+        IGatewayAdministrator? administrator = null,
+        Func<bool>? codexRunning = null,
+        Action<string, string>? recordActivity = null)
     {
         _snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
         _installation = installation ?? throw new ArgumentNullException(nameof(installation));
@@ -57,6 +63,8 @@ internal sealed class GatewayLifecycle
         _refresh = refresh ?? throw new ArgumentNullException(nameof(refresh));
         _markUserStopped = markUserStopped ?? throw new ArgumentNullException(nameof(markUserStopped));
         _administrator = administrator;
+        _codexRunning = codexRunning;
+        _recordActivity = recordActivity;
     }
 
     /// <summary>The service for the running app: the app's monitor, installation guard and runner.</summary>
@@ -70,7 +78,19 @@ internal sealed class GatewayLifecycle
             argv => services.Cli.RunGatewayAsync(argv),
             async () => _ = await services.Monitor.RefreshAsync().ConfigureAwait(true),
             () => services.GatewayAutoStart.MarkUserStopped(),
-            services.GatewayAdmin);
+            services.GatewayAdmin,
+            () => services.AgentProcesses.CodexRunning(),
+            (title, message) => RecordInActivity(services, title, message))
+        {
+            PostStartCheck = DefaultPostStartCheck,
+        };
+    }
+
+    /// <summary>One Activity line for a start that did not hold: a finished entry with the reason as its failure, so the Activity panel shows it as failed.</summary>
+    private static void RecordInActivity(AppServices services, string title, string message)
+    {
+        var entry = services.Cli.BeginExternalRun("DefenseClaw for Windows", new[] { "check", "gateway-stayed-up" }, title + ": " + message);
+        services.Cli.CompleteExternalRun(entry, null, message, null);
     }
 
     /// <summary>Test seam: shows the review and says whether the operator confirmed it (default: the gateway-action dialog window).</summary>
@@ -81,6 +101,15 @@ internal sealed class GatewayLifecycle
 
     /// <summary>Test seam: the wait between looks at whether an ordinary stop worked (default: a real second).</summary>
     internal Func<TimeSpan, Task> Delay { get; set; } = static span => Task.Delay(span);
+
+    /// <summary>How long after a start or restart that exited 0 the gateway is looked at again (CUST-352): the 1.0 gateway listens and then exits a second later when a connector's setup fails.</summary>
+    internal static readonly TimeSpan DefaultPostStartCheck = TimeSpan.FromSeconds(9);
+
+    /// <summary>
+    /// The wait before that second look; zero (the default of a lifecycle built by hand) turns it off. <see cref="Create"/> sets <see cref="DefaultPostStartCheck"/>.
+    /// While it runs the action counts as running, and the "succeeded" notice waits for it: a start that did not hold is a warning, not a success.
+    /// </summary>
+    internal TimeSpan PostStartCheck { get; set; } = TimeSpan.Zero;
 
     /// <summary>How many times, a second apart, an ordinary stop is waited on before it is called failed and a stop as administrator is offered.</summary>
     internal int StopSettleAttempts { get; set; } = 8;
@@ -165,7 +194,7 @@ internal sealed class GatewayLifecycle
 
             var argv = GatewayControl.Argv(action);
 
-            if (CommandTiers.Classify(argv) != CommandTier.ReadOnly && !Confirmer(owner ?? VisibleDashboard(), action))
+            if (CommandTiers.Classify(argv) != CommandTier.ReadOnly && !Confirm(owner ?? VisibleDashboard(), action))
             {
                 return;
             }
@@ -177,6 +206,12 @@ internal sealed class GatewayLifecycle
             }
 
             var invocation = await _run(argv).ConfigureAwait(true);
+            if (invocation.ExitCode == 0 && action != GatewayAction.Stop && PostStartCheck > TimeSpan.Zero)
+            {
+                await VerifyStaysUpAsync(title, action).ConfigureAwait(true);
+                return;
+            }
+
             RaiseNotice(
                 title,
                 invocation.ExitCode == 0
@@ -198,6 +233,60 @@ internal sealed class GatewayLifecycle
         {
             _ = Interlocked.Exchange(ref _running, 0);
             OfferChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    // ---- a start that holds ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The review of <paramref name="action"/>, with the "Codex is running" warning while Codex is (CUST-352). Without it the review is the gateway-action
+    /// dialog as it always was; with it, the same review plus the bar, through the review dialog. The operator can still go ahead.
+    /// </summary>
+    private bool Confirm(Window? owner, GatewayAction action)
+    {
+        if (_codexRunning?.Invoke() != true)
+        {
+            return Confirmer(owner, action);
+        }
+
+        var review = GatewayActionDialog.ReviewFor(action) with { Warnings = new[] { CodexRunningWarning } };
+        return ReviewConfirmer(owner, review);
+    }
+
+    internal static CommandReviewWarning CodexRunningWarning { get; } = new(AgentProcessProbe.CodexRunningTitle, AgentProcessProbe.CodexRunningMessage);
+
+    /// <summary>
+    /// A start or restart that exited 0 is judged after <see cref="PostStartCheck"/>, not at once: the gateway listens, then exits when a connector's
+    /// setup fails. Still up, the notice says it succeeded. Down again, the notice is a warning that says why (gateway.log, as the monitor classified
+    /// it) and the same words go to Activity. A gateway that has not answered yet but did not stop (still starting) is not called a failure.
+    /// </summary>
+    private async Task VerifyStaysUpAsync(string title, GatewayAction action)
+    {
+        await _refresh().ConfigureAwait(true);
+        await Delay(PostStartCheck).ConfigureAwait(true);
+        await _refresh().ConfigureAwait(true);
+
+        var snapshot = _snapshot();
+        if (snapshot.State != AppGatewayState.GatewayStopped)
+        {
+            RaiseNotice(title, GatewayControl.SucceededText(action), ToastLevel.Info);
+            return;
+        }
+
+        var reason = snapshot.LastFailure is { } failure
+            ? failure.Describe()
+            : "The gateway exited shortly after it started and its log gives no reason. Open Logs, then gateway.log.";
+        var message = $"{GatewayControl.CommandText(action)} succeeded, but the gateway is not running again. {reason}";
+        RaiseNotice(title, message, ToastLevel.Warning);
+        try
+        {
+            _recordActivity?.Invoke(title, message);
+        }
+#pragma warning disable CA1031 // Activity is a courtesy line; the notice above is already out.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceWarning($"Gateway start check could not be recorded: {ex.Message}");
         }
     }
 
@@ -259,8 +348,14 @@ internal sealed class GatewayLifecycle
         }
 
         var plan = await administrator.PlanAsync(action, CancellationToken.None).ConfigureAwait(true);
-        if (await RunPlanAsync(plan, title, owner, administrator).ConfigureAwait(true))
+        if (await RunPlanAsync(plan, title, owner, administrator, quiet: PostStartCheck > TimeSpan.Zero).ConfigureAwait(true))
         {
+            if (PostStartCheck > TimeSpan.Zero)
+            {
+                await VerifyStaysUpAsync(title, action).ConfigureAwait(true);
+                return;
+            }
+
             await _refresh().ConfigureAwait(true);
         }
     }
@@ -271,7 +366,7 @@ internal sealed class GatewayLifecycle
     /// </summary>
     private async Task StopWithFallbackAsync(Window? owner, IGatewayAdministrator administrator, string title)
     {
-        if (!Confirmer(owner ?? VisibleDashboard(), GatewayAction.Stop))
+        if (!Confirm(owner ?? VisibleDashboard(), GatewayAction.Stop))
         {
             return;
         }
@@ -307,7 +402,7 @@ internal sealed class GatewayLifecycle
     /// The review and the steps of one plan. Nothing runs unless the plan was not refused, the installation may be changed, and the operator
     /// confirmed the review; each step is one prompt, and a step that did not succeed ends the run. True when every step succeeded.
     /// </summary>
-    private async Task<bool> RunPlanAsync(AdminPlan plan, string title, Window? owner, IGatewayAdministrator administrator)
+    private async Task<bool> RunPlanAsync(AdminPlan plan, string title, Window? owner, IGatewayAdministrator administrator, bool quiet = false)
     {
         if (plan.Refusal is { } refusal)
         {
@@ -316,6 +411,11 @@ internal sealed class GatewayLifecycle
         }
 
         var review = plan.Review!.GuardedBy(_installation);
+        if (_codexRunning?.Invoke() == true && !review.Warnings.Any(static w => w.Title == AgentProcessProbe.CodexRunningTitle))
+        {
+            review = review with { Warnings = review.Warnings.Append(CodexRunningWarning).ToArray() };
+        }
+
         if (review.BlockedReason is { } blocked)
         {
             RaiseNotice(title, blocked, ToastLevel.Info);
@@ -341,7 +441,11 @@ internal sealed class GatewayLifecycle
             last = outcome.Message;
         }
 
-        RaiseNotice(title, last, ToastLevel.Info);
+        if (!quiet)
+        {
+            RaiseNotice(title, last, ToastLevel.Info);
+        }
+
         return true;
     }
 

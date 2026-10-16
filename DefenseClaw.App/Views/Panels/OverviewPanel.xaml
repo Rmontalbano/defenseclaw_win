@@ -349,6 +349,31 @@
                                                            AutomationProperties.Name="Clear the queued restart"
                                                            AutomationProperties.HelpText="Forgets the queued restart without restarting the gateway. What was saved stays saved and applies the next time the gateway restarts." />
                                             </StackPanel>
+
+                                            <!-- The durability rows' reviewed actions (CUST-352): Re-select Codex, Clear the stuck pending write, Put back, Switch to fail open. -->
+                                            <ItemsControl Margin="0,6,0,0"
+                                                          ItemsSource="{Binding Actions.Items}"
+                                                          Visibility="{Binding HasActions, Converter={StaticResource BoolToVisibility}}"
+                                                          AutomationProperties.Name="Actions">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <ui:Button Margin="0,0,8,6"
+                                                                   Content="{Binding Label}"
+                                                                   IsEnabled="{Binding Enabled}"
+                                                                   Command="{Binding DataContext.RunAttentionActionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl, AncestorLevel=2}}"
+                                                                   CommandParameter="{Binding Id}"
+                                                                   ToolTipService.ShowOnDisabled="True"
+                                                                   ToolTip="{Binding Tip}"
+                                                                   AutomationProperties.Name="{Binding Label}"
+                                                                   AutomationProperties.HelpText="{Binding Tip}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>

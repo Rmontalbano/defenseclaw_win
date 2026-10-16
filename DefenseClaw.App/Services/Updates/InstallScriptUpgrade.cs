@@ -566,27 +566,7 @@ public interface IUpgradeProbes
 /// <summary>The probes over the real machine (read-only).</summary>
 public sealed class SystemUpgradeProbes : IUpgradeProbes
 {
-    public IReadOnlyList<string> RunningProcessNames()
-    {
-        var names = new List<string>();
-        foreach (var process in System.Diagnostics.Process.GetProcesses())
-        {
-            try
-            {
-                names.Add(process.ProcessName);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-            {
-                // Gone between the listing and the read.
-            }
-            finally
-            {
-                process.Dispose();
-            }
-        }
-
-        return names;
-    }
+    public IReadOnlyList<string> RunningProcessNames() => AgentProcessProbe.RunningProcessNames();
 
     public long? FreeDiskBytes(string path)
     {
@@ -661,13 +641,13 @@ public static class InstallScriptPreflight
             running = Array.Empty<string>();
         }
 
-        var codex = running.Where(n => n.StartsWith("codex", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var codex = running.Where(AgentProcessProbe.IsCodexName).ToArray();
         rows.Add(codex.Length > 0
             ? new PreflightRow(CodexId, "Codex", PreflightStatus.Warn,
                 "Codex is running. Quit it first: the installer rewrites its hook configuration, and a running Codex keeps the old one.")
             : new PreflightRow(CodexId, "Codex", PreflightStatus.Pass, "Codex is not running."));
 
-        var claude = running.Where(n => string.Equals(n, "claude", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var claude = running.Where(AgentProcessProbe.IsClaudeName).ToArray();
         rows.Add(claude.Length > 0
             ? new PreflightRow(ClaudeCodeId, "Claude Code", PreflightStatus.Warn,
                 "claude.exe is running (Claude Code, or the Claude desktop app, which has the same process name). Quit it first: the installer rewrites " +

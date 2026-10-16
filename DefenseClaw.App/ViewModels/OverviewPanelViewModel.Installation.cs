@@ -37,5 +37,6 @@ public sealed partial class OverviewPanelViewModel
         ApplyQuickActions();
         RefreshRestartPendingActions();
         RefreshStartGatewayAttention();
+        BuildAttention(_snapshot);
     }
 }

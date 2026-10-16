@@ -715,10 +715,15 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 rows.Add(new AttentionRow
                 {
                     Title = "The gateway is not answering",
-                    Detail = snapshot.Detail + " Audit, Logs and Activity still work from disk.",
+                    Detail = snapshot.Detail + " Audit, Logs and Activity still work from disk." +
+
+                             // Why the last start ended, from gateway.log (CUST-352).
+                             (DurabilityAttention.StoppedSentence(snapshot) is { Length: > 0 } why ? " " + why : string.Empty),
                     SeverityKey = "High",
                     Command = GatewaySnapshot.StartGatewayCommand,
-                    OffersStart = true,
+
+                    // The blocked-agent row below carries Start gateway itself; two buttons for one command are noise.
+                    OffersStart = !snapshot.IsAgentBlocked,
                 });
                 break;
 
@@ -753,6 +758,18 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             default:
                 break;
         }
+
+        // What the disk says about the gateway's next start, and what a failure costs the agent (CUST-352): a moved Codex executable, a stuck
+        // config write, a fail-closed agent with no gateway. The agent that is blocked comes first: it is the one that cannot work right now.
+        var durabilityRows = DurabilityAttention.Rows(snapshot, id => AttentionActionBlockedReason(id, snapshot), DateTimeOffset.UtcNow);
+        var blockedFirst = snapshot.IsAgentBlocked && durabilityRows.Count > 0;
+        if (blockedFirst)
+        {
+            var stoppedAt = rows.FindIndex(static r => r.OffersStart || r.Title == "The gateway is not answering");
+            rows.Insert(stoppedAt < 0 ? rows.Count : stoppedAt, durabilityRows[0]);
+        }
+
+        rows.AddRange(blockedFirst ? durabilityRows.Skip(1) : durabilityRows);
 
         // A saved change the running gateway does not have yet (CUST-267), right after what the gateway itself is doing: it is what Restart now is for.
         AppendRestartPending(rows);
@@ -1124,7 +1141,11 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             // `defenseclaw status --json` (when it has been read) says what the hook EFFECTIVELY obeys, which outranks both.
             var mode = runtime?.GuardrailMode ?? ConfigOnly(settings?.Mode);
             var effectiveFailMode = reported?.FailMode?.Effective;
-            var failMode = effectiveFailMode is { Length: > 0 } ? effectiveFailMode : runtime?.HookFailMode ?? ConfigOnly(settings?.HookFailMode);
+            // The hooks' own file (hooks\.hookcfg) is what they obey, and it is there with the gateway down; it outranks the gateway's /status and config.yaml (CUST-352).
+            var hookMode = snapshot.Durability?.FailModeOf(name);
+            var failMode = effectiveFailMode is { Length: > 0 }
+                ? effectiveFailMode
+                : hookMode ?? runtime?.HookFailMode ?? ConfigOnly(settings?.HookFailMode);
             var mismatch = (settings?.HasFailModeMismatch ?? false) || (runtime?.HasFailModeMismatch ?? false) ||
                            (Equal(ModeOf(name), "observe") && Equal(effectiveFailMode, "closed"));
 
@@ -1133,6 +1154,12 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                          !Equal(runtime.HookFailMode, settings.HookFailMode))
                 ? $"config.yaml says mode {settings.Mode ?? "—"} / fail-mode {settings.HookFailMode ?? "—"}"
                 : string.Empty;
+            if (hookMode is not null && settings?.HookFailMode is { Length: > 0 } configuredFail && !Equal(hookMode, configuredFail))
+            {
+                var hooks = $"the hooks (.hookcfg) fail {hookMode}; config.yaml says {configuredFail}";
+                drift = drift.Length > 0 ? drift + " · " + hooks : hooks;
+            }
+
             if (reported?.FailMode is { HasDrift: true, Drift.Count: > 0 } failDrift)
             {
                 var sources = "fail-mode drift: " + string.Join(", ", failDrift.Drift);
@@ -1516,6 +1543,11 @@ public sealed record AttentionRow
     /// <summary>The row is the stopped gateway and carries Start gateway: the shared, reviewed <c>defenseclaw-gateway start</c> beside the copyable command.</summary>
     public bool OffersStart { get; init; }
 
+    /// <summary>Reviewed actions on the row (CUST-352): Re-select Codex, Clear the stuck pending write, Put back, Switch to fail open. Compared by value.</summary>
+    public AttentionActions Actions { get; init; } = AttentionActions.None;
+
+    public bool HasActions => Actions.Count > 0;
+
     /// <summary>
     /// The Mac's mono bracket tag for the row: <c>[!]</c> critical, <c>[*]</c> a warning (High, Medium), <c>[OK]</c> all clear, <c>[&gt;]</c> for
     /// information. Drawn in the row's tone beside the severity word, which stays: a bracket is a shape, not a reading.
@@ -1545,6 +1577,11 @@ public sealed record AttentionRow
         if (OffersStart)
         {
             text += " Start gateway is available.";
+        }
+
+        if (HasActions)
+        {
+            text += " " + string.Join(", ", Actions.Items.Select(static a => a.Label)) + (Actions.Count == 1 ? " is available." : " are available.");
         }
 
         return HasCommand ? text + " A suggested command is available." : text;

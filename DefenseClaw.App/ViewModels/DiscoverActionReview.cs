@@ -279,6 +279,14 @@ public sealed partial class DiscoverActionReview : ObservableObject
             warnings.AddRange(extraWarnings);
         }
 
+        // A command that rewrites Codex's config.toml (setup codex, a fail-mode change) while Codex is running can collide with Codex's own write (CUST-352).
+        if (steps.Any(static step => AgentProcessProbe.TouchesCodexConfig(step.Executable, step.Argv)) &&
+            !warnings.Any(static w => w.Title == AgentProcessProbe.CodexRunningTitle) &&
+            _services.AgentProcesses.CodexWarning() is { } codexRunning)
+        {
+            warnings.Add(codexRunning);
+        }
+
         _onFinished = onFinished;
         _onCancelled = onCancelled;
 

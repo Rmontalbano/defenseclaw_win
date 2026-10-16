@@ -371,6 +371,15 @@ public sealed class AppServices : IDisposable
     internal GatewayLifecycle GatewayLifecycle { get; set; }
 
     /// <summary>
+    /// Whether Codex or Claude Code is running: the real process list in the app, none in an isolated composition unless a test supplies one. Behind
+    /// the "Codex is running" warning on every review that rewrites Codex's config.toml (CUST-352).
+    /// </summary>
+    internal AgentProcessProbe AgentProcesses { get; set; } = AgentProcessProbe.Machine;
+
+    /// <summary>Where "Clear the stuck pending write" moves the stuck files to (<c>%LOCALAPPDATA%\DefenseClaw.App\cas-quarantine</c>): beside the app's settings, never in the DefenseClaw data directory.</summary>
+    internal string CasQuarantineRoot => Path.Combine(Path.GetDirectoryName(Settings.FilePath) ?? Path.GetTempPath(), "cas-quarantine");
+
+    /// <summary>
     /// "Run gateway as administrator" (Mac parity, 1.0 runtimes): <c>Status</c> is what a card shows (mode on or off, helper installed, copy matches the
     /// installed gateway, gateway running elevated, state-ownership problem), read without elevation; <c>TrySetMode</c> is the switch; the lifecycle
     /// reviews and runs the plans. <c>Changed</c> is raised on a pool thread. See <see cref="GatewayAdminService"/>.
@@ -612,7 +621,8 @@ public sealed class AppServices : IDisposable
         Func<AppServices, GatewayAdminDependencies>? gatewayAdminFactory = null,
         IAdminLayoutSource? adminLayout = null,
         IAdminFileSystem? adminFileSystem = null,
-        Func<AppServices, SelfUpdateService>? appUpdateFactory = null)
+        Func<AppServices, SelfUpdateService>? appUpdateFactory = null,
+        AgentProcessProbe? agentProcesses = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
@@ -638,7 +648,10 @@ public sealed class AppServices : IDisposable
         adminLayout ??= new NoAdminLayoutSource();
         adminFileSystem ??= new ReadOnlyAdminFileSystem();
         gatewayAdminFactory ??= services => InertGatewayAdmin.Dependencies(services, adminLayout, adminFileSystem);
-        return new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory, gatewayAdminFactory, adminLayout, adminFileSystem, appUpdateFactory);
+        // Likewise nothing looks at the real process list: an isolated composition sees no Codex running unless a test says it is.
+        var isolated = new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory, gatewayAdminFactory, adminLayout, adminFileSystem, appUpdateFactory);
+        isolated.AgentProcesses = agentProcesses ?? AgentProcessProbe.None;
+        return isolated;
     }
 
     /// <summary>Token provider handed to <see cref="GatewayClient"/>; re-read per request.</summary>

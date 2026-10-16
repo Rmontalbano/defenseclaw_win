@@ -1112,6 +1112,15 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             // Turning the guardrail off tears the connectors' hooks down: the tier the Setup hub gives the same command.
             : WizardCautions.Floor(argv) ?? CommandTier.StateChanging;
 
+    /// <summary>The "Codex is running" bar (CUST-352) for a wizard command that rewrites Codex's config.toml (<c>setup codex</c>); none otherwise.</summary>
+    private IEnumerable<CommandReviewWarning> CodexRunningWarnings(IReadOnlyList<string> argv)
+    {
+        if (AgentProcessProbe.TouchesCodexConfig(CommandReview.DefaultExecutable, argv) && _services.AgentProcesses.CodexWarning() is { } warning)
+        {
+            yield return warning;
+        }
+    }
+
     /// <summary>
     /// Rebuilds everything the review page says: the exact command, how much it changes, the restart
     /// notice, what the operator changed, which credentials it relies on, and any reason it cannot run.
@@ -1148,6 +1157,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 .Concat(LocalStackReview.Warnings(argv, _services.LocalStack.Status))
                 .Concat(SplunkDashboardsReview.Warnings(argv))
                 .Concat(WizardCautions.For(argv))
+                .Concat(CodexRunningWarnings(argv))
                 .ToArray(),
         };
         review = SecretFieldWarnings.AppendTo(review, new[] { WizardReview.SecretValueWarning(argv) });

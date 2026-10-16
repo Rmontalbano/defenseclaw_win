@@ -47,6 +47,9 @@ public sealed class TrayIconService : IDisposable
     /// </summary>
     private readonly GatewayToastTracker _gatewayToasts = new();
 
+    /// <summary>Announces once that an agent is blocked (its hooks fail closed and the gateway is down), the moment the app learns of it. UI thread only. CUST-352.</summary>
+    private readonly AgentBlockedToastTracker _blockedToasts = new();
+
     /// <summary>
     /// Watches the alert queue and raises the finding toasts (CRITICAL / HIGH as the settings allow, findings
     /// that arrived while the app was closed as one batch, the mark persisted). See <see cref="AlertNotifier"/>.
@@ -484,6 +487,11 @@ public sealed class TrayIconService : IDisposable
         if (_gatewayToasts.Observe(snapshot, _services.GatewayLifecycle.IsRunning, _services.Settings.Current.Notifications.Gateway) is { } toast)
         {
             Notify(toast.Title, toast.Body, IconFor(toast.Level));
+        }
+
+        if (_blockedToasts.Observe(snapshot, _services.GatewayLifecycle.IsRunning, _services.Settings.Current.Notifications.Gateway) is { } blockedToast)
+        {
+            Notify(blockedToast.Title, blockedToast.Body, IconFor(blockedToast.Level));
         }
 
         // Menu availability shares GatewayControl's rules with the command palette; the reason is

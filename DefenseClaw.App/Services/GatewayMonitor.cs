@@ -4,6 +4,7 @@ using System.IO;
 using DefenseClaw.App.Services.Settings;
 using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Gateway;
+using DefenseClaw.Core.Gateway.Durability;
 using DefenseClaw.Core.Gateway.Models;
 using DefenseClaw.Core.Install;
 using DefenseClaw.Core.Net;
@@ -186,6 +187,25 @@ public sealed record GatewaySnapshot
     /// </summary>
     public FailModeDrift? FailModeDrift { get; init; }
 
+    /// <summary>
+    /// Why the gateway's latest start attempt ended, read from gateway.log - set only while <see cref="State"/> is <see cref="AppGatewayState.GatewayStopped"/>
+    /// and the log names a cause (CUST-352). Null when the gateway is up, when the latest start reached "listening" and nothing failed after it, or when
+    /// the log says nothing. Part of <see cref="RendersSameAs"/>: the tray flyout and the Overview row say it.
+    /// </summary>
+    public GatewayExitReason? LastFailure { get; init; }
+
+    /// <summary>
+    /// What the disk says about the gateway's next start and what a failure would cost the agent: the pinned Codex executable, CAS writes that never
+    /// finished, the hook fail modes, files moved aside (CUST-352). Null before the first read. Part of <see cref="RendersSameAs"/>.
+    /// </summary>
+    public DurabilityFacts? Durability { get; init; }
+
+    /// <summary>
+    /// True when a connector's hooks fail closed (<c>.hookcfg</c>) and the gateway is not running: the agent is blocked on every action until the
+    /// gateway is back or the fail mode is changed. Codex's hooks are the case seen live (CUST-352).
+    /// </summary>
+    public bool IsAgentBlocked => State == AppGatewayState.GatewayStopped && Durability is { FailClosedConnectors.Count: > 0 };
+
     /// <summary>True while the gateway cannot serve reads and panels must fall back.</summary>
     public bool IsDegraded =>
         State is AppGatewayState.GatewayStopped or AppGatewayState.Degraded or AppGatewayState.NotInstalled;
@@ -243,7 +263,7 @@ public sealed record GatewaySnapshot
     /// <see cref="HealthStatus"/>, <see cref="WslGatewayDetected"/>, <see cref="PortOwner"/>,
     /// <see cref="ApiPort"/>, <see cref="CliPath"/>, <see cref="BinaryVersion"/>,
     /// <see cref="AlertCount"/>, <see cref="CriticalAlertCount"/>,
-    /// <see cref="AlertsUnavailable"/>, <see cref="FailModeDrift"/>, the ordered
+    /// <see cref="AlertsUnavailable"/>, <see cref="FailModeDrift"/>, <see cref="LastFailure"/>, <see cref="Durability"/>, the ordered
     /// <see cref="ActiveConnectors"/>, the <see cref="SubsystemReading"/> (the strip's
     /// Watchdog, Guardrail and Policy chips) and the alert list itself (see
     /// <see cref="AlertsEquivalent"/>). The tray's toasts key off <see cref="State"/> and the
@@ -295,6 +315,8 @@ public sealed record GatewaySnapshot
                string.Equals(SubsystemReading, other.SubsystemReading, StringComparison.Ordinal) &&
                EqualityComparer<PortOwner?>.Default.Equals(PortOwner, other.PortOwner) &&
                EqualityComparer<FailModeDrift?>.Default.Equals(FailModeDrift, other.FailModeDrift) &&
+               EqualityComparer<GatewayExitReason?>.Default.Equals(LastFailure, other.LastFailure) &&
+               EqualityComparer<DurabilityFacts?>.Default.Equals(Durability, other.Durability) &&
                ActiveConnectors.SequenceEqual(other.ActiveConnectors, StringComparer.Ordinal) &&
                AlertsEquivalent(RecentAlerts, other.RecentAlerts);
     }
@@ -542,6 +564,17 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
     /// </summary>
     private ClaudeSettingsSnapshot? _settingsCache;
     private (DateTime WrittenUtc, long Length) _settingsStamp;
+
+    /// <summary>How often the durability files (pinned executable, CAS receipts, .hookcfg) are read again; a manual refresh reads them at once.</summary>
+    internal static readonly TimeSpan DurabilityInterval = TimeSpan.FromSeconds(15);
+
+    private MonotonicStamp _lastDurabilityRead = MonotonicStamp.Never;
+    private int _durabilityDue = 1;
+    private DurabilityFacts? _lastDurability;
+
+    /// <summary>The gateway.log stamp the last classification was made at, and what it said: a stopped gateway's log does not change, so it is read once.</summary>
+    private (DateTime WrittenUtc, long Length)? _exitStamp;
+    private GatewayExitReason? _lastExit;
 
     private bool _disposed;
 
@@ -857,6 +890,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
     private Task<GatewaySnapshot> ManualPollAsync(bool forceAlerts, CancellationToken cancellationToken)
     {
         _services.Paths.InvalidateExecutableCache();
+        Volatile.Write(ref _durabilityDue, 1);
         return PollAndPublishAsync(forceAlerts, surfaceFaultNow: true, honourPause: false, cancellationToken);
     }
 
@@ -1111,6 +1145,10 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
 
         var state = Classify(status, health.Status);
 
+        // A stopped gateway says nothing itself; its log says why the last start ended, and the disk says what the next one is up against.
+        var lastFailure = state == AppGatewayState.GatewayStopped ? ReadExitReason() : null;
+        var durability = ReadDurability();
+
         if (state is AppGatewayState.Running or AppGatewayState.Degraded or AppGatewayState.WslGatewayDetected)
         {
             // The authenticated endpoints are polled only for the gateway itself: its owner
@@ -1180,10 +1218,72 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
             AlertsFetchedAt = _lastAlertsFetchedAt,
             ActiveConnectors = ResolveConnectors(health.Value),
             FailModeDrift = drift,
+            LastFailure = lastFailure,
+            Durability = durability,
             PolledAt = _time.GetUtcNow(),
             ConsecutiveFailures = Volatile.Read(ref _consecutiveFailures),
             IsPaused = IsPaused,
         };
+    }
+
+    /// <summary>
+    /// The classified end of the last start (<see cref="GatewayLogClassifier"/>). Read again only when gateway.log changed; a log that cannot be read
+    /// is "no reason", never a fault in the poll.
+    /// </summary>
+    private GatewayExitReason? ReadExitReason()
+    {
+        var path = _services.Paths.GatewayLogPath;
+        (DateTime WrittenUtc, long Length)? stamp;
+        try
+        {
+            var info = new FileInfo(path);
+            stamp = info.Exists ? (info.LastWriteTimeUtc, info.Length) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return _lastExit;
+        }
+
+        if (stamp is null)
+        {
+            _exitStamp = null;
+            return _lastExit = null;
+        }
+
+        if (_exitStamp == stamp)
+        {
+            return _lastExit;
+        }
+
+        _exitStamp = stamp;
+        return _lastExit = GatewayLogClassifier.ClassifyFile(path);
+    }
+
+    /// <summary>The durability files, read at most every <see cref="DurabilityInterval"/> (and on a manual refresh); the last answer between reads.</summary>
+    private DurabilityFacts ReadDurability()
+    {
+        var due = Interlocked.Exchange(ref _durabilityDue, 0) != 0;
+        if (_lastDurability is not null && !due && !_lastDurabilityRead.HasElapsed(DurabilityInterval, _time))
+        {
+            return _lastDurability;
+        }
+
+        _lastDurabilityRead = MonotonicStamp.Now(_time);
+        try
+        {
+            return _lastDurability = DurabilityReader.Read(
+                _services.Paths.DataDirectory,
+                _services.Paths.HooksDirectory,
+                _services.CasQuarantineRoot,
+                _time.GetUtcNow());
+        }
+#pragma warning disable CA1031 // Evidence for a banner: a file that cannot be read leaves the last answer, it must not fault the poll.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Trace.TraceWarning($"gateway monitor: durability files could not be read: {ex.GetType().Name}: {ex.Message}");
+            return _lastDurability ?? DurabilityFacts.Empty;
+        }
     }
 
     /// <summary>

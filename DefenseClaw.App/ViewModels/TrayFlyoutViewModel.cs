@@ -387,7 +387,7 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         StateLabel = paused ? "Paused" : view.StateLabel;
         StateDetail = paused
             ? "Monitoring is paused: nothing is polling the gateway and no audit queries run. The gateway itself is not affected."
-            : view.Detail;
+            : view.Detail + (DurabilityAttention.StoppedSentence(view) is { Length: > 0 } why ? " " + why : string.Empty);
         StateTone = GatewayPresentation.StateTone(view);
         ApplyStartOffer(view);
         HeaderCaption = paused ? GatewaySnapshot.PausedLabel : Caption(view);
@@ -399,11 +399,19 @@ public sealed partial class TrayFlyoutViewModel : ObservableObject, IDisposable
         var port = view.ApiPort > 0 ? view.ApiPort : _services.ApiPort;
         FactsLine = $"{version} · 127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)} · polled {LastPolled}";
 
+        // An agent whose hooks fail closed while the gateway is down is blocked on every action (CUST-352): the one thing worth a line here.
+        var blocked = DurabilityAttention.BlockedNote(view);
         if (view.FailModeDrift is { } drift)
         {
             FailModeNote =
+                (blocked.Length > 0 ? $"⚠ {blocked}. " : string.Empty) +
                 $"⚠ settings.json forces fail-{drift.EnvFailMode}; {drift.GatewaySource} says " +
                 $"{drift.GatewayFailMode} — open the dashboard";
+            HasFailModeNote = true;
+        }
+        else if (blocked.Length > 0)
+        {
+            FailModeNote = $"⚠ {blocked} - start the gateway or switch to fail open from the dashboard";
             HasFailModeNote = true;
         }
         else
