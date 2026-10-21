@@ -656,6 +656,15 @@ public interface IUpgradeProbes
     /// </summary>
     IReadOnlyList<CasPendingWrite> PendingConfigWrites(string dataDirectory) =>
         CasReceipts.FindPending(dataDirectory, DateTimeOffset.UtcNow, TimeSpan.Zero);
+
+    /// <summary>
+    /// The names of every <c>.defenseclaw-cas-v2-*</c> file directly in <paramref name="dataDirectory"/>: exactly what install.ps1 refuses on, which
+    /// also covers finished or garbage-collection receipts that <see cref="PendingConfigWrites"/> does not list. May throw I/O errors.
+    /// </summary>
+    IReadOnlyList<string> RecoveryReceiptNames(string dataDirectory) =>
+        Directory.Exists(dataDirectory)
+            ? Directory.EnumerateFiles(dataDirectory, CasReceipts.ReceiptPrefix + "*").Select(f => Path.GetFileName(f)).ToArray()
+            : Array.Empty<string>();
 }
 
 /// <summary>The probes over the real machine (read-only).</summary>
@@ -805,9 +814,11 @@ public static class InstallScriptPreflight
     {
         const string title = "Pending config writes";
         IReadOnlyList<CasPendingWrite> pending;
+        IReadOnlyList<string> receipts;
         try
         {
             pending = probes.PendingConfigWrites(dataDirectory);
+            receipts = probes.RecoveryReceiptNames(dataDirectory);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -815,9 +826,18 @@ public static class InstallScriptPreflight
                 "Could not check for pending config writes (" + ex.Message + "). The installer refuses to change version while any remain.");
         }
 
-        if (pending.Count == 0)
+        if (pending.Count == 0 && receipts.Count == 0)
         {
             return new PreflightRow(PendingWritesId, title, PreflightStatus.Pass, "No pending config writes.");
+        }
+
+        if (pending.Count == 0)
+        {
+            // Receipts the app does not list as a pending write (finished or garbage-collection records) still make the installer refuse.
+            var shown = string.Join(", ", receipts.Order(StringComparer.OrdinalIgnoreCase).Take(3)) + (receipts.Count > 3 ? ", ..." : string.Empty);
+            return new PreflightRow(PendingWritesId, title, PreflightStatus.Block,
+                $"{receipts.Count.ToString(CultureInfo.InvariantCulture)} DefenseClaw recovery file{(receipts.Count == 1 ? string.Empty : "s")} ({shown}) " +
+                $"remain in {dataDirectory}. DefenseClaw's installer refuses to change version while any remain, and they are not a pending write this app can clear.");
         }
 
         var targets = pending

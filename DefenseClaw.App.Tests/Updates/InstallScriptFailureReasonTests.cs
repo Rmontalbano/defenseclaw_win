@@ -88,6 +88,21 @@ public sealed class InstallScriptFailureReasonTests : IDisposable
         Assert.Contains("Could not check", row.Reason, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_receipt_that_is_not_a_pending_write_still_blocks_like_the_installer()
+    {
+        // A finished set (FindPending skips it) still trips install.ps1's name-only check.
+        WriteReceipt(@"C:\synthetic\home\.claude\settings.json");
+        File.WriteAllText(_temp.File($".defenseclaw-cas-v2-{Id}.terminal"), "{}");
+
+        var row = PendingRow(new Probes { Pending = _ => Array.Empty<CasPendingWrite>() });
+
+        Assert.Equal(PreflightStatus.Block, row.Status);
+        Assert.Contains("2 DefenseClaw recovery files", row.Reason, StringComparison.Ordinal);
+        Assert.Contains("refuses to change version", row.Reason, StringComparison.Ordinal);
+        Assert.False(row.HasAction);
+    }
+
     // ------------------------------------------------------------------ failure reason
 
     private static string Transcript(string eol, params string[] failures) =>
