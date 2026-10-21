@@ -10,6 +10,8 @@ public sealed class AgentProcessProbeTests
     [InlineData("codex", true)]
     [InlineData("Codex", true)]
     [InlineData("codex-windows-sandbox-setup", true)]
+    [InlineData("codex-windows-sandbox-service", false)]
+    [InlineData("Codex-Windows-Sandbox-Service", false)]
     [InlineData("claude", false)]
     [InlineData("notcodex", false)]
     [InlineData("", false)]
@@ -17,6 +19,18 @@ public sealed class AgentProcessProbeTests
     {
         Assert.Equal(codex, AgentProcessProbe.IsCodexName(name));
         Assert.Equal(codex, new AgentProcessProbe(() => new[] { "explorer", name }).CodexRunning());
+    }
+
+    [Fact]
+    public void The_always_on_sandbox_service_alone_is_not_codex_running_but_with_codex_it_is()
+    {
+        var service = new AgentProcessProbe(() => new[] { "explorer", "codex-windows-sandbox-service" });
+        Assert.False(service.CodexRunning());
+        Assert.Null(service.CodexWarning());
+
+        var both = new AgentProcessProbe(() => new[] { "codex-windows-sandbox-service", "codex" });
+        Assert.True(both.CodexRunning());
+        Assert.NotNull(both.CodexWarning());
     }
 
     [Theory]

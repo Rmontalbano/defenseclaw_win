@@ -190,6 +190,15 @@ public sealed class InstallScriptPlanTests : IDisposable
     }
 
     [Fact]
+    public void The_always_on_codex_sandbox_service_alone_leaves_the_codex_row_passing()
+    {
+        var probes = new Probes();
+        probes.Processes.Add("codex-windows-sandbox-service");
+
+        Assert.Equal(PreflightStatus.Pass, Row(Evaluate(probes), "codex").Status);
+    }
+
+    [Fact]
     public void A_running_claude_exe_warns_to_quit_it_first_and_nothing_else_is_touched()
     {
         var probes = new Probes();

@@ -41,8 +41,13 @@ public sealed class AgentProcessProbe
     /// <summary>A probe that sees no process: what an isolated composition (a test, a harness) starts with.</summary>
     public static AgentProcessProbe None { get; } = new(static () => Array.Empty<string>());
 
-    /// <summary>True for a Codex process name: <c>codex</c>, or anything that starts with it (<c>codex-windows-sandbox-setup</c>).</summary>
-    public static bool IsCodexName(string name) => name.StartsWith("codex", StringComparison.OrdinalIgnoreCase);
+    // The Codex desktop app's always-on LocalSystem service runs even when Codex is closed, so its presence says nothing about Codex being active (CUST-358).
+    private static readonly string[] NotCodexNames = { "codex-windows-sandbox-service" };
+
+    /// <summary>True for a Codex process name: <c>codex</c>, or anything that starts with it (<c>codex-windows-sandbox-setup</c>), except the always-on sandbox service.</summary>
+    public static bool IsCodexName(string name) =>
+        name.StartsWith("codex", StringComparison.OrdinalIgnoreCase) &&
+        !NotCodexNames.Contains(name, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>True for <c>claude</c>: Claude Code, or the Claude desktop app, which has the same process name.</summary>
     public static bool IsClaudeName(string name) => string.Equals(name, "claude", StringComparison.OrdinalIgnoreCase);
