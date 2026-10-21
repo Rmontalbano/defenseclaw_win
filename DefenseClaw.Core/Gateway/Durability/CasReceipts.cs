@@ -59,11 +59,18 @@ public sealed class CasPendingWrite : IEquatable<CasPendingWrite>
         TargetPath is not null &&
         (TargetPath.Contains(@"\.codex\", StringComparison.OrdinalIgnoreCase) || TargetPath.Contains("/.codex/", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The hash-based verdict on this write (CUST-360), or null when it has not been classified. Set by <see cref="WithAssessment"/>.</summary>
+    public CasWriteAssessment? Assessment { get; private init; }
+
+    /// <summary>A copy of this write that carries <paramref name="assessment"/>.</summary>
+    public CasPendingWrite WithAssessment(CasWriteAssessment assessment) =>
+        new(Id, StateDirectory, ReceiptFiles, TempFiles, TargetPath, Phases, LastWriteUtc) { Assessment = assessment };
+
     /// <summary>Everything that would be moved, receipts first.</summary>
     public IEnumerable<string> AllFiles => ReceiptFiles.Concat(TempFiles);
 
     private string Fingerprint =>
-        string.Join('|', Id, StateDirectory, TargetPath, Phases, LastWriteUtc.UtcTicks.ToString(CultureInfo.InvariantCulture), string.Join(',', ReceiptFiles), string.Join(',', TempFiles));
+        string.Join('|', Id, StateDirectory, TargetPath, Phases, LastWriteUtc.UtcTicks.ToString(CultureInfo.InvariantCulture), string.Join(',', ReceiptFiles), string.Join(',', TempFiles), Assessment?.State.ToString());
 
     public bool Equals(CasPendingWrite? other) => other is not null && string.Equals(Fingerprint, other.Fingerprint, StringComparison.Ordinal);
 
@@ -84,7 +91,7 @@ public static partial class CasReceipts
 
     private const int MaxEntries = 512;
 
-    private const long MaxReceiptBytes = 64 * 1024;
+    internal const long MaxReceiptBytes = 64 * 1024;
 
     // A name with a ".gc-<48 hex>" tail belongs to a retired set; it does not match, so it is never counted or moved.
     [GeneratedRegex(@"^\.defenseclaw-cas-v2-(?<id>[0-9a-fA-F]{24})\.intent(?<phase>\.allocation|\.prepared|\.terminal|\.complete)?$", RegexOptions.CultureInvariant, 250)]
@@ -289,7 +296,7 @@ public static partial class CasReceipts
         }
     }
 
-    private static string? FirstString(JsonElement element, params string[] names)
+    internal static string? FirstString(JsonElement element, params string[] names)
     {
         foreach (var name in names)
         {

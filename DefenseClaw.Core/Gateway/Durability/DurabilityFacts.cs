@@ -84,7 +84,7 @@ public static class DurabilityReader
 
         return new DurabilityFacts(
             AgentExecutablePin.Read(dataDirectory, "codex", now, exists) is { Executable: not null } pin ? pin : null,
-            CasReceipts.FindPending(dataDirectory, now),
+            CasReceipts.FindPending(dataDirectory, now).Select(w => w.WithAssessment(CasReceipts.Classify(w))).ToArray(),
             ReadFailModes(Path.Combine(hooksDirectory, ".hookcfg")),
             CasQuarantine.LatestUnrestored(quarantineRoot));
     }

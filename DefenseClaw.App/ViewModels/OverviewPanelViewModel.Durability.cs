@@ -112,7 +112,8 @@ public sealed partial class OverviewPanelViewModel
             "Clear the stuck pending write?",
             "Moves the files below out of the way so DefenseClaw can write the config again. They are moved, never deleted: the folder gets a manifest.json " +
             "with every original path, size and SHA-256, and Put back restores them. Only the pending receipt files of the writes listed, and the staging files " +
-            "beside their target, are moved; finished writes and the config file itself are not touched. Afterwards Re-run Codex setup is offered on the row.",
+            "beside their target, are moved; finished writes and the config file itself are not touched. Afterwards Re-run Codex setup is offered on the row." +
+            (DurabilityAttention.StateSentence(pending) is { Length: > 0 } states ? " " + states : string.Empty),
             new[]
             {
                 new DiscoverStep(

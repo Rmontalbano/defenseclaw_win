@@ -163,7 +163,7 @@ internal static class DurabilityAttention
                 Title = facts.PendingWrites.Count == 1 && facts.PendingWrites[0].IsCodexConfig
                     ? "A write to Codex's config.toml is stuck"
                     : $"{facts.PendingWrites.Count.ToString(CultureInfo.CurrentCulture)} guarded config write(s) never finished",
-                Detail = Describe(facts.PendingWrites, now) +
+                Detail = Describe(facts.PendingWrites, now) + (StateSentence(facts.PendingWrites) is { Length: > 0 } states ? " " + states : string.Empty) +
                          " If the agent rewrote the file in between, every later write is refused (\"requested recovery leaf is occupied by an unrecognized inode\"), " +
                          "and the gateway exits at start. DefenseClaw has no command to recover from this. " +
                          "Clearing it moves the pending files to a quarantine folder (nothing is deleted; you can put them back) while the gateway is stopped." +
@@ -205,6 +205,46 @@ internal static class DurabilityAttention
             $"{w.TargetPath ?? "an unreadable receipt"} (begun {Age(now - w.LastWriteUtc)} ago, id {w.Id[..8]}, {w.Phases})");
         var more = writes.Count > 3 ? $" and {(writes.Count - 3).ToString(CultureInfo.CurrentCulture)} more" : string.Empty;
         return "DefenseClaw began a guarded write of " + string.Join("; ", parts) + more + " and it never finished.";
+    }
+
+    /// <summary>The plain-English state of one write (CUST-360), from its hash check; empty when it was not checked.</summary>
+    internal static string StateText(CasWriteState state) => state switch
+    {
+        CasWriteState.Committed => "finished; only leftovers remain",
+        CasWriteState.NeverApplied => "never applied",
+        CasWriteState.Superseded => "rewritten since (the pending write no longer describes it; safe to set aside)",
+        _ => "could not verify — check before clearing",
+    };
+
+    /// <summary>One line per write (<c>settings.json — never applied</c>), plus a caution when any could not be verified. Empty when none was checked.</summary>
+    internal static string StateSentence(IReadOnlyList<CasPendingWrite> writes)
+    {
+        var lines = writes.Where(w => w.Assessment is not null).Take(3).Select(w =>
+            $"{FileName(w)} — {StateText(w.Assessment!.State)}").ToArray();
+        if (lines.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var text = "Checked against the receipts: " + string.Join("; ", lines) + ".";
+        if (writes.Any(w => w.Assessment?.State == CasWriteState.Unknown))
+        {
+            text += " At least one could not be verified, so look at the files before clearing.";
+        }
+
+        return text;
+    }
+
+    private static string FileName(CasPendingWrite write)
+    {
+        try
+        {
+            return write.TargetPath is { Length: > 0 } t && System.IO.Path.GetFileName(t) is { Length: > 0 } n ? n : "an unreadable receipt";
+        }
+        catch (ArgumentException)
+        {
+            return "an unreadable receipt";
+        }
     }
 
     /// <summary>"3 minutes", "2 hours", "4 days".</summary>
