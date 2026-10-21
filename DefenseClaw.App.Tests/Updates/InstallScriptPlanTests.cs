@@ -156,7 +156,7 @@ public sealed class InstallScriptPlanTests : IDisposable
         var report = Evaluate(new Probes());
 
         Assert.Equal(
-            new[] { "installation", "codex", "claude-code", "processes", "disk", "verification" },
+            new[] { "installation", "codex", "claude-code", "processes", "pending-writes", "disk", "verification" },
             report.Rows.Select(r => r.Id).ToArray());
         Assert.All(report.Rows, r => Assert.Equal(PreflightStatus.Pass, r.Status));
         Assert.False(report.HasBlock);

@@ -166,7 +166,7 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
         UiThread.Run(() => rig.Vm.ApplyCheck(result, UpgradeChannel.SetupInstaller));
         if (rig.Vm.IsApplicable)
         {
-            UiThread.WaitFor(() => rig.Vm.PreflightRows.Count == 6, "the pre-flight rows");
+            UiThread.WaitFor(() => rig.Vm.PreflightRows.Count == 7, "the pre-flight rows");
         }
     }
 

@@ -199,6 +199,13 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
     [ObservableProperty]
     private string _exitMessage = string.Empty;
 
+    /// <summary>One line pointing at the fix when the installer's reason names an unresolved connector recovery; empty otherwise.</summary>
+    [ObservableProperty]
+    private string _exitHint = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasExitHint;
+
     [ObservableProperty]
     private string _durationText = string.Empty;
 
@@ -811,6 +818,13 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             : result.Exit.Label;
         ExitToneKey = result.Exit.ToneKey;
         ExitMessage = result.FailureReason is { } reason ? reason + " " + result.Exit.Message : result.Exit.Message;
+        if (result.InstallerReason is { Length: > 0 } installerSaid)
+        {
+            ExitMessage = "The installer said: " + installerSaid + " " + ExitMessage;
+        }
+
+        ExitHint = InstallScriptPlan.HintFor(result.InstallerReason) ?? string.Empty;
+        HasExitHint = ExitHint.Length > 0;
         DurationText = result.Started ? $"{result.Duration.TotalSeconds:0} s" : string.Empty;
         LogPath = result.LogPath ?? string.Empty;
         HasLog = result.LogPath is not null;
@@ -924,6 +938,16 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         if (_staged is { } staged && File.Exists(staged.FilePath))
         {
             _reveal(staged.FilePath);
+        }
+    }
+
+    /// <summary>Runs a pre-flight row's action. Only "open Overview" exists: it shows the panel and changes nothing.</summary>
+    [RelayCommand]
+    private void RunPreflightAction(string? actionId)
+    {
+        if (string.Equals(actionId, PreflightActionIds.OpenOverview, StringComparison.Ordinal))
+        {
+            _services.Navigation.Request(new NavigationRequest("overview"));
         }
     }
 

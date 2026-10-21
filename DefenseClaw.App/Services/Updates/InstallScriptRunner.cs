@@ -75,6 +75,9 @@ public sealed record InstallScriptRunResult
     /// <summary>The newest <c>install-*.log</c> written after the start, when there is one.</summary>
     public string? LogPath { get; init; }
 
+    /// <summary>The installer's own last failure line from that log (<c>  x ...</c>), capped; null when the run did not fail or the log has none.</summary>
+    public string? InstallerReason { get; init; }
+
     /// <summary>Why nothing ran or the run could not be followed; null for a run that started and ended.</summary>
     public string? FailureReason { get; init; }
 
@@ -274,6 +277,7 @@ public sealed class InstallScriptRunner
                         ExitCode = exit,
                         Duration = duration,
                         LogPath = log,
+                        InstallerReason = exit is 0 ? null : InstallScriptPlan.ReadFailureReason(log),
                         Exit = info,
                         Invocation = invocation,
                     };

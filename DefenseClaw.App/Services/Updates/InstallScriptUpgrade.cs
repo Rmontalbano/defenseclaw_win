@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Gateway.Durability;
 
 namespace DefenseClaw.App.Services.Updates;
 
@@ -145,7 +146,7 @@ public static class InstallScriptPlan
                 return null;
             }
 
-            var floor = startedAtUtc.UtcDateTime - TimeSpan.FromSeconds(2);
+            var floor = startedAtUtc.UtcDateTime - TimeSpan.FromSeconds(5);
             return new DirectoryInfo(directory)
                 .EnumerateFiles("install-*.log")
                 .Where(f => f.LastWriteTimeUtc >= floor)
@@ -159,6 +160,78 @@ public static class InstallScriptPlan
             return null;
         }
     }
+
+    /// <summary>The longest failure reason this app shows.</summary>
+    public const int MaxFailureReasonChars = 400;
+
+    /// <summary>The installer's phrase for an unresolved CAS receipt; the hint below keys on it.</summary>
+    public const string ConnectorRecoveryPhrase = "active connector recovery remains";
+
+    public const string ConnectorRecoveryHint = "Open Overview and use \"Clear the stuck pending write\", then run the upgrade again.";
+
+    private static readonly Regex FailureLine = new(@"^  x (?<r>\S.*)$", RegexOptions.Multiline | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    /// <summary>
+    /// The last failure line (<c>  x &lt;reason&gt;</c>) of an install transcript, without its prefix, capped at <see cref="MaxFailureReasonChars"/>; null when
+    /// there is none. Nothing else of the transcript is returned (its header names the user and machine).
+    /// </summary>
+    public static string? ExtractFailureReason(string? transcript)
+    {
+        if (string.IsNullOrEmpty(transcript))
+        {
+            return null;
+        }
+
+        try
+        {
+            string? last = null;
+            foreach (Match m in FailureLine.Matches(transcript.Replace("\r\n", "\n").Replace('\r', '\n')))
+            {
+                last = m.Groups["r"].Value.Trim();
+            }
+
+            if (string.IsNullOrEmpty(last))
+            {
+                return null;
+            }
+
+            return last.Length <= MaxFailureReasonChars ? last : last[..(MaxFailureReasonChars - 1)].TrimEnd() + "…";
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads <paramref name="logPath"/> (size-capped, shared) and returns <see cref="ExtractFailureReason"/>; null on any read problem.</summary>
+    public static string? ReadFailureReason(string? logPath)
+    {
+        if (string.IsNullOrEmpty(logPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var info = new FileInfo(logPath);
+            if (!info.Exists || info.Length > InstallRunReader.MaxLogBytes)
+            {
+                return null;
+            }
+
+            using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            return ExtractFailureReason(reader.ReadToEnd());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The one-line hint for a reason that names an unresolved connector recovery; null otherwise.</summary>
+    public static string? HintFor(string? reason) =>
+        reason is not null && reason.Contains(ConnectorRecoveryPhrase, StringComparison.OrdinalIgnoreCase) ? ConnectorRecoveryHint : null;
 
     /// <summary>Where install.ps1 leaves what it migrated; the first file that exists wins.</summary>
     public static IReadOnlyList<string> MigrationFileCandidates(string dataDirectory) =>
@@ -507,6 +580,14 @@ public enum PreflightStatus
 /// <summary>One line of the checklist: what was checked, the verdict, and the reason in a sentence.</summary>
 public sealed record PreflightRow(string Id, string Title, PreflightStatus Status, string Reason)
 {
+    /// <summary>The id of the one action the row offers (<see cref="PreflightActionIds"/>), or null for text only.</summary>
+    public string? ActionId { get; init; }
+
+    /// <summary>The label of that action's button.</summary>
+    public string? ActionLabel { get; init; }
+
+    public bool HasAction => ActionId is not null;
+
     /// <summary>The tone key the badge maps to: Ok / Warn / Bad.</summary>
     public string ToneKey => Status switch
     {
@@ -521,6 +602,13 @@ public sealed record PreflightRow(string Id, string Title, PreflightStatus Statu
         PreflightStatus.Warn => "Warning",
         _ => "Blocked",
     };
+}
+
+/// <summary>The actions a pre-flight row can carry.</summary>
+public static class PreflightActionIds
+{
+    /// <summary>Show the Overview panel (where "Clear the stuck pending write" lives).</summary>
+    public const string OpenOverview = "open-overview";
 }
 
 /// <summary>The checklist as a whole.</summary>
@@ -561,6 +649,13 @@ public interface IUpgradeProbes
 
     /// <summary>Total size of the <c>*.db</c> files directly in <paramref name="dataDirectory"/>.</summary>
     long DatabaseBytes(string dataDirectory);
+
+    /// <summary>
+    /// The pending guarded config writes (CAS v2 receipt sets) in <paramref name="dataDirectory"/>, of any age: the installer refuses to change
+    /// version while any receipt remains. May throw I/O errors; the checklist turns that into a warning.
+    /// </summary>
+    IReadOnlyList<CasPendingWrite> PendingConfigWrites(string dataDirectory) =>
+        CasReceipts.FindPending(dataDirectory, DateTimeOffset.UtcNow, TimeSpan.Zero);
 }
 
 /// <summary>The probes over the real machine (read-only).</summary>
@@ -605,6 +700,7 @@ public static class InstallScriptPreflight
     public const string ProcessesId = "processes";
     public const string DiskId = "disk";
     public const string VerificationId = "verification";
+    public const string PendingWritesId = "pending-writes";
 
     /// <summary>The free space the upgrade wants, as a multiple of the databases it moves and may copy.</summary>
     public const int DiskFactor = 2;
@@ -666,6 +762,8 @@ public static class InstallScriptPreflight
                 "If a file is held open it reports which program, and this app releases its own database handles before it starts.")
             : new PreflightRow(ProcessesId, "DefenseClaw processes", PreflightStatus.Pass, "No other DefenseClaw program is running."));
 
+        rows.Add(PendingWritesRow(probes, dataDirectory));
+
         long databases;
         long? free;
         try
@@ -697,6 +795,45 @@ public static class InstallScriptPreflight
         });
 
         return new PreflightReport(rows);
+    }
+
+    /// <summary>
+    /// install.ps1's <c>Assert-NoActiveConnectorRecovery</c> throws when any <c>.defenseclaw-cas-v2-*</c> receipt is in the data directory, whatever its
+    /// age, so one pending set blocks. A directory that cannot be read only warns: the installer is the judge.
+    /// </summary>
+    private static PreflightRow PendingWritesRow(IUpgradeProbes probes, string dataDirectory)
+    {
+        const string title = "Pending config writes";
+        IReadOnlyList<CasPendingWrite> pending;
+        try
+        {
+            pending = probes.PendingConfigWrites(dataDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return new PreflightRow(PendingWritesId, title, PreflightStatus.Warn,
+                "Could not check for pending config writes (" + ex.Message + "). The installer refuses to change version while any remain.");
+        }
+
+        if (pending.Count == 0)
+        {
+            return new PreflightRow(PendingWritesId, title, PreflightStatus.Pass, "No pending config writes.");
+        }
+
+        var targets = pending
+            .Select(p => p.TargetPath is { Length: > 0 } t ? Path.GetFileName(t) : "an unreadable target")
+            .Where(n => n.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var count = pending.Count;
+        return new PreflightRow(PendingWritesId, title, PreflightStatus.Block,
+            $"{count.ToString(CultureInfo.InvariantCulture)} pending config write{(count == 1 ? string.Empty : "s")} ({string.Join(", ", targets)}). " +
+            "DefenseClaw's installer refuses to change version while they remain. Open Overview and use \"Clear the stuck pending write\", then check again.")
+        {
+            ActionId = PreflightActionIds.OpenOverview,
+            ActionLabel = "Open Overview",
+        };
     }
 
     /// <summary>Bytes as "812 KB", "1.4 GB".</summary>

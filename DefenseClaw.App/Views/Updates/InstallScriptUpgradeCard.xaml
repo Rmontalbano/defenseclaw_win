@@ -84,7 +84,17 @@
                                 </StackPanel>
                             </Border>
                             <TextBlock Grid.Column="1" Margin="10,2,0,0" FontWeight="SemiBold" Style="{StaticResource DcBody}" Text="{Binding Title}" />
-                            <TextBlock Grid.Column="2" Margin="10,2,0,0" Style="{StaticResource DcCaption}" Text="{Binding Reason}" />
+                            <StackPanel Grid.Column="2" Margin="10,2,0,0">
+                                <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Reason}" />
+                                <ui:Button Margin="0,6,0,0"
+                                           HorizontalAlignment="Left"
+                                           Appearance="Secondary"
+                                           AutomationProperties.HelpText="Shows the Overview panel. Nothing is changed by opening it."
+                                           Command="{Binding DataContext.RunPreflightActionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                           CommandParameter="{Binding ActionId}"
+                                           Content="{Binding ActionLabel}"
+                                           Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -192,6 +202,7 @@
                     <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcCaption}" Text="{Binding DurationText, StringFormat='took {0}'}" />
                 </StackPanel>
                 <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding ExitMessage}" Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Style="{StaticResource DcCaption}" Text="{Binding ExitHint}" Visibility="{Binding HasExitHint, Converter={StaticResource BoolToVisibility}}" />
 
                 <Border Margin="0,0,0,8" Padding="12" Style="{StaticResource DcSubtleRow}"
                         Visibility="{Binding HasPostFlight, Converter={StaticResource BoolToVisibility}}">

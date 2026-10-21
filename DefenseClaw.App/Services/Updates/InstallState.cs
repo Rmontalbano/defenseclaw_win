@@ -42,7 +42,11 @@ public sealed record InstallRunSummary(
     InstallRunOutcome Outcome,
     string? LogPath,
     bool ConfigAlreadyCurrent,
-    bool FromActivity);
+    bool FromActivity)
+{
+    /// <summary>The installer's own last failure line (<c>  x ...</c>) from the transcript, capped; null when the run did not fail or none was written.</summary>
+    public string? FailureReason { get; init; }
+}
 
 /// <summary>
 /// Reads the transcript <c>install.ps1</c> leaves in <c>~\.defenseclaw\logs\install-*.log</c> (a PowerShell transcript) and the app's Activity
@@ -184,7 +188,10 @@ public static class InstallRunReader
             outcome = InstallRunOutcome.Restored;
         }
 
-        return new InstallRunSummary(kind, from, to, StartOf(text, path, fileTime), outcome, path, ConfigCurrent.IsMatch(text), FromActivity: false);
+        return new InstallRunSummary(kind, from, to, StartOf(text, path, fileTime), outcome, path, ConfigCurrent.IsMatch(text), FromActivity: false)
+        {
+            FailureReason = outcome == InstallRunOutcome.Installed ? null : InstallScriptPlan.ExtractFailureReason(text),
+        };
     }
 
     private static string? LastMatch(Regex regex, string text)
@@ -345,7 +352,17 @@ public static class InstallRunReader
             _ => "unknown",
         };
         var when = run.StartedAt is { } at ? FormatWhen(at, now) : "unknown time";
-        return $"{what} {run.FromVersion ?? "unknown"} → {run.ToVersion ?? "unknown"}, {when}: {outcome}";
+        var text = $"{what} {run.FromVersion ?? "unknown"} → {run.ToVersion ?? "unknown"}, {when}: {outcome}";
+        if (run.Outcome is InstallRunOutcome.Failed or InstallRunOutcome.Restored or InstallRunOutcome.Unknown && run.FailureReason is { Length: > 0 } reason)
+        {
+            text += ". Installer said: " + reason;
+            if (InstallScriptPlan.HintFor(reason) is { } hint)
+            {
+                text += " " + hint;
+            }
+        }
+
+        return text;
     }
 
     /// <summary>Ok / Warn / Bad / Neutral for the row's badge.</summary>
