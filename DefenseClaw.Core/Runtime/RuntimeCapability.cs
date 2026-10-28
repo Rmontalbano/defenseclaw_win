@@ -51,11 +51,13 @@ public enum RuntimeCapability
     /// either on a managed Secure Client host, so the version only decides whether to ask; a 404 or 405 is still "not available on this host".
     /// </summary>
     IdeInventory,
+
     /// <summary>
     /// The gateway's administrator view of the policy it applies: <c>GET /api/v1/guardrail/profiles/resolve</c> (the Overview's Effective policy card,
     /// CUST-375). Judged from the runtime's version like <see cref="CorrelationApi"/>; the card itself still treats a 404 or 405 as "not supported".
     /// </summary>
     EffectivePolicy,
+
     /// <summary>
     /// The runtime's canonical alert list: <c>defenseclaw alerts --json</c> (1.0.0 or later), which lists enforcement actions, connector hook
     /// blocks and health failures as alerts, leaves detection-only findings out, and names each alert's decision, rule and agent. The Alerts panel
