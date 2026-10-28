@@ -62,6 +62,7 @@ public abstract class PanelViewModelBase : ObservableObject
     {
         Services = services ?? throw new ArgumentNullException(nameof(services));
         _installationSeen = services.Installation.Context;
+        _generationSeen = services.Installation.Generation;
     }
 
     /// <summary>Composition root. Panels pull their Core readers and the monitor from here.</summary>
@@ -205,6 +206,7 @@ public abstract class PanelViewModelBase : ObservableObject
     }
 
     private InstallationContext _installationSeen;
+    private int _generationSeen;
 
     /// <summary>The command properties of each panel type (<c>XCommand</c>, from <c>[RelayCommand]</c>), found once.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, System.Reflection.PropertyInfo[]> CommandProperties = new();
@@ -240,12 +242,14 @@ public abstract class PanelViewModelBase : ObservableObject
     private void CatchUpInstallation()
     {
         var current = Services.Installation.Context;
-        if (!IsActive || current == _installationSeen)
+        var generation = Services.Installation.Generation;
+        if (!IsActive || (current == _installationSeen && generation == _generationSeen))
         {
             return;
         }
 
         _installationSeen = current;
+        _generationSeen = generation;
         try
         {
             OnPropertyChanged(nameof(InstallationBlockedReason));

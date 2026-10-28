@@ -169,6 +169,7 @@ public sealed class PolicyModelReader
             GlobalPack = packsDoc?.Global ?? previous?.GlobalPack,
             ConnectorPacks = packsDoc?.Connectors ?? previous?.ConnectorPacks ?? Array.Empty<ScopePack>(),
             Packs = packsDoc?.Packs ?? previous?.Packs ?? Array.Empty<RulePackEntry>(),
+            PackPins = settings is not null ? settings.CustomPacks ?? Array.Empty<PackPin>() : previous?.PackPins ?? Array.Empty<PackPin>(),
             PackError = packError,
             Postures = postures,
             Protection = protection,

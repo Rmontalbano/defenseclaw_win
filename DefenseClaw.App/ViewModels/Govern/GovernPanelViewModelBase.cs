@@ -190,9 +190,13 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
 
     /// <summary>The banner text of a partial read: what it means for the rows, then the CLI's own diagnostics (one per line).</summary>
     public string PartialDiscoveryMessage => Trust.IsPartial
-        ? "These are the entries the CLI could read; others may be missing. Changes are off until discovery completes.\n"
+        ? PartialDiscoveryHeadline + "\n"
           + string.Join('\n', Trust.PartialDiagnostics.Select(DisplayNames.Visible))
         : string.Empty;
+
+    /// <summary>The first line of <see cref="PartialDiscoveryMessage"/>; the MCP panel overrides it with the Mac app's wording.</summary>
+    protected virtual string PartialDiscoveryHeadline =>
+        "These are the entries the CLI could read; others may be missing. Changes are off until discovery completes.";
 
     /// <summary>What the trust looked like when the rows were last told about it; they are re-notified only when it changes.</summary>
     private (bool Trusted, string? Reason) _trustSeen = (true, null);
@@ -605,6 +609,8 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             argv.Add(scope);
         }
 
+        // The installation this read starts against (an upgrade or a config change moves it): a result that comes back after it moved is dropped.
+        var generation = Services.Installation.Generation;
         CliInvocation invocation;
         try
         {
@@ -615,6 +621,14 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         catch (CliNotFoundException ex)
         {
             FailLoad(GovernState.CliUnavailable, "The defenseclaw CLI was not found", $"{NounPlural} cannot be listed without it. {ex.Message}", scopeKey);
+            return;
+        }
+
+        if (!Services.Installation.IsCurrent(generation))
+        {
+            // Read before the installation changed (an upgrade ran, or config.yaml moved it): neither rows nor an error say anything about it
+            // now. Nothing is kept, and the list is read again under the installation as it is.
+            _reloadRequested = true;
             return;
         }
 
@@ -632,7 +646,7 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         CatalogPartialRead? partial = null;
         if (invocation.ExitCode != 0 && !CatalogPartialReads.TryClassify(invocation, out partial))
         {
-            FailLoad(GovernState.Error, $"'{command}' failed", Summarize(invocation), scopeKey);
+            FailLoad(GovernState.Error, $"'{command}' failed", CatalogFailureDetail(invocation), scopeKey);
             return;
         }
 
@@ -1384,6 +1398,25 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         ResultMessage = message;
         ResultSeverity = severity;
         IsResultOpen = true;
+    }
+
+    /// <summary>
+    /// Why a non-zero catalog list is a failure, as the Mac's <c>catalogFailureDetail</c> says it: the diagnostic on stderr when there is one;
+    /// when the command printed rows (JSON) and no diagnostic, that the rows cannot be trusted (not the last line of that JSON).
+    /// </summary>
+    internal static string CatalogFailureDetail(CliInvocation invocation)
+    {
+        var hasStderr = invocation.OutputLines.Any(l => l.Stream == CliStream.StandardError && !string.IsNullOrWhiteSpace(l.Text));
+        if (!hasStderr && invocation.FailureReason is null)
+        {
+            var stdout = string.Concat(invocation.OutputLines.Where(l => l.Stream == CliStream.StandardOutput).Select(l => l.Text + "\n")).Trim();
+            if (stdout.StartsWith('[') || stdout.StartsWith('{'))
+            {
+                return $"Catalog command failed (exit {invocation.ExitCode?.ToString() ?? "unknown"}); returned rows could not be trusted.";
+            }
+        }
+
+        return Summarize(invocation);
     }
 
     /// <summary>The last meaningful line of what a command said, or why it did not finish.</summary>

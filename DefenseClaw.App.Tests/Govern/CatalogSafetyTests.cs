@@ -236,6 +236,73 @@ public sealed class CatalogSafetyTests : IDisposable
         Assert.False(vm.IsDataTrusted);
     }
 
+    [Fact]
+    public async Task The_mcp_panel_says_mcp_discovery_is_incomplete_and_other_panels_keep_the_generic_line()
+    {
+        var (mcp, mcpCli, mcpJson) = Panel("mcp");
+        mcpCli.List = Partial("mcp", mcpJson);
+        await mcp.InitializeAsync();
+        Assert.StartsWith("MCP discovery is incomplete. Showing readable entries.", mcp.PartialDiscoveryMessage, StringComparison.Ordinal);
+        Assert.Contains("Changes are off", mcp.PartialDiscoveryMessage, StringComparison.Ordinal);
+
+        var (plugin, pluginCli, pluginJson) = Panel("plugin");
+        pluginCli.List = Partial("plugin", pluginJson);
+        await plugin.InitializeAsync();
+        Assert.DoesNotContain("MCP discovery is incomplete", plugin.PartialDiscoveryMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rows_with_a_failing_exit_and_no_diagnostic_are_a_failure_that_says_the_rows_cannot_be_trusted()
+    {
+        var (vm, cli, json) = Panel("mcp");
+        cli.List = () => Result(1, new[] { "mcp", "list", "--json" }, Out(json));
+
+        await vm.InitializeAsync();
+
+        Assert.Equal(GovernState.Error, vm.State);
+        Assert.False(vm.HasPartialDiscovery);
+        Assert.Contains("returned rows could not be trusted", vm.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"name\"", vm.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rows_with_a_failing_exit_and_an_unknown_stderr_line_keep_that_line_as_the_detail()
+    {
+        var (vm, cli, json) = Panel("mcp");
+        cli.List = () => Result(1, new[] { "mcp", "list", "--json" }, Out(json), Err("permission denied"));
+
+        await vm.InitializeAsync();
+
+        Assert.Equal(GovernState.Error, vm.State);
+        Assert.Contains("permission denied", vm.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_read_that_finishes_after_the_installation_changed_is_dropped_and_read_again()
+    {
+        var (vm, cli, json) = Panel("mcp");
+        var calls = 0;
+        cli.List = () =>
+        {
+            if (calls++ == 0)
+            {
+                // The installation moves (an upgrade ran) while the first read is in flight; that read returns an error that must not be shown.
+                _services.Installation.SetUpgradeRunning(true);
+                _services.Installation.SetUpgradeRunning(false);
+                return Failed("mcp")();
+            }
+
+            return Complete("mcp", json)();
+        };
+
+        await vm.InitializeAsync();
+
+        Assert.Equal(2, calls);
+        Assert.Equal(GovernState.Loaded, vm.State);
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.True(vm.IsDataTrusted);
+    }
+
     // ------------------------------------------------------------------ acceptance: garbage and other failures
 
     [Fact]

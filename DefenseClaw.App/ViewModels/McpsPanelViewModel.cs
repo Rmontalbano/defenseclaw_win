@@ -62,6 +62,10 @@ public sealed partial class McpsPanelViewModel : GovernPanelViewModelBase
 
     protected override string NounPlural => "MCP servers";
 
+    // The Mac's wording (CatalogCLI.partialMCPWarning); "Changes are off" keeps the Windows terms.
+    protected override string PartialDiscoveryHeadline =>
+        "MCP discovery is incomplete. Showing readable entries. Changes are off until discovery completes.";
+
     protected override string? ScannerExecutable => "mcp-scanner";
 
     protected override string ItemsKey => "mcp_servers";

@@ -27,6 +27,20 @@ public sealed record ConnectorGuardrailSettings(string Mode, bool? HiltEnabled, 
     public bool HasOwnHilt => HiltEnabled is not null;
 }
 
+/// <summary>One <c>guardrail.custom_packs</c> entry: a custom rule pack's folder and the digest of its own files that was pinned.</summary>
+/// <param name="Name">The key under <c>custom_packs</c>.</param>
+/// <param name="Path">The pack's folder.</param>
+/// <param name="Digest">The pinned digest (<c>sha256:</c> and 64 hex digits; empty when none).</param>
+public sealed record PackPin(string Name, string Path, string Digest)
+{
+    /// <summary>The digest with any <c>sha256:</c> prefix removed, lower case, for comparing two spellings.</summary>
+    public static string Bare(string? digest) =>
+        (digest ?? string.Empty).Trim().ToLowerInvariant().Replace("sha256:", string.Empty, StringComparison.Ordinal);
+
+    /// <summary>The digest as the runtime prints it (<c>sha256:HEX</c>); empty when there is none.</summary>
+    public static string Spelled(string? digest) => Bare(digest) is { Length: > 0 } bare ? "sha256:" + bare : string.Empty;
+}
+
 /// <summary>The guardrail settings that decide a scope's posture, from <c>config show --section guardrail --format json</c>.</summary>
 /// <param name="Mode">The global mode.</param>
 /// <param name="HiltEnabled">The global approval switch.</param>
@@ -34,13 +48,15 @@ public sealed record ConnectorGuardrailSettings(string Mode, bool? HiltEnabled, 
 /// <param name="BlockAt">The global tool-call block level.</param>
 /// <param name="AlertAt">The global tool-call alert level.</param>
 /// <param name="Connectors">The per-connector blocks, by the name config.yaml gives them.</param>
+/// <param name="CustomPacks">The custom rule packs config.yaml pins (<c>guardrail.custom_packs</c>); null when the section printed none.</param>
 public sealed record GuardrailSettings(
     string Mode,
     bool HiltEnabled,
     string HiltMinSeverity,
     string BlockAt,
     string AlertAt,
-    IReadOnlyDictionary<string, ConnectorGuardrailSettings> Connectors)
+    IReadOnlyDictionary<string, ConnectorGuardrailSettings> Connectors,
+    IReadOnlyList<PackPin>? CustomPacks = null)
 {
     /// <summary>The block the settings hold for <paramref name="connector"/>: an exact key hit, else the key that names the same connector (<c>claude-code</c> for <c>claudecode</c>); null when there is none.</summary>
     public ConnectorGuardrailSettings? ConnectorBlock(string connector)
@@ -97,7 +113,8 @@ public sealed record GuardrailSettings(
 /// <param name="EnabledRuleCount">How many of them are enabled.</param>
 /// <param name="RuleFileCount">How many rule files the pack has.</param>
 /// <param name="Digest">The pack's digest.</param>
-public sealed record PackValidation(string State, string Message = "", int RuleCount = 0, int EnabledRuleCount = 0, int RuleFileCount = 0, string Digest = "")
+/// <param name="FilesDigest">The digest of the pack's own files, which is what <c>guardrail.custom_packs</c> pins (<c>summary.files_digest</c>); empty on a runtime that does not print it.</param>
+public sealed record PackValidation(string State, string Message = "", int RuleCount = 0, int EnabledRuleCount = 0, int RuleFileCount = 0, string Digest = "", string FilesDigest = "")
 {
     /// <summary>True only for a pack the validator accepted.</summary>
     public bool IsValid => string.Equals(State, "valid", StringComparison.Ordinal);
@@ -383,13 +400,26 @@ public static class PolicyCatalogJson
                 }
             }
 
+            var pins = new List<PackPin>();
+            if (section.TryGetProperty("custom_packs", out var packMap) && packMap.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var entry in packMap.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        pins.Add(new PackPin(entry.Name, Text(entry.Value, "path"), Text(entry.Value, "digest")));
+                    }
+                }
+            }
+
             settings = new GuardrailSettings(
                 Text(section, "mode").Trim(),
                 hilt.ValueKind == JsonValueKind.Object && Flag(hilt, "enabled"),
                 hilt.ValueKind == JsonValueKind.Object ? Text(hilt, "min_severity") : "HIGH",
                 Text(section, "block_at"),
                 Text(section, "alert_at"),
-                connectors);
+                connectors,
+                pins);
             return true;
         }
     }
@@ -439,7 +469,8 @@ public static class PolicyCatalogJson
                     summary.ValueKind == JsonValueKind.Object ? Whole(summary, "rule_count") : 0,
                     summary.ValueKind == JsonValueKind.Object ? Whole(summary, "enabled_rule_count") : 0,
                     summary.ValueKind == JsonValueKind.Object ? Whole(summary, "rule_file_count") : 0,
-                    summary.ValueKind == JsonValueKind.Object ? Text(summary, "digest") : string.Empty);
+                    summary.ValueKind == JsonValueKind.Object ? Text(summary, "digest") : string.Empty,
+                    summary.ValueKind == JsonValueKind.Object ? Text(summary, "files_digest") : string.Empty);
             }
 
             return new PackValidation("invalid", reason.Length > 0 ? reason : $"exit {exitCode.ToString(CultureInfo.InvariantCulture)}");

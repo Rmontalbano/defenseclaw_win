@@ -153,6 +153,11 @@ public sealed partial class PolicyModelViewModel
             return "This is already in force.";
         }
 
+        if (action.Kind == PolicyActionKind.RepinPack && !Services.Runtime.Check(DefenseClaw.Core.Runtime.RuntimeCapability.GuardrailRepin).IsAvailable)
+        {
+            return "This runtime cannot re-pin a rule pack (it needs DefenseClaw 1.0.4 or later).";
+        }
+
         return PolicyActionGuard.IsAllowedChange(action.Argv) ? null : "The Policies panel does not run this command.";
     }
 
@@ -259,6 +264,22 @@ public sealed partial class PolicyModelViewModel
                     }
 
                     consequence = consequence.With($"Validation: {validation.Summary}.");
+                    break;
+                }
+
+                case PolicyActionKind.RepinPack:
+                {
+                    // The pack is validated, and the digest of its files is compared with the pin: nothing is re-pinned that did not change, and
+                    // the review states both digests.
+                    var validation = await ValidatePackAsync(action, showWhenValid: false).ConfigureAwait(true);
+                    var decision = PackRepin.Decide(action, validation);
+                    if (decision.Consequence is not { } reviewed)
+                    {
+                        ShowNotice("Re-pin withheld", decision.Problem);
+                        return;
+                    }
+
+                    consequence = reviewed;
                     break;
                 }
 

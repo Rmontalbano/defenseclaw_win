@@ -141,6 +141,21 @@ public sealed class AppServices : IDisposable
         // Every run asks the live installation first: a read-only one gets only reads, and every child gets the installation's identity last.
         Cli = new CliRunner(Paths, installation: () => Installation.Context);
 
+        // A runtime upgrade in flight turns every control that changes DefenseClaw off (the guard's reason), and starts a new installation generation.
+        Cli.UpgradeRunChanged += (_, _) =>
+        {
+            Installation.SetUpgradeRunning(Cli.IsUpgradeRunning);
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess())
+            {
+                Installation.PublishPendingChange();
+            }
+            else
+            {
+                _ = dispatcher.BeginInvoke(Installation.PublishPendingChange);
+            }
+        };
+
         // The token must be registered before anything can shell out: CliRunner then
         // refuses to place it in argv and scrubs it out of any captured output.
         RegisterTokenWithCli();

@@ -27,6 +27,8 @@ internal sealed class InstallationGuard
     private readonly object _gate = new();
     private volatile InstallationContext _context;
     private bool _changePending;
+    private volatile bool _upgradeRunning;
+    private int _generation;
 
     /// <param name="context">What the app resolved at start.</param>
     /// <param name="runtime">The developer runtime selection the app started with (a non-default one is not the Setup-installed runtime).</param>
@@ -42,13 +44,45 @@ internal sealed class InstallationGuard
     public InstallationContext Context => _context;
 
     /// <summary>True when state-changing actions are allowed: a user-owned installation.</summary>
-    public bool IsMutable => _context.IsMutable;
+    public bool IsMutable => _context.IsMutable && !_upgradeRunning;
+
+    /// <summary>
+    /// Counts the changes of "which installation is this, and may it change": it moves whenever the verdict differs after a <see cref="Refresh"/>,
+    /// an upgrade starts or ends, or the context is replaced (the Mac's <c>installationGeneration</c>). A read that starts by noting it and
+    /// finds it different when it ends was made against an installation that has since changed: <see cref="IsCurrent"/> says to drop it.
+    /// </summary>
+    public int Generation => Volatile.Read(ref _generation);
+
+    /// <summary>True when <paramref name="generation"/> (noted when an async read started) is still the installation's.</summary>
+    public bool IsCurrent(int generation) => generation == Generation;
+
+    /// <summary>True while a runtime upgrade is replacing the install (<see cref="CliRunner.IsUpgradeRunning"/>).</summary>
+    public bool UpgradeRunning => _upgradeRunning;
+
+    /// <summary>
+    /// Notes that a runtime upgrade began or ended. Every control that changes DefenseClaw reads <see cref="BlockedReason"/>, which says so while
+    /// it runs; reads started before are dropped (<see cref="Generation"/>). The change is announced by <see cref="PublishPendingChange"/>.
+    /// </summary>
+    public void SetUpgradeRunning(bool running)
+    {
+        lock (_gate)
+        {
+            if (_upgradeRunning == running)
+            {
+                return;
+            }
+
+            _upgradeRunning = running;
+            _changePending = true;
+            Interlocked.Increment(ref _generation);
+        }
+    }
 
     /// <summary>
     /// Why state-changing actions are off, as one sentence for a banner or a tooltip; null while they are allowed. This is the text every
     /// disabled control shows.
     /// </summary>
-    public string? BlockedReason => _context.BlockedReason;
+    public string? BlockedReason => _context.BlockedReason ?? (_upgradeRunning ? CliRunner.UpgradeInProgressReason : null);
 
     /// <summary>"State-changing actions disabled: &lt;reason&gt;", the Overview banner's text; null while they are allowed.</summary>
     public string? BannerText => BlockedReason is { } reason ? "State-changing actions disabled: " + reason : null;
@@ -57,7 +91,9 @@ internal sealed class InstallationGuard
     /// Null when running <paramref name="argv"/> on <paramref name="executable"/> is allowed here; otherwise the reason it is not
     /// (<see cref="InstallationGate.RefusalFor"/>, the rule the runner enforces). A read is allowed whatever the installation.
     /// </summary>
-    public string? ReasonFor(string executable, IReadOnlyList<string> argv) => InstallationGate.RefusalFor(_context, executable, argv);
+    public string? ReasonFor(string executable, IReadOnlyList<string> argv) =>
+        InstallationGate.RefusalFor(_context, executable, argv)
+        ?? (_upgradeRunning && !InstallationGate.IsReadOnly(executable, argv) ? CliRunner.UpgradeInProgressReason : null);
 
     /// <summary><see cref="ReasonFor(string, IReadOnlyList{string})"/> for the <c>defenseclaw</c> CLI.</summary>
     public string? ReasonFor(IReadOnlyList<string> argv) => ReasonFor(CommandReview.DefaultExecutable, argv);
@@ -81,7 +117,9 @@ internal sealed class InstallationGuard
     /// installer would not touch and which is upgraded where it was built).
     /// </summary>
     public string? UpgradeBlockedReason =>
-        BlockedReason is { } reason
+        _upgradeRunning
+            ? "A runtime upgrade is already in progress."
+            : _context.BlockedReason is { } reason
             ? "The runtime is not upgraded from here. " + reason
             : !_runtime.IsDefault || _context.UsesDeveloperRuntime
                 ? "This app is driving a developer runtime (Settings → Advanced), not the one Setup installed, so a Setup upgrade would not touch it. Upgrade that runtime where it was built, or turn the selector off."
@@ -130,6 +168,7 @@ internal sealed class InstallationGuard
 
             _context = next;
             _changePending = true;
+            Interlocked.Increment(ref _generation);
             return true;
         }
     }
@@ -161,6 +200,7 @@ internal sealed class InstallationGuard
         {
             _context = context;
             _changePending = true;
+            Interlocked.Increment(ref _generation);
         }
 
         PublishPendingChange();

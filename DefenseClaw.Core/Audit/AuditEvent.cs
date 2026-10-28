@@ -9,10 +9,17 @@ namespace DefenseClaw.Core.Audit;
 /// covers. Ordering on the raw <c>timestamp</c> text is not safe: Go writes RFC3339Nano
 /// with trailing zeros trimmed, so <c>…:23.1Z</c> sorts after <c>…:23.15Z</c>.
 /// </summary>
-public readonly record struct AuditCursor(long TimestampNanos, string Id)
+/// <param name="TimestampNanos">The sort timestamp, nanoseconds since the epoch.</param>
+/// <param name="Id">The event id (empty for a row whose id is NULL).</param>
+/// <param name="RowId">
+/// The SQLite rowid of the row, which breaks a tie that the id cannot: <c>id TEXT PRIMARY KEY</c> admits any number of NULLs, so rows without an id
+/// on one timestamp tie on both. 0 means the cursor does not know it (a token from before it existed, a caller that has only a timestamp and an id);
+/// the page then continues by (timestamp, id) alone.
+/// </param>
+public readonly record struct AuditCursor(long TimestampNanos, string Id, long RowId = 0)
 {
-    /// <summary>Round-trippable token for stashing in view state.</summary>
-    public string ToToken() => $"{TimestampNanos}:{Id}";
+    /// <summary>Round-trippable token for stashing in view state: <c>NANOS:ID</c>, or <c>NANOS@ROWID:ID</c> when the rowid is known.</summary>
+    public string ToToken() => RowId > 0 ? $"{TimestampNanos}@{RowId}:{Id}" : $"{TimestampNanos}:{Id}";
 
     public static bool TryParse(string? token, out AuditCursor cursor)
     {
@@ -28,12 +35,25 @@ public readonly record struct AuditCursor(long TimestampNanos, string Id)
             return false;
         }
 
-        if (!long.TryParse(token.AsSpan(0, separator), out var nanos))
+        var head = token.AsSpan(0, separator);
+        long rowId = 0;
+        var at = head.IndexOf('@');
+        if (at >= 0)
+        {
+            if (!long.TryParse(head[(at + 1)..], out rowId) || rowId <= 0)
+            {
+                return false;
+            }
+
+            head = head[..at];
+        }
+
+        if (!long.TryParse(head, out var nanos))
         {
             return false;
         }
 
-        cursor = new AuditCursor(nanos, token[(separator + 1)..]);
+        cursor = new AuditCursor(nanos, token[(separator + 1)..], rowId);
         return true;
     }
 }
@@ -114,7 +134,10 @@ public sealed class AuditEvent
 
     public AuditSeverity SeverityLevel => AuditSeverityExtensions.Parse(Severity);
 
-    public AuditCursor Cursor => new(TimestampNanos, Id);
+    /// <summary>The SQLite rowid (0 when the row was not read with it); the last tie-break of the page order.</summary>
+    public long RowId { get; init; }
+
+    public AuditCursor Cursor => new(TimestampNanos, Id, RowId);
 
     /// <summary>
     /// Lazily parsed <c>structured_json</c>. Malformed JSON yields an empty map rather

@@ -78,6 +78,13 @@ public enum RuntimeCapability
     /// every per-user hook blocking (the hooks of 1.0.3 and earlier never read it). Judged from the runtime's version (1.0.4 or later).
     /// </summary>
     PerUserHookRules,
+
+    /// <summary>
+    /// <c>guardrail use-pack PACK --repin --yes --json</c> (1.0.4): replaces the pinned digest of a custom rule pack that was edited after it was
+    /// pinned. 1.0.3 and earlier have neither flag. Judged from the runtime's version (1.0.4 or later); the CLI's own "No such option" is still
+    /// treated as "not supported" by the review that runs it.
+    /// </summary>
+    GuardrailRepin,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -111,6 +118,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.RuntimeAlerts => "Runtime alert list (alerts --json)",
         RuntimeCapability.ConnectorsRetired => "OpenHands and OmniGent removed",
         RuntimeCapability.PerUserHookRules => "Per-user hook rules of 1.0.4",
+        RuntimeCapability.GuardrailRepin => "Re-pin an edited guardrail pack",
         _ => capability.ToString(),
     };
 
@@ -137,6 +145,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.RuntimeAlerts => "the runtime reports version 1.0.0 or later and lists its commands ('alerts --json' exists from 1.0.0)",
         RuntimeCapability.ConnectorsRetired => "the runtime reports version 1.0.4 or later and lists its commands (setup openhands and setup omnigent are gone)",
         RuntimeCapability.PerUserHookRules => "the runtime reports version 1.0.4 or later and lists its commands (a saved per-user hook_fail_mode is not applied, and a leftover install lock blocks hooks)",
+        RuntimeCapability.GuardrailRepin => "the runtime reports version 1.0.4 or later and lists its commands ('guardrail use-pack' gained --repin and --yes in 1.0.4)",
         _ => string.Empty,
     };
 }

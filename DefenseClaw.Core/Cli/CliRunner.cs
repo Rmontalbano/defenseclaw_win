@@ -814,14 +814,58 @@ public sealed partial class CliRunner : IDisposable
         ArgumentNullException.ThrowIfNull(args);
 
         var installation = CurrentInstallation;
-        if (installation.IsMutable || InstallationGate.IsReadOnly(executable, args))
+        var upgrading = IsUpgradeRunning;
+        if ((installation.IsMutable && !upgrading) || InstallationGate.IsReadOnly(executable, args))
         {
             return null;
         }
 
         GuardArguments(args, stdinSecret, ResolveEnvironment(options));
 
-        return RecordRefusal(executable, args, InstallationGate.RefusalReason(installation));
+        // A runtime upgrade is replacing the install: every other change waits (the Mac's runtimeUpgradeRunID guard, exit 75). Reads still run.
+        return RecordRefusal(executable, args, installation.IsMutable ? UpgradeInProgressReason : InstallationGate.RefusalReason(installation));
+    }
+
+    /// <summary>The reason every state-changing run is refused while a runtime upgrade runs.</summary>
+    public const string UpgradeInProgressReason = "A runtime upgrade is in progress. Wait for it to finish before making other changes.";
+
+    private int _upgradeRuns;
+
+    /// <summary>True from <see cref="EnterUpgradeRun"/> until the returned scope is disposed: the runtime is being replaced.</summary>
+    public bool IsUpgradeRunning => Volatile.Read(ref _upgradeRuns) > 0;
+
+    /// <summary>Raised (any thread) when <see cref="IsUpgradeRunning"/> changes.</summary>
+    public event EventHandler? UpgradeRunChanged;
+
+    /// <summary>
+    /// Marks a runtime upgrade as running. While the scope is open this runner refuses every run <see cref="InstallationGate"/> does not call
+    /// read-only, with <see cref="UpgradeInProgressReason"/>; the upgrade itself is launched outside the runner (<see cref="BeginExternalRun"/>), so
+    /// it is not refused. Dispose the scope when the installer has ended.
+    /// </summary>
+    public IDisposable EnterUpgradeRun()
+    {
+        var first = Interlocked.Increment(ref _upgradeRuns) == 1;
+        if (first)
+        {
+            UpgradeRunChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        return new UpgradeScope(this);
+    }
+
+    private sealed class UpgradeScope : IDisposable
+    {
+        private CliRunner? _owner;
+
+        public UpgradeScope(CliRunner owner) => _owner = owner;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _owner, null) is { } owner && Interlocked.Decrement(ref owner._upgradeRuns) == 0)
+            {
+                owner.UpgradeRunChanged?.Invoke(owner, EventArgs.Empty);
+            }
+        }
     }
 
     /// <summary>

@@ -144,6 +144,12 @@ public sealed partial class PolicyModel
 
     public PolicyCatalog Catalog { get; }
 
+    /// <summary>
+    /// True when the runtime has <c>guardrail use-pack --repin --yes</c> (<c>RuntimeCapability.GuardrailRepin</c>, 1.0.4): a custom rule pack in use
+    /// then offers "Re-pin edited pack". The panel sets it from the runtime probe; false, the model offers exactly what it offered before.
+    /// </summary>
+    public bool RepinSupported { get; init; }
+
     /// <summary>The opt-in packs, selectable first and staged last.</summary>
     public IReadOnlyList<ProtectionPack> Protection { get; }
 

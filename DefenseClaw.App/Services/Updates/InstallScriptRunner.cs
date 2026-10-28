@@ -148,12 +148,15 @@ public sealed class InstallScriptRunner
             return Refused(request, "An install.ps1 run is already in flight.");
         }
 
+        // Every other change is refused for as long as the installer may be replacing the install (CliRunner.EnterUpgradeRun).
+        var upgradeScope = _cli.EnterUpgradeRun();
         try
         {
             return await RunCoreAsync(request, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            upgradeScope.Dispose();
             Volatile.Write(ref _running, 0);
         }
     }

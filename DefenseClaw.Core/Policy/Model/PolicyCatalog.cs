@@ -177,6 +177,9 @@ public sealed record PolicyCatalog
 
     public IReadOnlyList<RulePackEntry> Packs { get; init; } = Array.Empty<RulePackEntry>();
 
+    /// <summary>The custom rule packs config.yaml pins (<c>guardrail.custom_packs</c>), read with the guardrail settings.</summary>
+    public IReadOnlyList<PackPin> PackPins { get; init; } = Array.Empty<PackPin>();
+
     /// <summary>Why the rule packs could not be read; empty when they were.</summary>
     public string PackError { get; init; } = string.Empty;
 

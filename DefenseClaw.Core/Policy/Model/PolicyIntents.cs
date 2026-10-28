@@ -87,6 +87,28 @@ public static partial class PolicyIntents
             $"Switch the guardrail rule pack{(scope.Length > 0 ? scope : " for every connector")} to {pack}.");
     }
 
+    /// <summary>
+    /// <c>guardrail use-pack FOLDER [--connector C] --repin --yes --json</c> (runtime 1.0.4): replaces the pinned digest of a custom pack that was
+    /// edited after it was pinned. <c>--yes</c> is passed because the confirmation is this app's review (the CLI's own prompt would wait on a
+    /// terminal), and <c>--json</c> without <c>--yes</c> is refused by the CLI (exit 2). The pack is named by its folder so the CLI resolves the pin
+    /// that names it.
+    /// </summary>
+    public static PolicyIntent RepinPack(string folder, string? connector = null)
+    {
+        if (!IsSafePackTarget(folder) || !Path.IsPathFullyQualified(folder))
+        {
+            throw new ArgumentException("Not a rule pack folder the CLI can be handed.", nameof(folder));
+        }
+
+        var args = WithConnector(new List<string> { "guardrail", "use-pack", folder }, connector);
+        args.AddRange(new[] { "--repin", "--yes", "--json" });
+        var scope = ScopeWords(connector);
+        return new PolicyIntent(
+            $"guardrail use-pack {folder}{scope} --repin",
+            args,
+            $"Re-pin the edited rule pack {folder}{(scope.Length > 0 ? scope : " for every connector")}.");
+    }
+
     /// <summary><c>guardrail mode observe|action [--connector C]</c>.</summary>
     public static PolicyIntent Mode(string mode, string? connector = null)
     {
@@ -283,10 +305,36 @@ public static class PolicyActionGuard
             "mode" => argv[2] is "observe" or "action" && OnlyConnector(argv, 3),
             "block-at" or "alert-at" => IsLevelWord(argv[2]) && OnlyConnector(argv, 3),
             "hilt" => IsHilt(argv),
-            "use-pack" => PolicyIntents.IsSafePackTarget(argv[2]) && OnlyConnector(argv, 3),
+            "use-pack" => PolicyIntents.IsSafePackTarget(argv[2]) && (OnlyConnector(argv, 3) || IsRepinTail(argv)),
             "protection" => argv.Count >= 4 && argv[2] is "enable" or "disable" && PolicyIntents.IsSafeName(argv[3]) && OnlyConnector(argv, 4),
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// <c>use-pack FOLDER [--connector C] --repin --yes --json</c>, whole: a re-pin without <c>--yes</c> would wait on a terminal prompt and one
+    /// without <c>--json</c> would not print the result, so neither is allowed; the folder must be a full path (the pack that was reviewed).
+    /// </summary>
+    private static bool IsRepinTail(IReadOnlyList<string> argv)
+    {
+        var tail = argv.Count - 3;
+        if (!Path.IsPathFullyQualified(argv[2]) || tail is not (3 or 5))
+        {
+            return false;
+        }
+
+        var at = 3;
+        if (tail == 5)
+        {
+            if (argv[3] != "--connector" || !PolicyIntents.IsSafeConnector(argv[4]))
+            {
+                return false;
+            }
+
+            at = 5;
+        }
+
+        return argv[at] == "--repin" && argv[at + 1] == "--yes" && argv[at + 2] == "--json";
     }
 
     private static bool IsActivate(IReadOnlyList<string> argv) =>

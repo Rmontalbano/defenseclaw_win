@@ -390,7 +390,7 @@ public sealed class RuntimeSelectorTests : IDisposable
     }
 
     /// <summary>What 1.0.4 added; the pinned source (version 1.0.0) does not have it.</summary>
-    private static readonly RuntimeCapability[] Release104 = [RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules];
+    private static readonly RuntimeCapability[] Release104 = [RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules, RuntimeCapability.GuardrailRepin];
 
     [Fact]
     public async Task Against_the_pin_fixtures_every_capability_opens_and_Changed_fires_once_on_the_first_answer()

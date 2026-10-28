@@ -495,7 +495,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         }
 
         _catalog = read.Catalog;
-        _model = new PolicyModel(read.Catalog);
+        _model = new PolicyModel(read.Catalog) { RepinSupported = Services.Runtime.Check(RuntimeCapability.GuardrailRepin).IsAvailable };
         _lastLoadedAt = DateTimeOffset.Now;
         ErrorTitle = string.Empty;
         ErrorMessage = string.Empty;

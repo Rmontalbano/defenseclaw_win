@@ -21,6 +21,12 @@ public enum PolicyActionKind
     /// <summary><c>guardrail validate-pack PATH --json</c>: a read, never a change.</summary>
     ValidatePack,
 
+    /// <summary>
+    /// <c>guardrail use-pack FOLDER --repin --yes --json</c> (runtime 1.0.4): replaces the pinned digest of the custom pack a scope uses, after it
+    /// was edited. Only after the pack validates and its files digest is seen to differ from the pin.
+    /// </summary>
+    RepinPack,
+
     /// <summary><c>guardrail protection enable|disable PACK</c>.</summary>
     Protection,
 
@@ -59,7 +65,8 @@ public sealed record PolicyConsequence(string Heading, string Summary, IReadOnly
 /// <param name="IsCurrent">True when this choice is already in force (the button shows as the current one).</param>
 /// <param name="Weakens">True when it protects less: the review then asks for an acknowledgement.</param>
 /// <param name="Consequence">What it says before it runs.</param>
-/// <param name="PackFolder">For <see cref="PolicyActionKind.UsePack"/> and <see cref="PolicyActionKind.ValidatePack"/>, the pack's folder, which is validated before a switch.</param>
+/// <param name="PackFolder">For <see cref="PolicyActionKind.UsePack"/>, <see cref="PolicyActionKind.RepinPack"/> and <see cref="PolicyActionKind.ValidatePack"/>, the pack's folder, which is validated before a switch.</param>
+/// <param name="PinnedDigest">For <see cref="PolicyActionKind.RepinPack"/>, the digest config.yaml pins now (the review's "old" digest).</param>
 public sealed record PolicyAction(
     string Id,
     PolicyActionKind Kind,
@@ -69,7 +76,8 @@ public sealed record PolicyAction(
     bool IsCurrent,
     bool Weakens,
     PolicyConsequence Consequence,
-    string? PackFolder = null)
+    string? PackFolder = null,
+    string? PinnedDigest = null)
 {
     /// <summary>True for a read (the validation of a pack): it changes nothing.</summary>
     public bool IsRead => Kind == PolicyActionKind.ValidatePack;
@@ -180,6 +188,11 @@ public sealed partial class PolicyModel
                 pack.Folder));
         }
 
+        if (RepinSupported && RepinActionFor(connector, current) is { } repin)
+        {
+            actions.Add(repin);
+        }
+
         foreach (var pack in Catalog.Packs)
         {
             if (!Path.IsPathFullyQualified(pack.Folder) || !PolicyIntents.IsSafePackTarget(pack.Folder))
@@ -199,6 +212,51 @@ public sealed partial class PolicyModel
         }
 
         return actions;
+    }
+
+    /// <summary>
+    /// "Re-pin edited pack" for the custom pack <paramref name="connector"/>'s scope uses now, when config.yaml pins that pack's folder. Whether the
+    /// pack was actually edited is not known here (the digest of its files comes from validating it): the panel validates, compares and only then
+    /// opens the review, which shows both digests. Null for a preset, a pack nothing pins, or a folder the CLI cannot be handed.
+    /// </summary>
+    private PolicyAction? RepinActionFor(string connector, string current)
+    {
+        var pack = Catalog.Packs.FirstOrDefault(p => !p.IsPreset && string.Equals(p.Name, current, StringComparison.Ordinal));
+        if (pack is null || !Path.IsPathFullyQualified(pack.Folder) || !PolicyIntents.IsSafePackTarget(pack.Folder))
+        {
+            return null;
+        }
+
+        var pin = PinFor(pack.Folder);
+        if (pin is null)
+        {
+            return null;
+        }
+
+        var intent = PolicyIntents.RepinPack(pack.Folder, connector.Length > 0 ? connector : null);
+        var scope = connector.Length > 0 ? connector : "every connector";
+        var details = new List<string>(PackConsequence(connector, pack, false).Details)
+        {
+            "Only the digest pinned in config.yaml changes; the rule files are not touched.",
+            "The gateway then enforces the edited pack, here and in every other scope that uses this pack.",
+        };
+        var consequence = new PolicyConsequence(
+            $"Re-pin the edited {pack.Name} rule pack for {scope}?",
+            $"Pinned {PinSpelled(pin)} → the pack as it is now (checked when you continue).",
+            details,
+            string.Empty,
+            "Re-pin edited pack");
+        return Make(PolicyActionKind.RepinPack, "Rule pack", "Re-pin edited pack", intent, false, false, consequence, pack.Folder) with { PinnedDigest = pin.Digest };
+    }
+
+    private static string PinSpelled(PackPin pin) => PackPin.Spelled(pin.Digest) is { Length: > 0 } spelled ? spelled : "(no digest)";
+
+    /// <summary>The pin whose folder is <paramref name="folder"/> (path spelling and case as Windows reads them); null when none.</summary>
+    private PackPin? PinFor(string folder)
+    {
+        static string Key(string path) => path.Trim().TrimEnd('\\', '/').Replace('/', '\\').ToLowerInvariant();
+        var wanted = Key(folder);
+        return Catalog.PackPins.FirstOrDefault(p => p.Path.Length > 0 && Key(p.Path) == wanted);
     }
 
     private PolicyConsequence PackConsequence(string connector, RulePackEntry pack, bool weakens)

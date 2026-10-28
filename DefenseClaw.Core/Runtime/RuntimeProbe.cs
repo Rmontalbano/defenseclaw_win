@@ -66,6 +66,9 @@ public static class RuntimeProbe
     /// <summary>The release that removed the OpenHands and OmniGent connectors and made a per-user hook's outage mode follow the policy tier.</summary>
     internal static readonly Version Release104 = new(1, 0, 4);
 
+    /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
+    internal static readonly Version RepinVersion = new(1, 0, 4);
+
     /// <summary>
     /// The subcommand names a Click help screen lists under its column-0 <c>Commands:</c> heading. Empty when there is no such
     /// heading (a leaf command, or text that is not help at all).
@@ -314,6 +317,11 @@ public static class RuntimeProbe
         {
             present.Add(RuntimeCapability.ConnectorsRetired);
             present.Add(RuntimeCapability.PerUserHookRules);
+        }
+
+        if (identity.ParsedVersion is { } repin && repin >= RepinVersion && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.GuardrailRepin);
         }
 
         if (HasAll(setup, RegistryMarkers))

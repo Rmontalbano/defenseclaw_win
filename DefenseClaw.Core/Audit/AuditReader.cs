@@ -245,6 +245,9 @@ public sealed class AuditReader
     private const int DetailsOverOrdinal = 21;
     private const int StructuredOverOrdinal = 22;
 
+    /// <summary>The rowid, selected last so no other ordinal moves (<see cref="AuditCursor.RowId"/>).</summary>
+    private const int RowIdOrdinal = 23;
+
     /// <summary>
     /// The select list every row read shares: the twenty columns <see cref="Map"/> reads, with <c>details</c> and <c>structured_json</c>
     /// within <paramref name="payloadLimit"/> bytes (NULL past it: see <c>PayloadCap</c>), then the sort key
@@ -257,7 +260,8 @@ public sealed class AuditReader
         + "e.tool_name, e.session_id, e.run_id, e.request_id, e.trace_id, e.source, e.signal, e.binary_version, "
         + sortExpression + " AS sort_nanos, "
         + PayloadCap.SizeWhenOver("e.details", payloadLimit) + " AS details_over, "
-        + PayloadCap.SizeWhenOver("e.structured_json", payloadLimit) + " AS structured_json_over";
+        + PayloadCap.SizeWhenOver("e.structured_json", payloadLimit) + " AS structured_json_over, "
+        + "e.rowid AS rid";
 
     private readonly string _connectionString;
     private readonly int _commonRowThreshold;
@@ -1131,7 +1135,8 @@ public sealed class AuditReader
         var direction = query.Ascending ? "ASC" : "DESC";
         var orderKey = hints.Mode == KeyMode.Indexed ? RetentionColumn : "sort_nanos";
         sql.Append("ORDER BY ").Append(orderKey).Append(' ').Append(direction)
-           .Append(", e.id ").Append(direction).AppendLine()
+           .Append(", e.id ").Append(direction)
+           .Append(", e.rowid ").Append(direction).AppendLine()
            .AppendLine("LIMIT $limit");
 
         command.Parameters.AddWithValue("$limit", query.EffectiveLimit + 1);
@@ -1401,6 +1406,20 @@ public sealed class AuditReader
             command.Parameters.AddWithValue("$cursorId", cursor.Id);
             var comparison = query.Ascending ? ">" : "<";
 
+            // The rowid is the last tie-break (ORDER BY ..., e.id, e.rowid): rows that tie on timestamp AND id - NULL ids, which the schema allows -
+            // are otherwise skipped by the "id <" comparison. It is a third level of the residual only; the range the planner seeks is unchanged, and
+            // SQLite appends the rowid to every index, so the ORDER BY still needs no sort. A cursor without one keeps the two-level comparison.
+            string idTail;
+            if (cursor.RowId > 0)
+            {
+                command.Parameters.AddWithValue("$cursorRowId", cursor.RowId);
+                idTail = $"({IdKey} {comparison} $cursorId OR ({IdKey} = $cursorId AND e.rowid {comparison} $cursorRowId))";
+            }
+            else
+            {
+                idTail = $"{IdKey} {comparison} $cursorId";
+            }
+
             // Indexed: the leading "nanos <= $c" (">=" ascending) is a plain range the planner
             // seeks to on the index; the parenthesised remainder is the tie-break, evaluated as
             // a residual on the few rows that share the cursor's timestamp. Written as a bare
@@ -1413,8 +1432,8 @@ public sealed class AuditReader
             // NULL sorts (below every string), and Map hands such a row exactly that id. It is only ever the residual
             // of the tie-break, never the range the planner seeks, so the plan is unchanged.
             clauses.Add(mode == KeyMode.Indexed
-                ? $"({RetentionColumn} {comparison}= $cursorNanos AND ({RetentionColumn} {comparison} $cursorNanos OR {IdKey} {comparison} $cursorId))"
-                : $"({SortKey} {comparison} $cursorNanos OR ({SortKey} = $cursorNanos AND {IdKey} {comparison} $cursorId))");
+                ? $"({RetentionColumn} {comparison}= $cursorNanos AND ({RetentionColumn} {comparison} $cursorNanos OR {idTail}))"
+                : $"({SortKey} {comparison} $cursorNanos OR ({SortKey} = $cursorNanos AND {idTail}))");
         }
 
         if (clauses.Count > 0)
@@ -1550,6 +1569,7 @@ public sealed class AuditReader
             RawTimestamp = rawTimestamp,
             Timestamp = ParseTimestamp(rawTimestamp, nanos),
             TimestampNanos = nanos,
+            RowId = reader.FieldCount > RowIdOrdinal && !reader.IsDBNull(RowIdOrdinal) ? reader.GetInt64(RowIdOrdinal) : 0,
             Action = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
             Target = Nullable(reader, 3),
             Actor = Nullable(reader, 4),
