@@ -176,7 +176,16 @@ public sealed class AppServices : IDisposable
 
         Navigation = new ShellNavigation();
         AppRestart = new AppRestart(() => Cli.Activity);
-        AlertQueue = new AlertQueueReader(Paths.AuditDatabasePath, probe: AuditChanges, readTimeout: ReaderTimeouts.AlertQueue);
+        // A 1.x runtime's own alert list leaves detection-only findings out (CUST-374); the queue follows it there, and 0.8.10 keeps listing them.
+        AlertQueue = new AlertQueueReader(
+            Paths.AuditDatabasePath,
+            probe: AuditChanges,
+            readTimeout: ReaderTimeouts.AlertQueue,
+            excludeDetectionOnly: () => Runtime.Check(RuntimeCapability.RuntimeAlerts).IsAvailable);
+        RuntimeAlerts = new RuntimeAlertsService(
+            () => Runtime.Check(RuntimeCapability.RuntimeAlerts).IsAvailable,
+            RuntimeAlertsService.FromCli(Cli),
+            (since, token) => DetectionOnlyFindings.CountAsync(Paths.AuditDatabasePath, since, token));
         ConnectorScope = new ConnectorScope(Monitor);
         HookTotals = new ConnectorHookTotalsReader(
             Paths.AuditDatabasePath,
@@ -336,6 +345,9 @@ public sealed class AppServices : IDisposable
 
     /// <summary>The kept-fresh counts over <see cref="AlertQueue"/>: subscribe to <c>Changed</c> for a badge, call <c>RefreshAsync</c> after an acknowledge. Idle while nothing subscribes.</summary>
     internal AlertCountsService AlertCounts { get; }
+
+    /// <summary>The runtime's own alert list (<c>alerts --json</c>) and the detection-only count, for the Alerts panel to merge into the queue. Idle until the panel asks, and nothing without <see cref="RuntimeCapability.RuntimeAlerts"/>. See <see cref="RuntimeAlertsService"/>.</summary>
+    internal RuntimeAlertsService RuntimeAlerts { get; }
 
     /// <summary>
     /// How many audit rows, Activity entries and AI Discovery components are new since the operator last had each panel on screen (the sidebar's

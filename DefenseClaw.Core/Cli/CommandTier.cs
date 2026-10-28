@@ -252,6 +252,14 @@ public static class CommandTiers
             return CommandTier.ReadOnly;
         }
 
+        // `alerts --json [--limit N] [--connector X]` prints the alert list and changes nothing; the bare group is the only path it can be on
+        // (a subcommand after it, acknowledge or dismiss, makes the path longer and is classified by its verb).
+        if (path.Length == 1 && string.Equals(path[0], "alerts", StringComparison.OrdinalIgnoreCase) && options.Contains("--json", StringComparer.Ordinal) &&
+            !options.Any(MutatingFlags.Contains) && !options.Any(SensitiveFlags.Contains))
+        {
+            return CommandTier.ReadOnly;
+        }
+
         // The first recognised verb decides; destructive words anywhere in the path already won above
         // (over-warning is the safe direction). Unrecognised paths default to asking.
         var verb = path.FirstOrDefault(t => ReadOnlyVerbs.Contains(t) || StateChangingVerbs.Contains(t));

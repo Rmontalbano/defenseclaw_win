@@ -51,10 +51,17 @@ public enum RuntimeCapability
     /// either on a managed Secure Client host, so the version only decides whether to ask; a 404 or 405 is still "not available on this host".
     /// </summary>
     IdeInventory,
+    /// <summary>
     /// The gateway's administrator view of the policy it applies: <c>GET /api/v1/guardrail/profiles/resolve</c> (the Overview's Effective policy card,
     /// CUST-375). Judged from the runtime's version like <see cref="CorrelationApi"/>; the card itself still treats a 404 or 405 as "not supported".
     /// </summary>
     EffectivePolicy,
+    /// <summary>
+    /// The runtime's canonical alert list: <c>defenseclaw alerts --json</c> (1.0.0 or later), which lists enforcement actions, connector hook
+    /// blocks and health failures as alerts, leaves detection-only findings out, and names each alert's decision, rule and agent. The Alerts panel
+    /// merges it into the audit-database queue; 0.8.10 has no <c>--json</c> and keeps reading the database alone.
+    /// </summary>
+    RuntimeAlerts,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -85,6 +92,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.CorrelationApi => "Agent view (correlation ledger)",
         RuntimeCapability.IdeInventory => "AI BOM IDE plugins and agent identities",
         RuntimeCapability.EffectivePolicy => "Effective policy (gateway profile resolution)",
+        RuntimeCapability.RuntimeAlerts => "Runtime alert list (alerts --json)",
         _ => capability.ToString(),
     };
 
@@ -108,6 +116,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.CorrelationApi => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/correlation/* and /api/v1/agents/identities)",
         RuntimeCapability.IdeInventory => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/ai-usage/ide-plugins and /api/v1/agents/identities, except on a managed host)",
         RuntimeCapability.EffectivePolicy => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/guardrail/profiles/resolve)",
+        RuntimeCapability.RuntimeAlerts => "the runtime reports version 1.0.0 or later and lists its commands ('alerts --json' exists from 1.0.0)",
         _ => string.Empty,
     };
 }

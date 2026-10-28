@@ -289,6 +289,20 @@
                         IsOpen="{Binding ShowActionError, Mode=TwoWay}"
                         Message="{Binding ActionBannerText}"
                         AutomationProperties.LiveSetting="Polite" />
+            <!-- The runtime's own alert list (the alerts JSON command) could not be refreshed: the list below is the last good one, and nothing is blocked. -->
+            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                        Severity="Warning"
+                        IsClosable="False"
+                        IsOpen="{Binding HasRuntimeStale, Mode=OneWay}"
+                        Message="{Binding RuntimeStaleText}"
+                        AutomationProperties.Name="Alerts may be stale"
+                        AutomationProperties.LiveSetting="Polite" />
+            <TextBlock Style="{StaticResource DcResultCaption}"
+                       Margin="{StaticResource DcCardGap}"
+                       TextWrapping="Wrap"
+                       Text="{Binding DetectionOnlyText}"
+                       Visibility="{Binding HasDetectionOnly, Converter={StaticResource BoolToVisibility}}"
+                       AutomationProperties.Name="Detection-only findings not listed" />
         </StackPanel>
 
         <!--

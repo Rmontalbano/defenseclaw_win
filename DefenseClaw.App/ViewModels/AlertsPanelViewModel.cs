@@ -487,6 +487,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         // The counts service runs while anything listens (the tray always does) and says when the queue changed; a finding that
         // arrives while this panel is open shows up on its next tick.
         Services.AlertCounts.Changed += OnAlertCountsChanged;
+        Services.RuntimeAlerts.Changed += OnRuntimeAlertsChanged;
 
         // The Connector column follows the roster (CUST-261); the roster may have changed while the panel was away.
         Services.ConnectorScope.Changed += OnRosterChanged;
@@ -499,6 +500,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         Services.Monitor.PollCompleted -= OnPollCompleted;
         Services.AlertCounts.Changed -= OnAlertCountsChanged;
+        Services.RuntimeAlerts.Changed -= OnRuntimeAlertsChanged;
         Services.ConnectorScope.Changed -= OnRosterChanged;
         _clock.Stop();
         CancelDetail();
@@ -578,6 +580,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     {
         // What the inspector read for rows is read again, too: Refresh means "look now".
         ResetDetails();
+        Services.RuntimeAlerts.Request(force: true);
 
         // The queue first: when it serves, the gateway's list is not what is on screen and there is nothing to re-read there.
         await RefreshQueueAsync();
@@ -1065,7 +1068,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     /// </summary>
     private async Task ReloadAfterDispositionAsync()
     {
-        // The queue excludes what was just acknowledged by definition, so when it is the source that is all there is to do.
+        // The queue excludes what was just acknowledged by definition, so when it is the source that is all there is to do. The runtime's list
+        // is asked again at once (its rows join the queue), and the panel re-reads when it answers.
+        Services.RuntimeAlerts.Request(force: true);
         await RefreshQueueAsync();
         if (_queueActive)
         {
@@ -1586,7 +1591,9 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             return;
         }
 
-        var window = result.Counts.Newest;
+        // The runtime's own list joins the database's (CUST-374): what it has now, with a fresh request behind it when it is due.
+        var runtime = RuntimeForQueue();
+        var window = runtime is null ? result.Counts.Newest : MergeRuntime(result.Counts.Newest, runtime.Rows);
 
         // The gateway's egress decisions that deserve a row (blocked, or LLM-shaped) join the findings, newest first.
         var egressEvents = await ReadEgressEventsAsync().ConfigureAwait(true);
@@ -1596,6 +1603,12 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         // filter pass, and the list, its selection and its scroll position stay. Only the age in the note moves. (The Mac's
         // appliedCanonicalIDs comparison.) A finding whose id is empty has no stable key, so a window holding one is always rebuilt.
         var keys = QueueKeys(window, egressEvents);
+        if (keys is not null && runtime is not null)
+        {
+            // A list that brings only facts (same ids) still has to reach the rows.
+            keys = [.. keys, RuntimeSignature(runtime.Rows)];
+        }
+
         if (_queueActive && keys is not null && result.Counts.HasMore == _queueHasMore && keys.AsSpan().SequenceEqual(_appliedKeys))
         {
             _queueReadAt = DateTimeOffset.UtcNow;
@@ -1622,7 +1635,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             : await Services.Audit.GetByIdsAsync(missing).ConfigureAwait(true);
 
         // A row flattens and pretty-prints its attribute bag, and a first load builds hundreds: not on the UI thread.
-        var rows = await Task.Run(() => BuildQueueRows(window, shown, details)).ConfigureAwait(true);
+        var runtimeById = runtime is null ? null : RuntimeRowsById(runtime.Rows);
+        var rows = await Task.Run(() => BuildQueueRows(window, shown, details, runtimeById)).ConfigureAwait(true);
 
         var egress = EgressRows(egressEvents, shown);
         if (egress.Count > 0)
@@ -1649,7 +1663,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         _queueHasMore = result.Counts.HasMore;
 
         SourceNote = QueueNote();
-        SetEmpty("Nothing to acknowledge", "No unacknowledged findings are waiting in the audit database.");
+        SetEmpty("Nothing to acknowledge", "No unacknowledged findings are waiting in the audit database." + DetectionOnlySuffix());
         ApplyFilters();
 
         // Last, so a pass that failed half-way is not remembered as done: the next read rebuilds.
@@ -1693,7 +1707,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
     private static List<AlertItem> BuildQueueRows(
         IReadOnlyList<AlertQueueItem> window,
         Dictionary<string, AlertItem> shown,
-        IReadOnlyList<AuditEvent> details)
+        IReadOnlyList<AuditEvent> details,
+        IReadOnlyDictionary<string, RuntimeAlertRow>? runtime = null)
     {
         Dictionary<string, AuditEvent>? byId = null;
         if (details.Count > 0)
@@ -1708,17 +1723,22 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         var rows = new List<AlertItem>(window.Count);
         foreach (var item in window)
         {
+            RuntimeAlertRow? fromRuntime = null;
+            _ = item.Id.Length > 0 && runtime is not null && runtime.TryGetValue(item.Id, out fromRuntime);
+
             if (item.Id.Length > 0 && shown.TryGetValue(item.Id, out var existing))
             {
-                rows.Add(existing);
+                // A row shown before the runtime's list arrived gains its facts; one that has them keeps them.
+                rows.Add(fromRuntime is not null && !existing.HasRuntimeFacts ? existing.WithRuntime(fromRuntime) : existing);
             }
             else if (item.Id.Length > 0 && byId is not null && byId.TryGetValue(item.Id, out var detail))
             {
-                rows.Add(AlertItem.FromAudit(detail));
+                var audited = AlertItem.FromAudit(detail);
+                rows.Add(fromRuntime is not null ? audited.WithRuntime(fromRuntime) : audited);
             }
             else
             {
-                rows.Add(AlertItem.FromQueue(item));
+                rows.Add(fromRuntime is not null ? AlertItem.FromRuntime(fromRuntime) : AlertItem.FromQueue(item));
             }
         }
 
@@ -2137,11 +2157,11 @@ public sealed partial class AlertItem : ObservableObject
         }
     }
 
-    public string Headline { get; private init; } = string.Empty;
+    public string Headline { get; private set; } = string.Empty;
 
     public string Action { get; private init; } = string.Empty;
 
-    public string TargetRef { get; private init; } = string.Empty;
+    public string TargetRef { get; private set; } = string.Empty;
 
     public string Evidence { get; private init; } = string.Empty;
 
@@ -2159,7 +2179,7 @@ public sealed partial class AlertItem : ObservableObject
     /// <summary>Full attribute bag, pretty-printed for the detail pane.</summary>
     public string StructuredText { get; private init; } = string.Empty;
 
-    public IReadOnlyList<AlertField> Fields { get; private init; } = Array.Empty<AlertField>();
+    public IReadOnlyList<AlertField> Fields { get; private set; } = Array.Empty<AlertField>();
 
     /// <summary>
     /// "Too large to display: structured_json is 3.2 MB, over the 256 KB limit" when part of the finding's audit row was left in the database

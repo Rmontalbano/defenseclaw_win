@@ -302,6 +302,8 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.IdeInventory);
             // The same judgement for the effective-policy route (CUST-375): present since 1.0.0 (api.go registers it), no CLI screen to probe.
             present.Add(RuntimeCapability.EffectivePolicy);
+            // `alerts --json` has been there since 1.0.0 (cmd_alerts.py), and like the ledger it has no help screen worth probing for one flag.
+            present.Add(RuntimeCapability.RuntimeAlerts);
         }
 
         if (HasAll(setup, RegistryMarkers))

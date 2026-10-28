@@ -93,6 +93,7 @@ public sealed class AlertQueueReader
     private readonly int _windowLimit;
     private readonly AuditChangeProbe? _probe;
     private readonly TimeSpan _readTimeout;
+    private readonly Func<bool>? _excludeDetectionOnly;
 
     /// <summary>The finished answers, by <c>newestLimit</c>: the object a repeat read of an unchanged database gets back.</summary>
     private readonly SnapshotMemo<int, AlertQueueResult> _results;
@@ -114,12 +115,17 @@ public sealed class AlertQueueReader
     /// How long a read may run when its caller names no timeout; <see cref="DefaultTimeout"/> when null, which is what the app uses. A
     /// composition built for a test passes its own (<see cref="ReaderTimeouts"/>); <see cref="Timeout.InfiniteTimeSpan"/> is no limit.
     /// </param>
+    /// <param name="excludeDetectionOnly">
+    /// Asked at every read that touches the database: true leaves detection-only findings (<see cref="DetectionOnlyFindings"/>) out of the queue, as a
+    /// 1.x runtime's own alert list does. The app answers with the runtime's capability; null (and 0.8.10) lists them, as it always did.
+    /// </param>
     public AlertQueueReader(
         string databasePath,
         int windowLimit = DefaultWindowLimit,
         AuditChangeProbe? probe = null,
         TimeProvider? timeProvider = null,
-        TimeSpan? readTimeout = null)
+        TimeSpan? readTimeout = null,
+        Func<bool>? excludeDetectionOnly = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(windowLimit, 1);
@@ -133,6 +139,7 @@ public sealed class AlertQueueReader
         _windowLimit = windowLimit;
         _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
         _probe = probe;
+        _excludeDetectionOnly = excludeDetectionOnly;
         _results = new SnapshotMemo<int, AlertQueueResult>(capacity: 4, time: timeProvider);
         _windows = new SnapshotMemo<int, QueueWindow>(capacity: 1, time: timeProvider);
     }
@@ -234,7 +241,7 @@ public sealed class AlertQueueReader
 
         await using var command = connection.CreateCommand();
         // nosemgrep: csharp-sqli -- allow-list: BuildSql picks fixed fragments by whether the database has a column or table (a boolean, never the name itself); $limit is bound
-        command.CommandText = BuildSql(schema);
+        command.CommandText = BuildSql(schema, ExcludesDetectionOnly(schema));
 
         // One past the window, so "there are more" needs no second query.
         command.Parameters.AddWithValue("$limit", _windowLimit + 1);
@@ -259,6 +266,8 @@ public sealed class AlertQueueReader
         _windows.Store(0, stamp, new QueueWindow(window, hasMore));
         return Remember(newestLimit, stamp, new AlertQueueResult(AlertQueueStatus.Ok, new AlertCounts(window, hasMore, newestLimit), clock.Elapsed));
     }
+
+    private bool ExcludesDetectionOnly(Schema schema) => schema.Has("payload_json") && _excludeDetectionOnly?.Invoke() == true;
 
     private AlertQueueResult Remember(int newestLimit, AuditStamp stamp, AlertQueueResult result)
     {
@@ -294,7 +303,7 @@ public sealed class AlertQueueReader
 
         await using var command = connection.CreateCommand();
         // nosemgrep: csharp-sqli -- allow-list: the EXPLAIN prefix and BuildSql, as annotated above; $limit is bound
-        command.CommandText = "EXPLAIN QUERY PLAN " + BuildSql(schema);
+        command.CommandText = "EXPLAIN QUERY PLAN " + BuildSql(schema, ExcludesDetectionOnly(schema));
         command.Parameters.AddWithValue("$limit", _windowLimit + 1);
 
         // Columns: id, parent, notused, detail.
@@ -351,12 +360,17 @@ public sealed class AlertQueueReader
     /// The statement: two newest-first arms merged (see the type documentation). Optional parts follow the database: no
     /// acknowledgement table, no acknowledgement condition; no <c>connector</c> or <c>target</c> column, a NULL in their place.
     /// </summary>
-    private static string BuildSql(Schema schema)
+    private static string BuildSql(Schema schema, bool excludeDetectionOnly)
     {
         var connector = schema.Has("connector") ? "e.connector" : "NULL";
         var target = schema.Has("target") ? $"substr(e.target, 1, {TargetLimit.ToString(CultureInfo.InvariantCulture)})" : "NULL";
         var acknowledged = schema.HasProjection
             ? " AND NOT EXISTS (SELECT 1 FROM alert_acknowledgement_projection p WHERE p.alert_id = e.id)"
+            : string.Empty;
+
+        // The runtime's list leaves a detection-only finding out; the test is a residual filter, so it never changes which index drives an arm.
+        var detection = excludeDetectionOnly
+            ? $" AND NOT ({DetectionOnlyFindings.Clause.Replace("payload_json", "e.payload_json", StringComparison.Ordinal)})"
             : string.Empty;
 
         var findings = Arm(FindingArm);
@@ -377,7 +391,7 @@ public sealed class AlertQueueReader
                 FROM audit_events e
                 WHERE {bucketCondition}
                   AND UPPER(e.severity) IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
-                  AND e.action NOT LIKE 'dismiss%'{acknowledged}
+                  AND e.action NOT LIKE 'dismiss%'{acknowledged}{detection}
                 ORDER BY e.timestamp DESC, e.rowid DESC LIMIT $limit
             """;
     }
