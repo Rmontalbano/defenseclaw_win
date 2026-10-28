@@ -223,11 +223,26 @@
                                       SelectedValue="{Binding ScannerMode, Mode=TwoWay}"
                                       AutomationProperties.Name="Scanner mode" />
 
-                            <TextBlock Grid.Row="2" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Hook failure mode" />
+                            <TextBlock Grid.Row="2" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Hook failure mode"
+                                       Visibility="{Binding AsksFailMode, Converter={StaticResource BoolToVisibility}}" />
                             <ComboBox Grid.Row="2" Grid.Column="1" Width="320" HorizontalAlignment="Left" Margin="0,2,0,2"
                                       ItemsSource="{Binding FailModes}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                       SelectedValue="{Binding FailMode, Mode=TwoWay}"
+                                      Visibility="{Binding AsksFailMode, Converter={StaticResource BoolToVisibility}}"
                                       AutomationProperties.Name="Hook failure mode" />
+
+                            <!-- 1.0.4 per-user rules: no fail-mode choice; the rule pack decides what a hook does while the gateway is down. -->
+                            <TextBlock Grid.Row="2" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="During a gateway outage"
+                                       Visibility="{Binding OutageFollowsPolicy, Converter={StaticResource BoolToVisibility}}" />
+                            <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,2,0,2"
+                                        Visibility="{Binding OutageFollowsPolicy, Converter={StaticResource BoolToVisibility}}">
+                                <ui:ToggleSwitch Content="Block calls (strict rule pack)"
+                                                 IsChecked="{Binding StrictOutage, Mode=TwoWay}"
+                                                 AutomationProperties.Name="Block calls during a gateway outage"
+                                                 AutomationProperties.HelpText="Adds a separate, reviewed step after setup: defenseclaw guardrail use-pack strict." />
+                                <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap"
+                                           Text="On this runtime the rule pack decides: the default pack lets a call run with a warning while the gateway is not running, strict blocks it. Every other failure blocks." />
+                            </StackPanel>
 
                             <TextBlock Grid.Row="3" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="LLM judge" />
                             <ui:ToggleSwitch Grid.Row="3" Grid.Column="1" HorizontalAlignment="Left" Margin="0,2,0,2"
@@ -249,7 +264,7 @@
                             </StackPanel>
 
                             <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
-                                       Text="Observe never blocks; Action applies only to the connectors marked Enforce. Closed blocks on a hook failure; Open allows and logs." />
+                                       Text="Observe never blocks; Action applies only to the connectors marked Enforce." />
                         </Grid>
                     </StackPanel>
                 </Border>

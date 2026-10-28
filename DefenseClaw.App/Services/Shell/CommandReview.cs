@@ -384,6 +384,18 @@ public sealed record CommandReview
 
     public bool HasMultipleSteps => Steps.Count > 1;
 
+    /// <summary>The sentence every review of more than one command opens its summary with (CUST-379).</summary>
+    public const string SequenceSentence = "These commands will run in order; stops on first failure.";
+
+    /// <summary>
+    /// What the summary line shows: <see cref="Summary"/>, led by <see cref="SequenceSentence"/> when the review runs more than one command. A summary
+    /// that already says it (or a single command) is shown as it is.
+    /// </summary>
+    public string DisplaySummary =>
+        !HasMultipleSteps || Summary.Contains(SequenceSentence, StringComparison.Ordinal)
+            ? Summary
+            : Summary.Length > 0 ? SequenceSentence + " " + Summary : SequenceSentence;
+
     /// <summary>"Read-only", "Changes state" or "Destructive" — the word on the tier badge.</summary>
     public string TierLabel => LabelFor(Tier);
 

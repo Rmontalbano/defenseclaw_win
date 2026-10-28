@@ -114,7 +114,7 @@ public static partial class WizardStepFactory
                 var field = WizardFieldBuilder.From(option, "subcommand", gateValues, prefix);
                 if (field is not null)
                 {
-                    fields.Add(field);
+                    fields.Add(ObservabilityAddWording(target, name, field));
                 }
             }
 
@@ -277,7 +277,8 @@ public static partial class WizardStepFactory
             "--enable-meta",
             "--use-trigger",
             "--use-virustotal",
-            "--use-aidefense"),
+            "--use-aidefense",
+            "--use-osv"),
         Step(
             "llm",
             "LLM analyzer",
@@ -285,6 +286,7 @@ public static partial class WizardStepFactory
             help,
             "--llm-provider",
             "--llm-model",
+            "--llm-base-url",
             "--llm-consensus-runs"),
         Step(
             "policy",
@@ -292,6 +294,8 @@ public static partial class WizardStepFactory
             "How findings are graded, and whether connectivity is verified afterwards.",
             help,
             "--policy",
+            "--fail-on-severity",
+            "--review-queue-min",
             "--lenient",
             "--verify",
             "--non-interactive"));
@@ -312,7 +316,16 @@ public static partial class WizardStepFactory
             "Shared with the skill and plugin scanners through the unified llm: block.",
             help,
             "--llm-provider",
-            "--llm-model"),
+            "--llm-model",
+            "--llm-base-url"),
+        Step(
+            "api",
+            "Cisco AI Defense API",
+            "The remote scan API the api analyzer calls. The key is referenced by environment-variable NAME; store its value under Setup > Credentials.",
+            help,
+            "--api-endpoint",
+            "--api-key-env",
+            "--api-timeout-ms"),
         Step(
             "apply",
             "Apply",

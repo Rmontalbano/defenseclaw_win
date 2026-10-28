@@ -155,6 +155,20 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _failMode = "open";
 
+    /// <summary>
+    /// 1.0.4 per-user rules: the hook failure mode is not a choice (the policy tier decides, and <c>init --fail-mode open</c> is refused), so the form asks
+    /// <see cref="StrictOutage"/> instead. False on every older runtime and on a managed install, where the question is unchanged.
+    /// </summary>
+    public bool OutageFollowsPolicy =>
+        DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(_services.Runtime.Capabilities, _services.Installation.Context.IsManaged);
+
+    /// <summary>The opposite of <see cref="OutageFollowsPolicy"/>: the Hook failure mode box is shown.</summary>
+    public bool AsksFailMode => !OutageFollowsPolicy;
+
+    /// <summary>Block calls during a gateway outage: adds <c>guardrail use-pack strict</c> as a step after setup.</summary>
+    [ObservableProperty]
+    private bool _strictOutage;
+
     [ObservableProperty]
     private bool _humanApproval;
 
@@ -323,6 +337,10 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     {
         IsActionProfile = Profile == "action";
 
+        // The runtime probe can land after the window opens; the form follows it.
+        OnPropertyChanged(nameof(OutageFollowsPolicy));
+        OnPropertyChanged(nameof(AsksFailMode));
+
         var problem = string.Empty;
         if (!IsInstalled)
         {
@@ -367,6 +385,8 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
             ScannerMode = ScannerMode,
             LlmJudge = LlmJudge,
             FailMode = FailMode,
+            OutageFollowsPolicy = OutageFollowsPolicy,
+            StrictOutage = StrictOutage,
             HumanApproval = HumanApproval,
             HiltSeverity = HiltSeverity,
             StartGateway = StartGateway,

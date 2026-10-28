@@ -230,7 +230,7 @@ public sealed class KeysSetPlanTests
             Assert.Equal("llm", review.Steps[1].Argv[1]);
             Assert.Contains("--api-key-env " + Name, review.Steps[1].CommandText, StringComparison.Ordinal);
             Assert.DoesNotContain("--api-key", review.Steps[1].Argv.Where(a => a != "--api-key-env"));
-            Assert.Contains("in order", review.Summary, StringComparison.Ordinal);
+            Assert.Contains(CommandReview.SequenceSentence, review.DisplaySummary, StringComparison.Ordinal);
 
             Assert.All(EverythingShown(vm, key), text => Assert.DoesNotContain(Value, text, StringComparison.Ordinal));
             Assert.Contains("Step 1 stores", key.CredentialReviewNote, StringComparison.Ordinal);

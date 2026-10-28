@@ -209,7 +209,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
         // The catalog's definition is a cache over --help and knows nothing of this machine; the pages
         // start from what config.yaml says now. Applied per open wizard, never to the shared definition.
-        Definition = WizardBaseline.Apply(definition, services.Config, services.ConfigLoadError is null);
+        Definition = WizardFailModeRule.Apply(
+            WizardBaseline.Apply(definition, services.Config, services.ConfigLoadError is null),
+            DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(services.Runtime.Capabilities, services.Installation.Context.IsManaged));
         Credentials = new WizardCredentials(services.Paths);
 
         foreach (var step in Definition.Steps)
@@ -735,7 +737,8 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 }
 
                 _pendingArgv = argv;
-                ResultMessage = "Running. Cancel stops the command and everything it started.";
+                BeginPlanStep(stores.Length + 1, stores.Length + 1, CommandReview);
+                ResultMessage = $"Step {stores.Length + 1} of {stores.Length + 1}: running {PlanCommandText(CommandReview, stores.Length)}. Cancel stops the command and everything it started.";
             }
 
             // Null unless a typed secret is being supplied, in which case it carries the variable and nothing
@@ -744,7 +747,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
             var invocation = await _services.Cli.RunAsync(argv, null, token, options).ConfigureAwait(true);
             _invocation = invocation;
             PullOutput();
+            var plan = CommandReview;
             ApplyResult(invocation, preview);
+            if (stores.Length > 0)
+            {
+                ReportPlanEnd(plan, stores.Length + 1, stores.Length + 1);
+            }
         }
         catch (CliNotFoundException ex)
         {
@@ -1142,7 +1150,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         {
             Title = steps.Length > 1 ? "Commands" : "Command",
             Summary = steps.Length > 1
-                ? "Execute runs these in order, each only if the one before it succeeded. The first stores the key you typed; the value is shown nowhere and is on no command line."
+                ? "The first stores the key you typed; the value is shown nowhere and is on no command line."
                 : string.Empty,
             Steps = steps,
             RestartsGateway = restartWarning.Length > 0,

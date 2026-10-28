@@ -114,6 +114,52 @@ public sealed partial class WizardViewModel
         return steps.ToArray();
     }
 
+    // ---- Showing the sequence (CUST-379): the step that is running, its status on the review, a header in the console, and the failed step named.
+
+    /// <summary>The command line of step <paramref name="index"/> (zero based) of <paramref name="review"/>, or empty.</summary>
+    private static string PlanCommandText(CommandReview? review, int index) =>
+        review is not null && index >= 0 && index < review.Steps.Count ? review.Steps[index].CommandText : string.Empty;
+
+    private static void SetPlanStatus(CommandReview? review, int index, string text, string key)
+    {
+        if (review is not null && index >= 0 && index < review.Steps.Count)
+        {
+            review.Steps[index].SetStatus(text, key);
+        }
+    }
+
+    /// <summary>Marks step <paramref name="number"/> (one based) as running and starts its part of the console with a header line.</summary>
+    private void BeginPlanStep(int number, int total, CommandReview? review)
+    {
+        SetPlanStatus(review, number - 1, "Running…", "Warn");
+
+        var header = $"--- Step {number.ToString(CultureInfo.CurrentCulture)} of {total.ToString(CultureInfo.CurrentCulture)}: {PlanCommandText(review, number - 1)} ---";
+        Output.Add(new CliOutputRow(header, false));
+        OutputText += header + "\n";
+    }
+
+    /// <summary>
+    /// After the last step of a plan: its status on the review, and the result line naming it. A failed or stopped step is named; a plan that ran
+    /// completely says so. Earlier steps that succeeded are not undone.
+    /// </summary>
+    private void ReportPlanEnd(CommandReview? review, int number, int total)
+    {
+        var command = PlanCommandText(review, number - 1);
+        var n = number.ToString(CultureInfo.CurrentCulture);
+        var of = total.ToString(CultureInfo.CurrentCulture);
+
+        if (LastRunSucceeded)
+        {
+            SetPlanStatus(review, number - 1, "Done", "Ok");
+            ResultMessage = $"All {of} steps ran. " + ResultMessage;
+            return;
+        }
+
+        var stopped = ExitBadgeText.Contains("cancelled", StringComparison.Ordinal);
+        SetPlanStatus(review, number - 1, stopped ? "Stopped" : "Failed", stopped ? "Warn" : "Bad");
+        ResultMessage = $"Step {n} of {of} ({command}) {(stopped ? "was stopped" : "failed")}. " + ResultMessage + " The steps before it succeeded and are not undone.";
+    }
+
     /// <summary>
     /// Stores the typed values, in order, before the command runs. True when every one was stored and the command may run; otherwise the badge and the
     /// message already say why and the command must not run (the key it reads is not there).
@@ -138,6 +184,8 @@ public sealed partial class WizardViewModel
             }
 
             ResultMessage = $"Step {number} of {total}: storing {name}. This app is typing the value at the CLI's hidden prompt. Cancel stops it.";
+            var plan = CommandReview;
+            BeginPlanStep(i + 1, total, plan);
 
             _pendingArgv = argv;
             _invocation = null;
@@ -152,7 +200,15 @@ public sealed partial class WizardViewModel
 
             if (result.Succeeded)
             {
+                SetPlanStatus(plan, i, "Done", "Ok");
                 continue;
+            }
+
+            // The step failed: it is named, and the ones after it did not run.
+            SetPlanStatus(plan, i, result.Outcome == SecretPtyOutcome.Cancelled ? "Stopped" : "Failed", result.Outcome == SecretPtyOutcome.Cancelled ? "Warn" : "Bad");
+            for (var later = i + 1; later < total; later++)
+            {
+                SetPlanStatus(plan, later, "Not run: an earlier step did not succeed", "Neutral");
             }
 
             if (result.RouteFailed)

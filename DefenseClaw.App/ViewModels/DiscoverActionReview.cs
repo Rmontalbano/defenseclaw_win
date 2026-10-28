@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Diagnostics;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -395,6 +396,13 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 }
 
                 row.SetStatus("Running…", "Warn");
+                if (review.Steps.Count > 1)
+                {
+                    // The step that is running, by name, until the report replaces it (CUST-379).
+                    ResultKey = "Warn";
+                    ResultText = string.Create(CultureInfo.CurrentCulture, $"Step {i + 1} of {review.Steps.Count} is running: {row.CommandText}");
+                }
+
                 try
                 {
                     var options = step.Timeout is { } timeout

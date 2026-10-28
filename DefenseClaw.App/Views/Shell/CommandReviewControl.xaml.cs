@@ -267,7 +267,7 @@ public partial class CommandReviewControl : UserControl
         TitleText.Margin = Compact ? new Thickness(0, 0, 0, 6) : new Thickness(0, 0, 0, 8);
         TitleText.VerticalAlignment = Compact ? VerticalAlignment.Center : VerticalAlignment.Top;
 
-        SummaryText.Text = review?.Summary ?? string.Empty;
+        SummaryText.Text = review?.DisplaySummary ?? string.Empty;
         SummaryText.Visibility = !Compact && SummaryText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         ExactCaption.Visibility = !Compact && dialog && phase == CommandReviewPhase.Review ? Visibility.Visible : Visibility.Collapsed;
 

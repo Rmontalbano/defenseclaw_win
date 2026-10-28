@@ -27,8 +27,17 @@ public sealed record InitPlanOptions
 
     public bool LlmJudge { get; init; }
 
-    /// <summary><c>open</c> or <c>closed</c>.</summary>
+    /// <summary><c>open</c> or <c>closed</c>. Not sent (and not asked) when <see cref="OutageFollowsPolicy"/>.</summary>
     public string FailMode { get; init; } = "open";
+
+    /// <summary>
+    /// The runtime is a 1.0.4 per-user one (<c>PerUserHookRules</c>): a hook's gateway-outage mode follows the policy tier, and <c>init --fail-mode open</c> is
+    /// refused (cmd_init.py:261). <c>--fail-mode</c> is then left off the command, and <see cref="StrictOutage"/> is the one choice that is left.
+    /// </summary>
+    public bool OutageFollowsPolicy { get; init; }
+
+    /// <summary>With <see cref="OutageFollowsPolicy"/>: block calls during a gateway outage, by switching to the strict rule pack as a step of its own after <c>init</c>.</summary>
+    public bool StrictOutage { get; init; }
 
     /// <summary>Human-in-the-loop approval; only meaningful (and only sent) for the Action profile.</summary>
     public bool HumanApproval { get; init; }
@@ -145,7 +154,11 @@ public static class InitPlanBuilder
         }
 
         var scanner = options.ScannerMode is "remote" or "both" ? options.ScannerMode : "local";
-        head.AddRange(new[] { "--scanner-mode", scanner, options.LlmJudge ? "--with-judge" : "--no-judge", "--fail-mode", options.FailMode == "closed" ? "closed" : "open" });
+        head.AddRange(new[] { "--scanner-mode", scanner, options.LlmJudge ? "--with-judge" : "--no-judge" });
+        if (!options.OutageFollowsPolicy)
+        {
+            head.AddRange(new[] { "--fail-mode", options.FailMode == "closed" ? "closed" : "open" });
+        }
 
         if (profile == "action")
         {
@@ -178,6 +191,15 @@ public static class InitPlanBuilder
                 $"Add {ConnectorOnboarding.Label(followUp[1] == "claude-code" ? "claudecode" : followUp[1])} alongside the others.",
                 CommandTier.StateChanging,
                 CliRunner.LongRunningTimeout));
+        }
+
+        // Fail closed during an outage on a per-user host: the rule pack decides, so it is switched once the configuration exists and before the gateway starts.
+        if (options.OutageFollowsPolicy && options.StrictOutage)
+        {
+            steps.Add(new DiscoverStep(
+                new[] { "guardrail", "use-pack", "strict" },
+                "Switch the guardrail to the strict rule pack, so a hook blocks calls while the gateway is not running (the default pack lets them run with a warning). Nothing is restarted.",
+                CommandTier.StateChanging));
         }
 
         if (options.StartGateway)

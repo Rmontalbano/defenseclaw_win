@@ -22,6 +22,9 @@ public static class WizardCautions
     /// <summary>The heading of the TLS bar.</summary>
     public const string InsecureTlsTitle = "TLS verification is off";
 
+    /// <summary>The heading of the private-network bar (<c>setup observability add --allow-private-networks</c>).</summary>
+    public const string PrivateNetworkTitle = "Sends to a private or loopback address";
+
     /// <summary>The heading of the guardrail-off bar.</summary>
     public const string GuardrailOffTitle = "Turns the guardrail off";
 
@@ -50,6 +53,15 @@ public static class WizardCautions
                 InsecureTlsTitle,
                 "The CLI will not check this endpoint's certificate, so anyone on the network path can read what is sent to it, the API key " +
                 "included. The CLI describes this option as for lab use only; give it the endpoint's CA bundle instead if you can."));
+        }
+
+        if (IsObservabilityAdd(options) && HasFlag(options, "--allow-private-networks"))
+        {
+            warnings.Add(new CommandReviewWarning(
+                PrivateNetworkTitle,
+                "The destination may be an address on this computer or a private network, which the CLI otherwise refuses. Telemetry (traces, metrics or logs, as chosen) " +
+                "will be sent there" + (HasFlag(options, "--plaintext") ? ", without TLS, so anyone on the path can read it" : string.Empty) +
+                ". Do this only for a collector you run yourself."));
         }
 
         if (GuardrailScope.IsDisableCommand(argv))
@@ -81,6 +93,12 @@ public static class WizardCautions
                "DefenseClaw protection until the guardrail is enabled again. " + scope;
     }
 
+    private static bool IsObservabilityAdd(IReadOnlyList<string> options) =>
+        options.Count >= 4 &&
+        string.Equals(options[0], "setup", StringComparison.Ordinal) &&
+        string.Equals(options[1], "observability", StringComparison.Ordinal) &&
+        string.Equals(options[2], "add", StringComparison.Ordinal);
+
     private static bool IsSetupLlm(IReadOnlyList<string> options) =>
         options.Count >= 2 &&
         string.Equals(options[0], "setup", StringComparison.Ordinal) &&
@@ -96,7 +114,7 @@ public static class WizardCautions
         "--ping", "--no-ping", "--insecure-skip-verify", "--judge-insecure-skip-verify", "--non-interactive", "--accept-defaults", "--yes",
         "--human-approval", "--no-human-approval", "--restart", "--no-restart", "--verify", "--no-verify", "--show", "--disable",
         "--inherit-llm", "--no-inherit-llm", "--inherit", "--no-inherit", "--replace", "--no-replace", "--enable-judge", "--no-enable-judge",
-        "--no-reload",
+        "--no-reload", "--allow-private-networks", "--plaintext", "--dry-run", "--enabled", "--disabled",
     };
 
     /// <summary>
