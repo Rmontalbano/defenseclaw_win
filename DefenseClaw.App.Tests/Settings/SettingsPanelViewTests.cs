@@ -174,8 +174,8 @@ public sealed class SettingsPanelViewTests : IDisposable
 
         UiThread.Run(() =>
         {
-            // Tall enough for every card, the Installation block (CUST-308) included.
-            const double TallWindow = 3600;
+            // Tall enough for every card, the Installation block (CUST-308) and the 1.0.4 capability rows (CUST-372) included.
+            const double TallWindow = 4200;
             using var shell = Open(1200, TallWindow, out var page);
             var scroller = ScrollerOf(page);
 
