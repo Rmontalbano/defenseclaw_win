@@ -52,7 +52,7 @@ public sealed class Runtime104Tests
     [Fact]
     public void About_names_and_explains_both()
     {
-        foreach (var capability in new[] { RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules })
+        foreach (var capability in new[] { RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules, RuntimeCapability.Config104Keys })
         {
             Assert.False(string.IsNullOrWhiteSpace(RuntimeCapabilityCatalog.DisplayName(capability)));
             Assert.Contains("1.0.4", RuntimeCapabilityCatalog.Marker(capability), StringComparison.Ordinal);

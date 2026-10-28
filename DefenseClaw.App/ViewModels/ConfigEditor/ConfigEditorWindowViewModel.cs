@@ -392,6 +392,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     partial void OnParseErrorChanged(string? value)
     {
         OnPropertyChanged(nameof(ShowFormStaleNotice));
+        OnPropertyChanged(nameof(ShowParseErrorBar));
         RaiseFormEmptyState();
     }
 
@@ -431,6 +432,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         {
             ShowRestartPrompt = false;
         }
+
+        VoidUndoOnFurtherEdit(value);
 
         // Programmatic publishes (a load, a FORM edit) set this around the assignment; see
         // SetRawTextWithoutRebuildFlag for why the flag is reset there and not here.
@@ -497,7 +500,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                ApplyLoadFailure($"config.yaml could not be read: {ex.Message}");
+                ApplyLoadFailure($"config.yaml could not be read: {ex.Message}", ConfigLoadProblem.FromRead(ex));
                 return;
             }
 
@@ -510,6 +513,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             }
 
             LoadError = null;
+            LoadProblem = null;
+            LoadProblemActionMessage = null;
+            ClearRebaseState();
 
             // Set before the assignment so the change hook compares against the file just read, and cleared
             // again after it: an unchanged text raises no hook, so a sticky "modified" would otherwise survive.
@@ -529,8 +535,11 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             {
                 _document = ConfigStore.Parse(string.Empty);
                 ParseError = ex.Message;
+                LoadProblem = ConfigLoadProblem.FromParse(ex);
                 ClearSections();
             }
+
+            RefreshFormNotes();
 
             // On a failed parse FORM has nothing (or something stale) to show for this RAW
             // text; keep it marked stale so FORM edits stay refused until RAW parses.
@@ -561,9 +570,13 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     /// <see cref="LoadFailed"/>, FORM is unavailable, and only a successful <see cref="LoadAsync"/>
     /// (Reload) clears it.
     /// </summary>
-    private void ApplyLoadFailure(string message)
+    private void ApplyLoadFailure(string message, ConfigLoadProblem problem)
     {
         LoadError = message;
+        LoadProblem = problem;
+        LoadProblemActionMessage = null;
+        ClearRebaseState();
+        FormNotes = Array.Empty<string>();
         ParseError = null;
 
         _diskText = string.Empty;
@@ -781,7 +794,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     {
         // Loading, saving and a pending question all own the buffer right now; the drift check on Save is the
         // backstop for a change that lands in their window, and a cancelled question re-checks (see the finally there).
-        if (_disposed || _diskChangeBusy || _resolvingUnsaved || IsLoading || IsSaving || LoadFailed)
+        if (_disposed || _diskChangeBusy || _resolvingUnsaved || IsLoading || IsSaving || _rebasing)
         {
             return;
         }
@@ -792,6 +805,14 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             var onDisk = _saveService.CaptureSignature();
             if (onDisk == _loadedSignature || _disposed)
             {
+                return;
+            }
+
+            // A file that could not be loaded left an empty, inert editor with nothing to lose: when it changes (the lock was released, the permissions
+            // fixed, the YAML repaired in another editor) it is read again by itself, and a failure shows the new reason (CUST-377).
+            if (LoadFailed)
+            {
+                await ReloadCoreAsync().ConfigureAwait(true);
                 return;
             }
 
@@ -988,10 +1009,15 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
                 ShowRestartPrompt = true;
 
                 // ... and the bar above is the editor's own, gone with the next edit. A save that changed a value (not a comment, spacing or key
-                // order) also joins the app-wide queue, which the Setup hub and the Overview keep until a restart or Clear (CUST-267).
-                if (RestartQueueRules.ConfigSaveReason(textBeforeSave, textToSave) is { } restartReason)
+                // order) also joins the app-wide queue, which the Setup hub and the Overview keep until a restart or Clear (CUST-267). A gateway that
+                // reloads config.yaml itself needs the restart only for the keys it cannot apply in place (CUST-377).
+                if (RestartQueueRules.ConfigSaveReason(textBeforeSave, textToSave, RestartQueueRules.ConfigSavedText, GatewayHotReloads) is { } restartReason)
                 {
                     _ = _services.RestartQueue.Queue(restartReason);
+                }
+                else
+                {
+                    ApplyHotReloadOutcome(textBeforeSave, textToSave);
                 }
 
                 // Typing that happened while the save was in flight is not saved yet.
@@ -1035,7 +1061,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     /// <summary>A saved-and-validated file proves the text parses; drop a stale parse-error banner if our own parser agrees.</summary>
     private void ClearParseErrorIfParses(string text)
     {
-        if (ParseError is null)
+        if (ParseError is null && LoadProblem is null)
         {
             return;
         }
@@ -1044,6 +1070,9 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         {
             _ = ConfigStore.Parse(text, _paths.ConfigFilePath);
             ParseError = null;
+
+            // The file on disk is the saved text now, and it parses: the "could not be loaded" card is about the file it replaced.
+            LoadProblem = null;
         }
         catch (ConfigParseException)
         {
@@ -1082,7 +1111,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             // A restore is a write to config.yaml like a save is (CUST-267), so it queues a restart when it changed a value of a file the gateway
             // may be running. Restoring after a rejected save is the usual case, and queues nothing: the file goes back to what the gateway has.
             if (!replacedAnUnvalidatedFile &&
-                RestartQueueRules.ConfigSaveReason(textBeforeRestore, _diskText, RestartQueueRules.ConfigRestoredText) is { } restartReason)
+                RestartQueueRules.ConfigSaveReason(textBeforeRestore, _diskText, RestartQueueRules.ConfigRestoredText, GatewayHotReloads) is { } restartReason)
             {
                 _ = _services.RestartQueue.Queue(restartReason);
             }
@@ -1243,6 +1272,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     private void RebuildForm()
     {
+        RefreshFormNotes();
         var result = ConfigFormBuilder.Build(_formSourceYaml, _document, OnFieldCommitted, OnListCommitted, CurrentChoiceProfile());
 
         ClearSections();
@@ -1270,7 +1300,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         ConfigChoiceProfile.ForHost(
             extendedConnectors: _services.Runtime.Capabilities.Has(RuntimeCapability.TuiRegistry),
             connectorsRetired: RemovedConnectors.AreRetired(_services.Runtime.Capabilities),
-            savedFailModeIgnored: DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(_services.Runtime.Capabilities, _services.Installation.Context.IsManaged));
+            savedFailModeIgnored: DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(_services.Runtime.Capabilities, _services.Installation.Context.IsManaged),
+            keys104: HasConfig104Keys);
 
     /// <summary>Empties the FORM tree. The held-back values go with it: they were boxes of that tree, and RAW never had them.</summary>
     private void ClearSections()

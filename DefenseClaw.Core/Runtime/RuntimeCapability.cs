@@ -85,6 +85,20 @@ public enum RuntimeCapability
     /// treated as "not supported" by the review that runs it.
     /// </summary>
     GuardrailRepin,
+
+    /// <summary>
+    /// The gateway applies a config.yaml change in place for every key outside its restart set (<c>restartKeys</c>, config_writer.py and configwrite.go), so a saved
+    /// change to most settings needs no restart. Present since 1.0.0 (judged from the version, like <see cref="CorrelationApi"/>); 0.8.10 reads config.yaml only
+    /// at start, and an unknown runtime is treated the same, so the app keeps predicting a restart for every change there.
+    /// </summary>
+    GatewayConfigReload,
+
+    /// <summary>
+    /// The config keys 1.0.4 added or changed that the editor shows only for it: <c>scanners.mcp_scanner.unverified_server</c> (warn or block), <c>openshell.trusted_ca_bundle</c>,
+    /// the read-only <c>local_stack</c> record on a local Splunk destination, and the notes that severities are read in any case and that profile assignments combine
+    /// to the strictest. Judged from the version (1.0.4 or later).
+    /// </summary>
+    Config104Keys,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -119,6 +133,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.ConnectorsRetired => "OpenHands and OmniGent removed",
         RuntimeCapability.PerUserHookRules => "Per-user hook rules of 1.0.4",
         RuntimeCapability.GuardrailRepin => "Re-pin an edited guardrail pack",
+        RuntimeCapability.GatewayConfigReload => "Gateway hot config reload",
+        RuntimeCapability.Config104Keys => "Config keys of 1.0.4",
         _ => capability.ToString(),
     };
 
@@ -146,6 +162,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.ConnectorsRetired => "the runtime reports version 1.0.4 or later and lists its commands (setup openhands and setup omnigent are gone)",
         RuntimeCapability.PerUserHookRules => "the runtime reports version 1.0.4 or later and lists its commands (a saved per-user hook_fail_mode is not applied, and a leftover install lock blocks hooks)",
         RuntimeCapability.GuardrailRepin => "the runtime reports version 1.0.4 or later and lists its commands ('guardrail use-pack' gained --repin and --yes in 1.0.4)",
+        RuntimeCapability.GatewayConfigReload => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then applies a config.yaml change outside its restart keys in place)",
+        RuntimeCapability.Config104Keys => "the runtime reports version 1.0.4 or later and lists its commands (mcp_scanner.unverified_server, openshell.trusted_ca_bundle and the Splunk local_stack record are in its schema)",
         _ => string.Empty,
     };
 }

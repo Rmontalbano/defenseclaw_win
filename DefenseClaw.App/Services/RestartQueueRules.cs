@@ -144,7 +144,12 @@ internal static class RestartQueueRules
     /// <param name="before">What config.yaml held.</param>
     /// <param name="after">What it holds now.</param>
     /// <param name="what">How the reason starts: <see cref="ConfigSavedText"/> or <see cref="ConfigRestoredText"/>.</param>
-    public static string? ConfigSaveReason(string before, string after, string what = ConfigSavedText)
+    /// <param name="gatewayHotReloads">
+    /// The connected runtime's gateway reloads config.yaml in place (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.GatewayConfigReload"/>, CUST-377):
+    /// then only a changed key the gateway applies after a restart (<see cref="ConfigReloadRules"/>) queues one, and the reason names only the sections that hold
+    /// such a key. A text that cannot be compared keeps the answer above. False (0.8.10, a runtime that has not answered): every changed value queues one, as before.
+    /// </param>
+    public static string? ConfigSaveReason(string before, string after, string what = ConfigSavedText, bool gatewayHotReloads = false)
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
@@ -154,6 +159,30 @@ internal static class RestartQueueRules
         if (!change.Changed)
         {
             return null;
+        }
+
+        if (gatewayHotReloads)
+        {
+            var verdict = DefenseClaw.Core.Config.ConfigReloadRules.Classify(before, after);
+            if (verdict.Parsed)
+            {
+                if (verdict.RestartPaths.Count == 0)
+                {
+                    return null;
+                }
+
+                var restartSections = new List<string>();
+                foreach (var path in verdict.RestartPaths)
+                {
+                    var top = path.Split(DefenseClaw.Core.Config.ConfigYamlFlatten.Separator)[0];
+                    if (top.Length is > 0 and <= 40 && top.All(static c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-') && !restartSections.Contains(top, StringComparer.Ordinal))
+                    {
+                        restartSections.Add(top);
+                    }
+                }
+
+                change = new ConfigChange(true, restartSections);
+            }
         }
 
         var shown = change.Sections.Take(MaxSectionsNamed).ToArray();

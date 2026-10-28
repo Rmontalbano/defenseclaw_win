@@ -27,11 +27,12 @@ public sealed record ConfigFieldInfo(string Hint, IReadOnlyList<string>? Options
 /// <param name="ExtendedConnectors">The pinned newer source's connector set.</param>
 /// <param name="ConnectorsRetired">The runtime removed OpenHands and OmniGent (1.0.4, <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ConnectorsRetired"/>): no picker offers them.</param>
 /// <param name="SavedFailModeIgnored">A per-user 1.0.4 runtime does not apply a saved <c>hook_fail_mode</c> (<see cref="DefenseClaw.Core.Config.HookFailModeRule"/>); the fail-mode fields say so.</param>
-public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false)
+/// <param name="Keys104">The runtime has the config keys 1.0.4 added (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.Config104Keys"/>, CUST-377): <c>scanners.mcp_scanner.unverified_server</c>, <c>openshell.trusted_ca_bundle</c> and the severity notes are in the catalogue; without it they are not, and the form is exactly what it was.</param>
+public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false, bool Keys104 = false)
 {
     /// <summary>This machine's operating system, with the 0.8.10 connector set: what the editor uses until the runtime says otherwise.</summary>
-    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false) =>
-        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored);
+    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false, bool keys104 = false) =>
+        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored, keys104);
 
     /// <summary>Windows with the 0.8.10 connector set: this app's own profile when no runtime has been probed.</summary>
     public static ConfigChoiceProfile Windows { get; } = new("windows", false);
@@ -75,6 +76,12 @@ public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors,
 public static class ConfigFieldCatalog
 {
     private const string BlankLabel = "(blank)";
+
+    /// <summary>1.0.4 reads a severity in any case (<c>config.py</c> <c>normalize_guardrail_level</c>, <c>hilt.min_severity</c> upper-cased on read) and writes it upper-case.</summary>
+    private const string SeverityAnyCase = "A level is read in any case (high and HIGH are the same) and stored upper-case.";
+
+    /// <summary><c>GUARDRAIL_LEVELS</c> (config.py), strongest first, with a leading blank for "inherit".</summary>
+    private static readonly string[] Levels = { string.Empty, "CRITICAL", "HIGH", "MEDIUM", "LOW" };
 
     private const string HookFailModeReason =
         "Hook fail mode is not edited here: change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which update the " +
@@ -191,7 +198,7 @@ public static class ConfigFieldCatalog
         profile ??= ConfigChoiceProfile.ForHost();
         if (ExactEntries.TryGetValue(path, out var entry))
         {
-            return entry.Resolve(profile, Array.Empty<string>());
+            return entry.Since104 && !profile.Keys104 ? null : entry.Resolve(profile, Array.Empty<string>());
         }
 
         var segments = path.Split('.');
@@ -199,7 +206,7 @@ public static class ConfigFieldCatalog
         {
             if (pattern.Segments.Length == segments.Length && pattern.TryMatch(segments, out var captures))
             {
-                return pattern.Entry.Resolve(profile, captures);
+                return pattern.Entry.Since104 && !profile.Keys104 ? null : pattern.Entry.Resolve(profile, captures);
             }
         }
 
@@ -217,10 +224,18 @@ public static class ConfigFieldCatalog
         Func<string[], string> Hint,
         Func<ConfigChoiceProfile, IReadOnlyList<string>>? Options = null,
         string? ReadOnlyReason = null,
-        Func<ConfigChoiceProfile, string?>? ReadOnlyReasonFor = null)
+        Func<ConfigChoiceProfile, string?>? ReadOnlyReasonFor = null,
+        bool Since104 = false,
+        string? HintSuffix104 = null)
     {
+        /// <summary>A key the runtime has only from 1.0.4 (<see cref="ConfigChoiceProfile.Keys104"/>): without it the catalogue does not know the key.</summary>
+        public bool Since104 { get; } = Since104;
+
         public ConfigFieldInfo Resolve(ConfigChoiceProfile profile, string[] captures) =>
-            new(Hint(captures), Options?.Invoke(profile), ReadOnlyReasonFor?.Invoke(profile) ?? ReadOnlyReason);
+            new(
+                profile.Keys104 && HintSuffix104 is not null ? Hint(captures) + " " + HintSuffix104 : Hint(captures),
+                Options?.Invoke(profile),
+                ReadOnlyReasonFor?.Invoke(profile) ?? ReadOnlyReason);
     }
 
     private sealed record Pattern(string[] Segments, Entry Entry)
@@ -345,7 +360,7 @@ public static class ConfigFieldCatalog
         Hint("guardrail.allow_empty_providers", "Let sidecar boot with no upstream providers.");
         Hint("guardrail.allow_unknown_llm_domains", "Permit unknown LLM-looking hosts.");
         Hint("guardrail.hilt.enabled", "Ask before supported high-risk actions.");
-        Choice("guardrail.hilt.min_severity", "Minimum severity for approval prompts.", "HIGH", "MEDIUM", "LOW", "CRITICAL");
+        Add("guardrail.hilt.min_severity", new Entry(_ => "Minimum severity for approval prompts.", _ => new[] { "HIGH", "MEDIUM", "LOW", "CRITICAL" }, HintSuffix104: SeverityAnyCase));
         Hint("guardrail.host", "Proxy bind address.");
         Hint("guardrail.port", "Proxy listen port.");
         Hint("guardrail.model", "Legacy upstream model identifier.");
@@ -382,7 +397,7 @@ public static class ConfigFieldCatalog
         Add("guardrail.connectors.*.enabled", new Entry(c => $"Per-connector guardrail switch for {c[0]} (off tears down its hooks; on by default)."));
         Add("guardrail.connectors.*.hook_fail_mode", new Entry(_ => string.Empty, ReadOnlyReasonFor: HookFailModeReasonFor));
         Add("guardrail.connectors.*.hilt.enabled", new Entry(c => $"Ask before supported high-risk actions for {c[0]}."));
-        Add("guardrail.connectors.*.hilt.min_severity", new Entry(c => $"Minimum severity for {c[0]} approval prompts.", _ => new[] { "HIGH", "MEDIUM", "LOW", "CRITICAL" }));
+        Add("guardrail.connectors.*.hilt.min_severity", new Entry(c => $"Minimum severity for {c[0]} approval prompts.", _ => new[] { "HIGH", "MEDIUM", "LOW", "CRITICAL" }, HintSuffix104: SeverityAnyCase));
         Add("guardrail.connectors.*.block_message", new Entry(c => $"Per-connector block message for {c[0]} (blank inherits the global message)."));
 
         // ---- The LLM override block of a component: _llm_override_fields, setup.py:6415-6429
@@ -451,6 +466,21 @@ public static class ConfigFieldCatalog
         Hint("openshell.policy_dir", "OpenShell policy YAML directory.");
         Choice("openshell.mode", "docker, standalone, or blank auto-detect.", string.Empty, "docker", "standalone");
         Hint("openshell.version", "Pinned OpenShell version.");
+
+        // ---- Keys of 1.0.4 (config.py, schemas/config/v8): shown only for a runtime that has them (Since104). CUST-377.
+        Add("openshell.trusted_ca_bundle", new Entry(
+            _ => "PEM file of CA certificates sandboxes trust besides the image's public roots (a TLS-inspecting proxy's root): an absolute path or one starting with ~/. Blank: none. Images built while it is set carry them.",
+            Since104: true));
+        Add("scanners.mcp_scanner.unverified_server", new Entry(
+            _ => "What mcp set and install admission do with an MCP server they could not verify (its scan did not finish, DNS failure included): warn adds or keeps it with a warning and an audit record; block refuses it. Blank is warn on a per-user host.",
+            _ => new[] { "warn", "block" },
+            Since104: true));
+        foreach (var level in new[] { "block_at", "alert_at" })
+        {
+            var what = level == "block_at" ? "Severity at which a finding is blocked" : "Severity at which a finding raises an alert";
+            Add("guardrail." + level, new Entry(_ => what + " (blank inherits the rule pack's level). " + SeverityAnyCase, _ => Levels, Since104: true));
+            Add("guardrail.connectors.*." + level, new Entry(c => $"{what} for {c[0]} (blank inherits the global level). " + SeverityAnyCase, _ => Levels, Since104: true));
+        }
         Hint("openshell.sandbox_home", "Root of per-sandbox state.");
         Hint("openshell.auto_pair", "Blank=default true.");
         Hint("openshell.host_networking", "Blank=default false.");

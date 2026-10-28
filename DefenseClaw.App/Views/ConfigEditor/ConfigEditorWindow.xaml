@@ -522,19 +522,94 @@
                 error. Save and FORM stay disabled until Reload succeeds, so the empty editor
                 below can never be mistaken for, or saved over, the real file.
             -->
-            <ui:InfoBar Title="config.yaml could not be loaded — Save is disabled until Reload succeeds"
-                        Margin="{StaticResource DcCardGap}"
-                        IsClosable="False"
-                        IsOpen="{Binding LoadError, Converter={StaticResource StringHasValue}, FallbackValue=False}"
-                        Message="{Binding LoadError}"
-                        Severity="Error" />
+            <!--
+                A config.yaml that cannot be loaded (CUST-377): unreadable, not YAML, or refused for its size. What is wrong, the line and
+                column when the parser gave them, what to do about it, and the actions the app already has - open it in an editor, show it
+                in Explorer, Reload. The form below is empty on purpose; this says why instead of leaving it blank.
+            -->
+            <Border Margin="{StaticResource DcCardGap}"
+                    Style="{StaticResource DcCardCompact}"
+                    AutomationProperties.Name="config.yaml could not be loaded"
+                    Visibility="{Binding HasLoadProblem, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource DcCardTitle}" Text="{Binding LoadProblem.Title}" />
+                    <TextBlock Margin="0,4,0,0"
+                               Style="{StaticResource DcCaption}"
+                               Text="{Binding LoadProblem.Location}"
+                               Visibility="{Binding LoadProblem.HasLocation, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Margin="0,4,0,0"
+                               Style="{StaticResource DcMono}"
+                               Text="{Binding LoadProblem.Reason}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Margin="0,8,0,0"
+                               Style="{StaticResource DcCaption}"
+                               Text="{Binding LoadProblem.Guidance}"
+                               TextWrapping="Wrap" />
+                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <ui:Button Appearance="Secondary"
+                                   AutomationProperties.HelpText="Opens config.yaml with the program Windows has for it."
+                                   Command="{Binding OpenConfigInEditorCommand}"
+                                   Content="Open in editor" />
+                        <ui:Button Margin="8,0,0,0"
+                                   Appearance="Secondary"
+                                   AutomationProperties.HelpText="Shows config.yaml in Explorer."
+                                   Command="{Binding ShowConfigInExplorerCommand}"
+                                   Content="Show in Explorer" />
+                        <ui:Button Margin="8,0,0,0"
+                                   Appearance="Secondary"
+                                   AutomationProperties.HelpText="Reads config.yaml again."
+                                   Command="{Binding ReloadCommand}"
+                                   Content="Reload" />
+                    </StackPanel>
+                    <TextBlock Margin="0,8,0,0"
+                               Style="{StaticResource DcCaption}"
+                               Text="{Binding LoadProblemActionMessage}"
+                               Visibility="{Binding HasLoadProblemActionMessage, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+            </Border>
 
             <ui:InfoBar Title="config.yaml does not parse as YAML"
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
-                        IsOpen="{Binding ParseError, Converter={StaticResource StringHasValue}, FallbackValue=False}"
+                        IsOpen="{Binding ShowParseErrorBar, Mode=OneWay}"
                         Message="{Binding ParseError}"
                         Severity="Error" />
+
+            <!-- What the 1.0.4 runtime does with this file that a field cannot say: the local Splunk stack record, the strictest-profile rule. Only for a runtime that has them. -->
+            <ItemsControl Margin="{StaticResource DcCardGap}"
+                          ItemsSource="{Binding FormNotes}"
+                          Visibility="{Binding HasFormNotes, Converter={StaticResource BoolToVisibility}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ui:InfoBar Margin="0,0,0,4"
+                                    IsClosable="False"
+                                    IsOpen="True"
+                                    Message="{Binding}"
+                                    Severity="Informational" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- After a rebase of the draft over a changed config.yaml: what it did and the keys changed in both places. Undo puts the draft back as it was. -->
+            <ui:InfoBar Title="Draft rebased onto the new config.yaml"
+                        Margin="{StaticResource DcCardGap}"
+                        IsClosable="False"
+                        IsOpen="{Binding HasRebaseNotice, Mode=OneWay}"
+                        Message="{Binding RebaseNotice}"
+                        Severity="Informational" />
+            <StackPanel Margin="{StaticResource DcCardGap}"
+                        Orientation="Horizontal"
+                        Visibility="{Binding HasRebaseNotice, Converter={StaticResource BoolToVisibility}}">
+                <ui:Button Appearance="Secondary"
+                           AutomationProperties.HelpText="Puts your draft back exactly as it was before the rebase."
+                           Command="{Binding UndoRebaseCommand}"
+                           Content="Undo rebase"
+                           Visibility="{Binding CanUndoRebase, Converter={StaticResource BoolToVisibility}}" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Secondary"
+                           Command="{Binding DismissRebaseNoticeCommand}"
+                           Content="Dismiss" />
+            </StackPanel>
 
             <ui:InfoBar Title="FORM view unavailable"
                         Margin="{StaticResource DcCardGap}"
@@ -557,6 +632,11 @@
                            Content="View on-disk version" />
                 <ui:Button Margin="8,0,0,0"
                            Appearance="Secondary"
+                           AutomationProperties.HelpText="Shows what changed on disk, and what putting your edits on the new file would do. Nothing is changed."
+                           Command="{Binding ReviewExternalChangeCommand}"
+                           Content="Review the difference" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Secondary"
                            Command="{Binding ReloadCommand}"
                            Content="Reload" />
             </StackPanel>
@@ -570,15 +650,20 @@
                         Margin="{StaticResource DcCardGap}"
                         IsClosable="False"
                         IsOpen="{Binding ShowExternalChangeBanner}"
-                        Message="Something else edited the file while you had unsaved changes here. Your edits have not been touched. Reload to take the file's version and drop your edits, or keep your edits and compare them first."
+                        Message="Something else edited the file while you had unsaved changes here. Your edits have not been touched. Review the difference, then rebase your edits onto the new file, keep them as they are, or drop them and reload."
                         Severity="Warning" />
             <StackPanel Margin="{StaticResource DcCardGap}"
                         Orientation="Horizontal"
                         Visibility="{Binding ShowExternalChangeBanner, Converter={StaticResource BoolToVisibility}}">
-                <ui:Button Appearance="Secondary"
+                <ui:Button Appearance="Primary"
+                           AutomationProperties.HelpText="Shows what changed on disk, and what putting your edits on the new file would do. Nothing is changed."
+                           Command="{Binding ReviewExternalChangeCommand}"
+                           Content="Review the difference" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Secondary"
                            AutomationProperties.HelpText="Replaces the editor with the file on disk. Your unsaved edits are dropped."
                            Command="{Binding ReloadDiscardingEditsCommand}"
-                           Content="Reload (drop my edits)" />
+                           Content="Discard my edits and reload" />
                 <ui:Button Margin="8,0,0,0"
                            Appearance="Secondary"
                            AutomationProperties.HelpText="Dismisses this notice and keeps the text in the editor. Saving will still report that the file changed."
@@ -794,6 +879,85 @@
                         <ui:SymbolIcon Symbol="Save24" />
                     </ui:Button.Icon>
                 </ui:Button>
+            </StackPanel>
+        </Grid>
+
+        <!--
+            config.yaml changed on disk under an unsaved draft (CUST-377): what changed on disk since the editor read it (masked, like the
+            pre-save review), the keys changed in both places, and the choice - rebase the draft onto the new file, or drop it and reload.
+            Nothing here changes anything until a button is pressed; Esc or Back to editing leaves the draft as it was.
+        -->
+        <Grid Grid.Row="1"
+              Grid.RowSpan="2"
+              Background="{DynamicResource DcWindowBackgroundBrush}"
+              Visibility="{Binding IsReviewingExternalChange, Converter={StaticResource BoolToVisibility}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0" Margin="{StaticResource DcCardGap}">
+                <TextBlock Style="{StaticResource DcSectionHeader}" Text="config.yaml changed on disk" />
+                <TextBlock Style="{StaticResource DcCaption}" Text="{Binding ExternalChangeSummary}" TextWrapping="Wrap" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Text="Below: what changed on disk since you opened it. Secret values are hidden; unchanged lines are folded. Rebase puts your edited settings on top of the new file."
+                           TextWrapping="Wrap" />
+                <ui:InfoBar Margin="0,8,0,0"
+                            IsClosable="False"
+                            IsOpen="{Binding RebaseBlockedReason, Converter={StaticResource StringHasValue}, FallbackValue=False}"
+                            Message="{Binding RebaseBlockedReason}"
+                            Severity="Warning"
+                            Title="Rebase is not possible right now" />
+                <StackPanel Margin="0,8,0,0" Visibility="{Binding HasRebaseConflicts, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcCardTitle}" Text="Changed in both places (the file's value is kept)" />
+                    <ItemsControl AutomationProperties.Name="Settings changed in both places" ItemsSource="{Binding RebaseConflicts}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vmc:RebaseConflict}">
+                                <TextBlock Margin="0,2,0,0"
+                                           Style="{StaticResource DcMono}"
+                                           Text="{Binding Line, Mode=OneWay}"
+                                           TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Row="1"
+                    Margin="{StaticResource DcCardGap}"
+                    Style="{StaticResource DcCodeBlock}">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsControl AutomationProperties.Name="Changes made to config.yaml on disk"
+                                  ItemTemplate="{StaticResource DiffLineTemplate}"
+                                  ItemsSource="{Binding ExternalChangeDiff.Lines}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+            <StackPanel Grid.Row="2"
+                        Margin="{StaticResource DcCardGap}"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal">
+                <ui:Button Appearance="Secondary"
+                           AutomationProperties.HelpText="Returns to the editor with your draft as it is. Shortcut: Esc."
+                           Command="{Binding CancelExternalReviewCommand}"
+                           Content="Back to editing"
+                           ToolTip="Back to editing (Esc)" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Secondary"
+                           AutomationProperties.HelpText="Replaces the editor with the file on disk. Your unsaved edits are dropped."
+                           Command="{Binding ReloadDiscardingEditsCommand}"
+                           Content="Discard my edits and reload" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="Primary"
+                           AutomationProperties.HelpText="Puts your edited settings on the new file. A setting changed in both places keeps the file's value. Nothing is saved; Undo rebase restores your draft."
+                           Command="{Binding RebaseDraftCommand}"
+                           Content="Rebase my edits"
+                           IsEnabled="{Binding CanRebaseDraft}" />
             </StackPanel>
         </Grid>
     </Grid>

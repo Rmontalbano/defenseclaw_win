@@ -310,6 +310,8 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.EffectivePolicy);
             // `alerts --json` has been there since 1.0.0 (cmd_alerts.py), and like the ledger it has no help screen worth probing for one flag.
             present.Add(RuntimeCapability.RuntimeAlerts);
+            // The gateway has reloaded config.yaml in place since 1.0.0 (config_writer.py RESTART_KEYS: "Everything else is hot"); nothing to probe (CUST-377).
+            present.Add(RuntimeCapability.GatewayConfigReload);
         }
 
         // 1.0.4 behaviour with no command to probe (a connector that is gone, a rule that moved): the version decides, on the same terms as the ledger above.
@@ -317,6 +319,7 @@ public static class RuntimeProbe
         {
             present.Add(RuntimeCapability.ConnectorsRetired);
             present.Add(RuntimeCapability.PerUserHookRules);
+            present.Add(RuntimeCapability.Config104Keys);
         }
 
         if (identity.ParsedVersion is { } repin && repin >= RepinVersion && (root.Count > 0 || setup.Count > 0))

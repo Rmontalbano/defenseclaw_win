@@ -297,6 +297,13 @@ public partial class ConfigEditorWindow : FluentWindow
             return;
         }
 
+        if (e.Key == Key.Escape && _viewModel.IsReviewingExternalChange)
+        {
+            _viewModel.CancelExternalReviewCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape && _viewModel.ShowOnDiskPreview)
         {
             _viewModel.DismissOnDiskPreviewCommand.Execute(null);
@@ -319,6 +326,12 @@ public partial class ConfigEditorWindow : FluentWindow
     /// </summary>
     private void SaveFromKeyboard()
     {
+        // The review of a change made to the file behind the editor covers it: a save would go under it, so Ctrl+S waits for the choice made there.
+        if (_viewModel.IsReviewingExternalChange)
+        {
+            return;
+        }
+
         if (_viewModel.IsReviewing)
         {
             if (_viewModel.ConfirmReviewedSaveCommand.CanExecute(null))
