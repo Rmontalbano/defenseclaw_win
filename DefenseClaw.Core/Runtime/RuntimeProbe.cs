@@ -297,6 +297,9 @@ public static class RuntimeProbe
         if (identity.ParsedVersion is { } gateway && gateway >= Schema8Version && (root.Count > 0 || setup.Count > 0))
         {
             present.Add(RuntimeCapability.CorrelationApi);
+
+            // The IDE plugin inventory route and the agent directory arrived together (1.0.0), and likewise have no CLI screen of their own to probe.
+            present.Add(RuntimeCapability.IdeInventory);
         }
 
         if (HasAll(setup, RegistryMarkers))

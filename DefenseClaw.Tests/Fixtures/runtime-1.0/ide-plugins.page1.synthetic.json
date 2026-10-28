@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "scope": "all",
+  "total": 2,
+  "next_cursor": "1.gen-a",
+  "counts": {"total": 2, "ai": 1, "disabled": 0, "users": 1, "installations": 1, "by_ide": {"vscode": 2}},
+  "installations": [
+    {"install_id": "inst-vscode-1", "user": "operator", "ide_family": "vscode", "ide_product": "vscode", "version": "1.99.0", "path_hash": "h1", "last_seen": "2026-10-01T10:00:00Z"}
+  ],
+  "plugins": [
+    {"fingerprint": "fp-1", "user": "operator", "install_id": "inst-vscode-1", "ide_family": "vscode", "ide_product": "vscode", "plugin_id": "example.assistant", "version": "2.3.1", "enabled": "enabled", "scope": "user", "is_ai": true, "last_seen": "2026-10-01T10:00:00Z"}
+  ]
+}

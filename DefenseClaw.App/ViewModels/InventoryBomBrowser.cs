@@ -34,13 +34,17 @@ public sealed class InventoryBomRowItem
 {
     private readonly string _haystack;
 
-    public InventoryBomRowItem(IReadOnlyList<string> cells, InventoryBomEntity? entity, string verdict = "")
+    public InventoryBomRowItem(IReadOnlyList<string> cells, InventoryBomEntity? entity, string verdict = "", InventoryBomExtraDetail? extra = null)
     {
         Cells = cells;
         Entity = entity;
         Verdict = verdict;
-        _haystack = string.Join('\n', cells) + (entity is null ? string.Empty : "\n" + entity.Id + "\n" + entity.Title);
+        Extra = extra;
+        _haystack = string.Join('\n', cells) + (entity is null ? string.Empty : "\n" + entity.Id + "\n" + entity.Title) + (extra is null ? string.Empty : "\n" + extra.Key);
     }
+
+    /// <summary>The IDE plugin or agent identity this is (CUST-376), which the gateway lists and no scan prints; null for every other row.</summary>
+    public InventoryBomExtraDetail? Extra { get; }
 
     public IReadOnlyList<string> Cells { get; }
 
@@ -150,7 +154,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
 
     /// <summary>Which tab shows: <see cref="SummaryTab"/> or a kind's word (<c>skills</c>, <c>agents</c>, <c>models</c>, ...).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSummary), nameof(IsSkillsTab), nameof(IsPluginsTab), nameof(HasStatusFilter), nameof(HasFilterRow))]
+    [NotifyPropertyChangedFor(nameof(IsSummary), nameof(IsSkillsTab), nameof(IsPluginsTab), nameof(HasStatusFilter), nameof(HasFilterRow), nameof(IsIdeTab), nameof(IsIdentitiesTab), nameof(IsExtrasTab), nameof(ShowGenerate), nameof(CanOpenAgents))]
     private string _activeTab = SummaryTab;
 
     /// <summary>The Skills / Plugins status chip: <c>all</c>, <c>eligible</c>, <c>warning</c>, <c>blocked</c>, <c>loaded</c> or <c>disabled</c>.</summary>
@@ -161,7 +165,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
     private string _searchText = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelection), nameof(HasDetail), nameof(ShowDetailEmpty))]
+    [NotifyPropertyChangedFor(nameof(HasSelection), nameof(HasDetail), nameof(ShowDetailEmpty), nameof(CanOpenAgents))]
     private InventoryBomRowItem? _selectedRow;
 
     [ObservableProperty]
@@ -205,7 +209,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
     public bool IsPluginsTab => ActiveTab == InventoryBomKind.Plugins.OnlyName();
 
     /// <summary>The tab has status chips (the TUI's Skills and Plugins).</summary>
-    public bool HasStatusFilter => IsSkillsTab || IsPluginsTab;
+    public bool HasStatusFilter => IsSkillsTab || IsPluginsTab || IsIdeTab;
 
     /// <summary>The row under the tabs has something in it: the status chips of Skills and Plugins, or the count of what is listed.</summary>
     public bool HasFilterRow => HasStatusFilter || ResultCaption.Length > 0;
@@ -222,7 +226,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
     public bool HasEmptyDetail => EmptyDetail.Length > 0;
 
     /// <summary>The empty state offers "Generate AI BOM…": there is no scan on screen to look at.</summary>
-    public bool ShowGenerate => ShowEmpty && !HasSnapshot;
+    public bool ShowGenerate => ShowEmpty && !HasSnapshot && !IsExtrasTab;
 
     /// <summary>The rows of the active tab after the connector scope, the status chip and the search.</summary>
     public BatchObservableCollection<InventoryBomRowItem> Rows { get; } = new();
@@ -468,6 +472,11 @@ public sealed partial class InventoryBomBrowser : ObservableObject
         var selected = SelectedRow;
         _all.Clear();
 
+        if (RebuildExtras(selected))
+        {
+            return;
+        }
+
         var snapshot = Snapshot;
         var connectors = snapshot is null ? new List<InventoryBomConnector>() : snapshot.Connectors.Where(InScope).ToList();
         ShowConnectorColumn = snapshot is { HasSeveralConnectors: true };
@@ -496,7 +505,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
                 new InventoryBomColumn("Metric", InventoryBomColumnSize.Wide),
                 new InventoryBomColumn("Value", InventoryBomColumnSize.Fill),
             });
-            foreach (var (label, value) in SummaryRows(connectors))
+            foreach (var (label, value) in SummaryRows(connectors).Concat(ExtraSummaryRows()))
             {
                 _all.Add(new InventoryBomRowItem(new[] { label, value }, null));
             }
@@ -650,6 +659,7 @@ public sealed partial class InventoryBomBrowser : ObservableObject
         OnPropertyChanged(nameof(ModelsCount));
         OnPropertyChanged(nameof(MemoryCount));
         OnPropertyChanged(nameof(ShowToolsTab));
+        RaiseExtraCounts();
         OnPropertyChanged(nameof(HasDetail));
         OnPropertyChanged(nameof(ShowDetailEmpty));
     }
@@ -671,6 +681,14 @@ public sealed partial class InventoryBomBrowser : ObservableObject
                 {
                     DetailFields.Add(new InventoryKeyValueRow(label, value));
                 }
+            }
+        }
+        else if (SelectedRow?.Extra is { } extra)
+        {
+            DetailHeading = extra.Title;
+            foreach (var field in extra.Fields)
+            {
+                DetailFields.Add(new InventoryKeyValueRow(field.Label, field.Value.Length == 0 ? NoValue : field.Value));
             }
         }
         else if (SelectedRow?.Entity is { } entity)

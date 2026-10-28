@@ -44,6 +44,13 @@ public enum RuntimeCapability
     /// makes it look populated.
     /// </summary>
     CorrelationApi,
+
+    /// <summary>
+    /// The gateway's read-only IDE plugin inventory (<c>GET /api/v1/ai-usage/ide-plugins</c>), which the AI BOM's IDE Plugins tab reads, next to the agent
+    /// directory (<c>GET /api/v1/agents/identities</c>) its Agent identities tab reads. Both routes arrived in 1.0.0 and the gateway does not register
+    /// either on a managed Secure Client host, so the version only decides whether to ask; a 404 or 405 is still "not available on this host".
+    /// </summary>
+    IdeInventory,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -72,6 +79,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.TuiRegistry => "Extended command registry",
         RuntimeCapability.AiRuntime => "AI Discovery runtime planes",
         RuntimeCapability.CorrelationApi => "Agent view (correlation ledger)",
+        RuntimeCapability.IdeInventory => "AI BOM IDE plugins and agent identities",
         _ => capability.ToString(),
     };
 
@@ -93,6 +101,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.TuiRegistry => "'setup --help' lists 'amp', 'devin' and 'kiro'",
         RuntimeCapability.AiRuntime => "'agent discovery --help' lists 'runtime' and 'agent discovery runtime --help' lists 'status', 'scan', 'findings' and 'permissions'",
         RuntimeCapability.CorrelationApi => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/correlation/* and /api/v1/agents/identities)",
+        RuntimeCapability.IdeInventory => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/ai-usage/ide-plugins and /api/v1/agents/identities, except on a managed host)",
         _ => string.Empty,
     };
 }

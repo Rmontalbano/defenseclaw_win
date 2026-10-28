@@ -1,0 +1,1 @@
+{"enabled": true, "scope": "off", "total": 0, "next_cursor": "", "counts": {"total": 0, "ai": 0, "disabled": 0, "users": 0, "installations": 0, "by_ide": {}}, "installations": [], "plugins": [], "reason": "The IDE inventory is turned off."}

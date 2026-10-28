@@ -240,6 +240,7 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
         Review = new DiscoverActionReview(services);
         BomBrowser.PropertyChanged += OnBomBrowserChanged;
         BuildBomConnectors();
+        InitBomExtras();
     }
 
     /// <summary>The shared confirm-and-run dialog (used by "Generate AI BOM").</summary>
@@ -265,7 +266,13 @@ public sealed partial class InventoryPanelViewModel : PanelViewModelBase
     }
 
     [RelayCommand]
-    private async Task RefreshAsync() => await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+    private async Task RefreshAsync()
+    {
+        // The AI BOM's gateway-fed tabs (IDE plugins, agent identities) are re-read with it; a plain read, no scan.
+        var extras = IsBomView ? LoadBomExtrasSafelyAsync() : Task.CompletedTask;
+        await LoadAsync(CancellationToken.None).ConfigureAwait(true);
+        await extras.ConfigureAwait(true);
+    }
 
     /// <summary>
     /// One-shot catch-up when the panel returns to the screen after its data has gone stale (no timer, no

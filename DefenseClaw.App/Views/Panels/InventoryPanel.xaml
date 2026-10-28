@@ -363,6 +363,19 @@
                                            Visibility="{Binding BomBrowser.ShowToolsTab, Converter={StaticResource BoolToVisibility}}" />
                             <ctl:DcSegment Value="models" Padding="10,0,10,0" Content="Models" Count="{Binding BomBrowser.ModelsCount}" />
                             <ctl:DcSegment Value="memory" Padding="10,0,10,0" Content="Memory" Count="{Binding BomBrowser.MemoryCount}" />
+                            <!-- CUST-376: read from the gateway, not from a scan; offered only on a runtime that has the routes. -->
+                            <ctl:DcSegment Value="ide-plugins"
+                                           Padding="10,0,10,0"
+                                           Content="IDE Plugins"
+                                           Count="{Binding BomBrowser.IdePluginsCount}"
+                                           IsEnabled="{Binding BomBrowser.ShowIdePluginsTab}"
+                                           Visibility="{Binding BomBrowser.ShowIdePluginsTab, Converter={StaticResource BoolToVisibility}}" />
+                            <ctl:DcSegment Value="identities"
+                                           Padding="10,0,10,0"
+                                           Content="Agent identities"
+                                           Count="{Binding BomBrowser.IdentitiesCount}"
+                                           IsEnabled="{Binding BomBrowser.ShowIdentitiesTab}"
+                                           Visibility="{Binding BomBrowser.ShowIdentitiesTab, Converter={StaticResource BoolToVisibility}}" />
                         </ctl:DcSegmented>
 
                         <!-- The TUI's 2 / 3 / 4 keys on Skills and Plugins; the count of what the tab shows. -->
@@ -384,6 +397,15 @@
                                 <ctl:DcSegment Value="loaded" Content="Loaded" ToolTip="Plugins whose status is loaded" />
                                 <ctl:DcSegment Value="disabled" Content="Disabled" ToolTip="Plugins whose status is disabled" />
                                 <ctl:DcSegment Value="blocked" Content="Blocked" ToolTip="Plugins on the block list or rejected by a scan" />
+                            </ctl:DcSegmented>
+                            <ctl:DcSegmented SelectedValue="{Binding BomBrowser.StatusFilter, Mode=TwoWay}"
+                                             AutomationProperties.Name="IDE plugins filter"
+                                             Visibility="{Binding BomBrowser.IsIdeTab, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcSegment Value="all" Content="All" />
+                                <ctl:DcSegment Value="enabled" Content="Enabled" ToolTip="Plugins the IDE has switched on" />
+                                <ctl:DcSegment Value="disabled" Content="Disabled" ToolTip="Plugins the IDE has switched off" />
+                                <ctl:DcSegment Value="unknown" Content="Unknown" ToolTip="Plugins whose enabled state the runtime could not read" />
+                                <ctl:DcSegment Value="ai" Content="AI" ToolTip="AI extensions and plugins" />
                             </ctl:DcSegmented>
                             <TextBlock Style="{StaticResource DcResultCaption}"
                                        Margin="0,0,12,8"
@@ -590,6 +612,14 @@
                                               VerticalScrollBarVisibility="Auto"
                                               Visibility="{Binding BomBrowser.HasDetail, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel>
+                                        <!-- An agent identity is the Agents panel's directory row; that panel owns the tree and timeline, so this only points there. -->
+                                        <ui:Button Margin="0,0,0,8"
+                                                   Content="Open the Agents panel"
+                                                   Command="{Binding BomBrowser.OpenInAgentsCommand}"
+                                                   Visibility="{Binding BomBrowser.CanOpenAgents, Converter={StaticResource BoolToVisibility}}"
+                                                   ToolTip="Show this agent's subagents and timeline. Find its Agent ID in the Agents panel's directory."
+                                                   AutomationProperties.Name="Open the Agents panel"
+                                                   AutomationProperties.HelpText="Opens the Agents panel, which lists this agent identity with its subagents and timeline." />
                                         <ItemsControl ItemsSource="{Binding BomBrowser.DetailFields}"
                                                       Focusable="False"
                                                       AutomationProperties.Name="Fields of the selected AI BOM row">

@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "scope": "all",
+  "total": 6,
+  "next_cursor": "",
+  "partial": false,
+  "scan_id": "scan-0001",
+  "scanned_at": "2026-10-01T10:00:00Z",
+  "counts": {"total": 6, "ai": 2, "disabled": 1, "users": 1, "installations": 3, "by_ide": {"vscode": 4, "pycharm": 1, "cursor": 1}},
+  "installations": [
+    {"install_id": "inst-vscode-1", "user": "operator", "ide_family": "vscode", "ide_product": "vscode", "channel": "stable", "version": "1.99.0", "path_hash": "h1", "last_seen": "2026-10-01T10:00:00Z"},
+    {"install_id": "inst-pycharm-1", "user": "operator", "ide_family": "jetbrains", "ide_product": "pycharm", "version": "2025.2", "remote_kind": "jetbrains_remote_dev", "path_hash": "h2", "last_seen": "2026-10-01T10:00:00Z"},
+    {"install_id": "inst-cursor-1", "user": "operator", "ide_family": "vscode", "ide_product": "cursor", "version": "0.50.1", "path_hash": "h3", "partial": true, "last_seen": "2026-10-01T10:00:00Z"}
+  ],
+  "plugins": [
+    {"fingerprint": "fp-1", "user": "operator", "install_id": "inst-vscode-1", "ide_family": "vscode", "ide_product": "vscode", "plugin_id": "example.assistant", "display_name": "Example Assistant", "publisher": "example", "version": "2.3.1", "enabled": "enabled", "enabled_source": "state_db", "scope": "user", "is_ai": true, "ai_signature_id": "sig-example-assistant", "installed_at": "2026-09-01T09:00:00Z", "last_seen": "2026-10-01T10:00:00Z"},
+    {"fingerprint": "fp-2", "user": "operator", "install_id": "inst-vscode-1", "ide_family": "vscode", "ide_product": "vscode", "plugin_id": "example.formatter", "display_name": "example.formatter", "publisher": "example", "version": "0.9.0", "enabled": "enabled", "scope": "user", "is_ai": false, "last_seen": "2026-10-01T10:00:00Z"},
+    {"fingerprint": "fp-3", "user": "operator", "install_id": "inst-vscode-1", "ide_family": "vscode", "ide_product": "vscode", "plugin_id": "example.linter", "version": "1.2.0", "enabled": "disabled", "enabled_source": "state_db", "scope": "user", "is_ai": false, "last_seen": "2026-10-01T10:00:00Z"},
+    {"fingerprint": "fp-4", "user": "operator", "install_id": "inst-pycharm-1", "ide_family": "jetbrains", "ide_product": "pycharm", "plugin_id": "com.example.completion", "display_name": "Example Completion", "version": "5.0", "enabled": "client_side_unknown", "scope": "remote", "is_ai": true, "last_seen": "2026-10-01T10:00:00Z"},
+    {"fingerprint": "fp-5", "user": "operator", "install_id": "inst-cursor-1", "ide_family": "vscode", "ide_product": "cursor", "plugin_id": "example.themes", "version": "3.1.4", "enabled": "unknown", "scope": "user", "is_ai": false, "last_seen": "2026-10-01T10:00:00Z"},
+    {"fingerprint": "fp-6", "user": "operator", "install_id": "inst-cursor-1", "ide_family": "vscode", "ide_product": "cursor", "plugin_id": "example.snippets", "version": "1.0.0", "enabled": "enabled", "scope": "user", "is_ai": false, "last_seen": "2026-10-01T10:00:00Z"}
+  ]
+}

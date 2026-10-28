@@ -137,7 +137,15 @@ public class InventoryBomPanelTests
         UiThread.Run(() =>
         {
             Assert.Equal("AI BOM tab", AutomationProperties.GetName(scene.BomTabs));
-            var tabs = scene.BomTabs.Items.Cast<DcSegment>().ToList();
+            var all = scene.BomTabs.Items.Cast<DcSegment>().ToList();
+
+            // CUST-376: the gateway-fed IDE Plugins and Agent identities tabs are hidden on a runtime that lacks the routes (this scene's is unprobed).
+            Assert.All(all.Where(t => (string)t.Value! is "ide-plugins" or "identities"), t =>
+            {
+                Assert.False(t.IsVisible);
+                Assert.False(t.IsEnabled);
+            });
+            var tabs = all.Where(t => (string)t.Value! is not ("ide-plugins" or "identities")).ToList();
             Assert.Equal(
                 new[] { "Summary", "Skills (1)", "Plugins (0)", "MCPs (1)", "Agents (0)", "Tools (0)", "Models (0)", "Memory (0)" },
                 tabs.Select(t => AutomationProperties.GetName(t)).ToArray());
