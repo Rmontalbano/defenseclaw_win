@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Diagnostics;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Cli;
@@ -131,6 +132,17 @@ public sealed partial class DiscoverActionReview : ObservableObject
     private readonly List<DiscoverStep> _plan = new();
     private Func<DiscoverReviewResult, Task>? _onFinished;
     private Action? _onCancelled;
+
+    // Live output of the step that is running (CUST-382). The runner records the invocation as the step starts; a dispatcher timer pulls the new
+    // lines from it (as the wizards do), so the runner's threads never touch the view-model.
+    private readonly Queue<string> _liveTail = new();
+    private LiveTick? _liveTimer;
+    private CliInvocation? _liveInvocation;
+    private IReadOnlyList<string> _liveArgv = Array.Empty<string>();
+    private StringBuilder? _liveCompleted;
+    private int _liveStep;
+    private int _liveCursor;
+    private int _liveTotal;
 
     public DiscoverActionReview(AppServices services)
     {
@@ -401,6 +413,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     // The step that is running, by name, until the report replaces it (CUST-379).
                     ResultKey = "Warn";
                     ResultText = string.Create(CultureInfo.CurrentCulture, $"Step {i + 1} of {review.Steps.Count} is running: {row.CommandText}");
+                    BeginLive(i + 1, step.Argv, output);
                 }
 
                 try
@@ -420,6 +433,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                                 : _services.Cli.RunNamedAsync(step.Executable, step.Argv, cancellationToken: CancellationToken.None, options: options))
                         .ConfigureAwait(true);
                     invocations.Add(invocation);
+                    EndLive();
 
                     if (invocation.FailureReason is { Length: > 0 } reason)
                     {
@@ -451,6 +465,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 }
                 catch (CliNotFoundException ex)
                 {
+                    EndLive();
                     row.SetStatus("Could not start", "Bad");
                     output.AppendLine($"'{ex.ExecutableName}' was not found: {ex.Message}");
                     outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Failed, row.CommandText, "it could not start"));
@@ -458,6 +473,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
                 }
                 catch (SecretInArgumentException)
                 {
+                    EndLive();
                     row.SetStatus("Refused: a secret was in the arguments", "Bad");
                     outcomes.Add(new DiscoverStepOutcome(i + 1, DiscoverStepState.Failed, row.CommandText, "a secret was in the arguments"));
                     succeeded = false;
@@ -466,6 +482,7 @@ public sealed partial class DiscoverActionReview : ObservableObject
         }
         finally
         {
+            EndLive();
             IsRunning = false;
             IsFinished = true;
         }
@@ -526,7 +543,14 @@ public sealed partial class DiscoverActionReview : ObservableObject
             .Select(l => l.Text)
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .ToList();
-        if (lines.Count == 0)
+        var skipped = Math.Max(0, lines.Count - MaxOutputLinesPerStep);
+        AppendLines(builder, stepNumber, lines.Skip(skipped).ToList(), lines.Count, label);
+    }
+
+    /// <summary>One step's output as the review shows it: the last <see cref="MaxOutputLinesPerStep"/> lines of <paramref name="total"/>, each cut at <see cref="MaxLineChars"/>.</summary>
+    private static void AppendLines(StringBuilder builder, int stepNumber, IReadOnlyCollection<string> tail, int total, bool label)
+    {
+        if (total == 0)
         {
             return;
         }
@@ -536,15 +560,114 @@ public sealed partial class DiscoverActionReview : ObservableObject
             builder.AppendLine($"Step {stepNumber}:");
         }
 
-        var skipped = Math.Max(0, lines.Count - MaxOutputLinesPerStep);
+        var skipped = Math.Max(0, total - tail.Count);
         if (skipped > 0)
         {
             builder.AppendLine($"… {skipped} earlier line(s) omitted; see Activity.");
         }
 
-        foreach (var line in lines.Skip(skipped))
+        foreach (var line in tail)
         {
             builder.AppendLine(line.Length > MaxLineChars ? line[..MaxLineChars] + "…" : line);
         }
     }
+
+    // ---- Live output of the running step (CUST-382). Several-step reviews only: a single step looks as it always did.
+
+    /// <summary>Starts following step <paramref name="number"/>: the runner announces its invocation, and a timer pulls what it prints.</summary>
+    private void BeginLive(int number, IReadOnlyList<string> argv, StringBuilder completed)
+    {
+        EndLive();
+        _liveStep = number;
+        _liveArgv = argv;
+        _liveCompleted = completed;
+        _services.Cli.InvocationStarted += OnStepInvocationStarted;
+        _liveTimer = new LiveTick(PullLive);
+    }
+
+    /// <summary>Stops following the step; the finished report replaces what was shown.</summary>
+    private void EndLive()
+    {
+        if (_liveTimer is null && _liveCompleted is null)
+        {
+            return;
+        }
+
+        _services.Cli.InvocationStarted -= OnStepInvocationStarted;
+        _liveTimer?.Stop();
+        _liveTimer = null;
+        Volatile.Write(ref _liveInvocation, null);
+        _liveCompleted = null;
+        _liveTail.Clear();
+        _liveCursor = 0;
+        _liveTotal = 0;
+    }
+
+    // Raised on the runner's thread: only remember the invocation (matched on the argv of the step that is running, as the wizards do).
+    internal void OnStepInvocationStarted(object? sender, CliInvocation invocation)
+    {
+        if (_liveCompleted is null || Volatile.Read(ref _liveInvocation) is not null ||
+            !invocation.Argv.SequenceEqual(_liveArgv, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        Volatile.Write(ref _liveInvocation, invocation);
+    }
+
+    /// <summary>
+    /// Shows what the running step has printed so far. UI thread (the timer's tick). Keeps only the last <see cref="MaxOutputLinesPerStep"/> lines of
+    /// the step, so a chatty command cannot grow it; the lines are already redacted and filtered by the runner.
+    /// </summary>
+    internal void PullLive()
+    {
+        if (_liveCompleted is not { } completed || Volatile.Read(ref _liveInvocation) is not { } invocation)
+        {
+            return;
+        }
+
+        var fresh = new List<CliOutputLine>();
+        _liveCursor = invocation.CopyNewLines(_liveCursor, fresh);
+        var added = false;
+        foreach (var line in fresh)
+        {
+            if (string.IsNullOrWhiteSpace(line.Text))
+            {
+                continue;
+            }
+
+            _liveTotal++;
+            _liveTail.Enqueue(line.Text.Length > MaxLineChars ? line.Text[..MaxLineChars] : line.Text);
+            while (_liveTail.Count > MaxOutputLinesPerStep)
+            {
+                _ = _liveTail.Dequeue();
+            }
+
+            added = true;
+        }
+
+        if (!added)
+        {
+            return;
+        }
+
+        var shown = new StringBuilder(completed.ToString());
+        AppendLines(shown, _liveStep, _liveTail, _liveTotal, label: true);
+        ResultOutput = shown.ToString().TrimEnd();
+    }
+}
+
+/// <summary>The 250 ms dispatcher tick a running review follows its step output with (CUST-382); a type of its own so the review holds no timer field.</summary>
+internal sealed class LiveTick
+{
+    private readonly DispatcherTimer _timer;
+
+    public LiveTick(Action tick)
+    {
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _timer.Tick += (_, _) => tick();
+        _timer.Start();
+    }
+
+    public void Stop() => _timer.Stop();
 }
