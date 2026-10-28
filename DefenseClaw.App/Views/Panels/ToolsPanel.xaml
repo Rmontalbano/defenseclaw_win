@@ -166,6 +166,54 @@
                         </StackPanel>
                     </ui:CardExpander>
 
+                    <!--
+                        Operator lists (CUST-375): the block and allow lists in config.yaml asset_policy, read-only. Closed to one line like the manage card, so the
+                        list keeps the page; drawn only when config.yaml has lists (or says why it has none to show). The actions that change them are the
+                        reviewed Block, Allow and Unblock commands on this panel and on Skills, MCPs and Plugins.
+                    -->
+                    <ui:CardExpander Margin="{StaticResource DcCardGap}"
+                                     IsExpanded="False"
+                                     Visibility="{Binding ShowOperatorLists, Converter={StaticResource BoolToVisibility}}"
+                                     AutomationProperties.Name="Operator lists">
+                        <ui:CardExpander.Header>
+                            <ctl:DcCardHeader Margin="0" Symbol="ShieldProhibited24" Section="Govern" Content="Operator lists (config.yaml)" />
+                        </ui:CardExpander.Header>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding OperatorListsSummary}" />
+                            <ItemsControl ItemsSource="{Binding OperatorListSections}"
+                                          Margin="0,8,0,0"
+                                          AutomationProperties.Name="Operator lists by asset type">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,8">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Title}" />
+                                                <TextBlock Style="{StaticResource DcCaption}" Margin="10,0,0,0" VerticalAlignment="Center" Text="{Binding Counts}" />
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Entries}" Margin="12,2,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,1,0,1">
+                                                            <TextBlock Style="{StaticResource DcToneText}"
+                                                                       FontSize="{DynamicResource DcFontSize}"
+                                                                       MinWidth="64"
+                                                                       Tag="{Binding ToneKey}"
+                                                                       Text="{Binding Decision}" />
+                                                            <TextBlock Style="{StaticResource DcBody}" Margin="0,0,12,0" Text="{Binding Target}" />
+                                                            <TextBlock Style="{StaticResource DcCaption}" Text="{Binding Reason}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ui:CardExpander>
+
                     <!-- Result of the last action and a stale-data warning -->
                     <ui:InfoBar Margin="{StaticResource DcCardGap}"
                                 Title="{Binding ResultTitle}"

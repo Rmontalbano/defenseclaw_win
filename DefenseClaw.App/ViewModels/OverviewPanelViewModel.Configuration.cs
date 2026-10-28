@@ -195,6 +195,7 @@ public sealed partial class OverviewPanelViewModel
             : _statusLoadedAt is { } at ? $"Fail mode and deployment rows from defenseclaw status --json, read {Relative(at)}." : "Reading defenseclaw status --json…";
 
         RenderConfigurationRows();
+        BuildPolicyCards();
     }
 
     private void RenderConfigurationRows()
@@ -368,7 +369,7 @@ public sealed partial class OverviewPanelViewModel
         var friendly = _status.Connector(scope)?.Friendly;
 
         rows.Add(("Connector", $"{(string.IsNullOrWhiteSpace(friendly) ? scope : friendly)} ({scope.ToLowerInvariant()})", "Neutral"));
-        rows.Add(("Mode", connector?.Mode ?? settings?.Mode ?? "?", "Neutral"));
+        rows.Add((ConfiguredModeLabel, connector?.Mode ?? settings?.Mode ?? "?", "Neutral"));
         rows.Add(("Rule pack", RulePackName(settings?.RulePackDir), "Neutral"));
         rows.Add(("Guardrail", Services.Config.Config.Guardrail.Enabled ? "enabled" : "disabled", "Neutral"));
 

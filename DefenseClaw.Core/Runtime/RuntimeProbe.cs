@@ -300,6 +300,8 @@ public static class RuntimeProbe
 
             // The IDE plugin inventory route and the agent directory arrived together (1.0.0), and likewise have no CLI screen of their own to probe.
             present.Add(RuntimeCapability.IdeInventory);
+            // The same judgement for the effective-policy route (CUST-375): present since 1.0.0 (api.go registers it), no CLI screen to probe.
+            present.Add(RuntimeCapability.EffectivePolicy);
         }
 
         if (HasAll(setup, RegistryMarkers))

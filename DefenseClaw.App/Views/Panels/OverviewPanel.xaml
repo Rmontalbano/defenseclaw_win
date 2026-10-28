@@ -773,6 +773,50 @@
                     </StackPanel>
                 </Border>
 
+                <!-- 3b. Effective policy (CUST-375): what the gateway resolved for this account and connector. Not drawn on a runtime without the route. -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowEffectivePolicy, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="ShieldCheckmark24" Section="Setup" Content="{Binding EffectivePolicyTitle}" />
+                        <Border CornerRadius="{DynamicResource DcRadiusS}" ClipToBounds="True">
+                            <ItemsControl ItemsSource="{Binding EffectivePolicyRows}"
+                                          Grid.IsSharedSizeScope="True"
+                                          AutomationProperties.Name="Effective policy">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource OverviewZebraRow}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="150" SharedSizeGroup="EffectivepolicyLabel" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcBody}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"
+                                                           Margin="0,0,12,0"
+                                                           Text="{Binding Label}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource DcToneText}"
+                                                           FontSize="{DynamicResource DcFontSize}"
+                                                           FontWeight="Normal"
+                                                           TextWrapping="Wrap"
+                                                           Tag="{Binding ToneKey}"
+                                                           Text="{Binding Value}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding EffectivePolicyNote}" />
+                    </StackPanel>
+                </Border>
+
                 <!-- 4. Configuration: zebra rows, four of them, then "Show N more settings". -->
                 <Border Style="{StaticResource DcCard}" Margin="{StaticResource DcCardGap}">
                     <StackPanel>
@@ -819,6 +863,100 @@
                         <TextBlock Style="{StaticResource DcCaption}"
                                    Margin="0,4,0,0"
                                    Text="{Binding ConfigurationSourceNote}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 4b. Admission overrides (CUST-375): the install gate's per-type, per-severity actions from config.yaml. Hidden when there are none. -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowAdmissionOverrides, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="ShieldKeyhole24" Section="Setup" Content="Admission overrides" />
+                        <Border CornerRadius="{DynamicResource DcRadiusS}" ClipToBounds="True">
+                            <ItemsControl ItemsSource="{Binding AdmissionOverrideRows}"
+                                          Grid.IsSharedSizeScope="True"
+                                          AutomationProperties.Name="Admission overrides">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource OverviewZebraRow}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="150" SharedSizeGroup="AdmissionoverridesLabel" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcBody}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"
+                                                           Margin="0,0,12,0"
+                                                           Text="{Binding Label}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource DcToneText}"
+                                                           FontSize="{DynamicResource DcFontSize}"
+                                                           FontWeight="Normal"
+                                                           TextWrapping="Wrap"
+                                                           Tag="{Binding ToneKey}"
+                                                           Text="{Binding Value}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   Text="From admission.*.actions in config.yaml. A type or severity not listed inherits the defaults." />
+                    </StackPanel>
+                </Border>
+
+                <!-- 4c. Operator lists (CUST-375): block and allow lists from config.yaml asset_policy, counted per asset type. Hidden when empty. -->
+                <Border Style="{StaticResource DcCard}"
+                        Margin="{StaticResource DcCardGap}"
+                        Visibility="{Binding ShowOperatorLists, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader Symbol="ShieldProhibited24" Section="Govern" Content="Operator lists" />
+                        <Border CornerRadius="{DynamicResource DcRadiusS}" ClipToBounds="True">
+                            <ItemsControl ItemsSource="{Binding OperatorListRows}"
+                                          Grid.IsSharedSizeScope="True"
+                                          AutomationProperties.Name="Operator lists">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource OverviewZebraRow}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="150" SharedSizeGroup="OperatorlistsLabel" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcBody}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"
+                                                           Margin="0,0,12,0"
+                                                           Text="{Binding Label}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource DcToneText}"
+                                                           FontSize="{DynamicResource DcFontSize}"
+                                                           FontWeight="Normal"
+                                                           TextWrapping="Wrap"
+                                                           Tag="{Binding ToneKey}"
+                                                           Text="{Binding Value}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding OperatorListsNote}" />
+                        <ui:Button Content="Open Tools"
+                                   Appearance="Transparent" BorderThickness="0"
+                                   Foreground="{DynamicResource DcAccentBrush}"
+                                   Margin="0,4,0,0"
+                                   Padding="6,3,6,3"
+                                   Command="{Binding OpenOperatorListsCommand}"
+                                   AutomationProperties.HelpText="Opens the Tools panel, where the lists are shown in full." />
                     </StackPanel>
                 </Border>
 

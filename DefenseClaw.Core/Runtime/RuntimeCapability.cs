@@ -51,6 +51,10 @@ public enum RuntimeCapability
     /// either on a managed Secure Client host, so the version only decides whether to ask; a 404 or 405 is still "not available on this host".
     /// </summary>
     IdeInventory,
+    /// The gateway's administrator view of the policy it applies: <c>GET /api/v1/guardrail/profiles/resolve</c> (the Overview's Effective policy card,
+    /// CUST-375). Judged from the runtime's version like <see cref="CorrelationApi"/>; the card itself still treats a 404 or 405 as "not supported".
+    /// </summary>
+    EffectivePolicy,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -80,6 +84,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.AiRuntime => "AI Discovery runtime planes",
         RuntimeCapability.CorrelationApi => "Agent view (correlation ledger)",
         RuntimeCapability.IdeInventory => "AI BOM IDE plugins and agent identities",
+        RuntimeCapability.EffectivePolicy => "Effective policy (gateway profile resolution)",
         _ => capability.ToString(),
     };
 
@@ -102,6 +107,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.AiRuntime => "'agent discovery --help' lists 'runtime' and 'agent discovery runtime --help' lists 'status', 'scan', 'findings' and 'permissions'",
         RuntimeCapability.CorrelationApi => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/correlation/* and /api/v1/agents/identities)",
         RuntimeCapability.IdeInventory => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/ai-usage/ide-plugins and /api/v1/agents/identities, except on a managed host)",
+        RuntimeCapability.EffectivePolicy => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/guardrail/profiles/resolve)",
         _ => string.Empty,
     };
 }

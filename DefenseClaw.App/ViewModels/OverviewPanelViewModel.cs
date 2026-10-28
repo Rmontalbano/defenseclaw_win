@@ -282,6 +282,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         await RefreshMetricsAsync(force: true, cancellationToken).ConfigureAwait(true);
         await RefreshHourlyAsync(cancellationToken).ConfigureAwait(true);
         await RefreshAgentsAsync(cancellationToken).ConfigureAwait(true);
+        await RefreshEffectivePolicyAsync(forceStatus, cancellationToken).ConfigureAwait(true);
         RefreshBomCoverage();
         await RefreshStatusAsync(forceStatus, cancellationToken).ConfigureAwait(true);
 

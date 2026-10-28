@@ -122,7 +122,7 @@ public sealed partial class OverviewPanelViewModel
         var suffix = scope is null ? string.Empty : " · " + scope.ToLowerInvariant();
         ScannersTitle = "Scanners" + suffix;
         EnforcementTitle = "Enforcement" + suffix;
-        ConfigurationTitle = "Configuration" + suffix;
+        ConfigurationTitle = ConfigurationBaseTitle + suffix;
         IsScoped = scope is not null;
 
         var row = scope is null ? null : ConnectorRows.FirstOrDefault(r => string.Equals(r.Name, scope, StringComparison.OrdinalIgnoreCase));
@@ -137,5 +137,6 @@ public sealed partial class OverviewPanelViewModel
         BuildScanners(snapshot, snapshot.Health);
         RenderEnforcementCards();
         BuildConfiguration();
+        NoteScopeForEffectivePolicy();
     }
 }
