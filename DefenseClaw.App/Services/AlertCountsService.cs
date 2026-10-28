@@ -57,6 +57,8 @@ internal sealed class AlertCountsService : IDisposable
     private readonly int _gatewayPageSize;
     private readonly int _newestLimit;
     private readonly Action<Action> _post;
+    private readonly RuntimeAlertsService? _runtimeAlerts;
+    private readonly TimeProvider _time;
 
     /// <summary>Guards the state below and the subscriber list; never held across an <c>await</c> or a callback.</summary>
     private readonly object _lock = new();
@@ -81,19 +83,34 @@ internal sealed class AlertCountsService : IDisposable
     /// <param name="newestLimit">How many rows <see cref="AlertCounts.Newest"/> keeps.</param>
     /// <param name="gatewayPageSize">The page size the monitor requests <c>/alerts</c> with; what "the fallback list was full" is measured against.</param>
     /// <param name="post">Runs an action on the UI thread; the application's dispatcher when null. A test passes one that runs it in place.</param>
+    /// <param name="runtimeAlerts">
+    /// The runtime's own alert list (CUST-380), the one the Alerts panel merges; null, or a runtime without
+    /// <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.RuntimeAlerts"/>, counts the database only. See <see cref="RuntimeAlertMerge"/>.
+    /// </param>
+    /// <param name="time">The clock the list's age is measured on; the system's when null.</param>
     public AlertCountsService(
         AlertQueueReader reader,
         IGatewaySnapshotSource source,
         int newestLimit = AlertCounts.DefaultNewestLimit,
         int gatewayPageSize = GatewayMonitor.AlertLimit,
-        Action<Action>? post = null)
+        Action<Action>? post = null,
+        RuntimeAlertsService? runtimeAlerts = null,
+        TimeProvider? time = null)
     {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _newestLimit = newestLimit;
         _gatewayPageSize = gatewayPageSize;
         _post = post ?? PostToDispatcher;
+        _runtimeAlerts = runtimeAlerts;
+        _time = time ?? TimeProvider.System;
     }
+
+    /// <summary>
+    /// How old the runtime's list may be and still count. The list is asked for at most once a minute while this service runs
+    /// (<see cref="RuntimeAlertsService.MinInterval"/>); three missed minutes means the CLI is not answering, and the counts go back to the database's.
+    /// </summary>
+    public static readonly TimeSpan RuntimeSnapshotMaxAge = TimeSpan.FromMinutes(3);
 
     /// <summary>
     /// Raised on the UI thread when the counts change (see the type documentation). The first subscriber starts the service —
@@ -235,6 +252,11 @@ internal sealed class AlertCountsService : IDisposable
     {
         _attached = new CancellationTokenSource();
         _source.AlertCadenceElapsed += OnAlertCadence;
+        if (_runtimeAlerts is not null)
+        {
+            _runtimeAlerts.Changed += OnRuntimeAlertsChanged;
+        }
+
         StartRefresh(_attached.Token);
     }
 
@@ -242,13 +264,23 @@ internal sealed class AlertCountsService : IDisposable
     private void Detach()
     {
         _source.AlertCadenceElapsed -= OnAlertCadence;
+        if (_runtimeAlerts is not null)
+        {
+            _runtimeAlerts.Changed -= OnRuntimeAlertsChanged;
+        }
+
         var attached = _attached;
         _attached = null;
         attached?.Cancel();
         attached?.Dispose();
     }
 
-    private void OnAlertCadence(object? sender, GatewaySnapshotEventArgs e)
+    /// <summary>The shared list was refreshed (by the panel, or by this service's own throttled request): count again. No CLI run starts from here.</summary>
+    private void OnRuntimeAlertsChanged(object? sender, EventArgs e) => OnAlertCadence();
+
+    private void OnAlertCadence(object? sender, GatewaySnapshotEventArgs e) => OnAlertCadence();
+
+    private void OnAlertCadence()
     {
         CancellationToken token;
         lock (_lock)
@@ -305,7 +337,7 @@ internal sealed class AlertCountsService : IDisposable
                     break;
 
                 default:
-                    counts = result.Counts;
+                    counts = await WithRuntimeAsync(result.Counts, cancellationToken).ConfigureAwait(false);
                     break;
             }
         }
@@ -323,6 +355,41 @@ internal sealed class AlertCountsService : IDisposable
         }
 
         Publish(counts, unavailable, cancellationToken);
+    }
+
+    /// <summary>
+    /// The database's counts plus the runtime's alerts the database does not hold (enforcement and egress actions, hook blocks, health failures), by
+    /// the Alerts list's own rule (<see cref="RuntimeAlertMerge"/>). Asks the shared list for a refresh (it starts a run at most once a minute, and only
+    /// with the capability) and uses what it has only while it is current: a failed or old list, or a runtime without the capability, changes nothing.
+    /// </summary>
+    private async Task<AlertCounts> WithRuntimeAsync(AlertCounts database, CancellationToken cancellationToken)
+    {
+        if (_runtimeAlerts is null || !_runtimeAlerts.IsEnabled)
+        {
+            return database;
+        }
+
+        _runtimeAlerts.Request(force: false);
+        var state = _runtimeAlerts.Current;
+        if (state.Rows.Count == 0 ||
+            state.StaleReason is not null ||
+            state.FetchedAt is not { } fetchedAt ||
+            _time.GetUtcNow() - fetchedAt > RuntimeSnapshotMaxAge)
+        {
+            return database;
+        }
+
+        // The whole window, for the id comparison: another cut of the state the first read saw, so it costs no second statement.
+        var full = await _reader.ReadAsync(AlertQueueReader.DefaultWindowLimit, timeout: null, cancellationToken).ConfigureAwait(false);
+        if (full.Status != AlertQueueStatus.Ok)
+        {
+            return database;
+        }
+
+        var merged = RuntimeAlertMerge.Merge(full.Counts.Newest, state.Rows);
+        return ReferenceEquals(merged, full.Counts.Newest)
+            ? database
+            : new AlertCounts(merged, full.Counts.HasMore, _newestLimit);
     }
 
     /// <summary>The fallback for a database with no bucket column: the gateway's list, if the gateway is answering.</summary>

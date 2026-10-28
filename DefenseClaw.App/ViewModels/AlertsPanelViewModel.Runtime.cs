@@ -80,42 +80,8 @@ public sealed partial class AlertsPanelViewModel
     /// A row both hold is the queue's (it is the same audit row); a queue row the runtime's list lacks stays, because the runtime's list is one minute
     /// older than the database at best and an alert acknowledged since is already out of the queue.
     /// </summary>
-    internal static IReadOnlyList<AlertQueueItem> MergeRuntime(IReadOnlyList<AlertQueueItem> queue, IReadOnlyList<RuntimeAlertRow> runtime)
-    {
-        if (runtime.Count == 0)
-        {
-            return queue;
-        }
-
-        var known = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in queue)
-        {
-            if (item.Id.Length > 0)
-            {
-                _ = known.Add(item.Id);
-            }
-        }
-
-        List<AlertQueueItem>? merged = null;
-        foreach (var row in runtime)
-        {
-            if (known.Contains(row.Id))
-            {
-                continue;
-            }
-
-            merged ??= new List<AlertQueueItem>(queue);
-            merged.Add(row.ToQueueItem());
-        }
-
-        if (merged is null)
-        {
-            return queue;
-        }
-
-        // Stable: rows of one instant keep the queue's order, and the queue's come first.
-        return merged.OrderByDescending(item => item.Timestamp).Take(AlertQueueReader.DefaultWindowLimit).ToList();
-    }
+    internal static IReadOnlyList<AlertQueueItem> MergeRuntime(IReadOnlyList<AlertQueueItem> queue, IReadOnlyList<RuntimeAlertRow> runtime) =>
+        RuntimeAlertMerge.Merge(queue, runtime);
 
     private static IReadOnlyDictionary<string, RuntimeAlertRow> RuntimeRowsById(IReadOnlyList<RuntimeAlertRow> rows)
     {

@@ -205,7 +205,7 @@ public sealed class AppServices : IDisposable
         HookTotals = new ConnectorHookTotalsReader(
             Paths.AuditDatabasePath,
             cache: hookTotalsCacheDirectory is null ? null : new HookTotalsCacheStore(hookTotalsCacheDirectory));
-        AlertCounts = new AlertCountsService(AlertQueue, Monitor);
+        AlertCounts = new AlertCountsService(AlertQueue, Monitor, runtimeAlerts: RuntimeAlerts);
         StatusFacts = new StatusFacts();
         InventoryBom = new InventoryBomStore();
 
