@@ -88,6 +88,13 @@ public sealed record AiDiscoveryScan;
 public sealed record RegistryFocus(string EntryType, string Name, string? SourceId = null);
 
 /// <summary>
+/// Payload for <c>agents</c> (CUST-381, the AI BOM's "Open the Agents panel" on an agent identity): open the Agents panel with the directory row of this
+/// agent id selected. Both panels read <c>GET /api/v1/agents/identities</c>, so the identity's <c>agent_id</c> is the directory row's key. Nothing is run by it.
+/// </summary>
+/// <param name="AgentId">The identity's agent id.</param>
+public sealed record AgentFocus(string AgentId);
+
+/// <summary>
 /// Payload for <c>setup</c> (CUST-328, the palette's <c>keys set NAME</c>): open the Credentials card on this variable - the masked box beside its row, or a
 /// row for it when the CLI's credential list does not have it, or the console window where the app cannot type the value itself. Nothing is stored or run by
 /// it, and no value is in it: the operator types the value into the box and reviews the command, as for any row.

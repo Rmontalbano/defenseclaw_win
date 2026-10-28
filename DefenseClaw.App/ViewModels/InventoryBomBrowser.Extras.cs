@@ -82,7 +82,7 @@ public sealed partial class InventoryBomBrowser
     private bool _agentsLinkAvailable;
 
     /// <summary>Raised when the operator asks to see the selected identity in the Agents panel.</summary>
-    public event EventHandler? OpenAgentsRequested;
+    public event EventHandler<string>? OpenAgentsRequested;
 
     public bool ShowIdePluginsTab => ExtrasAvailable;
 
@@ -113,9 +113,9 @@ public sealed partial class InventoryBomBrowser
     [RelayCommand]
     private void OpenInAgents()
     {
-        if (CanOpenAgents)
+        if (CanOpenAgents && SelectedRow?.Extra is { AgentId.Length: > 0 } extra)
         {
-            OpenAgentsRequested?.Invoke(this, EventArgs.Empty);
+            OpenAgentsRequested?.Invoke(this, extra.AgentId);
         }
     }
 

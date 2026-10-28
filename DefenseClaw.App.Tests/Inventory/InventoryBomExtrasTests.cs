@@ -448,7 +448,12 @@ public sealed class InventoryBomExtrasTests : IDisposable
         var scene = await OpenAsync("95159fd");
         ServeIdePlugins(scene.Handler);
         var requested = new List<string>();
-        scene.Services.Navigation.Requested += (_, e) => requested.Add(e.Request.PanelId);
+        object? payload = null;
+        scene.Services.Navigation.Requested += (_, e) =>
+        {
+            requested.Add(e.Request.PanelId);
+            payload = e.Request.Payload;
+        };
 
         await scene.Vm.LoadBomExtrasAsync(CancellationToken.None);
         scene.Vm.BomBrowser.ActiveTab = InventoryBomBrowser.IdentitiesTab;
@@ -456,5 +461,6 @@ public sealed class InventoryBomExtrasTests : IDisposable
         scene.Vm.BomBrowser.OpenInAgentsCommand.Execute(null);
 
         Assert.Equal(["agents"], requested);
+        Assert.Equal(new DefenseClaw.App.Services.AgentFocus("agt-0000000000000001"), payload);
     }
 }

@@ -26,7 +26,7 @@ public sealed partial class InventoryPanelViewModel
 
     private void InitBomExtras()
     {
-        BomBrowser.OpenAgentsRequested += (_, _) => Services.Navigation.Request("agents");
+        BomBrowser.OpenAgentsRequested += (_, agentId) => Services.Navigation.Request(new DefenseClaw.App.Services.NavigationRequest("agents", new DefenseClaw.App.Services.AgentFocus(agentId)));
         ApplyExtrasGate();
     }
 

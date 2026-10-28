@@ -57,7 +57,7 @@ public enum AgentsState
 /// it is the version, and clears the list.
 /// </para>
 /// </summary>
-public sealed partial class AgentsPanelViewModel : PanelViewModelBase
+public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsNavigation
 {
     public const string UnsupportedTitle = "The agent view is not supported by this gateway";
 
@@ -471,6 +471,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase
 #pragma warning restore CA1031
 
             ApplyDirectory(read);
+            ApplyPendingAgentFocus();
         }
         finally
         {
@@ -494,6 +495,7 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase
             State = !page.Enabled ? AgentsState.Disabled : page.Rows.Count == 0 ? AgentsState.Empty : AgentsState.Ready;
             OnPropertyChanged(nameof(CaptionText));
             OnPropertyChanged(nameof(ShowNoMatch));
+            ApplyPendingAgentFocus();
             return;
         }
 

@@ -49,7 +49,7 @@ internal sealed class AgentsScene : IDisposable
         new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
     /// <summary>Builds the view-model on the UI thread, wired to the in-memory gateway, and runs its first read to the end.</summary>
-    public async Task<AgentsPanelViewModel> OpenAsync()
+    public async Task<AgentsPanelViewModel> OpenAsync(Action<AgentsPanelViewModel>? beforeInitialize = null)
     {
         _ = await Services.Runtime.RefreshAsync();
         var (vm, init) = UiThread.Run(() =>
@@ -58,6 +58,7 @@ internal sealed class AgentsScene : IDisposable
             {
                 Fetch = (path, max, ct) => _client.GetBoundedJsonAsync(path, max, true, ct),
             };
+            beforeInitialize?.Invoke(model);
             return (model, model.InitializeAsync());
         });
         UiThread.WaitFor(() => init.IsCompleted, "the first directory read");
