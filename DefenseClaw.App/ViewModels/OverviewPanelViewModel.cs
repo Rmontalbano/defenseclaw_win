@@ -12,6 +12,7 @@ using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Gateway.Models;
+using DefenseClaw.Core.Runtime;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.ViewModels;
@@ -782,20 +783,10 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // Observe + fail-closed: the recurring bad default. config.yaml is the operator's
         // stated intent; /status carries what the running hook contract actually does, and
         // the two disagreeing is itself worth surfacing.
-        var configured = Services.Config.Config.Guardrail.Connectors;
-        foreach (var (name, settings) in configured)
-        {
-            if (settings.HasFailModeMismatch)
-            {
-                rows.Add(new AttentionRow
-                {
-                    Title = $"{name}: observe mode with a fail-closed hook",
-                    Detail = "The connector only observes, but a hook failure blocks the agent anyway. " +
-                             "Pair observe with hook_fail_mode: open, or move to enforce.",
-                    SeverityKey = "High",
-                });
-            }
-        }
+        // The rule moved in 1.0.4 (a per-user host's outage mode follows the policy tier): the rows are built in OverviewPanelViewModel.Runtime104.cs,
+        // together with the other rows only that runtime has.
+        AppendFailModeMismatchAttention(rows);
+        AppendRuntime104Attention(rows);
 
         // The third opinion, and the one that wins: Claude Code's own settings.json can
         // hold an env override the hook obeys over both config.yaml and /status.
@@ -1123,8 +1114,15 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         }
 
         var names = new List<string>();
+        var retired = RemovedConnectors.AreRetired(Services.Runtime.Capabilities);
         foreach (var name in snapshot.ActiveConnectors.Concat(live.Keys).Concat(configured.Keys))
         {
+            // 1.0.4 discards the removed connectors' settings when it loads config.yaml, so an old file's entry is no connector there.
+            if (retired && RemovedConnectors.IsRemoved(name))
+            {
+                continue;
+            }
+
             if (!names.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
                 names.Add(name);
@@ -1151,7 +1149,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             var failMode = effectiveFailMode is { Length: > 0 }
                 ? effectiveFailMode
                 : hookMode ?? runtime?.HookFailMode ?? ConfigOnly(settings?.HookFailMode);
-            var mismatch = (settings?.HasFailModeMismatch ?? false) || (runtime?.HasFailModeMismatch ?? false) ||
+            var mismatch = (settings?.HasFailModeMismatchOn(SavedFailModeIgnored) ?? false) || (runtime?.HasFailModeMismatch ?? false) ||
                            (Equal(ModeOf(name), "observe") && Equal(effectiveFailMode, "closed"));
 
             var drift = runtime is not null && settings is not null &&

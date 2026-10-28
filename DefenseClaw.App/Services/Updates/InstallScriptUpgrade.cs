@@ -195,7 +195,15 @@ public static class InstallScriptPlan
                 return null;
             }
 
-            return last.Length <= MaxFailureReasonChars ? last : last[..(MaxFailureReasonChars - 1)].TrimEnd() + "…";
+            if (last.Length <= MaxFailureReasonChars)
+            {
+                return last;
+            }
+
+            // The retry command is at the end of the line, so a cut would drop the switch the hint keys on: say it after the cut.
+            var keepFlag = last.Contains(AcceptCurrentInstallFlag, StringComparison.Ordinal);
+            var suffix = keepFlag ? " (" + AcceptCurrentInstallFlag + ")" : string.Empty;
+            return last[..(MaxFailureReasonChars - 1 - suffix.Length)].TrimEnd() + "…" + suffix;
         }
         catch (RegexMatchTimeoutException)
         {
@@ -229,9 +237,34 @@ public static class InstallScriptPlan
         }
     }
 
-    /// <summary>The one-line hint for a reason that names an unresolved connector recovery; null otherwise.</summary>
-    public static string? HintFor(string? reason) =>
-        reason is not null && reason.Contains(ConnectorRecoveryPhrase, StringComparison.OrdinalIgnoreCase) ? ConnectorRecoveryHint : null;
+    /// <summary>
+    /// The switch install.ps1 1.0.4 added (<c>-AcceptCurrentInstall</c>; the exit codes are unchanged). An interrupted install fails with exit 1 and a line that
+    /// ends in the command to run again, with this switch when the earlier run's record has to be settled against what is on the machine now.
+    /// </summary>
+    public const string AcceptCurrentInstallFlag = "-AcceptCurrentInstall";
+
+    public const string AcceptCurrentInstallHint =
+        "The installer finished nothing and says to run it again with -AcceptCurrentInstall, which keeps the config and connectors as they are now instead of " +
+        "restoring the earlier install's. Use it only if you changed them on purpose; run the command it printed in a console, because this app does not add the switch.";
+
+    /// <summary>
+    /// The one-line hint for a reason that names an unresolved connector recovery, or that tells the operator to run the installer again with
+    /// <see cref="AcceptCurrentInstallFlag"/>; null otherwise.
+    /// </summary>
+    public static string? HintFor(string? reason)
+    {
+        if (reason is null)
+        {
+            return null;
+        }
+
+        if (reason.Contains(ConnectorRecoveryPhrase, StringComparison.OrdinalIgnoreCase))
+        {
+            return ConnectorRecoveryHint;
+        }
+
+        return reason.Contains(AcceptCurrentInstallFlag, StringComparison.Ordinal) ? AcceptCurrentInstallHint : null;
+    }
 
     /// <summary>Where install.ps1 leaves what it migrated; the first file that exists wins.</summary>
     public static IReadOnlyList<string> MigrationFileCandidates(string dataDirectory) =>

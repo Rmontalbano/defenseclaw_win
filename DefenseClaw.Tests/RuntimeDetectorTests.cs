@@ -90,7 +90,9 @@ public class RuntimeDetectorTests
         var snapshot = await detector.RefreshAsync();
 
         Assert.True(snapshot.IsKnown);
-        Assert.Equal(RuntimeCapabilityCatalog.All, snapshot.Capabilities.Present.ToArray());
+        Assert.Equal(
+            RuntimeCapabilityCatalog.All.Except([RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules]).ToArray(),
+            snapshot.Capabilities.Present.ToArray());
         Assert.Contains("acp --help", runtime.Asked);
         Assert.Contains("setup redaction --help", runtime.Asked);
 

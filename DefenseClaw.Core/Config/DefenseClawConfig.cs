@@ -241,6 +241,17 @@ public sealed class GuardrailConnectorSettings
     public bool HasFailModeMismatch =>
         string.Equals(Mode, "observe", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(HookFailMode, "closed", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <see cref="HasFailModeMismatch"/> on a runtime where a saved per-user value is not what the hooks obey (1.0.4, see <see cref="HookFailModeRule"/>):
+    /// observe plus a saved <c>closed</c> then blocks nothing, so it is no mismatch. <paramref name="savedValueIgnored"/> is
+    /// <see cref="HookFailModeRule.SavedValueIgnored"/>; false keeps the old reading.
+    /// </summary>
+    public bool HasFailModeMismatchOn(bool savedValueIgnored) => !savedValueIgnored && HasFailModeMismatch;
+
+    /// <summary>True when config.yaml saves <c>hook_fail_mode: closed</c> (the one value a per-user 1.0.4 runtime does not apply).</summary>
+    [YamlIgnore]
+    public bool SavesFailClosed => string.Equals(HookFailMode, "closed", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class CiscoAiDefenseSection

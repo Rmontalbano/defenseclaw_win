@@ -143,9 +143,28 @@ public static class TuiRegistryCatalogues
         TuiRegistryData.ExtendedSourceEntries,
         TuiRegistryData.Extended);
 
-    /// <summary>The catalogue for a runtime with these capabilities: <see cref="Extended"/> when it has <see cref="RuntimeCapability.TuiRegistry"/>, otherwise <see cref="Baseline"/>.</summary>
+    /// <summary>
+    /// <see cref="Extended"/> without <c>setup openhands</c> and <c>setup omnigent</c>: 1.0.4's registry (<c>tui/registry_data.py</c>) differs from the
+    /// pinned one in exactly those two tuples (checked against the 1.0.0 and 1.0.4 files), so the catalogue is derived rather than generated a third time.
+    /// </summary>
+    public static TuiRegistryCatalogue ExtendedWithoutRemovedConnectors { get; } = new(
+        TuiRegistryData.ExtendedRuntime + ", without the connectors 1.0.4 removed",
+        TuiRegistryData.ExtendedSource,
+        TuiRegistryData.ExtendedSourceSha256,
+        TuiRegistryData.ExtendedSourceEntries - Extended.Entries.Count(static e => IsRemovedSetup(e)),
+        Extended.Entries.Where(static e => !IsRemovedSetup(e)).ToArray());
+
+    private static bool IsRemovedSetup(TuiRegistryEntry entry) =>
+        entry.Argv.Count >= 2 && entry.Argv[0] == "setup" && RemovedConnectors.IsRemoved(entry.Argv[1]);
+
+    /// <summary>
+    /// The catalogue for a runtime with these capabilities: <see cref="Extended"/> when it has <see cref="RuntimeCapability.TuiRegistry"/> (without the
+    /// removed connectors when it has <see cref="RuntimeCapability.ConnectorsRetired"/>), otherwise <see cref="Baseline"/>.
+    /// </summary>
     public static TuiRegistryCatalogue For(RuntimeCapabilities? capabilities) =>
-        capabilities is not null && capabilities.Has(RuntimeCapability.TuiRegistry) ? Extended : Baseline;
+        capabilities is not null && capabilities.Has(RuntimeCapability.TuiRegistry)
+            ? (capabilities.Has(RuntimeCapability.ConnectorsRetired) ? ExtendedWithoutRemovedConnectors : Extended)
+            : Baseline;
 
     /// <summary>
     /// Why <paramref name="argv"/> must not be run from a catalogue, or null when it may: it is empty, a token is empty, has whitespace or

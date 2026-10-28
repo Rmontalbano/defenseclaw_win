@@ -57,7 +57,11 @@ public sealed class ConnectorMode
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; init; }
 
-    /// <summary>Observe mode paired with a fail-closed hook — the recurring bad default.</summary>
+    /// <summary>
+    /// Observe mode paired with a fail-closed hook — the recurring bad default. What the gateway reports is what the hook contract does, so this holds on
+    /// every runtime; from 1.0.4 a per-user host reports the policy tier's mode, so the way out is a rule pack that is not strict
+    /// (<see cref="DefenseClaw.Core.Config.HookFailModeRule"/>), not a saved value.
+    /// </summary>
     public bool HasFailModeMismatch =>
         string.Equals(GuardrailMode, "observe", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(HookFailMode, "closed", StringComparison.OrdinalIgnoreCase);

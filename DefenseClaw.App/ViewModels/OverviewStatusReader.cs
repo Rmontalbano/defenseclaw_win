@@ -22,6 +22,12 @@ internal sealed record HookFailModeState(
     public bool HasDrift => Current == false || Drift.Count > 0;
 }
 
+/// <summary>One leftover of a removed connector: where it is, what it does, and the step that removes it by hand (the runtime's own words).</summary>
+internal sealed record RemovedConnectorItem(string Path, string What, string Step);
+
+/// <summary>What one removed connector (<c>openhands</c>, <c>omnigent</c>) left on this host, as <c>status --json</c> lists it.</summary>
+internal sealed record RemovedConnectorLeftovers(string Connector, string Label, IReadOnlyList<RemovedConnectorItem> Items);
+
 /// <summary>One entry of <c>connectors[]</c> in <c>defenseclaw status --json</c>.</summary>
 internal sealed record StatusConnector(string Name, string? Friendly, string? Mode, bool? Enabled, string? Source, HookFailModeState? FailMode);
 
@@ -48,6 +54,13 @@ internal sealed record DefenseClawStatus(
     string? ApplicationProtectionState,
     IReadOnlyList<StatusConnector> Connectors)
 {
+    /// <summary>
+    /// <c>removed_connector_cleanup</c> (1.0.4): what the removed OpenHands and OmniGent connectors left on this host, with the step to remove each item by
+    /// hand. Empty when the field is absent (every older runtime) or lists nothing. An init member rather than a constructor argument so the
+    /// positional form every reader of this record uses is unchanged.
+    /// </summary>
+    public IReadOnlyList<RemovedConnectorLeftovers> RemovedConnectorCleanup { get; init; } = Array.Empty<RemovedConnectorLeftovers>();
+
     /// <summary>The entry for <paramref name="name"/> (without case), or null.</summary>
     public StatusConnector? Connector(string name) =>
         Connectors.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -57,7 +70,7 @@ internal sealed record DefenseClawStatus(
         null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, Array.Empty<StatusConnector>());
 }
 
-/// <summary>Parses <c>defenseclaw status --json</c> (0.8.10). Tolerant: a missing or oddly typed member is null, never an error.</summary>
+/// <summary>Parses <c>defenseclaw status --json</c> (0.8.10 to 1.0.4). Tolerant: a missing or oddly typed member is null, never an error.</summary>
 internal static class DefenseClawStatusReader
 {
     /// <exception cref="JsonException">Not JSON, or not a JSON object.</exception>
@@ -98,7 +111,7 @@ internal static class DefenseClawStatusReader
             }
         }
 
-        return new DefenseClawStatus(
+        var status = new DefenseClawStatus(
             Text(root, "environment"),
             Text(root, "deployment_mode"),
             Text(root, "data_dir"),
@@ -114,7 +127,48 @@ internal static class DefenseClawStatusReader
             activity is { } a2 ? Int(a2, "active_alerts") : null,
             appProtection is { } p1 ? Bool(p1, "enabled") : null,
             appProtection is { } p2 ? Text(p2, "health_state") : null,
-            connectors);
+            connectors)
+        {
+            RemovedConnectorCleanup = ReadRemovedConnectorCleanup(root),
+        };
+        return status;
+    }
+
+    /// <summary><c>removed_connector_cleanup: [{connector, label, items: [{path, what, step}]}]</c> (<c>removed_connectors.py</c> <c>as_json</c>); a malformed entry is skipped.</summary>
+    private static IReadOnlyList<RemovedConnectorLeftovers> ReadRemovedConnectorCleanup(JsonElement root)
+    {
+        if (!root.TryGetProperty("removed_connector_cleanup", out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<RemovedConnectorLeftovers>();
+        }
+
+        var found = new List<RemovedConnectorLeftovers>();
+        foreach (var entry in list.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.Object || Text(entry, "connector") is not { Length: > 0 } connector)
+            {
+                continue;
+            }
+
+            var items = new List<RemovedConnectorItem>();
+            if (entry.TryGetProperty("items", out var rawItems) && rawItems.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in rawItems.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Object && Text(item, "path") is { Length: > 0 } path)
+                    {
+                        items.Add(new RemovedConnectorItem(path, Text(item, "what") ?? string.Empty, Text(item, "step") ?? string.Empty));
+                    }
+                }
+            }
+
+            if (items.Count > 0)
+            {
+                found.Add(new RemovedConnectorLeftovers(connector, Text(entry, "label") is { Length: > 0 } label ? label : connector, items));
+            }
+        }
+
+        return found;
     }
 
     private static HookFailModeState? ReadFailMode(JsonElement connector)

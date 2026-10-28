@@ -93,7 +93,11 @@ public sealed class WizardCredentials
             return CredentialPresence.Unknown;
         }
 
-        return names.Contains(envName!) ? CredentialPresence.InDotEnv : CredentialPresence.NotSet;
+        // The runtime matches its own gateway token's name without regard to case on Windows (1.0.4), as the environment above already does.
+        var stored = names.Contains(envName!) ||
+                     (DefenseClaw.Core.Cli.GatewayTokenNames.IsGatewayToken(envName) &&
+                      names.Any(n => DefenseClaw.Core.Cli.GatewayTokenNames.IsGatewayToken(n) && n.Equals(envName, StringComparison.OrdinalIgnoreCase)));
+        return stored ? CredentialPresence.InDotEnv : CredentialPresence.NotSet;
     }
 
     /// <summary>

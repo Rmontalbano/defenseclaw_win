@@ -50,16 +50,25 @@ public class RuntimeCapabilityTests
         Assert.Empty(snapshot.Capabilities.Notes);
     }
 
+    /// <summary>What 1.0.4 added and the pinned source (version 1.0.0) does not have (CUST-373).</summary>
+    private static readonly RuntimeCapability[] Release104Capabilities = [RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules];
+
     [Fact]
-    public void The_pinned_runtime_has_every_capability()
+    public void The_pinned_runtime_has_every_capability_that_predates_1_0_4()
     {
         var snapshot = Evaluate(Screens("95159fd"));
 
         Assert.True(snapshot.IsKnown);
         Assert.Equal("1.0.0", snapshot.Identity!.Version);
-        foreach (var capability in RuntimeCapabilityCatalog.All)
+        foreach (var capability in RuntimeCapabilityCatalog.All.Except(Release104Capabilities))
         {
             Assert.True(snapshot.Capabilities.Has(capability), capability + " must be present at the pin");
+        }
+
+        // The pin reports 1.0.0: the behaviours that arrived with 1.0.4 are not its.
+        foreach (var capability in Release104Capabilities)
+        {
+            Assert.False(snapshot.Capabilities.Has(capability), capability + " is a 1.0.4 behaviour");
         }
 
         Assert.True(snapshot.Capabilities.HasSetupCommand("redaction"));

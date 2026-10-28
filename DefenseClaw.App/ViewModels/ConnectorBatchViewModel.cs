@@ -113,7 +113,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
             .Where(static d => d is not null)
             .Cast<WizardDefinition>()
             .ToList();
-        return ConnectorOnboarding.Offerable(known);
+        return ConnectorOnboarding.Offerable(known, DefenseClaw.Core.Runtime.RemovedConnectors.AreRetired(Services.Runtime.Capabilities));
     }
 
     // ------------------------------------------------------------------ the form

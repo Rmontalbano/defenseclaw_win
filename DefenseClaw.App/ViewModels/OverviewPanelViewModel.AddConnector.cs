@@ -4,6 +4,7 @@ using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.FirstRun;
 using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -40,6 +41,12 @@ public sealed partial class OverviewPanelViewModel
     /// </summary>
     private void SetDetectedConnectors(IReadOnlyList<string> detected)
     {
+        // A runtime that removed OpenHands and OmniGent (1.0.4) has no connector to offer for an agent discovery still recognises.
+        if (RemovedConnectors.AreRetired(Services.Runtime.Capabilities))
+        {
+            detected = detected.Where(static name => !RemovedConnectors.IsRemoved(name)).ToList();
+        }
+
         SetDetectedForAttention(detected);
         if (_detectedConnectors.SequenceEqual(detected, StringComparer.Ordinal))
         {
@@ -93,7 +100,7 @@ public sealed partial class OverviewPanelViewModel
             .Where(static d => d is not null)
             .Cast<WizardDefinition>()
             .ToList();
-        return ConnectorOnboarding.Offerable(known);
+        return ConnectorOnboarding.Offerable(known, RemovedConnectors.AreRetired(Services.Runtime.Capabilities));
     }
 
     /// <summary>The row's Add: the review of the one command. Refused for a row that is configured (it has no button), and for a read-only installation.</summary>

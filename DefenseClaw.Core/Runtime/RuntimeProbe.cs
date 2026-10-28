@@ -63,6 +63,9 @@ public static class RuntimeProbe
     /// <summary>The version at which the runtime reports configuration schema 8 (the pin self-reports 1.0.0).</summary>
     internal static readonly Version Schema8Version = new(1, 0, 0);
 
+    /// <summary>The release that removed the OpenHands and OmniGent connectors and made a per-user hook's outage mode follow the policy tier.</summary>
+    internal static readonly Version Release104 = new(1, 0, 4);
+
     /// <summary>
     /// The subcommand names a Click help screen lists under its column-0 <c>Commands:</c> heading. Empty when there is no such
     /// heading (a leaf command, or text that is not help at all).
@@ -304,6 +307,13 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.EffectivePolicy);
             // `alerts --json` has been there since 1.0.0 (cmd_alerts.py), and like the ledger it has no help screen worth probing for one flag.
             present.Add(RuntimeCapability.RuntimeAlerts);
+        }
+
+        // 1.0.4 behaviour with no command to probe (a connector that is gone, a rule that moved): the version decides, on the same terms as the ledger above.
+        if (identity.ParsedVersion is { } release && release >= Release104 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.ConnectorsRetired);
+            present.Add(RuntimeCapability.PerUserHookRules);
         }
 
         if (HasAll(setup, RegistryMarkers))

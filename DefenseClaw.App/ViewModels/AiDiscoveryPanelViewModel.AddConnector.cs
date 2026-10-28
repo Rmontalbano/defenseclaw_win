@@ -28,7 +28,7 @@ public sealed partial class AiDiscoveryPanelViewModel
             .Cast<WizardDefinition>()
             .ToList();
         var id = ConnectorOnboarding.Normalize(name);
-        return ConnectorOnboarding.Offerable(known).Any(o => o.Id == id);
+        return ConnectorOnboarding.Offerable(known, DefenseClaw.Core.Runtime.RemovedConnectors.AreRetired(Services.Runtime.Capabilities)).Any(o => o.Id == id);
     }
 
     [RelayCommand(CanExecute = nameof(CanChangeInstallation))]

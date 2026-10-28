@@ -389,6 +389,9 @@ public sealed class RuntimeSelectorTests : IDisposable
         Assert.Equal("No features beyond the 0.8.10 baseline", RuntimeSummary.Features(snapshot));
     }
 
+    /// <summary>What 1.0.4 added; the pinned source (version 1.0.0) does not have it.</summary>
+    private static readonly RuntimeCapability[] Release104 = [RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules];
+
     [Fact]
     public async Task Against_the_pin_fixtures_every_capability_opens_and_Changed_fires_once_on_the_first_answer()
     {
@@ -404,9 +407,15 @@ public sealed class RuntimeSelectorTests : IDisposable
         System.Windows.Application.Current?.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
 
         Assert.Equal("1.0.0", snapshot.Identity!.Version);
-        foreach (var capability in RuntimeCapabilityCatalog.All)
+        foreach (var capability in RuntimeCapabilityCatalog.All.Except(Release104))
         {
             Assert.True(services.Runtime.Check(capability).IsAvailable, capability.ToString());
+        }
+
+        // The pin reports 1.0.0, so the two behaviours that arrived with 1.0.4 (CUST-373) stay closed.
+        foreach (var capability in Release104)
+        {
+            Assert.False(services.Runtime.Check(capability).IsAvailable, capability.ToString());
         }
 
         Assert.Equal(1, raised);
@@ -443,7 +452,9 @@ public sealed class RuntimeSelectorTests : IDisposable
         UiThread.Run(() => model.RecheckRuntimeCommand.Execute(null));
         UiThread.WaitFor(() => model.RuntimeIdentityText.StartsWith("defenseclaw-cli 1.0.0", StringComparison.Ordinal), "the identity to show");
 
-        Assert.All(model.RuntimeCapabilityRows, row => Assert.Equal("Available", row.Status));
+        var released104 = Release104.Select(RuntimeCapabilityCatalog.DisplayName).ToHashSet(StringComparer.Ordinal);
+        Assert.All(model.RuntimeCapabilityRows.Where(row => !released104.Contains(row.Name)), row => Assert.Equal("Available", row.Status));
+        Assert.All(model.RuntimeCapabilityRows.Where(row => released104.Contains(row.Name)), row => Assert.Equal("Not in this runtime", row.Status));
         Assert.Contains(model.RuntimeCapabilityRows, row => row.Name == "ACP guard");
         Assert.Contains("Linux and macOS only", model.RuntimeCapabilityNotes, StringComparison.Ordinal);
     }

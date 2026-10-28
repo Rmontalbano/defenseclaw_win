@@ -138,6 +138,17 @@ How the readers fare:
 - To check the query plans the Core suite pins (index use, no temp B-tree) as well, `TestAuditDatabase` can build every database in the suite from another DDL:
   `DEFENSECLAW_TEST_AUDIT_SCHEMA=runtime-95159fd/audit/audit-schema.sql dotnet test DefenseClaw.Tests -c Release`. Run that way, **all 1632 Core tests
   pass** against the 53-migration schema. CI runs the default (0.8.10) schema; the newer one is covered there by `Runtime95159fdCompatTests`.
+
+#### 1.0.4 delta (CUST-373)
+
+Read from the 1.0.0 to 1.0.4 diff of `internal/audit` (no 1.0.4 database was opened). The audit database gains one column, `audit_events.record_sha256 TEXT`
+(`migrateAuditEventRecordDigest` in `config_change_pin.go`, migration description "audit events: keep the canonical record digest of a spooled change"): the
+SHA-256 of the canonical record behind a spooled config change; NULL on every other row and on rows an earlier build wrote. It is additive (an earlier binary names
+its insert columns). Also new: the table `hook_delivery_journal` (created `IF NOT EXISTS`) and eight `audit_events` indexes (`idx_audit_trace_id`, `idx_audit_turn_id`,
+`idx_audit_agent_id`, `idx_audit_agent_instance_id`, `idx_audit_scan_id`, `idx_audit_source_timestamp`, `idx_audit_connector`,
+`idx_audit_action_connector_timestamp`). No reader names `record_sha256` or reads `hook_delivery_journal`, and every reader probes its columns with
+`pragma_table_info`, so none needs a change. The fixture DDLs (`Fixtures/audit-schema.sql`, `Fixtures/runtime-95159fd/audit/audit-schema.sql`) are not regenerated:
+they stay the 0.8.10 and 95159fd schemas.
 - Timestamps are written with nine fractional digits (`2030-01-15T10:01:00.123456789Z`) and parse; the reader rounds to .NET's 100 ns tick.
 - `activity_events` is **no longer written**. Operator changes are `audit_events` rows (`bucket = compliance.activity`, `action = config.change.applied`,
   actor `cli`, `tui:operator` ...). The Mutations reader already merged both sources, so the list is populated from the audit rows.

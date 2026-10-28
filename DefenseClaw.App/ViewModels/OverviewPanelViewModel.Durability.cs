@@ -56,6 +56,9 @@ public sealed partial class OverviewPanelViewModel
             case AttentionActionIds.SwitchToFailOpen:
                 SwitchToFailOpen();
                 break;
+            case OpenInstallerActionId:
+                OpenInstallerForLock();
+                break;
             default:
                 break;
         }

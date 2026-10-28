@@ -99,16 +99,19 @@ public static class ConnectorOnboarding
     /// anything <see cref="WizardWindowsPolicy"/> says cannot work here, such as a connector the CLI declares unsupported on Windows);
     /// from the built-in list otherwise.
     /// </summary>
-    public static IReadOnlyList<OfferedConnector> Offerable(IEnumerable<WizardDefinition>? definitions)
+    /// <param name="definitions">The Setup catalog's cards, or null while it has not been read.</param>
+    /// <param name="connectorsRetired">The runtime removed OpenHands and OmniGent (1.0.4, <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ConnectorsRetired"/>): neither is offered, whatever a card says.</param>
+    public static IReadOnlyList<OfferedConnector> Offerable(IEnumerable<WizardDefinition>? definitions, bool connectorsRetired = false)
     {
         var connectorCards = (definitions ?? Enumerable.Empty<WizardDefinition>())
             .Where(static d => d.Group == WizardGroups.Connectors && !NotAConnector.Contains(d.Target) && !IsProxy(d.Target))
+            .Where(d => !connectorsRetired || !DefenseClaw.Core.Runtime.RemovedConnectors.IsRemoved(d.Target))
             .ToList();
 
         if (connectorCards.Count == 0)
         {
             return KnownHookConnectors
-                .Where(static k => !UnsupportedBeforeCatalog.Contains(k.Id))
+                .Where(k => !UnsupportedBeforeCatalog.Contains(k.Id) && (!connectorsRetired || !DefenseClaw.Core.Runtime.RemovedConnectors.IsRemoved(k.Id)))
                 .Select(static k => new OfferedConnector(k.Id, k.Label, SetupAlias(k.Id), PlatformStatus.Unknown))
                 .ToArray();
         }

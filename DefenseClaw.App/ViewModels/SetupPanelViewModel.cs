@@ -712,7 +712,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
                 name,
                 settings.Mode,
                 settings.HookFailMode,
-                settings.HasFailModeMismatch,
+                settings.HasFailModeMismatchOn(DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(Services.Runtime.Capabilities, Services.Installation.Context.IsManaged)),
                 fromConfig: true));
         }
 

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DefenseClaw.Core.Config;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.ViewModels.ConfigEditor;
 
@@ -21,10 +23,15 @@ public sealed record ConfigFieldInfo(string Hint, IReadOnlyList<string>? Options
 /// runtime is the default; the pinned newer source (commit 95159fd) has another set and another Windows table, and is chosen only when the
 /// runtime shows <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.TuiRegistry"/> (<c>setup --help</c> lists amp, devin and kiro).
 /// </summary>
-public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors)
+/// <param name="OsName">The operating system the connector lists are for.</param>
+/// <param name="ExtendedConnectors">The pinned newer source's connector set.</param>
+/// <param name="ConnectorsRetired">The runtime removed OpenHands and OmniGent (1.0.4, <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ConnectorsRetired"/>): no picker offers them.</param>
+/// <param name="SavedFailModeIgnored">A per-user 1.0.4 runtime does not apply a saved <c>hook_fail_mode</c> (<see cref="DefenseClaw.Core.Config.HookFailModeRule"/>); the fail-mode fields say so.</param>
+public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false)
 {
     /// <summary>This machine's operating system, with the 0.8.10 connector set: what the editor uses until the runtime says otherwise.</summary>
-    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false) => new(HostOsName(), extendedConnectors);
+    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false) =>
+        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored);
 
     /// <summary>Windows with the 0.8.10 connector set: this app's own profile when no runtime has been probed.</summary>
     public static ConfigChoiceProfile Windows { get; } = new("windows", false);
@@ -73,6 +80,17 @@ public static class ConfigFieldCatalog
         "Hook fail mode is not edited here: change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which update the " +
         "installed hook registration as well as config.yaml.";
 
+    /// <summary>
+    /// The same field on a per-user 1.0.4 runtime: a saved value is not applied at all, because the gateway-outage mode follows the policy tier, and the
+    /// runtime's own pointer for failing closed is the strict rule pack (<c>cmd_guardrail.py</c>, <c>_PER_USER_OUTAGE_RULE</c>).
+    /// </summary>
+    private const string HookFailModeReasonFollowsTier =
+        "Hook fail mode is not edited here, and this runtime does not apply a saved per-user value: the gateway-outage mode follows the connector's policy tier " +
+        "(a strict rule pack fails closed, the default and permissive packs fail open). To fail closed during an outage, run " + HookFailModeRule.StrictPackCommand + ".";
+
+    private static string? HookFailModeReasonFor(ConfigChoiceProfile profile) =>
+        profile.SavedFailModeIgnored ? HookFailModeReasonFollowsTier : HookFailModeReason;
+
     // ------------------------------------------------------------------ option lists (cli_choices.py)
 
     /// <summary><c>CONNECTORS</c> in 0.8.10 (<c>cli_choices.py:35-49</c>): the order drives every connector picker.</summary>
@@ -110,8 +128,13 @@ public static class ConfigFieldCatalog
     public static IReadOnlyList<string> LlmOverrideProviders { get; } = new[] { string.Empty }.Concat(LlmProviders).ToArray();
 
     /// <summary>Every connector name the profile's runtime knows, in the order its pickers show them (<c>CONNECTORS</c>).</summary>
-    public static IReadOnlyList<string> AllConnectors(ConfigChoiceProfile profile) =>
-        profile.ExtendedConnectors ? ConnectorsPin : Connectors0810;
+    public static IReadOnlyList<string> AllConnectors(ConfigChoiceProfile profile)
+    {
+        var all = profile.ExtendedConnectors ? ConnectorsPin : Connectors0810;
+
+        // 1.0.4 removed OpenHands and OmniGent: a picker no longer offers them (a value already in the file stays selectable, see ChoiceItems).
+        return profile.ConnectorsRetired ? all.Where(static c => !RemovedConnectors.IsRemoved(c)).ToArray() : all;
+    }
 
     /// <summary>
     /// <c>supported_connector_choices(os_name)</c> (<c>cli_choices.py:58-65</c>): <see cref="AllConnectors"/> without the ones <c>os</c> cannot run. On
@@ -193,10 +216,11 @@ public static class ConfigFieldCatalog
     private sealed record Entry(
         Func<string[], string> Hint,
         Func<ConfigChoiceProfile, IReadOnlyList<string>>? Options = null,
-        string? ReadOnlyReason = null)
+        string? ReadOnlyReason = null,
+        Func<ConfigChoiceProfile, string?>? ReadOnlyReasonFor = null)
     {
         public ConfigFieldInfo Resolve(ConfigChoiceProfile profile, string[] captures) =>
-            new(Hint(captures), Options?.Invoke(profile), ReadOnlyReason);
+            new(Hint(captures), Options?.Invoke(profile), ReadOnlyReasonFor?.Invoke(profile) ?? ReadOnlyReason);
     }
 
     private sealed record Pattern(string[] Segments, Entry Entry)
@@ -315,7 +339,7 @@ public static class ConfigFieldCatalog
         // ---- Guardrail: _guardrail_section, setup.py:5837-5959
         Hint("guardrail.enabled", "Master guardrail switch.");
         Choice("guardrail.mode", "observe=log only; action=block.", "observe", "action");
-        Add("guardrail.hook_fail_mode", new Entry(_ => string.Empty, ReadOnlyReason: HookFailModeReason));
+        Add("guardrail.hook_fail_mode", new Entry(_ => string.Empty, ReadOnlyReasonFor: HookFailModeReasonFor));
         Choice("guardrail.scanner_mode", "local=regex/judge; remote=Cisco AI Defense; both=chained.", "local", "remote", "both");
         Add("guardrail.connector", new Entry(_ => "Blank follows claw.mode.", p => new[] { string.Empty }.Concat(SupportedConnectors(p)).ToArray()));
         Hint("guardrail.allow_empty_providers", "Let sidecar boot with no upstream providers.");
@@ -356,7 +380,7 @@ public static class ConfigFieldCatalog
         Add("guardrail.connectors.*.mode", new Entry(c => $"Per-connector mode for {c[0]} (blank inherits the global mode).", _ => new[] { "observe", "action" }));
         Add("guardrail.connectors.*.rule_pack_dir", new Entry(c => $"Per-connector rule pack for {c[0]} (blank inherits the global pack)."));
         Add("guardrail.connectors.*.enabled", new Entry(c => $"Per-connector guardrail switch for {c[0]} (off tears down its hooks; on by default)."));
-        Add("guardrail.connectors.*.hook_fail_mode", new Entry(_ => string.Empty, ReadOnlyReason: HookFailModeReason));
+        Add("guardrail.connectors.*.hook_fail_mode", new Entry(_ => string.Empty, ReadOnlyReasonFor: HookFailModeReasonFor));
         Add("guardrail.connectors.*.hilt.enabled", new Entry(c => $"Ask before supported high-risk actions for {c[0]}."));
         Add("guardrail.connectors.*.hilt.min_severity", new Entry(c => $"Minimum severity for {c[0]} approval prompts.", _ => new[] { "HIGH", "MEDIUM", "LOW", "CRITICAL" }));
         Add("guardrail.connectors.*.block_message", new Entry(c => $"Per-connector block message for {c[0]} (blank inherits the global message)."));

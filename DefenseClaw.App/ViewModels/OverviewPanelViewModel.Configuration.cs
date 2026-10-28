@@ -166,6 +166,9 @@ public sealed partial class OverviewPanelViewModel
         BuildConnectors(snapshot, snapshot.Health);
         BuildConfiguration();
         RenderActivitySummary();
+
+        // status --json carries the removed connectors' leftovers (1.0.4), which are attention rows.
+        BuildAttention(snapshot);
     }
 
     /// <summary>Rebuilds the Configuration card from config.yaml, the snapshot, the last <c>status --json</c> and the scope. No I/O.</summary>

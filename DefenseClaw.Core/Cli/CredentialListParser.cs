@@ -27,6 +27,39 @@ public sealed record CredentialRow(
 
     /// <summary>The TUI's <c>missing_credential_rows</c>: required by the current config and not set.</summary>
     public bool IsMissingRequired => string.Equals(Requirement, Required, StringComparison.OrdinalIgnoreCase) && !IsSet;
+
+    /// <summary>
+    /// True when the row is DefenseClaw's own gateway auth token (<see cref="GatewayTokenNames"/>), matched without regard to case: on Windows the
+    /// runtime matches the name case-insensitively since 1.0.4 (<c>cmd_keys.py</c> <c>_gateway_token_name</c>), because the environment is.
+    /// </summary>
+    public bool IsGatewayToken => GatewayTokenNames.IsGatewayToken(EnvName) || GatewayTokenNames.IsGatewayToken(CanonicalEnvName);
+}
+
+/// <summary>
+/// The environment names that hold DefenseClaw's own gateway token (<c>cmd_keys.py</c> <c>_gateway_token_names</c>): <c>DEFENSECLAW_GATEWAY_TOKEN</c>,
+/// <c>OPENCLAW_GATEWAY_TOKEN</c> and the configured <c>gateway.token_env</c>. Up to 1.0.3 the match was exact everywhere; from 1.0.4 it ignores case on
+/// Windows (<c>_gateway_token_name</c> casefolds there), so <c>defenseclaw_gateway_token</c> is the same variable, as the environment treats it.
+/// </summary>
+public static class GatewayTokenNames
+{
+    /// <summary>The two names every runtime knows.</summary>
+    public static IReadOnlyList<string> Builtin { get; } = ["DEFENSECLAW_GATEWAY_TOKEN", "OPENCLAW_GATEWAY_TOKEN"];
+
+    /// <summary>
+    /// True when <paramref name="name"/> is a gateway token name: one of <see cref="Builtin"/> or <paramref name="configuredTokenEnv"/>, ignoring case
+    /// (this app only runs on Windows, where the runtime does the same).
+    /// </summary>
+    public static bool IsGatewayToken(string? name, string? configuredTokenEnv = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var trimmed = name.Trim();
+        return Builtin.Any(b => b.Equals(trimmed, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrWhiteSpace(configuredTokenEnv) && configuredTokenEnv.Trim().Equals(trimmed, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>

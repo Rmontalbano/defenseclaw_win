@@ -252,7 +252,7 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
         try
         {
             var definitions = await _loadCatalog(_lifetime.Token).ConfigureAwait(true);
-            _offerable = ConnectorOnboarding.Offerable(definitions);
+            _offerable = ConnectorOnboarding.Offerable(definitions, DefenseClaw.Core.Runtime.RemovedConnectors.AreRetired(_services.Runtime.Capabilities));
             ApplyOffered();
         }
         catch (OperationCanceledException)

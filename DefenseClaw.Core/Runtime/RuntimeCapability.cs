@@ -64,6 +64,20 @@ public enum RuntimeCapability
     /// merges it into the audit-database queue; 0.8.10 has no <c>--json</c> and keeps reading the database alone.
     /// </summary>
     RuntimeAlerts,
+
+    /// <summary>
+    /// The runtime that removed the OpenHands and OmniGent connectors (1.0.4): <c>setup openhands</c> and <c>setup omnigent</c> are gone, the TUI registry
+    /// lists neither, and <c>status --json</c> may carry <c>removed_connector_cleanup</c>. Judged from the runtime's version (1.0.4 or later); older
+    /// runtimes, and one that has not answered, keep both connectors exactly as they were.
+    /// </summary>
+    ConnectorsRetired,
+
+    /// <summary>
+    /// The per-user hook rules of 1.0.4: a per-user host's gateway-outage fail mode follows the connector's policy tier (closed for a strict rule pack,
+    /// open otherwise), a saved per-user <c>hook_fail_mode</c> is not applied, and an <c>.install.lock</c> an interrupted install left behind keeps
+    /// every per-user hook blocking (the hooks of 1.0.3 and earlier never read it). Judged from the runtime's version (1.0.4 or later).
+    /// </summary>
+    PerUserHookRules,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -95,6 +109,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.IdeInventory => "AI BOM IDE plugins and agent identities",
         RuntimeCapability.EffectivePolicy => "Effective policy (gateway profile resolution)",
         RuntimeCapability.RuntimeAlerts => "Runtime alert list (alerts --json)",
+        RuntimeCapability.ConnectorsRetired => "OpenHands and OmniGent removed",
+        RuntimeCapability.PerUserHookRules => "Per-user hook rules of 1.0.4",
         _ => capability.ToString(),
     };
 
@@ -119,6 +135,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.IdeInventory => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/ai-usage/ide-plugins and /api/v1/agents/identities, except on a managed host)",
         RuntimeCapability.EffectivePolicy => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then serves /api/v1/guardrail/profiles/resolve)",
         RuntimeCapability.RuntimeAlerts => "the runtime reports version 1.0.0 or later and lists its commands ('alerts --json' exists from 1.0.0)",
+        RuntimeCapability.ConnectorsRetired => "the runtime reports version 1.0.4 or later and lists its commands (setup openhands and setup omnigent are gone)",
+        RuntimeCapability.PerUserHookRules => "the runtime reports version 1.0.4 or later and lists its commands (a saved per-user hook_fail_mode is not applied, and a leftover install lock blocks hooks)",
         _ => string.Empty,
     };
 }
