@@ -72,11 +72,19 @@ public sealed record InstallScriptRunResult
 
     public TimeSpan Duration { get; init; }
 
-    /// <summary>The newest <c>install-*.log</c> written after the start, when there is one.</summary>
+    /// <summary>When the installer was started and when it exited (null when it never ran).</summary>
+    public DateTimeOffset? StartedAt { get; init; }
+
+    public DateTimeOffset? EndedAt { get; init; }
+
+    /// <summary>This run's <c>install-*.log</c> (named after its start; see <see cref="InstallScriptPlan.FindInstallLog"/>), when there is one.</summary>
     public string? LogPath { get; init; }
 
-    /// <summary>The installer's own last failure line from that log (<c>  x ...</c>), capped; null when the run did not fail or the log has none.</summary>
+    /// <summary>The installer's own failure line from that log (<c>  x ...</c>), sanitized and capped; null when the run did not fail or the log has none.</summary>
     public string? InstallerReason { get; init; }
+
+    /// <summary>What that log says about the run (restore, gateway, how the release bytes were checked); empty without a log.</summary>
+    public InstallTranscriptFacts Transcript { get; init; } = InstallTranscriptFacts.Empty;
 
     /// <summary>Why nothing ran or the run could not be followed; null for a run that started and ended.</summary>
     public string? FailureReason { get; init; }
@@ -263,8 +271,12 @@ public sealed class InstallScriptRunner
                     // CancellationToken.None on purpose: nothing here ends an installer that is half-way through replacing the install.
                     var exit = await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
                     var duration = _time.GetElapsedTime(clock);
+                    var ended = _time.GetUtcNow();
                     var info = InstallScriptPlan.MapExit(exit, request.Rollback);
-                    var log = InstallScriptPlan.FindInstallLog(request.DataDirectory, started);
+
+                    // This run's transcript, by the start the installer names it after: never just the newest log (CUST-359).
+                    var log = InstallScriptPlan.FindInstallLog(request.DataDirectory, started, ended);
+                    var transcript = InstallTranscript.Read(log);
 
                     _cli.CompleteExternalRun(
                         invocation,
@@ -279,8 +291,11 @@ public sealed class InstallScriptRunner
                         Rollback = request.Rollback,
                         ExitCode = exit,
                         Duration = duration,
+                        StartedAt = started,
+                        EndedAt = ended,
                         LogPath = log,
-                        InstallerReason = exit is 0 ? null : InstallScriptPlan.ReadFailureReason(log),
+                        InstallerReason = exit is 0 ? null : transcript.Reason,
+                        Transcript = transcript,
                         Exit = info,
                         Invocation = invocation,
                     };
@@ -562,8 +577,15 @@ internal sealed class AppUpgradeSession : IUpgradeSession
         ReleaseDatabaseHandles(_services);
     }
 
+    /// <summary>
+    /// Gives back, again, every handle a reader opened while the installer ran (a panel left on screen still reads): those point at the files the
+    /// installer moved aside or replaced. Every reader then opens the database that is there now, and the installation guard's generation (moved
+    /// when the upgrade scope closes) drops any answer read before. Then monitoring resumes, when this session paused it.
+    /// </summary>
     public void End()
     {
+        ReleaseDatabaseHandles(_services);
+
         if (_pausedByUs)
         {
             _pausedByUs = false;

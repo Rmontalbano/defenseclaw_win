@@ -18,7 +18,25 @@ public sealed record PostFlightFacts(
     string RuntimeIdentity,
     string RuntimeFeatures,
     bool? GatewayRunning,
-    string GatewayText);
+    string GatewayText)
+{
+    /// <summary>True when the process on the API port verified as this install's gateway (not just "something answered 200"); null when unknown.</summary>
+    public bool? GatewayOwnerVerified { get; init; }
+
+    /// <summary>The version the verified gateway reports in <c>/health</c>; null when it is not verified or did not say.</summary>
+    public string? GatewayVersion { get; init; }
+
+    /// <summary>When the gateway says it started (<c>/health</c> <c>started_at</c>).</summary>
+    public DateTimeOffset? GatewayStartedAt { get; init; }
+
+    /// <summary>The version <c>defenseclaw --version-json</c> reports.</summary>
+    public string? CliVersion { get; init; }
+
+    public TelemetryFacts Telemetry { get; init; } = TelemetryFacts.NotReported;
+
+    public DefenseClaw.Core.Audit.AuditPersistence Audit { get; init; } =
+        DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the gateway is not answering as the verified gateway, so there is no start to look after.");
+}
 
 /// <summary>Reads <see cref="PostFlightFacts"/>. A seam: tests answer from memory, the app asks the machine.</summary>
 public interface IPostFlightProbe
@@ -72,13 +90,30 @@ internal sealed class AppPostFlightProbe : IPostFlightProbe
                 Path.TrimEndingDirectorySeparator(ExpectedBinDirectory()),
                 StringComparison.OrdinalIgnoreCase);
 
+        // Health counts only from the verified gateway: a 200 from whatever holds the port proves nothing about the new install (CUST-359).
+        var verified = gateway.IsRunning && !gateway.PeerUnverified && gateway.HealthStatus == DefenseClaw.Core.Gateway.GatewayStatus.Ok;
+        var startedAt = verified ? gateway.Health?.StartedAt : null;
+        var audit = startedAt is { } since
+            ? await DefenseClaw.Core.Audit.AuditPersistenceCheck.CheckAsync(_services.Paths.AuditDatabasePath, since, cancellationToken: cancellationToken).ConfigureAwait(false)
+            : null;
+
         return new PostFlightFacts(
             cli,
             inExpected,
             RuntimeSummary.Identity(runtime),
             RuntimeSummary.Features(runtime),
             gateway.IsRunning,
-            gateway.StateLabel);
+            gateway.StateLabel)
+        {
+            GatewayOwnerVerified = gateway.IsRunning ? verified : null,
+            GatewayVersion = verified ? gateway.TrustedBinaryVersion : null,
+            GatewayStartedAt = startedAt,
+            CliVersion = runtime.Identity?.Version,
+            Telemetry = verified ? TelemetryFacts.From(gateway.Health) : TelemetryFacts.NotReported,
+            Audit = audit ?? (verified
+                ? DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the gateway did not say when it started.")
+                : DefenseClaw.Core.Audit.AuditPersistence.NotChecked("Not checked: the gateway is not answering as the verified gateway, so there is no start to look after.")),
+        };
     }
 }
 
@@ -776,6 +811,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         var staged = _staged!;
         HasResult = false;
         HasPostFlight = false;
+        ClearVerdict();
         IsRunning = true;
         RunStatus = rollback
             ? "install.ps1 -Rollback is running in its own console window. Answer its questions there."
@@ -812,7 +848,16 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
 
     private void ShowResult(InstallScriptRunResult result)
     {
+        _lastRun = result;
         HasResult = true;
+
+        // What the run alone says; the post-flight read that follows a started run replaces it with what the machine says.
+        var verdict = UpgradeVerdicts.Classify(result, null, result.Rollback ? null : InstallVersion);
+        VerdictState = verdict.State;
+        VerdictLabel = verdict.Label;
+        VerdictToneKey = verdict.ToneKey;
+        VerdictSummary = verdict.Summary;
+        HasVerdict = true;
         ExitLabel = result.Started && result.ExitCode is { } code
             ? $"{result.Exit.Label} (exit {code.ToString(CultureInfo.InvariantCulture)})"
             : result.Exit.Label;
@@ -865,9 +910,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             CliPathToneKey = facts.CliPath is null ? "Bad" : facts.CliInExpectedDirectory ? "Ok" : "Warn";
             RuntimeText = facts.RuntimeIdentity;
             FeaturesText = facts.RuntimeFeatures;
-            GatewayText = facts.GatewayText;
             GatewayDown = facts.GatewayRunning == false;
-            GatewayToneKey = facts.GatewayRunning switch { true => "Ok", false => "Bad", _ => "Neutral" };
+            ApplyChecks(facts, state);
 
             ConfigVersionText = state.ConfigVersionText;
             _migrationFile = state.Migration?.FilePath;

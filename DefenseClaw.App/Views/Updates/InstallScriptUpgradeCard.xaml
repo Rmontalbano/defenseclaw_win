@@ -204,6 +204,25 @@
                 <TextBlock Margin="0,0,0,8" Style="{StaticResource DcCaption}" Text="{Binding ExitMessage}" Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}" />
                 <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Style="{StaticResource DcCaption}" Text="{Binding ExitHint}" Visibility="{Binding HasExitHint, Converter={StaticResource BoolToVisibility}}" />
 
+                <!-- The verdict (CUST-359): what the machine says after the run, not only the exit code. -->
+                <Border Margin="0,0,0,8" Padding="12" Style="{StaticResource DcSubtleRow}"
+                        AutomationProperties.Name="{Binding VerdictLabel, StringFormat='Upgrade result: {0}'}"
+                        Visibility="{Binding HasVerdict, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" VerticalAlignment="Top" Style="{StaticResource DcBadge}" Tag="{Binding VerdictToneKey}">
+                            <StackPanel Orientation="Horizontal">
+                                <ctl:DcStatusGlyph Tone="{Binding VerdictToneKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding VerdictLabel}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Grid.Column="1" Margin="10,1,0,0" TextWrapping="Wrap" Style="{StaticResource DcCaption}" Text="{Binding VerdictSummary}" />
+                    </Grid>
+                </Border>
+
                 <Border Margin="0,0,0,8" Padding="12" Style="{StaticResource DcSubtleRow}"
                         Visibility="{Binding HasPostFlight, Converter={StaticResource BoolToVisibility}}">
                     <Grid>
@@ -212,6 +231,9 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -231,7 +253,7 @@
                         <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Gateway" />
                         <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,0,0,4" Orientation="Horizontal">
                             <Border Style="{StaticResource DcBadge}" Tag="{Binding GatewayToneKey}">
-                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding GatewayText}" />
+                                <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap" MaxWidth="420" Text="{Binding GatewayText}" />
                             </Border>
                             <ui:Button Margin="10,0,0,0"
                                        Appearance="Secondary"
@@ -241,8 +263,29 @@
                                        Icon="{ctl:DcSymbolIcon Play24}"
                                        Visibility="{Binding CanStartGateway, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
-                        <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Migration" />
+                        <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Telemetry" />
                         <StackPanel Grid.Row="5" Grid.Column="1" Margin="0,0,0,4" Orientation="Horizontal">
+                            <ctl:DcStatusGlyph VerticalAlignment="Top" Margin="0,4,0,0" Tone="{Binding TelemetryToneKey}" GlyphSize="12" Gap="6" />
+                            <TextBlock TextWrapping="Wrap" MaxWidth="560" Style="{StaticResource DcFieldValueInline}"
+                                       AutomationProperties.Name="{Binding TelemetryText, StringFormat='Telemetry: {0}'}"
+                                       Text="{Binding TelemetryText}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Audit" />
+                        <StackPanel Grid.Row="6" Grid.Column="1" Margin="0,0,0,4" Orientation="Horizontal">
+                            <ctl:DcStatusGlyph VerticalAlignment="Top" Margin="0,4,0,0" Tone="{Binding AuditToneKey}" GlyphSize="12" Gap="6" />
+                            <TextBlock TextWrapping="Wrap" MaxWidth="560" Style="{StaticResource DcFieldValueInline}"
+                                       AutomationProperties.Name="{Binding AuditText, StringFormat='Audit: {0}'}"
+                                       Text="{Binding AuditText}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Release" />
+                        <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,0,0,4" Orientation="Horizontal">
+                            <ctl:DcStatusGlyph VerticalAlignment="Top" Margin="0,4,0,0" Tone="{Binding ReleaseToneKey}" GlyphSize="12" Gap="6" />
+                            <TextBlock TextWrapping="Wrap" MaxWidth="560" Style="{StaticResource DcFieldValueInline}"
+                                       AutomationProperties.Name="{Binding ReleaseText, StringFormat='Release: {0}'}"
+                                       Text="{Binding ReleaseText}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="8" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Migration" />
+                        <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,0,0,4" Orientation="Horizontal">
                             <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Style="{StaticResource DcFieldValueInline}" Text="{Binding MigrationText}" />
                             <ui:Button Margin="10,0,0,0"
                                        Appearance="Secondary"
@@ -252,8 +295,8 @@
                                        Icon="{ctl:DcSymbolIcon FolderOpen24}"
                                        Visibility="{Binding HasMigration, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
-                        <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Last install" />
-                        <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock Grid.Row="9" Grid.Column="0" Style="{StaticResource DcFieldLabelInline}" Text="Last install" />
+                        <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Horizontal">
                             <Border VerticalAlignment="Center" Style="{StaticResource DcBadge}" Tag="{Binding LastInstallToneKey}">
                                 <TextBlock Style="{StaticResource DcBadgeText}" TextWrapping="Wrap" MaxWidth="420" Text="{Binding LastInstallText}" />
                             </Border>

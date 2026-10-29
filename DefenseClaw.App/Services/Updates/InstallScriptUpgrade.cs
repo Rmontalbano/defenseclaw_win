@@ -132,11 +132,15 @@ public static class InstallScriptPlan
     /// <summary><c>%USERPROFILE%\.defenseclaw\logs</c> under <paramref name="dataDirectory"/>.</summary>
     public static string LogDirectory(string dataDirectory) => Path.Combine(dataDirectory, "logs");
 
+    /// <summary>The allowance between the app's clock and the stamp the installer and the file system keep.</summary>
+    private static readonly TimeSpan LogClockSlack = TimeSpan.FromSeconds(5);
+
     /// <summary>
-    /// The newest <c>install-*.log</c> in the logs folder that was written at or after <paramref name="startedAtUtc"/> (minus a two-second allowance for
-    /// the clock the file system keeps), or null. The installer names it with its own start time, so "written after the start" is what ties a log to this run.
+    /// The transcript of the run that started at <paramref name="startedAtUtc"/> and ended at <paramref name="endedAtUtc"/> (now when null), or null.
+    /// install.ps1 names it after its own start (<c>install-yyyyMMddTHHmmss.log</c>, local time), so a log whose name falls inside the run is this
+    /// run's even when a later run wrote a newer one; without such a name, the newest log written at or after the start (minus a few seconds) is.
     /// </summary>
-    public static string? FindInstallLog(string dataDirectory, DateTimeOffset startedAtUtc)
+    public static string? FindInstallLog(string dataDirectory, DateTimeOffset startedAtUtc, DateTimeOffset? endedAtUtc = null)
     {
         try
         {
@@ -146,9 +150,23 @@ public static class InstallScriptPlan
                 return null;
             }
 
-            var floor = startedAtUtc.UtcDateTime - TimeSpan.FromSeconds(5);
-            return new DirectoryInfo(directory)
-                .EnumerateFiles("install-*.log")
+            var files = new DirectoryInfo(directory).EnumerateFiles("install-*.log").ToArray();
+            var from = startedAtUtc - LogClockSlack;
+            var to = (endedAtUtc ?? DateTimeOffset.UtcNow) + LogClockSlack;
+            var named = files
+                .Select(f => (File: f, Stamp: InstallRunReader.StampOf(f.Name)))
+                .Where(x => x.Stamp is { } stamp && stamp >= from && stamp <= to)
+                .OrderBy(x => x.Stamp)
+                .ThenBy(x => x.File.Name, StringComparer.Ordinal)
+                .Select(x => x.File.FullName)
+                .FirstOrDefault();
+            if (named is not null)
+            {
+                return named;
+            }
+
+            var floor = from.UtcDateTime;
+            return files
                 .Where(f => f.LastWriteTimeUtc >= floor)
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .ThenByDescending(f => f.Name, StringComparer.Ordinal)
@@ -169,73 +187,15 @@ public static class InstallScriptPlan
 
     public const string ConnectorRecoveryHint = "Open Overview and use \"Clear the stuck pending write\", then run the upgrade again.";
 
-    private static readonly Regex FailureLine = new(@"^  x (?<r>\S.*)$", RegexOptions.Multiline | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-
     /// <summary>
-    /// The last failure line (<c>  x &lt;reason&gt;</c>) of an install transcript, without its prefix, capped at <see cref="MaxFailureReasonChars"/>; null when
-    /// there is none. Nothing else of the transcript is returned (its header names the user and machine).
+    /// The installer's failure in one sanitized line (<see cref="InstallTranscript"/>: the <c>  x</c> line that says why, then its last word on the
+    /// outcome), capped at <see cref="MaxFailureReasonChars"/>; null when there is none. Nothing else of the transcript is returned: not its header
+    /// (user and machine), not a home folder (written <c>~</c>), not the <c>Log:</c> path, not a credential.
     /// </summary>
-    public static string? ExtractFailureReason(string? transcript)
-    {
-        if (string.IsNullOrEmpty(transcript))
-        {
-            return null;
-        }
-
-        try
-        {
-            string? last = null;
-            foreach (Match m in FailureLine.Matches(transcript.Replace("\r\n", "\n").Replace('\r', '\n')))
-            {
-                last = m.Groups["r"].Value.Trim();
-            }
-
-            if (string.IsNullOrEmpty(last))
-            {
-                return null;
-            }
-
-            if (last.Length <= MaxFailureReasonChars)
-            {
-                return last;
-            }
-
-            // The retry command is at the end of the line, so a cut would drop the switch the hint keys on: say it after the cut.
-            var keepFlag = last.Contains(AcceptCurrentInstallFlag, StringComparison.Ordinal);
-            var suffix = keepFlag ? " (" + AcceptCurrentInstallFlag + ")" : string.Empty;
-            return last[..(MaxFailureReasonChars - 1 - suffix.Length)].TrimEnd() + "…" + suffix;
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            return null;
-        }
-    }
+    public static string? ExtractFailureReason(string? transcript) => InstallTranscript.Parse(transcript).Reason;
 
     /// <summary>Reads <paramref name="logPath"/> (size-capped, shared) and returns <see cref="ExtractFailureReason"/>; null on any read problem.</summary>
-    public static string? ReadFailureReason(string? logPath)
-    {
-        if (string.IsNullOrEmpty(logPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            var info = new FileInfo(logPath);
-            if (!info.Exists || info.Length > InstallRunReader.MaxLogBytes)
-            {
-                return null;
-            }
-
-            using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            return ExtractFailureReason(reader.ReadToEnd());
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return null;
-        }
-    }
+    public static string? ReadFailureReason(string? logPath) => InstallTranscript.Read(logPath).Reason;
 
     /// <summary>
     /// The switch install.ps1 1.0.4 added (<c>-AcceptCurrentInstall</c>; the exit codes are unchanged). An interrupted install fails with exit 1 and a line that
@@ -690,19 +650,20 @@ public interface IUpgradeProbes
     long DatabaseBytes(string dataDirectory);
 
     /// <summary>
-    /// The pending guarded config writes (CAS v2 receipt sets) in <paramref name="dataDirectory"/>, of any age: the installer refuses to change
-    /// version while any receipt remains. May throw I/O errors; the checklist turns that into a warning.
+    /// The pending guarded config writes (CAS v2 receipt sets) in <paramref name="dataDirectory"/>, of any age, each with its hash check (CUST-360):
+    /// the installer refuses to change version while any receipt remains. May throw I/O errors; the checklist turns that into a warning.
     /// </summary>
     IReadOnlyList<CasPendingWrite> PendingConfigWrites(string dataDirectory) =>
-        CasReceipts.FindPending(dataDirectory, DateTimeOffset.UtcNow, TimeSpan.Zero);
+        CasReceipts.FindPending(dataDirectory, DateTimeOffset.UtcNow, TimeSpan.Zero).Select(w => w.WithAssessment(CasReceipts.Classify(w))).ToArray();
 
     /// <summary>
-    /// The names of every <c>.defenseclaw-cas-v2-*</c> file directly in <paramref name="dataDirectory"/>: exactly what install.ps1 refuses on, which
-    /// also covers finished or garbage-collection receipts that <see cref="PendingConfigWrites"/> does not list. May throw I/O errors.
+    /// The names of every <c>.defenseclaw-cas-v2-*</c> entry directly in <paramref name="dataDirectory"/>, file or folder: exactly what install.ps1's
+    /// <c>Assert-NoActiveConnectorRecovery</c> refuses on (<c>Get-ChildItem -Force</c>, name only), which also covers finished or garbage-collection
+    /// receipts that <see cref="PendingConfigWrites"/> does not list. May throw I/O errors.
     /// </summary>
     IReadOnlyList<string> RecoveryReceiptNames(string dataDirectory) =>
         Directory.Exists(dataDirectory)
-            ? Directory.EnumerateFiles(dataDirectory, CasReceipts.ReceiptPrefix + "*").Select(f => Path.GetFileName(f)).ToArray()
+            ? Directory.EnumerateFileSystemEntries(dataDirectory, CasReceipts.ReceiptPrefix + "*").Select(f => Path.GetFileName(f)).ToArray()
             : Array.Empty<string>();
 }
 
@@ -891,8 +852,13 @@ public static class InstallScriptPreflight
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var count = pending.Count;
+
+        // The hash check the Overview row shows (CUST-360), in the same words; a probe that did not check is checked here.
+        var checkedWrites = pending.Select(p => p.Assessment is null ? p.WithAssessment(CasReceipts.Classify(p)) : p).ToArray();
+        var states = CasWriteText.Sentence(checkedWrites);
         return new PreflightRow(PendingWritesId, title, PreflightStatus.Block,
             $"{count.ToString(CultureInfo.InvariantCulture)} pending config write{(count == 1 ? string.Empty : "s")} ({string.Join(", ", targets)}). " +
+            (states.Length > 0 ? states + " " : string.Empty) +
             "DefenseClaw's installer refuses to change version while they remain. Open Overview and use \"Clear the stuck pending write\", then check again.")
         {
             ActionId = PreflightActionIds.OpenOverview,

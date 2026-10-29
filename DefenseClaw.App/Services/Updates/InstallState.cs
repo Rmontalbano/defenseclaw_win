@@ -44,8 +44,11 @@ public sealed record InstallRunSummary(
     bool ConfigAlreadyCurrent,
     bool FromActivity)
 {
-    /// <summary>The installer's own last failure line (<c>  x ...</c>) from the transcript, capped; null when the run did not fail or none was written.</summary>
+    /// <summary>The installer's own failure line (<c>  x ...</c>) from the transcript, sanitized and capped; null when the run did not fail or none was written.</summary>
     public string? FailureReason { get; init; }
+
+    /// <summary>What the run's transcript says (restore, gateway, how the release bytes were checked); empty when the summary has no transcript.</summary>
+    public InstallTranscriptFacts Transcript { get; init; } = InstallTranscriptFacts.Empty;
 }
 
 /// <summary>
@@ -73,6 +76,22 @@ public static class InstallRunReader
     private static readonly Regex NotInstalled = new(@"DefenseClaw (?<v>\d[\w.+\-]*?) was not installed\.(?<rest>[^\r\n]*)", RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex FailedRestoring = new(@"(Installing \S+ failed; restoring|did not become healthy[^\r\n]*restoring)", RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex ConfigCurrent = new(@"Configuration is current \(config_version \d+\)", RegexOptions.CultureInvariant, RegexTimeout);
+
+    /// <summary>When the run behind <paramref name="fileName"/> started, from install.ps1's name for it (<c>install-yyyyMMddTHHmmss.log</c>, local time); null for any other name.</summary>
+    internal static DateTimeOffset? StampOf(string? fileName)
+    {
+        try
+        {
+            return fileName is not null && FileStamp.Match(fileName) is { Success: true } m &&
+                   DateTime.TryParseExact(m.Groups[1].Value, "yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var named)
+                ? new DateTimeOffset(DateTime.SpecifyKind(named, DateTimeKind.Local))
+                : null;
+        }
+        catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>The newest <c>install-*.log</c> (by write time, then name), or null; never throws.</summary>
     public static string? FindNewestLog(string dataDirectory)
@@ -188,9 +207,11 @@ public static class InstallRunReader
             outcome = InstallRunOutcome.Restored;
         }
 
+        var transcript = InstallTranscript.Parse(text);
         return new InstallRunSummary(kind, from, to, StartOf(text, path, fileTime), outcome, path, ConfigCurrent.IsMatch(text), FromActivity: false)
         {
-            FailureReason = outcome == InstallRunOutcome.Installed ? null : InstallScriptPlan.ExtractFailureReason(text),
+            FailureReason = outcome == InstallRunOutcome.Installed ? null : transcript.Reason,
+            Transcript = transcript,
         };
     }
 
@@ -310,12 +331,28 @@ public static class InstallRunReader
         return null;
     }
 
-    /// <summary>The newest log, parsed, combined with the app's Activity record. Null when there is neither.</summary>
+    /// <summary>
+    /// The newest run, parsed, combined with the app's Activity record; null when there is neither. When the app's own run is the newest, its transcript
+    /// is the log named after its start (<see cref="InstallScriptPlan.FindInstallLog"/>), not whichever log happens to be newest; a log from a run
+    /// that started after it (from a console) is the newer record and wins.
+    /// </summary>
     public static InstallRunSummary? Read(string dataDirectory, IEnumerable<CliInvocation> activity)
     {
-        var path = FindNewestLog(dataDirectory);
+        var newest = FindNewestLog(dataDirectory);
+        var run = NewestActivityRun(activity);
+        var path = newest;
+        if (run is not null)
+        {
+            var end = run.FinishedAt ?? DateTimeOffset.UtcNow;
+            var laterRun = newest is not null && StampOf(Path.GetFileName(newest)) is { } stamp && stamp > end + TimeSpan.FromSeconds(5);
+            if (!laterRun)
+            {
+                path = InstallScriptPlan.FindInstallLog(dataDirectory, run.StartedAt, end) ?? newest;
+            }
+        }
+
         var log = path is null ? null : ReadLog(path);
-        return Combine(log, NewestActivityRun(activity));
+        return Combine(log, run);
     }
 
     // ------------------------------------------------------------------------------------------------ display
@@ -443,6 +480,9 @@ public sealed record InstallStateSnapshot(
     string? PreviousVersion,
     RollbackAvailability Rollback)
 {
+    /// <summary>The run the Last install row describes, with its transcript facts (CUST-359); null when none was found.</summary>
+    public InstallRunSummary? LastRun { get; init; }
+
     public static InstallStateSnapshot Read(string dataDirectory, IEnumerable<CliInvocation> activity, DateTimeOffset now)
     {
         ArgumentException.ThrowIfNullOrEmpty(dataDirectory);
@@ -471,6 +511,9 @@ public sealed record InstallStateSnapshot(
             run is null ? "Neutral" : InstallRunReader.ToneKey(run.Outcome),
             run?.LogPath,
             InstallFiles.ReadPreviousVersion(dataDirectory),
-            InstallScriptPlan.CheckRollback(dataDirectory));
+            InstallScriptPlan.CheckRollback(dataDirectory))
+        {
+            LastRun = run,
+        };
     }
 }

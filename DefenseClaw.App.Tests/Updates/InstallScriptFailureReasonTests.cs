@@ -12,6 +12,9 @@ public sealed class InstallScriptFailureReasonTests : IDisposable
         @"Version change to 1.0.3 refused: active connector recovery remains in C:\Users\operator\.defenseclaw. " +
         "Resolve it with the current DefenseClaw version before retrying; do not remove or replay its receipts.";
 
+    /// <summary>The same line as the card shows it: the home folder is written <c>~</c> (CUST-359 sanitizing).</summary>
+    private static readonly string ShownRecovery = Recovery.Replace(@"C:\Users\operator", "~", StringComparison.Ordinal);
+
     private const string Id = "0123456789abcdef01234567";
 
     private readonly TempDirectory _temp = new();
@@ -126,7 +129,7 @@ public sealed class InstallScriptFailureReasonTests : IDisposable
 
         var reason = InstallScriptPlan.ExtractFailureReason(text);
 
-        Assert.Equal(Recovery, reason);
+        Assert.Equal(ShownRecovery, reason);
         Assert.DoesNotContain("Username", reason, StringComparison.Ordinal);
         Assert.DoesNotContain("SYNTH-HOST", reason, StringComparison.Ordinal);
     }
@@ -163,7 +166,7 @@ public sealed class InstallScriptFailureReasonTests : IDisposable
         var found = InstallScriptPlan.FindInstallLog(_temp.Path, started);
 
         Assert.Equal(current, found);
-        Assert.Equal(Recovery, InstallScriptPlan.ReadFailureReason(found));
+        Assert.Equal(ShownRecovery, InstallScriptPlan.ReadFailureReason(found));
         Assert.Null(InstallScriptPlan.ReadFailureReason(Path.Combine(logs, "install-missing.log")));
         Assert.Null(InstallScriptPlan.ReadFailureReason(null));
     }

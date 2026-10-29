@@ -458,6 +458,100 @@ public sealed class InstallScriptRunnerTests : IDisposable
         }
     }
 
+    // ------------------------------------------------------------------ readers after the swap (CUST-359, CUST-378's generation guard)
+
+    [Theory]
+    [InlineData(0, false, "success")]
+    [InlineData(1, false, "failure")]
+    [InlineData(0, true, "rollback")]
+    public async Task Every_ending_moves_the_installation_generation_so_reads_from_before_or_during_the_swap_are_dropped(int exit, bool rollback, string because)
+    {
+        var rig = await BuildAsync();
+        rig.Launcher.Exit = exit;
+        var guard = _services.Installation;
+        var before = guard.Generation;
+        int? during = null;
+        var mutableDuring = true;
+        rig.Launcher.OnStart = () =>
+        {
+            during = guard.Generation;
+            mutableDuring = guard.IsMutable;
+        };
+
+        var result = await rig.Runner.RunAsync(Request(rig, rollback: rollback));
+
+        Assert.True(result.Started, because);
+        Assert.False(mutableDuring, because);
+        Assert.False(guard.IsCurrent(before), because);
+        Assert.NotNull(during);
+        Assert.False(guard.IsCurrent(during!.Value), because);
+        Assert.True(guard.IsMutable, because);
+        Assert.False(_services.Cli.IsUpgradeRunning, because);
+        Assert.Equal(new[] { "pause+release", "start", "resume" }, rig.Events.Log);
+    }
+
+    [Fact]
+    public async Task A_failed_run_reads_its_own_transcript_and_returns_its_sanitized_reason_and_facts()
+    {
+        var rig = await BuildAsync();
+        rig.Launcher.Exit = 1;
+        var logs = Directory.CreateDirectory(Path.Combine(_temp.Path, "logs")).FullName;
+        rig.Launcher.OnStart = () => File.WriteAllText(
+            Path.Combine(logs, $"install-{DateTime.Now:yyyyMMdd'T'HHmmss}.log"),
+            string.Join("\r\n",
+                "Username: SYNTH\\operator",
+                "  + Release signature verified",
+                "  + Assets match checksums.txt",
+                "  x The 1.0.0 gateway did not become healthy within 90 s [09:02:31Z]; restoring 0.8.10",
+                @"  x DefenseClaw 1.0.0 was not installed. Your previous install is back. Log: C:\Users\operator\.defenseclaw\logs\install-x.log",
+                string.Empty));
+
+        var result = await rig.Runner.RunAsync(Request(rig));
+
+        Assert.NotNull(result.LogPath);
+        Assert.Equal(
+            "The 1.0.0 gateway did not become healthy within 90 s [09:02:31Z]; restoring 0.8.10 — DefenseClaw 1.0.0 was not installed. Your previous install is back.",
+            result.InstallerReason);
+        Assert.True(result.Transcript.GatewayUnhealthy);
+        Assert.True(result.Transcript.PreviousRestored);
+        Assert.Equal(TranscriptAssetCheck.SignatureVerified, result.Transcript.AssetCheck);
+        Assert.NotNull(result.StartedAt);
+        Assert.True(result.EndedAt >= result.StartedAt);
+        Assert.Equal(UpgradeResultState.GatewayStartFailed, UpgradeVerdicts.Classify(result, null, "1.0.0").State);
+    }
+
+    [Fact]
+    public void The_apps_session_gives_back_handles_a_reader_opened_while_the_installer_ran()
+    {
+        var db = Path.Combine(_temp.Path, "audit.db");
+        using (var create = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = db, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false }.ToString()))
+        {
+            create.Open();
+            using var command = create.CreateCommand();
+            command.CommandText = "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (1);";
+            _ = command.ExecuteNonQuery();
+        }
+
+        var session = new AppUpgradeSession(_services);
+        session.Begin();
+
+        // A panel still on screen reads while the installer runs: its pooled connection would keep pointing at the file the installer moves aside.
+        using (var read = new SqliteConnection(DefenseClaw.Core.Audit.AuditReader.BuildReadOnlyConnectionString(db)))
+        {
+            read.Open();
+            using var command = read.CreateCommand();
+            command.CommandText = "SELECT count(*) FROM t";
+            _ = command.ExecuteScalar();
+        }
+
+        Assert.Throws<IOException>(() => File.Delete(db));
+
+        session.End();
+
+        File.Move(db, db + ".swapped");
+        Assert.True(File.Exists(db + ".swapped"));
+    }
+
     // ------------------------------------------------------------------ the app's own session
 
     [Fact]

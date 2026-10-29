@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Updates;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels.Updates;
 using DefenseClaw.App.Views.Updates;
+using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Paths;
 
@@ -783,6 +785,223 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
             Assert.Contains("Config", texts);
             Assert.Contains("Last install", texts);
             Assert.Contains(texts, t => t.StartsWith("Read at ", StringComparison.Ordinal));
+        });
+    }
+
+    // ------------------------------------------------------------------ CUST-359: the verdict, after the run
+
+    private static PostFlightFacts Verified(string version = "1.0.0", AuditPersistence? audit = null, TelemetryFacts? telemetry = null) => new(
+        @"C:\Users\synthetic\.local\bin\defenseclaw.exe",
+        true,
+        $@"defenseclaw-cli {version} (C:\Users\synthetic\.local\bin\defenseclaw.exe)",
+        "Policy model, ACP guard",
+        true,
+        "Running")
+    {
+        GatewayOwnerVerified = true,
+        GatewayVersion = version,
+        CliVersion = version,
+        GatewayStartedAt = DateTimeOffset.Now.AddMinutes(-1),
+        Telemetry = telemetry ?? new TelemetryFacts(TelemetryCondition.Healthy, "Running; no destination is failing."),
+        Audit = audit ?? new AuditPersistence(AuditPersistenceState.Persisted, "The gateway's start was recorded in audit.db; the newest is sidecar-start at 14:03:07."),
+    };
+
+    /// <summary>install.ps1's transcript for this run, written when the fake installer "starts", named after its start as install.ps1 names it.</summary>
+    private void WriteTranscriptOnStart(Rig rig, params string[] lines)
+    {
+        var logs = Directory.CreateDirectory(Path.Combine(_temp.Path, "logs")).FullName;
+        rig.Launcher.OnStart = () =>
+        {
+            var now = DateTime.Now;
+            File.WriteAllText(
+                Path.Combine(logs, $"install-{now:yyyyMMdd'T'HHmmss}.log"),
+                string.Join("\r\n", new[]
+                {
+                    "**********************",
+                    $"Start time: {now:yyyyMMddHHmmss}",
+                    @"Username: SYNTH\operator",
+                    @"Host Application: powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\staging\1.0.0\install.ps1 -Version 1.0.0",
+                    "**********************",
+                    "  > Installed: 0.8.10",
+                }.Concat(lines).Append(string.Empty)));
+        };
+    }
+
+    private static async Task RunUpgradeAsync(Rig rig)
+    {
+        ApplyAndWait(rig, Check("1.0.0", "0.8.10", withSetupExe: false));
+        await StageAsync(rig);
+        UiThread.Run(() => rig.Vm.OpenUpgradeReviewCommand.Execute(null));
+        await UiThread.Run(() => rig.Vm.ConfirmReviewAsync());
+        UiThread.Run(UiThread.Settle);
+        UiThread.WaitFor(() => rig.Vm.HasPostFlight && !rig.Vm.IsReadingPostFlight, "the post-run read");
+    }
+
+    private static string[] SignedInstall =>
+    [
+        "  + Release signature verified",
+        "  + Assets match checksums.txt",
+        "  + Installed DefenseClaw 1.0.0",
+    ];
+
+    [Fact]
+    public async Task A_verified_install_is_success_and_names_the_release_the_installer_verified()
+    {
+        var rig = Build();
+        rig.PostFlight.Facts = Verified();
+        WriteTranscriptOnStart(rig, SignedInstall);
+
+        await RunUpgradeAsync(rig);
+
+        UiThread.Run(() =>
+        {
+            Assert.True(rig.Vm.HasVerdict);
+            Assert.Equal(UpgradeResultState.Success, rig.Vm.VerdictState);
+            Assert.Equal("Ok", rig.Vm.VerdictToneKey);
+            Assert.StartsWith("Official release 1.0.0", rig.Vm.ReleaseText, StringComparison.Ordinal);
+            Assert.Contains("This app verified install.ps1", rig.Vm.ReleaseText, StringComparison.Ordinal);
+            Assert.Contains("owner verified", rig.Vm.GatewayText, StringComparison.Ordinal);
+            Assert.Equal("Ok", rig.Vm.AuditToneKey);
+            Assert.Equal("Ok", rig.Vm.TelemetryToneKey);
+        });
+    }
+
+    [Fact]
+    public async Task A_gateway_that_did_not_become_healthy_is_told_apart_with_the_installers_sanitized_reason()
+    {
+        var rig = Build();
+        rig.Launcher.Exit = 1;
+        rig.PostFlight.Facts = Verified("0.8.10");
+        WriteTranscriptOnStart(
+            rig,
+            "  + Release signature verified",
+            "  + Assets match checksums.txt",
+            "  x The 1.0.0 gateway did not become healthy within 90 s [09:02:31Z]; restoring 0.8.10",
+            @"  x DefenseClaw 1.0.0 was not installed. Your previous install is back. Log: C:\Users\operator\.defenseclaw\logs\install-20261029T090000.log");
+
+        await RunUpgradeAsync(rig);
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal(UpgradeResultState.GatewayStartFailed, rig.Vm.VerdictState);
+            Assert.Equal("Gateway did not start", rig.Vm.VerdictLabel);
+            Assert.Contains("did not become healthy within 90 s", rig.Vm.ExitMessage, StringComparison.Ordinal);
+            Assert.Contains("did not become healthy within 90 s", rig.Vm.LastInstallText, StringComparison.Ordinal);
+            foreach (var text in new[] { rig.Vm.ExitMessage, rig.Vm.VerdictSummary, rig.Vm.LastInstallText })
+            {
+                Assert.DoesNotContain(@"C:\Users\operator", text, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("Log:", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("SYNTH", text, StringComparison.Ordinal);
+            }
+
+            Assert.True(rig.Vm.HasLog);
+        });
+    }
+
+    [Fact]
+    public async Task Audit_held_by_retention_cleanup_is_degraded_never_called_corruption()
+    {
+        var rig = Build();
+        rig.PostFlight.Facts = Verified(
+            audit: new AuditPersistence(AuditPersistenceState.Busy, "audit.db was held by a writer for more than 2 s (SQLite busy); that is contention, not damage."),
+            telemetry: TelemetryFacts.From(System.Text.Json.JsonSerializer.Deserialize<DefenseClaw.Core.Gateway.Models.GatewayHealth>(
+                "{\"telemetry\":{\"state\":\"error\",\"details\":{\"retention_state\":\"degraded\",\"retention_failure\":\"sqlite_busy\"}}}")));
+        WriteTranscriptOnStart(rig, SignedInstall);
+
+        await RunUpgradeAsync(rig);
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal(UpgradeResultState.AuditDegraded, rig.Vm.VerdictState);
+            Assert.Equal("Installed; audit and telemetry degraded", rig.Vm.VerdictLabel);
+            Assert.Contains("retention: degraded (sqlite_busy)", rig.Vm.TelemetryText, StringComparison.Ordinal);
+            foreach (var text in new[] { rig.Vm.VerdictSummary, rig.Vm.AuditText, rig.Vm.TelemetryText })
+            {
+                Assert.DoesNotContain("corrupt", text, StringComparison.OrdinalIgnoreCase);
+            }
+        });
+    }
+
+    public static IEnumerable<object[]> Renders() =>
+        from size in new[] { "980x692", "1468x875" }
+        from mode in new[] { "Light", "Dark" }
+        select new object[] { size, mode };
+
+    /// <summary>The card as the Updates window scrolls it: the page's padding, scrolled so <paramref name="target"/> is at the top.</summary>
+    private static OffscreenHost Page(FrameworkElement card, int width, int height, out ScrollViewer scroll)
+    {
+        scroll = new ScrollViewer { Padding = new Thickness(24, 8, 24, 16), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = card };
+        return new OffscreenHost(scroll, width, height);
+    }
+
+    private static void ScrollTo(OffscreenHost host, ScrollViewer scroll, Func<FrameworkElement, bool> target)
+    {
+        var element = VisualTree.Descendants<FrameworkElement>(host.Content).First(e => e.IsVisible && target(e));
+        var top = element.TransformToAncestor((Visual)scroll.Content).Transform(new Point(0, 0)).Y;
+        scroll.ScrollToVerticalOffset(Math.Max(0, top - 12));
+        host.Relayout();
+    }
+
+    [Theory]
+    [MemberData(nameof(Renders))]
+    public async Task The_pending_write_row_and_the_verdict_render_at_both_review_sizes(string size, string mode)
+    {
+        var parts = size.Split('x');
+        var (width, height) = (int.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture), int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture));
+        using var fixture = new DefenseClaw.App.Tests.Appearance.AppearanceFixture(
+            new DefenseClaw.App.Services.Appearance.AppearanceSettings(
+                DefenseClaw.App.Services.Appearance.AppearanceStyle.Default, Enum.Parse<DefenseClaw.App.Services.Appearance.AppearanceMode>(mode)));
+
+        // 1. A pending write the agent rewrote since (CUST-360's Superseded) blocks the run and offers Overview.
+        var target = Path.Combine(Directory.CreateDirectory(Path.Combine(_temp.Path, "home", ".claude")).FullName, "settings.json");
+        File.WriteAllText(target, "{\"rewritten\":true}");
+        var receipt = Path.Combine(_temp.Path, ".defenseclaw-cas-v2-068ff1aa22bb33cc44dd55ee.intent");
+        File.WriteAllText(receipt, System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["version"] = 2,
+            ["target_path"] = target,
+            ["old_exists"] = true,
+            ["old"] = new Dictionary<string, object?> { ["name"] = "settings.json", ["sha256"] = new string('a', 64) },
+            ["stage"] = new Dictionary<string, object?> { ["name"] = ".tmp-cas-v2-stage-aa", ["sha256"] = new string('b', 64) },
+        }));
+
+        var rig = Build();
+        rig.PostFlight.Facts = Verified(
+            audit: new AuditPersistence(AuditPersistenceState.Busy, "audit.db was held by a writer for more than 2 s (SQLite busy), so this check could not see the newest events. The gateway's retention cleanup can hold it that long; that is contention, not damage. Refresh to look again."),
+            telemetry: TelemetryFacts.From(System.Text.Json.JsonSerializer.Deserialize<DefenseClaw.Core.Gateway.Models.GatewayHealth>(
+                "{\"telemetry\":{\"state\":\"error\",\"details\":{\"retention_state\":\"degraded\",\"retention_failure\":\"sqlite_busy\"}}}")));
+        WriteTranscriptOnStart(rig, SignedInstall);
+        ApplyAndWait(rig, Check("1.0.0", "0.8.10", withSetupExe: false));
+
+        UiThread.Run(() =>
+        {
+            using var host = Page(new InstallScriptUpgradeCard { DataContext = rig.Vm }, width, height, out var scroll);
+            ScrollTo(host, scroll, e => e is TextBlock { Text: "Pending config writes" });
+            RenderTo.Png(host, $"cust359-preflight-{size}-{mode.ToLowerInvariant()}");
+            Assert.Contains(VisibleTexts(host), t => t.Contains("settings.json — rewritten since", StringComparison.Ordinal));
+            Assert.Contains("Open Overview", ButtonTexts(host));
+        });
+
+        // 2. Cleared; the run installs, and the post-flight finds the audit writer starved by retention cleanup.
+        File.Delete(receipt);
+        await UiThread.Run(() => rig.Vm.RefreshPreflightAsync());
+        await StageAsync(rig);
+        UiThread.Run(() => rig.Vm.OpenUpgradeReviewCommand.Execute(null));
+        await UiThread.Run(() => rig.Vm.ConfirmReviewAsync());
+        UiThread.Run(UiThread.Settle);
+        UiThread.WaitFor(() => rig.Vm.HasPostFlight && !rig.Vm.IsReadingPostFlight, "the post-run read");
+
+        UiThread.Run(() =>
+        {
+            using var host = Page(new InstallScriptUpgradeCard { DataContext = rig.Vm }, width, height, out var scroll);
+            ScrollTo(host, scroll, e => e is TextBlock { Text: "Install state (read-only)" });
+            RenderTo.Png(host, $"cust359-verdict-{size}-{mode.ToLowerInvariant()}");
+            var texts = VisibleTexts(host);
+            Assert.Contains("Installed; audit and telemetry degraded", texts);
+            Assert.Contains("Telemetry", texts);
+            Assert.Contains("Audit", texts);
+            Assert.Contains("Release", texts);
+            Assert.True(scroll.ExtentWidth <= scroll.ViewportWidth + 0.5, $"{size} {mode}: the card overflows sideways");
         });
     }
 
