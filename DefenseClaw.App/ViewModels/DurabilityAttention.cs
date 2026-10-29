@@ -169,8 +169,7 @@ internal static class DurabilityAttention
                          "Clearing it moves the pending files to a quarantine folder (nothing is deleted; you can put them back) while the gateway is stopped." +
                          (stuckNow ? " This is why the gateway stops at start." : string.Empty),
                 SeverityKey = stuckNow ? "Critical" : "High",
-                Actions = Actions(blockedReason, (AttentionActionIds.ClearStuckWrite, "Clear the stuck pending write",
-                    "Review a file move (not a DefenseClaw command) into a quarantine folder. Nothing is deleted.")),
+                Actions = Actions(blockedReason, (AttentionActionIds.ClearStuckWrite, "Clear the stuck pending write", ClearTip(facts.PendingWrites))),
             });
         }
 
@@ -207,45 +206,18 @@ internal static class DurabilityAttention
         return "DefenseClaw began a guarded write of " + string.Join("; ", parts) + more + " and it never finished.";
     }
 
-    /// <summary>The plain-English state of one write (CUST-360), from its hash check; empty when it was not checked.</summary>
-    internal static string StateText(CasWriteState state) => state switch
-    {
-        CasWriteState.Committed => "finished; only leftovers remain",
-        CasWriteState.NeverApplied => "never applied",
-        CasWriteState.Superseded => "rewritten since (the pending write no longer describes it; safe to set aside)",
-        _ => "could not verify — check before clearing",
-    };
+    /// <summary>The plain-English state of one write (CUST-360), from its hash check (<see cref="CasWriteText.State"/>).</summary>
+    internal static string StateText(CasWriteState state) => CasWriteText.State(state);
 
     /// <summary>One line per write (<c>settings.json — never applied</c>), plus a caution when any could not be verified. Empty when none was checked.</summary>
-    internal static string StateSentence(IReadOnlyList<CasPendingWrite> writes)
-    {
-        var lines = writes.Where(w => w.Assessment is not null).Take(3).Select(w =>
-            $"{FileName(w)} — {StateText(w.Assessment!.State)}").ToArray();
-        if (lines.Length == 0)
-        {
-            return string.Empty;
-        }
+    internal static string StateSentence(IReadOnlyList<CasPendingWrite> writes) => CasWriteText.Sentence(writes);
 
-        var text = "Checked against the receipts: " + string.Join("; ", lines) + ".";
-        if (writes.Any(w => w.Assessment?.State == CasWriteState.Unknown))
-        {
-            text += " At least one could not be verified, so look at the files before clearing.";
-        }
-
-        return text;
-    }
-
-    private static string FileName(CasPendingWrite write)
-    {
-        try
-        {
-            return write.TargetPath is { Length: > 0 } t && System.IO.Path.GetFileName(t) is { Length: > 0 } n ? n : "an unreadable receipt";
-        }
-        catch (ArgumentException)
-        {
-            return "an unreadable receipt";
-        }
-    }
+    /// <summary>The clear button's tooltip: a stronger one when a write could not be verified (the button stays; the operator decides).</summary>
+    internal static string ClearTip(IReadOnlyList<CasPendingWrite> writes) =>
+        CasWriteText.AnyUnverified(writes)
+            ? "Review a file move (not a DefenseClaw command) into a quarantine folder. Nothing is deleted. At least one write could not be verified " +
+              "against its receipt: look at the files the review lists before you confirm."
+            : "Review a file move (not a DefenseClaw command) into a quarantine folder. Nothing is deleted.";
 
     /// <summary>"3 minutes", "2 hours", "4 days".</summary>
     internal static string Age(TimeSpan span)

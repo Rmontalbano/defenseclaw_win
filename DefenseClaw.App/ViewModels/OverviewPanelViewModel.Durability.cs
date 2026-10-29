@@ -127,14 +127,34 @@ public sealed partial class OverviewPanelViewModel
                     Run: () => RunMoveAsideAsync(ids, argv, root)),
             },
             onFinished: _ => RefreshAfterActionAsync(),
-            extraWarnings: new[]
-            {
-                new CommandReviewWarning(
-                    "A file operation, not a DefenseClaw command",
-                    "DefenseClaw has no command that recovers from a stuck pending write, so this app moves the files itself - the same move-aside that was done by hand " +
-                    "on 2026-10-15. Nothing here is run by the DefenseClaw CLI. The gateway must be stopped; the move is refused if it is running."),
-            },
+            extraWarnings: ClearWarnings(pending),
             primaryText: "Move the files aside");
+    }
+
+    /// <summary>
+    /// The review's warning bars: always that this is a file operation; and, when the hash check could not tell what a write amounts to (CUST-360), a
+    /// stronger one that says why and asks the operator to look first. The move itself does not change: it stays available and reversible.
+    /// </summary>
+    internal static IReadOnlyList<CommandReviewWarning> ClearWarnings(IReadOnlyList<CasPendingWrite> pending)
+    {
+        var warnings = new List<CommandReviewWarning>
+        {
+            new(
+                "A file operation, not a DefenseClaw command",
+                "DefenseClaw has no command that recovers from a stuck pending write, so this app moves the files itself - the same move-aside that was done by hand " +
+                "on 2026-10-15. Nothing here is run by the DefenseClaw CLI. The gateway must be stopped; the move is refused if it is running."),
+        };
+
+        if (CasWriteText.AnyUnverified(pending))
+        {
+            warnings.Add(new CommandReviewWarning(
+                "Not every pending write could be verified",
+                "The hash check could not tell whether this write finished, never applied or was rewritten since (" + CasWriteText.UnverifiedReasons(pending) + "). " +
+                "Open the target file and the staging files listed below and make sure nothing you need is only in them before you move them aside. " +
+                "The move is still reversible with Put back."));
+        }
+
+        return warnings;
     }
 
     private async Task<CliInvocation> RunMoveAsideAsync(IReadOnlyCollection<string> ids, IReadOnlyList<string> argv, string root)

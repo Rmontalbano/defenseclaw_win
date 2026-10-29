@@ -23,6 +23,68 @@ public enum CasWriteState
 /// <summary>A <see cref="CasWriteState"/> with a short human reason.</summary>
 public sealed record CasWriteAssessment(CasWriteState State, string Reason);
 
+/// <summary>
+/// The words every surface uses for a hash check (CUST-360): the Overview's stuck-write row, its move-aside review and the upgrade pre-flight (CUST-359)
+/// say the same thing about the same write. Pure; names files, never their folders.
+/// </summary>
+public static class CasWriteText
+{
+    /// <summary>The sentence added when at least one write could not be verified.</summary>
+    public const string UnverifiedCaution = "At least one could not be verified, so look at the files before clearing.";
+
+    /// <summary>The plain-English state of one write.</summary>
+    public static string State(CasWriteState state) => state switch
+    {
+        CasWriteState.Committed => "finished; only leftovers remain",
+        CasWriteState.NeverApplied => "never applied",
+        CasWriteState.Superseded => "rewritten since (the pending write no longer describes it; safe to set aside)",
+        _ => "could not verify — check before clearing",
+    };
+
+    /// <summary>True when any of <paramref name="writes"/> was checked and came out <see cref="CasWriteState.Unknown"/>.</summary>
+    public static bool AnyUnverified(IEnumerable<CasPendingWrite> writes) =>
+        writes?.Any(w => w.Assessment?.State == CasWriteState.Unknown) ?? false;
+
+    /// <summary>One line per write (<c>settings.json — never applied</c>), plus <see cref="UnverifiedCaution"/> when any could not be verified. Empty when none was checked.</summary>
+    public static string Sentence(IReadOnlyList<CasPendingWrite> writes)
+    {
+        ArgumentNullException.ThrowIfNull(writes);
+
+        var lines = writes.Where(w => w.Assessment is not null).Take(3).Select(w => $"{FileName(w)} — {State(w.Assessment!.State)}").ToArray();
+        if (lines.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var text = "Checked against the receipts: " + string.Join("; ", lines) + ".";
+        return AnyUnverified(writes) ? text + " " + UnverifiedCaution : text;
+    }
+
+    /// <summary>Why each unverified write could not be verified (<c>settings.json: the file could not be read</c>), for the review's warning.</summary>
+    public static string UnverifiedReasons(IReadOnlyList<CasPendingWrite> writes)
+    {
+        ArgumentNullException.ThrowIfNull(writes);
+        return string.Join("; ", writes
+            .Where(w => w.Assessment?.State == CasWriteState.Unknown)
+            .Take(3)
+            .Select(w => $"{FileName(w)}: {w.Assessment!.Reason}"));
+    }
+
+    /// <summary>The target's file name, or "an unreadable receipt".</summary>
+    public static string FileName(CasPendingWrite write)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        try
+        {
+            return write.TargetPath is { Length: > 0 } t && Path.GetFileName(t) is { Length: > 0 } n ? n : "an unreadable receipt";
+        }
+        catch (ArgumentException)
+        {
+            return "an unreadable receipt";
+        }
+    }
+}
+
 public static partial class CasReceipts
 {
     /// <summary>Files larger than this are never hashed (they are Unknown).</summary>

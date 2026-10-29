@@ -284,6 +284,10 @@ public sealed class OverviewDurabilityTests : IDisposable
 
         Assert.Contains(review.Warnings, w => w.Title == "A file operation, not a DefenseClaw command");
         Assert.Contains("never deleted", review.Summary, StringComparison.Ordinal);
+
+        // The seeded receipt records no hash for its staging file, so the check cannot verify it (CUST-360): the move stays, with the stronger warning.
+        Assert.Contains("could not verify", review.Summary, StringComparison.Ordinal);
+        Assert.Contains(review.Warnings, w => w.Title == "Not every pending write could be verified");
         Assert.Empty(Services.Cli.Activity);
 
         await vm.Review.ConfirmCommand.ExecuteAsync(null);
@@ -384,6 +388,58 @@ public sealed class OverviewDurabilityTests : IDisposable
     }
 
     // ---- a picture -------------------------------------------------------------------------------------------------------------------
+
+    public static IEnumerable<object[]> StuckWriteRenders() =>
+        from size in new[] { "980x692", "1468x875" }
+        from mode in new[] { "Light", "Dark" }
+        select new object[] { size, mode };
+
+    /// <summary>CUST-360: the row and the review with a write the hash check could not verify, at both review sizes, in both modes.</summary>
+    [Theory]
+    [MemberData(nameof(StuckWriteRenders))]
+    public async Task An_unverified_stuck_write_renders_its_state_in_the_row_and_its_warning_in_the_review(string size, string mode)
+    {
+        SeedStuckWrite();
+        _services = TestServices.Create(_temp, Config);
+        var snapshot = Snapshot(AppGatewayState.GatewayStopped, ReadFacts());
+        Publish(snapshot);
+        var parts = size.Split('x');
+        var (width, height) = (int.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture), int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture));
+        using var fixture = new DefenseClaw.App.Tests.Appearance.AppearanceFixture(
+            new DefenseClaw.App.Services.Appearance.AppearanceSettings(
+                DefenseClaw.App.Services.Appearance.AppearanceStyle.Default, Enum.Parse<DefenseClaw.App.Services.Appearance.AppearanceMode>(mode)));
+
+        PanelShell? shell = null;
+        try
+        {
+            var vm = UiThread.Run(() =>
+            {
+                shell = new PanelShell(Services, width, height);
+                _ = shell.Show<OverviewPanel>();
+                var panel = (OverviewPanelViewModel)shell.ViewModel;
+                panel.Apply(snapshot);
+                shell.Host.Relayout();
+                RenderTo.Png(shell.Host, $"cust360-row-{size}-{mode.ToLowerInvariant()}");
+                return panel;
+            });
+
+            var row = Assert.Single(vm.Attention, r => r.Title == "A write to Codex's config.toml is stuck");
+            Assert.Contains("could not verify", row.Detail, StringComparison.Ordinal);
+
+            await UiThread.Run(() => vm.RunAttentionActionCommand.ExecuteAsync(AttentionActionIds.ClearStuckWrite));
+            UiThread.Run(() =>
+            {
+                shell!.Host.Relayout();
+                RenderTo.Png(shell.Host, $"cust360-review-{size}-{mode.ToLowerInvariant()}");
+                Assert.Contains(vm.Review.CommandReview!.Warnings, w => w.Title == "Not every pending write could be verified");
+                vm.Review.DismissCommand.Execute(null);
+            });
+        }
+        finally
+        {
+            UiThread.Run(() => shell?.Dispose());
+        }
+    }
 
     [Fact]
     public void The_rows_are_drawn_with_their_buttons_and_a_PNG_is_written_when_asked()
