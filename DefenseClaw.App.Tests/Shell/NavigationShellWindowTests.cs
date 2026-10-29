@@ -328,6 +328,67 @@ public sealed class NavigationShellWindowTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task A_count_badge_ends_before_the_scroll_bar_of_a_sidebar_that_scrolls_and_the_entries_take_the_width_back_when_it_goes()
+    {
+        var window = await OpenAsync(980, 692);
+        var nav = window.RootNavigation;
+        DynamicScrollViewer viewer = null!;
+        DynamicScrollBar bar = null!;
+        InfoBadge badge = null!;
+
+        UiThread.Run(() =>
+        {
+            // A "9" on Activity, as an unread count shows it (CUST-265): the capsule sits at the entry's right edge.
+            var activity = nav.MenuItems.OfType<DcNavigationItem>().First(item => AutomationProperties.GetName(item) == "Activity");
+            badge = (InfoBadge)activity.InfoBadge!;
+            badge.Value = "9";
+            badge.Visibility = Visibility.Visible;
+            viewer = VisualTree.Find<DynamicScrollViewer>(nav, candidate => candidate.Name == "PART_ScrollViewer")!;
+            bar = VisualTree.Find<DynamicScrollBar>(viewer, candidate => candidate.Name == "PART_VerticalScrollBar")!;
+        });
+        UiThread.Run(UiThread.Settle);
+
+        double BadgeRight() => badge.TranslatePoint(new Point(badge.ActualWidth, 0), nav).X;
+        double BarLeft() => bar.TranslatePoint(new Point(0, 0), nav).X;
+
+        var cleared = UiThread.Run(() =>
+        {
+            // At the Mac's small size the sidebar scrolls, and its bar is drawn over the entries: the badge must end before it (it overlapped by ~9 DIPs).
+            Assert.True(viewer.ScrollableHeight > 0.5, $"the sidebar should scroll at 980x692 (it scrolls {viewer.ScrollableHeight:0.#} DIPs)");
+            Assert.True(bar.IsVisible && bar.ActualWidth > 0, "the scroll bar should show while the sidebar scrolls");
+            Assert.True(BadgeRight() <= BarLeft(), $"the badge ends at {BadgeRight():0.#} but the scroll bar starts at {BarLeft():0.#}");
+            return viewer.Padding.Right;
+        });
+        var resting = UiThread.Run(() => cleared - bar.ActualWidth);
+        Png(window, "shell-sidebar-badge-980x692");
+
+        UiThread.Run(() =>
+        {
+            // Folded to its icons the pane has nothing under the bar, so the entries keep their width.
+            nav.IsPaneOpen = false;
+            Assert.Equal(resting, viewer.Padding.Right, 1);
+            nav.IsPaneOpen = true;
+            Assert.Equal(cleared, viewer.Padding.Right, 1);
+        });
+
+        // Tall enough to show every entry, the bar goes and the entries reach the pane's edge again. A test machine whose screen caps the
+        // window's height may still scroll; then the badge is still clear of the bar.
+        UiThread.Run(() => window.Height = 900);
+        UiThread.Run(UiThread.Settle);
+        UiThread.Run(() =>
+        {
+            if (viewer.ScrollableHeight > 0.5)
+            {
+                Assert.True(BadgeRight() <= BarLeft(), $"the badge ends at {BadgeRight():0.#} but the scroll bar starts at {BarLeft():0.#}");
+            }
+            else
+            {
+                Assert.Equal(resting, viewer.Padding.Right, 1);
+            }
+        });
+    }
+
     // ------------------------------------------------------------------ renders
 
     [Theory]

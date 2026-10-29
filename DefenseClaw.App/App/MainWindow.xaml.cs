@@ -647,6 +647,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// (an enormous timeout, and the "scrolling" flags held on); when the window grows enough to show
     /// everything, they are released.
     /// </para>
+    /// <para>
+    /// The bar is drawn over the entries' right edge, which is where an entry's count badge sits, so while it
+    /// shows in the open pane the entries end where it begins (the viewer's right padding grows by the bar's width).
+    /// </para>
     /// </summary>
     private void TightenNavigationPane()
     {
@@ -667,6 +671,8 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             bar.Timeout = int.MaxValue;
         }
 
+        var resting = viewer.Padding;
+
         void HoldThumbWhileOverflowing()
         {
             var overflowing = viewer.ScrollableHeight > 0.5;
@@ -675,15 +681,22 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             {
                 bar.IsScrolling = overflowing;
             }
+
+            // The folded pane's icons sit clear of the bar; only the open pane's badges reach under it. The resting gap stays beside the bar.
+            var clear = overflowing && RootNavigation.IsPaneOpen && bar is not null ? bar.ActualWidth + resting.Right : resting.Right;
+            viewer.Padding = new Thickness(resting.Left, resting.Top, clear, resting.Bottom);
         }
 
         viewer.ScrollChanged += (_, _) => HoldThumbWhileOverflowing();
+        RootNavigation.PaneOpened += (_, _) => HoldThumbWhileOverflowing();
+        RootNavigation.PaneClosed += (_, _) => HoldThumbWhileOverflowing();
 
         // The bar lets go of its "scrolling" state itself when the mouse leaves it; take it back.
         if (bar is not null)
         {
             bar.MouseLeave += (_, _) =>
                 _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(HoldThumbWhileOverflowing));
+            bar.SizeChanged += (_, _) => HoldThumbWhileOverflowing();
         }
 
         HoldThumbWhileOverflowing();
