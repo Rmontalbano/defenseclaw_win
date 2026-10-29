@@ -496,6 +496,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         ApplyDoctorState();
         BuildAttention(_snapshot);
+
+        // The Scanners card's keys row reads the same snapshot.
+        BuildScanners(_snapshot, _snapshot.Health);
     }
 
     /// <summary>
@@ -1018,6 +1021,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         {
             ExecutableRow("skill-scanner", _skillScannerPath, _scannerPathsResolved),
             ExecutableRow("mcp-scanner", _mcpScannerPath, _scannerPathsResolved),
+            AibomRow(),
             new()
             {
                 Name = "codeguard",
@@ -1025,6 +1029,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 StateKey = "Ok",
                 Detail = "Ships inside the gateway binary; nothing to install.",
             },
+            KeysRow(_doctorSnapshot),
         };
 
         if (health?.Watcher is { } watcher)
