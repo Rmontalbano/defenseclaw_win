@@ -29,10 +29,10 @@ public sealed class UpdateClaimsTests
     private static readonly (string Name, string[] Path)[] ShippedText =
     {
         ("README.md", new[] { "README.md" }),
-        ("UpdatesWindow.xaml", new[] { "DefenseClaw.App", "Views", "Updates", "UpdatesWindow.xaml" }),
+        ("UpdatesWindow.xaml", new[] { "DefenseClaw.App", "Features", "Shell", "Updates", "UpdatesWindow.xaml" }),
         ("FirstRunWindow.xaml", new[] { "DefenseClaw.App", "Views", "FirstRun", "FirstRunWindow.xaml" }),
-        ("UpgradeSectionViewModel.cs", new[] { "DefenseClaw.App", "ViewModels", "Updates", "UpgradeSectionViewModel.cs" }),
-        ("UpdatesWindowViewModel.cs", new[] { "DefenseClaw.App", "ViewModels", "Updates", "UpdatesWindowViewModel.cs" }),
+        ("UpgradeSectionViewModel.cs", new[] { "DefenseClaw.App", "Features", "Shell", "Updates", "UpgradeSectionViewModel.cs" }),
+        ("UpdatesWindowViewModel.cs", new[] { "DefenseClaw.App", "Features", "Shell", "Updates", "UpdatesWindowViewModel.cs" }),
         ("UpgradeRunner.cs", new[] { "DefenseClaw.App", "Services", "Updates", "UpgradeRunner.cs" }),
         ("ProvenanceInspector.cs", new[] { "DefenseClaw.App", "Services", "Updates", "ProvenanceInspector.cs" }),
         ("ChecksumsSignatureVerifier.cs", new[] { "DefenseClaw.App", "Services", "Updates", "ChecksumsSignatureVerifier.cs" }),
@@ -73,7 +73,7 @@ public sealed class UpdateClaimsTests
     [Fact]
     public void The_updates_window_says_the_signature_is_checked_with_cosign_when_it_is_installed()
     {
-        var xaml = Read("DefenseClaw.App", "Views", "Updates", "UpdatesWindow.xaml");
+        var xaml = Read("DefenseClaw.App", "Features", "Shell", "Updates", "UpdatesWindow.xaml");
 
         Assert.Contains("compare its SHA-256 with that release's checksums.txt (and, when cosign is installed, verify that file's sigstore signature first)", xaml, StringComparison.Ordinal);
     }
