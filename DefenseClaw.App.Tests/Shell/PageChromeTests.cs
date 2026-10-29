@@ -485,8 +485,7 @@ public sealed class PageChromeTests
     [Fact]
     public void Controls_xaml_adds_no_token_and_hard_codes_no_colour_or_radius()
     {
-        var themes = Path.Combine(AppDirectory(), "Themes");
-        var controls = File.ReadAllText(Path.Combine(themes, "Controls.xaml"));
+        var controls = AppSource.Read("Controls.xaml");
 
         // Every x:Key it declares is a style: the vocabulary (brushes, radii, fonts, spacing) is not extended here.
         foreach (Match key in Regex.Matches(controls, @"x:Key=""([^""]+)"""))
@@ -500,7 +499,7 @@ public sealed class PageChromeTests
         Assert.DoesNotMatch(@"CornerRadius=""\d", controls);
 
         // Everything it consumes from the design system exists there, and is reached dynamically.
-        var known = File.ReadAllText(Path.Combine(themes, "DefenseClaw.xaml")) + File.ReadAllText(Path.Combine(themes, "Styles", "Default.xaml"));
+        var known = AppSource.Read("DefenseClaw.xaml") + AppSource.Read("Default.xaml");
         foreach (Match use in Regex.Matches(controls, @"\{DynamicResource (\w+)\}"))
         {
             Assert.Contains($"x:Key=\"{use.Groups[1].Value}\"", known, StringComparison.Ordinal);
@@ -550,12 +549,11 @@ public sealed class PageChromeTests
     [Fact]
     public void Every_panel_declares_the_toolbar_with_named_icon_actions_and_bindings_its_view_model_has()
     {
-        var panels = Path.Combine(AppDirectory(), "Views", "Panels");
         var problems = new List<string>();
 
         foreach (var (view, viewModelName, search) in ToolbarPanels)
         {
-            var text = File.ReadAllText(Path.Combine(panels, view + ".xaml"));
+            var text = AppSource.Read(view + ".xaml");
             var document = XDocument.Parse(text);
             var viewModel = typeof(DefenseClaw.App.ViewModels.PanelViewModelBase).Assembly.GetType("DefenseClaw.App.ViewModels." + viewModelName)
                 ?? throw new InvalidOperationException(viewModelName + " was not found");
@@ -802,20 +800,6 @@ public sealed class PageChromeTests
         };
         target.RaiseEvent(press);
         return press.Handled;
-    }
-
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
     }
 
     private sealed class Model : INotifyPropertyChanged

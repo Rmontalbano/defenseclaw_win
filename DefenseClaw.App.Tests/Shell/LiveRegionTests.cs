@@ -404,9 +404,7 @@ public sealed class LiveRegionTests
         var declarations = 0;
         var problems = new List<string>();
 
-        foreach (var file in Directory.EnumerateFiles(AppDirectory(), "*.xaml", SearchOption.AllDirectories)
-                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                                 && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+        foreach (var file in AppSource.Xaml())
         {
             foreach (var element in XDocument.Load(file).Descendants().Where(e => e.Attributes().Any(a => a.Name.LocalName == "AutomationProperties.LiveSetting")))
             {
@@ -431,19 +429,5 @@ public sealed class LiveRegionTests
 
         Assert.Empty(problems);
         Assert.True(declarations >= 38, $"expected the 38 declarations the review counted, found {declarations}");
-    }
-
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
     }
 }

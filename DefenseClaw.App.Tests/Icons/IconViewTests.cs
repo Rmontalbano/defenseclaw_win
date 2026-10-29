@@ -68,11 +68,10 @@ public sealed class IconViewTests : IDisposable
         // block until it is recomposed; every other panel opens with the compact DcPageToolbar (CUST-208).
         using var services = TestServices.Create(_temp);
         var catalog = new PanelCatalog(services);
-        var panels = Path.Combine(AppDirectory(), "Views", "Panels");
 
         foreach (var panel in catalog.Panels)
         {
-            var text = File.ReadAllText(Path.Combine(panels, panel.ViewType.Name + ".xaml"));
+            var text = AppSource.Read(panel.ViewType.Name + ".xaml");
             var header = Regex.Match(text, @"<(?:HeaderedContentControl\b[^>]*DcPageHeader|ctl:DcPageToolbar\b)[^>]*>");
 
             Assert.True(header.Success, $"{panel.Title} has neither a DcPageHeader nor a DcPageToolbar");
@@ -337,34 +336,12 @@ public sealed class IconViewTests : IDisposable
         }
     }
 
-    /// <summary>The XAML of the shell and the panels (the files this design covers), found above the test output directory.</summary>
-    private static IEnumerable<string> OwnedXaml()
-    {
-        var app = AppDirectory();
-        var files = new List<string>
-        {
-            Path.Combine(app, "MainWindow.xaml"),
-            Path.Combine(app, "Views", "TrayFlyoutWindow.xaml"),
-        };
-        foreach (var folder in new[] { Path.Combine("Views", "Panels"), Path.Combine("Views", "Shell"), Path.Combine("Views", "Updates") })
-        {
-            files.AddRange(Directory.EnumerateFiles(Path.Combine(app, folder), "*.xaml", SearchOption.AllDirectories));
-        }
-
-        return files;
-    }
-
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
-    }
+    /// <summary>
+    /// The XAML of the shell and the panels (the files this design covers): the main window, the tray flyout, every view in the Panels, Shell
+    /// and Updates namespaces, and the Govern table dictionary the four catalog panels merge (a dictionary has no x:Class to select it by).
+    /// </summary>
+    private static IEnumerable<string> OwnedXaml() =>
+        new[] { AppSource.Find("MainWindow.xaml"), AppSource.Find("TrayFlyoutWindow.xaml"), AppSource.Find("GovernTable.xaml") }
+            .Concat(AppSource.XamlInNamespaces("DefenseClaw.App.Views.Panels", "DefenseClaw.App.Views.Shell", "DefenseClaw.App.Views.Updates"))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 }

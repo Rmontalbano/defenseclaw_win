@@ -47,11 +47,11 @@ public sealed class StderrMarkerTests
     }
 
     [Theory]
-    [InlineData("Views/Panels/ActivityPanel.xaml", "OutputLine")]
+    [InlineData("ActivityPanel.xaml", "OutputLine")]
     public void Every_console_line_template_has_the_stderr_gutter_beside_the_line(string file, string lineStyle)
     {
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        var document = XDocument.Load(Path.Combine(AppDirectory(), file.Replace('/', Path.DirectorySeparatorChar)));
+        var document = XDocument.Load(AppSource.Find(file));
 
         var lines = document.Descendants(presentation + "TextBlock")
             .Where(t => (string?)t.Attribute("Style") == "{StaticResource " + lineStyle + "}")
@@ -64,19 +64,5 @@ public sealed class StderrMarkerTests
                 line.Parent!.Elements(presentation + "TextBlock"),
                 sibling => (string?)sibling.Attribute("Style") == "{StaticResource OutputMarker}");
         }
-    }
-
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
     }
 }

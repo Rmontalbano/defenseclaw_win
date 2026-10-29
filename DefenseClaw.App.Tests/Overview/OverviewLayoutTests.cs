@@ -537,19 +537,7 @@ public sealed class OverviewLayoutTests
         }
     }
 
-    private static string SourcePath()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "Views", "Panels", "OverviewPanel.xaml");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        throw new FileNotFoundException("Views\\Panels\\OverviewPanel.xaml was not found above the test output directory.");
-    }
+    private static string SourcePath() => AppSource.Find("OverviewPanel.xaml");
 
     private static Color Pixel(BitmapSource bitmap, int x, int y)
     {

@@ -218,7 +218,7 @@ public sealed class PlaneCReadinessPanelTests : IDisposable
         {
             @"DefenseClaw.Core\AiRuntime\PlaneCReadiness.cs",
             @"DefenseClaw.App\Services\WindowsPlaneCProbes.cs",
-            @"DefenseClaw.App\ViewModels\AiRuntimePanelViewModel.PlaneC.cs",
+            Path.GetRelativePath(root!, AppSource.Find("AiRuntimePanelViewModel.PlaneC.cs")),
         };
         var forbidden = new Regex(@"\bProcess\s*\.|ProcessStartInfo|ShellExecute|CliRunner|Services\s*\.\s*Cli\b|RunAsync\s*\(|\bReview\b|RunStep|RunPermissionsRead|\brunas\b", RegexOptions.None);
         var offenders = new List<string>();

@@ -259,19 +259,7 @@ public sealed class UpdateBannerViewTests : IDisposable
         Assert.DoesNotMatch(@"(FontFamily|CornerRadius)=""[^{]", markup);
     }
 
-    private static string MarkupPath()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "Views", "Shell", "UpdateBanner.xaml");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        throw new FileNotFoundException("UpdateBanner.xaml was not found above the test binaries.");
-    }
+    private static string MarkupPath() => AppSource.Find("UpdateBanner.xaml");
 
     // ------------------------------------------------------------------ contrast (WCAG 2.x relative luminance)
 

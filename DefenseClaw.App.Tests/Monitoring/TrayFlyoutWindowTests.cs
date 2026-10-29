@@ -266,8 +266,7 @@ public class TrayFlyoutWindowTests
     [Fact]
     public void The_flyout_xaml_hard_codes_no_colour_font_or_radius()
     {
-        var path = Path.Combine(AppDirectory(), "Views", "TrayFlyoutWindow.xaml");
-        var text = File.ReadAllText(path);
+        var text = AppSource.Read("TrayFlyoutWindow.xaml");
 
         // A token is a {DynamicResource Dc...}; a literal colour, font family or corner radius is a look the four styles cannot change.
         Assert.DoesNotMatch(new Regex(@"(?<!&)#[0-9A-Fa-f]{3,8}\b"), text);
@@ -278,19 +277,5 @@ public class TrayFlyoutWindowTests
 
         // Tokens are consumed live (DynamicResource); only a style may be a static reference.
         Assert.DoesNotMatch(new Regex(@"StaticResource Dc\w*(Brush|Radius|Shadow|FontFamily|FontSize|Thickness)"), text);
-    }
-
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
     }
 }

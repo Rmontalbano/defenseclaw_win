@@ -43,10 +43,10 @@ public sealed class AccessKeyXamlTests
     /// </summary>
     public static TheoryData<string, string, string> RuntimeTextSpots => new()
     {
-        { @"Views\Panels\LogsPanel.xaml", "CheckBox", "Name" },
-        { @"Views\Panels\AuditPanel.xaml", "Button", "RunFilterText" },
-        { @"Views\FirstRun\FirstRunWindow.xaml", "CheckBox", "Label" },
-        { @"Views\Panels\OverviewPanel.xaml", "Button", "ScopedAlertsText" },
+        { "LogsPanel.xaml", "CheckBox", "Name" },
+        { "AuditPanel.xaml", "Button", "RunFilterText" },
+        { "FirstRunWindow.xaml", "CheckBox", "Label" },
+        { "OverviewPanel.xaml", "Button", "ScopedAlertsText" },
     };
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class AccessKeyXamlTests
     [MemberData(nameof(RuntimeTextSpots))]
     public void Text_from_the_runtime_is_shown_by_a_TextBlock_where_the_control_recognises_access_keys(string file, string element, string path)
     {
-        var document = XDocument.Load(Path.Combine(AppDirectory(), file), LoadOptions.SetLineInfo);
+        var document = XDocument.Load(AppSource.Find(file), LoadOptions.SetLineInfo);
         var binding = "{Binding " + path + "}";
 
         var asString = document.Descendants()
@@ -151,24 +151,9 @@ public sealed class AccessKeyXamlTests
 
     private static int Line(XObject node) => node is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;
 
-    private static IEnumerable<string> XamlFiles() =>
-        Directory.EnumerateFiles(AppDirectory(), "*.xaml", SearchOption.AllDirectories)
-            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                     && !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+    private static IEnumerable<string> XamlFiles() => AppSource.Xaml();
 
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
-    }
+    private static string AppDirectory() => AppSource.ProjectDirectory;
 }
 
 

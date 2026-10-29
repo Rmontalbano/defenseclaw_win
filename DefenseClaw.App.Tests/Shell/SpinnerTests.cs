@@ -234,12 +234,9 @@ public sealed class SpinnerTests
         // The re-template only reaches a ring that takes the implicit style: one with its own Style, or one inside a
         // scope that declares an implicit ProgressRing style of its own, would quietly keep WPF-UI's leaking one.
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        var app = AppDirectory();
         var rings = 0;
         var offenders = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(app, "*.xaml", SearchOption.AllDirectories)
-                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                                 && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+        foreach (var file in AppSource.Xaml())
         {
             var name = Path.GetFileName(file);
             var document = XDocument.Load(file);
@@ -453,20 +450,6 @@ public sealed class SpinnerTests
         var pixels = new byte[width * height * 4];
         bitmap.CopyPixels(pixels, width * 4, 0);
         return pixels;
-    }
-
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
     }
 
     /// <summary>One ring in an off-screen host whose visibility a test flips, as a view-model's busy flag would.</summary>

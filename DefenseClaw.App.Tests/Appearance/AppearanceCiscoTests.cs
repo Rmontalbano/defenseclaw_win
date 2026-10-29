@@ -223,19 +223,7 @@ public sealed class AppearanceCiscoTests
         Assert.Equal($"{{DynamicResource {brushKey}}}", (string?)setter.Attribute("Value"));
     }
 
-    private static string ThemePath()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "Themes", "DefenseClaw.xaml");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        throw new FileNotFoundException("Themes\\DefenseClaw.xaml was not found above the test output directory.");
-    }
+    private static string ThemePath() => AppSource.Find("DefenseClaw.xaml");
 
     // ------------------------------------------------------------------ persistence
 

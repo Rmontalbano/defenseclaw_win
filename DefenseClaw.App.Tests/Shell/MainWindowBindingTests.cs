@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
 
 namespace DefenseClaw.App.Tests.Shell;
@@ -14,7 +15,7 @@ public sealed partial class MainWindowBindingTests
     [Fact]
     public void Every_main_window_binding_to_a_view_model_member_names_a_public_property()
     {
-        var xaml = File.ReadAllText(Path.Combine(AppDirectory(), "MainWindow.xaml"));
+        var xaml = AppSource.Read("MainWindow.xaml");
         var type = typeof(MainWindowViewModel);
         const BindingFlags all = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
@@ -30,7 +31,7 @@ public sealed partial class MainWindowBindingTests
     [Fact]
     public void Every_data_context_in_the_main_window_resolves_to_a_public_property()
     {
-        var xaml = File.ReadAllText(Path.Combine(AppDirectory(), "MainWindow.xaml"));
+        var xaml = AppSource.Read("MainWindow.xaml");
 
         foreach (Match match in DataContextPath().Matches(xaml))
         {
@@ -46,18 +47,4 @@ public sealed partial class MainWindowBindingTests
 
     [GeneratedRegex(@"DataContext=""\{Binding\s+(?:Path=)?(?<first>[A-Za-z_][A-Za-z0-9_]*)")]
     private static partial Regex DataContextPath();
-
-    private static string AppDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "DefenseClaw.App", "MainWindow.xaml");
-            if (File.Exists(candidate))
-            {
-                return Path.GetDirectoryName(candidate)!;
-            }
-        }
-
-        throw new FileNotFoundException("DefenseClaw.App\\MainWindow.xaml was not found above the test output directory.");
-    }
 }
