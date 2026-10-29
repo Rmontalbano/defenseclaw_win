@@ -281,15 +281,73 @@ public class GatewayPeerStaleOwnerTests
             ModuleTcpTables.Listener(Port, GatewayPid, Started.AddSeconds(1)),
             ModuleTcpTables.Listener(Port, GatewayPid, Started.AddSeconds(1), "::"));
         var inspector = new PortOwnerInspector(
-            (IntPtr table, ref int size, int family) => family == unreadable ? 87u : listeners(table, ref size, family),
+            (IntPtr table, ref int size, int family) => family == unreadable ? 31u : listeners(table, ref size, family),
             ModuleTcpTables.Reader(Connection(Started.AddMinutes(10))),
             Image(),
-            Process(Started));
+            Process(Started),
+            ipv6StackPresent: () => true);
 
         var owner = inspector.FindConnectionOwner(Server, Client);
 
         Assert.NotNull(owner);
         Assert.Null(owner!.SocketCreatedUtc);
+        Assert.Equal(PortOwnerTrust.Other, Verifier(inspector).ForConnection(Port)(Server, Client));
+    }
+
+    /// <summary>The gateway's good IPv4 listener and connection, with the IPv6 listener table failing with <paramref name="ipv6Status"/>.</summary>
+    private static PortOwnerInspector WithoutIpv6Table(uint ipv6Status, bool stackPresent, uint ipv4Status = 0)
+    {
+        var listeners = ModuleTcpTables.Reader(ModuleTcpTables.Listener(Port, GatewayPid, Started.AddSeconds(1)));
+        return new PortOwnerInspector(
+            (IntPtr table, ref int size, int family) => family switch
+            {
+                ModuleTcpTables.AfInet6 => ipv6Status,
+                _ when ipv4Status != 0 => ipv4Status,
+                _ => listeners(table, ref size, family),
+            },
+            ModuleTcpTables.Reader(Connection(Started.AddMinutes(10))),
+            Image(),
+            Process(Started),
+            ipv6StackPresent: () => stackPresent);
+    }
+
+    [Theory]
+    [InlineData(50u)]
+    [InlineData(87u)]
+    [InlineData(10047u)]
+    public void On_a_PC_without_an_IPv6_stack_the_IPv6_listener_table_is_empty_not_unread(uint status)
+    {
+        // Nothing can listen on IPv6 where no IPv6 socket can be made: refusing here would refuse every connection on such a PC.
+        var inspector = WithoutIpv6Table(status, stackPresent: false);
+
+        Assert.Equal(Started.AddSeconds(1), inspector.FindConnectionOwner(Server, Client)?.SocketCreatedUtc);
+        Assert.Equal(PortOwnerTrust.Gateway, Verifier(inspector).ForConnection(Port)(Server, Client));
+    }
+
+    [Theory]
+    [InlineData(50u, true)]
+    [InlineData(87u, true)]
+    [InlineData(10047u, true)]
+    [InlineData(31u, false)]
+    [InlineData(122u, false)]
+    public void An_IPv6_table_that_fails_on_a_PC_with_the_stack_or_for_another_reason_is_unread_and_refused(uint status, bool stackPresent)
+    {
+        // A "family not available" answer where IPv6 sockets can be made, or any other failure (122: still outgrowing its buffer after every round).
+        var inspector = WithoutIpv6Table(status, stackPresent);
+
+        Assert.Null(inspector.FindConnectionOwner(Server, Client)?.SocketCreatedUtc);
+        Assert.Equal(PortOwnerTrust.Other, Verifier(inspector).ForConnection(Port)(Server, Client));
+    }
+
+    [Theory]
+    [InlineData(50u)]
+    [InlineData(87u)]
+    [InlineData(10047u)]
+    public void A_missing_IPv4_listener_table_is_always_unread_and_refused(uint status)
+    {
+        // The gateway listens on 127.0.0.1: an IPv4 table Windows will not give is never "nothing there".
+        var inspector = WithoutIpv6Table(ipv6Status: status, stackPresent: false, ipv4Status: status);
+
         Assert.Equal(PortOwnerTrust.Other, Verifier(inspector).ForConnection(Port)(Server, Client));
     }
 

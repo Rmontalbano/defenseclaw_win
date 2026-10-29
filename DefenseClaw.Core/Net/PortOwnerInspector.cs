@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
 namespace DefenseClaw.Core.Net;
@@ -137,10 +137,17 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
     /// <summary>Size of one <c>MIB_TCP6ROW_OWNER_MODULE</c>.</summary>
     public const int Ipv6RowBytes = 192;
 
+    /// <summary>
+    /// What <c>GetExtendedTcpTable</c> answers for an address family whose stack is not there: <c>ERROR_NOT_SUPPORTED</c> (50),
+    /// <c>ERROR_INVALID_PARAMETER</c> (87, its documented answer for a family it does not take) and <c>WSAEAFNOSUPPORT</c> (10047).
+    /// </summary>
+    private static readonly HashSet<uint> FamilyUnavailable = [50, 87, 10047];
+
     private readonly TcpTableReader _readTable;
     private readonly TcpTableReader _readConnectionTable;
     private readonly ImagePathReader _readImagePath;
     private readonly ProcessReader _readProcess;
+    private readonly Func<bool> _ipv6StackPresent;
 
     public PortOwnerInspector()
         : this(NativeReadTable, NativeReadConnectionTable)
@@ -175,12 +182,39 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
     /// How a row's pid becomes its name, session and creation time (<see cref="ProcessList.Read"/> by default), so a test can play a pid that
     /// a younger process reused (CUST-392).
     /// </param>
-    public PortOwnerInspector(TcpTableReader readTable, TcpTableReader readConnectionTable, ImagePathReader readImagePath, ProcessReader readProcess)
+    /// <param name="ipv6StackPresent">
+    /// Whether this PC can make an IPv6 socket at all (by default, by trying to); asked only when the IPv6 listener table fails with a
+    /// "family not available" status, so a test can play a PC without the stack.
+    /// </param>
+    public PortOwnerInspector(
+        TcpTableReader readTable,
+        TcpTableReader readConnectionTable,
+        ImagePathReader readImagePath,
+        ProcessReader readProcess,
+        Func<bool>? ipv6StackPresent = null)
     {
         _readTable = readTable ?? throw new ArgumentNullException(nameof(readTable));
         _readConnectionTable = readConnectionTable ?? throw new ArgumentNullException(nameof(readConnectionTable));
         _readImagePath = readImagePath ?? throw new ArgumentNullException(nameof(readImagePath));
         _readProcess = readProcess ?? throw new ArgumentNullException(nameof(readProcess));
+        _ipv6StackPresent = ipv6StackPresent ?? Ipv6StackPresent;
+    }
+
+    /// <summary>
+    /// Tries to make an IPv6 socket. Not <see cref="Socket.OSSupportsIPv6"/>, which also answers no when the app's own configuration
+    /// switches IPv6 off: the question is whether any process on this PC could hold an IPv6 listener.
+    /// </summary>
+    private static bool Ipv6StackPresent()
+    {
+        try
+        {
+            using var probe = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -272,7 +306,7 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
         // process's pid, and a connection made just now is younger than anything. So the earliest of the connection's rows and its process's
         // listener rows on the port is the time the process is held to. Both families are read, whichever the connection is in: a dual-mode [::]
         // listener sits in the IPv6 table while its IPv4 connections sit in the IPv4 one. Either listener table unreadable leaves no time at all
-        // (refused), since the rows it hides could be the old ones.
+        // (refused), since the rows it hides could be the old ones; a PC with no IPv6 stack has an empty IPv6 table instead (ReadListeners).
         foreach (var family in new[] { AfInet, AfInet6 })
         {
             if (ReadListeners(family) is not { } listeners)
@@ -328,13 +362,17 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
 
     private IEnumerable<ListenerRow> AllListeners() => (ReadListeners(AfInet) ?? []).Concat(ReadListeners(AfInet6) ?? []);
 
-    /// <summary>The listening sockets of one address family; null when the table cannot be read.</summary>
+    /// <summary>
+    /// The listening sockets of one address family; null when the table cannot be read. One exception: a PC without an IPv6 stack, where the
+    /// IPv6 table fails with a "family not available" status and no IPv6 socket can be made, has an empty IPv6 table (nothing can listen
+    /// there), not an unread one, or every connection would be refused. A missing IPv4 table is always unread: the gateway is on 127.0.0.1.
+    /// </summary>
     private IReadOnlyList<ListenerRow>? ReadListeners(int addressFamily)
     {
-        var (buffer, size) = ReadTable(_readTable, addressFamily);
+        var (buffer, size, status) = ReadTable(_readTable, addressFamily);
         if (buffer == IntPtr.Zero)
         {
-            return null;
+            return addressFamily == AfInet6 && FamilyUnavailable.Contains(status) && !_ipv6StackPresent() ? [] : null;
         }
 
         try
@@ -365,7 +403,7 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
     /// <summary>The connections of one address family; null when the table cannot be read.</summary>
     private IReadOnlyList<ConnectionRow>? ReadConnections(int addressFamily)
     {
-        var (buffer, size) = ReadTable(_readConnectionTable, addressFamily);
+        var (buffer, size, _) = ReadTable(_readConnectionTable, addressFamily);
         if (buffer == IntPtr.Zero)
         {
             return null;
@@ -420,17 +458,18 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
     /// <summary>
     /// The size-then-fetch pair, retried while the table outgrows the buffer between the two
     /// calls. Returns an unmanaged buffer holding the table and its size (the caller frees it), or
-    /// <see cref="IntPtr.Zero"/> when there is none to read.
+    /// <see cref="IntPtr.Zero"/> when there is none to read, with the status that ended the read.
     /// </summary>
-    private static (IntPtr Buffer, int Size) ReadTable(TcpTableReader readTable, int addressFamily)
+    private static (IntPtr Buffer, int Size, uint Status) ReadTable(TcpTableReader readTable, int addressFamily)
     {
+        var status = NoError;
         for (var attempt = 0; attempt < MaxTableReadAttempts; attempt++)
         {
             var size = 0;
-            var status = readTable(IntPtr.Zero, ref size, addressFamily);
+            status = readTable(IntPtr.Zero, ref size, addressFamily);
             if ((status != ErrorInsufficientBuffer && status != NoError) || size <= 0)
             {
-                return (IntPtr.Zero, 0);
+                return (IntPtr.Zero, 0, status);
             }
 
             var allocated = size;
@@ -438,17 +477,18 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
             status = readTable(buffer, ref size, addressFamily);
             if (status == NoError)
             {
-                return (buffer, Math.Min(allocated, size > 0 ? size : allocated));
+                return (buffer, Math.Min(allocated, size > 0 ? size : allocated), status);
             }
 
             Marshal.FreeHGlobal(buffer);
             if (status != ErrorInsufficientBuffer)
             {
-                return (IntPtr.Zero, 0);
+                return (IntPtr.Zero, 0, status);
             }
         }
 
-        return (IntPtr.Zero, 0);
+        // Still outgrowing the buffer after every round: a read that failed, never an absent family.
+        return (IntPtr.Zero, 0, status);
     }
 
     private static uint NativeReadTable(IntPtr table, ref int size, int addressFamily) =>
