@@ -12,7 +12,8 @@ namespace DefenseClaw.Tests;
 /// it handed the socket to still serves it. Another account could bind the port, hand the socket on and exit; if this account's gateway (started,
 /// failing to bind) then got that pid, every lookup by pid would describe the real gateway while the token went to the other account's socket.
 /// The inspector now reads each socket's creation time (the <c>OWNER_MODULE</c> tables) and each owner's creation time (the process list, no
-/// handle), and the verifier refuses an owner younger than its socket, or one whose times are unknown. The TCP tables and process lists here are
+/// handle), and the verifier refuses an owner younger than its socket by more than one clock tick, or one whose times are unknown. A connection is
+/// held to its pid's listener rows in both tables, and refused when either cannot be read. The TCP tables and process lists here are
 /// synthetic, except two checks against this test process's own loopback sockets.
 /// </summary>
 public class GatewayPeerStaleOwnerTests
@@ -51,7 +52,7 @@ public class GatewayPeerStaleOwnerTests
         new(ModuleTcpTables.Reader(listeners), ModuleTcpTables.Reader(connections ?? []), Image(calls), process);
 
     private static GatewayPeerVerifier Verifier(PortOwnerInspector inspector) =>
-        new(Paths(), inspector, currentSessionId: AppSession);
+        new(Paths(), inspector, currentSessionId: AppSession, userProfile: PeerFixtures.FakeProfile);
 
     // ---- listeners --------------------------------------------------------------------------------------------------------
 
@@ -95,11 +96,24 @@ public class GatewayPeerStaleOwnerTests
     }
 
     [Fact]
-    public void A_one_tick_younger_process_is_already_refused()
+    public void A_process_up_to_one_clock_tick_younger_than_its_socket_still_counts()
     {
-        var inspector = Inspector([ModuleTcpTables.Listener(Port, GatewayPid, Started)], Process(Started.AddTicks(1)));
+        // One stamp rounded to the 15.6 ms tick, the other precise: a gateway that binds within a tick of starting can look younger by that much.
+        Assert.Equal(TimeSpan.FromMilliseconds(16), PortOwner.ClockSlack);
 
-        Assert.Equal(PortOwnerTrust.Other, Verifier(inspector).ForPort(Port)());
+        var withinOneTick = Inspector([ModuleTcpTables.Listener(Port, GatewayPid, Started)], Process(Started + PortOwner.ClockSlack));
+
+        Assert.True(Assert.Single(withinOneTick.FindListeners(Port)).PidMatchesSocket);
+        Assert.Equal(PortOwnerTrust.Gateway, Verifier(withinOneTick).ForPort(Port)());
+    }
+
+    [Fact]
+    public void A_process_younger_than_its_socket_by_more_than_one_tick_is_refused()
+    {
+        var justPast = Inspector([ModuleTcpTables.Listener(Port, GatewayPid, Started)], Process(Started + PortOwner.ClockSlack + TimeSpan.FromTicks(1)));
+
+        Assert.False(Assert.Single(justPast.FindListeners(Port)).PidMatchesSocket);
+        Assert.Equal(PortOwnerTrust.Other, Verifier(justPast).ForPort(Port)());
     }
 
     [Fact]
@@ -233,6 +247,49 @@ public class GatewayPeerStaleOwnerTests
         var inspector = Inspector([ModuleTcpTables.Listener(Port, GatewayPid, Started.AddSeconds(1))], Process(Started), [Connection(created: null)]);
 
         Assert.Null(inspector.FindConnectionOwner(Server, Client)?.SocketCreatedUtc);
+        Assert.Equal(PortOwnerTrust.Other, Verifier(inspector).ForConnection(Port)(Server, Client));
+    }
+
+    [Fact]
+    public void An_ipv4_connection_is_held_to_its_pids_dual_mode_listener_in_the_ipv6_table()
+    {
+        // A dual-mode [::] listener sits in the IPv6 table; the IPv4 connections it accepts sit in the IPv4 one. Its old row still counts.
+        var stale = Inspector(
+            [ModuleTcpTables.Listener(Port, GatewayPid, Started, "::")],
+            Process(Started.AddMinutes(5)),
+            [Connection(Started.AddMinutes(10))]);
+
+        Assert.Equal(Started, stale.FindConnectionOwner(Server, Client)?.SocketCreatedUtc);
+        Assert.Equal(PortOwnerTrust.Other, Verifier(stale).ForConnection(Port)(Server, Client));
+
+        var own = Inspector(
+            [ModuleTcpTables.Listener(Port, GatewayPid, Started.AddSeconds(1), "::")],
+            Process(Started),
+            [Connection(Started.AddMinutes(10))]);
+
+        Assert.Equal(Started.AddSeconds(1), own.FindConnectionOwner(Server, Client)?.SocketCreatedUtc);
+        Assert.Equal(PortOwnerTrust.Gateway, Verifier(own).ForConnection(Port)(Server, Client));
+    }
+
+    [Theory]
+    [InlineData(ModuleTcpTables.AfInet)]
+    [InlineData(ModuleTcpTables.AfInet6)]
+    public void A_connection_is_refused_when_either_listener_table_cannot_be_read(int unreadable)
+    {
+        // The readable table has the gateway's own good listener; the rows the other one hides could be the old ones.
+        var listeners = ModuleTcpTables.Reader(
+            ModuleTcpTables.Listener(Port, GatewayPid, Started.AddSeconds(1)),
+            ModuleTcpTables.Listener(Port, GatewayPid, Started.AddSeconds(1), "::"));
+        var inspector = new PortOwnerInspector(
+            (IntPtr table, ref int size, int family) => family == unreadable ? 87u : listeners(table, ref size, family),
+            ModuleTcpTables.Reader(Connection(Started.AddMinutes(10))),
+            Image(),
+            Process(Started));
+
+        var owner = inspector.FindConnectionOwner(Server, Client);
+
+        Assert.NotNull(owner);
+        Assert.Null(owner!.SocketCreatedUtc);
         Assert.Equal(PortOwnerTrust.Other, Verifier(inspector).ForConnection(Port)(Server, Client));
     }
 

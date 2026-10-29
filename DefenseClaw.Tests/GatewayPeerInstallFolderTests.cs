@@ -8,8 +8,10 @@ namespace DefenseClaw.Tests;
 /// <summary>
 /// CUST-392, finding 2. The installer's directories in this account's profile are this account's alone, so a gateway there keeps the old rule in
 /// any session. One outside the profile (<c>&lt;DEFENSECLAW_HOME&gt;\.venv\Scripts</c> on another drive, where new folders give Authenticated
-/// Users Modify) counts only for a process in this app's session, or when <see cref="IInstallFolderTrust"/> finds the file and its folders closed
-/// to other accounts. The folder trust is a fake here; the app's own one is tested over an in-memory disk in the app suite.
+/// Users Modify) needs both halves: the process in this app's session, and <see cref="IInstallFolderTrust"/> finding the file and its folders
+/// closed to other accounts. Either alone is too weak: a closed folder still lets another account run the genuine file in its own session (the
+/// administrator copy's case), and this session alone does not say who put the file in a loose folder. The folder trust is a fake here; the
+/// app's own one is tested over an in-memory disk in the app suite.
 /// </summary>
 public class GatewayPeerInstallFolderTests
 {
@@ -34,6 +36,8 @@ public class GatewayPeerInstallFolderTests
             return Answer(imagePath);
         }
     }
+
+    private static Folders Closed() => new() { Answer = _ => null };
 
     private sealed class NoListener : IPortOwnerInspector
     {
@@ -73,48 +77,57 @@ public class GatewayPeerInstallFolderTests
         Assert.Empty(folders.Asked);
     }
 
-    [Fact]
-    public void An_install_folder_outside_the_profile_counts_in_this_apps_session_without_a_folder_check()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Outside_the_profile_this_session_and_a_closed_folder_together_are_trusted(bool withoutHandle)
     {
-        var folders = new Folders();
+        var folders = Closed();
 
-        Assert.Equal(PortOwnerTrust.Gateway, Verifier(folders).Classify(Gateway(OutsideGateway, AppSession)));
-        Assert.Equal(PortOwnerTrust.Gateway, Verifier(folders).Classify(Gateway(OutsideGateway, AppSession, withoutHandle: true)));
-        Assert.Empty(folders.Asked);
+        Assert.Equal(
+            new PeerVerdict(PortOwnerTrust.Gateway, GatewayPeerRoute.InstallDirectory),
+            Verifier(folders).Judge(Gateway(OutsideGateway, AppSession, withoutHandle)));
+        Assert.Equal(new[] { OutsideGateway }, folders.Asked);
     }
 
     [Fact]
-    public void Outside_the_profile_and_this_session_a_folder_other_accounts_may_change_is_refused_and_says_so()
+    public void Outside_the_profile_a_closed_folder_in_another_session_is_refused_and_says_so()
+    {
+        // Other accounts may read and run the genuine file from a folder they cannot write: their run of it, in their session, is not this
+        // account's gateway, so the folder is not even asked about.
+        var folders = Closed();
+        var verifier = Verifier(folders);
+
+        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Gateway(OutsideGateway, OtherSession)));
+        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Gateway(OutsideGateway, session: null)));
+        Assert.Empty(folders.Asked);
+        Assert.Equal(
+            @"defenseclaw-gateway (pid 4242) runs from D:\dc\.venv\Scripts, outside this account's profile, in Windows session 0, not this app's session 2: " +
+            "a gateway there counts only in this app's session",
+            verifier.DescribeUntrusted(Gateway(OutsideGateway, OtherSession)));
+    }
+
+    [Fact]
+    public void Outside_the_profile_a_folder_other_accounts_may_change_is_refused_in_this_session_too_and_says_so()
     {
         var folders = new Folders();
         var verifier = Verifier(folders);
-        var owner = Gateway(OutsideGateway, OtherSession);
+        var owner = Gateway(OutsideGateway, AppSession);
 
         Assert.Equal(PortOwnerTrust.Other, verifier.Classify(owner));
-        Assert.Equal(new[] { OutsideGateway }, folders.Asked);
         Assert.Equal(
-            @"defenseclaw-gateway (pid 4242) runs from D:\dc\.venv\Scripts, outside this account's profile, in Windows session 0, not this app's session 2, " +
-            @"and D:\dc lets S-1-5-11 write to it, change it or delete it",
+            @"defenseclaw-gateway (pid 4242) runs from D:\dc\.venv\Scripts, outside this account's profile, and D:\dc lets S-1-5-11 write to it, change it or delete it",
             verifier.DescribeUntrusted(owner));
     }
 
     [Fact]
-    public void Outside_the_profile_and_this_session_a_folder_closed_to_other_accounts_is_trusted()
-    {
-        var folders = new Folders { Answer = _ => null };
-
-        Assert.Equal(new PeerVerdict(PortOwnerTrust.Gateway, GatewayPeerRoute.InstallDirectory), Verifier(folders).Judge(Gateway(OutsideGateway, OtherSession)));
-        Assert.Equal(PortOwnerTrust.Gateway, Verifier(folders).Classify(Gateway(OutsideGateway, session: null)));
-    }
-
-    [Fact]
-    public void Without_a_folder_check_an_install_folder_outside_the_profile_needs_this_session()
+    public void Without_a_folder_check_no_install_folder_outside_the_profile_counts()
     {
         var verifier = Verifier(null);
 
+        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Gateway(OutsideGateway, AppSession)));
         Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Gateway(OutsideGateway, OtherSession)));
-        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Gateway(OutsideGateway, session: null)));
-        Assert.EndsWith("and this app does not check who may change that folder", verifier.DescribeUntrusted(Gateway(OutsideGateway, OtherSession)), StringComparison.Ordinal);
+        Assert.EndsWith("and this app does not check who may change that folder", verifier.DescribeUntrusted(Gateway(OutsideGateway, AppSession)), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -122,16 +135,8 @@ public class GatewayPeerInstallFolderTests
     {
         var folders = new Folders { Answer = _ => throw new UnauthorizedAccessException("denied") };
 
-        Assert.Equal(PortOwnerTrust.Other, Verifier(folders).Classify(Gateway(OutsideGateway, OtherSession)));
-        Assert.EndsWith("and who may change that folder could not be read", Verifier(folders).DescribeUntrusted(Gateway(OutsideGateway, OtherSession)), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_path_read_without_a_handle_in_another_session_stays_refused_however_closed_its_folder_is()
-    {
-        var folders = new Folders { Answer = _ => null };
-
-        Assert.Equal(PortOwnerTrust.Other, Verifier(folders).Classify(Gateway(OutsideGateway, OtherSession, withoutHandle: true)));
+        Assert.Equal(PortOwnerTrust.Other, Verifier(folders).Classify(Gateway(OutsideGateway, AppSession)));
+        Assert.EndsWith("and who may change that folder could not be read", Verifier(folders).DescribeUntrusted(Gateway(OutsideGateway, AppSession)), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -139,16 +144,20 @@ public class GatewayPeerInstallFolderTests
     {
         var image = @"C:\Users\operator2\.local\bin\defenseclaw-gateway.exe";
 
-        Assert.Equal(PortOwnerTrust.Other, Verifier(null).Classify(Gateway(image, OtherSession)));
-        Assert.Equal(PortOwnerTrust.Gateway, Verifier(new Folders { Answer = _ => null }).Classify(Gateway(image, OtherSession)));
+        Assert.Equal(PortOwnerTrust.Other, Verifier(Closed()).Classify(Gateway(image, OtherSession)));
+        Assert.Equal(PortOwnerTrust.Other, Verifier(null).Classify(Gateway(image, AppSession)));
+        Assert.Equal(PortOwnerTrust.Gateway, Verifier(Closed()).Classify(Gateway(image, AppSession)));
     }
 
     [Fact]
     public void A_profile_that_cannot_be_read_is_no_profile()
     {
-        var verifier = new GatewayPeerVerifier(Paths(), new NoListener(), currentSessionId: AppSession, userProfile: string.Empty);
+        var bare = new GatewayPeerVerifier(Paths(), new NoListener(), currentSessionId: AppSession, userProfile: string.Empty);
+        var checkedFolders = new GatewayPeerVerifier(Paths(), new NoListener(), currentSessionId: AppSession, installFolders: Closed(), userProfile: string.Empty);
+        var image = ScriptBin + @"\defenseclaw-gateway.exe";
 
-        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Gateway(ScriptBin + @"\defenseclaw-gateway.exe", OtherSession)));
-        Assert.Equal(PortOwnerTrust.Gateway, verifier.Classify(Gateway(ScriptBin + @"\defenseclaw-gateway.exe", AppSession)));
+        Assert.Equal(PortOwnerTrust.Other, bare.Classify(Gateway(image, AppSession)));
+        Assert.Equal(PortOwnerTrust.Other, checkedFolders.Classify(Gateway(image, OtherSession)));
+        Assert.Equal(PortOwnerTrust.Gateway, checkedFolders.Classify(Gateway(image, AppSession)));
     }
 }

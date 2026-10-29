@@ -10,9 +10,9 @@ namespace DefenseClaw.App.Tests.GatewayAdmin;
 /// <summary>
 /// CUST-392, finding 2, the app's half: <see cref="InstallFolderTrust"/> reads the owner and access list of a gateway installed outside the profile
 /// and of every folder above it through <see cref="IAdminFileSystem"/>, and judges them with <see cref="AdminAcl"/> with this account trusted
-/// beside the administrative principals. A <c>DEFENSECLAW_HOME</c> made on a drive's root inherits Authenticated Users Modify and is refused for
-/// a gateway outside this app's session; the same folder locked to this account is trusted. Every disk is a <see cref="FakeFs"/>: nothing reads
-/// a real folder.
+/// beside the administrative principals. A <c>DEFENSECLAW_HOME</c> made on a drive's root inherits Authenticated Users Modify and is refused; the
+/// same folder locked to this account is trusted for a gateway in this app's session, and only there (the verifier asks for both). Every disk is a
+/// <see cref="FakeFs"/>: nothing reads a real folder.
 /// </summary>
 public sealed class InstallFolderTrustTests
 {
@@ -99,30 +99,27 @@ public sealed class InstallFolderTrustTests
     // ---- the brief's two cases, through the verifier ----------------------------------------------------------------------
 
     [Fact]
-    public void A_home_outside_the_profile_with_the_inherited_access_list_is_refused_to_another_session()
+    public void A_home_outside_the_profile_with_the_inherited_access_list_is_refused_in_any_session()
     {
-        var fs = Disk(InheritedAcl);
-        var verifier = Verifier(fs);
+        var verifier = Verifier(Disk(InheritedAcl));
 
+        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Owner(AppSession)));
         Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Owner(OtherSession)));
         Assert.Equal(
-            @"defenseclaw-gateway (pid 4242) runs from D:\dc\.venv\Scripts, outside this account's profile, in Windows session 0, not this app's session 1, " +
+            @"defenseclaw-gateway (pid 4242) runs from D:\dc\.venv\Scripts, outside this account's profile, " +
             @"and D:\dc\.venv\Scripts\defenseclaw-gateway.exe lets S-1-5-11 write to it, change it or delete it",
-            verifier.DescribeUntrusted(Owner(OtherSession)));
+            verifier.DescribeUntrusted(Owner(AppSession)));
     }
 
     [Fact]
-    public void The_same_home_locked_to_this_account_is_trusted_in_another_session()
+    public void The_same_home_locked_to_this_account_is_trusted_in_this_apps_session_only()
     {
+        // Users may still read and run the file from a folder they cannot write: another session's run of it is not this account's gateway.
         var verifier = Verifier(Disk(AccountAcl));
 
-        Assert.Equal(new PeerVerdict(PortOwnerTrust.Gateway, GatewayPeerRoute.InstallDirectory), verifier.Judge(Owner(OtherSession)));
-    }
-
-    [Fact]
-    public void In_this_apps_session_the_inherited_access_list_does_not_matter()
-    {
-        Assert.Equal(PortOwnerTrust.Gateway, Verifier(Disk(InheritedAcl)).Classify(Owner(AppSession)));
+        Assert.Equal(new PeerVerdict(PortOwnerTrust.Gateway, GatewayPeerRoute.InstallDirectory), verifier.Judge(Owner(AppSession)));
+        Assert.Equal(PortOwnerTrust.Other, verifier.Classify(Owner(OtherSession)));
+        Assert.EndsWith("a gateway there counts only in this app's session", verifier.DescribeUntrusted(Owner(OtherSession)), StringComparison.Ordinal);
     }
 
     // ---- the policy, node by node -----------------------------------------------------------------------------------------

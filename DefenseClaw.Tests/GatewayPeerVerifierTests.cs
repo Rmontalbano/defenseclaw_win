@@ -31,7 +31,7 @@ public class GatewayPeerVerifierTests
             fileExists: fileExists ?? (_ => false));
 
     private static GatewayPeerVerifier Verifier(DefenseClawPaths? paths = null, FixedPortInspector? inspector = null) =>
-        new(paths ?? Paths(), inspector ?? new FixedPortInspector());
+        new(paths ?? Paths(), inspector ?? new FixedPortInspector(), userProfile: PeerFixtures.FakeProfile);
 
     /// <summary>
     /// A listener in this test's own session whose process opened its socket: what the installer's gateway looks like to the verifier, whose
@@ -153,7 +153,8 @@ public class GatewayPeerVerifierTests
             binDirectory: Bin,
             searchPath: Array.Empty<string>(),
             fileExists: p => p.StartsWith(Bin, StringComparison.OrdinalIgnoreCase) || File.Exists(p));
-        var detector = new InstallStateDetector(paths, new HealthyGateway(), new FixedPortInspector { Owner = Owner(name, image) });
+        var inspector = new FixedPortInspector { Owner = Owner(name, image) };
+        var detector = new InstallStateDetector(paths, new HealthyGateway(), inspector, Verifier(paths, inspector));
 
         var status = await detector.DetectAsync(18970);
 

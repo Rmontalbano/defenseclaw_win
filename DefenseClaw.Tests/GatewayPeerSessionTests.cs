@@ -71,7 +71,7 @@ public class GatewayPeerSessionTests
             fileExists: p => p.StartsWith(Bin, StringComparison.OrdinalIgnoreCase) || File.Exists(p));
 
     private static GatewayPeerVerifier Verifier(IAdminCopyTrust? trust = null, IPortOwnerInspector? inspector = null, DefenseClawPaths? paths = null) =>
-        new(paths ?? Paths(), inspector ?? new FixedPortInspector(), adminCopy: trust, currentSessionId: AppSession);
+        new(paths ?? Paths(), inspector ?? new FixedPortInspector(), adminCopy: trust, currentSessionId: AppSession, userProfile: PeerFixtures.FakeProfile);
 
     /// <summary>When the synthetic gateway started, and opened its socket a moment later: the pid is its own (CUST-392).</summary>
     private static readonly DateTime Started = new(2026, 10, 29, 8, 0, 0, DateTimeKind.Utc);
@@ -128,13 +128,13 @@ public class GatewayPeerSessionTests
     public void The_installed_gateway_read_with_a_handle_keeps_its_old_rule_in_any_session_inside_the_profile()
     {
         // Unchanged from before CUST-362: a process this app could open, running the installer's file (a gateway started as a task, say). Since
-        // CUST-392 that holds for the installer's directories in this account's profile; one outside it needs this session or a closed folder
-        // (GatewayPeerInstallFolderTests).
-        var inProfile = new GatewayPeerVerifier(Paths(), new FixedPortInspector(), currentSessionId: AppSession, userProfile: @"C:\fake");
-
-        Assert.Equal(PortOwnerTrust.Gateway, inProfile.Classify(Owner(Installed, OtherSession)));
-        Assert.Equal(PortOwnerTrust.Gateway, inProfile.Classify(Owner(Installed, session: null)));
-        Assert.Equal(PortOwnerTrust.Other, Verifier().Classify(Owner(Installed, OtherSession)));
+        // CUST-392 that holds for the installer's directories in this account's profile (these tests' fake install is in their fake profile);
+        // one outside it needs this session and a closed folder (GatewayPeerInstallFolderTests).
+        Assert.Equal(PortOwnerTrust.Gateway, Verifier().Classify(Owner(Installed, OtherSession)));
+        Assert.Equal(PortOwnerTrust.Gateway, Verifier().Classify(Owner(Installed, session: null)));
+        Assert.Equal(
+            PortOwnerTrust.Other,
+            new GatewayPeerVerifier(Paths(), new FixedPortInspector(), currentSessionId: AppSession, userProfile: @"C:\Users\operator").Classify(Owner(Installed, OtherSession)));
     }
 
     [Fact]

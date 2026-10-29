@@ -1,6 +1,7 @@
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Tests.TestSupport;
 
 namespace DefenseClaw.Tests;
 
@@ -39,7 +40,8 @@ public class GatewayPeerAdminCopyTests
     /// <summary>The app's Windows session in these tests; the copy is trusted only in it (CUST-362).</summary>
     private const int Session = 3;
 
-    private static GatewayPeerVerifier Verifier(IAdminCopyTrust? trust) => new(Paths(), new NoPortInspector(), adminCopy: trust, currentSessionId: Session);
+    private static GatewayPeerVerifier Verifier(IAdminCopyTrust? trust) =>
+        new(Paths(), new NoPortInspector(), adminCopy: trust, currentSessionId: Session, userProfile: PeerFixtures.FakeProfile);
 
     /// <summary>A process that opened its own socket (CUST-392).</summary>
     private static readonly DateTime Started = new(2026, 10, 29, 8, 0, 0, DateTimeKind.Utc);

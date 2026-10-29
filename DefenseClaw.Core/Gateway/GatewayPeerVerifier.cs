@@ -107,10 +107,11 @@ public enum PortOwnerTrust
 /// <para>
 /// <b>Whose socket, and whose folder (CUST-392).</b> Windows keeps naming a listening socket by its creator's pid after the creator exits while a
 /// child it handed the socket to serves it, and a later process may reuse that pid: another account could bind the port, hand it on, exit, and
-/// have this account's gateway (started, and failing to bind) answer the pid lookups. So the owner's process must be no younger than its socket
-/// (<see cref="PortOwner.PidMatchesSocket"/>), and an owner whose times Windows did not give is refused. And an installer's directory outside this
-/// account's profile counts only for a process in this app's session or when <see cref="IInstallFolderTrust"/> finds the file and every folder
-/// above it closed to other accounts; the profile itself is this account's alone and keeps the old rule.
+/// have this account's gateway (started, and failing to bind) answer the pid lookups. So the owner's process must be no younger than its socket,
+/// give or take one clock tick (<see cref="PortOwner.PidMatchesSocket"/>), and an owner whose times Windows did not give is refused. And an installer's directory outside this
+/// account's profile counts only for a process in this app's session <i>and</i> when <see cref="IInstallFolderTrust"/> finds the file and every
+/// folder above it closed to other accounts (they may still run the genuine file, as they may the administrator copy); the profile itself is this
+/// account's alone and keeps the old rule.
 /// </para>
 /// <para>
 /// <b>Not closed.</b> A session is not an account: a process another account starts inside this app's session (<c>runas</c>, with that account's
@@ -144,8 +145,8 @@ public sealed class GatewayPeerVerifier
     /// </param>
     /// <param name="currentSessionId">This app's Windows session; null reads this process's own (a test names one).</param>
     /// <param name="installFolders">
-    /// Judges an installer's directory outside <paramref name="userProfile"/> for a gateway outside this app's session (CUST-392); null (the default)
-    /// trusts such a directory only in this app's session.
+    /// Judges an installer's directory outside <paramref name="userProfile"/>, which counts only in this app's session and only when this finds it
+    /// closed to other accounts (CUST-392); null (the default) trusts no such directory.
     /// </param>
     /// <param name="userProfile">This account's profile folder; null reads it from the system (a test names one). An unreadable profile is no profile.</param>
     public GatewayPeerVerifier(
@@ -331,10 +332,18 @@ public sealed class GatewayPeerVerifier
             {
                 return $"{who} runs this account's administrator copy, but in {SessionWords(owner)}, so it is not the gateway the helper started";
             }
+        }
 
-            if (InstallDirectoryOf(owner.ImagePath) is { } directory && !InProfile(directory) && FolderProblem(owner.ImagePath) is { } problem)
+        if (InstallDirectoryOf(owner.ImagePath) is { } directory && !InProfile(directory))
+        {
+            if (!InAppSession(owner))
             {
-                return $"{who} runs from {directory}, outside this account's profile, in {SessionWords(owner)}, and {problem}";
+                return $"{who} runs from {directory}, outside this account's profile, in {SessionWords(owner)}: a gateway there counts only in this app's session";
+            }
+
+            if (FolderProblem(owner.ImagePath) is { } problem)
+            {
+                return $"{who} runs from {directory}, outside this account's profile, and {problem}";
             }
         }
 
@@ -376,8 +385,8 @@ public sealed class GatewayPeerVerifier
             return GatewayPeerRoute.None;
         }
 
-        // The pid must still name the process that opened the socket: one younger than its socket only reused the pid of a creator that is gone
-        // (whose child may still serve the socket). Times Windows did not give are no proof either way: refused (CUST-392).
+        // The pid must still name the process that opened the socket: one younger than its socket (beyond one clock tick) only reused the pid of a
+        // creator that is gone, whose child may still serve the socket. Times Windows did not give are no proof either way: refused (CUST-392).
         if (!owner.PidMatchesSocket)
         {
             return GatewayPeerRoute.None;
@@ -409,9 +418,11 @@ public sealed class GatewayPeerVerifier
 
         if (IsInstallDirectory(imageDirectory))
         {
-            // The profile is this account's alone (its owner, SYSTEM and Administrators), so a gateway there was put there by this account. A folder
-            // outside it may be one other accounts can write to: the process must be in this app's session, or the folder closed to them (CUST-392).
-            return InProfile(imageDirectory) || thisSession || FolderProblem(owner.ImagePath) is null
+            // The profile is this account's alone (its owner, SYSTEM and Administrators): a gateway there was put there by this account, and only
+            // this account can run it. A folder outside it needs both halves (CUST-392): closed to other accounts, so nobody else put the file
+            // there, and the process in this app's session, because other accounts may still read and run the genuine file in their own session
+            // (the administrator copy's rule, for the same reason).
+            return InProfile(imageDirectory) || (thisSession && FolderProblem(owner.ImagePath) is null)
                 ? GatewayPeerRoute.InstallDirectory
                 : GatewayPeerRoute.None;
         }
@@ -443,7 +454,7 @@ public sealed class GatewayPeerVerifier
     /// <summary>
     /// Why the gateway at <paramref name="imagePath"/>, in an installer's directory outside the profile, may have been put there by another account;
     /// null only when <see cref="IInstallFolderTrust"/> finds the file and its folders closed to other accounts. No trust object, or one that
-    /// throws, is a problem (fail closed).
+    /// throws, is a problem (fail closed). Asked only for a process in this app's session.
     /// </summary>
     private string? FolderProblem(string imagePath)
     {

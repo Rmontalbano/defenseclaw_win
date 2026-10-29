@@ -120,7 +120,7 @@ public sealed class AppServices : IDisposable
         var adminSource = adminLayout ?? new WindowsAdminLayoutSource();
         var adminFs = adminFileSystem ?? new ReadOnlyAdminFileSystem();
 
-        // An installer's directory outside the profile (a DEFENSECLAW_HOME elsewhere) counts outside this app's session only while its folders
+        // An installer's directory outside the profile (a DEFENSECLAW_HOME elsewhere) counts only in this app's session and only while its folders
         // are closed to other accounts, read through the same reader (CUST-392).
         _peerVerifier = new GatewayPeerVerifier(
             Paths,

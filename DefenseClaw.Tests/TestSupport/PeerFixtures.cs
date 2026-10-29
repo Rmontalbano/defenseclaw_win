@@ -14,6 +14,12 @@ internal static class PeerFixtures
     /// <summary>When it opened its socket: after it started.</summary>
     public static readonly DateTime Bound = Started.AddMilliseconds(400);
 
+    /// <summary>
+    /// The synthetic profile the suite's fake install directories (<c>C:\fake\install\bin</c>, ...) sit in, for a verifier built with
+    /// <c>userProfile</c>: the common case, where the installer's directories are this account's own (CUST-392).
+    /// </summary>
+    public const string FakeProfile = @"C:\fake";
+
     /// <summary>This test process's Windows session.</summary>
     public static int ThisSession { get; } = ReadSession();
 

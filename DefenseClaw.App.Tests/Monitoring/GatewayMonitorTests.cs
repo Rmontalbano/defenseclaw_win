@@ -34,8 +34,7 @@ public class GatewayMonitorTests
     private static readonly DateTime GatewayStarted = new(2026, 10, 29, 8, 0, 0, DateTimeKind.Utc);
 
     /// <summary>
-    /// The installed gateway as the inspector reports it: in this test's own session (the fake bin directory is outside the profile) and holding
-    /// a socket it opened after it started (CUST-392).
+    /// The installed gateway as the inspector reports it: in this test's own session, holding a socket it opened after it started (CUST-392).
     /// </summary>
     private static PortOwner VerifiedGateway(int port)
     {
@@ -43,6 +42,13 @@ public class GatewayMonitorTests
         return new PortOwner(4242, "defenseclaw-gateway", "127.0.0.1", port, GatewayImage, self.SessionId,
             SocketCreatedUtc: GatewayStarted.AddSeconds(1), ProcessCreatedUtc: GatewayStarted);
     }
+
+    /// <summary>
+    /// A detector that judges <paramref name="inspector"/>'s owner with a verifier whose profile holds the fake install directory: the common case,
+    /// an installer's directory in this account's profile (CUST-392: one outside it would also need a folder check).
+    /// </summary>
+    private static InstallStateDetector Detector(AppServices services, FixedPortInspector inspector) =>
+        new(services.Paths, services.Gateway, inspector, new GatewayPeerVerifier(services.Paths, inspector, userProfile: @"C:\fake"));
 
     /// <summary>
     /// A listener that answers <c>/health</c> and nothing else needs. Tests that do not care about the answer
@@ -165,7 +171,7 @@ public class GatewayMonitorTests
         {
             Owner = VerifiedGateway(listener.Port),
         };
-        var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
+        var detector = Detector(services, inspector);
         using var monitor = new GatewayMonitor(services, clock, detector);
 
         _ = await monitor.PollOnceAsync();
@@ -257,7 +263,7 @@ public class GatewayMonitorTests
         {
             Owner = new PortOwner(31337, "wslrelay", "127.0.0.1", listener.Port, @"C:\Windows\System32\wslrelay.exe"),
         };
-        var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
+        var detector = Detector(services, inspector);
         using var monitor = new GatewayMonitor(services, new ManualClock(), detector);
 
         var snapshot = await monitor.RefreshAsync();
@@ -281,7 +287,7 @@ public class GatewayMonitorTests
         {
             Owner = new PortOwner(4242, "SomeRandomServer", "127.0.0.1", listener.Port, @"C:\tools\server.exe"),
         };
-        var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
+        var detector = Detector(services, inspector);
         using var monitor = new GatewayMonitor(services, new ManualClock(), detector);
 
         var snapshot = await monitor.RefreshAsync();
@@ -307,7 +313,7 @@ public class GatewayMonitorTests
         {
             Owner = VerifiedGateway(listener.Port),
         };
-        var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
+        var detector = Detector(services, inspector);
         using var monitor = new GatewayMonitor(services, new ManualClock(), detector);
 
         var snapshot = await monitor.RefreshAsync();

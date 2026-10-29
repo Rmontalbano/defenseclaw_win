@@ -220,7 +220,7 @@ public class GatewayClientPeerTests
         temp.Write("config.yaml", "config_version: 8\n");
         var inspector = new MutablePortInspector { Owner = SomeRandomServer with { Port = stray.Port } };
         var paths = InstalledPaths(temp.Path);
-        var verifier = new GatewayPeerVerifier(paths, inspector);
+        var verifier = new GatewayPeerVerifier(paths, inspector, userProfile: PeerFixtures.FakeProfile);
         using var client = GatewayClient.Create(stray.Port, () => new SecretValue(Token), verifyPeer: verifier.ForPort(stray.Port));
 
         var status = await client.GetStatusAsync();
@@ -251,9 +251,9 @@ public class GatewayClientPeerTests
             _ => RawHttpListener.Response(401, "{\"error\":\"unauthorized\"}"),
         });
 
-        var verifier = new GatewayPeerVerifier(paths, inspector);
+        var verifier = new GatewayPeerVerifier(paths, inspector, userProfile: PeerFixtures.FakeProfile);
         using var client = GatewayClient.Create(listener.Port, () => new SecretValue(Token), verifyPeer: verifier.ForPort(listener.Port));
-        var detector = new InstallStateDetector(paths, client, inspector);
+        var detector = new InstallStateDetector(paths, client, inspector, verifier);
 
         // 1. Something else owns the port: it is reported as such, and the token stays home.
         inspector.Owner = SomeRandomServer with { Port = listener.Port };

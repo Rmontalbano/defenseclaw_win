@@ -18,7 +18,9 @@ namespace DefenseClaw.App.Services;
 /// folders inherit is what the first rule catches.</item>
 /// </list>
 /// A link or junction anywhere on the way, a missing node, an access list that cannot be read, a network path or an unknown account is a
-/// problem: fails closed. The profile itself is never asked about (the verifier trusts it as this account's alone).
+/// problem: fails closed. The profile itself is never asked about (the verifier trusts it as this account's alone). A closed folder says nobody
+/// else put the file there, not whose process runs it (others may still read and run it), so the verifier also wants the process in this app's
+/// session.
 /// </summary>
 internal sealed class InstallFolderTrust : IInstallFolderTrust
 {

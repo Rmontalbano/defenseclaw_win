@@ -36,11 +36,19 @@ public sealed record PortOwner(
     DateTime? ProcessCreatedUtc = null)
 {
     /// <summary>
-    /// True when the process that holds <see cref="Pid"/> now is the one that opened the socket: both times are known and the process is not
-    /// the younger (equal counts, for the clock's granularity). Windows keeps naming a socket's creator after it exits, also while a child it
-    /// handed the socket to serves it, so a younger process with that pid has only reused it (CUST-392).
+    /// How much younger than its socket a process may look and still be its creator: one tick of the system clock (15.6 ms by default), in case
+    /// one of the two stamps is rounded to a tick while the other is precise. It does not reopen the reused-pid case: for that, this account's
+    /// gateway would have to start with the pid within one tick of the other account's socket being opened, a moment the other account can
+    /// neither see nor choose (CUST-392).
     /// </summary>
-    public bool PidMatchesSocket => ProcessCreatedUtc is { } process && SocketCreatedUtc is { } socket && process <= socket;
+    public static readonly TimeSpan ClockSlack = TimeSpan.FromMilliseconds(16);
+
+    /// <summary>
+    /// True when the process that holds <see cref="Pid"/> now is the one that opened the socket: both times are known and the process is not
+    /// younger than the socket by more than <see cref="ClockSlack"/>. Windows keeps naming a socket's creator after it exits, also while a child
+    /// it handed the socket to serves it, so a younger process with that pid has only reused it (CUST-392).
+    /// </summary>
+    public bool PidMatchesSocket => ProcessCreatedUtc is { } process && SocketCreatedUtc is { } socket && process - socket <= ClockSlack;
 
     /// <summary>
     /// True when the listener is WSL's port relay. Port 18970 answering through
@@ -97,7 +105,7 @@ public interface IConnectionOwnerInspector
 /// <b>Whose socket (CUST-392).</b> Windows names a socket by the pid of the process that opened it, and keeps that pid after the process exits
 /// while a child it handed the socket to still serves it. A later process can reuse the pid. So the tables are the <c>OWNER_MODULE</c> ones,
 /// which carry each socket's creation time, and every owner carries its process's creation time from <see cref="ProcessList"/> (no handle):
-/// the peer check refuses an owner whose process is younger than its socket (<see cref="PortOwner.PidMatchesSocket"/>). The image path is
+/// the peer check refuses an owner whose process is younger than its socket by more than a clock tick (<see cref="PortOwner.PidMatchesSocket"/>). The image path is
 /// read before the process list, so the process the list then shows, alive and no younger than the socket, is the one whose path was read.
 /// </para>
 /// </summary>
@@ -238,7 +246,6 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
         var serverAddress = Unmap(server.Address);
         var clientAddress = Unmap(client.Address);
         var pids = new HashSet<int>();
-        var families = new HashSet<int>();
         var created = new List<DateTime?>();
         foreach (var family in new[] { AfInet, AfInet6 })
         {
@@ -248,7 +255,6 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
                     Unmap(row.LocalAddress).Equals(serverAddress) && Unmap(row.RemoteAddress).Equals(clientAddress))
                 {
                     pids.Add(row.Pid);
-                    families.Add(family);
                     created.Add(row.Created);
                 }
             }
@@ -264,9 +270,10 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
 
         // The socket the connection was accepted from counts too: a connection accepted from a listener another process opened can carry that
         // process's pid, and a connection made just now is younger than anything. So the earliest of the connection's rows and its process's
-        // listener rows on the port (in the same table family) is the time the process is held to; a family whose listener table cannot be read
-        // leaves no time at all (refused).
-        foreach (var family in families)
+        // listener rows on the port is the time the process is held to. Both families are read, whichever the connection is in: a dual-mode [::]
+        // listener sits in the IPv6 table while its IPv4 connections sit in the IPv4 one. Either listener table unreadable leaves no time at all
+        // (refused), since the rows it hides could be the old ones.
+        foreach (var family in new[] { AfInet, AfInet6 })
         {
             if (ReadListeners(family) is not { } listeners)
             {

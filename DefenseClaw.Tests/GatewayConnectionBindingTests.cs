@@ -53,7 +53,8 @@ public class GatewayConnectionBindingTests
                 binDirectory: Bin,
                 searchPath: searchPath ?? Array.Empty<string>(),
                 fileExists: fileExists ?? (_ => false)),
-            owners);
+            owners,
+            userProfile: PeerFixtures.FakeProfile);
 
     // ---- trust is the installer's directory, not PATH ---------------------------------------------------
 
