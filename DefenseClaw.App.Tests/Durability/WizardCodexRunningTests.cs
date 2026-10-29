@@ -54,4 +54,38 @@ public sealed class WizardCodexRunningTests
             Assert.Equal(warned, vm.CommandReview.Warnings.Any(w => w.Title == "Codex is running" && w.Message.EndsWith("Quit Codex first.", StringComparison.Ordinal)));
         });
     }
+
+    private const string DesktopApp = @"C:\Program Files\WindowsApps\OpenAI.Codex_26.1021.3705.0_x64__2p2nqsd0c76g0\app";
+
+    [Theory]
+    [InlineData("sandbox-service", false)]
+    [InlineData("sandbox-service-and-setup", false)]
+    [InlineData("codex-exe", true)]
+    [InlineData("desktop-main-process", true)]
+    public void The_review_of_setup_codex_ignores_the_codex_desktop_apps_always_on_sandbox_service(string running, bool warned)
+    {
+        // CUST-358: the Codex desktop app's LocalSystem service runs with Codex closed. Injected processes only; the real machine is never listed.
+        var processes = running switch
+        {
+            "sandbox-service" => new[] { new RunningProcess("explorer"), new RunningProcess("codex-windows-sandbox-service", DesktopApp + @"\resources\codex-windows-sandbox-service.exe") },
+            "sandbox-service-and-setup" => new[]
+            {
+                new RunningProcess("codex-windows-sandbox-service", DesktopApp + @"\resources\codex-windows-sandbox-service.exe"),
+                new RunningProcess("codex-windows-sandbox-setup", DesktopApp + @"\resources\codex-windows-sandbox-setup.exe"),
+            },
+            "codex-exe" => new[] { new RunningProcess("codex-windows-sandbox-service"), new RunningProcess("codex", DesktopApp + @"\resources\codex.exe") },
+            _ => new[] { new RunningProcess("codex-windows-sandbox-service"), new RunningProcess("ChatGPT", DesktopApp + @"\ChatGPT.exe") },
+        };
+
+        using var temp = new TempDirectory();
+        StaThread.Run(() =>
+        {
+            using var services = TestServices.Create(temp);
+            services.AgentProcesses = AgentProcessProbe.FromProcesses(() => processes);
+            using var vm = new WizardViewModel(services, Definition("codex"));
+            ToReview(vm);
+
+            Assert.Equal(warned, vm.CommandReview!.Warnings.Any(w => w.Title == "Codex is running"));
+        });
+    }
 }

@@ -257,6 +257,25 @@ public sealed class GatewayLifecycleDurabilityTests : IDisposable
     }
 
     [Fact]
+    public async Task With_only_the_codex_desktop_apps_sandbox_service_running_the_review_is_the_gateway_dialog_as_before()
+    {
+        // CUST-358: what Create wires in is the services' probe; here it sees the always-on service and nothing else.
+        _services.AgentProcesses = AgentProcessProbe.FromProcesses(() => new[]
+        {
+            new RunningProcess("explorer"),
+            new RunningProcess("codex-windows-sandbox-service"),
+        });
+        _codexRunning = _services.AgentProcesses.CodexRunning();
+        _afterWait = Up;
+
+        await Lifecycle().RunAsync(GatewayAction.Start);
+
+        Assert.False(_codexRunning);
+        Assert.Empty(_reviews);
+        Assert.Contains("plain-review Start", _events);
+    }
+
+    [Fact]
     public void The_real_composition_asks_the_services_probe_and_an_isolated_one_sees_no_codex()
     {
         Assert.False(_services.AgentProcesses.CodexRunning());

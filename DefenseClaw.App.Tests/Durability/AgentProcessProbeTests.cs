@@ -6,16 +6,25 @@ namespace DefenseClaw.App.Tests.Durability;
 /// <summary>The one process look behind the upgrade checklist and the "Codex is running" warning (CUST-352), over injected process names.</summary>
 public sealed class AgentProcessProbeTests
 {
+    // The Codex desktop app's package, as installed (a synthetic version): the app's main process, its bundled codex.exe app-server, and the helpers.
+    private const string DesktopApp = @"C:\Program Files\WindowsApps\OpenAI.Codex_26.1021.3705.0_x64__2p2nqsd0c76g0\app";
+
     [Theory]
     [InlineData("codex", true)]
     [InlineData("Codex", true)]
-    [InlineData("codex-windows-sandbox-setup", true)]
+    [InlineData("CODEX", true)]
     [InlineData("codex-windows-sandbox-service", false)]
     [InlineData("Codex-Windows-Sandbox-Service", false)]
+    [InlineData("codex-windows-sandbox-setup", false)]
+    [InlineData("codex-command-runner", false)]
+    [InlineData("codex-code-mode-host", false)]
+    [InlineData("codex-computer-use", false)]
+    [InlineData("codex-anything-else", false)]
     [InlineData("claude", false)]
     [InlineData("notcodex", false)]
+    [InlineData("ChatGPT", false)]
     [InlineData("", false)]
-    public void A_codex_process_is_one_whose_name_starts_with_codex(string name, bool codex)
+    public void A_codex_process_is_codex_exe_and_no_other_name_that_starts_with_codex(string name, bool codex)
     {
         Assert.Equal(codex, AgentProcessProbe.IsCodexName(name));
         Assert.Equal(codex, new AgentProcessProbe(() => new[] { "explorer", name }).CodexRunning());
@@ -31,6 +40,71 @@ public sealed class AgentProcessProbeTests
         var both = new AgentProcessProbe(() => new[] { "codex-windows-sandbox-service", "codex" });
         Assert.True(both.CodexRunning());
         Assert.NotNull(both.CodexWarning());
+    }
+
+    [Fact]
+    public void Every_helper_the_codex_desktop_app_leaves_running_is_not_codex_running()
+    {
+        // The state CUST-358 reports: Codex closed, the app's LocalSystem service (and whatever else it keeps) still up.
+        var idle = AgentProcessProbe.FromProcesses(() => new[]
+        {
+            new RunningProcess("explorer"),
+            new RunningProcess("codex-windows-sandbox-service", DesktopApp + @"\resources\codex-windows-sandbox-service.exe"),
+            new RunningProcess("codex-windows-sandbox-setup", DesktopApp + @"\resources\codex-windows-sandbox-setup.exe"),
+            new RunningProcess("codex-command-runner", DesktopApp + @"\resources\codex-command-runner.exe"),
+        });
+
+        Assert.False(idle.CodexRunning());
+        Assert.Null(idle.CodexWarning());
+    }
+
+    [Fact]
+    public void The_codex_cli_counts_wherever_it_runs_from_and_so_does_the_desktop_apps_launcher()
+    {
+        foreach (var (name, path) in new[]
+                 {
+                     ("codex", @"C:\Users\operator\AppData\Local\OpenAI\Codex\bin\0123456789abcdef\codex.exe"),
+                     ("codex", DesktopApp + @"\resources\codex.exe"),
+                     ("Codex", DesktopApp + @"\Codex.exe"),
+                     ("codex", (string?)null),
+                 })
+        {
+            var probe = AgentProcessProbe.FromProcesses(() => new[]
+            {
+                new RunningProcess("codex-windows-sandbox-service"),
+                new RunningProcess(name, path),
+            });
+
+            Assert.True(probe.CodexRunning(), name + " " + path);
+        }
+    }
+
+    [Theory]
+    [InlineData("ChatGPT", @"C:\Program Files\WindowsApps\OpenAI.Codex_26.1021.3705.0_x64__2p2nqsd0c76g0\app\ChatGPT.exe", true)]
+    [InlineData("chatgpt", @"c:\program files\windowsapps\openai.codex_26.1021.3705.0_x64__2p2nqsd0c76g0\app\chatgpt.exe", true)]
+    [InlineData("ChatGPT", @"C:\Program Files\WindowsApps\OpenAI.CodexBeta_26.1.1.0_x64__2p2nqsd0c76g0\app\ChatGPT.exe", true)]
+    [InlineData("ChatGPT", @"C:\Program Files\WindowsApps\OpenAI.ChatGPT-Desktop_1.2025.1.0_x64__2p2nqsd0c76g0\app\ChatGPT.exe", false)]
+    [InlineData("ChatGPT", @"C:\Program Files\WindowsApps\OpenAI.CodexExtras_1.0.0.0_x64__2p2nqsd0c76g0\app\ChatGPT.exe", false)]
+    [InlineData("ChatGPT", @"C:\Users\operator\Downloads\OpenAI.Codex_1.0\ChatGPT.exe", false)]
+    [InlineData("ChatGPT", @"C:\Program Files\ChatGPT\ChatGPT.exe", false)]
+    [InlineData("ChatGPT", @"C:\Program Files\WindowsApps", false)]
+    [InlineData("ChatGPT", null, false)]
+    [InlineData("ChatGPT", "", false)]
+    [InlineData("chrome_proxy", @"C:\Program Files\WindowsApps\OpenAI.Codex_26.1021.3705.0_x64__2p2nqsd0c76g0\app\chrome_proxy.exe", false)]
+    [InlineData("explorer", @"C:\Windows\explorer.exe", false)]
+    public void The_codex_desktop_apps_main_process_is_chatgpt_exe_from_the_codex_package_and_only_that(string name, string? path, bool codex)
+    {
+        Assert.Equal(codex, AgentProcessProbe.IsCodexDesktopMain(name, path));
+        Assert.Equal(codex, AgentProcessProbe.IsCodexProcess(new RunningProcess(name, path)));
+        Assert.Equal(codex, AgentProcessProbe.FromProcesses(() => new[] { new RunningProcess(name, path) }).CodexRunning());
+        Assert.Equal(codex, AgentProcessProbe.FromProcesses(() => new[] { new RunningProcess(name, path) }).CodexWarning() is not null);
+    }
+
+    [Fact]
+    public void A_names_only_probe_has_no_paths_so_a_chatgpt_process_is_not_codex()
+    {
+        Assert.False(new AgentProcessProbe(() => new[] { "ChatGPT" }).CodexRunning());
+        Assert.All(new AgentProcessProbe(() => new[] { "ChatGPT" }).Processes(), p => Assert.Null(p.ImagePath));
     }
 
     [Theory]

@@ -134,11 +134,17 @@ public sealed class InstallScriptPlanTests : IDisposable
     {
         public List<string> Processes { get; } = new();
 
+        /// <summary>Processes that carry an image path (the Codex desktop app's main process), beside the names in <see cref="Processes"/>.</summary>
+        public List<RunningProcess> PathedProcesses { get; } = new();
+
         public long? Free { get; set; } = 100L * 1024 * 1024 * 1024;
 
         public long Databases { get; set; } = 50L * 1024 * 1024;
 
-        public IReadOnlyList<string> RunningProcessNames() => Processes;
+        public IReadOnlyList<string> RunningProcessNames() => Processes.Concat(PathedProcesses.Select(p => p.Name)).ToArray();
+
+        public IReadOnlyList<RunningProcess> RunningProcesses() =>
+            Processes.Select(name => new RunningProcess(name)).Concat(PathedProcesses).ToArray();
 
         public long? FreeDiskBytes(string path) => Free;
 
@@ -194,6 +200,42 @@ public sealed class InstallScriptPlanTests : IDisposable
     {
         var probes = new Probes();
         probes.Processes.Add("codex-windows-sandbox-service");
+
+        var report = Evaluate(probes);
+
+        Assert.Equal(PreflightStatus.Pass, Row(report, "codex").Status);
+        Assert.Equal("Codex is not running.", Row(report, "codex").Reason);
+        Assert.False(report.HasWarning);
+    }
+
+    [Fact]
+    public void Every_helper_the_codex_desktop_app_leaves_running_leaves_the_codex_row_passing()
+    {
+        var probes = new Probes();
+        probes.Processes.AddRange(new[] { "codex-windows-sandbox-service", "codex-windows-sandbox-setup", "codex-command-runner", "codex-code-mode-host", "explorer" });
+
+        Assert.Equal(PreflightStatus.Pass, Row(Evaluate(probes), "codex").Status);
+    }
+
+    [Fact]
+    public void The_codex_desktop_apps_main_process_warns_to_quit_it_first_beside_the_sandbox_service()
+    {
+        var probes = new Probes();
+        probes.Processes.Add("codex-windows-sandbox-service");
+        probes.PathedProcesses.Add(new RunningProcess("ChatGPT", @"C:\Program Files\WindowsApps\OpenAI.Codex_26.1021.3705.0_x64__2p2nqsd0c76g0\app\ChatGPT.exe"));
+
+        var row = Row(Evaluate(probes), "codex");
+
+        Assert.Equal(PreflightStatus.Warn, row.Status);
+        Assert.Contains("Quit it first", row.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_chatgpt_process_that_is_not_the_codex_apps_leaves_the_codex_row_passing()
+    {
+        var probes = new Probes();
+        probes.PathedProcesses.Add(new RunningProcess("ChatGPT", @"C:\Program Files\WindowsApps\OpenAI.ChatGPT-Desktop_1.2025.1.0_x64__2p2nqsd0c76g0\app\ChatGPT.exe"));
+        probes.PathedProcesses.Add(new RunningProcess("ChatGPT"));
 
         Assert.Equal(PreflightStatus.Pass, Row(Evaluate(probes), "codex").Status);
     }

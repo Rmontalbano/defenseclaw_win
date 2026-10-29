@@ -677,6 +677,12 @@ public interface IUpgradeProbes
     /// <summary>Names (no extension, any case) of the processes running now.</summary>
     IReadOnlyList<string> RunningProcessNames();
 
+    /// <summary>
+    /// The processes running now, with the image path where the name alone does not say whose process it is (the Codex desktop app's main process). A probe
+    /// that only knows names gets this for free: every process without a path.
+    /// </summary>
+    IReadOnlyList<RunningProcess> RunningProcesses() => RunningProcessNames().Select(static name => new RunningProcess(name)).ToArray();
+
     /// <summary>Free bytes on the volume that holds <paramref name="path"/>; null when unknown.</summary>
     long? FreeDiskBytes(string path);
 
@@ -704,6 +710,8 @@ public interface IUpgradeProbes
 public sealed class SystemUpgradeProbes : IUpgradeProbes
 {
     public IReadOnlyList<string> RunningProcessNames() => AgentProcessProbe.RunningProcessNames();
+
+    public IReadOnlyList<RunningProcess> RunningProcesses() => AgentProcessProbe.RunningProcesses();
 
     public long? FreeDiskBytes(string path)
     {
@@ -769,17 +777,20 @@ public static class InstallScriptPreflight
             ? new PreflightRow(InstallationId, "Installation", PreflightStatus.Block, blocked)
             : new PreflightRow(InstallationId, "Installation", PreflightStatus.Pass, "This is a user-owned installation that this app may change."));
 
-        IReadOnlyList<string> running;
+        IReadOnlyList<RunningProcess> processes;
         try
         {
-            running = probes.RunningProcessNames();
+            processes = probes.RunningProcesses();
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
         {
-            running = Array.Empty<string>();
+            processes = Array.Empty<RunningProcess>();
         }
 
-        var codex = running.Where(AgentProcessProbe.IsCodexName).ToArray();
+        var running = processes.Select(static p => p.Name).ToArray();
+
+        // A Codex agent (codex.exe, or the Codex desktop app's main process), not the app's always-on sandbox service (CUST-358).
+        var codex = processes.Where(AgentProcessProbe.IsCodexProcess).ToArray();
         rows.Add(codex.Length > 0
             ? new PreflightRow(CodexId, "Codex", PreflightStatus.Warn,
                 "Codex is running. Quit it first: the installer rewrites its hook configuration, and a running Codex keeps the old one.")

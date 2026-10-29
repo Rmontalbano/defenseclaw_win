@@ -207,6 +207,25 @@ public sealed class OverviewDurabilityTests : IDisposable
         Assert.DoesNotContain(vm.Review.CommandReview!.Warnings, w => w.Title == "Codex is running");
     }
 
+    [Fact]
+    public async Task With_only_the_codex_desktop_apps_sandbox_service_running_no_review_carries_the_warning()
+    {
+        SeedStuckWrite();
+        var vm = Panel();
+        Services.AgentProcesses = AgentProcessProbe.FromProcesses(() => new[]
+        {
+            new RunningProcess("codex-windows-sandbox-service"),
+            new RunningProcess("codex-windows-sandbox-setup"),
+        });
+
+        await vm.RunAttentionActionCommand.ExecuteAsync(AttentionActionIds.ReselectCodex);
+        Assert.DoesNotContain(vm.Review.CommandReview!.Warnings, w => w.Title == "Codex is running");
+        vm.Review.DismissCommand.Execute(null);
+
+        await vm.RunAttentionActionCommand.ExecuteAsync(AttentionActionIds.SwitchToFailOpen);
+        Assert.DoesNotContain(vm.Review.CommandReview!.Warnings, w => w.Title == "Codex is running");
+    }
+
     // ---- Switch to fail open ------------------------------------------------------------------------------------------------------
 
     [Fact]
