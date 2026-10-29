@@ -1,0 +1,26 @@
+Usage: defenseclaw acp setup [OPTIONS]
+
+  Install a guarded agent entry into Zed or JetBrains.
+
+Options:
+  --client [jetbrains|zed]        Editor that runs the agent.  [required]
+  --agent [copilot|cursor|devin|hermes|kiro|opencode]
+                                  ACP agent to guard.  [required]
+  --profile TEXT                  ACP policy profile (acp.profiles) the guard
+                                  enforces.  [default: default]
+  --guard-binary TEXT             DefenseClaw ACP guard executable the editor
+                                  entry starts.  [default: defenseclaw-acp]
+  --agent-binary TEXT             Override the catalog agent executable.
+  --activate                      Enable action mode; setup otherwise observes
+                                  only.
+  --managed                       Enroll user-side files only; enterprise
+                                  policy and credential stay administrator-
+                                  owned.
+  --runtime-data-dir DIRECTORY    Per-user ACP runtime directory (required
+                                  when it differs from central enterprise
+                                  data_dir).
+  --token-file FILE               Administrator-provisioned managed token;
+                                  must equal <runtime-data-
+                                  dir>/acp/<client>-<agent>.token.
+  --json-output, --json           Print the result as JSON.
+  -h, --help                      Show this message and exit.

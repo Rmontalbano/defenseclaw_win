@@ -194,6 +194,12 @@ public sealed partial class WizardField
 
     public IReadOnlyList<string> VisibleWhenValues { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Why the field cannot be answered here, or empty when it can. A disabled field keeps its place in the page (the order the Mac shows) and holds its
+    /// starting answer; the page says why under it (the ACP guard's Managed enrollment on a per-user installation, CUST-294).
+    /// </summary>
+    public string DisabledReason { get; init; } = string.Empty;
+
     /// <summary>True when the value must never appear on the command line.</summary>
     public bool IsSecret => Kind == WizardFieldKind.Secret;
 
@@ -329,6 +335,15 @@ public sealed partial class WizardDefinition
 
     public string Description { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The command the wizard runs, when it is not a <c>setup</c> target (<c>acp setup</c>, CUST-294); empty for every catalog wizard, which is
+    /// <c>setup &lt;target&gt;</c>. See <see cref="DisplayCommand"/>.
+    /// </summary>
+    public string CommandName { get; init; } = string.Empty;
+
+    /// <summary>What the window's header names: <see cref="CommandName"/>, or <c>setup &lt;target&gt;</c>.</summary>
+    public string DisplayCommand => CommandName.Length > 0 ? CommandName : "setup " + Target;
+
     public IReadOnlyList<WizardStep> Steps { get; init; } = Array.Empty<WizardStep>();
 
     public PlatformStatus PlatformStatus { get; init; } = PlatformStatus.Unknown;
@@ -388,6 +403,7 @@ public sealed partial class WizardDefinition
         Title = Title,
         Group = Group,
         Description = Description,
+        CommandName = CommandName,
         Steps = steps,
         PlatformStatus = PlatformStatus,
         PlatformNote = PlatformNote,

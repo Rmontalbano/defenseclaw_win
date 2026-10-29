@@ -373,6 +373,9 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
 
     public string Target => Definition.Target;
 
+    /// <summary>The command the header names: <c>setup &lt;target&gt;</c>, or the wizard's own (<c>acp setup</c>).</summary>
+    public string CommandName => Definition.DisplayCommand;
+
     public string Description => Definition.Description;
 
     public ObservableCollection<WizardStepViewModel> Steps { get; } = new();
@@ -1225,6 +1228,12 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         if (SplunkDashboardsReview.Summary(argv) is { Length: > 0 } dashboards)
         {
             return hasChanges ? dashboards + " What you chose:" : dashboards;
+        }
+
+        // Nor is acp setup (CUST-294): its answers name a pair to guard, not a configured value to change.
+        if (AcpGuardReview.Summary(argv) is { Length: > 0 } acp)
+        {
+            return acp + " What you chose:";
         }
 
         return (hasChanges, tier == CommandTier.ReadOnly) switch

@@ -69,6 +69,9 @@ public static class WizardCautions
             warnings.Add(new CommandReviewWarning(GuardrailOffTitle, DisableSentence(options)));
         }
 
+        // acp setup (CUST-294): action mode blocks, the editor's file is rewritten, a managed enrollment is the administrator's.
+        warnings.AddRange(AcpGuardReview.Warnings(argv));
+
         return warnings;
     }
 

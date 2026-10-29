@@ -192,6 +192,7 @@ public sealed partial class WizardField
             PickerInstanceFieldId = f.PickerInstanceFieldId;
             IsSynthetic = f.IsSynthetic;
             IgnoresConfig = f.IgnoresConfig;
+            DisabledReason = f.DisabledReason;
         }
 
         public string Id { get; set; }
@@ -242,6 +243,8 @@ public sealed partial class WizardField
 
         public bool IgnoresConfig { get; set; }
 
+        public string DisabledReason { get; set; }
+
         public WizardField Build() => new()
         {
             Id = Id,
@@ -268,6 +271,7 @@ public sealed partial class WizardField
             PickerInstanceFieldId = PickerInstanceFieldId,
             IsSynthetic = IsSynthetic,
             IgnoresConfig = IgnoresConfig,
+            DisabledReason = DisabledReason,
         };
     }
 }

@@ -101,6 +101,7 @@ public sealed partial class WizardDefinition
         Title = Title,
         Group = Group,
         Description = Description,
+        CommandName = CommandName,
         Steps = steps,
         PlatformStatus = PlatformStatus,
         PlatformNote = PlatformNote,

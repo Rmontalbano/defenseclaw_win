@@ -35,6 +35,9 @@ public enum SetupAreaRoute
 
     /// <summary>On a runtime that has it, a flow this app has not built yet: the tile keeps its place, disabled, and says so.</summary>
     Coming,
+
+    /// <summary>The ACP Guard wizard (<c>acp setup</c>, CUST-294), on a runtime with the ACP guard.</summary>
+    AcpGuard,
 }
 
 /// <summary>One Setup area: the Mac's tile, and the Windows flow it opens.</summary>
@@ -86,16 +89,23 @@ public static class SetupAreas
         new SetupAreaSpec("splunk-dashboards", "Splunk Dashboards", "Apply or destroy the DefenseClaw Splunk O11y dashboards and detectors.", SetupAreaRoute.Wizard, new[] { SplunkDashboards.Target }),
         new SetupAreaSpec("trusted-paths", "Trusted Paths", "List, add, or remove trusted connector-binary discovery prefixes.", SetupAreaRoute.Wizard, new[] { "trusted-paths" }),
         new SetupAreaSpec("guardrail-actions", "Guardrail Actions", "Run connector-scoped guardrail status and policy quick actions.", SetupAreaRoute.GuardrailActions, Array.Empty<string>()),
-        new SetupAreaSpec("acp-guard", "ACP Guard", "Observe or enforce policy on editor-to-agent ACP traffic, or enroll with administrator-provisioned policy and token files.", SetupAreaRoute.Coming, Array.Empty<string>(), Capability: RuntimeCapability.AcpGuard),
+        new SetupAreaSpec("acp-guard", "ACP Guard", "Observe or enforce policy on editor-to-agent ACP traffic, or enroll with administrator-provisioned policy and token files.", SetupAreaRoute.AcpGuard, Array.Empty<string>(), Capability: RuntimeCapability.AcpGuard),
     };
 
     /// <summary>Why the Sandbox tile offers nothing here: the runtime's OpenShell sandboxes target Linux and macOS (<see cref="RuntimeCapability.Sandbox"/>).</summary>
     public const string SandboxReason =
         "Sandboxes are Linux and macOS only: DefenseClaw's OpenShell sandbox does not run on Windows, so there is nothing to set up here.";
 
-    /// <summary>What the ACP Guard tile says on a runtime that has the guard: this app has not built its setup form yet.</summary>
-    public const string AcpComingReason =
-        "Coming to this app. The installed DefenseClaw has the ACP guard; until its setup form is here, run defenseclaw acp setup in a terminal.";
+    /// <summary>What a tile on the <see cref="SetupAreaRoute.Coming"/> route says on a runtime that has its capability: this app has not built the flow yet.</summary>
+    public const string ComingReason = "Coming to this app. The installed DefenseClaw has it; until the form is here, use the CLI in a terminal.";
+
+    /// <summary>The ACP Guard tile's tooltip on a runtime with the guard.</summary>
+    public const string AcpGuardToolTip =
+        "Opens the ACP Guard wizard: editor, agent, profile and mode, then the exact defenseclaw acp setup command to review. Opening it only reads (the CLI's help and the gateway's ACP catalog and profiles).";
+
+    /// <summary>The ACP Guard tile's tooltip on a read-only installation: the wizard still opens (a managed enrollment is only ever on one), and runs nothing.</summary>
+    public const string AcpGuardReadOnlyNote =
+        "This installation is read-only here: the wizard opens and its review shows the exact command, but nothing runs.";
 
     /// <summary>
     /// True when an area routes to <paramref name="target"/>: its card is reached through that tile, so it is not drawn again in the Windows group. The
@@ -143,7 +153,7 @@ public static class SetupAreas
 /// <param name="ReasonReplacesBlurb">True when the reason is the tile's text (the area cannot work here); false when it only goes in the tooltip (a read-only installation, which the page's banner already says).</param>
 /// <param name="StateLine">What config.yaml says about the area today, or null.</param>
 /// <param name="ToolTip">The tile's tooltip.</param>
-/// <param name="IsComing">The runtime has it and this app does not yet (the ACP guard).</param>
+/// <param name="IsComing">The runtime has it and this app does not yet (a <see cref="SetupAreaRoute.Coming"/> tile).</param>
 public sealed record SetupAreaState(
     WizardCardViewModel? Card,
     bool CanOpen,

@@ -88,7 +88,7 @@
                                Text="{Binding ProgressText}" />
                     <TextBlock HorizontalAlignment="Right"
                                Style="{StaticResource DcMono}"
-                               Text="{Binding Target, StringFormat='setup {0}'}" />
+                               Text="{Binding CommandName}" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -381,6 +381,7 @@
                                                 AutomationProperties.HelpText="{Binding Help}"
                                                 PlaceholderText="{Binding Placeholder}"
                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                IsEnabled="{Binding IsEnabled}"
                                                 Visibility="{Binding IsPlainText, Converter={StaticResource BoolToVisibility}}" />
 
                                     <!--
@@ -396,6 +397,7 @@
                                                 AutomationProperties.HelpText="{Binding Help}"
                                                 PlaceholderText="{Binding Placeholder}"
                                                 Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                IsEnabled="{Binding IsEnabled}"
                                                 Visibility="{Binding IsPath, Converter={StaticResource BoolToVisibility}}" />
 
                                     <!-- Repeatable flag: one value per line, one flag-and-value pair each -->
@@ -420,6 +422,7 @@
                                               DisplayMemberPath="Label"
                                               ItemsSource="{Binding Choices}"
                                               SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
+                                              IsEnabled="{Binding IsEnabled}"
                                               Visibility="{Binding IsChoice, Converter={StaticResource BoolToVisibility}}" />
 
                                     <!-- Bare switch: present in argv when on, absent when off -->
@@ -427,7 +430,17 @@
                                                      AutomationProperties.Name="{Binding AutomationName}"
                                                      AutomationProperties.HelpText="{Binding Help}"
                                                      IsChecked="{Binding IsOn, Mode=TwoWay}"
+                                                     IsEnabled="{Binding IsEnabled}"
                                                      Visibility="{Binding IsSwitch, Converter={StaticResource BoolToVisibility}}" />
+
+                                    <!-- A field that cannot be answered here keeps its place and says why (the ACP guard's Managed enrollment on a per-user installation). -->
+                                    <TextBlock Margin="0,4,0,0"
+                                               MaxWidth="720"
+                                               HorizontalAlignment="Left"
+                                               Style="{StaticResource DcCaption}"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding HasDisabledReason, Converter={StaticResource BoolToVisibility}}"
+                                               Text="{Binding DisabledReason}" />
 
                                     <!--
                                         Secret: never a text box and never argv. The flag takes the secret itself, so

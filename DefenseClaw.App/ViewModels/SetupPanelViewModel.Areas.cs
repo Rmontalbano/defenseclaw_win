@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
@@ -18,6 +19,7 @@ namespace DefenseClaw.App.ViewModels;
 /// <para>
 /// Nothing here is a new flow. A tile opens what the app already had: a catalog wizard (with its list-first editor or routing dialog where it has one), the
 /// Connector Setup chooser over the connector wizards, the batch dialog and <c>setup remove</c>, a card further down the page, or the AI Discovery panel's tuning.
+/// The one flow added since is the ACP Guard wizard (CUST-294, <see cref="AcpGuardWizard"/>), which is the shared wizard over <c>acp setup</c>.
 /// Opening the page runs nothing that changes anything, scans nothing, and writes no config: the catalog, the guardrail status, the credential list and the
 /// editor's <c>config show --source</c> are all reads.
 /// </para>
@@ -139,6 +141,37 @@ public sealed partial class SetupPanelViewModel
             case SetupAreaRoute.Panel:
                 RequestNavigation(area.Spec.Targets[0]);
                 break;
+
+            case SetupAreaRoute.AcpGuard:
+                await OpenAcpGuardAsync().ConfigureAwait(true);
+                break;
+        }
+    }
+
+    private bool _acpGuardOpening;
+
+    /// <summary>What opens the ACP Guard wizard: null is <see cref="AcpGuardWizard.ShowAsync"/> over the main window. A test puts its own here.</summary>
+    internal Func<Task>? AcpGuardOpener { get; set; }
+
+    /// <summary>
+    /// The ACP Guard tile (CUST-294): reads what the wizard offers (the CLI's help and the gateway's ACP catalog and profiles, nothing that changes
+    /// anything) and opens it. A second press while that read is under way is ignored.
+    /// </summary>
+    private async Task OpenAcpGuardAsync()
+    {
+        if (_acpGuardOpening)
+        {
+            return;
+        }
+
+        _acpGuardOpening = true;
+        try
+        {
+            await (AcpGuardOpener?.Invoke() ?? AcpGuardWizard.ShowAsync(Services, Application.Current?.MainWindow)).ConfigureAwait(true);
+        }
+        finally
+        {
+            _acpGuardOpening = false;
         }
     }
 
@@ -277,11 +310,26 @@ public sealed partial class SetupPanelViewModel
             case SetupAreaRoute.Unsupported:
                 return new SetupAreaState(null, false, spec.Blurb, true, null, spec.Blurb);
 
+            case SetupAreaRoute.AcpGuard:
+            {
+                // On a runtime without the guard (0.8.10), the capability's own sentence and nothing to press. With it, the wizard; on a read-only
+                // installation too, because a managed enrollment is only ever made on one: its review then says why Execute is off, and nothing runs.
+                var gate = Services.Runtime.Check(spec.Capability);
+                if (!gate.IsAvailable)
+                {
+                    var unsupported = gate.Reason ?? RuntimeCapabilityCatalog.UnsupportedMessage;
+                    return new SetupAreaState(null, false, unsupported, true, null, unsupported);
+                }
+
+                var tip = blocked is null ? SetupAreas.AcpGuardToolTip : SetupAreas.AcpGuardToolTip + Environment.NewLine + SetupAreas.AcpGuardReadOnlyNote;
+                return new SetupAreaState(null, true, null, false, null, tip);
+            }
+
             default:
             {
-                // The ACP guard: on a runtime without it, the capability's own sentence; with it, "coming" - its setup form is not built here yet.
+                // A flow this app has not built yet: on a runtime without its capability, the capability's own sentence; with it, "coming".
                 var gate = Services.Runtime.Check(spec.Capability);
-                var reason = gate.IsAvailable ? SetupAreas.AcpComingReason : gate.Reason ?? RuntimeCapabilityCatalog.UnsupportedMessage;
+                var reason = gate.IsAvailable ? SetupAreas.ComingReason : gate.Reason ?? RuntimeCapabilityCatalog.UnsupportedMessage;
                 return new SetupAreaState(null, false, reason, true, null, reason, IsComing: gate.IsAvailable);
             }
         }

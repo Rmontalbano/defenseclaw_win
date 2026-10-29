@@ -289,8 +289,9 @@ public sealed class SetupAreasTests
     }
 
     [Fact]
-    public async Task On_a_runtime_with_the_ACP_guard_its_tile_says_coming_and_still_runs_nothing()
+    public async Task On_a_runtime_with_the_ACP_guard_its_tile_opens_the_ACP_Guard_wizard()
     {
+        // CUST-294 replaced the "coming" tile (CUST-385) with the wizard: the tile now opens it, and its blurb is the Mac's.
         using var temp = new TempDirectory();
         using var services = TestServices.Create(temp, runtimeProbeRunner: RuntimeFixtureRunner.For("95159fd"));
         _ = await services.Runtime.RefreshAsync(force: true);
@@ -298,9 +299,10 @@ public sealed class SetupAreasTests
 
         var vm = Hub(services);
         var acp = Area(vm, "acp-guard");
-        Assert.True(acp.IsComing);
-        Assert.False(acp.CanOpen);
-        Assert.Equal(SetupAreas.AcpComingReason, acp.Blurb);
+        Assert.False(acp.IsComing);
+        Assert.True(acp.CanOpen);
+        Assert.Equal(SetupAreas.All.Single(a => a.Id == "acp-guard").Blurb, acp.Blurb);
+        Assert.Equal(SetupAreas.AcpGuardToolTip, acp.TileToolTip);
 
         // Sandboxes stay closed on Windows whatever the runtime says.
         Assert.False(Area(vm, "sandbox").CanOpen);

@@ -1,0 +1,16 @@
+{
+  "schema_version": "schema-v1.21.0",
+  "schema_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "agents": [
+    {"id": "kiro", "name": "Kiro", "command": "kiro-cli", "args": ["acp"], "support": "tested", "connector_id": "kiro", "kind": "native", "source_url": "https://example.invalid/kiro"},
+    {"id": "cursor", "name": "Cursor Agent", "command": "agent", "args": ["acp"], "support": "cataloged", "connector_id": "cursor", "kind": "native", "registry_id": "cursor", "source_url": "https://example.invalid/cursor"},
+    {"id": "opencode", "name": "OpenCode", "command": "opencode", "args": ["acp"], "support": "cataloged", "connector_id": "opencode", "kind": "native", "registry_id": "opencode", "source_url": "https://example.invalid/opencode"},
+    {"id": "hermes", "name": "Hermes Agent", "command": "hermes", "args": ["acp"], "support": "cataloged", "connector_id": "hermes", "kind": "native", "source_url": "https://example.invalid/hermes"},
+    {"id": "copilot", "name": "GitHub Copilot CLI", "command": "copilot", "args": ["--acp", "--stdio"], "support": "cataloged", "connector_id": "copilot", "kind": "native", "registry_id": "github-copilot-cli", "source_url": "https://example.invalid/copilot"},
+    {"id": "devin", "name": "Devin", "command": "devin", "args": ["acp"], "support": "cataloged", "connector_id": "devin", "kind": "native", "registry_id": "devin", "source_url": "https://example.invalid/devin"}
+  ],
+  "clients": [
+    {"id": "zed", "name": "Zed", "support": "tested", "config_kind": "zed-settings", "source_url": "https://example.invalid/zed"},
+    {"id": "jetbrains", "name": "JetBrains AI Assistant", "support": "cataloged", "config_kind": "jetbrains-acp", "source_url": "https://example.invalid/jetbrains"}
+  ]
+}

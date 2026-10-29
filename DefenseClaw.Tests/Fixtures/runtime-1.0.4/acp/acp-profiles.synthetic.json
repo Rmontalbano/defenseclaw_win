@@ -1,0 +1,9 @@
+{
+  "default_profile": "default",
+  "enabled": true,
+  "mode": "observe",
+  "profiles": {
+    "default": {"mode": "observe", "fail_mode": "open", "allowed_clients": ["zed"], "allowed_agents": ["kiro"]},
+    "locked": {"mode": "action", "fail_mode": "closed", "allowed_clients": ["zed"], "allowed_agents": ["devin"], "denied_methods": ["fs/write_text_file"]}
+  }
+}

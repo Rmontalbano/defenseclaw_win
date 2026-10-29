@@ -139,6 +139,14 @@ public sealed partial class WizardFieldViewModel : ObservableObject
 
     public bool IsPath => Field.Kind == WizardFieldKind.Path;
 
+    /// <summary>The control can be changed: the field has no <see cref="WizardField.DisabledReason"/>.</summary>
+    public bool IsEnabled => Field.DisabledReason.Length == 0;
+
+    /// <summary>Why the control cannot be changed here, shown under it; empty when it can.</summary>
+    public string DisabledReason => Field.DisabledReason;
+
+    public bool HasDisabledReason => !IsEnabled;
+
     /// <summary>The credential card is shown instead of an ordinary input. See the type remarks.</summary>
     public bool IsSecret => Field.Kind == WizardFieldKind.Secret;
 
