@@ -271,6 +271,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
         _saveService = new ConfigSaveService(_paths, _cli);
         _document = ConfigStore.Parse(string.Empty);
         Sections.CollectionChanged += (_, _) => RaiseFormEmptyState();
+
+        // The section list, the setting search and Revert (CUST-385, ConfigEditorWindowViewModel.Browse.cs) follow the tree and the buffer.
+        Sections.CollectionChanged += (_, _) => OnSectionsChanged();
+        PropertyChanged += (_, e) => OnBrowseStateChanged(e.PropertyName);
     }
 
     public ObservableCollection<FormSection> Sections { get; } = new();
@@ -466,7 +470,12 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     }
 
     /// <summary>Loads config.yaml and fetches the CLI's masked source view of it once. Call after the window is constructed.</summary>
-    public Task LoadAsync(CancellationToken cancellationToken = default) => LoadCoreAsync(cancellationToken, keepEditedBuffer: false);
+    public Task LoadAsync(CancellationToken cancellationToken = default)
+    {
+        // The shared session (CUST-385) loads once, for whichever view comes first; a second view must not read the file over the draft.
+        HasLoadStarted = true;
+        return LoadCoreAsync(cancellationToken, keepEditedBuffer: false);
+    }
 
     /// <param name="cancellationToken">Cancels the read of config.yaml.</param>
     /// <param name="keepEditedBuffer">

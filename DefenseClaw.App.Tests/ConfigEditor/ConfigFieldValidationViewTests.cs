@@ -65,8 +65,9 @@ public sealed class ConfigFieldValidationViewTests : IDisposable
             using var host = new OffscreenHost(content, 1100, 900);
             try
             {
+                // FORM is the editor's first tab since CUST-385 (the Mac's section list and typed form); picked by name, not by position.
                 var tabs = VisualTree.Find<TabControl>(host.Content, t => t.Name == "RootTabs")!;
-                tabs.SelectedIndex = 1;
+                tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(t => t.Name == "FormTabItem");
                 host.Relayout();
 
                 var save = VisualTree.Find<Wpf.Ui.Controls.Button>(host.Content, b => b.IsVisible && (b.Content as string) == "Save")!;

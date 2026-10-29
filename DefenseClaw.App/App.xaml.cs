@@ -327,7 +327,8 @@ public partial class App : Application
 
             // Unsaved config-editor edits: not clear means the operator cancelled, the save failed or the editor is
             // busy, so stay running. Last check, because it closes the editor itself once the answer allows the exit.
-            var clearance = await ClearEditorForExitAsync(Views.ConfigEditor.ConfigEditorWindow.CloseForExitAsync);
+            // The draft is shared by the Setup panel and the detached window (CUST-385), so it is asked about window or not.
+            var clearance = await ClearEditorForExitAsync(() => Views.ConfigEditor.ConfigEditorWindow.CloseForExitAsync(_services));
             if (clearance.Notice is { } notice)
             {
                 _tray?.Notify("DefenseClaw", notice, NotificationIcon.Warning);
@@ -374,7 +375,7 @@ public partial class App : Application
 
     /// <summary>
     /// The config-editor half of the tray Exit, separate from the window so it can be tested. <paramref name="closeEditor"/> is
-    /// <c>ConfigEditorWindow.CloseForExitAsync</c>.
+    /// <c>ConfigEditorWindow.CloseForExitAsync(services)</c>.
     /// <para>
     /// <see cref="Views.ConfigEditor.ConfigEditorExitResult.Declined"/> needs no toast: the operator just answered the
     /// question, or the editor is showing why the save failed. <see cref="Views.ConfigEditor.ConfigEditorExitResult.Busy"/>

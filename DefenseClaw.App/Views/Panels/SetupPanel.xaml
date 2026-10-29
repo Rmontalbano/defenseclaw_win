@@ -6,16 +6,20 @@
              xmlns:wizards="clr-namespace:DefenseClaw.App.Views.Wizards"
              xmlns:shell="clr-namespace:DefenseClaw.App.Views.Shell"
              xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
-             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels">
+             xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:vc="clr-namespace:DefenseClaw.App.Views.ConfigEditor">
     <!--
-        The Setup hub. Cards are generated from the CLI's own setup help at runtime, so this
-        file describes a card, not a catalogue - adding a setup target upstream needs no edit
-        here. Uncertified targets stay launchable and carry their warning into the wizard; targets
-        that cannot work on Windows sit in a last group, disabled, each with its reason.
+        The Setup page, in the Mac's order (CUST-385; Features/SetupView.swift at v1.1.34): "Setup Areas", the Redaction Policy entry, the area grid
+        (the Mac's 23 tiles, in its order, SetupAreas.All), then the config editor inline beneath it (ConfigEditorView over the app's one draft, which
+        the detached window shares). What only Windows has follows the Mac's tiles in a group of its own: the guardrail controls and runtime
+        monitoring tiles, and every setup target of the CLI no area reaches (cards generated from the CLI's own help at runtime, so adding a target
+        upstream needs no edit here). The readiness checklist, the connector roster, the guardrail quick controls and the credentials stay at the foot
+        of the page as its secondary content, each a disclosure that starts open.
 
-        Shared styling: Themes\DefenseClaw.xaml (Dc*). Local resources are the three visuals that exist
-        in this panel only. Keyboard: Ctrl+F focuses the search box, Esc closes the guardrail review,
-        F5 runs RefreshCommand (bound by the shell).
+        Shared styling: Themes\DefenseClaw.xaml (Dc*). Local resources are the visuals that exist in this panel only. Keyboard: Ctrl+F focuses the
+        setup search (the config editor's own search when focus is in the editor), Esc closes the chooser and the reviews, F5 runs RefreshCommand
+        (bound by the shell).
     -->
     <UserControl.Resources>
         <wizards:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
@@ -30,6 +34,210 @@
         <Style x:Key="WarnCaption" TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
             <Setter Property="Foreground" Value="{DynamicResource DcToneHighBrush}" />
         </Style>
+
+        <!-- The chevron that folds a secondary card (Readiness, connectors, guardrail, credentials): right when folded, down when open. -->
+        <Style x:Key="DisclosureToggle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chrome" Background="Transparent" CornerRadius="{DynamicResource DcControlRadius}">
+                            <ctl:DcSymbolIcon x:Name="Glyph"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              FontSize="14"
+                                              Foreground="{DynamicResource DcTextSecondaryBrush}"
+                                              Symbol="ChevronRight24" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Glyph" Property="Symbol" Value="ChevronDown24" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource DcSubtleBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            A Mac area tile: 233 x 92, the whole tile opens the area (DcInteractiveTile). A tile that cannot work here stays in its place, disabled, and says
+            why instead of its blurb; the ACP guard on a runtime that has it wears a COMING chip. The search hides a tile rather than removing it.
+        -->
+        <DataTemplate x:Key="AreaTile" DataType="{x:Type vm:SetupAreaViewModel}">
+            <Button Width="233"
+                    Height="92"
+                    Margin="0,0,12,12"
+                    Style="{StaticResource DcInteractiveTile}"
+                    IsEnabled="{Binding CanOpen}"
+                    Visibility="{Binding IsShown, Converter={StaticResource BoolToVisibility}}"
+                    ToolTipService.ShowOnDisabled="True"
+                    ToolTip="{Binding TileToolTip}"
+                    Command="{Binding DataContext.OpenAreaCommand, RelativeSource={RelativeSource AncestorType=panels:SetupPanel}}"
+                    CommandParameter="{Binding}"
+                    AutomationProperties.Name="{Binding LaunchAutomationName}"
+                    AutomationProperties.HelpText="{Binding AutomationName}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ctl:DcSymbolIcon Grid.Row="0"
+                                      Grid.Column="0"
+                                      Margin="0,0,8,0"
+                                      VerticalAlignment="Center"
+                                      Style="{StaticResource DcIconNav}"
+                                      ctl:DcIcon.Section="Setup"
+                                      Symbol="{Binding Icon}" />
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="1"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource DcCardTitle}"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               Text="{Binding Title}" />
+                    <Border Grid.Row="0"
+                            Grid.Column="2"
+                            Margin="6,0,0,0"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource DcChip}"
+                            Visibility="{Binding IsComing, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource DcBadgeText}" Text="COMING" />
+                    </Border>
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="3"
+                               Margin="0,6,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="Wrap"
+                               Text="{Binding Blurb}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                                <Setter Property="MaxHeight" Value="34" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasStateLine}" Value="True">
+                                        <Setter Property="MaxHeight" Value="16" />
+                                        <Setter Property="TextWrapping" Value="NoWrap" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <!-- What config.yaml says about the area today (the card behind it, CUST-271). -->
+                    <TextBlock Grid.Row="2"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="3"
+                               Margin="0,2,0,0"
+                               FontWeight="SemiBold"
+                               Style="{StaticResource DcCaption}"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               Text="{Binding StateLine}"
+                               Visibility="{Binding HasStateLine, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+            </Button>
+        </DataTemplate>
+
+        <!--
+            A catalog card as a tile (the Windows group and the Connector Setup chooser): 233 x 92, the whole tile opens the wizard; the certification
+            badge shares the title row, so it is a word as well as a colour. A tile that cannot be opened here stays, disabled, and says why instead of its blurb.
+        -->
+        <DataTemplate x:Key="WizardCardTile" DataType="{x:Type vm:WizardCardViewModel}">
+            <Button Width="233"
+                    Height="92"
+                    Margin="0,0,12,12"
+                    Style="{StaticResource DcInteractiveTile}"
+                    IsEnabled="{Binding CanLaunch}"
+                    ToolTipService.ShowOnDisabled="True"
+                    ToolTip="{Binding TileToolTip}"
+                    Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=panels:SetupPanel}}"
+                    CommandParameter="{Binding}"
+                    AutomationProperties.Name="{Binding LaunchAutomationName}"
+                    AutomationProperties.HelpText="{Binding AutomationName}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ctl:DcSymbolIcon Grid.Row="0"
+                                      Grid.Column="0"
+                                      Margin="0,0,8,0"
+                                      VerticalAlignment="Center"
+                                      Style="{StaticResource DcIconNav}"
+                                      ctl:DcIcon.Section="Setup"
+                                      Symbol="{Binding Icon}" />
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="1"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource DcCardTitle}"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               Text="{Binding Title}" />
+                    <!-- Certification as a glyph (check, caution, cross: a shape as well as a colour); its words are the
+                         tile's tooltip and automation help, so the title keeps the row. -->
+                    <ctl:DcStatusGlyph Grid.Row="0"
+                                       Grid.Column="2"
+                                       Margin="6,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Tone="{Binding BadgeKey}"
+                                       ShowDot="False"
+                                       GlyphSize="14"
+                                       Visibility="{Binding ShowTileBadge, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- One line of the blurb when the tile also carries a state line (CUST-271): the tile stays 233 x 92. -->
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="3"
+                               Margin="0,6,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="Wrap"
+                               Text="{Binding TileBlurb}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+                                <Setter Property="MaxHeight" Value="34" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasStateLine}" Value="True">
+                                        <Setter Property="MaxHeight" Value="16" />
+                                        <Setter Property="TextWrapping" Value="NoWrap" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <!-- What config.yaml says about this card's subject today. -->
+                    <TextBlock Grid.Row="2"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="3"
+                               Margin="0,2,0,0"
+                               FontWeight="SemiBold"
+                               Style="{StaticResource DcCaption}"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               AutomationProperties.Name="{Binding StateDetail}"
+                               Text="{Binding StateLine}"
+                               Visibility="{Binding HasStateLine, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+            </Button>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid Style="{StaticResource DcPage}">
@@ -38,7 +246,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar. No search box up here: the wizard search filters the cards further down this scrolling page, so it stays over them. -->
+        <!-- Toolbar. No search box up here: the setup search filters the tiles further down this scrolling page, so it stays over them. -->
         <ctl:DcPageToolbar x:Name="PageToolbar"
                            Grid.Row="0"
                            ctl:DcIcon.Symbol="ShieldSettings24"
@@ -48,10 +256,10 @@
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon DocumentEdit24}"
-                               Command="{Binding OpenConfigEditorCommand}"
-                               ToolTip="Config editor - edit config.yaml with backup, validation and restore"
+                               Command="{Binding ShowConfigEditorCommand}"
+                               ToolTip="Config editor - go to the config.yaml editor on this page (backup, validation and restore)"
                                AutomationProperties.Name="Config editor"
-                               AutomationProperties.HelpText="Edit config.yaml with backup, validation and restore." />
+                               AutomationProperties.HelpText="Brings the config.yaml editor on this page into view: backup, validation and restore." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
                                Command="{Binding OpenFirstRunCommand}"
                                ToolTip="Guided setup - first-run init with a reviewed plan, or add detected agents"
@@ -76,8 +284,8 @@
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
 
-        <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
-            <StackPanel>
+        <ScrollViewer x:Name="PageScroll" Grid.Row="1" Style="{StaticResource DcPageScroll}">
+            <StackPanel x:Name="PageContent">
                 <!-- A managed or invalid installation is only read: the wizards, the guardrail buttons and the credential writers are off, with this as their tooltip. -->
                 <ui:InfoBar Margin="{StaticResource DcCardGap}"
                             IsClosable="False"
@@ -155,578 +363,45 @@
                     </Grid>
                 </Border>
 
-                <!-- Connector roster: what the wizards are acting on right now. -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                   Symbol="PlugConnected24"
-                                   Section="Setup"
-                                   Content="Configured connectors" />
-
-                        <ItemsControl ItemsSource="{Binding Connectors}"
-                                      IsTabStop="False"
-                                      AutomationProperties.Name="Configured connectors">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,10,8"
-                                            Style="{StaticResource DcSubtleRow}"
-                                            ToolTip="{Binding ToolTipText}"
-                                            AutomationProperties.Name="{Binding Mode=OneWay}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Style="{StaticResource ChipName}" Text="{Binding Name}" />
-                                                <Border Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcChip}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Mode}" />
-                                                </Border>
-                                                <!-- Fail-mode is a first-class chip: observe + fail-closed is the
-                                                     recurring bad default this project keeps meeting. -->
-                                                <Border Margin="6,0,0,0"
-                                                        VerticalAlignment="Center"
-                                                        Style="{StaticResource DcBadge}"
-                                                        Tag="{Binding FailKey}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FailMode}" />
-                                                </Border>
-                                            </StackPanel>
-
-                                            <TextBlock Margin="0,4,0,0"
-                                                       MaxWidth="320"
-                                                       Style="{StaticResource WarnCaption}"
-                                                       Visibility="{Binding HasMismatch, Converter={StaticResource BoolToVisibility}}"
-                                                       Text="{Binding MismatchNote}" />
-
-                                            <TextBlock Margin="0,2,0,0"
-                                                       Style="{StaticResource DcCaption}"
-                                                       Text="{Binding SourceNote}" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding ConnectorNote}" />
-
-                        <ui:Button Margin="0,8,0,0"
-                                   HorizontalAlignment="Left"
-                                   Content="Set up several…"
-                                   Icon="{ctl:DcSymbolIcon PlugConnected24}"
-                                   Command="{Binding OpenBatchCommand}"
-                                   ToolTip="Configure more than one connector in a single reviewed command (setup --yes --connector ... --mode ...)."
-                                   AutomationProperties.HelpText="Opens a dialog that sets up several connectors at once. Shows the exact command first." />
-                    </StackPanel>
-                </Border>
-
-                <!-- Guardrail quick controls: status, enable / disable, hook fail mode. -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <ctl:DcCardHeader Margin="0,0,10,0"
-                                           VerticalAlignment="Center"
-                                           AutomationProperties.HeadingLevel="Level2"
-                                           Symbol="ShieldCheckmark24"
-                                           Section="Govern"
-                                           Content="Guardrail" />
-                                <Border VerticalAlignment="Center"
-                                        Style="{StaticResource DcBadge}"
-                                        Tag="{Binding GuardrailHeadlineKey}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ctl:DcStatusGlyph Tone="{Binding GuardrailHeadlineKey}" ShowDot="False" GlyphSize="12" Gap="5" />
-                                        <TextBlock Style="{StaticResource DcBadgeText}"
-                                                   AutomationProperties.LiveSetting="Polite"
-                                                   Text="{Binding GuardrailHeadline}" />
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <ui:ProgressRing Width="16"
-                                                 Height="16"
-                                                 Margin="0,0,8,0"
-                                                 IsIndeterminate="True"
-                                                 Visibility="{Binding IsGuardrailBusy, Converter={StaticResource BoolToVisibility}}" />
-                                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding GuardrailAsOf}" />
-                            </StackPanel>
-                        </Grid>
-
-                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                                    IsClosable="False"
-                                    Severity="Error"
-                                    Title="The guardrail status could not be read"
-                                    IsOpen="{Binding HasGuardrailError, Mode=OneWay}"
-                                    Message="{Binding GuardrailError}" />
-
-                        <ItemsControl ItemsSource="{Binding GuardrailRows}"
-                                      IsTabStop="False"
-                                      AutomationProperties.Name="Guardrail roster, one row per active connector">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,0,8"
-                                            Style="{StaticResource DcSubtleRow}"
-                                            AutomationProperties.Name="{Binding Mode=OneWay}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Style="{StaticResource ChipName}" Text="{Binding Name}" />
-                                                <Border Margin="10,0,0,0" VerticalAlignment="Center"
-                                                        Style="{StaticResource DcBadge}" Tag="{Binding StateKey}">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <ctl:DcStatusGlyph Tone="{Binding StateKey}" ShowDot="False" GlyphSize="12" Gap="5" />
-                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding State}" />
-                                                    </StackPanel>
-                                                </Border>
-                                                <Border Margin="6,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcChip}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Mode}" />
-                                                </Border>
-                                                <Border Margin="6,0,0,0" VerticalAlignment="Center"
-                                                        Style="{StaticResource DcBadge}" Tag="{Binding FailKey}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}"
-                                                               Text="{Binding Fail, StringFormat='fail-{0}'}" />
-                                                </Border>
-                                            </StackPanel>
-                                            <TextBlock Margin="0,4,0,0"
-                                                       Style="{StaticResource DcCaption}"
-                                                       Text="{Binding Detail}" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       Style="{StaticResource WarnCaption}"
-                                                       Visibility="{Binding HasMismatch, Converter={StaticResource BoolToVisibility}}"
-                                                       Text="{Binding MismatchNote}" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <ItemsControl ItemsSource="{Binding GuardrailWarnings}"
-                                      IsTabStop="False"
-                                      AutomationProperties.Name="Guardrail notes from the CLI">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Margin="0,0,0,4"
-                                               Style="{StaticResource WarnCaption}"
-                                               Text="{Binding}" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <TextBlock Margin="0,0,0,8"
-                                   Style="{StaticResource DcCaption}"
-                                   Visibility="{Binding ShowNoGuardrailRoster, Converter={StaticResource BoolToVisibility}}"
-                                   Text="No connector is active, so there is nothing for the guardrail to enforce yet. Configure one from the tiles below." />
-
-                        <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,4,0,0">
-                            <TextBlock Style="{StaticResource DcToolbarLabel}"
-                                       Visibility="{Binding HasMultipleGuardrailConnectors, Converter={StaticResource BoolToVisibility}}"
-                                       Text="Scope" />
-                            <ComboBox Width="200"
-                                      AutomationProperties.Name="Guardrail scope: which connector a change applies to"
-                                      ItemsSource="{Binding GuardrailScopes}"
-                                      SelectedItem="{Binding SelectedGuardrailScope, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanUseGuardrailControls}"
-                                      Visibility="{Binding HasMultipleGuardrailConnectors, Converter={StaticResource BoolToVisibility}}" />
-
-                            <ui:Button Content="Enable"
-                                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                                       AutomationProperties.Name="Enable the guardrail"
-                                       IsEnabled="{Binding CanUseGuardrailControls}"
-                                       ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding InstallationBlockedReason}"
-                                       Visibility="{Binding ShowEnableGuardrail, Converter={StaticResource BoolToVisibility}}"
-                                       Command="{Binding EnableGuardrailCommand}" />
-                            <ui:Button Content="Disable"
-                                       Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
-                                       AutomationProperties.Name="Disable the guardrail"
-                                       IsEnabled="{Binding CanUseGuardrailControls}"
-                                       ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding InstallationBlockedReason}"
-                                       Visibility="{Binding ShowDisableGuardrail, Converter={StaticResource BoolToVisibility}}"
-                                       Command="{Binding DisableGuardrailCommand}" />
-                            <ui:Button Content="Fail open"
-                                       Icon="{ctl:DcSymbolIcon LockOpen24}"
-                                       AutomationProperties.Name="Set the hook fail mode to open"
-                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Allow and log when the gateway errors (recommended)'}"
-                                       ToolTipService.ShowOnDisabled="True"
-                                       IsEnabled="{Binding CanUseGuardrailControls}"
-                                       Command="{Binding SetFailModeOpenCommand}" />
-                            <ui:Button Content="Fail closed"
-                                       Icon="{ctl:DcSymbolIcon LockClosed24}"
-                                       AutomationProperties.Name="Set the hook fail mode to closed"
-                                       ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Block whenever the gateway errors or is unreachable'}"
-                                       ToolTipService.ShowOnDisabled="True"
-                                       IsEnabled="{Binding CanUseGuardrailControls}"
-                                       Command="{Binding SetFailModeClosedCommand}" />
-                            <CheckBox Content="Show CLI output"
-                                      AutomationProperties.HelpText="Shows the verbatim text of defenseclaw guardrail status"
-                                      IsChecked="{Binding ShowGuardrailRaw, Mode=TwoWay}" />
-                        </WrapPanel>
-
-                        <ctl:DcCommandOutput Margin="0,4,0,0"
-                                             MaxHeight="320"
-                                             OutputName="Verbatim output of defenseclaw guardrail status"
-                                             Visibility="{Binding ShowGuardrailRaw, Converter={StaticResource BoolToVisibility}}"
-                                             Text="{Binding GuardrailRaw, Mode=OneWay}" />
-
-                        <!-- The outcome of the last change. -->
-                        <Border Margin="0,8,0,0"
-                                Style="{StaticResource DcSubtleRow}"
-                                AutomationProperties.LiveSetting="Polite"
-                                Visibility="{Binding HasGuardrailResult, Converter={StaticResource BoolToVisibility}}">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource ChipName}" Text="{Binding GuardrailResultHeading}" />
-                                    <Border Margin="10,0,0,0" VerticalAlignment="Center"
-                                            Style="{StaticResource DcBadge}" Tag="{Binding GuardrailResultKey}">
-                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding GuardrailResultBadge}" />
-                                    </Border>
-                                </StackPanel>
-                                <ctl:DcCommandOutput Margin="0,8,0,0"
-                                                     MaxHeight="320"
-                                                     OutputName="Output of the guardrail change"
-                                                     Text="{Binding GuardrailResultText, Mode=OneWay}" />
-                                <ui:Button Margin="0,8,0,0"
-                                           HorizontalAlignment="Left"
-                                           Appearance="Secondary"
-                                           Content="Dismiss"
-                                           Icon="{ctl:DcSymbolIcon Dismiss24}"
-                                           Command="{Binding DismissGuardrailResultCommand}" />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Border>
-
                 <!--
-                    Readiness checklist: the TUI's rows, each failing one with a Fix. A Fix opens the shared review (the exact argv), a
-                    console window for a command that prompts for a secret, or the Setup wizard; none runs from the press alone.
+                    Setup Areas (the Mac's heading, then its Redaction Policy entry, then its grid). The search filters the tiles here and in the Windows group
+                    below; a connector's name finds the Connector Setup tile, which leads to it.
                 -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <ctl:DcCardHeader Grid.Column="0"
-                                              AutomationProperties.HeadingLevel="Level2"
-                                              Symbol="TaskListSquareLtr24"
-                                              Section="Setup"
-                                              Content="Readiness" />
-                            <TextBlock Grid.Column="1"
-                                       VerticalAlignment="Center"
-                                       Style="{StaticResource DcStatusText}"
-                                       AutomationProperties.LiveSetting="Polite"
-                                       Text="{Binding Readiness.Summary}" />
-                        </Grid>
-
-                        <ItemsControl ItemsSource="{Binding Readiness.Rows}"
-                                      IsTabStop="False"
-                                      AutomationProperties.Name="Readiness checklist">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,0,6" Style="{StaticResource DcSubtleRow}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <Border Grid.Column="0"
-                                                    Width="64"
-                                                    Margin="0,0,12,0"
-                                                    VerticalAlignment="Center"
-                                                    Style="{StaticResource DcBadge}"
-                                                    Tag="{Binding StatusKey}">
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                    <ctl:DcStatusGlyph Tone="{Binding StatusKey}" ShowDot="False" GlyphSize="12" Gap="5" />
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusText}" />
-                                                </StackPanel>
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Style="{StaticResource ChipName}" Text="{Binding Title}" />
-                                                <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding Detail}" />
-                                            </StackPanel>
-                                            <ui:Button Grid.Column="2"
-                                                       Margin="12,0,0,0"
-                                                       VerticalAlignment="Center"
-                                                       Content="Fix"
-                                                       Icon="{ctl:DcSymbolIcon Wrench24}"
-                                                       Command="{Binding FixCommand}"
-                                                       ToolTip="{Binding FixToolTip}"
-                                                       AutomationProperties.Name="{Binding FixAutomationName}"
-                                                       AutomationProperties.HelpText="{Binding FixToolTip}"
-                                                       Visibility="{Binding HasFix, Converter={StaticResource BoolToVisibility}}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                <Grid Margin="0,4,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center" Orientation="Horizontal">
+                        <TextBlock Margin="0"
+                                   VerticalAlignment="Center"
+                                   AutomationProperties.HeadingLevel="Level2"
+                                   Style="{StaticResource DcSectionHeader}"
+                                   Text="Setup Areas" />
+                        <TextBlock Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource DcCaption}"
+                                   Text="{Binding AreaCountText}" />
                     </StackPanel>
-                </Border>
-
-                <!--
-                    Credentials: `defenseclaw keys list` as JSON, names and set/unset only (the CLI prints no value). Setting a value needs the
-                    CLI's hidden console prompt, which reads the console and not stdin. Set opens a masked box under the row; Review shows the
-                    exact command with the value masked; the confirmed run types the value at the prompt in a pseudo-console (CUST-221). Where the
-                    app cannot do that (Windows before 10 1809, a container runtime, or a run that failed) Set opens a console window running the
-                    exact command, as before; the small console button on each row is always that.
-                -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <ctl:DcCardHeader Margin="0,0,10,0"
-                                                  VerticalAlignment="Center"
-                                                  AutomationProperties.HeadingLevel="Level2"
-                                                  Symbol="Key24"
-                                                  Section="Setup"
-                                                  Content="Credentials" />
-                                <Border VerticalAlignment="Center"
-                                        Style="{StaticResource DcBadge}"
-                                        Tag="Bad"
-                                        Visibility="{Binding Credentials.HasMissingRequired, Converter={StaticResource BoolToVisibility}}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ctl:DcStatusGlyph Tone="Bad" ShowDot="False" GlyphSize="12" Gap="5" />
-                                        <TextBlock Style="{StaticResource DcBadgeText}"
-                                                   AutomationProperties.LiveSetting="Polite"
-                                                   Text="{Binding Credentials.SummaryText}" />
-                                    </StackPanel>
-                                </Border>
-                                <TextBlock VerticalAlignment="Center"
-                                           Style="{StaticResource DcStatusText}"
-                                           Visibility="{Binding Credentials.HasMissingRequired, Converter={StaticResource InverseBoolToVisibility}}"
-                                           Text="{Binding Credentials.SummaryText}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <ui:ProgressRing Width="16"
-                                                 Height="16"
-                                                 Margin="0,0,8,0"
-                                                 IsIndeterminate="True"
-                                                 Visibility="{Binding Credentials.IsLoading, Converter={StaticResource BoolToVisibility}}" />
-                                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding Credentials.AsOf}" />
-                            </StackPanel>
-                        </Grid>
-
-                        <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                                    IsClosable="False"
-                                    Severity="Error"
-                                    Title="The credential list could not be read"
-                                    IsOpen="{Binding Credentials.HasError, Mode=OneWay}"
-                                    Message="{Binding Credentials.Error}" />
-
-                        <TextBlock Margin="0,0,0,8"
-                                   Style="{StaticResource DcCaption}"
-                                   Visibility="{Binding Credentials.ShowNotLoaded, Converter={StaticResource BoolToVisibility}}"
-                                   Text="Not loaded yet. Refresh reads defenseclaw keys list --json." />
-                        <TextBlock Margin="0,0,0,8"
-                                   Style="{StaticResource DcCaption}"
-                                   Visibility="{Binding Credentials.ShowEmpty, Converter={StaticResource BoolToVisibility}}"
-                                   Text="No credentials to report." />
-
-                        <StackPanel Grid.IsSharedSizeScope="True"
-                                    Visibility="{Binding Credentials.HasRows, Converter={StaticResource BoolToVisibility}}">
-                            <Grid Margin="8,0,8,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition SharedSizeGroup="CredEnv" Width="Auto" MinWidth="200" />
-                                    <ColumnDefinition SharedSizeGroup="CredFeature" Width="Auto" MinWidth="140" />
-                                    <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
-                                    <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
-                                    <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
-                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="130" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Style="{StaticResource DcStatusText}" Text="Env" />
-                                <TextBlock Grid.Column="1" Style="{StaticResource DcStatusText}" Text="Feature" />
-                                <TextBlock Grid.Column="2" Style="{StaticResource DcStatusText}" Text="Requirement" />
-                                <TextBlock Grid.Column="3" Style="{StaticResource DcStatusText}" Text="Source" />
-                                <TextBlock Grid.Column="4" Style="{StaticResource DcStatusText}" Text="Set" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding Credentials.Rows}"
-                                          IsTabStop="False"
-                                          AutomationProperties.Name="Credentials, one row per environment variable">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,2"
-                                                Style="{StaticResource DcSubtleRow}"
-                                                ToolTip="{Binding Description}"
-                                                AutomationProperties.Name="{Binding RowAutomationName}">
-                                            <StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition SharedSizeGroup="CredEnv" Width="Auto" MinWidth="200" />
-                                                    <ColumnDefinition SharedSizeGroup="CredFeature" Width="Auto" MinWidth="140" />
-                                                    <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
-                                                    <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
-                                                    <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
-                                                    <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="130" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextMono}" Text="{Binding EnvName}" />
-                                                <TextBlock Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellText}" Text="{Binding Feature}" />
-                                                <TextBlock Grid.Column="2" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextQuiet}" Text="{Binding Requirement}" />
-                                                <TextBlock Grid.Column="3" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextQuiet}" Text="{Binding Source}" />
-                                                <Border Grid.Column="4" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                        Style="{StaticResource DcBadge}" Tag="{Binding SetKey}">
-                                                    <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SetText}" />
-                                                </Border>
-                                                <StackPanel Grid.Column="5" Orientation="Horizontal">
-                                                    <!-- Set: the masked box below where the app can type the value itself, a console window where it cannot. -->
-                                                    <ui:Button Content="Set…"
-                                                               Command="{Binding SetCommand}"
-                                                               ToolTipService.ShowOnDisabled="True"
-                                                               ToolTip="{Binding SetButtonToolTip}"
-                                                               AutomationProperties.Name="{Binding SetButtonAutomationName}" />
-                                                    <!-- Always the console: the exact command in a window the operator types into. Drawn beside Set only while Set does not already do that. -->
-                                                    <ui:Button Margin="6,0,0,0"
-                                                               Icon="{ctl:DcSymbolIcon WindowConsole20}"
-                                                               Command="{Binding SetInTerminalCommand}"
-                                                               ToolTipService.ShowOnDisabled="True"
-                                                               ToolTip="{Binding SetToolTip}"
-                                                               AutomationProperties.Name="{Binding SetAutomationName}"
-                                                               Visibility="{Binding ShowTerminalButton, Converter={StaticResource BoolToVisibility}}" />
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- The masked box (CUST-221). The value is handed to the row as a SecureString by CredentialEntryBox, never bound. -->
-                                            <StackPanel Margin="0,10,0,4"
-                                                        Visibility="{Binding ShowEditor, Converter={StaticResource BoolToVisibility}}">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <PasswordBox Width="420"
-                                                                 panels:CredentialEntryBox.Attach="True"
-                                                                 AutomationProperties.Name="{Binding EntryAutomationName}"
-                                                                 AutomationProperties.HelpText="{Binding EntryStatus}"
-                                                                 ToolTip="Typed here and handed to the CLI’s hidden prompt for one run. Never on a command line, never in Activity.">
-                                                        <!-- Enter goes on to the review (which shows the command and asks), Esc closes the box. -->
-                                                        <PasswordBox.InputBindings>
-                                                            <KeyBinding Key="Return" Command="{Binding ReviewCommand}" />
-                                                            <KeyBinding Key="Escape" Command="{Binding CancelEntryCommand}" />
-                                                        </PasswordBox.InputBindings>
-                                                    </PasswordBox>
-                                                    <ui:Button Margin="8,0,0,0"
-                                                               Content="Review…"
-                                                               Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                                                               Command="{Binding ReviewCommand}"
-                                                               ToolTipService.ShowOnDisabled="True"
-                                                               ToolTip="{Binding ReviewToolTip}"
-                                                               AutomationProperties.Name="{Binding ReviewAutomationName}" />
-                                                    <ui:Button Margin="8,0,0,0"
-                                                               Appearance="Secondary"
-                                                               Content="Cancel"
-                                                               Command="{Binding CancelEntryCommand}"
-                                                               ToolTip="Close the box and forget what was typed"
-                                                               AutomationProperties.Name="{Binding CancelAutomationName}" />
-                                                </StackPanel>
-                                                <TextBlock Margin="0,6,0,0"
-                                                           Style="{StaticResource DcToneText}"
-                                                           Tag="Bad"
-                                                           TextWrapping="Wrap"
-                                                           AutomationProperties.LiveSetting="Assertive"
-                                                           Visibility="{Binding HasEntryProblem, Converter={StaticResource BoolToVisibility}}"
-                                                           Text="{Binding EntryProblem}" />
-                                                <TextBlock Margin="0,6,0,0"
-                                                           Style="{StaticResource DcCaption}"
-                                                           TextWrapping="Wrap"
-                                                           AutomationProperties.LiveSetting="Polite"
-                                                           Visibility="{Binding HasEntryProblem, Converter={StaticResource InverseBoolToVisibility}}"
-                                                           Text="{Binding EntryStatus}" />
-                                            </StackPanel>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-
-                        <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,8,0,0">
-                            <ui:Button Content="Refresh"
-                                       Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
-                                       Command="{Binding Credentials.RefreshCommand}"
-                                       ToolTip="Read defenseclaw keys list --json again"
-                                       AutomationProperties.Name="Refresh the credential list" />
-                            <ui:Button Content="Check"
-                                       Icon="{ctl:DcSymbolIcon CheckmarkCircle24}"
-                                       Command="{Binding Credentials.CheckCommand}"
-                                       ToolTip="Run defenseclaw keys check (read-only): exits non-zero when a required key is missing"
-                                       AutomationProperties.Name="Check required credentials" />
-                            <!-- Where the app can type values, this opens a masked box on every required credential that is unset; otherwise a console window. -->
-                            <ui:Button Content="Fill missing…"
-                                       Icon="{ctl:DcSymbolIcon Key24}"
-                                       Command="{Binding Credentials.BeginFillCommand}"
-                                       IsEnabled="{Binding Credentials.CanChange}"
-                                       ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding Credentials.FillMissingButtonToolTip}"
-                                       AutomationProperties.Name="{Binding Credentials.FillMissingAutomationName}" />
-                            <ui:Button Content="Fill missing in a terminal"
-                                       Icon="{ctl:DcSymbolIcon WindowConsole20}"
-                                       Command="{Binding Credentials.OpenFillMissingInTerminalCommand}"
-                                       IsEnabled="{Binding Credentials.CanChange}"
-                                       ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding Credentials.FillMissingToolTip}"
-                                       Visibility="{Binding Credentials.ShowFillTerminalButton, Converter={StaticResource BoolToVisibility}}"
-                                       AutomationProperties.Name="Fill missing credentials in a terminal" />
-                        </WrapPanel>
-
-                        <!-- Fill missing is open: the boxes of the credentials that are unset are showing; one review stores what was typed. -->
-                        <WrapPanel Style="{StaticResource DcToolbarPanel}"
-                                   Margin="0,4,0,0"
-                                   Visibility="{Binding Credentials.IsFilling, Converter={StaticResource BoolToVisibility}}">
-                            <ui:Button Content="{Binding Credentials.FillReviewText}"
-                                       Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
-                                       Command="{Binding Credentials.ReviewFillCommand}"
-                                       ToolTipService.ShowOnDisabled="True"
-                                       ToolTip="{Binding Credentials.FillReviewToolTip}"
-                                       AutomationProperties.Name="Review the commands that store the values typed" />
-                            <ui:Button Appearance="Secondary"
-                                       Content="Cancel"
-                                       Command="{Binding Credentials.CancelFillCommand}"
-                                       ToolTip="Close the boxes and forget what was typed"
-                                       AutomationProperties.Name="Cancel Fill missing" />
-                        </WrapPanel>
-
-                        <TextBlock Margin="0,8,0,0"
-                                   Style="{StaticResource DcCaption}"
-                                   TextWrapping="Wrap"
-                                   AutomationProperties.LiveSetting="Polite"
-                                   Visibility="{Binding Credentials.HasNote, Converter={StaticResource BoolToVisibility}}"
-                                   Text="{Binding Credentials.Note}" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Style="{StaticResource DcCaption}"
-                                   TextWrapping="Wrap"
-                                   Text="{Binding Credentials.FooterText}" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Filter strip (no card of its own) -->
-                <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
                     <ui:TextBox x:Name="SearchBox"
-                                Width="320"
-                                AutomationProperties.Name="Search setup wizards"
-                                PlaceholderText="Search wizards by name, target or description…  (Ctrl+F)"
+                                Grid.Column="1"
+                                MaxWidth="360"
+                                HorizontalAlignment="Right"
+                                AutomationProperties.Name="Search setup areas"
+                                PlaceholderText="Search setup areas, wizards and connectors…  (Ctrl+F)"
                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                </Grid>
 
-                    <CheckBox Content="Hide uncertified connectors"
-                              IsChecked="{Binding CertifiedOnly, Mode=TwoWay}"
-                              ToolTip="Hides connectors the CLI reports as not_certified or unsupported on Windows. Flows that are not connectors (rotate-token, webhook, llm, scanners…) have nothing to certify and stay visible." />
-
-                    <ui:Button Style="{StaticResource DcToolbarIconButton}"
-                               Margin="0,0,12,8"
-                               Icon="{ctl:DcSymbolIcon FilterDismiss24}"
-                               Command="{Binding ClearFiltersCommand}"
-                               ToolTip="Clear filters"
-                               AutomationProperties.Name="Clear filters" />
-                </WrapPanel>
-
-                <TextBlock Margin="0,0,12,8"
-                           Style="{StaticResource DcResultCaption}"
-                           Text="{Binding StatusNote}" />
+                <!-- Redaction policy (CUST-295): the advanced editor of a runtime that has `setup redaction`; hidden entirely on 0.8.10, as it always was. -->
+                <ui:Button Margin="0,0,0,12"
+                           HorizontalAlignment="Left"
+                           Appearance="Secondary"
+                           Command="{Binding OpenRedactionTileCommand}"
+                           Visibility="{Binding HasRedactionTile, Converter={StaticResource BoolToVisibility}}"
+                           AutomationProperties.Name="Redaction policy"
+                           AutomationProperties.HelpText="Opens the redaction policy: the profile of each bucket and destination, with every change previewed before it is applied."
+                           Icon="{ctl:DcSymbolIcon EyeOff24}"
+                           Content="Redaction Policy — inspect profiles, buckets, destinations, and routes" />
 
                 <ui:InfoBar Margin="0,0,0,8"
                             IsClosable="False"
@@ -735,210 +410,19 @@
                             IsOpen="{Binding HasLoadError, Mode=OneWay}"
                             Message="{Binding LoadError}" />
 
-                <WrapPanel>
-                    <!-- Guardrail controls (HILT, block message, judge): their own view, wired by the shell; absent until it is. -->
-                    <Button Width="233"
-                            Height="92"
-                            Margin="0,0,12,12"
-                            HorizontalAlignment="Left"
-                            Style="{StaticResource DcInteractiveTile}"
-                            Command="{Binding OpenGuardrailControlsTileCommand}"
-                            Visibility="{Binding HasGuardrailControlsTile, Converter={StaticResource BoolToVisibility}}"
-                            AutomationProperties.Name="Guardrail controls"
-                            AutomationProperties.HelpText="Opens the guardrail's human approval, block message and judge settings.">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <ctl:DcSymbolIcon Margin="0,0,8,0"
-                                                  Style="{StaticResource DcIconNav}"
-                                                  ctl:DcIcon.Section="Setup"
-                                                  Symbol="ShieldCheckmark24" />
-                                <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Guardrail controls" />
-                            </StackPanel>
-                            <TextBlock Margin="0,6,0,0"
-                                       MaxHeight="34"
-                                       Style="{StaticResource DcCaption}"
-                                       TextTrimming="CharacterEllipsis"
-                                       TextWrapping="Wrap"
-                                       Text="Human approval, block message and the judge." />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Redaction policy (CUST-295): the advanced editor of a runtime that has `setup redaction`; hidden entirely on 0.8.10. -->
-                    <Button Width="233"
-                            Height="92"
-                            Margin="0,0,12,12"
-                            HorizontalAlignment="Left"
-                            Style="{StaticResource DcInteractiveTile}"
-                            Command="{Binding OpenRedactionTileCommand}"
-                            Visibility="{Binding HasRedactionTile, Converter={StaticResource BoolToVisibility}}"
-                            AutomationProperties.Name="Redaction policy"
-                            AutomationProperties.HelpText="Opens the redaction policy: the profile of each bucket and destination, with every change previewed before it is applied.">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <ctl:DcSymbolIcon Margin="0,0,8,0"
-                                                  Style="{StaticResource DcIconNav}"
-                                                  ctl:DcIcon.Section="Setup"
-                                                  Symbol="EyeOff24" />
-                                <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Redaction policy" />
-                            </StackPanel>
-                            <TextBlock Margin="0,6,0,0"
-                                       MaxHeight="34"
-                                       Style="{StaticResource DcCaption}"
-                                       TextTrimming="CharacterEllipsis"
-                                       TextWrapping="Wrap"
-                                       Text="What is collected, and how it is redacted." />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Runtime monitoring (CUST-348): AI Discovery's runtime planes, on a runtime that has them; hidden entirely on 0.8.10. -->
-                    <Button Width="233"
-                            Height="92"
-                            Margin="0,0,12,12"
-                            HorizontalAlignment="Left"
-                            Style="{StaticResource DcInteractiveTile}"
-                            Command="{Binding OpenRuntimeMonitoringTileCommand}"
-                            Visibility="{Binding HasRuntimeMonitoringTile, Converter={StaticResource BoolToVisibility}}"
-                            AutomationProperties.Name="Runtime monitoring"
-                            AutomationProperties.HelpText="Opens the runtime monitoring card: whether DefenseClaw is watching running processes and connections for AI use, plane by plane, and what each plane needs. Changes are reviewed first.">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <ctl:DcSymbolIcon Margin="0,0,8,0"
-                                                  Style="{StaticResource DcIconNav}"
-                                                  ctl:DcIcon.Section="Setup"
-                                                  Symbol="Pulse24" />
-                                <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Runtime monitoring" />
-                            </StackPanel>
-                            <TextBlock Margin="0,6,0,0"
-                                       MaxHeight="34"
-                                       Style="{StaticResource DcCaption}"
-                                       TextTrimming="CharacterEllipsis"
-                                       TextWrapping="Wrap"
-                                       Text="Watch running AI processes and connections." />
-                        </StackPanel>
-                    </Button>
-                </WrapPanel>
-
-                <!-- Tile grid, grouped -->
-                <ItemsControl ItemsSource="{Binding Groups}" IsTabStop="False">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="{StaticResource DcSectionGap}">
-                                <StackPanel Margin="2,0,0,8"
-                                            Orientation="Horizontal"
-                                            AutomationProperties.Name="{Binding AutomationName}">
-                                    <TextBlock Style="{StaticResource DcSectionHeader}"
-                                               Margin="0"
-                                               AutomationProperties.HeadingLevel="Level2"
-                                               Text="{Binding Name}" />
-                                    <TextBlock Margin="8,0,0,0"
-                                               VerticalAlignment="Center"
-                                               Style="{StaticResource DcCaption}"
-                                               Text="{Binding CountText}" />
-                                </StackPanel>
-
-                                <!--
-                                    The tile grid (the mac's Setup Areas): 233 x 92 tiles, 12 apart, wrapping to whatever the page is wide. A tile is a
-                                    DcInteractiveTile, so the whole tile opens the wizard; the certification badge shares the title row, so it is a word
-                                    as well as a colour. A tile that cannot be opened here stays in the grid, disabled, and says why instead of its blurb.
-                                -->
-                                <ItemsControl ItemsSource="{Binding Cards}"
-                                              IsTabStop="False"
-                                              KeyboardNavigation.TabNavigation="Continue"
-                                              AutomationProperties.Name="{Binding Name, StringFormat='{}{0} setup tiles'}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Button Width="233"
-                                                    Height="92"
-                                                    Margin="0,0,12,12"
-                                                    Style="{StaticResource DcInteractiveTile}"
-                                                    IsEnabled="{Binding CanLaunch}"
-                                                    ToolTipService.ShowOnDisabled="True"
-                                                    ToolTip="{Binding TileToolTip}"
-                                                    Command="{Binding DataContext.LaunchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    AutomationProperties.Name="{Binding LaunchAutomationName}"
-                                                    AutomationProperties.HelpText="{Binding AutomationName}">
-                                                <Grid>
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="Auto" />
-                                                        <RowDefinition Height="*" />
-                                                        <RowDefinition Height="Auto" />
-                                                    </Grid.RowDefinitions>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <ctl:DcSymbolIcon Grid.Row="0"
-                                                                      Grid.Column="0"
-                                                                      Margin="0,0,8,0"
-                                                                      VerticalAlignment="Center"
-                                                                      Style="{StaticResource DcIconNav}"
-                                                                      ctl:DcIcon.Section="Setup"
-                                                                      Symbol="{Binding Icon}" />
-                                                    <TextBlock Grid.Row="0"
-                                                               Grid.Column="1"
-                                                               VerticalAlignment="Center"
-                                                               Style="{StaticResource DcCardTitle}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               TextWrapping="NoWrap"
-                                                               Text="{Binding Title}" />
-                                                    <!-- Certification as a glyph (check, caution, cross: a shape as well as a colour); its words are the
-                                                         tile's tooltip and automation help, so the title keeps the row. -->
-                                                    <ctl:DcStatusGlyph Grid.Row="0"
-                                                                       Grid.Column="2"
-                                                                       Margin="6,0,0,0"
-                                                                       VerticalAlignment="Center"
-                                                                       Tone="{Binding BadgeKey}"
-                                                                       ShowDot="False"
-                                                                       GlyphSize="14"
-                                                                       Visibility="{Binding ShowTileBadge, Converter={StaticResource BoolToVisibility}}" />
-                                                    <!-- One line of the blurb when the tile also carries a state line (CUST-271): the tile stays 233 x 92. -->
-                                                    <TextBlock Grid.Row="1"
-                                                               Grid.Column="0"
-                                                               Grid.ColumnSpan="3"
-                                                               Margin="0,6,0,0"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               TextWrapping="Wrap"
-                                                               Text="{Binding TileBlurb}">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
-                                                                <Setter Property="MaxHeight" Value="34" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding HasStateLine}" Value="True">
-                                                                        <Setter Property="MaxHeight" Value="16" />
-                                                                        <Setter Property="TextWrapping" Value="NoWrap" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                    <!-- What config.yaml says about this card's subject today. -->
-                                                    <TextBlock Grid.Row="2"
-                                                               Grid.Column="0"
-                                                               Grid.ColumnSpan="3"
-                                                               Margin="0,2,0,0"
-                                                               FontWeight="SemiBold"
-                                                               Style="{StaticResource DcCaption}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               TextWrapping="NoWrap"
-                                                               AutomationProperties.Name="{Binding StateDetail}"
-                                                               Text="{Binding StateLine}"
-                                                               Visibility="{Binding HasStateLine, Converter={StaticResource BoolToVisibility}}" />
-                                                </Grid>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
+                <!--
+                    The area grid (the Mac's LazyVGrid, adaptive): 233 x 92 tiles, 12 apart, wrapping to whatever the page is wide, in the Mac's order.
+                -->
+                <ItemsControl ItemsSource="{Binding Areas}"
+                              ItemTemplate="{StaticResource AreaTile}"
+                              IsTabStop="False"
+                              KeyboardNavigation.TabNavigation="Continue"
+                              AutomationProperties.Name="Setup areas">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
                 </ItemsControl>
 
                 <!-- Empty and loading are states, not failures: say which one. -->
@@ -986,8 +470,718 @@
                     <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
                     <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No wizards match" />
                     <TextBlock Style="{StaticResource DcEmptyDetail}"
-                               Text="Clear the search, or turn off the certification filter: on this platform only Claude Code and Codex are certified connectors." />
+                               Text="Clear the search: no setup area, wizard or connector matches it. (In Connector Setup, the certification filter hides the connectors not certified on Windows.)" />
                 </StackPanel>
+
+                <!--
+                    On Windows: what this app has beyond the Mac's areas. Its own tiles first (the guardrail controls window, runtime monitoring), then every
+                    setup target of the CLI that no area reaches, grouped as the hub always grouped them. Filtered by the same search.
+                -->
+                <StackPanel Margin="{StaticResource DcSectionGap}">
+                    <StackPanel Margin="2,0,0,8" Orientation="Horizontal">
+                        <TextBlock Margin="0"
+                                   AutomationProperties.HeadingLevel="Level2"
+                                   Style="{StaticResource DcSectionHeader}"
+                                   Text="More on Windows" />
+                        <TextBlock Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource DcCaption}"
+                                   Text="{Binding StatusNote}" />
+                    </StackPanel>
+
+                    <WrapPanel>
+                        <!-- Guardrail controls (HILT, block message, judge): their own view, wired by the shell; absent until it is. -->
+                        <Button Width="233"
+                                Height="92"
+                                Margin="0,0,12,12"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource DcInteractiveTile}"
+                                Command="{Binding OpenGuardrailControlsTileCommand}"
+                                Visibility="{Binding HasGuardrailControlsTile, Converter={StaticResource BoolToVisibility}}"
+                                AutomationProperties.Name="Guardrail controls"
+                                AutomationProperties.HelpText="Opens the guardrail's human approval, block message and judge settings.">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <ctl:DcSymbolIcon Margin="0,0,8,0"
+                                                      Style="{StaticResource DcIconNav}"
+                                                      ctl:DcIcon.Section="Setup"
+                                                      Symbol="ShieldCheckmark24" />
+                                    <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Guardrail controls" />
+                                </StackPanel>
+                                <TextBlock Margin="0,6,0,0"
+                                           MaxHeight="34"
+                                           Style="{StaticResource DcCaption}"
+                                           TextTrimming="CharacterEllipsis"
+                                           TextWrapping="Wrap"
+                                           Text="Human approval, block message and the judge." />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Runtime monitoring (CUST-348): AI Discovery's runtime planes, on a runtime that has them; hidden entirely on 0.8.10. -->
+                        <Button Width="233"
+                                Height="92"
+                                Margin="0,0,12,12"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource DcInteractiveTile}"
+                                Command="{Binding OpenRuntimeMonitoringTileCommand}"
+                                Visibility="{Binding HasRuntimeMonitoringTile, Converter={StaticResource BoolToVisibility}}"
+                                AutomationProperties.Name="Runtime monitoring"
+                                AutomationProperties.HelpText="Opens the runtime monitoring card: whether DefenseClaw is watching running processes and connections for AI use, plane by plane, and what each plane needs. Changes are reviewed first.">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <ctl:DcSymbolIcon Margin="0,0,8,0"
+                                                      Style="{StaticResource DcIconNav}"
+                                                      ctl:DcIcon.Section="Setup"
+                                                      Symbol="Pulse24" />
+                                    <TextBlock VerticalAlignment="Center" Style="{StaticResource DcCardTitle}" Text="Runtime monitoring" />
+                                </StackPanel>
+                                <TextBlock Margin="0,6,0,0"
+                                           MaxHeight="34"
+                                           Style="{StaticResource DcCaption}"
+                                           TextTrimming="CharacterEllipsis"
+                                           TextWrapping="Wrap"
+                                           Text="Watch running AI processes and connections." />
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
+
+                    <!-- The catalog's other targets, grouped. -->
+                    <ItemsControl ItemsSource="{Binding ExtraGroups}" IsTabStop="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="{StaticResource DcSectionGap}">
+                                    <StackPanel Margin="2,0,0,8"
+                                                Orientation="Horizontal"
+                                                AutomationProperties.Name="{Binding AutomationName}">
+                                        <TextBlock Style="{StaticResource DcSectionHeader}"
+                                                   Margin="0"
+                                                   AutomationProperties.HeadingLevel="Level2"
+                                                   Text="{Binding Name}" />
+                                        <TextBlock Margin="8,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Style="{StaticResource DcCaption}"
+                                                   Text="{Binding CountText}" />
+                                    </StackPanel>
+
+                                    <ItemsControl ItemsSource="{Binding Cards}"
+                                                  ItemTemplate="{StaticResource WizardCardTile}"
+                                                  IsTabStop="False"
+                                                  KeyboardNavigation.TabNavigation="Continue"
+                                                  AutomationProperties.Name="{Binding Name, StringFormat='{}{0} setup tiles'}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <Separator Margin="0,8,0,16" />
+
+                <!--
+                    Config Editor (the Mac's, under a divider): the app's one config.yaml draft, which the detached window shares (ConfigEditorSession). It reads
+                    the file the first time it comes on screen - a read only, nothing is written - and the draft stays when the page is left.
+                -->
+                <StackPanel x:Name="ConfigEditorSection" Margin="0,0,0,8">
+                    <TextBlock Margin="0"
+                               AutomationProperties.HeadingLevel="Level2"
+                               Style="{StaticResource DcSectionHeader}"
+                               Text="Config Editor" />
+                    <TextBlock Margin="0,2,0,10"
+                               Style="{StaticResource DcCaption}"
+                               TextWrapping="Wrap"
+                               Text="A typed, sectioned config.yaml editor built from the installed runtime's own view of the file - new runtime settings appear here without an app update. Changes are diff-reviewed, backed up and validated by the CLI when saved, and queue a gateway restart when the gateway needs one." />
+                    <vc:ConfigEditorView x:Name="InlineEditor"
+                                         IsInline="True"
+                                         Session="{Binding ConfigEditor}"
+                                         FooterNote="One draft: Open in window shows these same edits in a window of their own." />
+                </StackPanel>
+
+                <Separator Margin="0,8,0,16" />
+
+                <!-- On this machine: the Windows hub's own cards, kept as the page's secondary content (each folds; all start open). -->
+                <TextBlock Margin="0,0,0,8"
+                           AutomationProperties.HeadingLevel="Level2"
+                           Style="{StaticResource DcSectionHeader}"
+                           Text="On this machine" />
+
+                <!--
+                    Readiness checklist: the TUI's rows, each failing one with a Fix. A Fix opens the shared review (the exact argv), a
+                    console window for a command that prompts for a secret, or the Setup wizard; none runs from the press alone.
+                -->
+                <Border x:Name="ReadinessSection" Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <ToggleButton Style="{StaticResource DisclosureToggle}"
+                                              IsChecked="{Binding IsReadinessExpanded, Mode=TwoWay}"
+                                              AutomationProperties.Name="Show the readiness checklist" />
+                                <ctl:DcCardHeader VerticalAlignment="Center"
+                                                  AutomationProperties.HeadingLevel="Level2"
+                                                  Symbol="TaskListSquareLtr24"
+                                                  Section="Setup"
+                                                  Content="Readiness" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource DcStatusText}"
+                                       AutomationProperties.LiveSetting="Polite"
+                                       Text="{Binding Readiness.Summary}" />
+                        </Grid>
+
+                        <StackPanel Visibility="{Binding IsReadinessExpanded, Converter={StaticResource BoolToVisibility}}">
+                            <ItemsControl ItemsSource="{Binding Readiness.Rows}"
+                                          IsTabStop="False"
+                                          AutomationProperties.Name="Readiness checklist">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6" Style="{StaticResource DcSubtleRow}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0"
+                                                        Width="64"
+                                                        Margin="0,0,12,0"
+                                                        VerticalAlignment="Center"
+                                                        Style="{StaticResource DcBadge}"
+                                                        Tag="{Binding StatusKey}">
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                        <ctl:DcStatusGlyph Tone="{Binding StatusKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding StatusText}" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Style="{StaticResource ChipName}" Text="{Binding Title}" />
+                                                    <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding Detail}" />
+                                                </StackPanel>
+                                                <ui:Button Grid.Column="2"
+                                                           Margin="12,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           Content="Fix"
+                                                           Icon="{ctl:DcSymbolIcon Wrench24}"
+                                                           Command="{Binding FixCommand}"
+                                                           ToolTip="{Binding FixToolTip}"
+                                                           AutomationProperties.Name="{Binding FixAutomationName}"
+                                                           AutomationProperties.HelpText="{Binding FixToolTip}"
+                                                           Visibility="{Binding HasFix, Converter={StaticResource BoolToVisibility}}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Connector roster: what the wizards are acting on right now. -->
+                <Border x:Name="ConnectorsSection" Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ToggleButton Style="{StaticResource DisclosureToggle}"
+                                          IsChecked="{Binding IsConnectorsExpanded, Mode=TwoWay}"
+                                          AutomationProperties.Name="Show the configured connectors" />
+                            <ctl:DcCardHeader VerticalAlignment="Center"
+                                              AutomationProperties.HeadingLevel="Level2"
+                                              Symbol="PlugConnected24"
+                                              Section="Setup"
+                                              Content="Configured connectors" />
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsConnectorsExpanded, Converter={StaticResource BoolToVisibility}}">
+                            <ItemsControl ItemsSource="{Binding Connectors}"
+                                          IsTabStop="False"
+                                          AutomationProperties.Name="Configured connectors">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,10,8"
+                                                Style="{StaticResource DcSubtleRow}"
+                                                ToolTip="{Binding ToolTipText}"
+                                                AutomationProperties.Name="{Binding Mode=OneWay}">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource ChipName}" Text="{Binding Name}" />
+                                                    <Border Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcChip}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Mode}" />
+                                                    </Border>
+                                                    <!-- Fail-mode is a first-class chip: observe + fail-closed is the
+                                                         recurring bad default this project keeps meeting. -->
+                                                    <Border Margin="6,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource DcBadge}"
+                                                            Tag="{Binding FailKey}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding FailMode}" />
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <TextBlock Margin="0,4,0,0"
+                                                           MaxWidth="320"
+                                                           Style="{StaticResource WarnCaption}"
+                                                           Visibility="{Binding HasMismatch, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding MismatchNote}" />
+
+                                                <TextBlock Margin="0,2,0,0"
+                                                           Style="{StaticResource DcCaption}"
+                                                           Text="{Binding SourceNote}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource DcCaption}" Text="{Binding ConnectorNote}" />
+
+                            <ui:Button Margin="0,8,0,0"
+                                       HorizontalAlignment="Left"
+                                       Content="Set up several…"
+                                       Icon="{ctl:DcSymbolIcon PlugConnected24}"
+                                       Command="{Binding OpenBatchCommand}"
+                                       ToolTip="Configure more than one connector in a single reviewed command (setup --yes --connector ... --mode ...)."
+                                       AutomationProperties.HelpText="Opens a dialog that sets up several connectors at once. Shows the exact command first." />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Guardrail quick controls: status, enable / disable, hook fail mode. -->
+                <Border x:Name="GuardrailSection" Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <ToggleButton Style="{StaticResource DisclosureToggle}"
+                                              IsChecked="{Binding IsGuardrailExpanded, Mode=TwoWay}"
+                                              AutomationProperties.Name="Show the guardrail quick controls" />
+                                <ctl:DcCardHeader Margin="0,0,10,0"
+                                           VerticalAlignment="Center"
+                                           AutomationProperties.HeadingLevel="Level2"
+                                           Symbol="ShieldCheckmark24"
+                                           Section="Govern"
+                                           Content="Guardrail" />
+                                <Border VerticalAlignment="Center"
+                                        Style="{StaticResource DcBadge}"
+                                        Tag="{Binding GuardrailHeadlineKey}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="{Binding GuardrailHeadlineKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                   AutomationProperties.LiveSetting="Polite"
+                                                   Text="{Binding GuardrailHeadline}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:ProgressRing Width="16"
+                                                 Height="16"
+                                                 Margin="0,0,8,0"
+                                                 IsIndeterminate="True"
+                                                 Visibility="{Binding IsGuardrailBusy, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding GuardrailAsOf}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Visibility="{Binding IsGuardrailExpanded, Converter={StaticResource BoolToVisibility}}">
+                            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                        IsClosable="False"
+                                        Severity="Error"
+                                        Title="The guardrail status could not be read"
+                                        IsOpen="{Binding HasGuardrailError, Mode=OneWay}"
+                                        Message="{Binding GuardrailError}" />
+
+                            <ItemsControl ItemsSource="{Binding GuardrailRows}"
+                                          IsTabStop="False"
+                                          AutomationProperties.Name="Guardrail roster, one row per active connector">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,8"
+                                                Style="{StaticResource DcSubtleRow}"
+                                                AutomationProperties.Name="{Binding Mode=OneWay}">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource ChipName}" Text="{Binding Name}" />
+                                                    <Border Margin="10,0,0,0" VerticalAlignment="Center"
+                                                            Style="{StaticResource DcBadge}" Tag="{Binding StateKey}">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ctl:DcStatusGlyph Tone="{Binding StateKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding State}" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border Margin="6,0,0,0" VerticalAlignment="Center" Style="{StaticResource DcChip}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Mode}" />
+                                                    </Border>
+                                                    <Border Margin="6,0,0,0" VerticalAlignment="Center"
+                                                            Style="{StaticResource DcBadge}" Tag="{Binding FailKey}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                                   Text="{Binding Fail, StringFormat='fail-{0}'}" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Margin="0,4,0,0"
+                                                           Style="{StaticResource DcCaption}"
+                                                           Text="{Binding Detail}" />
+                                                <TextBlock Margin="0,2,0,0"
+                                                           Style="{StaticResource WarnCaption}"
+                                                           Visibility="{Binding HasMismatch, Converter={StaticResource BoolToVisibility}}"
+                                                           Text="{Binding MismatchNote}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding GuardrailWarnings}"
+                                          IsTabStop="False"
+                                          AutomationProperties.Name="Guardrail notes from the CLI">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Margin="0,0,0,4"
+                                                   Style="{StaticResource WarnCaption}"
+                                                   Text="{Binding}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Margin="0,0,0,8"
+                                       Style="{StaticResource DcCaption}"
+                                       Visibility="{Binding ShowNoGuardrailRoster, Converter={StaticResource BoolToVisibility}}"
+                                       Text="No connector is active, so there is nothing for the guardrail to enforce yet. Configure one from the tiles below." />
+
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,4,0,0">
+                                <TextBlock Style="{StaticResource DcToolbarLabel}"
+                                           Visibility="{Binding HasMultipleGuardrailConnectors, Converter={StaticResource BoolToVisibility}}"
+                                           Text="Scope" />
+                                <ComboBox Width="200"
+                                          AutomationProperties.Name="Guardrail scope: which connector a change applies to"
+                                          ItemsSource="{Binding GuardrailScopes}"
+                                          SelectedItem="{Binding SelectedGuardrailScope, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanUseGuardrailControls}"
+                                          Visibility="{Binding HasMultipleGuardrailConnectors, Converter={StaticResource BoolToVisibility}}" />
+
+                                <ui:Button Content="Enable"
+                                           Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                           AutomationProperties.Name="Enable the guardrail"
+                                           IsEnabled="{Binding CanUseGuardrailControls}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding InstallationBlockedReason}"
+                                           Visibility="{Binding ShowEnableGuardrail, Converter={StaticResource BoolToVisibility}}"
+                                           Command="{Binding EnableGuardrailCommand}" />
+                                <ui:Button Content="Disable"
+                                           Icon="{ctl:DcSymbolIcon ShieldProhibited24}"
+                                           AutomationProperties.Name="Disable the guardrail"
+                                           IsEnabled="{Binding CanUseGuardrailControls}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding InstallationBlockedReason}"
+                                           Visibility="{Binding ShowDisableGuardrail, Converter={StaticResource BoolToVisibility}}"
+                                           Command="{Binding DisableGuardrailCommand}" />
+                                <ui:Button Content="Fail open"
+                                           Icon="{ctl:DcSymbolIcon LockOpen24}"
+                                           AutomationProperties.Name="Set the hook fail mode to open"
+                                           ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Allow and log when the gateway errors (recommended)'}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           IsEnabled="{Binding CanUseGuardrailControls}"
+                                           Command="{Binding SetFailModeOpenCommand}" />
+                                <ui:Button Content="Fail closed"
+                                           Icon="{ctl:DcSymbolIcon LockClosed24}"
+                                           AutomationProperties.Name="Set the hook fail mode to closed"
+                                           ToolTip="{Binding InstallationBlockedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Block whenever the gateway errors or is unreachable'}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           IsEnabled="{Binding CanUseGuardrailControls}"
+                                           Command="{Binding SetFailModeClosedCommand}" />
+                                <CheckBox Content="Show CLI output"
+                                          AutomationProperties.HelpText="Shows the verbatim text of defenseclaw guardrail status"
+                                          IsChecked="{Binding ShowGuardrailRaw, Mode=TwoWay}" />
+                            </WrapPanel>
+
+                            <ctl:DcCommandOutput Margin="0,4,0,0"
+                                                 MaxHeight="320"
+                                                 OutputName="Verbatim output of defenseclaw guardrail status"
+                                                 Visibility="{Binding ShowGuardrailRaw, Converter={StaticResource BoolToVisibility}}"
+                                                 Text="{Binding GuardrailRaw, Mode=OneWay}" />
+
+                            <!-- The outcome of the last change. -->
+                            <Border Margin="0,8,0,0"
+                                    Style="{StaticResource DcSubtleRow}"
+                                    AutomationProperties.LiveSetting="Polite"
+                                    Visibility="{Binding HasGuardrailResult, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource ChipName}" Text="{Binding GuardrailResultHeading}" />
+                                        <Border Margin="10,0,0,0" VerticalAlignment="Center"
+                                                Style="{StaticResource DcBadge}" Tag="{Binding GuardrailResultKey}">
+                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding GuardrailResultBadge}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <ctl:DcCommandOutput Margin="0,8,0,0"
+                                                         MaxHeight="320"
+                                                         OutputName="Output of the guardrail change"
+                                                         Text="{Binding GuardrailResultText, Mode=OneWay}" />
+                                    <ui:Button Margin="0,8,0,0"
+                                               HorizontalAlignment="Left"
+                                               Appearance="Secondary"
+                                               Content="Dismiss"
+                                               Icon="{ctl:DcSymbolIcon Dismiss24}"
+                                               Command="{Binding DismissGuardrailResultCommand}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!--
+                    Credentials: `defenseclaw keys list` as JSON, names and set/unset only (the CLI prints no value). Setting a value needs the
+                    CLI's hidden console prompt, which reads the console and not stdin. Set opens a masked box under the row; Review shows the
+                    exact command with the value masked; the confirmed run types the value at the prompt in a pseudo-console (CUST-221). Where the
+                    app cannot do that (Windows before 10 1809, a container runtime, or a run that failed) Set opens a console window running the
+                    exact command, as before; the small console button on each row is always that.
+                -->
+                <Border x:Name="CredentialsSection" Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <ToggleButton Style="{StaticResource DisclosureToggle}"
+                                              IsChecked="{Binding IsCredentialsExpanded, Mode=TwoWay}"
+                                              AutomationProperties.Name="Show the credentials" />
+                                <ctl:DcCardHeader Margin="0,0,10,0"
+                                                  VerticalAlignment="Center"
+                                                  AutomationProperties.HeadingLevel="Level2"
+                                                  Symbol="Key24"
+                                                  Section="Setup"
+                                                  Content="Credentials" />
+                                <Border VerticalAlignment="Center"
+                                        Style="{StaticResource DcBadge}"
+                                        Tag="Bad"
+                                        Visibility="{Binding Credentials.HasMissingRequired, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="Bad" ShowDot="False" GlyphSize="12" Gap="5" />
+                                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                                   AutomationProperties.LiveSetting="Polite"
+                                                   Text="{Binding Credentials.SummaryText}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock VerticalAlignment="Center"
+                                           Style="{StaticResource DcStatusText}"
+                                           Visibility="{Binding Credentials.HasMissingRequired, Converter={StaticResource InverseBoolToVisibility}}"
+                                           Text="{Binding Credentials.SummaryText}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ui:ProgressRing Width="16"
+                                                 Height="16"
+                                                 Margin="0,0,8,0"
+                                                 IsIndeterminate="True"
+                                                 Visibility="{Binding Credentials.IsLoading, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Style="{StaticResource DcStatusText}" Text="{Binding Credentials.AsOf}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Visibility="{Binding IsCredentialsExpanded, Converter={StaticResource BoolToVisibility}}">
+                            <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                        IsClosable="False"
+                                        Severity="Error"
+                                        Title="The credential list could not be read"
+                                        IsOpen="{Binding Credentials.HasError, Mode=OneWay}"
+                                        Message="{Binding Credentials.Error}" />
+
+                            <TextBlock Margin="0,0,0,8"
+                                       Style="{StaticResource DcCaption}"
+                                       Visibility="{Binding Credentials.ShowNotLoaded, Converter={StaticResource BoolToVisibility}}"
+                                       Text="Not loaded yet. Refresh reads defenseclaw keys list --json." />
+                            <TextBlock Margin="0,0,0,8"
+                                       Style="{StaticResource DcCaption}"
+                                       Visibility="{Binding Credentials.ShowEmpty, Converter={StaticResource BoolToVisibility}}"
+                                       Text="No credentials to report." />
+
+                            <StackPanel Grid.IsSharedSizeScope="True"
+                                        Visibility="{Binding Credentials.HasRows, Converter={StaticResource BoolToVisibility}}">
+                                <Grid Margin="8,0,8,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition SharedSizeGroup="CredEnv" Width="Auto" MinWidth="200" />
+                                        <ColumnDefinition SharedSizeGroup="CredFeature" Width="Auto" MinWidth="140" />
+                                        <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
+                                        <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
+                                        <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
+                                        <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="130" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource DcStatusText}" Text="Env" />
+                                    <TextBlock Grid.Column="1" Style="{StaticResource DcStatusText}" Text="Feature" />
+                                    <TextBlock Grid.Column="2" Style="{StaticResource DcStatusText}" Text="Requirement" />
+                                    <TextBlock Grid.Column="3" Style="{StaticResource DcStatusText}" Text="Source" />
+                                    <TextBlock Grid.Column="4" Style="{StaticResource DcStatusText}" Text="Set" />
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Credentials.Rows}"
+                                              IsTabStop="False"
+                                              AutomationProperties.Name="Credentials, one row per environment variable">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,2"
+                                                    Style="{StaticResource DcSubtleRow}"
+                                                    ToolTip="{Binding Description}"
+                                                    AutomationProperties.Name="{Binding RowAutomationName}">
+                                                <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition SharedSizeGroup="CredEnv" Width="Auto" MinWidth="200" />
+                                                        <ColumnDefinition SharedSizeGroup="CredFeature" Width="Auto" MinWidth="140" />
+                                                        <ColumnDefinition SharedSizeGroup="CredRequirement" Width="Auto" MinWidth="90" />
+                                                        <ColumnDefinition SharedSizeGroup="CredSource" Width="Auto" MinWidth="70" />
+                                                        <ColumnDefinition SharedSizeGroup="CredSet" Width="Auto" MinWidth="90" />
+                                                        <ColumnDefinition SharedSizeGroup="CredAction" Width="Auto" MinWidth="130" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextMono}" Text="{Binding EnvName}" />
+                                                    <TextBlock Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellText}" Text="{Binding Feature}" />
+                                                    <TextBlock Grid.Column="2" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextQuiet}" Text="{Binding Requirement}" />
+                                                    <TextBlock Grid.Column="3" Margin="0,0,12,0" VerticalAlignment="Center" Style="{StaticResource DcCellTextQuiet}" Text="{Binding Source}" />
+                                                    <Border Grid.Column="4" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                            Style="{StaticResource DcBadge}" Tag="{Binding SetKey}">
+                                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding SetText}" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="5" Orientation="Horizontal">
+                                                        <!-- Set: the masked box below where the app can type the value itself, a console window where it cannot. -->
+                                                        <ui:Button Content="Set…"
+                                                                   Command="{Binding SetCommand}"
+                                                                   ToolTipService.ShowOnDisabled="True"
+                                                                   ToolTip="{Binding SetButtonToolTip}"
+                                                                   AutomationProperties.Name="{Binding SetButtonAutomationName}" />
+                                                        <!-- Always the console: the exact command in a window the operator types into. Drawn beside Set only while Set does not already do that. -->
+                                                        <ui:Button Margin="6,0,0,0"
+                                                                   Icon="{ctl:DcSymbolIcon WindowConsole20}"
+                                                                   Command="{Binding SetInTerminalCommand}"
+                                                                   ToolTipService.ShowOnDisabled="True"
+                                                                   ToolTip="{Binding SetToolTip}"
+                                                                   AutomationProperties.Name="{Binding SetAutomationName}"
+                                                                   Visibility="{Binding ShowTerminalButton, Converter={StaticResource BoolToVisibility}}" />
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <!-- The masked box (CUST-221). The value is handed to the row as a SecureString by CredentialEntryBox, never bound. -->
+                                                <StackPanel Margin="0,10,0,4"
+                                                            Visibility="{Binding ShowEditor, Converter={StaticResource BoolToVisibility}}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <PasswordBox Width="420"
+                                                                     panels:CredentialEntryBox.Attach="True"
+                                                                     AutomationProperties.Name="{Binding EntryAutomationName}"
+                                                                     AutomationProperties.HelpText="{Binding EntryStatus}"
+                                                                     ToolTip="Typed here and handed to the CLI’s hidden prompt for one run. Never on a command line, never in Activity.">
+                                                            <!-- Enter goes on to the review (which shows the command and asks), Esc closes the box. -->
+                                                            <PasswordBox.InputBindings>
+                                                                <KeyBinding Key="Return" Command="{Binding ReviewCommand}" />
+                                                                <KeyBinding Key="Escape" Command="{Binding CancelEntryCommand}" />
+                                                            </PasswordBox.InputBindings>
+                                                        </PasswordBox>
+                                                        <ui:Button Margin="8,0,0,0"
+                                                                   Content="Review…"
+                                                                   Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                                                   Command="{Binding ReviewCommand}"
+                                                                   ToolTipService.ShowOnDisabled="True"
+                                                                   ToolTip="{Binding ReviewToolTip}"
+                                                                   AutomationProperties.Name="{Binding ReviewAutomationName}" />
+                                                        <ui:Button Margin="8,0,0,0"
+                                                                   Appearance="Secondary"
+                                                                   Content="Cancel"
+                                                                   Command="{Binding CancelEntryCommand}"
+                                                                   ToolTip="Close the box and forget what was typed"
+                                                                   AutomationProperties.Name="{Binding CancelAutomationName}" />
+                                                    </StackPanel>
+                                                    <TextBlock Margin="0,6,0,0"
+                                                               Style="{StaticResource DcToneText}"
+                                                               Tag="Bad"
+                                                               TextWrapping="Wrap"
+                                                               AutomationProperties.LiveSetting="Assertive"
+                                                               Visibility="{Binding HasEntryProblem, Converter={StaticResource BoolToVisibility}}"
+                                                               Text="{Binding EntryProblem}" />
+                                                    <TextBlock Margin="0,6,0,0"
+                                                               Style="{StaticResource DcCaption}"
+                                                               TextWrapping="Wrap"
+                                                               AutomationProperties.LiveSetting="Polite"
+                                                               Visibility="{Binding HasEntryProblem, Converter={StaticResource InverseBoolToVisibility}}"
+                                                               Text="{Binding EntryStatus}" />
+                                                </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}" Margin="0,8,0,0">
+                                <ui:Button Content="Refresh"
+                                           Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                           Command="{Binding Credentials.RefreshCommand}"
+                                           ToolTip="Read defenseclaw keys list --json again"
+                                           AutomationProperties.Name="Refresh the credential list" />
+                                <ui:Button Content="Check"
+                                           Icon="{ctl:DcSymbolIcon CheckmarkCircle24}"
+                                           Command="{Binding Credentials.CheckCommand}"
+                                           ToolTip="Run defenseclaw keys check (read-only): exits non-zero when a required key is missing"
+                                           AutomationProperties.Name="Check required credentials" />
+                                <!-- Where the app can type values, this opens a masked box on every required credential that is unset; otherwise a console window. -->
+                                <ui:Button Content="Fill missing…"
+                                           Icon="{ctl:DcSymbolIcon Key24}"
+                                           Command="{Binding Credentials.BeginFillCommand}"
+                                           IsEnabled="{Binding Credentials.CanChange}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding Credentials.FillMissingButtonToolTip}"
+                                           AutomationProperties.Name="{Binding Credentials.FillMissingAutomationName}" />
+                                <ui:Button Content="Fill missing in a terminal"
+                                           Icon="{ctl:DcSymbolIcon WindowConsole20}"
+                                           Command="{Binding Credentials.OpenFillMissingInTerminalCommand}"
+                                           IsEnabled="{Binding Credentials.CanChange}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding Credentials.FillMissingToolTip}"
+                                           Visibility="{Binding Credentials.ShowFillTerminalButton, Converter={StaticResource BoolToVisibility}}"
+                                           AutomationProperties.Name="Fill missing credentials in a terminal" />
+                            </WrapPanel>
+
+                            <!-- Fill missing is open: the boxes of the credentials that are unset are showing; one review stores what was typed. -->
+                            <WrapPanel Style="{StaticResource DcToolbarPanel}"
+                                       Margin="0,4,0,0"
+                                       Visibility="{Binding Credentials.IsFilling, Converter={StaticResource BoolToVisibility}}">
+                                <ui:Button Content="{Binding Credentials.FillReviewText}"
+                                           Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                                           Command="{Binding Credentials.ReviewFillCommand}"
+                                           ToolTipService.ShowOnDisabled="True"
+                                           ToolTip="{Binding Credentials.FillReviewToolTip}"
+                                           AutomationProperties.Name="Review the commands that store the values typed" />
+                                <ui:Button Appearance="Secondary"
+                                           Content="Cancel"
+                                           Command="{Binding Credentials.CancelFillCommand}"
+                                           ToolTip="Close the boxes and forget what was typed"
+                                           AutomationProperties.Name="Cancel Fill missing" />
+                            </WrapPanel>
+
+                            <TextBlock Margin="0,8,0,0"
+                                       Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Polite"
+                                       Visibility="{Binding Credentials.HasNote, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding Credentials.Note}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Style="{StaticResource DcCaption}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding Credentials.FooterText}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
 
@@ -1028,5 +1222,99 @@
 
         <!-- Runtime monitoring (CUST-348): the tile's dialog (and the Overview row's), with a review of its own. -->
         <panels:RuntimeMonitoringDialog Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Monitoring}" />
+
+        <!--
+            Connector Setup (CUST-385): the Mac's one connector tile, over the flows this app already has - one connector's wizard (a tile per connector the
+            CLI lists, certified or not, those Windows cannot run disabled with their reason), several at once (the batch dialog, CUST-271), or removing one
+            (setup remove). Each ends on its own review; nothing runs from here. Esc closes it.
+        -->
+        <Grid Grid.Row="0"
+              Grid.RowSpan="2"
+              Style="{StaticResource DcScrim}"
+              KeyboardNavigation.TabNavigation="Cycle"
+              KeyboardNavigation.ControlTabNavigation="Cycle"
+              Visibility="{Binding IsConnectorSetupOpen, Converter={StaticResource BoolToVisibility}}">
+            <Border Margin="24"
+                    MaxWidth="820"
+                    MaxHeight="760"
+                    Style="{StaticResource DcDialogCard}"
+                    AutomationProperties.Name="Connector Setup">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                        <TextBlock AutomationProperties.HeadingLevel="Level1"
+                                   Style="{StaticResource DcSectionHeader}"
+                                   Text="Connector Setup" />
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   TextWrapping="Wrap"
+                                   Text="Add or re-run a connector, choose the active hook connector set (batch), or remove one. Every choice ends on a review of the exact command." />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="0,0,8,0">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           VerticalAlignment="Center"
+                                           AutomationProperties.HeadingLevel="Level2"
+                                           Style="{StaticResource DcCardTitle}"
+                                           Text="Set up one connector" />
+                                <CheckBox Grid.Column="1"
+                                          Content="Hide uncertified connectors"
+                                          IsChecked="{Binding CertifiedOnly, Mode=TwoWay}"
+                                          ToolTip="Hides connectors the CLI reports as not_certified or unsupported on Windows." />
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding ConnectorChoices}"
+                                          ItemTemplate="{StaticResource WizardCardTile}"
+                                          IsTabStop="False"
+                                          KeyboardNavigation.TabNavigation="Continue"
+                                          AutomationProperties.Name="Connector setup tiles">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <TextBlock Margin="0,0,0,8"
+                                       Style="{StaticResource DcCaption}"
+                                       Visibility="{Binding HasConnectorChoices, Converter={StaticResource InverseBoolToVisibility}}"
+                                       Text="The installed DefenseClaw lists no connector setup targets (or the setup catalog is still being read)." />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <WrapPanel Grid.Row="2" Margin="0,12,0,0" HorizontalAlignment="Right">
+                        <ui:Button Margin="0,0,8,0"
+                                   Content="Set up several…"
+                                   Icon="{ctl:DcSymbolIcon PlugConnected24}"
+                                   Command="{Binding OpenBatchFromChooserCommand}"
+                                   ToolTip="Configure more than one connector in a single reviewed command (setup --yes --connector ... --mode ...)."
+                                   AutomationProperties.HelpText="Opens a dialog that sets up several connectors at once. Shows the exact command first." />
+                        <ui:Button Margin="0,0,8,0"
+                                   Content="Remove a connector…"
+                                   Icon="{ctl:DcSymbolIcon PlugDisconnected24}"
+                                   Command="{Binding RemoveConnectorCommand}"
+                                   IsEnabled="{Binding RemoveConnectorCard.CanLaunch, FallbackValue=False}"
+                                   ToolTipService.ShowOnDisabled="True"
+                                   ToolTip="{Binding RemoveConnectorCard.TileToolTip}"
+                                   Visibility="{Binding HasRemoveConnector, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.HelpText="Opens the setup remove wizard, which ends on a review of the exact command." />
+                        <ui:Button Appearance="Secondary"
+                                   Content="Close"
+                                   Command="{Binding CloseConnectorSetupCommand}"
+                                   ToolTip="Close (Esc)" />
+                    </WrapPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

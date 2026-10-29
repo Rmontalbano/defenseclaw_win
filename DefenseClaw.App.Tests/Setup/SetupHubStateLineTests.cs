@@ -118,8 +118,15 @@ public sealed class SetupHubStateLineTests
 
                 var lines = VisualTree.Descendants<TextBlock>(shell.Page!).Where(t => t.IsVisible).Select(t => t.Text).ToList();
                 Assert.Contains("On · observe · regex_only", lines);
-                Assert.Contains(lines, l => l.StartsWith("Configured · observe", StringComparison.Ordinal));
                 Assert.Contains(lines, l => l.EndsWith(" of 6 on", StringComparison.Ordinal));
+
+                // A connector's own line is on its tile in the Connector Setup chooser (CUST-385: the grid has one connector tile).
+                vm.IsConnectorSetupOpen = true;
+                shell.Host.Relayout();
+                lines = VisualTree.Descendants<TextBlock>(shell.Page!).Where(t => t.IsVisible).Select(t => t.Text).ToList();
+                Assert.Contains(lines, l => l.StartsWith("Configured · observe", StringComparison.Ordinal));
+                vm.IsConnectorSetupOpen = false;
+                shell.Host.Relayout();
 
                 var tiles = VisualTree.Descendants<Button>(shell.Page!).Where(b => b.Width == 233 && b.IsVisible && b.Height == 92).ToArray();
                 Assert.True(tiles.Length >= 4);

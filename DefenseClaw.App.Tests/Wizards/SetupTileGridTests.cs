@@ -9,7 +9,7 @@ using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.Tests.Wizards;
 
-/// <summary>The Setup hub's wizards are an adaptive grid of 233 x 92 tiles, each a Fluent glyph, a title and a two-line blurb (CUST-225).</summary>
+/// <summary>The Setup hub's areas are an adaptive grid of 233 x 92 tiles, each a Fluent glyph, a title and a two-line blurb (CUST-225; the Mac's 23 areas since CUST-385).</summary>
 [Collection(UiCollection.Name)]
 public class SetupTileGridTests
 {
@@ -72,6 +72,7 @@ public class SetupTileGridTests
     [Fact]
     public void The_grid_is_233_by_92_tiles_that_open_the_wizard_and_the_guardrail_tile_waits_for_its_wiring()
     {
+        // CUST-385: the grid is the Mac's 23 setup areas (it was one tile per catalog card, grouped); the cards are what the tiles open.
         using var temp = new TempDirectory();
         using var services = TestServices.Create(temp);
         var shell = UiThread.Run(() =>
@@ -91,7 +92,7 @@ public class SetupTileGridTests
                 shell.Host.Relayout();
 
                 var tiles = Tiles(shell);
-                Assert.Equal(Sample.Length, tiles.Length);
+                Assert.Equal(SetupAreas.All.Count, tiles.Length);
                 Assert.All(tiles, t =>
                 {
                     Assert.Equal(233, t.ActualWidth, 0.5);
@@ -100,7 +101,8 @@ public class SetupTileGridTests
                     Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(t)));
                     Assert.NotNull(t.Command);
                 });
-                Assert.Contains(tiles, t => AutomationProperties.GetName(t) == "Configure claude-code");
+                Assert.Contains(tiles, t => AutomationProperties.GetName(t) == "Configure LLM");
+                Assert.Contains(tiles, t => AutomationProperties.GetName(t) == "Open Connector Setup");
 
                 // Several tiles share a row on a wide page: it is a grid, not a list.
                 var rows = tiles.Select(t => Math.Round(t.TranslatePoint(new Point(), shell.Page!).Y)).Distinct().Count();
@@ -155,19 +157,23 @@ public class SetupTileGridTests
                 shell.Host.Relayout();
                 RenderTo.Png(shell.Host, "setup-tiles-720x900");
 
+                // A connector's name finds the one tile that leads to it (CUST-385: Connector Setup holds the connector wizards).
                 vm.SearchText = "codex";
                 shell.Host.Relayout();
-                Assert.Single(Tiles(shell));
+                Assert.Equal(new[] { "Open Connector Setup" }, Tiles(shell).Select(AutomationProperties.GetName));
 
                 vm.SearchText = "no such wizard";
                 shell.Host.Relayout();
                 Assert.Empty(Tiles(shell));
                 Assert.True(vm.ShowNoMatch);
 
+                // The certification filter is the chooser's now: it hides cursor (not certified) from the connector list, nothing from the grid.
                 vm.ClearFiltersCommand.Execute(null);
                 vm.CertifiedOnly = true;
                 shell.Host.Relayout();
-                Assert.DoesNotContain(Tiles(shell), t => AutomationProperties.GetName(t) == "Configure cursor");
+                Assert.Equal(SetupAreas.All.Count, Tiles(shell).Length);
+                Assert.DoesNotContain(vm.ConnectorChoices, c => c.Target == "cursor");
+                Assert.Contains(vm.ConnectorChoices, c => c.Target == "codex");
             });
         }
         finally
@@ -176,9 +182,10 @@ public class SetupTileGridTests
         }
     }
 
+    /// <summary>The area tiles on screen (the Mac's grid).</summary>
     private static System.Windows.Controls.Button[] Tiles(PanelShell shell) =>
         VisualTree.Descendants<System.Windows.Controls.Button>(shell.Page!)
-            .Where(b => b.IsVisible && b.DataContext is WizardCardViewModel)
+            .Where(b => b.IsVisible && b.DataContext is SetupAreaViewModel)
             .ToArray();
 
     private static System.Windows.Controls.Button[] ControlsTile(PanelShell shell) =>

@@ -170,7 +170,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     public override string Title => "Setup";
 
-    /// <summary>Opens the config.yaml editor (raw AvalonEdit + generated form tabs).</summary>
+    /// <summary>Opens the config.yaml editor in a window of its own: the same draft as the inline editor on this page (<see cref="ConfigEditor"/>, CUST-385).</summary>
     [RelayCommand]
     private void OpenConfigEditor() => Views.ConfigEditor.ConfigEditorWindow.Show(Services);
 
@@ -259,7 +259,13 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     /// <summary>The list the tile opens, when it is one of the three that have an editor and the shell has wired it.</summary>
     private SetupResource? ResourceFor(WizardCardViewModel card) => _openResourceEditor is null ? null : SetupResourceArgv.ForTarget(card.Target);
 
-    private void OnRuntimeChanged(object? sender, EventArgs e) => RaiseRedactionTile();
+    private void OnRuntimeChanged(object? sender, EventArgs e)
+    {
+        RaiseRedactionTile();
+
+        // The ACP Guard tile follows the runtime's answer (CUST-385).
+        RefreshAreas();
+    }
 
     /// <summary>Shows these definitions as the tile grid without asking the CLI (tests).</summary>
     internal void ShowCards(IReadOnlyList<WizardDefinition> definitions)
@@ -270,7 +276,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     }
 
     public override string Description =>
-        "Every defenseclaw setup flow on this machine, discovered from the CLI at runtime. Each one ends on a review screen showing the exact command before anything runs.";
+        "The setup areas, then the config editor. Every defenseclaw setup flow on this machine is discovered from the CLI at runtime, and each one ends on a review screen showing the exact command before anything runs.";
 
     /// <summary>Cards, bucketed by <see cref="WizardGroups"/>, filtered by search and certification.</summary>
     public ObservableCollection<WizardGroupViewModel> Groups { get; } = new();
@@ -315,7 +321,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     /// </summary>
     /// <summary>
     /// A deep link (<see cref="IAcceptsNavigation"/>): a <see cref="CredentialSet"/> (the palette's <c>keys set NAME</c>, CUST-328) opens the Credentials card's masked
-    /// box on that variable. Any other payload is ignored. Nothing is stored or run by it.
+    /// box on that variable; a <see cref="ConfigEditorFocus"/> brings the inline config editor into view (CUST-385). Any other payload is ignored. Nothing is stored or
+    /// run by it.
     /// </summary>
     public void Accept(object payload)
     {
@@ -327,6 +334,11 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         {
             // The Overview's Runtime monitoring row (CUST-348): opens the card. Nothing is changed by it; the dialog still reviews every change.
             Monitoring.Open();
+        }
+        else if (payload is ConfigEditorFocus)
+        {
+            // The inline config editor (CUST-385): brought into view with the draft it holds. Nothing is loaded, saved or run by it.
+            RequestSection(ConfigEditorSection);
         }
     }
 
@@ -435,6 +447,9 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         {
             _ = card.ApplyState(WizardCardStates.For(card.Target, card.Definition.Group, Services.Config));
         }
+
+        // The area tiles carry their card's line (CUST-385).
+        RefreshAreas();
     }
 
     private void OnConfigReloaded(object? sender, EventArgs e) => RefreshCardStates();
@@ -533,12 +548,20 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     partial void OnCertifiedOnlyChanged(bool value) => ApplyFilters();
 
     [RelayCommand]
-    private async Task LaunchAsync(WizardCardViewModel? card)
+    private Task LaunchAsync(WizardCardViewModel? card) => LaunchCoreAsync(card, preset: null);
+
+    /// <summary>
+    /// Opens what a card opens: its list-first editor, the routing dialog, or its wizard (on <paramref name="preset"/>'s page or goal when one is given, as
+    /// the Cisco AI Defense tile asks of the guardrail wizard). The Connector Setup chooser, when it is what launched it, closes first.
+    /// </summary>
+    private async Task LaunchCoreAsync(WizardCardViewModel? card, WizardPreset? preset)
     {
         if (card is null || !card.CanLaunch)
         {
             return;
         }
+
+        IsConnectorSetupOpen = false;
 
         // The list-first editors (CUST-270): the tile opens the list, and the list's Add opens the wizard on add.
         if (ResourceFor(card) is { } resource && _openResourceEditor is { } openEditor)
@@ -558,7 +581,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         try
         {
             await WizardLauncher
-                .ShowAsync(Services, card.Target, Application.Current?.MainWindow)
+                .ShowAsync(Services, card.Target, Application.Current?.MainWindow, preset: preset)
                 .ConfigureAwait(true);
         }
         finally
@@ -615,6 +638,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         EmptyState = SetupEmptyState.None;
         Groups.Clear();
         _all.Clear();
+        RefreshAreas();
 
         try
         {
@@ -760,7 +784,12 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
             Groups.Add(new WizardGroupViewModel(group.Key, group.OrderBy(c => c.Title, StringComparer.CurrentCultureIgnoreCase)));
         }
 
-        EmptyState = ClassifyEmpty(IsLoading, HasLoadError, _all.Count, matching.Count);
+        RefreshAreas();
+
+        // The area tiles are always there (a tile the CLI cannot serve says why), so "nothing matches" counts them too; a catalog that failed or listed
+        // nothing is still said as such.
+        var shown = _all.Count == 0 ? matching.Count : matching.Count + Areas.Count(a => a.IsShown);
+        EmptyState = ClassifyEmpty(IsLoading, HasLoadError, _all.Count, shown);
         UpdateStatusNote();
     }
 
@@ -931,6 +960,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
         OnPropertyChanged(nameof(CanUseGuardrailControls));
         OnPropertyChanged(nameof(HasInstallationBlock));
+        RefreshAreas();
         Credentials.RefreshInstallation();
         RefreshGuardrailReview();
         RefreshRestartBanner();

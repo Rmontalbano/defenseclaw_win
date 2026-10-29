@@ -181,13 +181,14 @@ public sealed class SetupHubEditorTilesTests : IDisposable
                 vm.ShowCards(Cards);
                 shell.Host.Relayout();
 
+                // CUST-385: the cards are reached through the Mac's area tiles, which carry the Mac's titles; the tile of each is its card's.
                 var tiles = VisualTree.Descendants<System.Windows.Controls.Button>(shell.Page!)
-                    .Where(b => b.IsVisible && b.DataContext is WizardCardViewModel)
-                    .Select(b => AutomationProperties.GetName(b))
-                    .Order(StringComparer.Ordinal)
+                    .Where(b => b.IsVisible && b.DataContext is SetupAreaViewModel { Card: not null })
                     .ToArray();
+                var names = tiles.Select(b => AutomationProperties.GetName(b)).Order(StringComparer.Ordinal).ToArray();
 
-                Assert.Equal(new[] { "Configure LLM providers", "Configure Observability", "Configure Trusted binary paths", "Configure Webhook" }, tiles);
+                Assert.Equal(new[] { "Configure LLM", "Configure Observability", "Configure Trusted Paths", "Configure Webhooks" }, names);
+                Assert.All(tiles, b => Assert.Contains(((SetupAreaViewModel)b.DataContext).Card!, vm.Groups.SelectMany(g => g.Cards)));
             });
         }
         finally

@@ -2,52 +2,41 @@ using System;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Appearance;
 using DefenseClaw.App.ViewModels.ConfigEditor;
-using ICSharpCode.AvalonEdit.Search;
+using ICSharpCode.AvalonEdit;
 using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.Views.ConfigEditor;
 
-/// <summary>The answer <see cref="ConfigEditorWindow.CloseForExitAsync"/> gives the tray Exit.</summary>
+/// <summary>The answer <see cref="ConfigEditorWindow.CloseForExitAsync(AppServices)"/> gives the tray Exit.</summary>
 public enum ConfigEditorExitResult
 {
-    /// <summary>No editor is left open: there was none, it was clean, or the operator discarded or saved.</summary>
+    /// <summary>No edits are left to lose: there were none, the operator discarded, or saved; any detached editor window is closed.</summary>
     Closed,
 
-    /// <summary>The operator cancelled the close or the save failed; the editor stays open and says why.</summary>
+    /// <summary>The operator cancelled or the save failed; the editor stays as it was and says why.</summary>
     Declined,
 
-    /// <summary>The editor is already closing or saving, so this request was not a new question and nothing was asked.</summary>
+    /// <summary>The editor is already closing, asking or saving, so this request was not a new question and nothing was asked.</summary>
     Busy,
 }
 
 /// <summary>
-/// The config.yaml editor window: RAW (AvalonEdit) and FORM (generated sections) tabs
-/// over the same <see cref="ConfigEditorWindowViewModel"/>.
+/// The detached config.yaml editor: <see cref="ConfigEditorView"/> (the same control the Setup panel shows inline) in a window of its own, over the
+/// app's one draft (<see cref="ConfigEditorSession"/>, CUST-385). An edit made here is the edit in Setup and the other way round; there is one file
+/// watcher and one save pipeline whichever shows it.
 /// <para>
-/// <b>Entry point.</b> <see cref="Show"/> is the whole public surface this window
-/// exposes to the rest of the app — the orchestrator wires it up from wherever the
-/// Configure/Setup panel ends up launching it from. Calling it twice reuses the same
-/// window (brought to front) instead of opening a second editor over the same file.
+/// <b>Entry point.</b> <see cref="Show"/> is the whole public surface this window exposes to the rest of the app (the palette's "Open config editor",
+/// <c>ShellActions.OpenConfigEditor</c>, and the inline editor's "Open in window"). Calling it twice reuses the same window (brought to front) instead of
+/// opening a second window over the same draft.
 /// </para>
 /// <para>
-/// AvalonEdit's <c>TextEditor.Text</c> is a plain CLR property, not a dependency
-/// property, so it cannot be bound from XAML — this code-behind is the standard,
-/// AvalonEdit-recommended way to keep it in sync with the view-model's
-/// <see cref="ConfigEditorWindowViewModel.RawText"/> in both directions without an
-/// infinite update loop.
-/// </para>
-/// <para>
-/// <b>Closing with unsaved edits.</b> <see cref="OnClosing"/> holds a close that would drop edits (RAW or FORM),
-/// asks save / discard / cancel through <see cref="UnsavedChangesDialog"/>, and closes for real only once the
-/// view-model says so (Discard, or a Save that wrote <i>and</i> validated). The app's tray Exit cannot rely on
-/// <c>Closing</c> — <c>Application.Shutdown</c> ignores <c>Cancel</c> — so it asks first through
-/// <see cref="CloseForExitAsync"/>.
+/// <b>Closing.</b> The draft does not live in this window, so closing it drops nothing: the edits stay in the Setup panel's editor and the window just goes.
+/// The tray Exit is different - it ends the app, and with it the draft - so it asks first through <see cref="CloseForExitAsync(AppServices)"/>, over this
+/// window when it is open and over the dashboard when it is not. <c>Application.Shutdown</c> ignores <c>Cancel</c>, which is why the exit asks before it shuts
+/// down rather than in <see cref="OnClosing"/>.
 /// </para>
 /// </summary>
 public partial class ConfigEditorWindow : FluentWindow
@@ -56,22 +45,21 @@ public partial class ConfigEditorWindow : FluentWindow
 
     /// <summary>
     /// How the post-save bar reaches the tray's gateway control: opens the reviewed <c>defenseclaw-gateway restart</c> over the
-    /// given window (the editor) and runs it only if the operator confirms. Set once by the dashboard window, which is built
-    /// with the tray; null in a test host, where the bar then carries no restart button.
+    /// given window and runs it only if the operator confirms. Set once by the dashboard window, which is built with the tray; null in a
+    /// test host, where the bar then carries no restart button. The shared session (<see cref="ConfigEditorSession"/>) wires it to the draft.
     /// </summary>
     internal static Func<Window, Task>? GatewayRestart { get; set; }
 
+    private readonly ConfigEditorSession _session;
     private readonly ConfigEditorWindowViewModel _viewModel;
 
-    /// <summary>The look controls, whose changes re-colour the YAML; null when the app was built without them (a test host).</summary>
+    /// <summary>The look controls; null when the app was built without them (a test host).</summary>
     private readonly AppearanceService? _appearance = AppearanceService.Current;
 
-    private bool _syncingEditorText;
-
-    /// <summary>Set once the view-model has said the close may go ahead, so the <c>Close()</c> that follows is not asked about again.</summary>
+    /// <summary>Set once the exit's question has been answered, so the <c>Close()</c> that follows is not held again.</summary>
     private bool _closeApproved;
 
-    /// <summary>True while a close question is being asked or acted on; a second X click or Alt+F4 meanwhile is not a second answer.</summary>
+    /// <summary>True while the exit's question is being asked or acted on; a second exit meanwhile is told the editor is busy.</summary>
     private bool _closeFlowRunning;
 
     private bool _closed;
@@ -84,45 +72,17 @@ public partial class ConfigEditorWindow : FluentWindow
         Icon = ShieldIconFactory.CreateWindowIcon();
         _appearance?.Attach(this);
 
-        _viewModel = new ConfigEditorWindowViewModel(services);
+        _session = ConfigEditorSession.For(services);
+        _viewModel = _session.Editor;
         DataContext = _viewModel;
-        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        _viewModel.UnsavedChangesPrompt = request => Task.FromResult(UnsavedChangesDialog.Ask(this, request));
-        _viewModel.CommitPendingEdits = CommitPendingFormEdit;
-        if (GatewayRestart is { } restart)
-        {
-            _viewModel.RestartGatewayRequest = () => restart(this);
-        }
+        EditorView.Session = _session;
 
-        _viewModel.WatchDiskChanges();
-
-        ApplyHighlighting();
-        if (_appearance is not null)
-        {
-            _appearance.Changed += OnAppearanceChanged;
-        }
-
-        RawEditor.ShowLineNumbers = true;
-        RawEditor.Options.EnableHyperlinks = false;
-        RawEditor.Options.EnableEmailHyperlinks = false;
-        RawEditor.Options.ShowTabs = false;
-        SearchPanel.Install(RawEditor);
-        RawEditor.TextChanged += OnEditorTextChanged;
-
-        RootTabs.SelectionChanged += OnTabSelectionChanged;
-        PreviewKeyDown += OnWindowPreviewKeyDown;
-
-        Loaded += OnLoaded;
         Closed += (_, _) =>
         {
             _closed = true;
-            if (_appearance is not null)
-            {
-                _appearance.Changed -= OnAppearanceChanged;
-            }
 
-            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
-            _viewModel.Dispose();
+            // The draft is the session's: the view lets go of it (it detaches when unloaded), and nothing is disposed.
+            EditorView.Session = null;
             if (ReferenceEquals(_current, this))
             {
                 _current = null;
@@ -130,14 +90,13 @@ public partial class ConfigEditorWindow : FluentWindow
         };
     }
 
-    /// <summary>The YAML palette that reads on the look on screen (see <see cref="YamlHighlighting"/>): the style's own hues, light or dark.</summary>
-    private void ApplyHighlighting() =>
-        RawEditor.SyntaxHighlighting = YamlHighlighting.ForCurrent();
+    /// <summary>The RAW editor of this window's view (tests read its options).</summary>
+    internal TextEditor RawEditor => EditorView.RawEditor;
 
-    private void OnAppearanceChanged(object? sender, EventArgs e) =>
-        _ = Dispatcher.BeginInvoke(new Action(ApplyHighlighting));
+    /// <summary>The detached editor window when one is open; null otherwise.</summary>
+    internal static ConfigEditorWindow? OpenWindow => _current;
 
-    /// <summary>Opens the config editor, or brings the already-open one to the front.</summary>
+    /// <summary>Opens the detached config editor on the app's one draft, or brings the already-open one to the front.</summary>
     public static void Show(AppServices services)
     {
         if (_current is { } existing)
@@ -150,39 +109,45 @@ public partial class ConfigEditorWindow : FluentWindow
         _current.Show();
     }
 
+    /// <summary>The tray Exit's question about the detached window alone (no composition to look up the draft by): kept for callers that only know the window.</summary>
+    public static Task<ConfigEditorExitResult> CloseForExitAsync() => CloseForExitAsync(null);
+
     /// <summary>
-    /// The tray Exit's question, asked before the app shuts down: closes the editor if it can be closed without
-    /// losing edits and says so. <see cref="ConfigEditorExitResult.Closed"/> means no editor is left open (there was
-    /// none, it was clean, the operator discarded, or the edits were saved and validated) and the exit may go ahead;
-    /// <see cref="ConfigEditorExitResult.Declined"/> means the operator cancelled or the save failed, and
-    /// <see cref="ConfigEditorExitResult.Busy"/> that a close question or save is already in flight - either way the
-    /// exit must be abandoned, and only the last is one the operator has not just been shown.
+    /// The tray Exit's question, asked before the app shuts down. With the detached window open it is asked over that window, which closes once the answer
+    /// allows it; without one, the draft is the Setup panel's and the question is asked there (<see cref="ConfigEditorSession"/>).
+    /// <see cref="ConfigEditorExitResult.Closed"/> means nothing is left to lose (there were no edits, the operator discarded, or the edits were saved and
+    /// validated) and the exit may go ahead; <see cref="ConfigEditorExitResult.Declined"/> means the operator cancelled or the save failed, and
+    /// <see cref="ConfigEditorExitResult.Busy"/> that a question or save is already in flight - either way the exit must be abandoned, and only the last is
+    /// one the operator has not just been shown.
     /// <para>
-    /// It closes the window itself, rather than approving a later close, so an approval can never outlive an exit
-    /// that something else then calls off. Call it as the last check before <c>Shutdown</c>.
+    /// It closes the window itself, rather than approving a later close, so an approval can never outlive an exit that something else then calls off. Call
+    /// it as the last check before <c>Shutdown</c>.
     /// </para>
     /// </summary>
-    public static async Task<ConfigEditorExitResult> CloseForExitAsync()
+    /// <param name="services">The composition whose draft to ask about when no window is open; null asks about the window only.</param>
+    public static async Task<ConfigEditorExitResult> CloseForExitAsync(AppServices? services)
     {
-        if (_current is not { } window)
+        if (_current is { } window)
         {
-            return ConfigEditorExitResult.Closed;
+            if (window._closeFlowRunning)
+            {
+                // A question is already open (its dialog is modal, so on screen) or a save is finishing: a second request
+                // is not a second answer, and CloseAfterConfirmationAsync would only say "no" without a word.
+                return ConfigEditorExitResult.Busy;
+            }
+
+            return await window.CloseAfterConfirmationAsync(bringToFront: true).ConfigureAwait(true)
+                ? ConfigEditorExitResult.Closed
+                : ConfigEditorExitResult.Declined;
         }
 
-        if (window._closeFlowRunning)
-        {
-            // A question is already open (its dialog is modal, so on screen) or a save is finishing: a second request
-            // is not a second answer, and CloseAfterConfirmationAsync would only say "no" without a word.
-            return ConfigEditorExitResult.Busy;
-        }
-
-        return await window.CloseAfterConfirmationAsync(bringToFront: true).ConfigureAwait(true)
-            ? ConfigEditorExitResult.Closed
-            : ConfigEditorExitResult.Declined;
+        return services is not null && ConfigEditorSession.TryGet(services) is { } session
+            ? await session.ConfirmExitAsync().ConfigureAwait(true)
+            : ConfigEditorExitResult.Closed;
     }
 
     /// <summary>
-    /// Asks whatever must be asked and, if the answer allows it, closes the window. True when the window is closed
+    /// Asks whatever must be asked about the draft and, if the answer allows it, closes the window. True when the window is closed
     /// (or needed no question), false when it stays open.
     /// </summary>
     private async Task<bool> CloseAfterConfirmationAsync(bool bringToFront)
@@ -199,7 +164,7 @@ public partial class ConfigEditorWindow : FluentWindow
             {
                 if (bringToFront)
                 {
-                    // The question is about this window's edits; make sure it is on screen to be read.
+                    // The question is about the draft this window shows; make sure it is on screen to be read.
                     ShowAndActivate();
                 }
 
@@ -224,43 +189,17 @@ public partial class ConfigEditorWindow : FluentWindow
     }
 
     /// <summary>
-    /// Holds a close that would lose edits. The title-bar X, Alt+F4 and the system menu land here; the window stays
-    /// open while <see cref="CloseAfterConfirmationAsync"/> asks, then closes itself only if the answer allows it.
-    /// A close WPF forces regardless — <c>Application.Shutdown</c> ignores <c>Cancel</c> — is let through untouched
-    /// (a question nobody could answer would only be left on screen), which is why the app asks first, via
-    /// <see cref="CloseForExitAsync"/>.
+    /// The title-bar X, Alt+F4 and the system menu land here. Closing drops nothing (the draft stays in the Setup panel's editor), so the window goes -
+    /// except while the exit's question is open or its save is finishing, when a second close is not a second answer and is held.
     /// </summary>
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (!e.Cancel && !_closeApproved && !Dispatcher.HasShutdownStarted)
+        if (!e.Cancel && !_closeApproved && !Dispatcher.HasShutdownStarted && _closeFlowRunning)
         {
-            if (_closeFlowRunning)
-            {
-                // A question is already open (or a save is finishing): a second close request is not a second answer.
-                e.Cancel = true;
-            }
-            else if (_viewModel.CloseNeedsConfirmation())
-            {
-                e.Cancel = true;
-                _ = CloseAfterConfirmationAsync(bringToFront: false);
-            }
+            e.Cancel = true;
         }
 
         base.OnClosing(e);
-    }
-
-    /// <summary>
-    /// Lets a FORM edit that is still inside its box reach the view-model. FORM boxes commit on <c>LostFocus</c>, and
-    /// a title-bar click or a tray Exit does not move keyboard focus, so without this the typed value would be
-    /// invisible to the "any unsaved edits?" check. Focus is put back afterwards so typing can continue.
-    /// </summary>
-    private void CommitPendingFormEdit()
-    {
-        if (Keyboard.FocusedElement is UIElement focused && IsInside(FormScroll, focused))
-        {
-            _ = Keyboard.Focus(null);
-            _ = focused.Focus();
-        }
     }
 
     private void ShowAndActivate()
@@ -273,151 +212,5 @@ public partial class ConfigEditorWindow : FluentWindow
         base.Show();
         _ = Activate();
         _ = Focus();
-    }
-
-    private async void OnLoaded(object sender, RoutedEventArgs e)
-    {
-        Loaded -= OnLoaded;
-        await _viewModel.LoadAsync().ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Window-level shortcuts. <b>Ctrl+S</b> runs Save when Save is enabled (it is the same command the
-    /// button uses, so the same CanExecute applies): it opens the pre-save review, and pressed again there saves.
-    /// <b>Esc</b> leaves the review (back to editing) or closes the on-disk preview when one is open
-    /// and otherwise does nothing — it deliberately does not close the window, which could throw away
-    /// unsaved edits.
-    /// </summary>
-    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape && _viewModel.IsReviewing)
-        {
-            _viewModel.CancelReviewCommand.Execute(null);
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Escape && _viewModel.IsReviewingExternalChange)
-        {
-            _viewModel.CancelExternalReviewCommand.Execute(null);
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Escape && _viewModel.ShowOnDiskPreview)
-        {
-            _viewModel.DismissOnDiskPreviewCommand.Execute(null);
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            e.Handled = true;
-            SaveFromKeyboard();
-        }
-    }
-
-    /// <summary>
-    /// FORM boxes commit on <c>LostFocus</c>, so a value typed into the focused box has not reached the
-    /// view-model when Ctrl+S is pressed — and a Save would then miss it. When focus is inside the FORM
-    /// tab, clearing it first makes WPF commit the pending edit (synchronously), then focus is put back.
-    /// The RAW editor needs none of this: its text is pushed to the view-model on every change.
-    /// </summary>
-    private void SaveFromKeyboard()
-    {
-        // The review of a change made to the file behind the editor covers it: a save would go under it, so Ctrl+S waits for the choice made there.
-        if (_viewModel.IsReviewingExternalChange)
-        {
-            return;
-        }
-
-        if (_viewModel.IsReviewing)
-        {
-            if (_viewModel.ConfirmReviewedSaveCommand.CanExecute(null))
-            {
-                _viewModel.ConfirmReviewedSaveCommand.Execute(null);
-            }
-
-            return;
-        }
-
-        if (!_viewModel.ReviewAndSaveCommand.CanExecute(null))
-        {
-            return;
-        }
-
-        UIElement? restoreFocusTo = null;
-        if (Keyboard.FocusedElement is UIElement focused && IsInside(FormScroll, focused))
-        {
-            restoreFocusTo = focused;
-            _ = Keyboard.Focus(null);
-        }
-
-        if (_viewModel.ReviewAndSaveCommand.CanExecute(null))
-        {
-            _viewModel.ReviewAndSaveCommand.Execute(null);
-        }
-
-        _ = restoreFocusTo?.Focus();
-    }
-
-    private static bool IsInside(DependencyObject ancestor, DependencyObject? node)
-    {
-        while (node is not null)
-        {
-            if (ReferenceEquals(node, ancestor))
-            {
-                return true;
-            }
-
-            node = node is Visual
-                ? VisualTreeHelper.GetParent(node)
-                : LogicalTreeHelper.GetParent(node);
-        }
-
-        return false;
-    }
-
-    private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!ReferenceEquals(e.OriginalSource, RootTabs))
-        {
-            return;
-        }
-
-        if (RootTabs.SelectedItem is TabItem { Name: "FormTabItem" })
-        {
-            _viewModel.NotifyFormTabSelected();
-        }
-    }
-
-    private void OnEditorTextChanged(object? sender, EventArgs e)
-    {
-        if (_syncingEditorText)
-        {
-            return;
-        }
-
-        _viewModel.RawText = RawEditor.Text;
-    }
-
-    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != nameof(ConfigEditorWindowViewModel.RawText))
-        {
-            return;
-        }
-
-        if (RawEditor.Text == _viewModel.RawText)
-        {
-            return;
-        }
-
-        _syncingEditorText = true;
-        var caret = Math.Min(RawEditor.CaretOffset, _viewModel.RawText.Length);
-        RawEditor.Text = _viewModel.RawText;
-        RawEditor.CaretOffset = caret;
-        _syncingEditorText = false;
     }
 }
