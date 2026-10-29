@@ -50,8 +50,8 @@ public sealed record InstallStatus
     public PortOwnerTrust OwnerTrust { get; init; }
 
     /// <summary>
-    /// Which trusted gateway <see cref="PortOwner"/> is (the installed one, or this app's administrator copy by its file or by the helper's
-    /// records); <see cref="GatewayPeerRoute.None"/> unless <see cref="OwnerTrust"/> is <see cref="PortOwnerTrust.Gateway"/>. Words only.
+    /// Which trusted gateway <see cref="PortOwner"/> is (the installed one, or this app's administrator copy);
+    /// <see cref="GatewayPeerRoute.None"/> unless <see cref="OwnerTrust"/> is <see cref="PortOwnerTrust.Gateway"/>. Words only.
     /// </summary>
     public GatewayPeerRoute OwnerRoute { get; init; }
 
@@ -245,16 +245,11 @@ public sealed class InstallStateDetector
         }
 
         // This app's own administrator gateway is named as such, so an elevated gateway the app started is never read as a stuck or foreign one.
-        var who = verdict.Route is GatewayPeerRoute.AdministratorCopy or GatewayPeerRoute.AdministratorCopyByRecord
+        var who = verdict.Route == GatewayPeerRoute.AdministratorCopy
             ? "The administrator gateway started by this app is responding"
             : "Gateway responding";
-        var answer = health.IsOk
+        return health.IsOk
             ? $"{who} on 127.0.0.1:{port}."
             : $"{who} on 127.0.0.1:{port}, but /health returned {health.Status}: {health.ErrorMessage}";
-
-        return verdict.Route == GatewayPeerRoute.AdministratorCopyByRecord
-            ? answer.TrimEnd('.') + ". Windows does not show this app which file an elevated process runs, so it was matched by the " +
-              "administrator helper's records (its last start, and the gateway.pid it wrote) instead."
-            : answer;
     }
 }

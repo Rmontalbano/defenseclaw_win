@@ -10,11 +10,23 @@ namespace DefenseClaw.Core.Net;
 /// <param name="LocalAddress">Address the socket is bound to.</param>
 /// <param name="Port">Port the socket is listening on.</param>
 /// <param name="ImagePath">
-/// Full path of the owning executable; null when it could not be read (process gone, or not
-/// openable). Together with <paramref name="ProcessName"/> this is what says whether the
+/// Full path of the owning executable; null when it could not be read (process gone, or Windows gave no path either way, see
+/// <see cref="ProcessImagePath"/>). Together with <paramref name="ProcessName"/> this is what says whether the
 /// listener really is the DefenseClaw gateway — a name alone is anyone's to pick.
 /// </param>
-public sealed record PortOwner(int Pid, string? ProcessName, string LocalAddress, int Port = 0, string? ImagePath = null)
+/// <param name="SessionId">The Windows session the process runs in, from the process list (no handle needed); null when unknown.</param>
+/// <param name="ImageWithoutHandle">
+/// True when <paramref name="ImagePath"/> came from the kernel's process list because the process could not be opened (another account's,
+/// or an elevated one); see <see cref="ProcessImage.WithoutHandle"/>.
+/// </param>
+public sealed record PortOwner(
+    int Pid,
+    string? ProcessName,
+    string LocalAddress,
+    int Port = 0,
+    string? ImagePath = null,
+    int? SessionId = null,
+    bool ImageWithoutHandle = false)
 {
     /// <summary>
     /// True when the listener is WSL's port relay. Port 18970 answering through
@@ -77,9 +89,6 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
     /// <summary>TCP_TABLE_OWNER_PID_LISTENER.</summary>
     private const int TcpTableOwnerPidListener = 3;
 
-    /// <summary>PROCESS_QUERY_LIMITED_INFORMATION: enough for the image path, granted even for elevated processes.</summary>
-    private const uint ProcessQueryLimitedInformation = 0x1000;
-
     /// <summary>How many size-then-fetch rounds are tried before the table is given up on.</summary>
     public const int MaxTableReadAttempts = 5;
 
@@ -106,13 +115,13 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
 
     /// <param name="readConnectionTable">The same call for the connections table (a test hands it a synthetic buffer).</param>
     public PortOwnerInspector(TcpTableReader readTable, TcpTableReader readConnectionTable)
-        : this(readTable, readConnectionTable, ReadImagePath)
+        : this(readTable, readConnectionTable, ProcessImagePath.Read)
     {
     }
 
     /// <param name="readImagePath">
-    /// How a row's pid becomes the file it runs (<see cref="ReadImagePath"/> by default), so a test can play a process whose path Windows will
-    /// not give out without needing one (CUST-362).
+    /// How a row's pid becomes the file it runs (<see cref="ProcessImagePath.Read(int)"/> by default), so a test can play a process whose path
+    /// Windows gives only without a handle, or not at all, without needing one (CUST-362).
     /// </param>
     public PortOwnerInspector(TcpTableReader readTable, TcpTableReader readConnectionTable, ImagePathReader readImagePath)
     {
@@ -128,8 +137,8 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
     /// </summary>
     public delegate uint TcpTableReader(IntPtr table, ref int size, int addressFamily);
 
-    /// <summary>The full path of the executable process <paramref name="pid"/> runs, or null when it cannot be read.</summary>
-    public delegate string? ImagePathReader(int pid);
+    /// <summary>The executable process <paramref name="pid"/> runs and how that was learned, or null when it cannot be read.</summary>
+    public delegate ProcessImage? ImagePathReader(int pid);
 
     public PortOwner? FindListener(int port)
     {
@@ -209,58 +218,32 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
             .ToArray();
     }
 
-    private PortOwner Describe((int Pid, int Port, string Address) entry) =>
-        new(entry.Pid, ResolveProcessName(entry.Pid), entry.Address, entry.Port, _readImagePath(entry.Pid));
-
-    /// <summary>
-    /// Full path of the process's executable, or null when it cannot be read. Uses the limited
-    /// query right (<c>PROCESS_QUERY_LIMITED_INFORMATION</c> and <c>QueryFullProcessImageNameW</c>) rather than
-    /// <c>Process.MainModule</c> or WMI's <c>ExecutablePath</c>, which need read access to the process's memory: those come back empty for an
-    /// elevated process seen from an unelevated one, where the limited right is usually still granted for the same account. It is not
-    /// always (another account's process, a security product that filters handles), and then this is null and the caller decides.
-    /// </summary>
-    public static string? ReadImagePath(int pid)
+    private PortOwner Describe((int Pid, int Port, string Address) entry)
     {
-        if (pid <= 0 || !OperatingSystem.IsWindows())
-        {
-            return null;
-        }
-
-        var handle = OpenProcess(ProcessQueryLimitedInformation, false, (uint)pid);
-        if (handle == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        try
-        {
-            var capacity = 1024;
-            var buffer = new char[capacity];
-            return QueryFullProcessImageName(handle, 0, buffer, ref capacity)
-                ? new string(buffer, 0, capacity)
-                : null;
-        }
-        finally
-        {
-            _ = CloseHandle(handle);
-        }
+        var (name, session) = ResolveProcess(entry.Pid);
+        var image = _readImagePath(entry.Pid);
+        return new PortOwner(entry.Pid, name, entry.Address, entry.Port, image?.Path, session, image?.WithoutHandle ?? false);
     }
 
-    private static string? ResolveProcessName(int pid)
+    /// <summary>
+    /// The process's name and Windows session, both from the process list (<c>NtQuerySystemInformation</c>, which is where .NET reads them):
+    /// no handle, so they are known even for a process this app may not open. Nulls when the process is gone.
+    /// </summary>
+    private static (string? Name, int? Session) ResolveProcess(int pid)
     {
         try
         {
             using var process = Process.GetProcessById(pid);
-            return process.ProcessName;
+            return (process.ProcessName, process.SessionId);
         }
         catch (ArgumentException)
         {
             // Process exited between enumeration and lookup.
-            return null;
+            return (null, null);
         }
         catch (InvalidOperationException)
         {
-            return null;
+            return (null, null);
         }
     }
 
@@ -406,27 +389,6 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
         int ulAf,
         int tableClass,
         uint reserved);
-
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr OpenProcess(
-        uint desiredAccess,
-        [MarshalAs(UnmanagedType.Bool)] bool inheritHandle,
-        uint processId);
-
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(IntPtr handle);
-
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool QueryFullProcessImageName(
-        IntPtr process,
-        uint flags,
-        [Out] char[] exeName,
-        ref int size);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MibTcpRowOwnerPid

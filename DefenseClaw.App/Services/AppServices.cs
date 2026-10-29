@@ -116,8 +116,7 @@ public sealed class AppServices : IDisposable
 
         // "Run gateway as administrator": the administrator copy of the gateway is the one place besides the installer's directories whose
         // gateway may be sent the token, and only while it passes its checks at that moment (AdminCopyTrust). Nothing is read until a
-        // gateway whose image is that exact path answers on the port, or one whose image Windows will not show (then the helper's records
-        // are read to match it, CUST-362).
+        // gateway whose image is that exact path answers on the port, in this app's Windows session (CUST-362).
         var adminSource = adminLayout ?? new WindowsAdminLayoutSource();
         var adminFs = adminFileSystem ?? new ReadOnlyAdminFileSystem();
         _peerVerifier = new GatewayPeerVerifier(Paths, PortInspector, adminCopy: new AdminCopyTrust(adminSource, adminFs));

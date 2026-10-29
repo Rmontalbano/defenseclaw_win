@@ -7,7 +7,8 @@ namespace DefenseClaw.Tests;
 /// <summary>
 /// The second place a gateway may be sent the bearer token from: the administrator copy that "Run gateway as administrator" keeps in Program Files.
 /// The verifier asks <see cref="IAdminCopyTrust"/> only for an image outside the installer's directories, with the process's name and the file's
-/// name still required to be <c>defenseclaw-gateway</c>, and the answer is read afresh each time. Without a trust object nothing changes.
+/// name still required to be <c>defenseclaw-gateway</c>, the process in this app's Windows session, and the answer is read afresh each time.
+/// Without a trust object nothing changes.
 /// </summary>
 public class GatewayPeerAdminCopyTests
 {
@@ -35,9 +36,12 @@ public class GatewayPeerAdminCopyTests
     private static DefenseClawPaths Paths() =>
         new(dataDirectory: @"C:\fake\data", binDirectory: Bin, searchPath: Array.Empty<string>(), fileExists: _ => false);
 
-    private static GatewayPeerVerifier Verifier(IAdminCopyTrust? trust) => new(Paths(), new NoPortInspector(), adminCopy: trust);
+    /// <summary>The app's Windows session in these tests; the copy is trusted only in it (CUST-362).</summary>
+    private const int Session = 3;
 
-    private static PortOwner Owner(string? name, string? image) => new(4242, name, "127.0.0.1", 18970, image);
+    private static GatewayPeerVerifier Verifier(IAdminCopyTrust? trust) => new(Paths(), new NoPortInspector(), adminCopy: trust, currentSessionId: Session);
+
+    private static PortOwner Owner(string? name, string? image) => new(4242, name, "127.0.0.1", 18970, image, Session);
 
     [Fact]
     public void A_trusted_administrator_copy_is_the_gateway()

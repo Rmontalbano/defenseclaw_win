@@ -37,7 +37,7 @@ The elevated process does not run the gateway from your profile. The helper copi
 
 Only Restart refreshes the copy. A Start with a copy that differs from the installed gateway is refused.
 
-The app sends the gateway token to the elevated gateway only once it has recognised it as this copy. Usually Windows tells the app which file the process runs, and that must be your copy's exact path, with the folders admin-only and the file equal to `copy.json`. When Windows will not tell an unelevated app (some security products refuse it), the app matches it by the helper's own `last-result.json` (a successful start) and the gateway's `gateway.pid` (the same process, your copy, written during that start). The dashboard then says "The administrator gateway started by this app is responding". Anything it cannot match is called unverified and gets no token.
+The app sends the gateway token to the elevated gateway only once it has recognised it as this copy: the process runs your copy's exact path, the folders are admin-only, the file equals `copy.json`, and the process runs in the app's own Windows session (Users may run the copy, so the path alone does not say it is yours). When Windows will not let the unelevated app open the elevated process, the app reads its path from the kernel's process list instead. The dashboard then says "The administrator gateway started by this app is responding". A gateway whose path cannot be read, or that runs in another session, is called unverified and gets no token; the helper's `last-result.json` and the gateway's `gateway.pid` never stand in for the path.
 
 ### The helper
 

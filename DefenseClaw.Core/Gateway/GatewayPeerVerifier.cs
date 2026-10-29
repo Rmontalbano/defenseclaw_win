@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using DefenseClaw.Core.Net;
 using DefenseClaw.Core.Paths;
@@ -14,13 +15,6 @@ public interface IAdminCopyTrust
 {
     /// <summary>True when <paramref name="imagePath"/> is the trusted administrator copy, judged now.</summary>
     bool IsTrustedImage(string imagePath);
-
-    /// <summary>
-    /// For a <c>defenseclaw-gateway</c> whose image path Windows would not give out (an elevated process seen from an unelevated app can be one,
-    /// and so can another account's process): true only when the helper's own records tie this very process to the administrator copy it
-    /// started, judged now (CUST-362). The default is no, so an implementation that reads no records trusts nothing it cannot see.
-    /// </summary>
-    bool IsStartedCopy(PortOwner owner) => false;
 
     /// <summary>
     /// Why <paramref name="owner"/> is not the trusted administrator copy, as the rest of a sentence that starts with the process's name and pid
@@ -42,14 +36,8 @@ public enum GatewayPeerRoute
     /// <summary>The gateway from the installer's directories.</summary>
     InstallDirectory,
 
-    /// <summary>The administrator copy this app's helper keeps in Program Files, recognised by the file the process runs.</summary>
+    /// <summary>The administrator copy this app's helper keeps in Program Files, recognised by the file the process runs, in this app's session.</summary>
     AdministratorCopy,
-
-    /// <summary>
-    /// The administrator copy, whose image path Windows would not give this app, recognised instead by the helper's admin-only records and
-    /// the gateway's <c>gateway.pid</c> naming the very process on the port.
-    /// </summary>
-    AdministratorCopyByRecord,
 }
 
 /// <summary>A listener's verdict and how it was reached.</summary>
@@ -93,9 +81,15 @@ public enum PortOwnerTrust
 /// <see cref="Models.GatewayHealth"/> — <see cref="GatewayClient"/> does.
 /// </para>
 /// <para>
-/// Fails closed: an owner whose image path could not be read is <see cref="PortOwnerTrust.Other"/>, with one exception: this app's own
-/// administrator copy, when the helper's records name that very process (<see cref="IAdminCopyTrust.IsStartedCopy"/>, CUST-362). An elevated
-/// gateway can hide its path from an unelevated app; another account's process can too, and nothing of that account's is in those records.
+/// <b>Which file, and whose session (CUST-362).</b> The path is read with a handle when Windows grants one, and otherwise from the kernel's
+/// process list (<see cref="ProcessImagePath"/>), which names the image of an elevated gateway as well. Without a handle nothing says which
+/// account runs the process, so a path read that way counts only for a process in this app's Windows session. The administrator copy needs the
+/// same session either way: it sits in Program Files, where every account may run it, so its path alone does not say it is the one the helper
+/// started for this account (an elevated start keeps the session). No record of the helper's or the gateway's (<c>last-result.json</c>,
+/// <c>gateway.pid</c>) ever stands in for the path.
+/// </para>
+/// <para>
+/// Fails closed: an owner whose image path could not be read either way is <see cref="PortOwnerTrust.Other"/>.
 /// </para>
 /// </summary>
 public sealed class GatewayPeerVerifier
@@ -108,6 +102,7 @@ public sealed class GatewayPeerVerifier
 
     private readonly IConnectionOwnerInspector? _connections;
     private readonly IAdminCopyTrust? _adminCopy;
+    private readonly int? _sessionId;
 
     /// <param name="adminCopy">
     /// Also trusts the administrator copy of the gateway while it is judged trusted (see <see cref="IAdminCopyTrust"/>); null (the default) trusts
@@ -117,16 +112,32 @@ public sealed class GatewayPeerVerifier
     /// Where the owner of one connection is looked up; defaults to <paramref name="inspector"/> when that is one too (the real
     /// <see cref="PortOwnerInspector"/> is). With none, <see cref="ForConnection"/> refuses everything.
     /// </param>
+    /// <param name="currentSessionId">This app's Windows session; null reads this process's own (a test names one).</param>
     public GatewayPeerVerifier(
         DefenseClawPaths paths,
         IPortOwnerInspector inspector,
         IConnectionOwnerInspector? connections = null,
-        IAdminCopyTrust? adminCopy = null)
+        IAdminCopyTrust? adminCopy = null,
+        int? currentSessionId = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
         _connections = connections ?? inspector as IConnectionOwnerInspector;
         _adminCopy = adminCopy;
+        _sessionId = currentSessionId ?? OwnSession();
+    }
+
+    private static int? OwnSession()
+    {
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            return self.SessionId;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Classifies <paramref name="owner"/>.</summary>
@@ -255,17 +266,41 @@ public sealed class GatewayPeerVerifier
             return $"{who} is not the DefenseClaw gateway";
         }
 
-        // The administrator trust knows the one case worth naming precisely (its own copy, another account's copy, or the helper's records
-        // that do not match); everything else keeps the plain sentence.
+        if (string.IsNullOrWhiteSpace(owner.ImagePath))
+        {
+            return $"{who} could not be verified: Windows does not show this app which file it runs from";
+        }
+
+        if (!InThisSession(owner))
+        {
+            if (owner.ImageWithoutHandle)
+            {
+                return $"{who} runs in {SessionWords(owner)}, and Windows would not let this app open it to see which account runs it";
+            }
+
+            if (_adminCopy?.IsTrustedImage(owner.ImagePath) == true)
+            {
+                return $"{who} runs this account's administrator copy, but in {SessionWords(owner)}, so it is not the gateway the helper started";
+            }
+        }
+
+        // The administrator trust knows the cases worth naming precisely (its own copy failing its checks, another account's copy); everything
+        // else keeps the plain sentence.
         if (_adminCopy?.ExplainRefusal(owner) is { Length: > 0 } why)
         {
             return $"{who} {why}";
         }
 
-        return string.IsNullOrWhiteSpace(owner.ImagePath)
-            ? $"{who} could not be verified: Windows does not show this app which file it runs from"
-            : $"{who} is not running from the DefenseClaw install directory";
+        return $"{who} is not running from the DefenseClaw install directory";
     }
+
+    /// <summary>True when <paramref name="owner"/> runs in this app's Windows session (both known and equal).</summary>
+    private bool InThisSession(PortOwner owner) => owner.SessionId is { } session && _sessionId is { } mine && session == mine;
+
+    private string SessionWords(PortOwner owner) =>
+        owner.SessionId is { } session && _sessionId is { } mine
+            ? $"Windows session {session}, not this app's session {mine}"
+            : "a Windows session this app could not read";
 
     private GatewayPeerRoute GatewayRoute(PortOwner owner)
     {
@@ -276,10 +311,16 @@ public sealed class GatewayPeerVerifier
 
         if (string.IsNullOrWhiteSpace(owner.ImagePath))
         {
-            // Windows did not say which file this process runs (PortOwnerInspector asks with the limited query right, which usually works
-            // across elevation for the same account, but not always, and not for another account's process). A name is anyone's to pick, so
-            // this is refused - unless the helper's admin-only records tie this very pid to the administrator copy it started (CUST-362).
-            return _adminCopy is not null && _adminCopy.IsStartedCopy(owner) ? GatewayPeerRoute.AdministratorCopyByRecord : GatewayPeerRoute.None;
+            // Windows gave no path, with a handle or from its process list. A name is anyone's to pick: refused.
+            return GatewayPeerRoute.None;
+        }
+
+        // A path from the process list (the process could not be opened: another account's, or elevated) says which file, not whose process.
+        // Only one in this app's session is considered at all.
+        var thisSession = InThisSession(owner);
+        if (owner.ImageWithoutHandle && !thisSession)
+        {
+            return GatewayPeerRoute.None;
         }
 
         // The name comes from the process list and can be anything; the file it runs from
@@ -303,8 +344,11 @@ public sealed class GatewayPeerVerifier
             return GatewayPeerRoute.InstallDirectory;
         }
 
-        // The one other place a gateway may run from: the helper's administrator copy, and only while it passes its own checks right now.
-        return _adminCopy is not null && _adminCopy.IsTrustedImage(owner.ImagePath) ? GatewayPeerRoute.AdministratorCopy : GatewayPeerRoute.None;
+        // The one other place a gateway may run from: the helper's administrator copy, only while it passes its own checks right now, and only
+        // in this app's session. Every account may run the file in Program Files; another account's run of it is not the helper's start.
+        return thisSession && _adminCopy is not null && _adminCopy.IsTrustedImage(owner.ImagePath)
+            ? GatewayPeerRoute.AdministratorCopy
+            : GatewayPeerRoute.None;
     }
 
     /// <summary>
