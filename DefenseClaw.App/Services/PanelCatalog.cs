@@ -21,6 +21,10 @@ namespace DefenseClaw.App.Services;
 /// The runtime capability the panel needs, or null (the default) for a panel 0.8.10 already supports. A panel that requires one is
 /// offered only when the connected runtime has it: see <see cref="PanelCatalog.Gate"/>.
 /// </param>
+/// <param name="Tag">
+/// A platform word the sidebar shows beside the title, or null (the default) for a panel the Mac app has too and that works here: "Windows" on
+/// the Windows-only Agents panel, "Linux/macOS" on Sandboxes, which the runtime does not offer on Windows (CUST-383).
+/// </param>
 public sealed record PanelDescriptor(
     string Id,
     string Title,
@@ -28,7 +32,22 @@ public sealed record PanelDescriptor(
     SymbolRegular Icon,
     Type ViewType,
     Func<AppServices, PanelViewModelBase> ViewModelFactory,
-    RuntimeCapability? Requires = null);
+    RuntimeCapability? Requires = null,
+    PanelTag? Tag = null);
+
+/// <summary>The sidebar's platform word for a panel (see <see cref="PanelDescriptor.Tag"/>).</summary>
+/// <param name="Text">The word on the entry: "Windows".</param>
+/// <param name="Description">What it means, in a sentence: the entry's tooltip and the end of its accessible help text.</param>
+public sealed record PanelTag(string Text, string Description)
+{
+    /// <summary>A panel this app has and the Mac app does not.</summary>
+    public static PanelTag WindowsOnly { get; } = new("Windows", "Windows only: the macOS app has no such panel.");
+
+    /// <summary>The Sandboxes slot: the runtime's sandboxes (<see cref="RuntimeCapability.Sandbox"/>) are not usable on this PC.</summary>
+    public static PanelTag SandboxesElsewhere { get; } = new(
+        "Linux/macOS",
+        RuntimeCapabilityCatalog.DisplayName(RuntimeCapability.Sandbox) + ": not available on Windows. The page explains why.");
+}
 
 /// <summary>
 /// The single registry of panels, and the bridge between WPF-UI's navigation frame and
@@ -60,6 +79,7 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// capability the connected runtime has; closed (with the standard sentence) otherwise, including before the runtime has been probed.
     /// The command palette shows a closed panel's "Go to" row disabled with the sentence; the sidebar hides its entry, its number chord
     /// does nothing, and <c>MainWindow</c> will not navigate to it (the Runtime panel, CUST-309, is the first to require anything).
+    /// Sandboxes requires nothing on purpose: the runtime's sandboxes never run on Windows, so a gate would hide the one page that says so.
     /// </summary>
     internal GateDecision Gate(PanelDescriptor panel) =>
         RuntimeGate.Check(_services.Runtime.Capabilities, panel.Requires);
@@ -109,6 +129,8 @@ public sealed class PanelCatalog : INavigationViewPageProvider
         // app, like the inbox it listens to.
         _services.Navigation.Requested += OnNavigationRequested;
 
+        // The order and the groups are the Mac's sidebar (v1.1.34, Features/MainWindow.swift), with the Windows extension (Agents) last in Discover
+        // (CUST-383). Moving a panel here moves its sidebar entry and its palette row, never its chord: those are pinned in ChordIds.
         Panels = panels ?? new PanelDescriptor[]
         {
             // Monitor
@@ -132,6 +154,14 @@ public sealed class PanelCatalog : INavigationViewPageProvider
                 typeof(PluginsPanel), s => new PluginsPanelViewModel(s)),
             new("tools", "Tools", "Govern", SymbolRegular.WrenchScrewdriver24,
                 typeof(ToolsPanel), s => new ToolsPanelViewModel(s)),
+            new("policies", "Policies", "Govern", SymbolRegular.Gavel24,
+                typeof(PoliciesPanel), s => new PoliciesPanelViewModel(s)),
+
+            // The Mac's Sandboxes slot. The runtime's sandboxes are Linux and macOS only (RuntimeCapabilityCatalog.IsUsableHere), so this page
+            // only says so: it is always on offer, to explain, and has nothing that runs (CUST-296, sandbox execution, is canceled).
+            new("sandboxes", "Sandboxes", "Govern", SymbolRegular.Cube24,
+                typeof(SandboxesPanel), s => new SandboxesPanelViewModel(s),
+                Tag: RuntimeCapabilityCatalog.IsUsableHere(RuntimeCapability.Sandbox) ? null : PanelTag.SandboxesElsewhere),
 
             // Discover
             new("inventory", "Inventory", "Discover", SymbolRegular.BookDatabase24,
@@ -140,10 +170,12 @@ public sealed class PanelCatalog : INavigationViewPageProvider
                 typeof(AiDiscoveryPanel), s => new AiDiscoveryPanelViewModel(s)),
             new("ai-runtime", "Runtime", "Discover", SymbolRegular.Pulse24,
                 typeof(AiRuntimePanel), s => new AiRuntimePanelViewModel(s), RuntimeCapability.AiRuntime),
-            new("agents", "Agents", "Discover", SymbolRegular.PeopleTeam24,
-                typeof(AgentsPanel), s => new AgentsPanelViewModel(s), RuntimeCapability.CorrelationApi),
             new("registries", "Registries", "Discover", SymbolRegular.Library24,
                 typeof(RegistriesPanel), s => new RegistriesPanelViewModel(s)),
+
+            // The Windows extension (CUST-355): the Mac has no Agents panel, so it comes after the Mac's four and its entry says it is Windows-only.
+            new("agents", "Agents", "Discover", SymbolRegular.PeopleTeam24,
+                typeof(AgentsPanel), s => new AgentsPanelViewModel(s), RuntimeCapability.CorrelationApi, PanelTag.WindowsOnly),
 
             // Configure
             new("setup", "Setup", "Configure", SymbolRegular.ShieldSettings24,
@@ -158,8 +190,6 @@ public sealed class PanelCatalog : INavigationViewPageProvider
                     // The Observability, Webhook and Trusted binary paths tiles (CUST-270): a list-first window each, with the wizard behind its Add.
                     OpenResourceEditor = resource => DefenseClaw.App.Views.SetupResources.SetupResourceWindow.Open(s, resource, System.Windows.Application.Current?.MainWindow),
                 }),
-            new("policies", "Policies", "Configure", SymbolRegular.Gavel24,
-                typeof(PoliciesPanel), s => new PoliciesPanelViewModel(s)),
 
             // Footer: the app's own settings, below the groups (Ctrl+,).
             new("settings", "Settings", FooterGroup, SymbolRegular.Settings24,
@@ -189,8 +219,8 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     /// Every panel in the order the sidebar shows them: group by group (<see cref="Groups"/>),
     /// catalog order within a group. This — not <see cref="Panels"/>, which only happens to be
     /// grouped already — is the order the sidebar and the command palette list them in; the number
-    /// chords (Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…5) count in <see cref="ChordOrder"/>, which is this order
-    /// with the panels that need a newer runtime moved after the others.
+    /// chords (Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…5) count in <see cref="ChordOrder"/>, which is pinned
+    /// (<see cref="ChordIds"/>) and does not follow this order.
     /// The footer panels (<see cref="FooterPanels"/>) are not in it. A panel the connected runtime does not
     /// offer is in it all the same (see <see cref="IsOffered"/>): the sidebar hides its entry, this list does not.
     /// </summary>
@@ -200,15 +230,33 @@ public sealed class PanelCatalog : INavigationViewPageProvider
     private PanelDescriptor[]? _sidebarOrder;
 
     /// <summary>
-    /// The order the number chords count in: the panels that need nothing first, in sidebar order, then the ones that need a newer runtime
-    /// (<see cref="PanelDescriptor.Requires"/>), in sidebar order. Every chord a panel has today therefore stays where it is whether or not the
-    /// connected runtime has a panel in the middle of the sidebar: an upgrade must not re-bind Ctrl+Shift+2. The Runtime panel is
-    /// the fifteenth, Ctrl+Shift+5.
+    /// The fifteen panels with a number chord, by id, in chord order: Ctrl+1 is the first, Ctrl+Shift+5 the last. Pinned, not derived from
+    /// <see cref="SidebarOrder"/>: the chords are muscle memory, so a panel that moves in the sidebar (Policies from Configure to Govern, CUST-383)
+    /// keeps its chord, and so does every panel after it. It is the order the chords had when they were derived (the panels every runtime has in
+    /// the sidebar order of the time, then Runtime). A panel added later is not in it, so it takes no chord and moves none (Agents, Sandboxes).
     /// </summary>
-    public IReadOnlyList<PanelDescriptor> ChordOrder =>
-        _chordOrder ??= SidebarOrder.Where(p => p.Requires is null).Concat(SidebarOrder.Where(p => p.Requires is not null)).ToArray();
+    internal static readonly IReadOnlyList<string> ChordIds = new[]
+    {
+        "overview", "alerts", "logs", "audit", "activity",
+        "skills", "mcps", "plugins", "tools", "inventory",
+        "ai-discovery", "registries", "setup", "policies", "ai-runtime",
+    };
+
+    /// <summary>
+    /// The order the number chords count in: the panels of <see cref="ChordIds"/> in that order, then every other panel (in sidebar order, the
+    /// ones that need nothing before the ones that need a newer runtime), which lands past the fifteenth chord and so has none. Whether a panel is
+    /// on offer never moves a chord either: a chord whose panel the runtime does not offer simply does nothing.
+    /// </summary>
+    public IReadOnlyList<PanelDescriptor> ChordOrder => _chordOrder ??= BuildChordOrder();
 
     private PanelDescriptor[]? _chordOrder;
+
+    private PanelDescriptor[] BuildChordOrder()
+    {
+        var pinned = ChordIds.Select(ById).OfType<PanelDescriptor>().ToArray();
+        var rest = SidebarOrder.Except(pinned).ToArray();
+        return pinned.Concat(rest.Where(p => p.Requires is null)).Concat(rest.Where(p => p.Requires is not null)).ToArray();
+    }
 
     /// <summary>
     /// The chord text of <paramref name="panel"/> (<c>Ctrl+3</c>) whether or not it is on offer right now, or null when it has none (a footer

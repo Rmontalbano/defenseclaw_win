@@ -6,8 +6,8 @@ namespace DefenseClaw.App.Services;
 /// The shell's keyboard map, in one place so the key handler, the sidebar tooltips, the command
 /// palette and the shortcuts overlay can never disagree about which chord does what.
 /// <para>
-/// <b>Panels.</b> The 15 panels are numbered in <see cref="PanelCatalog.ChordOrder"/>: sidebar order for the 14 that every
-/// runtime has, then the one that needs a newer runtime (Runtime) after them. <c>Ctrl+1</c> … <c>Ctrl+9</c> are
+/// <b>Panels.</b> The 15 panels are numbered in <see cref="PanelCatalog.ChordOrder"/>, pinned by <see cref="PanelCatalog.ChordIds"/> (the order
+/// they had before the sidebar took the Mac's, CUST-383: a panel that moves in the sidebar keeps its chord). <c>Ctrl+1</c> … <c>Ctrl+9</c> are
 /// panels 1-9, <c>Ctrl+0</c> is panel 10, and <c>Ctrl+Shift+1</c> … <c>Ctrl+Shift+5</c> are panels
 /// 11-15. (A plain <c>Ctrl+digit</c> never types a character, so it is safe inside text boxes; the
 /// shifted set follows the macOS companion's Cmd-Shift-N convention for the overflow.) A panel

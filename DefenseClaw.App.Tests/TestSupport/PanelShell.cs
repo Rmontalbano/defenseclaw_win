@@ -9,11 +9,11 @@ namespace DefenseClaw.App.Tests.TestSupport;
 
 /// <summary>
 /// A stand-in for <c>MainWindow</c> that keeps the parts which decide how much room a panel gets — the 32 DIP
-/// title bar, a status strip of real WPF-UI buttons, and the <c>NavigationView</c> with its 220 DIP open
+/// title bar, the status strip with its one icon button (CUST-383), and the <c>NavigationView</c> with its 218 DIP open
 /// pane, configured exactly as <c>MainWindow.xaml</c> configures it — and hosts one real panel from the real
 /// <see cref="PanelCatalog"/>. <c>MainWindow</c> itself is not built: its constructor needs the tray icon.
 /// <para>
-/// At the window's 940 x 620 DIP minimum the panel host measures about 711 x 538 DIP. UI thread only.
+/// At the window's 940 x 620 DIP minimum the panel host measures about 713 x 547 DIP. UI thread only.
 /// </para>
 /// </summary>
 internal sealed class PanelShell : IDisposable
@@ -26,21 +26,20 @@ internal sealed class PanelShell : IDisposable
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Border Grid.Row="0" Height="32" />
-            <Border Grid.Row="1" Style="{StaticResource DcStatusStrip}">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <ui:Button Content="Refresh" />
-                    <ui:Button Margin="8,0,0,0" Content="Search" />
-                    <ui:Button Margin="8,0,0,0" Content="Keys" />
+            <Border Grid.Row="2" Style="{StaticResource DcStatusStrip}">
+                <StackPanel Style="{StaticResource DcToolbarActions}" HorizontalAlignment="Right">
+                    <ui:Button Icon="{ui:SymbolIcon ArrowSync24}" />
                 </StackPanel>
             </Border>
             <ui:NavigationView x:Name="RootNavigation"
-                               Grid.Row="3"
+                               Grid.Row="4"
                                IsBackButtonVisible="Collapsed"
-                               IsPaneToggleVisible="True"
-                               OpenPaneLength="220"
+                               IsPaneToggleVisible="False"
+                               OpenPaneLength="218"
                                PaneDisplayMode="Left" />
         </Grid>
         """;

@@ -156,7 +156,7 @@
 
         SHELL (added with the shell rework; safe to use anywhere)
           DcStatusStrip           Border: the always-visible one-line gateway strip under the title bar
-                                  (padding 24,8, 1px rule underneath).
+                                  (padding 24,4 around a 32 px icon button, 1px rule underneath).
           DcKeyCap                Border: a keyboard shortcut in a hint, palette row or shortcuts overlay.
           DcKeyCapText            TextBlock inside a DcKeyCap (11px semibold mono, inherits the cap's colour).
 
@@ -973,7 +973,7 @@
 
     <!-- ===== Shell ======================================================================= -->
     <Style x:Key="DcStatusStrip" TargetType="Border">
-        <Setter Property="Padding" Value="24,8,24,8" />
+        <Setter Property="Padding" Value="24,4,24,4" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
         <Setter Property="BorderBrush" Value="{DynamicResource DcBorderBrush}" />
     </Style>

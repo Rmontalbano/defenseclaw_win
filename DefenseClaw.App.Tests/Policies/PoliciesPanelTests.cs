@@ -518,9 +518,10 @@ public sealed class PoliciesPanelTests : IDisposable
     {
         var catalog = new PanelCatalog(_services);
 
+        // In Govern since CUST-383 (the Mac's sidebar), with the chord it had in Configure.
         var descriptor = catalog.ById("policies");
         Assert.NotNull(descriptor);
-        Assert.Equal("Configure", descriptor.Group);
+        Assert.Equal("Govern", descriptor.Group);
         Assert.Equal(typeof(DefenseClaw.App.Views.Panels.PoliciesPanel), descriptor.ViewType);
         Assert.Equal("Ctrl+Shift+4", catalog.ChordTextOf(descriptor));
         Assert.Contains(ShellCommandRegistry.BuildPanelCommands(catalog, _ => { }), c => c.Title == "Go to Policies");

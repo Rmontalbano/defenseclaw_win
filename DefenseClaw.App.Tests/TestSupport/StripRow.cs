@@ -7,10 +7,10 @@ using DefenseClaw.App.Views.Shell;
 namespace DefenseClaw.App.Tests.TestSupport;
 
 /// <summary>
-/// The status strip's row as <c>MainWindow</c> lays it out - the state pill, the real <see cref="StatusStripControl"/> in the star column, the three
-/// buttons - hosted offscreen at an exact width in DIPs. <c>MainWindow</c> itself is not built (its constructor needs the tray icon); the pill is the
-/// window's markup with its text fixed, and the buttons are the real WPF-UI ones with the real icons, so the room the chips get is the room they get in
-/// the window. UI thread only.
+/// The status strip's row as <c>MainWindow</c> lays it out - the state pill, the real <see cref="StatusStripControl"/> in the star column, the gateway's
+/// Refresh icon (the palette and shortcuts buttons moved to the title bar, CUST-383) - hosted offscreen at an exact width in DIPs. <c>MainWindow</c> itself
+/// is not built (its constructor needs the tray icon); the pill is the window's markup with its text fixed, and the button is the real WPF-UI one in the
+/// real toolbar style, so the room the chips get is the room they get in the window. UI thread only.
 /// </summary>
 internal sealed class StripRow : IDisposable
 {
@@ -34,10 +34,8 @@ internal sealed class StripRow : IDisposable
                     </StackPanel>
                 </Border>
                 <shell:StatusStripControl x:Name="Strip" Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center" />
-                <StackPanel x:Name="Buttons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ui:Button Content="Refresh" Icon="{ctl:DcSymbolIcon ArrowSync24}" />
-                    <ui:Button Margin="8,0,0,0" Icon="{ctl:DcSymbolIcon Search24}" />
-                    <ui:Button Margin="8,0,0,0" Icon="{ctl:DcSymbolIcon Keyboard24}" />
+                <StackPanel x:Name="Buttons" Grid.Column="2" Style="{StaticResource DcToolbarActions}">
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowSync24}" />
                 </StackPanel>
             </Grid>
         </Border>

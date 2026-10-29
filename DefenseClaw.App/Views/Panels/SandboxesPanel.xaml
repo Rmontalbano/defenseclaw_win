@@ -1,0 +1,56 @@
+<UserControl x:Class="DefenseClaw.App.Views.Panels.SandboxesPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:SandboxesPanelViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <!--
+        The Sandboxes panel (CUST-383): the Mac's Sandboxes slot in Govern, in the Mac's off-state layout (SandboxesView.swift: the title, an empty
+        state that explains, Open Setup). On Windows it can only explain: the runtime's sandboxes are Linux and macOS only, and sandbox execution
+        from this app is canceled (CUST-296). No control here runs anything: no run command to copy (it would not work on this PC), no doctor, no
+        refresh. Open Setup only shows another panel. On the shared Dc* design system, no local colours.
+    -->
+    <Grid Style="{StaticResource DcPage}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ctl:DcPageToolbar x:Name="PageToolbar"
+                           Grid.Row="0"
+                           ctl:DcIcon.Symbol="Cube24"
+                           ctl:DcIcon.Section="Govern"
+                           Title="{Binding Title}"
+                           TitleToolTip="{Binding Description}"
+                           Caption="{Binding CaptionText}" />
+
+        <!-- The explanation fills the page like any panel's empty state; it scrolls in a window too short for it. -->
+        <Border Grid.Row="1" Style="{StaticResource DcCard}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <StackPanel x:Name="Explanation" Style="{StaticResource DcEmptyState}">
+                    <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Cube24" />
+                    <TextBlock Style="{StaticResource DcEmptyTitle}"
+                               Text="{Binding StateTitle}"
+                               AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding StateDetail}" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}"
+                               Margin="0,12,0,0"
+                               Text="{Binding RuntimeFact}"
+                               AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding ElsewhereText}" />
+                    <ui:Button Margin="0,16,0,0"
+                               HorizontalAlignment="Center"
+                               Content="Open Setup"
+                               Icon="{ctl:DcSymbolIcon ShieldSettings24}"
+                               Command="{Binding OpenSetupCommand}"
+                               AutomationProperties.Name="Open Setup"
+                               AutomationProperties.HelpText="Shows the Setup panel, where this PC's protection is configured. There is no sandbox setting on Windows, and nothing runs." />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

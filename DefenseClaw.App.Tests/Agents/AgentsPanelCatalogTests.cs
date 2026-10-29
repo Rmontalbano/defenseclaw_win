@@ -33,7 +33,7 @@ public sealed class AgentsPanelCatalogTests : IDisposable
     }
 
     [Fact]
-    public void The_catalog_lists_the_panel_in_discover_after_runtime_and_it_requires_the_capability()
+    public void The_catalog_lists_the_panel_last_in_discover_after_the_macs_four_marked_windows_only_and_it_requires_the_capability()
     {
         var services = Create("95159fd");
         var catalog = new PanelCatalog(services);
@@ -45,9 +45,13 @@ public sealed class AgentsPanelCatalogTests : IDisposable
         Assert.Equal("Discover", panel.Group);
         Assert.Equal(RuntimeCapability.CorrelationApi, panel.Requires);
         Assert.Equal(typeof(DefenseClaw.App.Views.Panels.AgentsPanel), panel.ViewType);
+
+        // CUST-383: the Mac's Discover is Inventory, AI Discovery, Runtime, Registries; Agents, the Windows extension, comes after them and says so.
         Assert.Equal(
-            ["inventory", "ai-discovery", "ai-runtime", "agents", "registries"],
+            ["inventory", "ai-discovery", "ai-runtime", "registries", "agents"],
             catalog.InGroup("Discover").Select(p => p.Id));
+        Assert.Same(PanelTag.WindowsOnly, panel.Tag);
+        Assert.Equal("Windows", panel.Tag!.Text);
         Assert.Equal("Discover", DcSections.OfPanelId("agents"));
         Assert.Equal(panel.Icon, DcSections.IconOfPanelId("agents"));
     }

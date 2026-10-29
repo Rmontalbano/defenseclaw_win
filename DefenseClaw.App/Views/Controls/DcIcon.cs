@@ -37,13 +37,14 @@ public static class DcSections
         ("mcps", typeof(McpsPanel), Govern, SymbolRegular.PlugConnected24),
         ("plugins", typeof(PluginsPanel), Govern, SymbolRegular.PuzzleCube24),
         ("tools", typeof(ToolsPanel), Govern, SymbolRegular.WrenchScrewdriver24),
+        ("policies", typeof(PoliciesPanel), Govern, SymbolRegular.Gavel24),
+        ("sandboxes", typeof(SandboxesPanel), Govern, SymbolRegular.Cube24),
         ("inventory", typeof(InventoryPanel), Discover, SymbolRegular.BookDatabase24),
         ("ai-discovery", typeof(AiDiscoveryPanel), Discover, SymbolRegular.Bot24),
         ("ai-runtime", typeof(AiRuntimePanel), Discover, SymbolRegular.Pulse24),
-        ("agents", typeof(AgentsPanel), Discover, SymbolRegular.PeopleTeam24),
         ("registries", typeof(RegistriesPanel), Discover, SymbolRegular.Library24),
+        ("agents", typeof(AgentsPanel), Discover, SymbolRegular.PeopleTeam24),
         ("setup", typeof(SetupPanel), Setup, SymbolRegular.ShieldSettings24),
-        ("policies", typeof(PoliciesPanel), Setup, SymbolRegular.Gavel24),
         ("settings", typeof(SettingsPanel), Setup, SymbolRegular.Settings24),
     };
 

@@ -15,8 +15,14 @@
                  WindowStartupLocation="CenterScreen">
 
     <Grid>
+        <!--
+            The shell, top to bottom (CUST-383, the Mac v1.1.34 hierarchy without its chrome): the window row (title bar: sidebar toggle, name,
+            the palette's search box, the look controls), the menu bar's row, the gateway status strip, the banners, then the sidebar and the
+            page, whose own toolbar is the panel's title, actions and search.
+        -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="MenuBarRow" Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -27,16 +33,67 @@
             text sat 9 px below their centre line and the bar wasted 16 px of a window that already scrolls its sidebar.
         -->
         <!--
-            The title bar also carries the two look controls, left of the caption buttons: a one-click light/dark
-            toggle (a sun while dark, a moon while light: the icon is where a click goes; the name and tooltip say so
-            in words) and the Appearance button, which opens the style + mode flyout below. Both are hidden when there
-            is no AppearanceService (a host built without one).
+            The title bar is the window's toolbar, where the Mac keeps its sidebar toggle and its Command Palette button: the sidebar toggle at
+            the left (it used to take a 40 px row of its own at the top of the sidebar), the palette's "Search panels and commands" box in the
+            middle (Ctrl+K; it used to be an icon on the status strip), and at the right the shortcuts list (F1) and the two look controls: the
+            Appearance button, which opens the style + mode flyout below, and a one-click light/dark toggle (a sun while dark, a moon while
+            light: the icon is where a click goes; the name and tooltip say so in words). The look controls are hidden when there is no
+            AppearanceService (a host built without one).
         -->
-        <ui:TitleBar Grid.Row="0" Height="32" Title="DefenseClaw for Windows">
+        <ui:TitleBar x:Name="ShellTitleBar" Grid.Row="0" Height="32" Title="DefenseClaw for Windows">
+            <ui:TitleBar.Header>
+                <!-- A header replaces WPF-UI's title text, so the title is drawn here; it is not hit-testable, so a press on it still drags the window. -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button x:Name="SidebarToggleButton"
+                               Margin="6,0,2,0"
+                               Appearance="Transparent"
+                               Height="26"
+                               MinHeight="0"
+                               Padding="8,0,8,0"
+                               BorderThickness="0"
+                               VerticalAlignment="Center"
+                               Click="OnSidebarToggleClick"
+                               ToolTip="Show or hide the sidebar"
+                               AutomationProperties.Name="Toggle sidebar"
+                               AutomationProperties.HelpText="Shows the sidebar's names, or folds it to a strip of icons.">
+                        <ui:Button.Icon>
+                            <ctl:DcSymbolIcon Symbol="PanelLeft24" FontSize="14" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                    <TextBlock x:Name="TitleText"
+                               Margin="6,0,12,0"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               IsHitTestVisible="False"
+                               Text="DefenseClaw for Windows" />
+                </StackPanel>
+            </ui:TitleBar.Header>
+            <ui:TitleBar.CenterContent>
+                <shell:PaletteLauncher x:Name="PaletteLauncher"
+                                       Width="320"
+                                       VerticalAlignment="Center"
+                                       ButtonBase.Click="OnPaletteButtonClick" />
+            </ui:TitleBar.CenterContent>
             <ui:TitleBar.TrailingContent>
                 <StackPanel Orientation="Horizontal"
                             VerticalAlignment="Center"
                             Margin="0,0,6,0">
+                    <ui:Button x:Name="ShortcutsButton"
+                               Margin="0,0,2,0"
+                               Appearance="Transparent"
+                               Height="26"
+                               MinHeight="0"
+                               Padding="8,0,8,0"
+                               BorderThickness="0"
+                               Click="OnShortcutsButtonClick"
+                               ToolTip="Keyboard shortcuts (F1)"
+                               AutomationProperties.Name="Show keyboard shortcuts"
+                               AutomationProperties.AcceleratorKey="F1">
+                        <ui:Button.Icon>
+                            <ctl:DcSymbolIcon Symbol="Keyboard24" FontSize="14" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+
                     <ui:Button x:Name="AppearanceButton"
                                Appearance="Transparent"
                                Height="26"
@@ -69,16 +126,19 @@
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
+        <!-- Grid.Row="1" (MenuBarRow) is the menu bar's (CUST-384): one control, directly under the title bar. Empty, the row takes no height. -->
+
         <!--
             Status strip: one line, always visible, always from the GatewayMonitor snapshot.
             Left to right it reads as a hierarchy: the state pill (the one thing that must be
             noticed), the detail sentence (trims first when the window is narrow), then the
             supporting facts as chips (Watchdog, Guardrail, Keys, alerts, connector, redaction, policy, running,
-            stale, version) and the actions. Every colour is a Dc tone chosen by Tag, so the dot and pill follow a
+            stale, version) and the gateway's own Refresh. Every colour is a Dc tone chosen by Tag, so the dot and pill follow a
             live light/dark switch. The sentence and the chips are the StatusStripControl: it hides chips,
-            lowest priority first, when the window has no room for them (see ChipStripPanel).
+            lowest priority first, when the window has no room for them (see ChipStripPanel). Status only (CUST-383): the palette and the
+            shortcuts moved up to the title bar, and Refresh is an icon, so the facts get the width and the row is a toolbar button high.
         -->
-        <Border Grid.Row="1" Style="{StaticResource DcStatusStrip}">
+        <Border Grid.Row="2" Style="{StaticResource DcStatusStrip}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -116,38 +176,13 @@
                                           Margin="12,0,12,0"
                                           VerticalAlignment="Center" />
 
-                <StackPanel Grid.Column="2"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center">
-                    <ui:Button Content="Refresh"
+                <StackPanel Grid.Column="2" Style="{StaticResource DcToolbarActions}">
+                    <ui:Button x:Name="GatewayRefreshButton"
+                               Icon="{ctl:DcSymbolIcon ArrowSync24}"
                                Command="{Binding RefreshCommand}"
                                ToolTip="Check the gateway now. F5 refreshes the panel you are viewing."
                                AutomationProperties.Name="Refresh gateway status"
-                               AutomationProperties.HelpText="Polls the gateway immediately instead of waiting for the next automatic check.">
-                        <ui:Button.Icon>
-                            <ctl:DcSymbolIcon Symbol="ArrowSync24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
-
-                    <ui:Button Margin="8,0,0,0"
-                               Click="OnPaletteButtonClick"
-                               ToolTip="Command palette (Ctrl+K)"
-                               AutomationProperties.Name="Open command palette"
-                               AutomationProperties.AcceleratorKey="Ctrl+K">
-                        <ui:Button.Icon>
-                            <ctl:DcSymbolIcon Symbol="Search24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
-
-                    <ui:Button Margin="8,0,0,0"
-                               Click="OnShortcutsButtonClick"
-                               ToolTip="Keyboard shortcuts (F1)"
-                               AutomationProperties.Name="Show keyboard shortcuts"
-                               AutomationProperties.AcceleratorKey="F1">
-                        <ui:Button.Icon>
-                            <ctl:DcSymbolIcon Symbol="Keyboard24" />
-                        </ui:Button.Icon>
-                    </ui:Button>
+                               AutomationProperties.HelpText="Polls the gateway immediately instead of waiting for the next automatic check." />
                 </StackPanel>
             </Grid>
         </Border>
@@ -157,7 +192,7 @@
             stack: a closed banner is collapsed (margin and all), so with nothing to say the region takes no
             height at all instead of 12 px above the sidebar.
         -->
-        <StackPanel Grid.Row="2" Margin="24,0,24,0">
+        <StackPanel Grid.Row="3" Margin="24,0,24,0">
             <!-- "DefenseClaw X is available" (UpdateWatcher): informational, so it leads the region and the warnings stay visible below it. -->
             <shell:UpdateBanner />
 
@@ -293,13 +328,14 @@
 
         <!--
             Sidebar. Items are added in code from Services\PanelCatalog.cs so that adding or
-            replacing a panel never requires editing this file.
+            replacing a panel never requires editing this file. 218 DIPs open, the Mac's sidebar (its 210 ideal column plus its list inset);
+            its toggle is the title bar's (SidebarToggleButton), so the entries start right under the strip.
         -->
         <ui:NavigationView x:Name="RootNavigation"
-                           Grid.Row="3"
+                           Grid.Row="4"
                            IsBackButtonVisible="Collapsed"
-                           IsPaneToggleVisible="True"
-                           OpenPaneLength="220"
+                           IsPaneToggleVisible="False"
+                           OpenPaneLength="218"
                            PaneDisplayMode="Left">
             <ui:NavigationView.Resources>
                 <!--
@@ -311,20 +347,20 @@
         </ui:NavigationView>
 
         <!--
-            Overlays. They start under the title bar so the window buttons stay usable, and sit last
-            in the grid so they draw over the sidebar and the page. Each host binds to the shell
+            Overlays. They start under the title bar so the window buttons stay usable (and cover the menu bar, the strip and
+            the page), and sit last in the grid so they draw over the sidebar and the page. Each host binds to the shell
             view-model's flag; the controls themselves get their own DataContext in code.
         -->
         <Grid x:Name="PaletteHost"
               Grid.Row="1"
-              Grid.RowSpan="3"
+              Grid.RowSpan="4"
               Visibility="{Binding IsPaletteOpen, Converter={StaticResource BoolToVisibility}}">
             <shell:CommandPaletteControl x:Name="Palette" />
         </Grid>
 
         <Grid x:Name="ShortcutsHost"
               Grid.Row="1"
-              Grid.RowSpan="3"
+              Grid.RowSpan="4"
               Visibility="{Binding IsShortcutsOpen, Converter={StaticResource BoolToVisibility}}">
             <shell:ShortcutsOverlay x:Name="Shortcuts" />
         </Grid>

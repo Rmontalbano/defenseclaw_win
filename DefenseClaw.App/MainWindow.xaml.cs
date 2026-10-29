@@ -18,8 +18,8 @@ using Wpf.Ui.Controls;
 namespace DefenseClaw.App;
 
 /// <summary>
-/// The dashboard window: title bar, status strip, banner region, sidebar, and the shell's two
-/// overlays (command palette, keyboard shortcuts).
+/// The dashboard window: title bar (sidebar toggle, the palette's search box, shortcuts and look controls), the menu bar's row, status strip,
+/// banner region, sidebar, and the shell's two overlays (command palette, keyboard shortcuts).
 /// <para>
 /// Shell-owned. The sidebar is built from <see cref="PanelCatalog"/> at load time, so a
 /// panel landing later never touches this file — and the close button minimizes to the
@@ -34,7 +34,7 @@ namespace DefenseClaw.App;
 /// <para>
 /// <b>Keyboard map</b> (one handler, <see cref="OnWindowPreviewKeyDown"/>; the chords themselves
 /// live in <see cref="ShellShortcuts"/>): Ctrl+1…9 / Ctrl+0 / Ctrl+Shift+1…5 jump to the panels in
-/// sidebar order, Ctrl+, opens Settings (the pinned footer entry), F5 refreshes the current panel (falling back to a gateway poll), Ctrl+K opens the
+/// their pinned chord order (<see cref="PanelCatalog.ChordIds"/>, not the sidebar's), Ctrl+, opens Settings (the pinned footer entry), F5 refreshes the current panel (falling back to a gateway poll), Ctrl+K opens the
 /// command palette, F1 — or <c>?</c> outside a text box — the shortcuts list, Esc closes whichever
 /// overlay is open. Handled at the window's <i>preview</i> stage so a panel's own controls cannot
 /// swallow them, but never while the operator is typing: a plain <c>?</c> is only a shortcut when
@@ -567,23 +567,28 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         }
     }
 
-    /// <summary>One sidebar entry: the panel's title and glyph, its accessible name, help text and accelerator, and its place in <see cref="_navigationItems"/>.</summary>
+    /// <summary>
+    /// One sidebar entry: the panel's title and glyph (and its platform word, <see cref="PanelDescriptor.Tag"/>), its accessible name, help text and
+    /// accelerator, and its place in <see cref="_navigationItems"/>.
+    /// </summary>
     private DcNavigationItem CreateNavigationItem(PanelDescriptor panel, string? chord, string helpText)
     {
+        var toolTip = chord is null ? panel.Title : $"{panel.Title} ({chord})";
         var item = new DcNavigationItem
         {
-            Content = panel.Title,
+            Content = panel.Tag is { } tag ? SidebarTag.Content(panel.Title, tag) : panel.Title,
             Icon = new SymbolIcon { Symbol = panel.Icon },
             TargetPageType = panel.ViewType,
-            ToolTip = chord is null ? panel.Title : $"{panel.Title} ({chord})",
+            ToolTip = panel.Tag is { } described ? $"{toolTip} — {described.Description}" : toolTip,
             Height = 34,
             MinHeight = 34,
             Margin = new Thickness(0, 0, 0, 1),
         };
         _navigationItems[panel.Id] = item;
 
+        // The name stays the title alone (what a screen reader and a test find the entry by); the platform word is in the help text.
         AutomationProperties.SetName(item, panel.Title);
-        AutomationProperties.SetHelpText(item, helpText);
+        AutomationProperties.SetHelpText(item, panel.Tag is { } said ? $"{helpText} {said.Description}" : helpText);
         if (chord is not null)
         {
             AutomationProperties.SetAcceleratorKey(item, chord);
@@ -604,6 +609,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
             NavigateTo(panel);
         }
     }
+
+    /// <summary>The title bar's sidebar toggle (CUST-383; the sidebar's own toggle row is gone): folds the sidebar to its icons, or opens it again.</summary>
+    private void OnSidebarToggleClick(object sender, RoutedEventArgs e) => RootNavigation.IsPaneOpen = !RootNavigation.IsPaneOpen;
 
     private void ShowGroupHeadings(bool paneOpen)
     {
@@ -863,7 +871,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
     private void OnPaletteButtonClick(object sender, RoutedEventArgs e) => OpenPalette();
 
-    /// <summary>A panel asked for the palette (the Overview's Diagnostics menu); same as the status strip's Search button.</summary>
+    /// <summary>A panel asked for the palette (the Overview's Diagnostics menu); same as the title bar's search box.</summary>
     private void OnPaletteRequested(object? sender, EventArgs e) => OpenPalette();
 
     private void OnShortcutsButtonClick(object sender, RoutedEventArgs e) => OpenShortcuts();

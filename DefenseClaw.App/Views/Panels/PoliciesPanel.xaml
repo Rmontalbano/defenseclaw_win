@@ -38,7 +38,7 @@
         <ctl:DcPageToolbar x:Name="PageToolbar"
                            Grid.Row="0"
                            ctl:DcIcon.Symbol="Gavel24"
-                           ctl:DcIcon.Section="Setup"
+                           ctl:DcIcon.Section="Govern"
                            Title="{Binding Title}"
                            TitleToolTip="{Binding Description}"
                            Caption="{Binding CaptionText}"
