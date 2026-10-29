@@ -368,6 +368,7 @@
                                            Padding="10,0,10,0"
                                            Content="IDE Plugins"
                                            Count="{Binding BomBrowser.IdePluginsCount}"
+                                           CountIsAtLeast="{Binding BomBrowser.IdePluginsCountIsAtLeast}"
                                            IsEnabled="{Binding BomBrowser.ShowIdePluginsTab}"
                                            Visibility="{Binding BomBrowser.ShowIdePluginsTab, Converter={StaticResource BoolToVisibility}}" />
                             <ctl:DcSegment Value="identities"

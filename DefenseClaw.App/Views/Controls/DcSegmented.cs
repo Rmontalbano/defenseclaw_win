@@ -202,6 +202,12 @@ public sealed class DcSegment : ListBoxItem
         typeof(DcSegment),
         new PropertyMetadata(null, OnCountChanged));
 
+    public static readonly DependencyProperty CountIsAtLeastProperty = DependencyProperty.Register(
+        nameof(CountIsAtLeast),
+        typeof(bool),
+        typeof(DcSegment),
+        new PropertyMetadata(false, OnCountChanged));
+
     private static readonly DependencyPropertyKey CountTextPropertyKey = DependencyProperty.RegisterReadOnly(
         nameof(CountText),
         typeof(string),
@@ -233,6 +239,13 @@ public sealed class DcSegment : ListBoxItem
         set => SetValue(CountProperty, value);
     }
 
+    /// <summary>The count is a lower bound (the read stopped at its limit): shown as "(50+)", and named so. Meaningless without a <see cref="Count"/>.</summary>
+    public bool CountIsAtLeast
+    {
+        get => (bool)GetValue(CountIsAtLeastProperty);
+        set => SetValue(CountIsAtLeastProperty, value);
+    }
+
     public string CountText => (string)GetValue(CountTextProperty);
 
     protected override void OnContentChanged(object oldContent, object newContent)
@@ -244,7 +257,7 @@ public sealed class DcSegment : ListBoxItem
     private static void OnCountChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var segment = (DcSegment)d;
-        segment.SetValue(CountTextPropertyKey, e.NewValue is int count ? $"({count})" : string.Empty);
+        segment.SetValue(CountTextPropertyKey, segment.Count is { } count ? $"({count}{(segment.CountIsAtLeast ? "+" : string.Empty)})" : string.Empty);
         segment.UpdateAutomationName();
     }
 
@@ -264,7 +277,7 @@ public sealed class DcSegment : ListBoxItem
             return;
         }
 
-        _derivedName = Count is { } count ? $"{label} ({count})" : label;
+        _derivedName = Count is { } count ? $"{label} ({count}{(CountIsAtLeast ? "+" : string.Empty)})" : label;
         SetCurrentValue(AutomationProperties.NameProperty, _derivedName);
     }
 }

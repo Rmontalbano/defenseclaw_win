@@ -101,6 +101,9 @@ public sealed partial class InventoryBomBrowser
     /// <summary>The IDE Plugins tab's count; null until plugins have been read (and for a gateway that has none to give).</summary>
     public int? IdePluginsCount => ExtrasAvailable && _ide.IsReady ? _ide.Rows.Count : null;
 
+    /// <summary>The IDE inventory stopped at its bound (the scan reached its limits): the tab reads "N+", as the Mac's does (<c>idePluginsPartial</c>).</summary>
+    public bool IdePluginsCountIsAtLeast => ExtrasAvailable && _ide.IsReady && _ide.Partial;
+
     /// <summary>The Agent identities tab's count under the connector scope.</summary>
     public int? IdentitiesCount => ExtrasAvailable && _identities.IsReady ? _identities.Rows.Count(InIdentityScope) : null;
 
@@ -258,6 +261,7 @@ public sealed partial class InventoryBomBrowser
     private void RaiseExtraCounts()
     {
         OnPropertyChanged(nameof(IdePluginsCount));
+        OnPropertyChanged(nameof(IdePluginsCountIsAtLeast));
         OnPropertyChanged(nameof(IdentitiesCount));
         OnPropertyChanged(nameof(IdeState));
         OnPropertyChanged(nameof(IdentitiesState));
@@ -280,7 +284,10 @@ public sealed partial class InventoryBomBrowser
         {
             var ai = _ide.Rows.Count(r => r.IsAi);
             var off = _ide.Rows.Count(r => r.Enabled == "disabled");
-            yield return ("IDE plugins", string.Create(CultureInfo.InvariantCulture, $"{_ide.Rows.Count} ({ai} AI, {off} disabled)"));
+            var users = _ide.Rows.Where(r => r.User.Length > 0).Select(r => r.User).Distinct(StringComparer.Ordinal).Count();
+
+            // The CLI's and the Mac's line (inventory_state._ide_count_summary): "N (X AI, Y disabled, Z users)", and N+ when the scan stopped at its bound.
+            yield return ("IDE plugins", string.Create(CultureInfo.InvariantCulture, $"{_ide.Rows.Count}{(_ide.Partial ? "+" : string.Empty)} ({ai} AI, {off} disabled, {users} user{(users == 1 ? string.Empty : "s")})"));
         }
 
         if (_identities.IsReady)

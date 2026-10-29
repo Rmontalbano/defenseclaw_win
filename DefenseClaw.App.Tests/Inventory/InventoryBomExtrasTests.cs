@@ -337,7 +337,7 @@ public sealed class InventoryBomExtrasTests : IDisposable
         browser.ShowIdentities(Identities());
 
         var summary = browser.Rows.ToDictionary(r => r.Cells[0], r => r.Cells[1]);
-        Assert.Equal("6 (2 AI, 1 disabled)", summary["IDE plugins"]);
+        Assert.Equal("6 (2 AI, 1 disabled, 1 user)", summary["IDE plugins"]);
         Assert.Equal("3", summary["Agent identities"]);
 
         // A tab of the scan is as it was, and its Generate offer is too.
