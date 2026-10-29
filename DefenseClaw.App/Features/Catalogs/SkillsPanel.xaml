@@ -1,4 +1,4 @@
-<UserControl x:Class="DefenseClaw.App.Views.Panels.McpsPanel"
+<UserControl x:Class="DefenseClaw.App.Views.Panels.SkillsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -8,26 +8,27 @@
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             d:DataContext="{d:DesignInstance Type=vm:McpsPanelViewModel}"
+             d:DataContext="{d:DesignInstance Type=vm:SkillsPanelViewModel}"
              mc:Ignorable="d">
     <!--
-        MCPs panel. Data is the CLI command 'mcp list' with its JSON flag (one read per visit / Refresh / scope change).
-        Row actions and the review dialog are shared with the other Govern panels; the "Add MCP server"
-        form (mcp set) is the one panel-specific piece. Keys: F5 refresh (shell), Ctrl+F filter, Esc closes
-        the dialog / form / result card / clears the filter.
+        Skills panel. Data is the CLI command 'skill list' with its JSON flag (one read per visit / Refresh / scope change),
+        not the gateway's /skills, which answers "not connected" on a standalone install.
+        Row layout, the review dialog and the result card are shared with the other Govern panels
+        (Views\Panels\Govern\); the logic lives in ViewModels\Govern\GovernPanelViewModelBase.cs.
+        Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the dialog / result card / clears the filter.
 
         Layout. Everything under the header is one scrolling page (PageScroll): the toolbar, the banners and the list
-        together are taller than the page is with the shell's gateway banner open (and the add form, when it is), and they
-        used to share it, so the list kept whatever the fixed rows above it left over. Now the list is the last thing on the
-        page with a height of its own: the rest of the viewport under the chrome, and never less than 250 DIPs
-        (FillHeightConverter). A ScrollViewer measures its content with unlimited height, and a virtualizing list measured
-        that way realizes every row, so the list keeps a definite height and its own scroller. The result card of a
-        read-only command sits under the list and is scrolled into view when it opens.
+        together are taller than the page is with the shell's gateway banner open, and they used to share it, so the list
+        kept whatever the fixed rows above it left over. Now the list is the last thing on the page with a height of its
+        own: the rest of the viewport under the chrome, and never less than 250 DIPs (FillHeightConverter). A ScrollViewer
+        measures its content with unlimited height, and a virtualizing list measured that way realizes every row, so the
+        list keeps a definite height and its own scroller. The result card of a read-only command sits under the list and
+        is scrolled into view when it opens.
     -->
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/DefenseClaw.App;component/Views/Panels/Govern/GovernTable.xaml" />
+                <ResourceDictionary Source="/DefenseClaw.App;component/Features/Catalogs/GovernTable.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>
@@ -37,19 +38,19 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar: the busy ring and "as of 12:04", the page actions as icons, the filter box. -->
+        <!-- Toolbar: the busy ring and "as of 12:04", the refresh icon, the filter box. -->
         <ctl:DcPageToolbar x:Name="PageToolbar"
                            Grid.Row="0"
-                           ctl:DcIcon.Symbol="PlugConnected24"
+                           ctl:DcIcon.Symbol="PuzzlePiece24"
                            ctl:DcIcon.Section="Govern"
                            Title="{Binding Title}"
                            TitleToolTip="{Binding Description}"
                            Caption="{Binding HeaderStatusText}"
                            HasSearch="True"
                            SearchText="{Binding FilterText}"
-                           SearchPlaceholder="Filter MCP servers…"
-                           SearchAutomationName="Filter MCP servers"
-                           SearchHelpText="Matches name, transport, command, URL, connector, state and registry. Shortcut Ctrl+F; Esc clears it.">
+                           SearchPlaceholder="Filter skills…"
+                           SearchAutomationName="Filter skills"
+                           SearchHelpText="Matches name, description, connector, state, scan result and registry. Shortcut Ctrl+F; Esc clears it.">
             <ctl:DcPageToolbar.Leading>
                 <ui:ProgressRing Width="16"
                                  Height="16"
@@ -63,17 +64,24 @@
             </ctl:DcPageToolbar.ConnectorSlot>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
-                    <ui:Button Icon="{ctl:DcSymbolIcon PlugConnected24}"
-                               Command="{Binding ToggleSetFormCommand}"
+                    <ui:Button Icon="{ctl:DcSymbolIcon ArrowDownload24}"
+                               Command="{Binding ToggleInstallFormCommand}"
                                IsEnabled="{Binding CanChange}"
                                ToolTipService.ShowOnDisabled="True"
-                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Add MCP server…'}"
-                               AutomationProperties.Name="Add MCP server…"
-                               AutomationProperties.HelpText="Register or update a server with 'defenseclaw mcp set'. You review the command first." />
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Install skill…'}"
+                               AutomationProperties.Name="Install skill…"
+                               AutomationProperties.HelpText="Install a ClawHub skill with 'defenseclaw skill install'. You review the command first." />
+                    <ui:Button Icon="{ctl:DcSymbolIcon ScanText24}"
+                               Command="{Binding ScanAllCommand}"
+                               IsEnabled="{Binding CanScanAll}"
+                               ToolTipService.ShowOnDisabled="True"
+                               ToolTip="{Binding DataUntrustedReason, Converter={x:Static govern:ChangeTipConverter.Instance}, ConverterParameter='Scan all skills…'}"
+                               AutomationProperties.Name="Scan all skills…"
+                               AutomationProperties.HelpText="Runs 'defenseclaw skill scan --all' and records the results. You review the command first." />
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
                                Command="{Binding RefreshCommand}"
                                IsEnabled="{Binding IsIdle}"
-                               ToolTip="Read the MCP server list again (F5)"
+                               ToolTip="Read the skill list again (F5)"
                                AutomationProperties.Name="Refresh"
                                AutomationProperties.AcceleratorKey="F5" />
                 </StackPanel>
@@ -84,9 +92,9 @@
                       Grid.Row="1"
                       Style="{StaticResource DcPageScroll}"
                       Focusable="False"
-                      AutomationProperties.Name="MCP servers page">
+                      AutomationProperties.Name="Skills page">
             <StackPanel x:Name="PageContent">
-                <!-- Toolbar, the add form, banners and the caption: what the list's height is worked out from. -->
+                <!-- Toolbar, banners and the caption: what the list's height is worked out from. -->
                 <StackPanel x:Name="Chrome">
                     <!-- Filter strip: which state, which connector, and the reason the next action records. -->
                     <WrapPanel Margin="0,0,0,4" Style="{StaticResource DcToolbarPanel}">
@@ -95,7 +103,7 @@
                             <ComboBox Width="160"
                                       ItemsSource="{Binding StatusFilters}"
                                       SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}"
-                                      AutomationProperties.Name="Show MCP servers in state" />
+                                      AutomationProperties.Name="Show skills in state" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Connector scope" />
@@ -103,7 +111,7 @@
                                       ItemsSource="{Binding Connectors}"
                                       SelectedItem="{Binding SelectedConnector, Mode=TwoWay}"
                                       AutomationProperties.Name="Connector scope"
-                                      AutomationProperties.HelpText="Which connector's MCP servers to list, and which connector Add MCP server writes to. All configured connectors means every one." />
+                                      AutomationProperties.HelpText="Which connector's skills to list, and which connector block, allow and the other actions apply to when a row does not name one." />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource DcToolbarLabel}" Text="Reason" />
@@ -112,7 +120,7 @@
                                         PlaceholderText="Recorded with the action"
                                         Text="{Binding Reason, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                         AutomationProperties.Name="Reason"
-                                        AutomationProperties.HelpText="Sent as --reason with block and allow." />
+                                        AutomationProperties.HelpText="Sent as --reason with block, allow, disable and quarantine." />
                         </StackPanel>
                     </WrapPanel>
 
@@ -125,78 +133,33 @@
                                Visibility="{Binding HasScanUnavailableReason, Converter={StaticResource BoolToVisibility}}"
                                AutomationProperties.LiveSetting="Polite" />
 
-                    <!-- Add / update an MCP server (mcp set) -->
+                    <!-- Install a skill (skill install) -->
                     <Border Style="{StaticResource DcCard}"
                             Margin="{StaticResource DcCardGap}"
-                            Visibility="{Binding IsSetFormOpen, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding IsInstallFormOpen, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
-                            <ctl:DcCardHeader Symbol="PlugConnected24" Section="Govern" Content="Add or update an MCP server" />
+                            <ctl:DcCardHeader Symbol="ArrowDownload24" Section="Govern" Content="Install a skill" />
                             <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Runs 'defenseclaw mcp set'. Give either a command (a local server) or a URL (a remote server), not both. The scope is the connector chosen in the toolbar; 'All configured connectors' writes to every one. You review the exact command before anything runs." />
+                                       Text="Runs 'defenseclaw skill install'. The skill is downloaded from ClawHub, copied into the connector's skill folder and scanned. The scope is the connector chosen in the toolbar; 'All configured connectors' installs into every one. You review the exact command before anything runs." />
 
-                            <WrapPanel Margin="0,12,0,0">
-                                <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Name (required)" />
-                                    <ui:TextBox Text="{Binding SetName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                AutomationProperties.Name="Server name" />
-                                </StackPanel>
-                                <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Transport" />
-                                    <ComboBox HorizontalAlignment="Stretch"
-                                              ItemsSource="{Binding TransportChoices}"
-                                              SelectedItem="{Binding SetTransport, Mode=TwoWay}"
-                                              AutomationProperties.Name="Transport"
-                                              AutomationProperties.HelpText="stdio runs a local command, sse connects to a URL. Leave it on infer to send no --transport." />
-                                </StackPanel>
-                                <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Command (local server, e.g. npx or uvx)" />
-                                    <ui:TextBox Text="{Binding SetCommand, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                AutomationProperties.Name="Command" />
-                                </StackPanel>
-                                <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="URL (remote server, http or https)" />
-                                    <ui:TextBox Text="{Binding SetUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                AutomationProperties.Name="URL" />
-                                </StackPanel>
-                                <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Arguments (one per line, or a JSON array)" />
-                                    <ui:TextBox AcceptsReturn="True"
-                                                MinLines="3"
-                                                MaxLines="6"
-                                                TextWrapping="NoWrap"
-                                                VerticalScrollBarVisibility="Auto"
-                                                HorizontalScrollBarVisibility="Auto"
-                                                Text="{Binding SetArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                AutomationProperties.Name="Command arguments"
-                                                AutomationProperties.HelpText="One argument per line; sent to the CLI as a JSON array, so commas inside an argument are safe. Only for a command, not a URL." />
-                                </StackPanel>
-                                <StackPanel Width="280" Margin="0,0,12,8">
-                                    <TextBlock Style="{StaticResource DcFieldLabel}" Text="Environment (one KEY=VAL per line)" />
-                                    <ui:TextBox AcceptsReturn="True"
-                                                MinLines="3"
-                                                MaxLines="6"
-                                                TextWrapping="NoWrap"
-                                                VerticalScrollBarVisibility="Auto"
-                                                HorizontalScrollBarVisibility="Auto"
-                                                Text="{Binding SetEnv, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                AutomationProperties.Name="Environment variables"
-                                                AutomationProperties.HelpText="Sent as one --env flag per line. Values are visible in the confirm box, Activity and to other processes: no secrets." />
-                                </StackPanel>
-                            </WrapPanel>
+                            <StackPanel Margin="0,12,0,8">
+                                <TextBlock Style="{StaticResource DcFieldLabel}" Text="ClawHub skill name" />
+                                <ui:TextBox Text="{Binding InstallName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            AutomationProperties.Name="Skill to install" />
+                            </StackPanel>
 
-                            <TextBlock Style="{StaticResource DcCaption}"
-                                       Text="Environment values are placed on the command line: they show in the review, in Activity and to other processes on this machine. Do not put secrets here." />
-
-                            <CheckBox Margin="0,8,0,0"
-                                      Content="Skip the security scan (the server is added unchecked)"
-                                      IsChecked="{Binding SetSkipScan, Mode=TwoWay}" />
+                            <CheckBox Content="Force: overwrite an existing skill of the same name"
+                                      IsChecked="{Binding InstallForce, Mode=TwoWay}" />
+                            <CheckBox Margin="0,6,0,0"
+                                      Content="Apply the configured skill__actions policy based on scan severity"
+                                      IsChecked="{Binding InstallApplyActionPolicy, Mode=TwoWay}" />
 
                             <TextBlock Style="{StaticResource DcToneText}"
                                        Tag="Bad"
                                        Margin="0,10,0,0"
                                        TextWrapping="Wrap"
-                                       Text="{Binding SetFormError}"
-                                       Visibility="{Binding HasSetFormError, Converter={StaticResource BoolToVisibility}}"
+                                       Text="{Binding InstallFormError}"
+                                       Visibility="{Binding HasInstallFormError, Converter={StaticResource BoolToVisibility}}"
                                        AutomationProperties.LiveSetting="Assertive" />
 
                             <StackPanel Margin="0,12,0,0"
@@ -205,11 +168,11 @@
                                 <ui:Button Margin="0,0,8,0"
                                            Content="Cancel"
                                            Icon="{ctl:DcSymbolIcon Dismiss24}"
-                                           Command="{Binding ToggleSetFormCommand}" />
+                                           Command="{Binding ToggleInstallFormCommand}" />
                                 <ui:Button Appearance="Primary"
                                            Content="Review command"
                                            Icon="{ctl:DcSymbolIcon ClipboardCheckmark24}"
-                                           Command="{Binding SubmitSetFormCommand}" />
+                                           Command="{Binding SubmitInstallFormCommand}" />
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -248,8 +211,8 @@
                     <ui:ProgressRing Width="32"
                                      Height="32"
                                      IsIndeterminate="True"
-                                     AutomationProperties.Name="Reading MCP servers" />
-                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading MCP servers from the CLI…" />
+                                     AutomationProperties.Name="Reading skills" />
+                    <TextBlock Style="{StaticResource DcEmptyDetail}" Text="Reading skills from the CLI…" />
                 </StackPanel>
 
                 <Border Style="{StaticResource DcCard}"
@@ -274,7 +237,7 @@
                 <Border Style="{StaticResource DcCard}"
                         Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Style="{StaticResource DcEmptyState}" MaxWidth="560">
-                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="PlugConnected24" />
+                        <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="PuzzlePiece24" />
                         <TextBlock Style="{StaticResource DcEmptyTitle}" Text="{Binding EmptyTitle}" />
                         <TextBlock Style="{StaticResource DcEmptyDetail}" Text="{Binding EmptyDetail}" />
                     </StackPanel>
@@ -284,8 +247,8 @@
                         Visibility="{Binding ShowNoMatch, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Style="{StaticResource DcEmptyState}">
                         <ctl:DcSymbolIcon Style="{StaticResource DcEmptyIcon}" Symbol="Search24" />
-                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No MCP servers match the filter" />
-                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every server the CLI listed. Clear it to see them all." />
+                        <TextBlock Style="{StaticResource DcEmptyTitle}" Text="No skills match the filter" />
+                        <TextBlock Style="{StaticResource DcEmptyDetail}" Text="The filter hides every skill the CLI listed. Clear it to see them all." />
                         <ui:Button Margin="0,12,0,0"
                                    HorizontalAlignment="Center"
                                    Content="Clear filter"
@@ -302,7 +265,7 @@
                              RowDetailsTemplate="{StaticResource GovernRowDetails}"
                              RowDetailsVisibilityMode="VisibleWhenSelected"
                              SelectionMode="Single"
-                             AutomationProperties.Name="MCP servers"
+                             AutomationProperties.Name="Skills"
                              ItemsSource="{Binding Rows}"
                              VirtualizingPanel.ScrollUnit="Pixel"
                              ctl:DcGridColumns.Fit="True"
@@ -318,18 +281,14 @@
                         <DataGridTemplateColumn Width="1*" MinWidth="110" Header="Status"
                                                 SortMemberPath="StateLabel"
                                                 CellTemplate="{StaticResource GovernStatusCell}" />
-                        <DataGridTemplateColumn Width="1.4*" MinWidth="100" Header="Name"
+                        <DataGridTemplateColumn Width="1.5*" MinWidth="100" Header="Name"
                                                 SortMemberPath="DisplayTitle"
                                                 ClipboardContentBinding="{Binding DisplayTitle}"
                                                 CellTemplate="{StaticResource GovernNameCell}" />
-                        <DataGridTextColumn Width="0.8*" MinWidth="76" Header="Transport"
-                                            SortMemberPath="Transport"
+                        <DataGridTextColumn Width="2.2*" MinWidth="100" Header="Description"
+                                            SortMemberPath="Description"
                                             ElementStyle="{StaticResource DcCellTextQuiet}"
-                                            Binding="{Binding Transport}" />
-                        <DataGridTextColumn Width="2.4*" MinWidth="120" Header="Command or URL"
-                                            SortMemberPath="LaunchText"
-                                            ElementStyle="{StaticResource DcCellTextMono}"
-                                            Binding="{Binding LaunchText}" />
+                                            Binding="{Binding Description}" />
                         <DataGridTemplateColumn Width="1.3*" MinWidth="120" Header="Scan"
                                                 SortMemberPath="ScanLabel"
                                                 CellTemplate="{StaticResource GovernScanCell}" />
@@ -337,6 +296,10 @@
                                             SortMemberPath="ConnectorLabel"
                                             ElementStyle="{StaticResource DcCellTextQuiet}"
                                             Binding="{Binding ConnectorLabel}" />
+                        <DataGridTextColumn Width="1.3*" MinWidth="80" Header="Source"
+                                            SortMemberPath="SourceText"
+                                            ElementStyle="{StaticResource DcCellTextMono}"
+                                            Binding="{Binding SourceText}" />
                         <DataGridTemplateColumn Width="32" Header="Actions"
                                                 CanUserSort="False"
                                                 HeaderStyle="{StaticResource DcDataGridActionsHeader}"

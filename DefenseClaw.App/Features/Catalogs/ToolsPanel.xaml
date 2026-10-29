@@ -29,7 +29,7 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/DefenseClaw.App;component/Views/Panels/Govern/GovernTable.xaml" />
+                <ResourceDictionary Source="/DefenseClaw.App;component/Features/Catalogs/GovernTable.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>
