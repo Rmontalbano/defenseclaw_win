@@ -39,7 +39,7 @@ public enum FormFieldKind
 
 /// <summary>
 /// A single leaf value in the generated form. Bound directly by the DataTemplates in
-/// <c>Views\ConfigEditor\ConfigEditorWindow.xaml</c> — one template per <see cref="Kind"/>.
+/// <c>Features\Setup\ConfigEditor\ConfigEditorView.xaml</c> — one template per <see cref="Kind"/>.
 /// <para>
 /// A field that is not <see cref="IsEditable"/> never commits: the guard lives here as well as in the
 /// UI (a disabled control) so that a masked value can not reach config.yaml by any route.

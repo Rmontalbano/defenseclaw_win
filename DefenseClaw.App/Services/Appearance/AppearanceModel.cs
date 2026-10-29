@@ -135,7 +135,7 @@ internal static class AppearanceCatalog
 
 /// <summary>
 /// The token keys the code (rather than XAML) refers to, and the full list the style dictionaries must each define
-/// (a test holds them to it). The vocabulary is documented in <c>Themes\Styles\Default.xaml</c>.
+/// (a test holds them to it). The vocabulary is documented in <c>DesignSystem\Themes\Styles\Default.xaml</c>.
 /// </summary>
 internal static class AppearanceTokens
 {

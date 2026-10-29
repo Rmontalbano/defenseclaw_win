@@ -13,8 +13,8 @@ namespace DefenseClaw.App.ViewModels;
 /// <see langword="partial"/>.
 /// <para>
 /// <b>Panel contract.</b> A panel is exactly two files:
-/// <c>Views\Panels\{Name}Panel.xaml</c> (plus its code-behind) and
-/// <c>ViewModels\{Name}PanelViewModel.cs</c>. Replacing those files is the only edit a
+/// <c>{Name}Panel.xaml</c> (plus its code-behind) and
+/// <c>{Name}PanelViewModel.cs</c>, side by side in its <c>Features\</c> folder. Replacing those files is the only edit a
 /// panel needs — navigation registration lives in
 /// <see cref="PanelCatalog"/> and never has to change. To keep it that way:
 /// </para>

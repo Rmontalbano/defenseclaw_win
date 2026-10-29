@@ -16,7 +16,7 @@ namespace DefenseClaw.App.Views.Controls;
 /// (<see cref="Stop"/> is <c>Controller.Remove()</c>, which is what actually frees it).
 /// </para>
 /// <para>
-/// Themes\DefenseClaw.xaml re-templates every <c>ui:ProgressRing</c> to host one of these, so the views keep declaring a
+/// DesignSystem\Themes\DefenseClaw.xaml re-templates every <c>ui:ProgressRing</c> to host one of these, so the views keep declaring a
 /// ring and none of them needs to know. The colours are tokens read as dynamic resources (the accent step that clears
 /// contrast for the arc, the hairline colour for the track), and the SHAPE follows <c>DcGlyphFamily</c> like the status glyphs
 /// do: a round arc under Default and Linear, a square-ended segmented ring that turns in steps under TUI. A live style

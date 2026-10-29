@@ -26,7 +26,7 @@
         screen before it runs. Check, verify and run are three separate clicks; the run is behind a
         confirm overlay. Nothing here is automatic.
 
-        Styling is the shared Dc* design system (Themes\DefenseClaw.xaml): cards, type, tone badges
+        Styling is the shared Dc* design system (DesignSystem\Themes\DefenseClaw.xaml): cards, type, tone badges
         (Tag = the view-model's Ok/Warn/Bad/Neutral key, so the badge text takes the tone colour
         too), scrim and dialog card. The only local styles are the two below that exist in exactly
         this window.

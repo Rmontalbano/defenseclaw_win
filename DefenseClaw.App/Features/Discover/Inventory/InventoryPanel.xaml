@@ -11,7 +11,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
     <!--
-        Migrated to the shared design system (Themes\DefenseClaw.xaml); the local styles below are the components
+        Migrated to the shared design system (DesignSystem\Themes\DefenseClaw.xaml); the local styles below are the components
         grid's cell text and the narrow/wide switch of its master-detail block.
 
         Two views share the page (the segmented control at the top of the strip): Components, the AI components inventory.db

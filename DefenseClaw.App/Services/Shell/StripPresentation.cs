@@ -10,7 +10,7 @@ namespace DefenseClaw.App.Services;
 /// credentials and counts the rest, <c>Redaction</c> carries the aggregate label as it is, <c>policy</c> is the mode, <c>stale</c> and
 /// <c>running</c> are one word. The existing gateway, alerts, connector and version chips keep <see cref="GatewayPresentation"/>'s words.
 /// <para>
-/// The tone keys are the design system's (<c>Ok / Warn / Bad / Low / Neutral</c>, see Themes\DefenseClaw.xaml), chosen by <c>Tag</c>, so the
+/// The tone keys are the design system's (<c>Ok / Warn / Bad / Low / Neutral</c>, see DesignSystem\Themes\DefenseClaw.xaml), chosen by <c>Tag</c>, so the
 /// strip follows a live light/dark switch. A tone is never the only carrier of a meaning: every chip also says it in words, in its tooltip and in
 /// its automation name.
 /// </para>

@@ -16,7 +16,7 @@ namespace DefenseClaw.App.Tests.Shell;
 /// <summary>
 /// The busy spinner (D2-1). A WPF-UI <c>ProgressRing</c> that has been shown once keeps a 60 fps animation clock alive for the
 /// life of the process, hidden or not, which held a resident tray app at 2-3 % of a core. <see cref="DcSpinner"/> owns its clock
-/// only while it is visible and removes it from the timing tree otherwise, and Themes\DefenseClaw.xaml re-templates every
+/// only while it is visible and removes it from the timing tree otherwise, and DesignSystem\Themes\DefenseClaw.xaml re-templates every
 /// <c>ui:ProgressRing</c> to host one, so the 21 rings need no edit. What is asserted is both the mechanism (no clock, nothing
 /// animated) and the cost that matters (the UI thread's cycles after a show and a hide).
 /// </summary>

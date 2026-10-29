@@ -15,7 +15,7 @@
         Nothing changes configuration from here without the review at the bottom: the shared DiscoverReviewOverlay shows the exact command, what
         the preview said, whether the gateway restarts, and, when raw content would start to flow, a tick that has to be given.
 
-        Shared styling: Themes\DefenseClaw.xaml (Dc*). Nothing here is hard-coded. Keys: F5 re-reads the policy, Esc closes the review.
+        Shared styling: DesignSystem\Themes\DefenseClaw.xaml (Dc*). Nothing here is hard-coded. Keys: F5 re-reads the policy, Esc closes the review.
     -->
     <UserControl.Resources>
         <Style x:Key="RowName" TargetType="TextBlock" BasedOn="{StaticResource DcBody}">

@@ -4,7 +4,7 @@
     <!--
         Style "Linear", dark. A clean product UI: solid backgrounds (no Mica), 1 px hairline borders instead
         of shadows, compact density, an indigo accent. Token values only - the vocabulary is listed in
-        Default.xaml and consumed by Themes\DefenseClaw.xaml; AppearanceService bridges these tokens onto
+        Default.xaml and consumed by DesignSystem\Themes\DefenseClaw.xaml; AppearanceService bridges these tokens onto
         WPF-UI's own brushes so its controls follow.
 
         Values are the design brief's, unchanged. Tones carry the same meaning as everywhere else
@@ -90,7 +90,7 @@
     <SolidColorBrush x:Key="DcNavIconSetupBrush" Color="#EB5DA0" />
     <SolidColorBrush x:Key="DcNavIconUpdatesBrush" Color="#4CB782" />
 
-    <!-- Which shapes the status and severity glyphs draw (Views\Controls\DcGlyphs.cs): Linear's status circles and priority bars. -->
+    <!-- Which shapes the status and severity glyphs draw (DesignSystem\Controls\DcGlyphs.cs): Linear's status circles and priority bars. -->
     <sys:String x:Key="DcGlyphFamily">Linear</sys:String>
 
     <!-- ===== Type ========================================================================= -->

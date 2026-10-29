@@ -10,7 +10,7 @@
         HILT, block message and the hook-lane judge gate (CUST-222). Not a panel: GuardrailControlsWindow hosts it, and the Setup
         tile grid / Overview guardrail tile open that window. Every write goes through the shared review overlay at the bottom
         (exact argv, tier, gateway restart, a no-restart checkbox); the reads run on open and on F5 / Refresh.
-        Shared styling: Themes\Controls.xaml (Dc*). Nothing here is hard-coded.
+        Shared styling: DesignSystem\Themes\Controls.xaml (Dc*). Nothing here is hard-coded.
     -->
     <UserControl.Resources>
         <Style x:Key="RowName" TargetType="TextBlock" BasedOn="{StaticResource DcBody}">

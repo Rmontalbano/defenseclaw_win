@@ -7,7 +7,7 @@ using Wpf.Ui.Controls;
 namespace DefenseClaw.App.Views.Controls;
 
 /// <summary>
-/// The app's sections, one tint each (Themes\Styles\*.xaml: DcSection*Brush for card headers, DcNavIcon*Brush for the
+/// The app's sections, one tint each (DesignSystem\Themes\Styles\*.xaml: DcSection*Brush for card headers, DcNavIcon*Brush for the
 /// sidebar and page headers). Every style decides what a section looks like: Linear colours each one, Default tints only
 /// the card headers, TUI uses the accent. A view names the section, never the colour.
 /// </summary>

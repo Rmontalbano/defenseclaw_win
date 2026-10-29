@@ -19,7 +19,7 @@
         edits DefenseClaw state itself, so the operator reads the exact argv before anything
         happens, and the same list is what CliRunner executes.
 
-        Styling is the shared Dc* dictionary (Themes\DefenseClaw.xaml); only three visuals live here
+        Styling is the shared Dc* dictionary (DesignSystem\Themes\DefenseClaw.xaml); only three visuals live here
         because they exist in this window alone. Accessibility: every control carries the field's label
         as its automation name, validation and result text are live regions, Esc closes (or, mid-run,
         asks before stopping), and a secret is never a text box: a secret-taking flag is a credential

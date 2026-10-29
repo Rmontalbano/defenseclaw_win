@@ -4,7 +4,7 @@
     <!--
         Style "Cisco", light: the look of DefenseClaw for Mac (its DesignSystem\CiscoTheme.swift and the running app v1.1.25). Solid
         fills (Mica is Default's alone), rounded cards (12), stat tiles (10), a padding of 14, Cisco blue. Token values only - the
-        vocabulary is listed in Default.xaml and consumed by Themes\DefenseClaw.xaml.
+        vocabulary is listed in Default.xaml and consumed by DesignSystem\Themes\DefenseClaw.xaml.
 
         This is the one style with a reference to check against: the Mac capture (CUST-199, Light mode only). Where the capture and
         the source hexes agree the source value is used; where they differ, the running app wins and the value says so:

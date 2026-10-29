@@ -4,17 +4,17 @@
     <!--
         Style "Default": the Fluent look the app has always had. Unlike Linear and TUI this file holds no
         colour of its own - every brush token takes its colour from the WPF-UI colour the Dc styles used before the
-        token layer existed (Themes\DefenseClaw.xaml lists which), so Default is the same colours it was, in both
+        token layer existed (DesignSystem\Themes\DefenseClaw.xaml lists which), so Default is the same colours it was, in both
         modes: WPF-UI's own Light/Dark dictionary decides which, and the OS accent flows through
         AccentFillColorDefault / SystemAccentColorSecondary exactly as it did.
 
         A brush here copies a colour that exists at the moment the file is loaded, so it has to be loaded AFTER WPF-UI's
         theme dictionary has been swapped (and after its accent keys were written); AppearanceService does that on
         every change, which is why there is one Default file for both modes: the mode lives in WPF-UI.
-        (Themes\DefenseClaw.xaml also merges a copy, so a host that only has the Dc dictionaries still resolves every
+        (DesignSystem\Themes\DefenseClaw.xaml also merges a copy, so a host that only has the Dc dictionaries still resolves every
         token - with whatever WPF-UI colours exist at that moment.)
 
-        Token vocabulary, shared by every style (see Themes\DefenseClaw.xaml for what consumes each):
+        Token vocabulary, shared by every style (see DesignSystem\Themes\DefenseClaw.xaml for what consumes each):
           Brushes  DcWindowBackground, DcSurface (card), DcRaised (keycap, control-like), DcInset (code block,
                    subtle row), DcDialog (dialog / flyout card), DcSubtle (chip, hover), DcSelected,
                    DcZebra (the alternate row of a striped table), DcBorder (hairline), DcControlBorder,

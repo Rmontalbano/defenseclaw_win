@@ -16,7 +16,7 @@ namespace DefenseClaw.App.Tests.Overview;
 /// </summary>
 public sealed class AttentionToneTests : IDisposable
 {
-    /// <summary>The looks a tone key can produce. Mirrors the TONES table at the top of Themes\DefenseClaw.xaml.</summary>
+    /// <summary>The looks a tone key can produce. Mirrors the TONES table at the top of DesignSystem\Themes\DefenseClaw.xaml.</summary>
     public enum Tone
     {
         Red,

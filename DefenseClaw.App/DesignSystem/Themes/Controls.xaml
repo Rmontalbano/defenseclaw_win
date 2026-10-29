@@ -4,7 +4,7 @@
                     xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
                     xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels">
     <!--
-        Page chrome controls, merged by Themes\DefenseClaw.xaml (one line, at the top of its MergedDictionaries).
+        Page chrome controls, merged by DesignSystem\Themes\DefenseClaw.xaml (one line, at the top of its MergedDictionaries).
 
           ctl:DcPageToolbar    The compact row at the top of a panel: glyph tile, title (20 semibold) and caption, a Leading
                                slot, right-aligned Actions, a ConnectorSlot, an optional search box. Replaces DcPageHeader
@@ -314,7 +314,7 @@
         </Setter>
     </Style>
 
-    <!-- ===== Badges, pills, status labels (Views\Controls\DcBadges.cs) ===================== -->
+    <!-- ===== Badges, pills, status labels (DesignSystem\Controls\DcBadges.cs) ===================== -->
     <!--
         DcSeverityBadge  A solid small-radius rectangle: the tone's colour as the fill, black or white as the label (whichever has more contrast).
         DcStatePill      A dot and a lowercase word on a faint tint of the tone.

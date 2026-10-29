@@ -22,7 +22,7 @@
         Keyboard (code-behind): Ctrl+S saves when Save is enabled (a focused FORM box is committed first), Ctrl+F goes to the setting search
         (to AvalonEdit's own search inside RAW), Esc leaves a review, closes the on-disk preview or clears the search.
 
-        Every style is a shared Dc* key (Themes\DefenseClaw.xaml); nothing here hard-codes a colour.
+        Every style is a shared Dc* key (DesignSystem\Themes\DefenseClaw.xaml); nothing here hard-codes a colour.
     -->
     <UserControl.Resources>
         <vc:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />

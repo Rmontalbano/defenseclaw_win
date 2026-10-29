@@ -12,7 +12,7 @@
              mc:Ignorable="d"
              panels:CompactLayout.Below="960">
     <!--
-        Migrated to the shared design system (Themes\DefenseClaw.xaml); the only local styles are the page's placement beside the
+        Migrated to the shared design system (DesignSystem\Themes\DefenseClaw.xaml); the only local styles are the page's placement beside the
         inspector and two data templates shared by the cards and the inspector.
         Order is deliberate: coverage first (what was looked at, and when), then what was found (the latest scan's counts, a Products |
         Models switch, and the list it picks), then the runtime section, then where the data came from.

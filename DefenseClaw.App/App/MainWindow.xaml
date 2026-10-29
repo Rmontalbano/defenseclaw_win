@@ -341,7 +341,7 @@
             <ui:NavigationView.Resources>
                 <!--
                     The items and their icons are made in code, so this is how an icon learns its section: it looks up the
-                    sidebar item it sits in (Themes\DefenseClaw.xaml, DcNavIcon). Icons outside an item are untouched.
+                    sidebar item it sits in (DesignSystem\Themes\DefenseClaw.xaml, DcNavIcon). Icons outside an item are untouched.
                 -->
                 <Style TargetType="{x:Type ui:SymbolIcon}" BasedOn="{StaticResource DcNavIcon}" />
             </ui:NavigationView.Resources>

@@ -20,7 +20,7 @@
         a row never starts either.
 
         Keys: F5 reads the list again, Enter on a row shows it (it never tests), Delete reviews a Remove, Esc closes the review, the notice, then the
-        details. Shared styling: Themes\DefenseClaw.xaml (Dc*); nothing is hard-coded.
+        details. Shared styling: DesignSystem\Themes\DefenseClaw.xaml (Dc*); nothing is hard-coded.
     -->
     <UserControl.Resources>
         <!-- The state of a row as a pill: the word, and a dot in its tone. -->

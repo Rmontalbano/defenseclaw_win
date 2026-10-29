@@ -11,7 +11,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
     <!--
-        Migrated to the shared design system (Themes\DefenseClaw.xaml). Reads come from
+        Migrated to the shared design system (DesignSystem\Themes\DefenseClaw.xaml). Reads come from
         `registry list` (JSON) plus the selected source's index.json; every change goes through the shared
         review dialog (DiscoverReviewOverlay) that shows the exact command first.
 

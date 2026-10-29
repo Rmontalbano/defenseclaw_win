@@ -47,7 +47,7 @@ internal sealed class WindowsSystemThemeSource : ISystemThemeSource
 /// Owns the app's look: which style (<see cref="AppearanceStyle"/>) and mode (<see cref="AppearanceMode"/>) are on
 /// screen, and swaps them live.
 /// <para>
-/// <b>Layers.</b> A style is a <i>token dictionary</i> (Themes\Styles\*.xaml: colours, fonts, radii, density) merged after
+/// <b>Layers.</b> A style is a <i>token dictionary</i> (DesignSystem\Themes\Styles\*.xaml: colours, fonts, radii, density) merged after
 /// everything else; the <c>Dc*</c> styles read tokens through DynamicResource, so replacing that one dictionary re-skins
 /// every open window. For Linear, TUI and Cisco the tokens are also <i>bridged</i> onto WPF-UI's own resource keys
 /// (<see cref="WpfUiBridge"/>) so its controls follow, and the accent goes in through the same

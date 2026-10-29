@@ -14,7 +14,7 @@
         Skills panel. Data is the CLI command 'skill list' with its JSON flag (one read per visit / Refresh / scope change),
         not the gateway's /skills, which answers "not connected" on a standalone install.
         Row layout, the review dialog and the result card are shared with the other Govern panels
-        (Views\Panels\Govern\); the logic lives in ViewModels\Govern\GovernPanelViewModelBase.cs.
+        (Features\Catalogs\, beside this file); the logic lives in Features\Catalogs\GovernPanelViewModelBase.cs.
         Keys: F5 refresh (shell), Ctrl+F filter, Esc closes the dialog / result card / clears the filter.
 
         Layout. Everything under the header is one scrolling page (PageScroll): the toolbar, the banners and the list

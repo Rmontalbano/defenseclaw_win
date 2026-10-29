@@ -13,7 +13,7 @@
         look while the app runs (Services\Appearance\AppearanceService).
 
         =============================================================================================
-        TOKENS (Themes\Styles\*.xaml define only their values; Default.xaml lists the vocabulary)
+        TOKENS (DesignSystem\Themes\Styles\*.xaml define only their values; Default.xaml lists the vocabulary)
           One dictionary per style x mode is merged after this one at run time: Default.xaml (aliases of
           WPF-UI's brushes, so Default is exactly the look the app always had), Linear.Dark / Linear.Light,
           Tui.Dark / Tui.Light, Cisco.Dark / Cisco.Light. Default.xaml is also merged here, below, so a host that only loads this
@@ -92,7 +92,7 @@
         LAYOUT
           DcPage                 Grid style: root of a panel; applies DcPageMargin.
           DcPageScroll           ScrollViewer style: vertical auto, horizontal off, room for the bar.
-          ctl:DcPageToolbar      The compact page toolbar every panel but Overview opens with (Themes\Controls.xaml, with
+          ctl:DcPageToolbar      The compact page toolbar every panel but Overview opens with (DesignSystem\Themes\Controls.xaml, with
                                  DcToolbarActions / DcToolbarIconButton for its icon buttons, ctl:DcSegmented for a filter of
                                  six options or fewer and DcResultCaption for the mono count of a filter strip).
           DcPageHeader           HeaderedContentControl (Overview only): Header = title+subtitle block, Content =

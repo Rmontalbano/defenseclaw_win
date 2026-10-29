@@ -17,7 +17,7 @@
         upstream needs no edit here). The readiness checklist, the connector roster, the guardrail quick controls and the credentials stay at the foot
         of the page as its secondary content, each a disclosure that starts open.
 
-        Shared styling: Themes\DefenseClaw.xaml (Dc*). Local resources are the visuals that exist in this panel only. Keyboard: Ctrl+F focuses the
+        Shared styling: DesignSystem\Themes\DefenseClaw.xaml (Dc*). Local resources are the visuals that exist in this panel only. Keyboard: Ctrl+F focuses the
         setup search (the config editor's own search when focus is in the editor), Esc closes the chooser and the reviews, F5 runs RefreshCommand
         (bound by the shell).
     -->

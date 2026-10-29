@@ -11,7 +11,7 @@ namespace DefenseClaw.App.Tests.Shell;
 
 /// <summary>
 /// The destructive button reads the style's tokens (D4-6). WPF-UI paints <c>Appearance="Danger"</c> with a fixed #F44336 and no
-/// label colour of its own, which left the label at 3.2-3.7:1 in most looks; a style trigger in Themes\DefenseClaw.xaml now
+/// label colour of its own, which left the label at 3.2-3.7:1 in most looks; a style trigger in DesignSystem\Themes\DefenseClaw.xaml now
 /// gives it <c>DcDanger</c> / <c>DcDangerHover</c> / <c>DcOnDanger</c>, whose contrast is held in AppearanceContrastTests. This
 /// is the other half: that a real button actually wears them, wherever it sits, in every look.
 /// </summary>

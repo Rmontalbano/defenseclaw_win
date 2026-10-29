@@ -15,7 +15,7 @@
 
         Keyboard: the area picker is one tab stop (Left and Right move between areas); Ctrl+Tab and Ctrl+Shift+Tab move between areas from anywhere on
         the page. Each area is top to bottom in tab order, one stop per control. Ctrl+, opens the page from anywhere in the dashboard.
-        Shared styling: Themes\DefenseClaw.xaml (Dc*); the only local styles are the rows, the status line and the path line.
+        Shared styling: DesignSystem\Themes\DefenseClaw.xaml (Dc*); the only local styles are the rows, the status line and the path line.
     -->
     <UserControl.Resources>
         <!--

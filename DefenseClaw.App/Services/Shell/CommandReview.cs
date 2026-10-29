@@ -447,7 +447,7 @@ public sealed record CommandReview
     };
 
     /// <summary>
-    /// The tone key the badge maps to (see the TONES index in <c>Themes\DefenseClaw.xaml</c>): neutral for a
+    /// The tone key the badge maps to (see the TONES index in <c>DesignSystem\Themes\DefenseClaw.xaml</c>): neutral for a
     /// read, amber for a change, red for a destructive one. Colour is never the only cue — the badge says the word.
     /// </summary>
     public static string ToneFor(CommandTier tier) => tier switch
