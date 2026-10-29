@@ -29,6 +29,12 @@ public enum FormFieldKind
     /// <see cref="FormField.Choices"/>. A value the list does not have is one more item, selected: never replaced.
     /// </summary>
     Choice,
+
+    /// <summary>
+    /// A read-only line of the runtime's own catalog (CUST-391): a summary, a status or a legacy value its editor shows but does not edit
+    /// (<c>Config Version</c>, <c>Webhooks</c>, <c>Inspect LLM</c>). A label and a value, never a control, and never committed.
+    /// </summary>
+    Info,
 }
 
 /// <summary>
@@ -88,7 +94,9 @@ public sealed partial class FormField : ObservableObject
         Path = path;
         Kind = kind;
         OriginalValue = originalValue;
-        IsEditable = isEditable;
+
+        // An information line is never a setting this form writes, whatever the caller says.
+        IsEditable = isEditable && kind != FormFieldKind.Info;
         DisabledReason = disabledReason;
         IsMasked = isMasked || kind == FormFieldKind.Secret;
         Hint = string.IsNullOrWhiteSpace(hint) ? null : hint;
@@ -256,6 +264,7 @@ public sealed partial class FormField : ObservableObject
         FormFieldKind.EnvName => $"{DisplayName}, environment variable name",
         FormFieldKind.Secret => $"{DisplayName}, secret, masked and read-only",
         FormFieldKind.Choice => $"{DisplayName}, choice setting",
+        FormFieldKind.Info => $"{DisplayName}, read-only information",
         _ => IsMasked ? $"{DisplayName}, masked and read-only" : $"{DisplayName}, text setting",
     };
 }
@@ -402,15 +411,30 @@ public class FormGroup
     public override string ToString() => $"{DisplayName} group";
 }
 
-/// <summary>One top-level YAML key, rendered as a card in the FORM tab.</summary>
+/// <summary>
+/// One card in the FORM tab: a top-level YAML key (the source-driven form), or one section of the runtime's own catalog (CUST-391, see
+/// <see cref="RuntimeCatalogLayout"/>), which also carries the catalog's summary and help line.
+/// </summary>
 public sealed class FormSection : FormGroup
 {
-    public FormSection(string key, string displayName, string path, bool isKnownToCore, bool existsInRawConfig)
+    public FormSection(string key, string displayName, string path, bool isKnownToCore, bool existsInRawConfig, string? summary = null, string? help = null)
         : base(key, displayName, path)
     {
         IsKnownToCore = isKnownToCore;
         ExistsInRawConfig = existsInRawConfig;
+        Summary = string.IsNullOrWhiteSpace(summary) ? null : summary;
+        Help = string.IsNullOrWhiteSpace(help) ? null : help;
     }
+
+    /// <summary>The catalog's one line on what the section is for (<c>ConfigSection.summary</c>); null for a section built from a YAML key.</summary>
+    public string? Summary { get; }
+
+    /// <summary>The catalog's second, quieter line (<c>ConfigSection.help</c>); null when it has none.</summary>
+    public string? Help { get; }
+
+    public bool HasSummary => Summary is not null;
+
+    public bool HasHelp => Help is not null;
 
     /// <summary>True when <see cref="DefenseClawConfig.KnownSections"/> recognizes this key.</summary>
     public bool IsKnownToCore { get; }

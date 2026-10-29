@@ -72,17 +72,24 @@ public static class ConfigFormBuilder
     /// Which operating system and runtime the connector lists are for (<see cref="ConfigFieldCatalog"/>); null is this machine with the
     /// 0.8.10 connector set.
     /// </param>
+    /// <param name="describe">
+    /// What the installed runtime's own catalog says about a dotted key (<see cref="RuntimeConfigCatalog.Describe"/>, CUST-391), asked before the
+    /// built-in <see cref="ConfigFieldCatalog"/>: its label, hint and choices, whether it is a password, and why its own editor keeps it read-only.
+    /// Null (no runtime catalog) is the built-in catalogue alone, exactly as before.
+    /// </param>
     public static BuildResult Build(
         string sourceYaml,
         ConfigDocument document,
         Action<FormField> onFieldCommitted,
         Action<FormListField> onListCommitted,
-        ConfigChoiceProfile? profile = null)
+        ConfigChoiceProfile? profile = null,
+        Func<string, ConfigFieldInfo?>? describe = null)
     {
         ArgumentNullException.ThrowIfNull(sourceYaml);
         ArgumentNullException.ThrowIfNull(document);
 
         profile ??= ConfigChoiceProfile.ForHost();
+        var lookup = new FieldLookup(profile, describe);
 
         var warnings = new List<string>();
         if (ConfigYamlGuard.Refusal(sourceYaml) is { } refusal)
@@ -137,10 +144,10 @@ public static class ConfigFormBuilder
             switch (valueNode)
             {
                 case YamlMappingNode map:
-                    Populate(section, map, path, document, onFieldCommitted, onListCommitted, profile, depth: 1);
+                    Populate(section, map, path, document, onFieldCommitted, onListCommitted, lookup, depth: 1);
                     break;
                 case YamlScalarNode scalar:
-                    AddScalarField(section, key, path, scalar, document, onFieldCommitted, profile);
+                    AddScalarField(section, key, path, scalar, document, onFieldCommitted, lookup);
                     break;
                 case YamlSequenceNode seq:
                     AddSequenceEntry(section, key, path, seq, document, onFieldCommitted, onListCommitted);
@@ -160,7 +167,7 @@ public static class ConfigFormBuilder
         ConfigDocument document,
         Action<FormField> onFieldCommitted,
         Action<FormListField> onListCommitted,
-        ConfigChoiceProfile profile,
+        FieldLookup lookup,
         int depth)
     {
         foreach (var (keyNode, valueNode) in Entries(node))
@@ -177,7 +184,7 @@ public static class ConfigFormBuilder
                 switch (valueNode)
                 {
                     case YamlScalarNode scalar:
-                        AddScalarField(group, key, path, scalar, document, onFieldCommitted, profile);
+                        AddScalarField(group, key, path, scalar, document, onFieldCommitted, lookup);
                         break;
 
                     case YamlSequenceNode seq:
@@ -192,7 +199,7 @@ public static class ConfigFormBuilder
                         }
 
                         var subGroup = new FormGroup(key, Humanize(key), string.Join('.', path));
-                        Populate(subGroup, map, path, document, onFieldCommitted, onListCommitted, profile, depth + 1);
+                        Populate(subGroup, map, path, document, onFieldCommitted, onListCommitted, lookup, depth + 1);
                         if (subGroup.HasContent)
                         {
                             group.SubGroups.Add(subGroup);
@@ -215,7 +222,7 @@ public static class ConfigFormBuilder
         YamlScalarNode scalar,
         ConfigDocument document,
         Action<FormField> onFieldCommitted,
-        ConfigChoiceProfile profile)
+        FieldLookup lookup)
     {
         var (kind, value) = ClassifyScalar(key, scalar);
         var text = scalar.Value ?? string.Empty;
@@ -223,8 +230,13 @@ public static class ConfigFormBuilder
 
         // What the TUI's Setup config panel knows about this key: its hint, the list it offers, a reason it is not editable there.
         // Only text becomes a choice: a plain true/false or integer keeps its own control, and a secret-shaped key stays a secret.
-        var info = ConfigFieldCatalog.Resolve(dotted, profile);
-        if (kind == FormFieldKind.String && info?.IsChoice == true)
+        var info = lookup.Resolve(dotted);
+        if (info?.IsSecret == true)
+        {
+            // The runtime's own editor calls it a password: never shown, never written from here, whatever the key's name looks like.
+            kind = FormFieldKind.Secret;
+        }
+        else if (kind == FormFieldKind.String && info?.IsChoice == true)
         {
             kind = FormFieldKind.Choice;
         }
@@ -277,7 +289,31 @@ public static class ConfigFormBuilder
         }
 
         group.Fields.Add(new FormField(
-            key, Humanize(key), dotted, kind, value, isEditable, reason, onFieldCommitted, isMasked, info?.Options, info?.Hint));
+            key, info?.Label ?? Humanize(key), dotted, kind, value, isEditable, reason, onFieldCommitted, isMasked, info?.Options, info?.Hint));
+    }
+
+    /// <summary>
+    /// Where a key's hint, choices and read-only reason come from: the runtime's own catalog when there is one (CUST-391), the built-in
+    /// <see cref="ConfigFieldCatalog"/> otherwise. Combined, the runtime speaks for the label, hint, choices and secrecy; a read-only reason this app
+    /// knows (the hook fail mode's Windows guidance) still wins over the runtime's shorter one, and a key the runtime does not list keeps the
+    /// built-in entry.
+    /// </summary>
+    private sealed class FieldLookup(ConfigChoiceProfile profile, Func<string, ConfigFieldInfo?>? describe)
+    {
+        public ConfigFieldInfo? Resolve(string dotted)
+        {
+            var builtIn = ConfigFieldCatalog.Resolve(dotted, profile);
+            if (describe?.Invoke(dotted) is not { } runtime)
+            {
+                return builtIn;
+            }
+
+            return runtime with
+            {
+                Hint = runtime.Hint.Length > 0 ? runtime.Hint : builtIn?.Hint ?? string.Empty,
+                ReadOnlyReason = builtIn?.ReadOnlyReason ?? runtime.ReadOnlyReason,
+            };
+        }
     }
 
     /// <summary>True when any ancestor key of the value at <paramref name="path"/> is a headers map (the CLI masks every string beneath one).</summary>

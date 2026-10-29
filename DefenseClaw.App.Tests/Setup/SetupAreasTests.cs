@@ -410,7 +410,8 @@ public sealed class SetupAreasTests
                 var sections = VisualTree.Find<ListBox>(inline, l => l.Name == "SectionList")!;
                 var save = VisualTree.Find<Wpf.Ui.Controls.Button>(inline, b => b.IsVisible && (b.Content as string) == "Save")!;
                 var revert = VisualTree.Find<Wpf.Ui.Controls.Button>(inline, b => b.IsVisible && (b.Content as string) == "Revert")!;
-                Assert.StartsWith("runtime · ", session.Editor.CatalogLabel, StringComparison.Ordinal);
+                // The composition fakes the CLI, so no runtime catalog is read (CUST-391): the built-in layout, and the label says so.
+                Assert.StartsWith("built-in catalog · ", session.Editor.CatalogLabel, StringComparison.Ordinal);
                 Assert.Equal(session.Editor.Sections.Count, sections.Items.Count);
                 Assert.True(Y(search, inline) <= Y(label, inline));
                 Assert.True(Y(label, inline) < Y(sections, inline));

@@ -233,10 +233,38 @@
             </Grid>
         </DataTemplate>
 
+        <!--
+            Info (CUST-391): a read-only line of the runtime's catalog - a summary (Webhooks, Trusted Paths), a status, a legacy value (Inspect LLM) or a
+            key its editor does not edit. The Mac draws these as a label and its value; so does this, with the runtime's hint under it, and no control.
+        -->
+        <DataTemplate x:Key="InfoFieldTemplate" DataType="{x:Type vmc:FormField}">
+            <Grid Margin="{StaticResource DcFieldGap}" ToolTip="{Binding ToolTipText}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="260" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource DcBody}" Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource DcCaption}"
+                               Text="{Binding Hint}"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding HasHint, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           AutomationProperties.HelpText="{Binding HelpText}"
+                           AutomationProperties.Name="{Binding DisplayName, StringFormat='{}{0}, read-only'}"
+                           Style="{StaticResource DcCaption}"
+                           Text="{Binding TextValue, Mode=OneWay}"
+                           TextWrapping="Wrap" />
+            </Grid>
+        </DataTemplate>
+
         <vc:FormFieldTemplateSelector x:Key="FieldSelector"
                                       BoolTemplate="{StaticResource BoolFieldTemplate}"
                                       ChoiceTemplate="{StaticResource ChoiceFieldTemplate}"
                                       EnvNameTemplate="{StaticResource EnvNameFieldTemplate}"
+                                      InfoTemplate="{StaticResource InfoFieldTemplate}"
                                       IntTemplate="{StaticResource IntFieldTemplate}"
                                       SecretTemplate="{StaticResource SecretFieldTemplate}"
                                       StringTemplate="{StaticResource StringFieldTemplate}" />
@@ -374,6 +402,18 @@
                             <TextBlock Style="{StaticResource DcBadgeText}" Text="NOT IN CONFIG.YAML" />
                         </Border>
                     </StackPanel>
+                    <!-- A section of the runtime's catalog says what it is for, and a quieter second line, as the Mac's section form does (CUST-391). -->
+                    <TextBlock Margin="0,0,0,2"
+                               Style="{StaticResource DcCaption}"
+                               Text="{Binding Summary}"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding HasSummary, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Margin="0,0,0,6"
+                               Opacity="0.8"
+                               Style="{StaticResource DcCaption}"
+                               Text="{Binding Help}"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding HasHelp, Converter={StaticResource BoolToVisibility}}" />
                     <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource GroupContentTemplate}" />
                 </StackPanel>
             </Border>

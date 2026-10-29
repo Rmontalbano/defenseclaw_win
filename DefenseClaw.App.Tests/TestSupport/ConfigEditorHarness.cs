@@ -69,17 +69,28 @@ internal sealed class ConfigEditorHarness : IDisposable
     /// What answers the runtime probes (<see cref="RuntimeFixtureRunner"/>). Null: nothing does, the runtime reads as unknown, and the form offers
     /// the 0.8.10 lists. When given, the probe has run (and its answer is in) before the form is built.
     /// </param>
+    /// <param name="catalogRunner">
+    /// What answers the runtime's catalog dump (CUST-391, <see cref="RuntimeCatalogFixtures"/>). Null: nothing is asked and the form is the built-in,
+    /// source-driven one. When given, a stand-in CLI and interpreter (empty files) are planted so the interpreter is found, and the runner is the only
+    /// thing that "runs".
+    /// </param>
     public static async Task<ConfigEditorHarness> LoadAsync(
         string eol = LineEndings.Lf,
         string? raw = null,
         string? maskedSource = null,
         string? maskedSourceEol = null,
         bool withoutCli = false,
-        RuntimeProbeRunner? runtimeProbeRunner = null)
+        RuntimeProbeRunner? runtimeProbeRunner = null,
+        RuntimePythonRunner? catalogRunner = null)
     {
         var fileText = LineEndings.With(raw ?? ConfigSamples.Raw, eol);
 
         var temp = new TempDirectory();
+        if (catalogRunner is not null)
+        {
+            RuntimeCatalogFixtures.PlantCliAndPython(temp.Path);
+        }
+
         var services = TestServices.Create(temp, fileText, runtimeProbeRunner);
         if (runtimeProbeRunner is not null)
         {
@@ -92,7 +103,7 @@ internal sealed class ConfigEditorHarness : IDisposable
         // (AppServices.ReloadConfig), which never needed the watcher.
         services.ConfigWatcher.Dispose();
 
-        var vm = new ConfigEditorWindowViewModel(services);
+        var vm = new ConfigEditorWindowViewModel(services) { CatalogRunnerOverride = catalogRunner };
         if (!withoutCli)
         {
             var masked = LineEndings.With(maskedSource ?? ConfigSamples.MaskedSource, maskedSourceEol ?? eol);

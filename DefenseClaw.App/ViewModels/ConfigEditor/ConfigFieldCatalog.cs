@@ -13,7 +13,9 @@ public sealed record ChoiceOption(string Value, string Label);
 /// What the catalogue knows about one config.yaml key: the TUI's one-line hint, the values a Choice offers (null: the key is not a
 /// choice), and, for a key the TUI shows but does not let the operator edit, why.
 /// </summary>
-public sealed record ConfigFieldInfo(string Hint, IReadOnlyList<string>? Options = null, string? ReadOnlyReason = null)
+/// <param name="Label">The label the runtime's own catalog gives the key (<see cref="RuntimeConfigCatalog"/>); null keeps the form's humanized key name.</param>
+/// <param name="IsSecret">The runtime's catalog calls the key a <c>password</c>: the field is a masked, read-only secret whatever its name looks like.</param>
+public sealed record ConfigFieldInfo(string Hint, IReadOnlyList<string>? Options = null, string? ReadOnlyReason = null, string? Label = null, bool IsSecret = false)
 {
     public bool IsChoice => Options is not null;
 }
@@ -425,6 +427,15 @@ public static class ConfigFieldCatalog
         Hint("scanners.skill_scanner.virustotal_api_key_env", "Env var NAME for VirusTotal key.");
         Hint("scanners.skill_scanner.virustotal_api_key", "Inline VirusTotal key.");
         Hint("scanners.skill_scanner.use_aidefense", "Chain Cisco AI Defense scan.");
+
+        // The skill scanner keys of config_version 9 (1.0.0 and later; _scanners_section, setup.py:8263-8321 at 1.0.4, SkillScannerConfig and
+        // SkillScannerAnalyzers in config.py:1448-1489). A 0.8.10 file never holds them, so nothing gates them. CUST-391.
+        var severities = new[] { string.Empty, "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO" };
+        ChoiceOf("scanners.skill_scanner.fail_on_severity", "Findings at or above this severity block (empty: HIGH).", severities);
+        ChoiceOf("scanners.skill_scanner.review_queue_min", "Findings from here up to Block At go to review (empty: MEDIUM).", severities);
+        Choice("scanners.skill_scanner.judge_source", "inherit: the top-level llm block; override: the LLM override below.", string.Empty, "inherit", "override");
+        Hint("scanners.skill_scanner.analyzers.osv.enabled", "Optional: check dependencies on OSV.dev.");
+
         Hint("scanners.mcp_scanner.binary", "Path/name of mcp-scanner executable.");
         Hint("scanners.mcp_scanner.analyzers", "CSV of analyzer IDs.");
         Hint("scanners.mcp_scanner.scan_prompts", "Scan MCP prompt templates.");

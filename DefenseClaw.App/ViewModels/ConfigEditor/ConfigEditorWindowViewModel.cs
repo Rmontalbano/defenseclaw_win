@@ -639,6 +639,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             return;
         }
 
+        // The operator asked for a fresh look: the runtime's catalog is read again too, even if nothing it depends on changed (CUST-391).
+        _forceCatalogRead = true;
         await ReloadCoreAsync().ConfigureAwait(true);
     }
 
@@ -1221,7 +1223,11 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
 
     private async Task FetchFormSourceAsync(CancellationToken cancellationToken)
     {
+        // The runtime's own catalog (CUST-391, ConfigEditorWindowViewModel.Catalog.cs) is read alongside: two Python starts at once, not one after the other.
+        // The read never throws, so if the source read does, it finishes on its own.
+        var catalog = ReadCatalogAsync();
         var result = await ReadFormSourceAsync(cancellationToken).ConfigureAwait(true);
+        _catalogResult = await catalog.ConfigureAwait(true);
         if (result.Yaml is null)
         {
             FormUnavailableReason = result.Failure;
@@ -1275,6 +1281,8 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             return;
         }
 
+        // The file changed, so the catalog's values for keys it does not set may have too (quiet as well: a failed read keeps the built-in layout).
+        _catalogResult = await ReadCatalogAsync().ConfigureAwait(true);
         RebuildForm();
         NeedsFormRebuild = false;
     }
@@ -1282,13 +1290,17 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     private void RebuildForm()
     {
         RefreshFormNotes();
-        var result = ConfigFormBuilder.Build(_formSourceYaml, _document, OnFieldCommitted, OnListCommitted, CurrentChoiceProfile());
+        var catalog = _catalogResult?.Catalog;
+        var result = ConfigFormBuilder.Build(
+            _formSourceYaml, _document, OnFieldCommitted, OnListCommitted, CurrentChoiceProfile(), catalog is null ? null : catalog.Describe);
 
         ClearSections();
-        foreach (var section in result.Sections)
+        foreach (var section in LayOut(result, catalog))
         {
             Sections.Add(section);
         }
+
+        RaiseCatalogState();
 
         FormWarnings = result.Warnings;
         OnPropertyChanged(nameof(FormWarnings));
@@ -1315,6 +1327,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
     /// <summary>Empties the FORM tree. The held-back values go with it: they were boxes of that tree, and RAW never had them.</summary>
     private void ClearSections()
     {
+        _layoutCatalog = null;
         Sections.Clear();
         if (_fieldsWithErrors.Count > 0)
         {
