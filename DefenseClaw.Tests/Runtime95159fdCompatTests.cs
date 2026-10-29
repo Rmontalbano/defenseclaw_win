@@ -442,9 +442,11 @@ public sealed class Runtime95159fdCompatTests
             [],
             _ => false,
             fallbackBinDirectories: [@"C:\Users\operator\.local\bin"]);
-        var verifier = new GatewayPeerVerifier(paths, new NoListener());
+        // The profile these synthetic paths are under (CUST-392: the profile's install folders count in any session).
+        var verifier = new GatewayPeerVerifier(paths, new NoListener(), userProfile: @"C:\Users\operator");
 
-        PortOwner Owner(string image) => new(1, "defenseclaw-gateway", "127.0.0.1", 18970, image);
+        PortOwner Owner(string image) =>
+            new(1, "defenseclaw-gateway", "127.0.0.1", 18970, image, SocketCreatedUtc: PeerFixtures.Bound, ProcessCreatedUtc: PeerFixtures.Started);
 
         Assert.Equal(PortOwnerTrust.Gateway, verifier.Classify(Owner(@"C:\Users\operator\.local\bin\defenseclaw-gateway.exe")));
         Assert.Equal(PortOwnerTrust.Gateway, verifier.Classify(Owner(@"C:\Users\operator\AppData\Local\Programs\DefenseClaw\bin\defenseclaw-gateway.exe")));

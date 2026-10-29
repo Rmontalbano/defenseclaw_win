@@ -32,6 +32,13 @@ public static class AdminAcl
     /// <summary>ReadData, ReadEA, Execute, ReadAttributes, ReadPermissions, Synchronize: the rights Users get.</summary>
     public const uint ReadExecuteMask = 0x1 | 0x8 | 0x20 | 0x80 | 0x20000 | 0x100000;
 
+    /// <summary>
+    /// DeleteSubdirectoriesAndFiles, Delete, WriteDAC, WriteOwner, GenericWrite, GenericAll: the rights that let a principal remove, rename or
+    /// re-permission what a folder already holds. A volume's root lets Authenticated Users add folders, which takes nothing that is there, so a
+    /// root is held to this mask and every folder below it to <see cref="WriteLikeMask"/>.
+    /// </summary>
+    public const uint TakeOverMask = 0x40 | 0x10000 | 0x40000 | 0x80000 | 0x40000000 | 0x10000000;
+
     private static readonly HashSet<string> Administrative = new(StringComparer.OrdinalIgnoreCase)
     {
         System, Administrators, TrustedInstaller,
@@ -47,15 +54,23 @@ public static class AdminAcl
     public static bool IsAdministrative(string? sid) => sid is not null && Administrative.Contains(sid);
 
     /// <summary>Everything wrong with <paramref name="node"/> for something that will be run elevated; empty when it is admin-only.</summary>
-    public static IReadOnlyList<string> Problems(NodeSecurity node, string label)
+    public static IReadOnlyList<string> Problems(NodeSecurity node, string label) => Problems(node, label, accountSid: null, WriteLikeMask);
+
+    /// <summary>
+    /// The same test with one account trusted beside the administrative principals, for a file that must be this account's or an administrator's
+    /// (the app's peer check on a gateway installed outside the profile, CUST-392): the owner is <paramref name="accountSid"/> or administrative,
+    /// and no other principal holds a right in <paramref name="writeMask"/>. A null <paramref name="accountSid"/> is the admin-only test.
+    /// </summary>
+    public static IReadOnlyList<string> Problems(NodeSecurity node, string label, string? accountSid, uint writeMask)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         var problems = new List<string>();
+        bool IsAccount(string? sid) => accountSid is not null && string.Equals(sid, accountSid, StringComparison.OrdinalIgnoreCase);
 
-        if (!IsAdministrative(node.OwnerSid))
+        if (!IsAdministrative(node.OwnerSid) && !IsAccount(node.OwnerSid))
         {
-            problems.Add($"{label} is owned by {node.OwnerSid ?? "an unknown owner"}, not an administrator.");
+            problems.Add($"{label} is owned by {node.OwnerSid ?? "an unknown owner"}, not {(accountSid is null ? "an administrator" : "this account or an administrator")}.");
         }
 
         if (!node.HasDacl)
@@ -66,12 +81,12 @@ public static class AdminAcl
 
         foreach (var entry in node.Entries)
         {
-            if (!entry.Allow || entry.InheritOnly || (entry.Mask & WriteLikeMask) == 0)
+            if (!entry.Allow || entry.InheritOnly || (entry.Mask & writeMask) == 0)
             {
                 continue;
             }
 
-            if (!MayWrite.Contains(entry.Sid))
+            if (!MayWrite.Contains(entry.Sid) && !IsAccount(entry.Sid))
             {
                 problems.Add($"{label} lets {entry.Sid} write to it, change it or delete it.");
             }

@@ -25,6 +25,22 @@ public interface IAdminCopyTrust
 }
 
 /// <summary>
+/// Whether one of the installer's directories that lies outside this account's profile is closed to other accounts (CUST-392). The profile is
+/// this account's alone, but a folder elsewhere (a <c>DEFENSECLAW_HOME</c> on <c>C:\</c>, whose new folders give Authenticated Users Modify)
+/// may be one another account could have put a <c>defenseclaw-gateway.exe</c> in. The app answers it from the owner and access list of the file
+/// and every folder above it (<c>InstallFolderTrust</c>). Fails closed: anything unreadable is a problem.
+/// </summary>
+public interface IInstallFolderTrust
+{
+    /// <summary>
+    /// Null when <paramref name="imagePath"/> and every folder above it are owned by this account, SYSTEM or Administrators and no other principal
+    /// may write, delete, re-permission or take them; otherwise the first thing wrong, as the rest of a sentence (for example
+    /// "D:\dc\.venv\Scripts lets S-1-5-11 write to it, change it or delete it").
+    /// </summary>
+    string? Problem(string imagePath);
+}
+
+/// <summary>
 /// How a listener that <see cref="GatewayPeerVerifier"/> trusts was recognised, for the words the app shows. The token decision is
 /// <see cref="PortOwnerTrust"/>'s alone; this only says which of the trusted gateways it is.
 /// </summary>
@@ -89,6 +105,18 @@ public enum PortOwnerTrust
 /// <c>gateway.pid</c>) ever stands in for the path.
 /// </para>
 /// <para>
+/// <b>Whose socket, and whose folder (CUST-392).</b> Windows keeps naming a listening socket by its creator's pid after the creator exits while a
+/// child it handed the socket to serves it, and a later process may reuse that pid: another account could bind the port, hand it on, exit, and
+/// have this account's gateway (started, and failing to bind) answer the pid lookups. So the owner's process must be no younger than its socket
+/// (<see cref="PortOwner.PidMatchesSocket"/>), and an owner whose times Windows did not give is refused. And an installer's directory outside this
+/// account's profile counts only for a process in this app's session or when <see cref="IInstallFolderTrust"/> finds the file and every folder
+/// above it closed to other accounts; the profile itself is this account's alone and keeps the old rule.
+/// </para>
+/// <para>
+/// <b>Not closed.</b> A session is not an account: a process another account starts inside this app's session (<c>runas</c>, with that account's
+/// password) and whose path is read without a handle is judged by its path and session; Windows gives its owner only to a handle.
+/// </para>
+/// <para>
 /// Fails closed: an owner whose image path could not be read either way is <see cref="PortOwnerTrust.Other"/>.
 /// </para>
 /// </summary>
@@ -102,6 +130,8 @@ public sealed class GatewayPeerVerifier
 
     private readonly IConnectionOwnerInspector? _connections;
     private readonly IAdminCopyTrust? _adminCopy;
+    private readonly IInstallFolderTrust? _installFolders;
+    private readonly string? _profile;
     private readonly int? _sessionId;
 
     /// <param name="adminCopy">
@@ -113,17 +143,26 @@ public sealed class GatewayPeerVerifier
     /// <see cref="PortOwnerInspector"/> is). With none, <see cref="ForConnection"/> refuses everything.
     /// </param>
     /// <param name="currentSessionId">This app's Windows session; null reads this process's own (a test names one).</param>
+    /// <param name="installFolders">
+    /// Judges an installer's directory outside <paramref name="userProfile"/> for a gateway outside this app's session (CUST-392); null (the default)
+    /// trusts such a directory only in this app's session.
+    /// </param>
+    /// <param name="userProfile">This account's profile folder; null reads it from the system (a test names one). An unreadable profile is no profile.</param>
     public GatewayPeerVerifier(
         DefenseClawPaths paths,
         IPortOwnerInspector inspector,
         IConnectionOwnerInspector? connections = null,
         IAdminCopyTrust? adminCopy = null,
-        int? currentSessionId = null)
+        int? currentSessionId = null,
+        IInstallFolderTrust? installFolders = null,
+        string? userProfile = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _inspector = inspector ?? throw new ArgumentNullException(nameof(inspector));
         _connections = connections ?? inspector as IConnectionOwnerInspector;
         _adminCopy = adminCopy;
+        _installFolders = installFolders;
+        _profile = NormalizeDirectory(userProfile ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
         _sessionId = currentSessionId ?? OwnSession();
     }
 
@@ -271,7 +310,17 @@ public sealed class GatewayPeerVerifier
             return $"{who} could not be verified: Windows does not show this app which file it runs from";
         }
 
-        if (!InThisSession(owner))
+        if (owner.ProcessCreatedUtc is null || owner.SocketCreatedUtc is null)
+        {
+            return $"{who} could not be verified: Windows did not say when the process started or when its socket on the API port was opened";
+        }
+
+        if (!owner.PidMatchesSocket)
+        {
+            return $"{who} did not open the socket on the API port: the socket is older than the process, so another process opened it with that pid";
+        }
+
+        if (!InAppSession(owner))
         {
             if (owner.ImageWithoutHandle)
             {
@@ -281,6 +330,11 @@ public sealed class GatewayPeerVerifier
             if (_adminCopy?.IsTrustedImage(owner.ImagePath) == true)
             {
                 return $"{who} runs this account's administrator copy, but in {SessionWords(owner)}, so it is not the gateway the helper started";
+            }
+
+            if (InstallDirectoryOf(owner.ImagePath) is { } directory && !InProfile(directory) && FolderProblem(owner.ImagePath) is { } problem)
+            {
+                return $"{who} runs from {directory}, outside this account's profile, in {SessionWords(owner)}, and {problem}";
             }
         }
 
@@ -294,8 +348,15 @@ public sealed class GatewayPeerVerifier
         return $"{who} is not running from the DefenseClaw install directory";
     }
 
-    /// <summary>True when <paramref name="owner"/> runs in this app's Windows session (both known and equal).</summary>
-    private bool InThisSession(PortOwner owner) => owner.SessionId is { } session && _sessionId is { } mine && session == mine;
+    /// <summary>
+    /// True when <paramref name="owner"/> runs in this app's Windows session (both known and equal): the session rule the verdict applies, also for
+    /// the administrator feature's words about which gateway is the helper's (CUST-392).
+    /// </summary>
+    public bool InAppSession(PortOwner owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        return owner.SessionId is { } session && _sessionId is { } mine && session == mine;
+    }
 
     private string SessionWords(PortOwner owner) =>
         owner.SessionId is { } session && _sessionId is { } mine
@@ -315,9 +376,16 @@ public sealed class GatewayPeerVerifier
             return GatewayPeerRoute.None;
         }
 
+        // The pid must still name the process that opened the socket: one younger than its socket only reused the pid of a creator that is gone
+        // (whose child may still serve the socket). Times Windows did not give are no proof either way: refused (CUST-392).
+        if (!owner.PidMatchesSocket)
+        {
+            return GatewayPeerRoute.None;
+        }
+
         // A path from the process list (the process could not be opened: another account's, or elevated) says which file, not whose process.
         // Only one in this app's session is considered at all.
-        var thisSession = InThisSession(owner);
+        var thisSession = InAppSession(owner);
         if (owner.ImageWithoutHandle && !thisSession)
         {
             return GatewayPeerRoute.None;
@@ -339,9 +407,13 @@ public sealed class GatewayPeerVerifier
             return GatewayPeerRoute.None;
         }
 
-        if (InstallDirectories().Any(directory => string.Equals(directory, imageDirectory, StringComparison.OrdinalIgnoreCase)))
+        if (IsInstallDirectory(imageDirectory))
         {
-            return GatewayPeerRoute.InstallDirectory;
+            // The profile is this account's alone (its owner, SYSTEM and Administrators), so a gateway there was put there by this account. A folder
+            // outside it may be one other accounts can write to: the process must be in this app's session, or the folder closed to them (CUST-392).
+            return InProfile(imageDirectory) || thisSession || FolderProblem(owner.ImagePath) is null
+                ? GatewayPeerRoute.InstallDirectory
+                : GatewayPeerRoute.None;
         }
 
         // The one other place a gateway may run from: the helper's administrator copy, only while it passes its own checks right now, and only
@@ -349,6 +421,47 @@ public sealed class GatewayPeerVerifier
         return thisSession && _adminCopy is not null && _adminCopy.IsTrustedImage(owner.ImagePath)
             ? GatewayPeerRoute.AdministratorCopy
             : GatewayPeerRoute.None;
+    }
+
+    private bool IsInstallDirectory(string directory) =>
+        InstallDirectories().Any(install => string.Equals(install, directory, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The installer's directory <paramref name="imagePath"/> is the gateway in, or null when it is not one (or not the gateway's file name).</summary>
+    private string? InstallDirectoryOf(string imagePath) =>
+        string.Equals(Path.GetFileNameWithoutExtension(imagePath), GatewayProcessName, StringComparison.OrdinalIgnoreCase) &&
+        NormalizeDirectory(Path.GetDirectoryName(imagePath)) is { } directory && IsInstallDirectory(directory)
+            ? directory
+            : null;
+
+    /// <summary>True when <paramref name="directory"/> (normalised) is this account's profile folder or below it.</summary>
+    private bool InProfile(string directory) =>
+        _profile is { } profile &&
+        (string.Equals(directory, profile, StringComparison.OrdinalIgnoreCase) ||
+         (directory.Length > profile.Length && directory[profile.Length] == Path.DirectorySeparatorChar &&
+          directory.StartsWith(profile, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// Why the gateway at <paramref name="imagePath"/>, in an installer's directory outside the profile, may have been put there by another account;
+    /// null only when <see cref="IInstallFolderTrust"/> finds the file and its folders closed to other accounts. No trust object, or one that
+    /// throws, is a problem (fail closed).
+    /// </summary>
+    private string? FolderProblem(string imagePath)
+    {
+        if (_installFolders is null)
+        {
+            return "this app does not check who may change that folder";
+        }
+
+        try
+        {
+            return _installFolders.Problem(imagePath);
+        }
+#pragma warning disable CA1031 // A check that throws is a check that failed: not trusted.
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+#pragma warning restore CA1031
+        {
+            return "who may change that folder could not be read";
+        }
     }
 
     /// <summary>

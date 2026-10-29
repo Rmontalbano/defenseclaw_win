@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Gateway.Models;
 using DefenseClaw.Core.Install;
@@ -74,8 +73,11 @@ public class GatewayPeerSessionTests
     private static GatewayPeerVerifier Verifier(IAdminCopyTrust? trust = null, IPortOwnerInspector? inspector = null, DefenseClawPaths? paths = null) =>
         new(paths ?? Paths(), inspector ?? new FixedPortInspector(), adminCopy: trust, currentSessionId: AppSession);
 
+    /// <summary>When the synthetic gateway started, and opened its socket a moment later: the pid is its own (CUST-392).</summary>
+    private static readonly DateTime Started = new(2026, 10, 29, 8, 0, 0, DateTimeKind.Utc);
+
     private static PortOwner Owner(string? image, int? session = AppSession, bool withoutHandle = false, string name = "defenseclaw-gateway") =>
-        new(11524, name, "127.0.0.1", 18970, image, session, withoutHandle);
+        new(11524, name, "127.0.0.1", 18970, image, session, withoutHandle, SocketCreatedUtc: Started.AddMilliseconds(300), ProcessCreatedUtc: Started);
 
     // ---- the verdict ----------------------------------------------------------------------------------------------------
 
@@ -123,11 +125,16 @@ public class GatewayPeerSessionTests
     }
 
     [Fact]
-    public void The_installed_gateway_read_with_a_handle_keeps_its_old_rule_in_any_session()
+    public void The_installed_gateway_read_with_a_handle_keeps_its_old_rule_in_any_session_inside_the_profile()
     {
-        // Unchanged from before CUST-362: a process this app could open, running the installer's file (a gateway started as a task, say).
-        Assert.Equal(PortOwnerTrust.Gateway, Verifier().Classify(Owner(Installed, OtherSession)));
-        Assert.Equal(PortOwnerTrust.Gateway, Verifier().Classify(Owner(Installed, session: null)));
+        // Unchanged from before CUST-362: a process this app could open, running the installer's file (a gateway started as a task, say). Since
+        // CUST-392 that holds for the installer's directories in this account's profile; one outside it needs this session or a closed folder
+        // (GatewayPeerInstallFolderTests).
+        var inProfile = new GatewayPeerVerifier(Paths(), new FixedPortInspector(), currentSessionId: AppSession, userProfile: @"C:\fake");
+
+        Assert.Equal(PortOwnerTrust.Gateway, inProfile.Classify(Owner(Installed, OtherSession)));
+        Assert.Equal(PortOwnerTrust.Gateway, inProfile.Classify(Owner(Installed, session: null)));
+        Assert.Equal(PortOwnerTrust.Other, Verifier().Classify(Owner(Installed, OtherSession)));
     }
 
     [Fact]
@@ -221,6 +228,19 @@ public class GatewayPeerSessionTests
         Assert.Equal("The administrator gateway started by this app is responding on 127.0.0.1:18970.", status.Detail);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Another_sessions_run_of_the_copy_is_never_named_the_gateway_this_app_started(bool withoutHandle)
+    {
+        // CUST-392: the dashboard's words follow the verdict, so the copy run elsewhere is a stranger on the port, not "started by this app".
+        var status = await Detect(Owner(CopyImage, OtherSession, withoutHandle), new Trust());
+
+        Assert.Equal(GatewayPeerRoute.None, status.OwnerRoute);
+        Assert.DoesNotContain("started by this app", status.Detail, StringComparison.Ordinal);
+        Assert.Contains("sends it no credentials", status.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task An_unverified_process_is_still_called_one_and_sent_nothing()
     {
@@ -252,36 +272,10 @@ public class GatewayPeerSessionTests
     // ---- the inspector ----------------------------------------------------------------------------------------------------
 
     private const uint NoError = 0;
-    private const uint InsufficientBuffer = 122;
-    private const int AfInet = 2;
-    private const int RowSize = 24;
-
-    private static uint OneListener(IntPtr table, ref int size, int family, int port, int pid)
-    {
-        if (family != AfInet)
-        {
-            return NoError;
-        }
-
-        if (table == IntPtr.Zero)
-        {
-            size = 4 + RowSize;
-            return InsufficientBuffer;
-        }
-
-        Marshal.WriteInt32(table, 0, 1);
-        Marshal.WriteInt32(table, 4, 2);
-        Marshal.WriteInt32(table, 8, 0x0100007F);
-        Marshal.WriteInt32(table, 12, ((port & 0xFF) << 8) | (port >> 8));
-        Marshal.WriteInt32(table, 16, 0);
-        Marshal.WriteInt32(table, 20, 0);
-        Marshal.WriteInt32(table, 24, pid);
-        return NoError;
-    }
 
     private static PortOwnerInspector Inspector(PortOwnerInspector.ImagePathReader image, List<int> asked) =>
         new(
-            (IntPtr table, ref int size, int family) => OneListener(table, ref size, family, 4712, Environment.ProcessId),
+            ModuleTcpTables.Reader(ModuleTcpTables.Listener(4712, Environment.ProcessId, DateTime.UtcNow)),
             (IntPtr table, ref int size, int family) => NoError,
             pid =>
             {

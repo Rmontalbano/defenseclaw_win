@@ -1,5 +1,4 @@
 using System.Net;
-using System.Runtime.InteropServices;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
 using DefenseClaw.Core.Net;
@@ -42,7 +41,8 @@ public class GatewayConnectionBindingTests
         }
     }
 
-    private static PortOwner Gateway(int pid = 4242) => new(pid, "defenseclaw-gateway", "127.0.0.1", 18970, GatewayImage);
+    private static PortOwner Gateway(int pid = 4242) =>
+        new(pid, "defenseclaw-gateway", "127.0.0.1", 18970, GatewayImage, PeerFixtures.ThisSession, SocketCreatedUtc: PeerFixtures.Bound, ProcessCreatedUtc: PeerFixtures.Started);
 
     private static PortOwner Stranger(int pid = 9001) => new(pid, "SomeRandomServer", "127.0.0.1", 18970, @"C:\tools\server.exe");
 
@@ -276,40 +276,20 @@ public class GatewayConnectionBindingTests
 
     // ---- the TCP-table read, over a synthetic buffer ------------------------------------------------------------
 
-    private static uint NetPort(int port) => (uint)(((port & 0xFF) << 8) | ((port >> 8) & 0xFF));
-
     private static uint V4(string address) => BitConverter.ToUInt32(IPAddress.Parse(address).GetAddressBytes(), 0);
 
+    /// <summary>An IPv4 connections table (the OWNER_MODULE layout since CUST-392); the IPv6 one is empty.</summary>
     private static PortOwnerInspector.TcpTableReader Table(params (uint Local, int LocalPort, uint Remote, int RemotePort, int Pid)[] rows) =>
-        (IntPtr table, ref int size, int family) =>
-        {
-            if (family != 2)
-            {
-                size = 0;
-                return 0;
-            }
-
-            var needed = 4 + (rows.Length * 24);
-            if (table == IntPtr.Zero || size < needed)
-            {
-                size = needed;
-                return 122;
-            }
-
-            Marshal.WriteInt32(table, rows.Length);
-            for (var i = 0; i < rows.Length; i++)
-            {
-                var at = table + 4 + (i * 24);
-                Marshal.WriteInt32(at, 0, 5);
-                Marshal.WriteInt32(at, 4, (int)rows[i].Local);
-                Marshal.WriteInt32(at, 8, (int)NetPort(rows[i].LocalPort));
-                Marshal.WriteInt32(at, 12, (int)rows[i].Remote);
-                Marshal.WriteInt32(at, 16, (int)NetPort(rows[i].RemotePort));
-                Marshal.WriteInt32(at, 20, rows[i].Pid);
-            }
-
-            return 0;
-        };
+        ModuleTcpTables.Reader(rows
+            .Select(row => new ModuleTcpTables.Row(
+                new IPAddress(BitConverter.GetBytes(row.Local)).ToString(),
+                row.LocalPort,
+                new IPAddress(BitConverter.GetBytes(row.Remote)).ToString(),
+                row.RemotePort,
+                row.Pid,
+                DateTime.UtcNow,
+                ModuleTcpTables.Established))
+            .ToArray());
 
     private static PortOwnerInspector Inspector(PortOwnerInspector.TcpTableReader connections) =>
         new((IntPtr table, ref int size, int family) => { size = 0; return 0; }, connections);

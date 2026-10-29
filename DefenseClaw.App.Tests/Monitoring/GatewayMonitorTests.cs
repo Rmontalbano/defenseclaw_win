@@ -31,6 +31,19 @@ public class GatewayMonitorTests
         public PortOwner? FindListener(int port) => Owner;
     }
 
+    private static readonly DateTime GatewayStarted = new(2026, 10, 29, 8, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>
+    /// The installed gateway as the inspector reports it: in this test's own session (the fake bin directory is outside the profile) and holding
+    /// a socket it opened after it started (CUST-392).
+    /// </summary>
+    private static PortOwner VerifiedGateway(int port)
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        return new PortOwner(4242, "defenseclaw-gateway", "127.0.0.1", port, GatewayImage, self.SessionId,
+            SocketCreatedUtc: GatewayStarted.AddSeconds(1), ProcessCreatedUtc: GatewayStarted);
+    }
+
     /// <summary>
     /// A listener that answers <c>/health</c> and nothing else needs. Tests that do not care about the answer
     /// still point the config at one: Windows retries a connection to a closed loopback port for about two
@@ -150,7 +163,7 @@ public class GatewayMonitorTests
         // The detector is told the gateway owns the port, so the monitor goes on to fetch alerts and status.
         var inspector = new FixedPortInspector
         {
-            Owner = new PortOwner(4242, "defenseclaw-gateway", "127.0.0.1", listener.Port, GatewayImage),
+            Owner = VerifiedGateway(listener.Port),
         };
         var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
         using var monitor = new GatewayMonitor(services, clock, detector);
@@ -292,7 +305,7 @@ public class GatewayMonitorTests
         using var services = Create(temp, listener.Port);
         var inspector = new FixedPortInspector
         {
-            Owner = new PortOwner(4242, "defenseclaw-gateway", "127.0.0.1", listener.Port, GatewayImage),
+            Owner = VerifiedGateway(listener.Port),
         };
         var detector = new InstallStateDetector(services.Paths, services.Gateway, inspector);
         using var monitor = new GatewayMonitor(services, new ManualClock(), detector);

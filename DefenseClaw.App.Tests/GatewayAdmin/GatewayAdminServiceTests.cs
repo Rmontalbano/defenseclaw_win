@@ -173,7 +173,7 @@ public sealed class GatewayAdminServiceTests
         {
             State = AppGatewayState.Running,
             Install = InstallState.Running,
-            PortOwner = new DefenseClaw.Core.Net.PortOwner(4242, "defenseclaw-gateway", "127.0.0.1", 18970, image),
+            PortOwner = new DefenseClaw.Core.Net.PortOwner(4242, "defenseclaw-gateway", "127.0.0.1", 18970, image, AdminRig.AppSession),
         };
 
         var status = await rig.Service.RefreshAsync();
@@ -192,7 +192,7 @@ public sealed class GatewayAdminServiceTests
         {
             State = AppGatewayState.Running,
             Install = InstallState.Running,
-            PortOwner = new DefenseClaw.Core.Net.PortOwner(1, "defenseclaw-gateway", "127.0.0.1", 18970, image),
+            PortOwner = new DefenseClaw.Core.Net.PortOwner(1, "defenseclaw-gateway", "127.0.0.1", 18970, image, AdminRig.AppSession),
         };
 
         rig.Elevation.Answer = true;

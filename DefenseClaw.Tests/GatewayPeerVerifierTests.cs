@@ -33,8 +33,12 @@ public class GatewayPeerVerifierTests
     private static GatewayPeerVerifier Verifier(DefenseClawPaths? paths = null, FixedPortInspector? inspector = null) =>
         new(paths ?? Paths(), inspector ?? new FixedPortInspector());
 
+    /// <summary>
+    /// A listener in this test's own session whose process opened its socket: what the installer's gateway looks like to the verifier, whose
+    /// session defaults to this process's (CUST-392: the fake bin directory is outside the profile, so the session is what lets it count).
+    /// </summary>
     private static PortOwner Owner(string? name, string? image, int pid = 4242) =>
-        new(pid, name, "127.0.0.1", 18970, image);
+        new(pid, name, "127.0.0.1", 18970, image, PeerFixtures.ThisSession, SocketCreatedUtc: PeerFixtures.Bound, ProcessCreatedUtc: PeerFixtures.Started);
 
     [Fact]
     public void The_gateway_from_the_install_directory_is_trusted()

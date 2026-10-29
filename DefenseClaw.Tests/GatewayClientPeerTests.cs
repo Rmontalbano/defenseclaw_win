@@ -27,7 +27,8 @@ public class GatewayClientPeerTests
         public PortOwner? FindListener(int port) => Owner;
     }
 
-    private static PortOwner RealGateway => new(4242, "defenseclaw-gateway", "127.0.0.1", 18970, GatewayImage);
+    private static PortOwner RealGateway => new(
+        4242, "defenseclaw-gateway", "127.0.0.1", 18970, GatewayImage, PeerFixtures.ThisSession, SocketCreatedUtc: PeerFixtures.Bound, ProcessCreatedUtc: PeerFixtures.Started);
 
     private static PortOwner SomeRandomServer => new(9001, "SomeRandomServer", "127.0.0.1", 18970, @"C:\tools\server.exe");
 

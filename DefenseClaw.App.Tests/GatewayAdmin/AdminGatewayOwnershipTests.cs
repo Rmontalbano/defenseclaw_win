@@ -48,7 +48,7 @@ public sealed class AdminGatewayOwnershipTests
 
     /// <summary>The gateway as the inspector reports it: its name, its pid from the TCP table, a path (or none), a session, and how the path was read.</summary>
     private static PortOwner Listener(string? image, int? session = AppSession, bool withoutHandle = true, string name = "defenseclaw-gateway") =>
-        new(GatewayPid, name, "127.0.0.1", 18970, image, session, withoutHandle);
+        new(GatewayPid, name, "127.0.0.1", 18970, image, session, withoutHandle, SocketCreatedUtc: Finished.AddSeconds(-11), ProcessCreatedUtc: Finished.AddSeconds(-12));
 
     private static GatewayPeerVerifier Verifier(AdminRig rig) =>
         new(

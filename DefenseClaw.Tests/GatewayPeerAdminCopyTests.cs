@@ -41,7 +41,11 @@ public class GatewayPeerAdminCopyTests
 
     private static GatewayPeerVerifier Verifier(IAdminCopyTrust? trust) => new(Paths(), new NoPortInspector(), adminCopy: trust, currentSessionId: Session);
 
-    private static PortOwner Owner(string? name, string? image) => new(4242, name, "127.0.0.1", 18970, image, Session);
+    /// <summary>A process that opened its own socket (CUST-392).</summary>
+    private static readonly DateTime Started = new(2026, 10, 29, 8, 0, 0, DateTimeKind.Utc);
+
+    private static PortOwner Owner(string? name, string? image) =>
+        new(4242, name, "127.0.0.1", 18970, image, Session, SocketCreatedUtc: Started.AddSeconds(1), ProcessCreatedUtc: Started);
 
     [Fact]
     public void A_trusted_administrator_copy_is_the_gateway()

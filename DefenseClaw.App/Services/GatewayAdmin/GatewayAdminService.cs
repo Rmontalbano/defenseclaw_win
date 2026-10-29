@@ -61,6 +61,13 @@ internal sealed class GatewayAdminDependencies
 
     public required Func<GatewaySnapshot> Snapshot { get; init; }
 
+    /// <summary>
+    /// Whether a process runs in this app's Windows session: the peer check's own rule (<c>GatewayPeerVerifier.InAppSession</c>). Users may run the
+    /// copy in Program Files, so only a run of it in this session is the helper's start, and only that one is called the administrator gateway
+    /// (CUST-392).
+    /// </summary>
+    public required Func<DefenseClaw.Core.Net.PortOwner, bool> InAppSession { get; init; }
+
     /// <summary>The installed DefenseClaw version (the release the gateway is checked against), or null while unknown.</summary>
     public required Func<string?> InstalledVersion { get; init; }
 
@@ -129,8 +136,9 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
     public bool IsActive => Status.IsActive;
 
     /// <summary>
-    /// Elevated only when the gateway on the API port is our Program Files copy (the image is the per-user copy path, and the status check found the
-    /// copy admin-only and unchanged) with an elevated token. NotElevated for any other running gateway; Unknown when none runs or it cannot be told.
+    /// Elevated only when the gateway on the API port is our Program Files copy (the image is the per-user copy path, the status check found the
+    /// copy admin-only and unchanged, and it runs in this app's session, as the peer check requires) with an elevated token. NotElevated for any
+    /// other running gateway; Unknown when none runs or it cannot be told.
     /// </summary>
     public GatewayElevation Current
     {
@@ -144,7 +152,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
             }
 
             var layout = _d.Layout.Get();
-            var isCopy = layout is not null && layout.IsGatewayCopy(owner.ImagePath) && status.CopyTrusted;
+            var isCopy = layout is not null && IsHelpersStart(layout, owner) && status.CopyTrusted;
             return isCopy && status.GatewayRunningElevated == true
                 ? GatewayElevation.Elevated
                 : status.GatewayRunningElevated is null && !isCopy ? GatewayElevation.Unknown : GatewayElevation.NotElevated;
@@ -294,9 +302,20 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
             return null;
         }
 
-        // The token says it when Windows lets a limited handle read it; otherwise the image says it (only the helper starts the copy).
-        return _d.Elevation.IsElevated(owner.Pid) ?? (layout.IsGatewayCopy(owner.ImagePath) ? true : null);
+        // The copy run outside this app's session is not the helper's start (Users may run the file): nothing is claimed about it, as the peer
+        // check sends it nothing (CUST-392).
+        if (layout.IsGatewayCopy(owner.ImagePath) && !_d.InAppSession(owner))
+        {
+            return null;
+        }
+
+        // The token says it when Windows lets a limited handle read it; otherwise the image says it (only the helper starts the copy in this session).
+        return _d.Elevation.IsElevated(owner.Pid) ?? (IsHelpersStart(layout, owner) ? true : null);
     }
+
+    /// <summary>The process runs this account's administrator copy in this app's Windows session: the one the helper started.</summary>
+    private bool IsHelpersStart(AdminLayout layout, DefenseClaw.Core.Net.PortOwner owner) =>
+        layout.IsGatewayCopy(owner.ImagePath) && _d.InAppSession(owner);
 
     // ---- refusing the ordinary path ------------------------------------------------------------------------
 

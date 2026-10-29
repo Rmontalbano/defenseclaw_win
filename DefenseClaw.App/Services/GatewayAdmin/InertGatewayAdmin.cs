@@ -15,6 +15,7 @@ internal static class InertGatewayAdmin
         ModeOn = static () => false,
         SaveMode = static _ => { },
         Snapshot = () => services.Monitor.Current,
+        InAppSession = owner => services.PeerVerifier.InAppSession(owner),
         InstalledVersion = static () => null,
         Layout = layout,
         Fs = fs,

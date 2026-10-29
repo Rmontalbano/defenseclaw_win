@@ -119,7 +119,14 @@ public sealed class AppServices : IDisposable
         // gateway whose image is that exact path answers on the port, in this app's Windows session (CUST-362).
         var adminSource = adminLayout ?? new WindowsAdminLayoutSource();
         var adminFs = adminFileSystem ?? new ReadOnlyAdminFileSystem();
-        _peerVerifier = new GatewayPeerVerifier(Paths, PortInspector, adminCopy: new AdminCopyTrust(adminSource, adminFs));
+
+        // An installer's directory outside the profile (a DEFENSECLAW_HOME elsewhere) counts outside this app's session only while its folders
+        // are closed to other accounts, read through the same reader (CUST-392).
+        _peerVerifier = new GatewayPeerVerifier(
+            Paths,
+            PortInspector,
+            adminCopy: new AdminCopyTrust(adminSource, adminFs),
+            installFolders: new InstallFolderTrust(adminFs));
 
         var apiPort = EffectiveApiPort(_config.Config.Gateway.ApiPort);
         _endpoint = new GatewayEndpoint(apiPort, CreateGatewayClient(apiPort));
@@ -434,6 +441,7 @@ public sealed class AppServices : IDisposable
         ModeOn = () => s.Settings.Current.Connection.GatewayAdministratorMode,
         SaveMode = on => _ = s.Settings.Update(settings => settings with { Connection = settings.Connection with { GatewayAdministratorMode = on } }),
         Snapshot = () => s.Monitor.Current,
+        InAppSession = owner => s.PeerVerifier.InAppSession(owner),
         InstalledVersion = () => s.Runtime.Current.Identity?.Version,
         Layout = layout,
         Fs = fs,

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using DefenseClaw.Core.Net;
+using DefenseClaw.Tests.TestSupport;
 
 namespace DefenseClaw.Tests;
 
@@ -12,23 +12,15 @@ namespace DefenseClaw.Tests;
 /// </summary>
 public class PortOwnerInspectorRetryTests
 {
-    private const uint NoError = 0;
-    private const uint InsufficientBuffer = 122;
-    private const int AfInet = 2;
+    private const uint NoError = ModuleTcpTables.NoError;
+    private const uint InsufficientBuffer = ModuleTcpTables.InsufficientBuffer;
+    private const int AfInet = ModuleTcpTables.AfInet;
 
-    /// <summary>MIB_TCPROW_OWNER_PID is six dwords.</summary>
-    private const int RowSize = 24;
+    /// <summary>One MIB_TCPROW_OWNER_MODULE after the table's header (CUST-392).</summary>
+    private static readonly int OneRowTable = ModuleTcpTables.Size(AfInet, 1);
 
-    private static void WriteTable(IntPtr table, int port, int pid)
-    {
-        Marshal.WriteInt32(table, 0, 1);                                   // dwNumEntries
-        Marshal.WriteInt32(table, 4, 2);                                   // state: listen
-        Marshal.WriteInt32(table, 8, 0x0100007F);                          // 127.0.0.1
-        Marshal.WriteInt32(table, 12, ((port & 0xFF) << 8) | (port >> 8)); // network byte order
-        Marshal.WriteInt32(table, 16, 0);
-        Marshal.WriteInt32(table, 20, 0);
-        Marshal.WriteInt32(table, 24, pid);
-    }
+    private static void WriteTable(IntPtr table, int port, int pid) =>
+        ModuleTcpTables.Write(table, AfInet, new[] { ModuleTcpTables.Listener(port, pid, DateTime.UtcNow) });
 
     [Fact]
     public void A_table_that_grows_between_the_size_query_and_the_fetch_is_read_on_the_next_round()
@@ -50,7 +42,7 @@ public class PortOwnerInspectorRetryTests
             {
                 // Sizing call. The first time it reports a small table; by the second it has grown.
                 calls.Add("size");
-                size = calls.Count(c => c == "size") == 1 ? 8 : 4 + RowSize;
+                size = calls.Count(c => c == "size") == 1 ? 8 : OneRowTable;
                 return InsufficientBuffer;
             }
 
@@ -58,7 +50,7 @@ public class PortOwnerInspectorRetryTests
             if (calls.Count(c => c == "fetch") == 1)
             {
                 // A socket appeared after we sized it: the buffer is now too small.
-                size = 4 + RowSize;
+                size = OneRowTable;
                 return InsufficientBuffer;
             }
 
@@ -90,7 +82,7 @@ public class PortOwnerInspectorRetryTests
                 fetches++;
             }
 
-            size = 4 + RowSize;
+            size = OneRowTable;
             return InsufficientBuffer;
         });
 

@@ -96,6 +96,9 @@ internal sealed class AdminRig
     public const string Profile = @"C:\TestUsers\tester";
     public const string Version = "1.0.0";
 
+    /// <summary>This app's Windows session in the rig: only the copy run in it is the helper's start (CUST-392).</summary>
+    public const int AppSession = 1;
+
     public static readonly byte[] Gateway = Enumerable.Range(0, 4096).Select(i => (byte)(i * 7 % 251)).ToArray();
     public static readonly byte[] Helper = Enumerable.Range(0, 2048).Select(i => (byte)(i * 13 % 239)).ToArray();
 
@@ -160,6 +163,7 @@ internal sealed class AdminRig
                 Saved.Add(on);
             },
             Snapshot = () => Snapshot,
+            InAppSession = static owner => owner.SessionId == AppSession,
             InstalledVersion = () => InstalledVersion,
             Layout = LayoutSource,
             Fs = Fs,
