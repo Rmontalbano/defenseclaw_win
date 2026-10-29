@@ -246,15 +246,15 @@ public sealed class ShellMenuBarViewTests : IDisposable
     {
         UiThread.Run(() =>
         {
-            // A sidebar with a page more in Govern (another change to the catalog, such as a new Sandboxes page): the Go menu follows it on its next open.
+            // A sidebar with a page more in Govern (another change to the catalog, here a made-up Approvals page): the Go menu follows it on its next open.
             var panels = _catalog.Panels.ToList();
-            panels.Insert(panels.FindIndex(p => p.Id == "tools") + 1, new PanelDescriptor("sandboxes", "Sandboxes", "Govern", SymbolRegular.Gavel24, typeof(Grid), _ => throw new NotSupportedException()));
+            panels.Insert(panels.FindIndex(p => p.Id == "tools") + 1, new PanelDescriptor("approvals", "Approvals", "Govern", SymbolRegular.Gavel24, typeof(Grid), _ => throw new NotSupportedException()));
             var wider = new PanelCatalog(_services, panels);
 
             var current = _catalog;
             var bar = Bar(() => Menus(current));
             using var host = new OffscreenHost(bar, 980, 40);
-            Assert.DoesNotContain(Items(bar.MenuBar), i => i.Tag is ShellCommand { Id: "nav.sandboxes" });
+            Assert.DoesNotContain(Items(bar.MenuBar), i => i.Tag is ShellCommand { Id: "nav.approvals" });
 
             current = wider;
             Open(bar.TopLevel(ShellMenuModel.GoKey)!);
@@ -262,7 +262,7 @@ public sealed class ShellMenuBarViewTests : IDisposable
             var go = bar.TopLevel(ShellMenuModel.GoKey)!;
             var ids = go.Items.OfType<MenuItem>().Select(i => ((ShellCommand)i.Tag).Id).ToList();
             Assert.Equal(wider.SidebarOrder.Select(p => "nav." + p.Id).Concat(wider.FooterPanels.Select(p => "nav." + p.Id)), ids);
-            Assert.True(ids.IndexOf("nav.sandboxes") == ids.IndexOf("nav.tools") + 1);
+            Assert.True(ids.IndexOf("nav.approvals") == ids.IndexOf("nav.tools") + 1);
         });
     }
 

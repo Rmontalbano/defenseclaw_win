@@ -215,26 +215,32 @@ public sealed class ShellMenuModelTests : IDisposable
     [Fact]
     public void A_sidebar_that_changes_changes_the_Go_menu_with_it()
     {
-        // Another change to the catalog (Policies moved to Govern, a Sandboxes page added there): the Go menu is built from the catalog, so it follows.
+        // The shipped catalog (CUST-383): Govern ends Tools, Policies, Sandboxes, and the Go menu shows it in that order.
+        var shipped = Menu(Menus(), ShellMenuModel.GoKey);
+        Assert.Equal(new[] { "nav.skills", "nav.mcps", "nav.plugins", "nav.tools", "nav.policies", "nav.sandboxes" }, GroupIds(shipped, "Govern"));
+
+        // Another change to the catalog (Agents moved up into Monitor): the Go menu is built from the catalog, so it follows.
         var panels = Catalog.Panels.ToList();
-        var policies = panels.Single(p => p.Id == "policies");
-        panels.Remove(policies);
-        var afterTools = panels.FindIndex(p => p.Id == "tools") + 1;
-        panels.Insert(afterTools, policies with { Group = "Govern" });
-        panels.Insert(afterTools + 1, new PanelDescriptor("sandboxes", "Sandboxes", "Govern", SymbolRegular.Gavel24, typeof(System.Windows.Controls.Grid), _ => throw new NotSupportedException()));
+        var agents = panels.Single(p => p.Id == "agents");
+        panels.Remove(agents);
+        panels.Insert(panels.FindIndex(p => p.Id == "overview") + 1, agents with { Group = "Monitor" });
         var moved = new PanelCatalog(Services, panels);
 
         var go = Menu(Menus(catalog: moved), ShellMenuModel.GoKey);
 
         Assert.Equal(moved.SidebarOrder.Concat(moved.FooterPanels).Select(p => "nav." + p.Id), Ids(go));
-        var govern = go.Entries
-            .SkipWhile(e => e is not ShellMenuSeparator { Heading: "Govern" })
+        Assert.Equal("nav.agents", GroupIds(go, "Monitor").ElementAt(1));
+        Assert.DoesNotContain("nav.agents", GroupIds(go, "Discover"));
+    }
+
+    private static IEnumerable<string> GroupIds(ShellMenu menu, string heading) =>
+        menu.Entries
+            .SkipWhile(e => e is not ShellMenuSeparator s || s.Heading != heading)
             .Skip(1)
             .TakeWhile(e => e is ShellMenuCommand)
             .Cast<ShellMenuCommand>()
-            .Select(r => r.Id);
-        Assert.Equal(new[] { "nav.skills", "nav.mcps", "nav.plugins", "nav.tools", "nav.policies", "nav.sandboxes" }, govern);
-    }
+            .Select(r => r.Id)
+            .ToList();
 
     [Fact]
     public void Go_rows_show_the_chord_and_the_disabled_reason_of_the_palettes_Go_to_rows()

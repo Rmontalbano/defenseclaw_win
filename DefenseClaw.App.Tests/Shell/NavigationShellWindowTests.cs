@@ -305,8 +305,9 @@ public sealed class NavigationShellWindowTests : IDisposable
                 strip = (FrameworkElement)strip.Parent;
             }
 
-            // Title bar 32, the strip under it at most 41 (it was 47: a labelled Refresh, a palette and a shortcuts button), the menu bar's row empty.
-            Assert.Equal(32, Top(strip, root), 0);
+            // Title bar 32, the menu bar (CUST-384) in its row under it, then the strip at most 41 (it was 47: a labelled Refresh, a palette and a shortcuts button).
+            Assert.InRange(window.MenuBar.ActualHeight, 28, 32);
+            Assert.Equal(32 + window.MenuBar.ActualHeight, Top(strip, root), 0);
             Assert.InRange(strip.ActualHeight, 36, 41.5);
 
             // Its only button is the gateway's Refresh, an icon with its name; the palette and the shortcuts moved to the title bar.
