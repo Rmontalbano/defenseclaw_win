@@ -12,7 +12,7 @@ namespace DefenseClaw.App.Tests.TestSupport;
 /// that made it, and xunit gives every test a different thread.
 /// <para>
 /// The dictionaries are merged in the order <c>App.xaml</c> merges them — WPF-UI's theme and control
-/// styles first, then <c>Themes/DefenseClaw.xaml</c>, which is built on their brushes — so a view built here
+/// styles first, then <c>DesignSystem/Themes/DefenseClaw.xaml</c>, which is built on their brushes — so a view built here
 /// resolves every <c>Dc*</c> and WPF-UI key exactly as the running app does.
 /// </para>
 /// </summary>
@@ -118,7 +118,7 @@ internal static class UiThread
             app.Resources.MergedDictionaries.Add(new ControlsDictionary());
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
             {
-                Source = new Uri("pack://application:,,,/DefenseClaw.App;component/Themes/DefenseClaw.xaml", UriKind.Absolute),
+                Source = new Uri("pack://application:,,,/DefenseClaw.App;component/DesignSystem/Themes/DefenseClaw.xaml", UriKind.Absolute),
             });
             app.Resources["BoolToVisibility"] = new System.Windows.Controls.BooleanToVisibilityConverter();
 

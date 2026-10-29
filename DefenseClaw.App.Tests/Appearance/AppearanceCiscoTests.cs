@@ -35,8 +35,8 @@ public sealed class AppearanceCiscoTests
         Assert.Equal(new[] { AppearanceStyle.Default, AppearanceStyle.Linear, AppearanceStyle.Tui, AppearanceStyle.Cisco }, AppearanceCatalog.Styles);
         Assert.Equal("Cisco", AppearanceCatalog.Name(AppearanceStyle.Cisco));
         Assert.False(string.IsNullOrWhiteSpace(AppearanceCatalog.Description(AppearanceStyle.Cisco)));
-        Assert.EndsWith("/Themes/Styles/Cisco.Dark.xaml", AppearanceCatalog.TokenSource(AppearanceStyle.Cisco, dark: true).AbsolutePath, StringComparison.Ordinal);
-        Assert.EndsWith("/Themes/Styles/Cisco.Light.xaml", AppearanceCatalog.TokenSource(AppearanceStyle.Cisco, dark: false).AbsolutePath, StringComparison.Ordinal);
+        Assert.EndsWith("/DesignSystem/Themes/Styles/Cisco.Dark.xaml", AppearanceCatalog.TokenSource(AppearanceStyle.Cisco, dark: true).AbsolutePath, StringComparison.Ordinal);
+        Assert.EndsWith("/DesignSystem/Themes/Styles/Cisco.Light.xaml", AppearanceCatalog.TokenSource(AppearanceStyle.Cisco, dark: false).AbsolutePath, StringComparison.Ordinal);
     }
 
     [Fact]

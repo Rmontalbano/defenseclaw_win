@@ -129,7 +129,7 @@ internal static class AppearanceCatalog
             _ => "Default.xaml",
         };
 
-        return new Uri($"pack://application:,,,/DefenseClaw.App;component/Themes/Styles/{file}", UriKind.Absolute);
+        return new Uri($"pack://application:,,,/DefenseClaw.App;component/DesignSystem/Themes/Styles/{file}", UriKind.Absolute);
     }
 }
 

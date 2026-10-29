@@ -29,7 +29,7 @@
                     Default style's tokens itself; AppearanceService merges the chosen style's
                     after everything here, so it is the last dictionary and wins.
                 -->
-                <ResourceDictionary Source="Themes/DefenseClaw.xaml" />
+                <ResourceDictionary Source="/DefenseClaw.App;component/DesignSystem/Themes/DefenseClaw.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
