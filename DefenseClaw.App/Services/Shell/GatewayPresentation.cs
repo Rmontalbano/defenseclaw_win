@@ -5,7 +5,7 @@ namespace DefenseClaw.App.Services;
 /// surfaces, the dashboard's status strip and the tray flyout, so both say the same thing.
 /// <para>
 /// The tone keys are the shared design system's <c>Tag</c> vocabulary
-/// (<c>Ok / Warn / Bad / Critical / Neutral</c>, see Themes\DefenseClaw.xaml). Surfaces bind
+/// (<c>Ok / Warn / Bad / Critical / Neutral</c>, see DesignSystem\Themes\DefenseClaw.xaml). Surfaces bind
 /// <c>Tag</c> to them and the theme picks the colour from WPF-UI brushes, so a live light/dark
 /// switch restyles the dot and the badge with no code — the shield-icon colours the strip used
 /// to freeze into brushes never followed the theme.
