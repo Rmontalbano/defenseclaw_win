@@ -9,7 +9,7 @@ namespace DefenseClaw.App.Services;
 /// gateway controls. A fixed vocabulary — the palette never runs free-form text, so there is
 /// nothing in it that can reach the CLI except through the same reviewed paths the tray uses.
 /// </summary>
-internal static class ShellCommandRegistry
+internal static partial class ShellCommandRegistry
 {
     public const string PanelCategory = "Panel";
 
@@ -204,6 +204,10 @@ internal static class ShellCommandRegistry
             DisabledReason: actions.Installation.BlockedReason,
             Run: actions.ScanAiComponents));
 
+        // Diagnose, copy and export say why they cannot act (one diagnosis at a time; nothing in Activity yet), as the menu bar does (CUST-384).
+        var (canDiagnose, diagnoseReason) = actions.DiagnoseState;
+        var (canCopy, copyReason) = actions.CopyOutputState;
+        var (canExport, exportReason) = actions.ExportOutputState;
         commands.Add(new ShellCommand(
             Id: "app.diagnose",
             Title: "Diagnose in background",
@@ -211,8 +215,8 @@ internal static class ShellCommandRegistry
             Description: "Run the read-only doctor without leaving this panel and toast the result. Changes nothing.",
             Shortcut: ShellShortcuts.DiagnoseText,
             Keywords: "doctor health check background diagnostics probe problems",
-            IsEnabled: true,
-            DisabledReason: null,
+            IsEnabled: canDiagnose,
+            DisabledReason: diagnoseReason,
             Run: () => _ = actions.DiagnoseInBackgroundAsync()));
 
         commands.Add(new ShellCommand(
@@ -222,8 +226,8 @@ internal static class ShellCommandRegistry
             Description: "Put the newest Activity entry's output on the clipboard.",
             Shortcut: ShellShortcuts.CopyOutputText,
             Keywords: "clipboard copy activity transcript result",
-            IsEnabled: true,
-            DisabledReason: null,
+            IsEnabled: canCopy,
+            DisabledReason: copyReason,
             Run: () => actions.CopyLastOutput()));
 
         commands.Add(new ShellCommand(
@@ -233,8 +237,8 @@ internal static class ShellCommandRegistry
             Description: "Save the newest Activity entry (command, outcome and output) to a file.",
             Shortcut: ShellShortcuts.ExportOutputText,
             Keywords: "save file log activity transcript result download",
-            IsEnabled: true,
-            DisabledReason: null,
+            IsEnabled: canExport,
+            DisabledReason: exportReason,
             Run: () => actions.ExportLastOutput()));
 
         // The TUI's `!` and Ctrl+C, as rows: both act on Activity, and both say which command they would act on (or why they cannot).

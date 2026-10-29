@@ -1,0 +1,63 @@
+<UserControl x:Class="DefenseClaw.App.Views.Shell.ShellMenuBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsTabStop="False"
+             Focusable="False">
+    <!--
+        The main window's menu bar (CUST-384): File, View, Monitor, Commands, Go and Help, the Mac's command menus as Windows menus. The
+        entries are built in code (ShellMenuBar.xaml.cs) from ShellMenuModel, which maps every row to an existing registry command by id,
+        so the menu, the palette and the toolbar run the same handler and agree about what is enabled and why not. Opening a menu re-reads
+        those states and runs nothing; a row runs only when it is chosen.
+
+        Windows conventions: Alt or F10 puts the bar in menu mode (IsMainMenu), every menu and row has an access key, the chords shown at
+        the right are the shell's own (display only: the window's key handler owns them), and the bar is not a Tab stop. Everything visible
+        is WPF-UI's menu look over Dc tokens, so it follows the style and light or dark.
+    -->
+    <UserControl.Resources>
+        <!--
+            The bar sits on the window's backdrop (Mica or the style's window colour) like the title bar above it: no fill of its own. Inset so the
+            first entry's text lines up with the status strip's 24 DIP edge below it.
+        -->
+        <Style x:Key="DcMenuBar" TargetType="{x:Type Menu}" BasedOn="{StaticResource {x:Type Menu}}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource DcTextPrimaryBrush}" />
+            <Setter Property="Margin" Value="12,0,12,0" />
+        </Style>
+
+        <!--
+            The bar's own entries (File ... Help) are ShellMenuBarItems: WPF-UI's menu item and its popup exactly, with the template's fixed
+            margins tightened in code to a 30 DIP strip (WPF-UI draws a 46 DIP toolbar row), so the bar costs the page as little height as the
+            title bar does. A subclass gets no implicit style, so this hands it WPF-UI's. The rows inside each menu keep WPF-UI's size.
+        -->
+        <Style x:Key="DcMenuBarItem" TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}" />
+
+        <!--
+            A group heading inside a menu (the Go menu's Monitor, Govern, ...): the sidebar's group names, in its heading style. A separator, so
+            the arrow keys pass over it and it is never a row that can be chosen; its name is the group, for a screen reader.
+        -->
+        <Style x:Key="DcMenuGroupHeading" TargetType="{x:Type Separator}">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Separator}">
+                        <TextBlock Margin="12,2,12,2"
+                                   Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Foreground="{DynamicResource DcTextSecondaryBrush}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Menu x:Name="Bar"
+          Style="{StaticResource DcMenuBar}"
+          ItemContainerStyle="{StaticResource DcMenuBarItem}"
+          IsMainMenu="True"
+          KeyboardNavigation.TabNavigation="None"
+          AutomationProperties.Name="Menu bar"
+          AutomationProperties.AutomationId="MenuBar" />
+</UserControl>

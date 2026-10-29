@@ -119,6 +119,13 @@ public sealed class InstallationShellTests : IDisposable
     public void The_palettes_own_rows_that_change_something_are_off_with_the_sentence_and_the_rest_are_on()
     {
         var h = Harness_(TestInstallations.Managed(_temp.Path));
+
+        // Something in Activity with output, so copy's own rule (nothing to copy yet, CUST-384) is not what is being asked about.
+        var ran = InvocationFactory.Create(argv: new[] { "doctor" });
+        InvocationFactory.Append(ran, "synthetic output");
+        InvocationFactory.Finish(ran, 0);
+        h.Actions.ActivitySource = () => new[] { ran };
+
         var rows = ShellCommandRegistry.Build(h.Catalog, h.Actions, _ => { }, () => { }, curated: Array.Empty<CuratedCommand>());
 
         var scan = Assert.Single(rows, r => r.Id == "app.scan-ai");

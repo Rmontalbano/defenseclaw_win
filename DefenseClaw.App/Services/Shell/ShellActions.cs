@@ -20,7 +20,7 @@ namespace DefenseClaw.App.Services;
 /// navigation; there is no free-form command entry.
 /// </para>
 /// </summary>
-internal sealed class ShellActions
+internal sealed partial class ShellActions
 {
     private readonly AppServices _services;
     private readonly PanelCatalog _catalog;
@@ -334,7 +334,7 @@ internal sealed class ShellActions
     /// <summary>Copy Last Command Output (Ctrl+Shift+Y): the newest Activity entry's output as plain text. False when there is none.</summary>
     public bool CopyLastOutput()
     {
-        if (LastCommandOutput.Latest(_services.Cli.Activity) is not { } invocation || invocation.OutputLines.Count == 0)
+        if (LastCommandOutput.Latest(Activity) is not { } invocation || invocation.OutputLines.Count == 0)
         {
             ShowToast("Copy last output", "There is no command output to copy yet.");
             return false;
@@ -348,7 +348,7 @@ internal sealed class ShellActions
     /// <summary>Export Last Command Output (Ctrl+Shift+E): the newest entry (command, outcome, output) to a file the operator picks.</summary>
     public bool ExportLastOutput()
     {
-        if (LastCommandOutput.Latest(_services.Cli.Activity) is not { } invocation)
+        if (LastCommandOutput.Latest(Activity) is not { } invocation)
         {
             ShowToast("Export last output", "There is no command output to export yet.");
             return false;

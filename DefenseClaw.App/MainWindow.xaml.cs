@@ -165,6 +165,9 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         Shortcuts.DataContext = ShortcutCatalog.Build(_catalog);
         Shortcuts.CloseRequested += (_, _) => CloseShortcuts();
 
+        // The menu bar (CUST-384): the registry's rows under Windows menus; it takes no subscription to anything that outlives the window.
+        WireMenuBar();
+
         PreviewKeyDown += OnWindowPreviewKeyDown;
         PreviewTextInput += OnWindowPreviewTextInput;
 
@@ -404,17 +407,7 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
                 return;
             }
 
-            Hide();
-
-            if (closeToTray && !_minimizeHintShown)
-            {
-                _minimizeHintShown = true;
-                _tray.Notify(
-                    "DefenseClaw is still running",
-                    "The dashboard closed to the tray and keeps watching the gateway. " +
-                    "Right-click the shield and pick Exit to quit for real.");
-            }
-
+            HideToTray(hint: closeToTray);
             return;
         }
 
@@ -428,6 +421,24 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
         _agent360.Changed -= OnProbeAnswerChanged;
         _viewModel.Dispose();
         base.OnClosing(e);
+    }
+
+    /// <summary>
+    /// Hides the dashboard; the app keeps running in the tray. The close button's path while <c>startup.closeToTray</c> is on, and the File menu's
+    /// "Close to tray". With <paramref name="hint"/>, the first time says where the window went and how to quit for real.
+    /// </summary>
+    private void HideToTray(bool hint)
+    {
+        Hide();
+
+        if (hint && !_minimizeHintShown)
+        {
+            _minimizeHintShown = true;
+            _tray.Notify(
+                "DefenseClaw is still running",
+                "The dashboard closed to the tray and keeps watching the gateway. " +
+                "Right-click the shield and pick Exit to quit for real.");
+        }
     }
 
     /// <summary>The close button follows <c>startup.closeToTray</c>; see <see cref="UpdateCloseButtonName"/>. May arrive on any thread.</summary>

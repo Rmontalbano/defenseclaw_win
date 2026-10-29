@@ -325,8 +325,11 @@ public sealed class TrayIconService : IDisposable
         return menu;
     }
 
-    /// <summary>"Check for app updates…": a manual check. A newer release opens the review window; anything else is said in a toast, including why a check failed.</summary>
-    private async Task CheckAppUpdatesAsync()
+    /// <summary>
+    /// "Check for app updates…": a manual check. A newer release opens the review window; anything else is said in a toast, including why a check failed.
+    /// Also the main window's File menu entry (CUST-384), through <see cref="ShellActions.CheckForAppUpdates"/>.
+    /// </summary>
+    internal async Task CheckAppUpdatesAsync()
     {
         try
         {

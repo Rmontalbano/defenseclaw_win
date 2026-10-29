@@ -126,7 +126,8 @@
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
-        <!-- Grid.Row="1" (MenuBarRow) is the menu bar's (CUST-384): one control, directly under the title bar. Empty, the row takes no height. -->
+        <!-- The menu bar (CUST-384) in MenuBarRow (CUST-383), directly under the title bar: File, View, Monitor, Commands, Go, Help. Built in ShellMenuBar. -->
+        <shell:ShellMenuBar x:Name="MenuBar" Grid.Row="1" />
 
         <!--
             Status strip: one line, always visible, always from the GatewayMonitor snapshot.

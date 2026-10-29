@@ -57,6 +57,9 @@ internal static class ShortcutCatalog
                     new ShortcutRow(ShellShortcuts.ExportOutputText, "Export the last command's output to a file"),
                     new ShortcutRow(ShellShortcuts.CycleConnectorText, "Step the connector scope: all connectors, then each one in turn (with more than one connector)"),
                     new ShortcutRow(ShellShortcuts.HelpText, "Show this list (also ? outside a text box)"),
+
+                    // The menu bar's own key (CUST-384): WPF's main menu takes F10 and Alt itself, so the shell's key handler claims neither.
+                    new ShortcutRow("F10", "Menu bar: File, View, Monitor, Commands, Go, Help (Alt too); arrows or a menu's underlined letter"),
                     new ShortcutRow(ShellShortcuts.CloseText, "Close the open overlay, detail pane or dialog"),
                 }),
             new(
