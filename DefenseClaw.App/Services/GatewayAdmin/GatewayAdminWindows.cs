@@ -3,7 +3,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using DefenseClaw.Core.AiRuntime;
-using DefenseClaw.Core.Gateway;
 using DefenseClaw.GatewayAdmin.Contract;
 
 namespace DefenseClaw.App.Services;
@@ -321,40 +320,4 @@ internal sealed class ShellExecuteElevator : IAdminElevator
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr handle);
-}
-
-/// <summary>
-/// The peer check's second trusted place: the administrator copy of the gateway. Trusted only while it is where the layout says, in an
-/// admin-only chain with no link on it, the file the helper recorded, and unchanged since (<see cref="AdminCopyInspector.InspectGatewayCopy"/>,
-/// read every time so that a changed access list is noticed on the next request). Fails closed: anything unreadable is not trusted.
-/// </summary>
-internal sealed class AdminCopyTrust : IAdminCopyTrust
-{
-    private readonly IAdminLayoutSource _layout;
-    private readonly AdminCopyInspector _inspector;
-
-    public AdminCopyTrust(IAdminLayoutSource layout, IAdminFileSystem fs)
-    {
-        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
-        _inspector = new AdminCopyInspector(fs ?? throw new ArgumentNullException(nameof(fs)));
-    }
-
-    public bool IsTrustedImage(string imagePath)
-    {
-        if (_layout.Get() is not { } layout || !layout.IsGatewayCopy(imagePath))
-        {
-            return false;
-        }
-
-        try
-        {
-            return _inspector.InspectGatewayCopy(layout).Trusted;
-        }
-#pragma warning disable CA1031 // A check that throws is a check that failed: not trusted.
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-#pragma warning restore CA1031
-        {
-            return false;
-        }
-    }
 }

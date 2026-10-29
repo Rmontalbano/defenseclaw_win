@@ -49,6 +49,12 @@ public sealed record InstallStatus
     /// </summary>
     public PortOwnerTrust OwnerTrust { get; init; }
 
+    /// <summary>
+    /// Which trusted gateway <see cref="PortOwner"/> is (the installed one, or this app's administrator copy by its file or by the helper's
+    /// records); <see cref="GatewayPeerRoute.None"/> unless <see cref="OwnerTrust"/> is <see cref="PortOwnerTrust.Gateway"/>. Words only.
+    /// </summary>
+    public GatewayPeerRoute OwnerRoute { get; init; }
+
     public string? CliPath { get; init; }
 
     public string? GatewayCliPath { get; init; }
@@ -101,16 +107,25 @@ public sealed class InstallStateDetector
     private readonly IPortOwnerInspector _portInspector;
     private readonly GatewayPeerVerifier _peer;
 
+    /// <param name="peer">
+    /// The verifier the app's gateway client sends the token through, so that what this reports and what the client does cannot disagree (the
+    /// app's own administrator copy used to be trusted by one and called a stranger by the other, CUST-362). Null builds one over
+    /// <paramref name="paths"/> and the inspector that trusts only the installer's directories.
+    /// </param>
     public InstallStateDetector(
         DefenseClawPaths paths,
         IGatewayClient gateway,
-        IPortOwnerInspector? portInspector = null)
+        IPortOwnerInspector? portInspector = null,
+        GatewayPeerVerifier? peer = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         _portInspector = portInspector ?? new PortOwnerInspector();
-        _peer = new GatewayPeerVerifier(_paths, _portInspector);
+        _peer = peer ?? new GatewayPeerVerifier(_paths, _portInspector);
     }
+
+    /// <summary>The verifier this detector judges the port's owner with; a caller that describes the owner uses the same one.</summary>
+    public GatewayPeerVerifier PeerVerifier => _peer;
 
     /// <summary>Detects using the port from <paramref name="config"/>.</summary>
     public Task<InstallStatus> DetectAsync(DefenseClawConfig config, CancellationToken cancellationToken = default)
@@ -142,7 +157,8 @@ public sealed class InstallStateDetector
         var gatewayCliPath = _paths.GatewayCliPath;
         var owner = _portInspector.FindListener(port);
         var wslDetected = owner?.IsWslRelay ?? false;
-        var trust = _peer.Classify(owner);
+        var verdict = _peer.Judge(owner);
+        var trust = verdict.Trust;
 
         if (cliPath is null && gatewayCliPath is null)
         {
@@ -152,6 +168,7 @@ public sealed class InstallStateDetector
                 Port = port,
                 PortOwner = owner,
                 OwnerTrust = trust,
+                OwnerRoute = verdict.Route,
                 WslGatewayDetected = wslDetected,
                 Detail = wslDetected
                     ? "DefenseClaw is not installed natively, but a WSL gateway is relaying port " +
@@ -170,6 +187,7 @@ public sealed class InstallStateDetector
                 GatewayCliPath = gatewayCliPath,
                 PortOwner = owner,
                 OwnerTrust = trust,
+                OwnerRoute = verdict.Route,
                 WslGatewayDetected = wslDetected,
                 Detail = $"No config.yaml in {_paths.DataDirectory}. Run 'defenseclaw init' to set it up.",
             };
@@ -189,11 +207,12 @@ public sealed class InstallStateDetector
             GatewayCliPath = gatewayCliPath,
             PortOwner = owner,
             OwnerTrust = trust,
+            OwnerRoute = verdict.Route,
             WslGatewayDetected = wslDetected,
             HealthProbe = health.Status,
             Health = health,
             BinaryVersion = health.Value?.Provenance?.BinaryVersion,
-            Detail = BuildDetail(running, port, owner, wslDetected, health, trust),
+            Detail = BuildDetail(running, port, owner, wslDetected, health, verdict),
         };
     }
 
@@ -203,8 +222,9 @@ public sealed class InstallStateDetector
         PortOwner? owner,
         bool wslDetected,
         GatewayResult<GatewayHealth> health,
-        PortOwnerTrust trust)
+        PeerVerdict verdict)
     {
+        var trust = verdict.Trust;
         if (wslDetected)
         {
             return $"Port {port} is owned by {owner?.ProcessName} (pid {owner?.Pid}) — this is a WSL gateway " +
@@ -224,8 +244,17 @@ public sealed class InstallStateDetector
                    "The app reads only /health from it and sends it no credentials.";
         }
 
-        return health.IsOk
-            ? $"Gateway responding on 127.0.0.1:{port}."
-            : $"Gateway responding on 127.0.0.1:{port}, but /health returned {health.Status}: {health.ErrorMessage}";
+        // This app's own administrator gateway is named as such, so an elevated gateway the app started is never read as a stuck or foreign one.
+        var who = verdict.Route is GatewayPeerRoute.AdministratorCopy or GatewayPeerRoute.AdministratorCopyByRecord
+            ? "The administrator gateway started by this app is responding"
+            : "Gateway responding";
+        var answer = health.IsOk
+            ? $"{who} on 127.0.0.1:{port}."
+            : $"{who} on 127.0.0.1:{port}, but /health returned {health.Status}: {health.ErrorMessage}";
+
+        return verdict.Route == GatewayPeerRoute.AdministratorCopyByRecord
+            ? answer.TrimEnd('.') + ". Windows does not show this app which file an elevated process runs, so it was matched by the " +
+              "administrator helper's records (its last start, and the gateway.pid it wrote) instead."
+            : answer;
     }
 }

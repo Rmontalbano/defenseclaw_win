@@ -14,7 +14,48 @@ public interface IAdminCopyTrust
 {
     /// <summary>True when <paramref name="imagePath"/> is the trusted administrator copy, judged now.</summary>
     bool IsTrustedImage(string imagePath);
+
+    /// <summary>
+    /// For a <c>defenseclaw-gateway</c> whose image path Windows would not give out (an elevated process seen from an unelevated app can be one,
+    /// and so can another account's process): true only when the helper's own records tie this very process to the administrator copy it
+    /// started, judged now (CUST-362). The default is no, so an implementation that reads no records trusts nothing it cannot see.
+    /// </summary>
+    bool IsStartedCopy(PortOwner owner) => false;
+
+    /// <summary>
+    /// Why <paramref name="owner"/> is not the trusted administrator copy, as the rest of a sentence that starts with the process's name and pid
+    /// (for example "runs from this account's administrator copy, but that copy did not pass its checks: ..."). Null when there is nothing
+    /// specific to say, and the verifier's own words are used.
+    /// </summary>
+    string? ExplainRefusal(PortOwner owner) => null;
 }
+
+/// <summary>
+/// How a listener that <see cref="GatewayPeerVerifier"/> trusts was recognised, for the words the app shows. The token decision is
+/// <see cref="PortOwnerTrust"/>'s alone; this only says which of the trusted gateways it is.
+/// </summary>
+public enum GatewayPeerRoute
+{
+    /// <summary>Not a trusted gateway (or not a gateway at all).</summary>
+    None = 0,
+
+    /// <summary>The gateway from the installer's directories.</summary>
+    InstallDirectory,
+
+    /// <summary>The administrator copy this app's helper keeps in Program Files, recognised by the file the process runs.</summary>
+    AdministratorCopy,
+
+    /// <summary>
+    /// The administrator copy, whose image path Windows would not give this app, recognised instead by the helper's admin-only records and
+    /// the gateway's <c>gateway.pid</c> naming the very process on the port.
+    /// </summary>
+    AdministratorCopyByRecord,
+}
+
+/// <summary>A listener's verdict and how it was reached.</summary>
+/// <param name="Trust">Whether it may be sent the token.</param>
+/// <param name="Route">Which trusted gateway it is; <see cref="GatewayPeerRoute.None"/> unless <paramref name="Trust"/> is <see cref="PortOwnerTrust.Gateway"/>.</param>
+public readonly record struct PeerVerdict(PortOwnerTrust Trust, GatewayPeerRoute Route);
 
 /// <summary>What the process holding the API port is, as far as sending it a credential goes.</summary>
 public enum PortOwnerTrust
@@ -52,7 +93,9 @@ public enum PortOwnerTrust
 /// <see cref="Models.GatewayHealth"/> — <see cref="GatewayClient"/> does.
 /// </para>
 /// <para>
-/// Fails closed: an owner whose image path could not be read is <see cref="PortOwnerTrust.Other"/>.
+/// Fails closed: an owner whose image path could not be read is <see cref="PortOwnerTrust.Other"/>, with one exception: this app's own
+/// administrator copy, when the helper's records name that very process (<see cref="IAdminCopyTrust.IsStartedCopy"/>, CUST-362). An elevated
+/// gateway can hide its path from an unelevated app; another account's process can too, and nothing of that account's is in those records.
 /// </para>
 /// </summary>
 public sealed class GatewayPeerVerifier
@@ -87,22 +130,28 @@ public sealed class GatewayPeerVerifier
     }
 
     /// <summary>Classifies <paramref name="owner"/>.</summary>
-    public PortOwnerTrust Classify(PortOwner? owner)
+    public PortOwnerTrust Classify(PortOwner? owner) => Judge(owner).Trust;
+
+    /// <summary>Classifies <paramref name="owner"/> and says which trusted gateway it is, for the words shown about it.</summary>
+    public PeerVerdict Judge(PortOwner? owner)
     {
         if (owner is null)
         {
-            return PortOwnerTrust.Unknown;
+            return new PeerVerdict(PortOwnerTrust.Unknown, GatewayPeerRoute.None);
         }
 
         if (owner.IsWslRelay)
         {
-            return PortOwnerTrust.WslRelay;
+            return new PeerVerdict(PortOwnerTrust.WslRelay, GatewayPeerRoute.None);
         }
 
-        return IsGatewayImage(owner) ? PortOwnerTrust.Gateway : PortOwnerTrust.Other;
+        var route = GatewayRoute(owner);
+        return route == GatewayPeerRoute.None
+            ? new PeerVerdict(PortOwnerTrust.Other, GatewayPeerRoute.None)
+            : new PeerVerdict(PortOwnerTrust.Gateway, route);
     }
 
-    /// <summary>True when <paramref name="owner"/> is the native gateway from the install directory.</summary>
+    /// <summary>True when <paramref name="owner"/> is the native gateway: from the install directory, or this app's verified administrator copy.</summary>
     public bool IsTrustedOwner(PortOwner? owner) => Classify(owner) == PortOwnerTrust.Gateway;
 
     /// <summary>
@@ -201,17 +250,36 @@ public sealed class GatewayPeerVerifier
             return $"{who} is a WSL relay, not the native gateway";
         }
 
-        return string.Equals(owner.ProcessName, GatewayProcessName, StringComparison.OrdinalIgnoreCase)
-            ? $"{who} is not running from the DefenseClaw install directory"
-            : $"{who} is not the DefenseClaw gateway";
+        if (!string.Equals(owner.ProcessName, GatewayProcessName, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{who} is not the DefenseClaw gateway";
+        }
+
+        // The administrator trust knows the one case worth naming precisely (its own copy, another account's copy, or the helper's records
+        // that do not match); everything else keeps the plain sentence.
+        if (_adminCopy?.ExplainRefusal(owner) is { Length: > 0 } why)
+        {
+            return $"{who} {why}";
+        }
+
+        return string.IsNullOrWhiteSpace(owner.ImagePath)
+            ? $"{who} could not be verified: Windows does not show this app which file it runs from"
+            : $"{who} is not running from the DefenseClaw install directory";
     }
 
-    private bool IsGatewayImage(PortOwner owner)
+    private GatewayPeerRoute GatewayRoute(PortOwner owner)
     {
-        if (!string.Equals(owner.ProcessName, GatewayProcessName, StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(owner.ImagePath))
+        if (!string.Equals(owner.ProcessName, GatewayProcessName, StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            return GatewayPeerRoute.None;
+        }
+
+        if (string.IsNullOrWhiteSpace(owner.ImagePath))
+        {
+            // Windows did not say which file this process runs (PortOwnerInspector asks with the limited query right, which usually works
+            // across elevation for the same account, but not always, and not for another account's process). A name is anyone's to pick, so
+            // this is refused - unless the helper's admin-only records tie this very pid to the administrator copy it started (CUST-362).
+            return _adminCopy is not null && _adminCopy.IsStartedCopy(owner) ? GatewayPeerRoute.AdministratorCopyByRecord : GatewayPeerRoute.None;
         }
 
         // The name comes from the process list and can be anything; the file it runs from
@@ -221,22 +289,22 @@ public sealed class GatewayPeerVerifier
                 GatewayProcessName,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            return GatewayPeerRoute.None;
         }
 
         var imageDirectory = NormalizeDirectory(Path.GetDirectoryName(owner.ImagePath));
         if (imageDirectory is null)
         {
-            return false;
+            return GatewayPeerRoute.None;
         }
 
         if (InstallDirectories().Any(directory => string.Equals(directory, imageDirectory, StringComparison.OrdinalIgnoreCase)))
         {
-            return true;
+            return GatewayPeerRoute.InstallDirectory;
         }
 
         // The one other place a gateway may run from: the helper's administrator copy, and only while it passes its own checks right now.
-        return _adminCopy is not null && _adminCopy.IsTrustedImage(owner.ImagePath);
+        return _adminCopy is not null && _adminCopy.IsTrustedImage(owner.ImagePath) ? GatewayPeerRoute.AdministratorCopy : GatewayPeerRoute.None;
     }
 
     /// <summary>

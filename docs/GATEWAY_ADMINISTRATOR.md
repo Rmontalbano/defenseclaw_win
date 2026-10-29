@@ -37,6 +37,8 @@ The elevated process does not run the gateway from your profile. The helper copi
 
 Only Restart refreshes the copy. A Start with a copy that differs from the installed gateway is refused.
 
+The app sends the gateway token to the elevated gateway only once it has recognised it as this copy. Usually Windows tells the app which file the process runs, and that must be your copy's exact path, with the folders admin-only and the file equal to `copy.json`. When Windows will not tell an unelevated app (some security products refuse it), the app matches it by the helper's own `last-result.json` (a successful start) and the gateway's `gateway.pid` (the same process, your copy, written during that start). The dashboard then says "The administrator gateway started by this app is responding". Anything it cannot match is called unverified and gets no token.
+
 ### The helper
 
 `DefenseClaw.GatewayAdmin.exe` is a console program published beside the app and listed in `checksums.txt`. It takes exactly one argument: `install-copy`, `start`, `restart`, `stop`, `repair-ownership` or `status`. Anything else exits with code 64 before it does anything. It never takes paths as arguments. Paths come from the Program Files folder, the token's SID and your profile folder.

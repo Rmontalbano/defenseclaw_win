@@ -88,6 +88,7 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
 
     private readonly TcpTableReader _readTable;
     private readonly TcpTableReader _readConnectionTable;
+    private readonly ImagePathReader _readImagePath;
 
     public PortOwnerInspector()
         : this(NativeReadTable, NativeReadConnectionTable)
@@ -105,9 +106,19 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
 
     /// <param name="readConnectionTable">The same call for the connections table (a test hands it a synthetic buffer).</param>
     public PortOwnerInspector(TcpTableReader readTable, TcpTableReader readConnectionTable)
+        : this(readTable, readConnectionTable, ReadImagePath)
+    {
+    }
+
+    /// <param name="readImagePath">
+    /// How a row's pid becomes the file it runs (<see cref="ReadImagePath"/> by default), so a test can play a process whose path Windows will
+    /// not give out without needing one (CUST-362).
+    /// </param>
+    public PortOwnerInspector(TcpTableReader readTable, TcpTableReader readConnectionTable, ImagePathReader readImagePath)
     {
         _readTable = readTable ?? throw new ArgumentNullException(nameof(readTable));
         _readConnectionTable = readConnectionTable ?? throw new ArgumentNullException(nameof(readConnectionTable));
+        _readImagePath = readImagePath ?? throw new ArgumentNullException(nameof(readImagePath));
     }
 
     /// <summary>
@@ -116,6 +127,9 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
     /// Returns the Win32 status (0 = <c>NO_ERROR</c>, 122 = <c>ERROR_INSUFFICIENT_BUFFER</c>).
     /// </summary>
     public delegate uint TcpTableReader(IntPtr table, ref int size, int addressFamily);
+
+    /// <summary>The full path of the executable process <paramref name="pid"/> runs, or null when it cannot be read.</summary>
+    public delegate string? ImagePathReader(int pid);
 
     public PortOwner? FindListener(int port)
     {
@@ -195,15 +209,17 @@ public sealed class PortOwnerInspector : IPortOwnerInspector, IConnectionOwnerIn
             .ToArray();
     }
 
-    private static PortOwner Describe((int Pid, int Port, string Address) entry) =>
-        new(entry.Pid, ResolveProcessName(entry.Pid), entry.Address, entry.Port, ResolveImagePath(entry.Pid));
+    private PortOwner Describe((int Pid, int Port, string Address) entry) =>
+        new(entry.Pid, ResolveProcessName(entry.Pid), entry.Address, entry.Port, _readImagePath(entry.Pid));
 
     /// <summary>
     /// Full path of the process's executable, or null when it cannot be read. Uses the limited
-    /// query right rather than <c>Process.MainModule</c>, which needs more access, walks the
-    /// module list and fails outright across bitness.
+    /// query right (<c>PROCESS_QUERY_LIMITED_INFORMATION</c> and <c>QueryFullProcessImageNameW</c>) rather than
+    /// <c>Process.MainModule</c> or WMI's <c>ExecutablePath</c>, which need read access to the process's memory: those come back empty for an
+    /// elevated process seen from an unelevated one, where the limited right is usually still granted for the same account. It is not
+    /// always (another account's process, a security product that filters handles), and then this is null and the caller decides.
     /// </summary>
-    private static string? ResolveImagePath(int pid)
+    public static string? ReadImagePath(int pid)
     {
         if (pid <= 0 || !OperatingSystem.IsWindows())
         {

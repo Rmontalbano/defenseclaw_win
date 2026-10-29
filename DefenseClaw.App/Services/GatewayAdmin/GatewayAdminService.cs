@@ -144,7 +144,7 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
             }
 
             var layout = _d.Layout.Get();
-            var isCopy = layout is not null && layout.IsGatewayCopy(owner.ImagePath) && status.CopyTrusted;
+            var isCopy = layout is not null && IsOurCopy(layout, snapshot, owner) && status.CopyTrusted;
             return isCopy && status.GatewayRunningElevated == true
                 ? GatewayElevation.Elevated
                 : status.GatewayRunningElevated is null && !isCopy ? GatewayElevation.Unknown : GatewayElevation.NotElevated;
@@ -295,8 +295,16 @@ internal sealed class GatewayAdminService : IGatewayAdministrator, IGatewayEleva
         }
 
         // The token says it when Windows lets a limited handle read it; otherwise the image says it (only the helper starts the copy).
-        return _d.Elevation.IsElevated(owner.Pid) ?? (layout.IsGatewayCopy(owner.ImagePath) ? true : null);
+        return _d.Elevation.IsElevated(owner.Pid) ?? (IsOurCopy(layout, snapshot, owner) ? true : null);
     }
+
+    /// <summary>
+    /// The gateway on the port is the administrator copy: its image is the copy's path, or (when Windows would not give an unelevated app the
+    /// image of an elevated process) the peer check matched it by the helper's records (CUST-362).
+    /// </summary>
+    private static bool IsOurCopy(AdminLayout layout, GatewaySnapshot snapshot, DefenseClaw.Core.Net.PortOwner owner) =>
+        layout.IsGatewayCopy(owner.ImagePath) ||
+        (string.IsNullOrWhiteSpace(owner.ImagePath) && snapshot.PeerRoute == DefenseClaw.Core.Gateway.GatewayPeerRoute.AdministratorCopyByRecord);
 
     // ---- refusing the ordinary path ------------------------------------------------------------------------
 

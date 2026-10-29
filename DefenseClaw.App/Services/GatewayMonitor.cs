@@ -108,6 +108,13 @@ public sealed record GatewaySnapshot
     public bool PeerUnverified { get; init; }
 
     /// <summary>
+    /// Which trusted gateway the port's owner is (<see cref="InstallStatus.OwnerRoute"/>): the installed one, or this app's administrator copy,
+    /// recognised by its file or by the helper's records. Words and the elevation status only; the token decision is the verifier's.
+    /// Part of <see cref="RendersSameAs"/>.
+    /// </summary>
+    public GatewayPeerRoute PeerRoute { get; init; }
+
+    /// <summary>
     /// The version the update check may use: <see cref="BinaryVersion"/>, unless the peer is unverified. A process on the port
     /// can claim any version, so an unverified claim must never suppress or trigger an update prompt; callers fall back to the CLI.
     /// </summary>
@@ -310,6 +317,7 @@ public sealed record GatewaySnapshot
                string.Equals(Detail, other.Detail, StringComparison.Ordinal) &&
                string.Equals(BinaryVersion, other.BinaryVersion, StringComparison.Ordinal) &&
                PeerUnverified == other.PeerUnverified &&
+               PeerRoute == other.PeerRoute &&
                string.Equals(CliPath, other.CliPath, StringComparison.Ordinal) &&
                string.Equals(AlertsUnavailable, other.AlertsUnavailable, StringComparison.Ordinal) &&
                string.Equals(SubsystemReading, other.SubsystemReading, StringComparison.Ordinal) &&
@@ -586,7 +594,8 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
         _services = services;
         _time = timeProvider ?? TimeProvider.System;
         _detector = detector;
-        _peer = new GatewayPeerVerifier(services.Paths, services.PortInspector);
+        // The detector's own verifier, so the words about the port's owner follow the verdict that was reached (CUST-362).
+        _peer = (detector ?? services.InstallDetector).PeerVerifier;
     }
 
     /// <summary>How many handlers are attached to <see cref="PollCompleted"/> right now; what the idle-cost tests read.</summary>
@@ -1208,6 +1217,7 @@ public sealed class GatewayMonitor : IDisposable, IGatewaySnapshotSource, IPollF
                           string.Equals(health.ErrorMessage, GatewayClient.RefusedMessage, StringComparison.Ordinal),
             BinaryVersion = status.BinaryVersion ?? health.Value?.Provenance?.BinaryVersion,
             PeerUnverified = status.OwnerTrust != PortOwnerTrust.Gateway,
+            PeerRoute = status.OwnerRoute,
             ApiPort = status.Port,
             CliPath = status.CliPath,
             RecentAlerts = alerts,

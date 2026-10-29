@@ -116,7 +116,8 @@ public sealed class AppServices : IDisposable
 
         // "Run gateway as administrator": the administrator copy of the gateway is the one place besides the installer's directories whose
         // gateway may be sent the token, and only while it passes its checks at that moment (AdminCopyTrust). Nothing is read until a
-        // gateway whose image is that exact path answers on the port.
+        // gateway whose image is that exact path answers on the port, or one whose image Windows will not show (then the helper's records
+        // are read to match it, CUST-362).
         var adminSource = adminLayout ?? new WindowsAdminLayoutSource();
         var adminFs = adminFileSystem ?? new ReadOnlyAdminFileSystem();
         _peerVerifier = new GatewayPeerVerifier(Paths, PortInspector, adminCopy: new AdminCopyTrust(adminSource, adminFs));
@@ -127,7 +128,9 @@ public sealed class AppServices : IDisposable
         // The detector's own client is only its default for the parameterless overloads; the
         // monitor always hands it the live endpoint's client (see GatewayMonitor.PollAsync), so
         // the port it inspects and the client it probes through cannot drift apart.
-        InstallDetector = new InstallStateDetector(Paths, _endpoint.Client, PortInspector);
+        // It judges the port's owner with the same verifier the client sends the token through, so the app's own administrator copy is not
+        // called a stranger on the dashboard while the client trusts it (CUST-362).
+        InstallDetector = new InstallStateDetector(Paths, _endpoint.Client, PortInspector, _peerVerifier);
 
         // One change probe over audit.db for every reader of it (docs/PARITY-FOUNDATIONS.md, "Change probe"): a refresh that finds the
         // database where the last one left it reuses the last result. It opens its connection on the first sample and does nothing on its own.
@@ -702,6 +705,9 @@ public sealed class AppServices : IDisposable
     /// before the first client is built.
     /// </summary>
     private readonly GatewayPeerVerifier _peerVerifier;
+
+    /// <summary>The verifier above, for the detector and the monitor's words, so every judgement of the port's owner is the same one.</summary>
+    internal GatewayPeerVerifier PeerVerifier => _peerVerifier;
 
     /// <summary>
     /// A client for <paramref name="port"/> that sends the bearer token only to the DefenseClaw
