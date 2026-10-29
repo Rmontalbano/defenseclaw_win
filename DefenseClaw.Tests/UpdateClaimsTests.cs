@@ -30,7 +30,7 @@ public sealed class UpdateClaimsTests
     {
         ("README.md", new[] { "README.md" }),
         ("UpdatesWindow.xaml", new[] { "DefenseClaw.App", "Features", "Shell", "Updates", "UpdatesWindow.xaml" }),
-        ("FirstRunWindow.xaml", new[] { "DefenseClaw.App", "Views", "FirstRun", "FirstRunWindow.xaml" }),
+        ("FirstRunWindow.xaml", new[] { "DefenseClaw.App", "Features", "Setup", "FirstRun", "FirstRunWindow.xaml" }),
         ("UpgradeSectionViewModel.cs", new[] { "DefenseClaw.App", "Features", "Shell", "Updates", "UpgradeSectionViewModel.cs" }),
         ("UpdatesWindowViewModel.cs", new[] { "DefenseClaw.App", "Features", "Shell", "Updates", "UpdatesWindowViewModel.cs" }),
         ("UpgradeRunner.cs", new[] { "DefenseClaw.App", "Services", "Updates", "UpgradeRunner.cs" }),
@@ -81,7 +81,7 @@ public sealed class UpdateClaimsTests
     [Fact]
     public void The_first_run_window_says_the_same()
     {
-        var xaml = Read("DefenseClaw.App", "Views", "FirstRun", "FirstRunWindow.xaml");
+        var xaml = Read("DefenseClaw.App", "Features", "Setup", "FirstRun", "FirstRunWindow.xaml");
 
         Assert.Contains("compares its SHA-256 with the release's checksums.txt (and verifies that file's sigstore signature when cosign is installed)", xaml, StringComparison.Ordinal);
     }
