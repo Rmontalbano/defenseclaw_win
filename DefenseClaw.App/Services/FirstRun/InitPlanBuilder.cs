@@ -27,8 +27,17 @@ public sealed record InitPlanOptions
 
     public bool LlmJudge { get; init; }
 
-    /// <summary><c>open</c> or <c>closed</c>. Not sent (and not asked) when <see cref="OutageFollowsPolicy"/>.</summary>
-    public string FailMode { get; init; } = "open";
+    /// <summary>
+    /// <c>open</c> or <c>closed</c>; anything else is sent as <c>closed</c>. Not sent (and not asked) when <see cref="OutageFollowsPolicy"/>, and with
+    /// <see cref="FailModeActionOnly"/> sent only for the Action profile. What the form starts on is <see cref="FirstRunFailMode.DefaultFor"/>.
+    /// </summary>
+    public string FailMode { get; init; } = "closed";
+
+    /// <summary>
+    /// 1.0.x (<see cref="FirstRunFailModeQuestion.ActionProfileOnly"/>): <c>--fail-mode</c> goes with the Action profile only, and an Observe plan leaves
+    /// it off so the CLI keeps the current setting. False is the 0.8.x contract: it goes with every plan.
+    /// </summary>
+    public bool FailModeActionOnly { get; init; }
 
     /// <summary>
     /// The runtime is a 1.0.4 per-user one (<c>PerUserHookRules</c>): a hook's gateway-outage mode follows the policy tier, and <c>init --fail-mode open</c> is
@@ -155,9 +164,11 @@ public static class InitPlanBuilder
 
         var scanner = options.ScannerMode is "remote" or "both" ? options.ScannerMode : "local";
         head.AddRange(new[] { "--scanner-mode", scanner, options.LlmJudge ? "--with-judge" : "--no-judge" });
-        if (!options.OutageFollowsPolicy)
+        // 0.8.x: with every plan. 1.0.x: with the Action profile only (tui/panels/first_run.py args), so Observe keeps what is saved. Per-user 1.0.4:
+        // never. Only an explicit "open" is sent as open; any other value is closed.
+        if (!options.OutageFollowsPolicy && (!options.FailModeActionOnly || profile == "action"))
         {
-            head.AddRange(new[] { "--fail-mode", options.FailMode == "closed" ? "closed" : "open" });
+            head.AddRange(new[] { "--fail-mode", options.FailMode == "open" ? "open" : "closed" });
         }
 
         if (profile == "action")

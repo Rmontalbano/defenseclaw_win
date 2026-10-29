@@ -209,6 +209,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Profile" />
@@ -222,14 +223,6 @@
                                       ItemsSource="{Binding ScannerModes}" DisplayMemberPath="Label" SelectedValuePath="Value"
                                       SelectedValue="{Binding ScannerMode, Mode=TwoWay}"
                                       AutomationProperties.Name="Scanner mode" />
-
-                            <TextBlock Grid.Row="2" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Hook failure mode"
-                                       Visibility="{Binding AsksFailMode, Converter={StaticResource BoolToVisibility}}" />
-                            <ComboBox Grid.Row="2" Grid.Column="1" Width="320" HorizontalAlignment="Left" Margin="0,2,0,2"
-                                      ItemsSource="{Binding FailModes}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      SelectedValue="{Binding FailMode, Mode=TwoWay}"
-                                      Visibility="{Binding AsksFailMode, Converter={StaticResource BoolToVisibility}}"
-                                      AutomationProperties.Name="Hook failure mode" />
 
                             <!-- 1.0.4 per-user rules: no fail-mode choice; the rule pack decides what a hook does while the gateway is down. -->
                             <TextBlock Grid.Row="2" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="During a gateway outage"
@@ -250,9 +243,25 @@
                                              AutomationProperties.Name="Enable LLM judge"
                                              AutomationProperties.HelpText="The judge needs an API key in an environment variable. No key is entered or sent here." />
 
-                            <TextBlock Grid.Row="4" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Human approval"
+                            <!-- CUST-390: on 1.0.x the fail mode is the Action profile's, next to human approval, with the TUI's hint (Observe sends no
+                                 flag and the CLI keeps what is saved); on 0.8.x it is asked in both profiles, as it always was. -->
+                            <TextBlock Grid.Row="4" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Top" Margin="0,8,12,4" Text="Hook failure mode"
+                                       Visibility="{Binding AsksFailMode, Converter={StaticResource BoolToVisibility}}" />
+                            <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,2,0,2"
+                                        Visibility="{Binding AsksFailMode, Converter={StaticResource BoolToVisibility}}">
+                                <ComboBox Width="320" HorizontalAlignment="Left"
+                                          ItemsSource="{Binding FailModes}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding FailMode, Mode=TwoWay}"
+                                          AutomationProperties.Name="Hook failure mode"
+                                          AutomationProperties.HelpText="{Binding FailModeHint}" />
+                                <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Text="{Binding FailModeHint}"
+                                           Visibility="{Binding HasFailModeHint, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="5" Style="{StaticResource DcFieldLabelInline}" VerticalAlignment="Center" Text="Human approval"
                                        Visibility="{Binding IsActionProfile, Converter={StaticResource BoolToVisibility}}" />
-                            <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="0,2,0,2"
+                            <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,2,0,2"
                                         Visibility="{Binding IsActionProfile, Converter={StaticResource BoolToVisibility}}">
                                 <ui:ToggleSwitch IsChecked="{Binding HumanApproval, Mode=TwoWay}"
                                                  AutomationProperties.Name="Require human approval" />
@@ -263,7 +272,7 @@
                                           AutomationProperties.Name="Approval minimum severity" />
                             </StackPanel>
 
-                            <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                            <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
                                        Text="Observe never blocks; Action applies only to the connectors marked Enforce." />
                         </Grid>
                     </StackPanel>

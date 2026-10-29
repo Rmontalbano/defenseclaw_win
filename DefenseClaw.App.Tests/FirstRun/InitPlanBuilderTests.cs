@@ -34,7 +34,7 @@ public sealed class InitPlanBuilderTests
             new[]
             {
                 "init", "--non-interactive", "--yes", "--json-summary", "--connector", "codex", "--profile", "observe",
-                "--scanner-mode", "local", "--no-judge", "--fail-mode", "open", "--no-start-gateway", "--verify",
+                "--scanner-mode", "local", "--no-judge", "--fail-mode", "closed", "--no-start-gateway", "--verify",
             },
             Init(plan));
         Assert.Equal(2, plan.Steps.Count);

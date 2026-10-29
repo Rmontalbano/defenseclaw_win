@@ -99,7 +99,12 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
 
         ApplyOffered();
         ApplySnapshot(snapshot ?? services.Monitor.Current);
+        _failModeQuestion = FailModeQuestion;
+        SetFailModeDefault(_failModeQuestion);
         Recompute();
+
+        // The runtime probe can land after the window opens: the fail-mode question (and its starting value) follows it.
+        _services.Runtime.Changed += OnRuntimeChanged;
     }
 
     public DiscoverActionReview Review { get; }
@@ -152,18 +157,45 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _llmJudge;
 
+    /// <summary><c>open</c> or <c>closed</c>. Starts on <see cref="FirstRunFailMode.DefaultFor"/> for the runtime, and follows it until the operator picks one.</summary>
     [ObservableProperty]
     private string _failMode = "open";
+
+    /// <summary>True once the operator picked a fail mode: a runtime that answers later no longer moves it.</summary>
+    private bool _failModeChosen;
+
+    /// <summary>Set while the form itself moves <see cref="FailMode"/> to the runtime's starting value, so that is not taken as the operator's pick.</summary>
+    private bool _applyingFailModeDefault;
+
+    /// <summary>The question the starting value was taken for.</summary>
+    private FirstRunFailModeQuestion _failModeQuestion;
+
+    /// <summary>How this runtime asks the hook failure mode (CUST-390): every profile on 0.8.x, the Action profile on 1.0.x, not at all on a per-user 1.0.4.</summary>
+    public FirstRunFailModeQuestion FailModeQuestion =>
+        FirstRunFailMode.For(_services.Runtime.Current, _services.Installation.Context.IsManaged);
 
     /// <summary>
     /// 1.0.4 per-user rules: the hook failure mode is not a choice (the policy tier decides, and <c>init --fail-mode open</c> is refused), so the form asks
     /// <see cref="StrictOutage"/> instead. False on every older runtime and on a managed install, where the question is unchanged.
     /// </summary>
-    public bool OutageFollowsPolicy =>
-        DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(_services.Runtime.Capabilities, _services.Installation.Context.IsManaged);
+    public bool OutageFollowsPolicy => FailModeQuestion == FirstRunFailModeQuestion.FollowsPolicy;
 
-    /// <summary>The opposite of <see cref="OutageFollowsPolicy"/>: the Hook failure mode box is shown.</summary>
-    public bool AsksFailMode => !OutageFollowsPolicy;
+    /// <summary>The Hook failure mode box is shown: always on 0.8.x, with the Action profile on 1.0.x, never where <see cref="OutageFollowsPolicy"/>.</summary>
+    public bool AsksFailMode => FirstRunFailMode.IsAsked(FailModeQuestion, Profile == "action");
+
+    /// <summary>The caption under the box (the TUI's hint on 1.0.x); empty on 0.8.x.</summary>
+    public string FailModeHint => FirstRunFailMode.HintFor(FailModeQuestion);
+
+    /// <summary>The caption is shown: the box is, and the runtime has a hint for it.</summary>
+    public bool HasFailModeHint => AsksFailMode && FailModeHint.Length > 0;
+
+    partial void OnFailModeChanged(string value)
+    {
+        if (!_applyingFailModeDefault)
+        {
+            _failModeChosen = true;
+        }
+    }
 
     /// <summary>Block calls during a gateway outage: adds <c>guardrail use-pack strict</c> as a step after setup.</summary>
     [ObservableProperty]
@@ -337,9 +369,23 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     {
         IsActionProfile = Profile == "action";
 
-        // The runtime probe can land after the window opens; the form follows it.
+        // The runtime probe can land after the window opens; the form follows it. A fail mode the operator has not picked moves to the new
+        // runtime's starting value (closed on 1.0.x, open on 0.8.x as before); one they picked stays.
+        var question = FailModeQuestion;
+        if (question != _failModeQuestion)
+        {
+            _failModeQuestion = question;
+            if (!_failModeChosen)
+            {
+                SetFailModeDefault(question);
+            }
+        }
+
+        OnPropertyChanged(nameof(FailModeQuestion));
         OnPropertyChanged(nameof(OutageFollowsPolicy));
         OnPropertyChanged(nameof(AsksFailMode));
+        OnPropertyChanged(nameof(FailModeHint));
+        OnPropertyChanged(nameof(HasFailModeHint));
 
         var problem = string.Empty;
         if (!IsInstalled)
@@ -369,6 +415,27 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
         RunCommand.NotifyCanExecuteChanged();
     }
 
+    private void SetFailModeDefault(FirstRunFailModeQuestion question)
+    {
+        _applyingFailModeDefault = true;
+        try
+        {
+            FailMode = FirstRunFailMode.DefaultFor(question);
+        }
+        finally
+        {
+            _applyingFailModeDefault = false;
+        }
+    }
+
+    private void OnRuntimeChanged(object? sender, EventArgs e)
+    {
+        if (!_disposed)
+        {
+            Recompute();
+        }
+    }
+
     /// <summary>The plan the form describes, as it would be reviewed. Pure of side effects; the review opens it.</summary>
     internal InitPlan BuildPlan()
     {
@@ -385,6 +452,7 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
             ScannerMode = ScannerMode,
             LlmJudge = LlmJudge,
             FailMode = FailMode,
+            FailModeActionOnly = FailModeQuestion == FirstRunFailModeQuestion.ActionProfileOnly,
             OutageFollowsPolicy = OutageFollowsPolicy,
             StrictOutage = StrictOutage,
             HumanApproval = HumanApproval,
@@ -636,6 +704,7 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        _services.Runtime.Changed -= OnRuntimeChanged;
         foreach (var choice in Detected)
         {
             choice.PropertyChanged -= OnChoiceChanged;
