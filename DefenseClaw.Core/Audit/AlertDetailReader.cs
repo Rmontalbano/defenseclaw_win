@@ -189,7 +189,7 @@ public sealed class AlertDetailReader
                    {Column("location")}, {Column("line_number")}, {Column("remediation")}
             FROM scan_findings f
             WHERE f.scan_id IN ({inList})
-            {(columns.Contains("timestamp") ? "ORDER BY f.timestamp DESC" : string.Empty)}
+            {(columns.Contains("timestamp") ? "ORDER BY f.timestamp DESC, f.rowid DESC" : string.Empty)}
             LIMIT $cap
             """;
     }
@@ -216,7 +216,7 @@ public sealed class AlertDetailReader
     }
 
     private static string ScanIdsSql(string column) =>
-        $"SELECT id FROM scan_results WHERE {column} = $key ORDER BY timestamp DESC LIMIT $scans";
+        $"SELECT id FROM scan_results WHERE {column} = $key ORDER BY timestamp DESC, rowid DESC LIMIT $scans";
 
     private static string? Where(string? location, long? line) =>
         string.IsNullOrEmpty(location) ? null : line is > 0 ? $"{location}:{line.Value.ToString(CultureInfo.InvariantCulture)}" : location;

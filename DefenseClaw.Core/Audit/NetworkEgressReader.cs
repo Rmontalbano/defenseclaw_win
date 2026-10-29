@@ -279,7 +279,7 @@ public sealed class NetworkEgressReader
         command.CommandText =
             $"""
             SELECT id, timestamp, hostname, {Pick("url")}, {Pick("policy_outcome")}, {Pick("blocked")}, {Pick("details")}, {Pick("connector")}
-            FROM network_egress_events ORDER BY timestamp DESC LIMIT $limit
+            FROM network_egress_events ORDER BY timestamp DESC, rowid DESC LIMIT $limit
             """;
         command.Parameters.AddWithValue("$limit", limit);
 

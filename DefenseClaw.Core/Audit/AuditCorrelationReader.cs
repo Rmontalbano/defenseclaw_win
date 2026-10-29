@@ -148,6 +148,7 @@ public sealed class AuditCorrelationReader
 
         if (basis == RelatedBasis.Run)
         {
+            // Stable: events that tie on timestamp and id (no id at all) keep the rowid-descending order they were read in.
             events = events.OrderByDescending(e => e.TimestampNanos).ThenByDescending(e => e.Id, StringComparer.Ordinal).ToList();
         }
 
@@ -164,7 +165,7 @@ public sealed class AuditCorrelationReader
     private static string Select =>
         "SELECT " + Columns + " FROM audit_events e ";
 
-    private static string Order => " ORDER BY " + AuditReader.RetentionColumn + " DESC, e.id DESC LIMIT $limit";
+    private static string Order => " ORDER BY " + AuditReader.RetentionColumn + " DESC, e.id DESC, e.rowid DESC LIMIT $limit";
 
     /// <summary>
     /// A run's entries in <c>idx_audit_run_id</c> are ordered by rowid (insertion order, which follows time), so reading the index
@@ -182,7 +183,7 @@ public sealed class AuditCorrelationReader
         SELECT id, scanner, target, timestamp, raw_json
         FROM scan_results
         WHERE run_id = $run AND raw_json IS NOT NULL AND raw_json != ''
-        ORDER BY timestamp DESC
+        ORDER BY timestamp DESC, rowid DESC
         LIMIT $limit
         """;
 
