@@ -122,7 +122,7 @@ internal sealed class InstallationGuard
             : _context.BlockedReason is { } reason
             ? "The runtime is not upgraded from here. " + reason
             : !_runtime.IsDefault || _context.UsesDeveloperRuntime
-                ? "This app is driving a developer runtime (Settings → Advanced), not the one Setup installed, so a Setup upgrade would not touch it. Upgrade that runtime where it was built, or turn the selector off."
+                ? "This app is driving a developer runtime (Settings → Connection → Installation), not the one Setup installed, so a Setup upgrade would not touch it. Upgrade that runtime where it was built, or turn the selector off."
                 : null;
 
     /// <summary>True when the runtime upgrade is offered.</summary>

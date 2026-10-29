@@ -219,7 +219,7 @@ public sealed record InstallationContext
     public string SourceLabel => Source switch
     {
         InstallationSource.EnvironmentConfig => ConfigVariable,
-        InstallationSource.AppOverride => "Developer runtime selector (Settings → Advanced)",
+        InstallationSource.AppOverride => "Developer runtime selector (Settings → Connection → Installation)",
         InstallationSource.EnvironmentHome => HomeVariable,
         InstallationSource.ManagedLayout => Layout is { } layout ? $"Managed installation ({layout.ProfileLabel})" : "Managed installation",
         _ => "User default",

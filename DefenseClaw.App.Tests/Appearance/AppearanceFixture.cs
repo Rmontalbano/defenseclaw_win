@@ -60,10 +60,15 @@ internal sealed class AppearanceFixture : IDisposable
 {
     private readonly HashSet<object> _keysBefore = new();
 
+    /// <param name="saved">What <see cref="Store"/> holds at start.</param>
+    /// <param name="manageFluentThemeMode">Whether the service drives the Fluent theme mode too.</param>
+    /// <param name="configureSystem">Sets up the made-up Windows before the service reads it.</param>
+    /// <param name="backing">A store to use instead of <see cref="Store"/> (a real settings file, for a test of where the choice is kept).</param>
     public AppearanceFixture(
         AppearanceSettings? saved = null,
         bool manageFluentThemeMode = false,
-        Action<FakeSystemThemeSource>? configureSystem = null)
+        Action<FakeSystemThemeSource>? configureSystem = null,
+        IAppearanceSettingsStore? backing = null)
     {
         Store.Stored = saved ?? AppearanceSettings.Defaults;
         configureSystem?.Invoke(System);
@@ -75,7 +80,7 @@ internal sealed class AppearanceFixture : IDisposable
                 _ = _keysBefore.Add(key);
             }
 
-            Service = new AppearanceService(Application.Current, Store, System, manageFluentThemeMode);
+            Service = new AppearanceService(Application.Current, backing ?? Store, System, manageFluentThemeMode);
             Service.Initialize();
         });
     }

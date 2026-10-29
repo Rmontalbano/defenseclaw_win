@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Input;
+using DefenseClaw.App.Services;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -20,9 +21,13 @@ public sealed partial class OverviewPanelViewModel
     public string ScanSkillsTip => InstallationBlockedReason ??
         "Scan every configured skill: defenseclaw skill scan --all. Asks for confirmation first.";
 
-    /// <summary>The banner's button: Settings, where the Installation block says what was selected and why it is read-only.</summary>
+    /// <summary>
+    /// The banner's button: Settings → Connection, scrolled to the Installation block, which says what was selected and why it is read-only (the
+    /// Mac sets <c>selectedSettingsTab = .connection</c> before it opens Settings).
+    /// </summary>
     [RelayCommand]
-    private void ReviewInstallation() => RequestNavigation("settings");
+    private void ReviewInstallation() =>
+        RequestNavigation("settings", new SettingsAreaLink(SettingsArea.Connection, SettingsAreaLink.InstallationSection));
 
     /// <summary>
     /// The installation turned read-only (or writable) while the page was open: the banner, the gateway buttons and the Quick Actions are drawn

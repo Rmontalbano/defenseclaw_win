@@ -4,14 +4,18 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
+             xmlns:svc="clr-namespace:DefenseClaw.App.Services"
              xmlns:local="clr-namespace:DefenseClaw.App.Views.Panels">
     <!--
-        Settings: the app's own preferences (monitoring, notifications, startup, connection, updates), after the Mac's settings window, as
-        one page of cards. Every control reads and writes the app's settings.json through SettingsPanelViewModel; none of them touches
-        DefenseClaw's own state. A row is label left, control right, and a caption under both (the SettingRow style below).
+        Settings: the app's own preferences, in the four areas of the Mac's settings window (CUST-386; Features/AppSettingsView.swift of v1.1.34):
+        General, Monitoring, Notifications, Connection, picked from the segmented control beside the title. Every control reads and writes the app's
+        settings.json through SettingsPanelViewModel exactly as it did on the one long page (CUST-203); none of them touches DefenseClaw's own state.
+        Which area is on screen is not saved; the page remembers it for the session. A row is label left, control right, and a caption under both
+        (the SettingRow style below); a value too long for the right-hand column (a path) sits under its label instead (SettingBlock).
 
-        Keyboard: the page is top to bottom in tab order, one stop per control. Ctrl+, opens it from anywhere in the dashboard.
-        Shared styling: Themes\DefenseClaw.xaml (Dc*); the only local styles are the row, the status line and the path line.
+        Keyboard: the area picker is one tab stop (Left and Right move between areas); Ctrl+Tab and Ctrl+Shift+Tab move between areas from anywhere on
+        the page. Each area is top to bottom in tab order, one stop per control. Ctrl+, opens the page from anywhere in the dashboard.
+        Shared styling: Themes\DefenseClaw.xaml (Dc*); the only local styles are the rows, the status line and the path line.
     -->
     <UserControl.Resources>
         <!--
@@ -79,6 +83,44 @@
             </Setter>
         </Style>
 
+        <!--
+            A setting whose value is too long for the right-hand column (a path, an executable and its version): the label, then the value the
+            full width of the card under it, then the caption. Same rule and first-row behaviour as SettingRow.
+        -->
+        <Style x:Key="SettingBlock" TargetType="HeaderedContentControl" BasedOn="{StaticResource SettingRow}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="HeaderedContentControl">
+                        <Border x:Name="Row"
+                                Padding="0,10,0,10"
+                                BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource DcBorderBrush}">
+                            <StackPanel>
+                                <ContentPresenter ContentSource="Header" />
+                                <ContentPresenter Margin="0,4,0,0" />
+                                <TextBlock x:Name="Caption"
+                                           Margin="0,4,0,0"
+                                           Style="{StaticResource DcCaption}"
+                                           Text="{Binding (local:SettingsRow.Caption), RelativeSource={RelativeSource TemplatedParent}}" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="local:SettingsRow.IsFirst" Value="True">
+                                <Setter TargetName="Row" Property="BorderThickness" Value="0" />
+                                <Setter TargetName="Row" Property="Padding" Value="0,2,0,10" />
+                            </Trigger>
+                            <Trigger Property="local:SettingsRow.Caption" Value="{x:Null}">
+                                <Setter TargetName="Caption" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="local:SettingsRow.Caption" Value="">
+                                <Setter TargetName="Caption" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- What an action just did, in a sentence; a polite live region (the shell's LiveRegion behaviour announces a change), and gone while empty. -->
         <Style x:Key="StatusLine" TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
             <Setter Property="Margin" Value="0,8,0,0" />
@@ -97,7 +139,7 @@
             <Setter Property="AutomationProperties.LiveSetting" Value="Assertive" />
         </Style>
 
-        <!-- A path: mono, selectable, and as long as it needs to be. -->
+        <!-- A path: mono, selectable, wrapped at any character when it is longer than the card is wide. -->
         <Style x:Key="PathBlock" TargetType="Border" BasedOn="{StaticResource DcCodeBlock}">
             <Setter Property="Padding" Value="10,6,10,6" />
         </Style>
@@ -112,6 +154,17 @@
             </Style.Triggers>
         </Style>
 
+        <!-- A heading inside a card (Installation's developer runtime selector). -->
+        <Style x:Key="SubHeading" TargetType="TextBlock" BasedOn="{StaticResource DcBody}">
+            <Setter Property="Margin" Value="0,16,0,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="AutomationProperties.HeadingLevel" Value="Level3" />
+        </Style>
+
+        <!--
+            One file role: its name, the path (wrapped, the whole of it on hover), Copy path and Open folder, and the line saying where it came from.
+            A role this installation does not have says "Not on this installation" in the path's place, offers neither button, and says why.
+        -->
         <DataTemplate x:Key="FileRow" DataType="{x:Type vm:SettingsPathRow}">
             <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
@@ -127,9 +180,20 @@
                 <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource DcCaption}" Text="{Binding Label}" />
 
                 <Border Grid.Row="1" Grid.Column="0" Margin="0,2,0,0" Style="{StaticResource PathBlock}" VerticalAlignment="Center">
-                    <TextBox Style="{StaticResource DcMonoTextBox}"
-                             Text="{Binding FullPath, Mode=OneWay}"
-                             AutomationProperties.Name="{Binding Label}" />
+                    <TextBox Text="{Binding DisplayPath, Mode=OneWay}"
+                             ToolTip="{Binding PathToolTip}"
+                             AutomationProperties.Name="{Binding Label}">
+                        <TextBox.Style>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource DcMonoTextBox}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                        <Setter Property="Foreground" Value="{DynamicResource DcTextSecondaryBrush}" />
+                                        <Setter Property="FontStyle" Value="Italic" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBox.Style>
+                    </TextBox>
                 </Border>
 
                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,2,0,0" Orientation="Horizontal" VerticalAlignment="Center">
@@ -147,10 +211,16 @@
                 <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource RowNote}" Text="{Binding DetailText}" />
             </Grid>
         </DataTemplate>
+
+        <!-- A picker of a few choices (appearance): the segmented control, each segment's sentence as its tooltip. -->
+        <Style x:Key="ChoiceSegment" TargetType="{x:Type ctl:DcSegment}" BasedOn="{StaticResource {x:Type ctl:DcSegment}}">
+            <Setter Property="ToolTip" Value="{Binding Help}" />
+        </Style>
     </UserControl.Resources>
 
     <Grid Style="{StaticResource DcPage}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -161,6 +231,27 @@
                            ctl:DcIcon.Section="Setup"
                            Title="{Binding Title}"
                            TitleToolTip="{Binding Description}">
+            <!-- General | Monitoring | Notifications | Connection, right after the title: the Mac's settings tabs, in its order. -->
+            <ctl:DcPageToolbar.Leading>
+                <ctl:DcSegmented x:Name="AreaSwitch"
+                                 Margin="12,0,0,0"
+                                 SelectedValue="{Binding SelectedArea, Mode=TwoWay}"
+                                 AutomationProperties.Name="Settings area"
+                                 AutomationProperties.HelpText="General, Monitoring, Notifications or Connection. Left and Right move between them; Ctrl+Tab and Ctrl+Shift+Tab do too, from anywhere on the page.">
+                    <ctl:DcSegment Value="{x:Static svc:SettingsArea.General}"
+                                   Content="General"
+                                   ToolTip="Startup and the window, appearance, and updates for this app and for the DefenseClaw runtime" />
+                    <ctl:DcSegment Value="{x:Static svc:SettingsArea.Monitoring}"
+                                   Content="Monitoring"
+                                   ToolTip="How often the gateway's health is polled, and pausing it" />
+                    <ctl:DcSegment Value="{x:Static svc:SettingsArea.Notifications}"
+                                   Content="Notifications"
+                                   ToolTip="Which events show a desktop notification" />
+                    <ctl:DcSegment Value="{x:Static svc:SettingsArea.Connection}"
+                                   Content="Connection"
+                                   ToolTip="Gateway, installation, files and the defenseclaw CLI" />
+                </ctl:DcSegmented>
+            </ctl:DcPageToolbar.Leading>
             <ctl:DcPageToolbar.Actions>
                 <StackPanel Style="{StaticResource DcToolbarActions}">
                     <ui:Button Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
@@ -173,24 +264,267 @@
             </ctl:DcPageToolbar.Actions>
         </ctl:DcPageToolbar>
 
-        <ScrollViewer Grid.Row="1" Style="{StaticResource DcPageScroll}">
+        <!-- The settings file could not be written: the change holds for this session only. Above the areas, so it is seen whichever is open. -->
+        <ui:InfoBar Grid.Row="1"
+                    Margin="{StaticResource DcCardGap}"
+                    IsClosable="False"
+                    Severity="Warning"
+                    Title="Settings not saved"
+                    IsOpen="{Binding HasSaveProblem, Mode=OneWay}"
+                    Message="{Binding SaveProblem, Mode=OneWay}" />
+
+        <!-- ================================================================== General -->
+        <ScrollViewer x:Name="GeneralArea"
+                      Grid.Row="2"
+                      Style="{StaticResource DcPageScroll}"
+                      Visibility="{Binding IsGeneralArea, Converter={StaticResource BoolToVisibility}}"
+                      AutomationProperties.Name="General settings">
             <StackPanel MaxWidth="880" HorizontalAlignment="Left">
 
-                <!-- The settings file could not be written: the change holds for this session only. -->
-                <ui:InfoBar Margin="{StaticResource DcCardGap}"
-                            IsClosable="False"
-                            Severity="Warning"
-                            Title="Settings not saved"
-                            IsOpen="{Binding HasSaveProblem, Mode=OneWay}"
-                            Message="{Binding SaveProblem, Mode=OneWay}" />
+                <!-- General: the Mac's Launch at login and close-to-menu-bar, as Windows has them. -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="Power24"
+                                          Section="Setup"
+                                          Content="General" />
 
-                <!-- Monitoring -->
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Start with Windows"
+                                                local:SettingsRow.Caption="Launches DefenseClaw minimized to the tray when you sign in. It adds a per-user startup entry; no administrator rights are needed.">
+                            <ui:ToggleSwitch IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                                             AutomationProperties.Name="Start with Windows"
+                                             AutomationProperties.HelpText="Adds or removes the per-user startup entry that launches DefenseClaw to the tray at sign-in." />
+                        </HeaderedContentControl>
+                        <TextBlock Style="{StaticResource ProblemLine}"
+                                   Visibility="{Binding HasAutostartProblem, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding AutostartProblem}" />
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Closing the window keeps DefenseClaw in the tray"
+                                                local:SettingsRow.Caption="{Binding CloseToTrayCaption}">
+                            <ui:ToggleSwitch IsChecked="{Binding CloseToTray, Mode=TwoWay}"
+                                             AutomationProperties.Name="Closing the window keeps DefenseClaw in the tray"
+                                             AutomationProperties.HelpText="On: the close button hides the dashboard. Off: the close button exits DefenseClaw." />
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Reopen on the last panel"
+                                                local:SettingsRow.Caption="Opens the dashboard on the panel you were last looking at, instead of Overview.">
+                            <ui:ToggleSwitch IsChecked="{Binding RememberLastPanel, Mode=TwoWay}"
+                                             AutomationProperties.Name="Reopen on the last panel"
+                                             AutomationProperties.HelpText="Remembers the panel you last looked at and opens the dashboard on it." />
+                        </HeaderedContentControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Appearance: the title bar flyout's style and mode, the same choice (one store), offered here too. -->
+                <Border Margin="{StaticResource DcCardGap}"
+                        Style="{StaticResource DcCard}"
+                        Visibility="{Binding HasAppearance, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="PaintBrush24"
+                                          Section="Setup"
+                                          Content="Appearance" />
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Style">
+                            <ctl:DcSegmented Margin="0"
+                                             ItemsSource="{Binding AppearanceStyles}"
+                                             SelectedValuePath="Value"
+                                             SelectedValue="{Binding AppearanceStyle, Mode=TwoWay}"
+                                             ItemContainerStyle="{StaticResource ChoiceSegment}"
+                                             AutomationProperties.Name="App style"
+                                             AutomationProperties.HelpText="Default, Linear, TUI or Cisco. Applies at once." />
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Light or dark"
+                                                local:SettingsRow.Caption="{Binding AppearanceCaption}">
+                            <ctl:DcSegmented Margin="0"
+                                             ItemsSource="{Binding AppearanceModes}"
+                                             SelectedValuePath="Value"
+                                             SelectedValue="{Binding AppearanceMode, Mode=TwoWay}"
+                                             ItemContainerStyle="{StaticResource ChoiceSegment}"
+                                             AutomationProperties.Name="Light or dark mode"
+                                             AutomationProperties.HelpText="System follows Windows; Light and Dark stay put. Applies at once." />
+                        </HeaderedContentControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Updates — this app (Rmontalbano/defenseclaw_win): the companion's own release check and reviewed self-update (CUST-315/351). -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel DataContext="{Binding AppUpdate}">
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="ArrowCircleUp24"
+                                          Section="Updates"
+                                          Content="Updates — DefenseClaw for Windows (this app)" />
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Installed">
+                            <TextBlock Style="{StaticResource DcMono}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding RunningText}"
+                                       AutomationProperties.Name="{Binding RunningText, StringFormat=Installed app version: {0}}" />
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Status"
+                                                local:SettingsRow.Caption="{Binding DetailText}">
+                            <Border Style="{StaticResource DcBadge}"
+                                    VerticalAlignment="Center"
+                                    Tag="{Binding StatusTone}">
+                                <TextBlock Style="{StaticResource DcBadgeText}"
+                                           FontSize="12"
+                                           Text="{Binding StatusText}"
+                                           AutomationProperties.Name="{Binding StatusText, StringFormat=App update status: {0}}" />
+                            </Border>
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Last checked">
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding LastCheckedText}" />
+                        </HeaderedContentControl>
+
+                        <WrapPanel Margin="0,4,0,0">
+                            <ui:Button Margin="0,0,8,4"
+                                       Content="Check for Updates…"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                       Command="{Binding CheckNowCommand}"
+                                       AutomationProperties.HelpText="Asks GitHub for the newest release of DefenseClaw for Windows (this app, not the runtime). A development build says what the latest release is but is never offered it." />
+                            <ui:Button Margin="0,0,8,4"
+                                       Content="Review update…"
+                                       Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
+                                       Command="{Binding UpdateNowCommand}"
+                                       AutomationProperties.HelpText="Shows the version, size and SHA-256 of the newer release of this app before anything is downloaded or replaced." />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <!--
+                    Updates — the DefenseClaw runtime: what the gateway or CLI reports, the update watcher's answer, and the Updates window, where an upgrade
+                    is reviewed and preflighted (CUST-359/360) before anything runs. A managed or developer runtime says here that it is not upgraded from
+                    this app (the status caption), and the Updates window offers no upgrade.
+                -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="ArrowCircleUp24"
+                                          Section="Updates"
+                                          Content="Updates — DefenseClaw runtime (CLI and gateway)" />
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Installed">
+                            <TextBlock Style="{StaticResource DcMono}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding RuntimeVersionText}"
+                                       AutomationProperties.Name="{Binding RuntimeVersionText, StringFormat=Installed runtime version: {0}}" />
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Status"
+                                                local:SettingsRow.Caption="{Binding UpdateDetail}">
+                            <Border Style="{StaticResource DcBadge}"
+                                    VerticalAlignment="Center"
+                                    Tag="{Binding UpdateStatusTone}">
+                                <TextBlock Style="{StaticResource DcBadgeText}"
+                                           FontSize="12"
+                                           Text="{Binding UpdateStatusText}"
+                                           AutomationProperties.Name="{Binding UpdateStatusText, StringFormat=Runtime update status: {0}}" />
+                            </Border>
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                                                Header="Last checked">
+                            <TextBlock Style="{StaticResource DcBody}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding LastCheckedText}" />
+                        </HeaderedContentControl>
+
+                        <WrapPanel Margin="0,4,0,0">
+                            <ui:Button Margin="0,0,8,4"
+                                       Content="Check now"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                       Command="{Binding CheckNowCommand}"
+                                       AutomationProperties.HelpText="Looks for a newer DefenseClaw runtime release now, skipping the 24 hour cache, and shows the answer here. Installs nothing." />
+                            <ui:Button Margin="0,0,8,4"
+                                       Content="Open Updates…"
+                                       Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
+                                       Command="{Binding OpenUpdatesCommand}"
+                                       AutomationProperties.HelpText="Opens the Updates window, where a newer runtime release is reviewed and checked before anything is installed." />
+                        </WrapPanel>
+
+                        <!-- What the runtime reports about itself (CUST-291/372): closed by default, the same facts as before. -->
+                        <Expander Margin="0,10,0,0"
+                                  Header="Runtime identity and features"
+                                  AutomationProperties.Name="Runtime identity and features"
+                                  AutomationProperties.HelpText="What defenseclaw --version-json reports, which executable answered, and which features this runtime has.">
+                            <StackPanel Margin="0,6,0,0">
+                                <HeaderedContentControl Style="{StaticResource SettingBlock}"
+                                                        local:SettingsRow.IsFirst="True"
+                                                        Header="Runtime identity"
+                                                        local:SettingsRow.Caption="What defenseclaw --version-json reports, and which executable answered. Read again whenever the CLI file changes, so an upgrade shows here by itself.">
+                                    <Border Style="{StaticResource PathBlock}">
+                                        <TextBox Style="{StaticResource DcMonoTextBox}"
+                                                 Text="{Binding RuntimeIdentityText, Mode=OneWay}"
+                                                 ToolTip="{Binding RuntimeIdentityText}"
+                                                 AutomationProperties.Name="Runtime identity" />
+                                    </Border>
+                                </HeaderedContentControl>
+
+                                <TextBlock Margin="0,10,0,4" Style="{StaticResource DcCaption}" Text="Features this runtime has" />
+                                <ItemsControl ItemsSource="{Binding RuntimeCapabilityRows}"
+                                              IsTabStop="False"
+                                              AutomationProperties.Name="Runtime capabilities">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:RuntimeCapabilityRow}">
+                                            <Grid Margin="0,2,0,2" ToolTip="{Binding Marker}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Style="{StaticResource DcBody}" Text="{Binding Name}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Style="{StaticResource DcCaption}"
+                                                           Text="{Binding Status}"
+                                                           AutomationProperties.Name="{Binding Name, StringFormat={}{0}: availability}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource RowNote}" Text="{Binding RuntimeCapabilityNotes}" />
+                                <ui:Button Margin="0,8,0,0"
+                                           Content="Check the runtime again"
+                                           Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                           Command="{Binding RecheckRuntimeCommand}"
+                                           AutomationProperties.HelpText="Asks the CLI again which commands it has. Read-only: only --version-json and --help are run." />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ================================================================== Monitoring -->
+        <ScrollViewer x:Name="MonitoringArea"
+                      Grid.Row="2"
+                      Style="{StaticResource DcPageScroll}"
+                      Visibility="{Binding IsMonitoringArea, Converter={StaticResource BoolToVisibility}}"
+                      AutomationProperties.Name="Monitoring settings">
+            <StackPanel MaxWidth="880" HorizontalAlignment="Left">
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>
                         <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
                                           Symbol="Pulse24"
                                           Section="Setup"
-                                          Content="Monitoring" />
+                                          Content="Refresh cadence" />
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
@@ -226,14 +560,22 @@
                         </HeaderedContentControl>
                     </StackPanel>
                 </Border>
+            </StackPanel>
+        </ScrollViewer>
 
-                <!-- Notifications -->
+        <!-- ================================================================== Notifications -->
+        <ScrollViewer x:Name="NotificationsArea"
+                      Grid.Row="2"
+                      Style="{StaticResource DcPageScroll}"
+                      Visibility="{Binding IsNotificationsArea, Converter={StaticResource BoolToVisibility}}"
+                      AutomationProperties.Name="Notification settings">
+            <StackPanel MaxWidth="880" HorizontalAlignment="Left">
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>
                         <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
                                           Symbol="Alert24"
                                           Section="Setup"
-                                          Content="Notifications" />
+                                          Content="Desktop notifications" />
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
@@ -257,9 +599,19 @@
                                              AutomationProperties.Name="Notify when the gateway goes offline or recovers"
                                              AutomationProperties.HelpText="Shows a notification from the tray when a gateway that was answering stops, and when it answers again." />
                         </HeaderedContentControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="ArrowReset24"
+                                          Section="Setup"
+                                          Content="Seen-alert history" />
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Seen-alert history"
+                                                local:SettingsRow.IsFirst="True"
+                                                Header="Announce outstanding findings again"
                                                 local:SettingsRow.Caption="Forgets which findings were already announced, so the CRITICAL and HIGH findings that are still unacknowledged are announced once more, as one notification.">
                             <ui:Button Content="Reset seen-alert history"
                                        Icon="{ctl:DcSymbolIcon ArrowReset24}"
@@ -269,67 +621,28 @@
                         <TextBlock Style="{StaticResource StatusLine}" Text="{Binding ResetSeenMessage}" />
                     </StackPanel>
                 </Border>
+            </StackPanel>
+        </ScrollViewer>
 
-                <!-- Startup -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                          Symbol="Power24"
-                                          Section="Setup"
-                                          Content="Startup" />
+        <!-- ================================================================== Connection: Gateway, Installation, Files, CLI (the Mac's order) -->
+        <ScrollViewer x:Name="ConnectionArea"
+                      Grid.Row="2"
+                      Style="{StaticResource DcPageScroll}"
+                      Visibility="{Binding IsConnectionArea, Converter={StaticResource BoolToVisibility}}"
+                      AutomationProperties.Name="Connection settings">
+            <StackPanel MaxWidth="880" HorizontalAlignment="Left">
 
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                local:SettingsRow.IsFirst="True"
-                                                Header="Start with Windows"
-                                                local:SettingsRow.Caption="Launches DefenseClaw minimized to the tray when you sign in. It adds a per-user startup entry; no administrator rights are needed.">
-                            <ui:ToggleSwitch IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
-                                             AutomationProperties.Name="Start with Windows"
-                                             AutomationProperties.HelpText="Adds or removes the per-user startup entry that launches DefenseClaw to the tray at sign-in." />
-                        </HeaderedContentControl>
-                        <TextBlock Style="{StaticResource ProblemLine}"
-                                   Visibility="{Binding HasAutostartProblem, Converter={StaticResource BoolToVisibility}}"
-                                   Text="{Binding AutostartProblem}" />
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Closing the window keeps DefenseClaw in the tray"
-                                                local:SettingsRow.Caption="{Binding CloseToTrayCaption}">
-                            <ui:ToggleSwitch IsChecked="{Binding CloseToTray, Mode=TwoWay}"
-                                             AutomationProperties.Name="Closing the window keeps DefenseClaw in the tray"
-                                             AutomationProperties.HelpText="On: the close button hides the dashboard. Off: the close button exits DefenseClaw." />
-                        </HeaderedContentControl>
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Start the gateway automatically"
-                                                local:SettingsRow.Caption="Once per launch, if the gateway is stopped because nothing is listening on its port, runs defenseclaw-gateway start. Never after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it yourself. Off by default; turning it on shows the command first.">
-                            <ui:ToggleSwitch IsChecked="{Binding AutoStartGateway, Mode=TwoWay}"
-                                             IsEnabled="{Binding CanChangeAutoStart}"
-                                             ToolTipService.ShowOnDisabled="True"
-                                             ToolTip="{Binding AutoStartToolTip}"
-                                             AutomationProperties.Name="Start the gateway automatically"
-                                             AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. You review the command when you turn this on." />
-                        </HeaderedContentControl>
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Reopen on the last panel"
-                                                local:SettingsRow.Caption="Opens the dashboard on the panel you were last looking at, instead of Overview.">
-                            <ui:ToggleSwitch IsChecked="{Binding RememberLastPanel, Mode=TwoWay}"
-                                             AutomationProperties.Name="Reopen on the last panel"
-                                             AutomationProperties.HelpText="Remembers the panel you last looked at and opens the dashboard on it." />
-                        </HeaderedContentControl>
-                    </StackPanel>
-                </Border>
-
-                <!-- Connection -->
+                <!-- Gateway -->
                 <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
                     <StackPanel>
                         <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
                                           Symbol="PlugConnected24"
                                           Section="Setup"
-                                          Content="Connection" />
+                                          Content="Gateway" />
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
-                                                Header="Gateway endpoint"
+                                                Header="Endpoint"
                                                 local:SettingsRow.Caption="The port is gateway.api_port in config.yaml; the gateway listens on this machine only.">
                             <TextBox Style="{StaticResource DcMonoTextBox}"
                                      Text="{Binding EndpointText, Mode=OneWay}"
@@ -348,19 +661,21 @@
                         </HeaderedContentControl>
 
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Configuration"
-                                                local:SettingsRow.Caption="Re-reads config.yaml and the .env file. The app does this by itself when either changes; this is for when it missed one. It only reads.">
-                            <ui:Button Content="Reload config.yaml now"
-                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                                       Command="{Binding ReloadConfigCommand}"
-                                       AutomationProperties.HelpText="Re-reads config.yaml and the .env file from disk." />
+                                                Header="Start the gateway automatically"
+                                                local:SettingsRow.Caption="Once per launch, if the gateway is stopped because nothing is listening on its port, runs defenseclaw-gateway start. Never after a timeout, a refused or unreadable answer, with a WSL gateway, while paused, or after you stop it yourself. Off by default; turning it on shows the command first.">
+                            <ui:ToggleSwitch IsChecked="{Binding AutoStartGateway, Mode=TwoWay}"
+                                             IsEnabled="{Binding CanChangeAutoStart}"
+                                             ToolTipService.ShowOnDisabled="True"
+                                             ToolTip="{Binding AutoStartToolTip}"
+                                             AutomationProperties.Name="Start the gateway automatically"
+                                             AutomationProperties.HelpText="Starts the gateway once per launch when its port refuses connections. You review the command when you turn this on." />
                         </HeaderedContentControl>
-                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding ConnectionMessage}" />
 
                         <!--
                             Run gateway as administrator: the Mac's switch in the same card. The same view-model as the Overview's Quick Actions, so the
                             two cannot disagree. Flipping it starts and stops nothing; the first start after turning it on installs the helper and a copy of
-                            the gateway in Program Files (Windows asks, and the helper asks once more in its own window).
+                            the gateway in Program Files (Windows asks, and the helper asks once more in its own window). What blocks it (a runtime without
+                            the feature, a standard account, Secure Endpoint) is its detail line, as before.
                         -->
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 Header="Run gateway as administrator"
@@ -395,17 +710,22 @@
                                        Visibility="{Binding AdminGateway.ShowPrepare, Converter={StaticResource BoolToVisibility}}"
                                        AutomationProperties.HelpText="Installs the helper and a copy of your installed gateway in Program Files, after you confirm and approve the Windows prompt. Starts nothing." />
                         </WrapPanel>
+                    </StackPanel>
+                </Border>
 
-                        <!--
-                            Installation: which DefenseClaw this run drives, what chose it (DEFENSECLAW_CONFIG, the developer runtime selector,
-                            DEFENSECLAW_HOME, a managed layout, or the user default), and whether the app may change it. A managed or invalid
-                            installation is only read: the reason is the caption under Access, and it is what every disabled control says.
-                        -->
-                        <TextBlock Margin="0,16,0,0"
-                                   Style="{StaticResource DcBody}"
-                                   FontWeight="SemiBold"
-                                   AutomationProperties.HeadingLevel="Level3"
-                                   Text="Installation" />
+                <!--
+                    Installation: which DefenseClaw this run drives, what chose it (DEFENSECLAW_CONFIG, the developer runtime selector, DEFENSECLAW_HOME, a
+                    managed layout, or the user default), and whether the app may change it. A managed or invalid installation is only read: the reason is
+                    the caption under Access, and it is what every disabled control says. The override is the developer runtime selector below (the
+                    Windows analogue of the Mac's config path override), which applies the next time the app starts.
+                -->
+                <Border x:Name="InstallationCard" Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="Wrench24"
+                                          Section="Setup"
+                                          Content="Installation" />
+
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Selected by"
@@ -413,6 +733,8 @@
                             <TextBlock Style="{StaticResource DcBody}"
                                        VerticalAlignment="Center"
                                        TextWrapping="Wrap"
+                                       MaxWidth="420"
+                                       TextAlignment="Right"
                                        Text="{Binding InstallationSelectedBy}"
                                        AutomationProperties.Name="{Binding InstallationSelectedBy, StringFormat=Installation selected by: {0}}" />
                         </HeaderedContentControl>
@@ -428,281 +750,19 @@
                                            AutomationProperties.Name="{Binding InstallationAccessText, StringFormat=Installation access: {0}}" />
                             </Border>
                         </HeaderedContentControl>
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                        <HeaderedContentControl Style="{StaticResource SettingBlock}"
                                                 Header="Override"
-                                                local:SettingsRow.Caption="The developer runtime selector under Advanced, when it is on. It applies the next time the app starts, like the selector itself.">
-                            <TextBox Style="{StaticResource DcMonoTextBox}"
-                                     Text="{Binding InstallationOverride, Mode=OneWay}"
-                                     AutomationProperties.Name="Installation override path" />
-                        </HeaderedContentControl>
-                    </StackPanel>
-                </Border>
-
-                <!-- Files -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                          Symbol="DocumentText24"
-                                          Section="Setup"
-                                          Content="Files" />
-                        <ItemsControl ItemsSource="{Binding Files}"
-                                      ItemTemplate="{StaticResource FileRow}"
-                                      IsTabStop="False"
-                                      AutomationProperties.Name="Files DefenseClaw reads" />
-                    </StackPanel>
-                </Border>
-
-                <!-- The CLI -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                          Symbol="Code24"
-                                          Section="Setup"
-                                          Content="defenseclaw CLI" />
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Style="{StaticResource DcCaption}" Text="Runs as" />
-                            <Border Grid.Row="1" Margin="0,2,0,0" Style="{StaticResource PathBlock}" VerticalAlignment="Center">
+                                                local:SettingsRow.Caption="The developer runtime selector below, when it is on. It applies the next time the app starts, like the selector itself.">
+                            <Border Style="{StaticResource PathBlock}">
                                 <TextBox Style="{StaticResource DcMonoTextBox}"
-                                         Text="{Binding CliResolvedPath, Mode=OneWay}"
-                                         AutomationProperties.Name="defenseclaw executable in use" />
-                            </Border>
-                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,2,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <ui:Button Icon="{ctl:DcSymbolIcon Copy24}"
-                                           ToolTip="Copy path"
-                                           Command="{Binding CopyCliPathCommand}"
-                                           AutomationProperties.Name="Copy the defenseclaw.exe path" />
-                                <ui:Button Margin="6,0,0,0"
-                                           Icon="{ctl:DcSymbolIcon FolderOpen24}"
-                                           ToolTip="Show in Explorer"
-                                           Command="{Binding OpenCliFolderCommand}"
-                                           AutomationProperties.Name="Show defenseclaw.exe in Explorer" />
-                            </StackPanel>
-                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,4,0,0" Style="{StaticResource DcCaption}" Text="{Binding CliSourceNote}" />
-                        </Grid>
-
-                        <HeaderedContentControl Margin="0,10,0,0"
-                                                Style="{StaticResource SettingRow}"
-                                                Header="Binary path (optional override)"
-                                                local:SettingsRow.Caption="Leave this automatic unless the CLI is installed where PATH does not reach. The file must be named defenseclaw.exe. The file in use is shown in every command review.">
-                            <StackPanel Orientation="Horizontal">
-                                <ui:Button Content="Browse…"
-                                           Icon="{ctl:DcSymbolIcon FolderOpen24}"
-                                           Command="{Binding BrowseCliExecutableCommand}"
-                                           AutomationProperties.HelpText="Choose the defenseclaw.exe to use instead of the automatic lookup." />
-                                <ui:Button Margin="8,0,0,0"
-                                           Content="Use automatic"
-                                           Command="{Binding ClearCliOverrideCommand}"
-                                           AutomationProperties.HelpText="Forget the chosen file and look defenseclaw.exe up on PATH and in the install directory again." />
-                            </StackPanel>
-                        </HeaderedContentControl>
-                        <Border Margin="0,0,0,0" Style="{StaticResource PathBlock}">
-                            <TextBox Style="{StaticResource DcMonoTextBox}"
-                                     Text="{Binding CliOverrideDisplay, Mode=OneWay}"
-                                     AutomationProperties.Name="Chosen defenseclaw.exe override" />
-                        </Border>
-                        <TextBlock Style="{StaticResource ProblemLine}"
-                                   Visibility="{Binding HasCliOverrideProblem, Converter={StaticResource BoolToVisibility}}"
-                                   Text="{Binding CliOverrideProblem}" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Updates -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                          Symbol="ArrowCircleUp24"
-                                          Section="Updates"
-                                          Content="Updates" />
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                local:SettingsRow.IsFirst="True"
-                                                Header="Installed runtime (CLI and gateway)">
-                            <TextBlock Style="{StaticResource DcMono}"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding RuntimeVersionText}"
-                                       AutomationProperties.Name="{Binding RuntimeVersionText, StringFormat=Installed runtime version: {0}}" />
-                        </HeaderedContentControl>
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Runtime identity"
-                                                local:SettingsRow.Caption="What defenseclaw --version-json reports, and which executable answered. Read again whenever the CLI file changes, so an upgrade shows here by itself.">
-                            <TextBox Style="{StaticResource DcMonoTextBox}"
-                                     Text="{Binding RuntimeIdentityText, Mode=OneWay}"
-                                     AutomationProperties.Name="Runtime identity" />
-                        </HeaderedContentControl>
-
-                        <TextBlock Margin="0,10,0,4" Style="{StaticResource DcCaption}" Text="Features this runtime has" />
-                        <ItemsControl ItemsSource="{Binding RuntimeCapabilityRows}"
-                                      IsTabStop="False"
-                                      AutomationProperties.Name="Runtime capabilities">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:RuntimeCapabilityRow}">
-                                    <Grid Margin="0,2,0,2" ToolTip="{Binding Marker}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Style="{StaticResource DcBody}" Text="{Binding Name}" />
-                                        <TextBlock Grid.Column="1"
-                                                   Style="{StaticResource DcCaption}"
-                                                   Text="{Binding Status}"
-                                                   AutomationProperties.Name="{Binding Name, StringFormat={}{0}: availability}" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Style="{StaticResource RowNote}" Text="{Binding RuntimeCapabilityNotes}" />
-                        <ui:Button Margin="0,8,0,0"
-                                   Content="Check the runtime again"
-                                   Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                                   Command="{Binding RecheckRuntimeCommand}"
-                                   AutomationProperties.HelpText="Asks the CLI again which commands it has. Read-only: only --version-json and --help are run." />
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Status"
-                                                local:SettingsRow.Caption="{Binding UpdateDetail}">
-                            <Border Style="{StaticResource DcBadge}"
-                                    VerticalAlignment="Center"
-                                    Tag="{Binding UpdateStatusTone}">
-                                <TextBlock Style="{StaticResource DcBadgeText}"
-                                           FontSize="12"
-                                           Text="{Binding UpdateStatusText}"
-                                           AutomationProperties.Name="{Binding UpdateStatusText, StringFormat=Update status: {0}}" />
+                                         Text="{Binding InstallationOverride, Mode=OneWay}"
+                                         ToolTip="{Binding InstallationOverride}"
+                                         AutomationProperties.Name="Installation override path" />
                             </Border>
                         </HeaderedContentControl>
 
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Last checked">
-                            <TextBlock Style="{StaticResource DcBody}"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding LastCheckedText}" />
-                        </HeaderedContentControl>
-
-                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
-                            <ui:Button Content="Check now"
-                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                                       Command="{Binding CheckNowCommand}"
-                                       AutomationProperties.HelpText="Looks for a newer DefenseClaw release now, skipping the 24 hour cache, and shows the answer here." />
-                            <ui:Button Margin="8,0,0,0"
-                                       Content="Open Updates…"
-                                       Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
-                                       Command="{Binding OpenUpdatesCommand}"
-                                       AutomationProperties.HelpText="Opens the Updates window, where a newer release is reviewed before anything is installed." />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-                <!-- This app's own updates (Rmontalbano/defenseclaw_win), separate from the runtime's above. -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel DataContext="{Binding AppUpdate}">
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                          Symbol="ArrowCircleUp24"
-                                          Section="Updates"
-                                          Content="DefenseClaw for Windows (this app)" />
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                local:SettingsRow.IsFirst="True"
-                                                Header="Installed">
-                            <TextBlock Style="{StaticResource DcMono}"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding RunningText}"
-                                       AutomationProperties.Name="{Binding RunningText, StringFormat=Installed app version: {0}}" />
-                        </HeaderedContentControl>
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Status"
-                                                local:SettingsRow.Caption="{Binding DetailText}">
-                            <Border Style="{StaticResource DcBadge}"
-                                    VerticalAlignment="Center"
-                                    Tag="{Binding StatusTone}">
-                                <TextBlock Style="{StaticResource DcBadgeText}"
-                                           FontSize="12"
-                                           Text="{Binding StatusText}"
-                                           AutomationProperties.Name="{Binding StatusText, StringFormat=App update status: {0}}" />
-                            </Border>
-                        </HeaderedContentControl>
-
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
-                                                Header="Last checked">
-                            <TextBlock Style="{StaticResource DcBody}"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding LastCheckedText}" />
-                        </HeaderedContentControl>
-
-                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
-                            <ui:Button Content="Check for Updates…"
-                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
-                                       Command="{Binding CheckNowCommand}"
-                                       AutomationProperties.HelpText="Asks GitHub for the newest release of DefenseClaw for Windows. A development build says what the latest release is but is never offered it." />
-                            <ui:Button Margin="8,0,0,0"
-                                       Content="Review update…"
-                                       Icon="{ctl:DcSymbolIcon ArrowCircleUp24}"
-                                       Command="{Binding UpdateNowCommand}"
-                                       AutomationProperties.HelpText="Shows the version, size and SHA-256 of the newer release before anything is downloaded or replaced." />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-                <!-- Audit archive: a copy of an earlier DefenseClaw's audit.db the Audit panel can show, read-only (CUST-299). -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                          Symbol="DatabaseSearch24"
-                                          Section="Observe"
-                                          Content="Audit archive" />
-                        <TextBlock Style="{StaticResource DcCaption}"
-                                   TextWrapping="Wrap"
-                                   Text="An upgrade purges the old audit history. If you kept a copy of the old audit.db outside the DefenseClaw folder, choose it here and the Audit panel gets a Live | Archive switch. The file is only ever read (opened read-only, nothing is written beside it)." />
-                        <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Archived audit database (optional)" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <ui:TextBox Grid.Column="0"
-                                        PlaceholderText="C:\Users\you\DefenseClaw-archive\audit-2026-10-08.db"
-                                        AutomationProperties.Name="Archived audit database path"
-                                        Text="{Binding ArchivePathText, UpdateSourceTrigger=PropertyChanged}" />
-                            <ui:Button Grid.Column="1" Margin="8,0,0,0"
-                                       Content="Browse…"
-                                       Icon="{ctl:DcSymbolIcon FolderOpen24}"
-                                       Command="{Binding BrowseArchiveCommand}"
-                                       AutomationProperties.HelpText="Choose the archived audit.db." />
-                        </Grid>
-                        <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-                            <ui:Button Content="Apply"
-                                       Icon="{ctl:DcSymbolIcon Checkmark24}"
-                                       Command="{Binding ApplyArchiveCommand}"
-                                       AutomationProperties.HelpText="Checks that the file exists, is a DefenseClaw audit database and is outside the live DefenseClaw folder, then saves it." />
-                            <ui:Button Margin="8,0,0,0"
-                                       Content="Clear"
-                                       Command="{Binding ClearArchiveCommand}"
-                                       AutomationProperties.HelpText="Stops using the archive. The file itself is left alone." />
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource ProblemLine}"
-                                   Visibility="{Binding HasArchiveProblem, Converter={StaticResource BoolToVisibility}}"
-                                   Text="{Binding ArchiveProblem}" />
-                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding ArchiveMessage}" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Advanced: the developer runtime selector. Off by default; off is the installed runtime, unchanged. -->
-                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
-                    <StackPanel>
-                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
-                                          Symbol="Wrench24"
-                                          Section="Setup"
-                                          Content="Advanced" />
-
+                        <!-- The developer runtime selector (CUST-291). Off by default; off is the installed runtime, unchanged. -->
+                        <TextBlock Style="{StaticResource SubHeading}" Text="Developer runtime selector" />
                         <HeaderedContentControl Style="{StaticResource SettingRow}"
                                                 local:SettingsRow.IsFirst="True"
                                                 Header="Use a different DefenseClaw runtime"
@@ -712,12 +772,15 @@
                                              AutomationProperties.HelpText="Turns the developer runtime selector on or off. Nothing changes until the app restarts." />
                         </HeaderedContentControl>
 
-                        <HeaderedContentControl Style="{StaticResource SettingRow}"
+                        <HeaderedContentControl Style="{StaticResource SettingBlock}"
                                                 Header="Running now"
                                                 local:SettingsRow.Caption="The runtime this run of the app was started against.">
-                            <TextBox Style="{StaticResource DcMonoTextBox}"
-                                     Text="{Binding RuntimeInUseText, Mode=OneWay}"
-                                     AutomationProperties.Name="Runtime in use" />
+                            <Border Style="{StaticResource PathBlock}">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         Text="{Binding RuntimeInUseText, Mode=OneWay}"
+                                         ToolTip="{Binding RuntimeInUseText}"
+                                         AutomationProperties.Name="Runtime in use" />
+                            </Border>
                         </HeaderedContentControl>
 
                         <StackPanel Visibility="{Binding DeveloperEnabled, Converter={StaticResource BoolToVisibility}}">
@@ -796,21 +859,177 @@
                                             Text="{Binding RuntimeGatewayUrl, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
-                            <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-                                <ui:Button Content="Apply"
+                            <WrapPanel Margin="0,12,0,0">
+                                <ui:Button Margin="0,0,8,4"
+                                           Content="Apply"
                                            Icon="{ctl:DcSymbolIcon Checkmark24}"
                                            Command="{Binding ApplyRuntimeCommand}"
                                            AutomationProperties.HelpText="Checks the choice and saves it. Takes effect the next time the app starts." />
-                                <ui:Button Margin="8,0,0,0"
+                                <ui:Button Margin="0,0,8,4"
                                            Content="Use the installed runtime"
                                            Command="{Binding UseInstalledRuntimeCommand}"
                                            AutomationProperties.HelpText="Turns the selector off and goes back to the installed runtime." />
-                            </StackPanel>
+                            </WrapPanel>
                             <TextBlock Style="{StaticResource ProblemLine}"
                                        Visibility="{Binding HasRuntimeProblem, Converter={StaticResource BoolToVisibility}}"
                                        Text="{Binding RuntimeProblem}" />
                         </StackPanel>
                         <TextBlock Style="{StaticResource StatusLine}" Text="{Binding RuntimeMessage}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Files: the installation's six roles, in the Mac's order, each from what the app resolved. -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="DocumentText24"
+                                          Section="Setup"
+                                          Content="Files" />
+                        <ItemsControl ItemsSource="{Binding Files}"
+                                      ItemTemplate="{StaticResource FileRow}"
+                                      IsTabStop="False"
+                                      AutomationProperties.Name="DefenseClaw's files" />
+                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding FilesMessage}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- The CLI: which defenseclaw.exe answers, the override, and the config reload (the Mac's "defenseclaw CLI" section). -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="Code24"
+                                          Section="Setup"
+                                          Content="defenseclaw CLI" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Style="{StaticResource DcCaption}" Text="Runs as" />
+                            <Border Grid.Row="1" Margin="0,2,0,0" Style="{StaticResource PathBlock}" VerticalAlignment="Center">
+                                <TextBox Style="{StaticResource DcMonoTextBox}"
+                                         Text="{Binding CliResolvedPath, Mode=OneWay}"
+                                         ToolTip="{Binding CliResolvedPath}"
+                                         AutomationProperties.Name="defenseclaw executable in use" />
+                            </Border>
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,2,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <ui:Button Icon="{ctl:DcSymbolIcon Copy24}"
+                                           ToolTip="Copy path"
+                                           Command="{Binding CopyCliPathCommand}"
+                                           AutomationProperties.Name="Copy the defenseclaw.exe path" />
+                                <ui:Button Margin="6,0,0,0"
+                                           Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                           ToolTip="Show in Explorer"
+                                           Command="{Binding OpenCliFolderCommand}"
+                                           AutomationProperties.Name="Show defenseclaw.exe in Explorer" />
+                            </StackPanel>
+                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,4,0,0" Style="{StaticResource DcCaption}" Text="{Binding CliSourceNote}" />
+                        </Grid>
+
+                        <HeaderedContentControl Margin="0,10,0,0"
+                                                Style="{StaticResource SettingRow}"
+                                                Header="Binary path (optional override)"
+                                                local:SettingsRow.Caption="Leave this automatic unless the CLI is installed where PATH does not reach. The file must be named defenseclaw.exe. The file in use is shown in every command review.">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Browse…"
+                                           Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                           Command="{Binding BrowseCliExecutableCommand}"
+                                           AutomationProperties.HelpText="Choose the defenseclaw.exe to use instead of the automatic lookup." />
+                                <ui:Button Margin="8,0,0,0"
+                                           Content="Use automatic"
+                                           Command="{Binding ClearCliOverrideCommand}"
+                                           AutomationProperties.HelpText="Forget the chosen file and look defenseclaw.exe up on PATH and in the install directory again." />
+                            </StackPanel>
+                        </HeaderedContentControl>
+                        <Border Style="{StaticResource PathBlock}">
+                            <TextBox Style="{StaticResource DcMonoTextBox}"
+                                     Text="{Binding CliOverrideDisplay, Mode=OneWay}"
+                                     ToolTip="{Binding CliOverrideDisplay}"
+                                     AutomationProperties.Name="Chosen defenseclaw.exe override" />
+                        </Border>
+                        <TextBlock Style="{StaticResource ProblemLine}"
+                                   Visibility="{Binding HasCliOverrideProblem, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding CliOverrideProblem}" />
+
+                        <HeaderedContentControl Margin="0,10,0,0"
+                                                Style="{StaticResource SettingRow}"
+                                                Header="Configuration"
+                                                local:SettingsRow.Caption="Re-reads config.yaml and the .env file. The app does this by itself when either changes; this is for when it missed one. It only reads.">
+                            <ui:Button Content="Reload config.yaml now"
+                                       Icon="{ctl:DcSymbolIcon ArrowSync24}"
+                                       Command="{Binding ReloadConfigCommand}"
+                                       AutomationProperties.HelpText="Re-reads config.yaml and the .env file from disk." />
+                        </HeaderedContentControl>
+                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding CliMessage}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Audit archive: a copy of an earlier DefenseClaw's audit.db the Audit panel can show, read-only (CUST-299). -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="DatabaseSearch24"
+                                          Section="Observe"
+                                          Content="Audit archive" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="An upgrade purges the old audit history. If you kept a copy of the old audit.db outside the DefenseClaw folder, choose it here and the Audit panel gets a Live | Archive switch. The file is only ever read (opened read-only, nothing is written beside it)." />
+                        <TextBlock Margin="0,10,0,2" Style="{StaticResource DcCaption}" Text="Archived audit database (optional)" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Grid.Column="0"
+                                        PlaceholderText="C:\Users\you\DefenseClaw-archive\audit-2026-10-08.db"
+                                        AutomationProperties.Name="Archived audit database path"
+                                        Text="{Binding ArchivePathText, UpdateSourceTrigger=PropertyChanged}" />
+                            <ui:Button Grid.Column="1" Margin="8,0,0,0"
+                                       Content="Browse…"
+                                       Icon="{ctl:DcSymbolIcon FolderOpen24}"
+                                       Command="{Binding BrowseArchiveCommand}"
+                                       AutomationProperties.HelpText="Choose the archived audit.db." />
+                        </Grid>
+                        <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                            <ui:Button Content="Apply"
+                                       Icon="{ctl:DcSymbolIcon Checkmark24}"
+                                       Command="{Binding ApplyArchiveCommand}"
+                                       AutomationProperties.HelpText="Checks that the file exists, is a DefenseClaw audit database and is outside the live DefenseClaw folder, then saves it." />
+                            <ui:Button Margin="8,0,0,0"
+                                       Content="Clear"
+                                       Command="{Binding ClearArchiveCommand}"
+                                       AutomationProperties.HelpText="Stops using the archive. The file itself is left alone." />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource ProblemLine}"
+                                   Visibility="{Binding HasArchiveProblem, Converter={StaticResource BoolToVisibility}}"
+                                   Text="{Binding ArchiveProblem}" />
+                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding ArchiveMessage}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Companion app files: this app's own, kept apart from DefenseClaw's installation, data, logs and backups above. -->
+                <Border Margin="{StaticResource DcCardGap}" Style="{StaticResource DcCard}">
+                    <StackPanel>
+                        <ctl:DcCardHeader AutomationProperties.HeadingLevel="Level2"
+                                          Symbol="Folder24"
+                                          Section="Setup"
+                                          Content="Companion app files" />
+                        <TextBlock Margin="0,0,0,8"
+                                   Style="{StaticResource DcCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="DefenseClaw for Windows keeps its own settings and caches here. They are not part of the DefenseClaw installation, and nothing on this page moves them." />
+                        <ItemsControl ItemsSource="{Binding CompanionFiles}"
+                                      ItemTemplate="{StaticResource FileRow}"
+                                      IsTabStop="False"
+                                      AutomationProperties.Name="This app's own files" />
+                        <TextBlock Style="{StaticResource StatusLine}" Text="{Binding CompanionMessage}" />
                     </StackPanel>
                 </Border>
             </StackPanel>

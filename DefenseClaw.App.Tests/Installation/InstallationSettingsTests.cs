@@ -98,7 +98,7 @@ public sealed class InstallationSettingsTests : IDisposable
     {
         var model = Build(Create(TestInstallations.DeveloperRuntime()));
 
-        Assert.Equal("Developer runtime selector (Settings → Advanced)", model.InstallationSelectedBy);
+        Assert.Equal("Developer runtime selector (Settings → Connection → Installation)", model.InstallationSelectedBy);
         Assert.Equal("Unmanaged — setup changes allowed", model.InstallationAccessText);
         Assert.Equal(TestInstallations.DeveloperHome, model.InstallationOverride);
         Assert.False(model.HasInstallationReason);

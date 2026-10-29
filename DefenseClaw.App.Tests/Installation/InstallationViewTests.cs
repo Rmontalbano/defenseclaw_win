@@ -136,7 +136,7 @@ public sealed class InstallationViewTests
     }
 
     [Fact]
-    public void Review_Installation_opens_Settings()
+    public void Review_Installation_opens_Settings_on_Connection_at_the_installation_block()
     {
         using var screen = OverviewScreen.Open(TestInstallations.ManagedByConfigMode());
 
@@ -150,7 +150,7 @@ public sealed class InstallationViewTests
             Assert.Same(screen.ViewModel.ReviewInstallationCommand, review.Command);
             review.Command.Execute(review.CommandParameter);
 
-            Assert.Equal(new NavigationRequest("settings"), requested);
+            Assert.Equal(new NavigationRequest("settings", new SettingsAreaLink(SettingsArea.Connection, SettingsAreaLink.InstallationSection)), requested);
         });
     }
 
@@ -194,7 +194,9 @@ public sealed class InstallationViewTests
             });
             UiThread.Run(() =>
             {
+                // The Installation block is in the Connection area (CUST-386).
                 var model = (SettingsPanelViewModel)Page.DataContext;
+                model.SelectedArea = SettingsArea.Connection;
                 var look = model.RefreshMachineFactsAsync();
                 var deadline = Environment.TickCount64 + 30_000;
                 while (!look.IsCompleted && Environment.TickCount64 < deadline)
@@ -228,8 +230,9 @@ public sealed class InstallationViewTests
 
     private static void ScrollToInstallation(SettingsScreen screen)
     {
-        var heading = VisualTree.Descendants<TextBlock>(screen.Page).First(t => t.Text == "Installation" && t.IsVisible);
-        heading.BringIntoView(new Rect(0, 0, heading.ActualWidth, heading.ActualHeight + 260));
+        var card = (FrameworkElement)screen.Page.FindName("InstallationCard");
+        Assert.True(card.IsVisible);
+        card.BringIntoView(new Rect(0, 0, card.ActualWidth, 300));
         screen.Host.Relayout();
     }
 
@@ -295,7 +298,7 @@ public sealed class InstallationViewTests
 
         UiThread.Run(() =>
         {
-            Assert.True(Shows(Row(screen.Page, "Selected by"), "Developer runtime selector (Settings → Advanced)"));
+            Assert.True(Shows(Row(screen.Page, "Selected by"), "Developer runtime selector (Settings → Connection → Installation)"));
             Assert.True(Shows(Row(screen.Page, "Override"), TestInstallations.DeveloperHome));
         });
     }

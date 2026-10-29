@@ -445,27 +445,71 @@ public sealed class SettingsPanelViewModelTests : IDisposable
     }
 
     [Fact]
-    public void The_five_files_are_listed_where_the_app_resolved_them_with_the_data_directorys_source()
+    public void The_files_are_the_macs_six_roles_in_its_order_where_the_app_resolved_them_each_with_its_source()
     {
         var services = Create();
         var model = Build(services);
 
         Assert.Equal(
-            new[] { "Config file", "Data directory", ".env file", "Audit database", "Gateway log", "Python runtime" },
+            new[] { "Config", "Data", "Environment", "Audit DB", "Virtual environment", "Gateway log" },
             model.Files.Select(f => f.Label).ToArray());
         Assert.Equal(
-            new[] { services.Paths.ConfigFilePath, services.Paths.DataDirectory, services.Paths.EnvFilePath, services.Paths.AuditDatabasePath, services.Paths.GatewayLogPath, services.Paths.PythonInterpreterPath },
+            new[]
+            {
+                services.Paths.ConfigFilePath, services.Paths.DataDirectory, services.Paths.EnvFilePath, services.Paths.AuditDatabasePath,
+                Path.Combine(services.Paths.DataDirectory, ".venv"), services.Paths.GatewayLogPath,
+            },
             model.Files.Select(f => f.FullPath).ToArray());
+
+        // Every role says where its path came from.
+        Assert.All(model.Files.Where(f => f.IsAvailable), f => Assert.False(string.IsNullOrWhiteSpace(f.Note), $"{f.Label} has no source"));
+        Assert.Equal("In the data directory.", model.Files[0].Note);
 
         var data = model.Files[1];
         Assert.True(data.IsDirectory);
         Assert.Equal(services.Paths.DataDirectoryOrigin.Description, data.Note);
         Assert.Contains(data.Note!, data.DetailText, StringComparison.Ordinal);
 
-        Assert.Equal("Copy the Config file path", model.Files[0].CopyAutomationName);
-        Assert.Equal("Show the Config file in Explorer", model.Files[0].OpenFolderAutomationName);
-        Assert.Equal("Open the Data directory in Explorer", data.OpenFolderAutomationName);
-        Assert.Equal($"Config file: {services.Paths.ConfigFilePath}", model.Files[0].ToString());
+        Assert.Equal("Copy the config.yaml path", model.Files[0].CopyAutomationName);
+        Assert.Equal("Show the config.yaml in Explorer", model.Files[0].OpenFolderAutomationName);
+        Assert.Equal("Open the data directory in Explorer", data.OpenFolderAutomationName);
+        Assert.Equal($"Config: {services.Paths.ConfigFilePath}", model.Files[0].ToString());
+    }
+
+    [Fact]
+    public void A_config_named_by_DEFENSECLAW_CONFIG_says_so_as_its_source()
+    {
+        _ = Directory.CreateDirectory(_temp.File("elsewhere"));
+        var config = _temp.WriteFile(Path.Combine("elsewhere", "config.yaml"), "config_version: 8\n");
+        var installation = new InstallationContext
+        {
+            Source = InstallationSource.EnvironmentConfig,
+            Access = InstallationAccess.UnmanagedMutable,
+            HomeRoot = _temp.Path,
+            ConfigPath = config,
+            PinnedConfig = config,
+        };
+        var paths = TestServices.IsolatedPaths(_temp.Path, installation);
+        var model = Build(Create(paths: paths));
+
+        Assert.Equal(config, model.Files[0].FullPath);
+        Assert.Contains("DEFENSECLAW_CONFIG", model.Files[0].Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_companion_apps_own_files_are_listed_apart_from_DefenseClaws()
+    {
+        var services = Create();
+        var model = Build(services);
+
+        Assert.Equal(new[] { "Settings file", "App folder" }, model.CompanionFiles.Select(f => f.Label).ToArray());
+        Assert.Equal(
+            new[] { services.Settings.FilePath, Path.GetDirectoryName(services.Settings.FilePath)! },
+            model.CompanionFiles.Select(f => f.FullPath).ToArray());
+        Assert.True(model.CompanionFiles[1].IsDirectory);
+
+        // None of DefenseClaw's roles is the companion's, and the other way round.
+        Assert.Empty(model.Files.Select(f => f.FullPath).Intersect(model.CompanionFiles.Select(f => f.FullPath), StringComparer.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -480,30 +524,11 @@ public sealed class SettingsPanelViewModelTests : IDisposable
         Assert.True(model.Files[1].Exists);
         Assert.False(model.Files[3].Exists);
         Assert.Contains("Not found on disk", model.Files[3].DetailText, StringComparison.Ordinal);
-        Assert.Equal(string.Empty, model.Files[0].DetailText);
+        Assert.DoesNotContain("Not found", model.Files[0].DetailText, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task The_python_runtime_row_is_the_setup_layouts_runtime_python()
-    {
-        var bin = Path.Combine(_temp.Path, "Programs", "DefenseClaw", "bin");
-        var python = Path.Combine(_temp.Path, "Programs", "DefenseClaw", "runtime", "python", "python.exe");
-        TouchFile(python);
-        var services = Create(paths: new DefenseClawPaths(dataDirectory: _temp.Path, binDirectory: bin, searchPath: Array.Empty<string>()));
-        var model = Build(services);
-
-        await UiThread.Run(model.RefreshMachineFactsAsync);
-
-        var row = model.Files.Single(f => f.Label == "Python runtime");
-        Assert.Equal(python, row.FullPath);
-        Assert.False(row.IsDirectory);
-        Assert.True(row.Exists);
-        Assert.Equal("From the Setup install's runtime folder.", row.Note);
-        Assert.DoesNotContain("Not found", row.DetailText, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task The_python_runtime_row_is_the_installer_scripts_venv_when_there_is_no_setup_runtime()
+    public async Task The_virtual_environment_is_the_installer_scripts_venv_when_there_is_one()
     {
         var venv = Path.Combine(_temp.Path, ".venv", "Scripts", "python.exe");
         TouchFile(venv);
@@ -512,24 +537,54 @@ public sealed class SettingsPanelViewModelTests : IDisposable
 
         await UiThread.Run(model.RefreshMachineFactsAsync);
 
-        var row = model.Files.Single(f => f.Label == "Python runtime");
-        Assert.Equal(venv, row.FullPath);
+        var row = model.Files.Single(f => f.Label == "Virtual environment");
+        Assert.True(row.IsAvailable);
+        Assert.Equal(Path.Combine(_temp.Path, ".venv"), row.FullPath);
+        Assert.Equal(row.FullPath, row.DisplayPath);
+        Assert.True(row.IsDirectory);
         Assert.True(row.Exists);
-        Assert.Equal("From the installer script's .venv under the data directory.", row.Note);
+        Assert.Equal("The installer script's .venv under the data directory: the Python DefenseClaw runs.", row.Note);
+        Assert.True(row.CopyCommand.CanExecute(null));
+        Assert.True(row.OpenFolderCommand.CanExecute(null));
     }
 
     [Fact]
-    public async Task The_python_runtime_row_says_not_found_when_neither_layout_has_one()
+    public async Task On_a_setup_install_the_virtual_environment_is_not_there_and_says_which_python_runs_instead()
+    {
+        var bin = Path.Combine(_temp.Path, "Programs", "DefenseClaw", "bin");
+        var python = Path.Combine(_temp.Path, "Programs", "DefenseClaw", "runtime", "python", "python.exe");
+        TouchFile(python);
+        var platform = new FakePlatform();
+        var services = Create(paths: new DefenseClawPaths(dataDirectory: _temp.Path, binDirectory: bin, searchPath: Array.Empty<string>()));
+        var model = Build(services, platform);
+
+        await UiThread.Run(model.RefreshMachineFactsAsync);
+
+        var row = model.Files.Single(f => f.Label == "Virtual environment");
+        Assert.False(row.IsAvailable);
+        Assert.Equal(SettingsPathRow.UnavailablePathText, row.DisplayPath);
+        Assert.Null(row.PathToolTip);
+        Assert.Contains(python, row.DetailText, StringComparison.Ordinal);
+        Assert.Contains("no virtual environment", row.DetailText, StringComparison.Ordinal);
+
+        // Nothing to copy or open: the commands are off, and a stray call does nothing.
+        Assert.False(row.CopyCommand.CanExecute(null));
+        Assert.False(row.OpenFolderCommand.CanExecute(null));
+        await UiThread.Run(() => row.OpenFolderCommand.ExecuteAsync(null));
+        Assert.Empty(platform.Revealed);
+    }
+
+    [Fact]
+    public async Task The_virtual_environment_says_neither_layout_has_one_when_neither_does()
     {
         var services = Create(paths: new DefenseClawPaths(dataDirectory: _temp.Path, binDirectory: Path.Combine(_temp.Path, "no-such-bin"), searchPath: Array.Empty<string>()));
         var model = Build(services);
 
         await UiThread.Run(model.RefreshMachineFactsAsync);
 
-        var row = model.Files.Single(f => f.Label == "Python runtime");
-        Assert.Equal(Path.Combine(_temp.Path, "runtime", "python", "python.exe"), row.FullPath);
-        Assert.False(row.Exists);
-        Assert.Contains("Not found on disk", row.DetailText, StringComparison.Ordinal);
+        var row = model.Files.Single(f => f.Label == "Virtual environment");
+        Assert.False(row.IsAvailable);
+        Assert.Contains("no Setup runtime either", row.DetailText, StringComparison.Ordinal);
     }
 
     private static void TouchFile(string path)
@@ -539,7 +594,7 @@ public sealed class SettingsPanelViewModelTests : IDisposable
     }
 
     [Fact]
-    public void Copy_puts_the_path_on_the_clipboard_and_says_so_and_a_busy_clipboard_is_reported()
+    public void Copy_puts_the_path_on_the_clipboard_and_says_so_beside_the_files_and_a_busy_clipboard_is_reported()
     {
         var platform = new FakePlatform();
         var services = Create();
@@ -547,11 +602,19 @@ public sealed class SettingsPanelViewModelTests : IDisposable
 
         model.Files[0].CopyCommand.Execute(null);
         Assert.Equal(services.Paths.ConfigFilePath, platform.Copied);
-        Assert.Equal("Copied the Config file path.", model.ConnectionMessage);
+        Assert.Equal("Copied the config.yaml path.", model.ConnectionMessage);
+        Assert.Equal(model.ConnectionMessage, model.FilesMessage);
+        Assert.Empty(model.CliMessage);
+        Assert.Empty(model.CompanionMessage);
+
+        model.CompanionFiles[0].CopyCommand.Execute(null);
+        Assert.Equal(services.Settings.FilePath, platform.Copied);
+        Assert.Equal("Copied the settings file path.", model.CompanionMessage);
+        Assert.Empty(model.FilesMessage);
 
         platform.ClipboardBusy = true;
         model.Files[2].CopyCommand.Execute(null);
-        Assert.Contains("another program is holding the clipboard", model.ConnectionMessage, StringComparison.Ordinal);
+        Assert.Contains("another program is holding the clipboard", model.FilesMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1007,8 +1070,12 @@ internal sealed class FakePlatform
 
     public AppServices? UpdatesOpenedWith { get; private set; }
 
+    /// <summary>The appearance service the page drives; null (the default) is a host without one.</summary>
+    public DefenseClaw.App.Services.Appearance.IAppearanceControl? Appearance { get; set; }
+
     public SettingsPlatform Build() => new()
     {
+        Appearance = () => Appearance,
         IsAutostartEnabled = () => AutostartOn,
         ToggleAutostart = () =>
         {
@@ -1057,4 +1124,37 @@ internal sealed class FakePlatform
             UpdatesOpenedWith = services;
         },
     };
+}
+
+/// <summary>Stands in for the appearance service: remembers the style and mode it was given, and says so the way the real one does.</summary>
+internal sealed class FakeAppearance : DefenseClaw.App.Services.Appearance.IAppearanceControl
+{
+    public DefenseClaw.App.Services.Appearance.AppearanceStyle Style { get; private set; }
+
+    public DefenseClaw.App.Services.Appearance.AppearanceMode Mode { get; private set; }
+
+    public bool IsDark => Mode == DefenseClaw.App.Services.Appearance.AppearanceMode.Dark;
+
+    public int Sets { get; private set; }
+
+    public event EventHandler? Changed;
+
+    public void SetStyle(DefenseClaw.App.Services.Appearance.AppearanceStyle style)
+    {
+        Style = style;
+        Sets++;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void SetMode(DefenseClaw.App.Services.Appearance.AppearanceMode mode)
+    {
+        Mode = mode;
+        Sets++;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ToggleLightDark() => SetMode(IsDark ? DefenseClaw.App.Services.Appearance.AppearanceMode.Light : DefenseClaw.App.Services.Appearance.AppearanceMode.Dark);
+
+    public (System.Windows.Media.Color Window, System.Windows.Media.Color Surface, System.Windows.Media.Color Accent, System.Windows.Media.Color Text) Swatch(
+        DefenseClaw.App.Services.Appearance.AppearanceStyle style) => default;
 }

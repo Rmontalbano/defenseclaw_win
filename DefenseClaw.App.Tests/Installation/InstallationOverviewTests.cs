@@ -116,7 +116,7 @@ public sealed class InstallationOverviewTests : IDisposable
     }
 
     [Fact]
-    public void Review_Installation_opens_Settings_where_the_installation_block_is()
+    public void Review_Installation_opens_Settings_on_Connection_at_the_installation_block()
     {
         Services.Installation.Replace(TestInstallations.Managed());
         var vm = Panel();
@@ -124,7 +124,9 @@ public sealed class InstallationOverviewTests : IDisposable
         Assert.True(vm.ReviewInstallationCommand.CanExecute(null));
         vm.ReviewInstallationCommand.Execute(null);
 
-        Assert.Equal(new NavigationRequest("settings"), Services.Navigation.Pending);
+        Assert.Equal(
+            new NavigationRequest("settings", new SettingsAreaLink(SettingsArea.Connection, SettingsAreaLink.InstallationSection)),
+            Services.Navigation.Pending);
     }
 
     [Fact]

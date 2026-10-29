@@ -15,10 +15,10 @@ using DefenseClaw.Core.Paths;
 namespace DefenseClaw.App.ViewModels;
 
 /// <summary>
-/// Settings (CUST-203): the app's own preferences on one page, after the Mac's four-tab settings window — monitoring, notifications, startup,
-/// connection, updates — every one of them a read or a write of <see cref="AppServices.Settings"/> (the app's <c>settings.json</c>), or a
-/// read-only look at what the app resolved. <b>It never writes DefenseClaw's state</b>: no config.yaml, no .env, no CLI command. The one
-/// thing that reads config.yaml is "Reload config.yaml now", which only re-reads it.
+/// Settings (CUST-203): the app's own preferences, in the Mac's four areas since CUST-386 — General, Monitoring, Notifications, Connection
+/// (<c>SettingsPanelViewModel.Areas.cs</c>) — every one of them a read or a write of <see cref="AppServices.Settings"/> (the app's
+/// <c>settings.json</c>), or a read-only look at what the app resolved. <b>It never writes DefenseClaw's state</b>: no config.yaml, no .env, no
+/// CLI command. The one thing that reads config.yaml is "Reload config.yaml now", which only re-reads it.
 /// <para>
 /// <b>Commit on change.</b> A switch writes the moment it flips. The health-interval slider writes once it has been still for
 /// <see cref="IntervalCommitDelay"/> (the store writes synchronously, so a drag must not write per tick) and when the page goes away, and the
@@ -65,6 +65,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         _platform = platform ?? SettingsPlatform.Real;
 
         Files = new ObservableCollection<SettingsPathRow>(BuildFiles());
+        CompanionFiles = new ObservableCollection<SettingsPathRow>(BuildCompanionFiles());
         _selectedRuntimeKind = RuntimeKinds[0];
 
         // Everything the constructor shows is already in memory (the settings cache, the resolved config and token, the last snapshots); what
@@ -74,12 +75,15 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         ShowUpdates();
         ShowRuntimeIdentity();
         ShowInstallation();
+
+        _appearance = _platform.Appearance();
+        ShowAppearance();
     }
 
     public override string Title => "Settings";
 
     public override string Description =>
-        "How this app behaves: monitoring, notifications, startup, connection and updates. These are the app's own settings; changing them never changes DefenseClaw's configuration.";
+        "How this app behaves, in four areas: General (startup, appearance, updates), Monitoring, Notifications and Connection. These are the app's own settings; changing them never changes DefenseClaw's configuration.";
 
     // ------------------------------------------------------------------ the page
 
@@ -333,42 +337,6 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ReloadConfigCommand))]
     private bool _isReloading;
 
-    /// <summary>Config file, data directory, .env, audit database, gateway log, Python runtime: where the app reads, each with its Copy and Open-folder.</summary>
-    public ObservableCollection<SettingsPathRow> Files { get; }
-
-    private IEnumerable<SettingsPathRow> BuildFiles()
-    {
-        var paths = Services.Paths;
-        yield return NewRow("Config file", paths.ConfigFilePath, isDirectory: false, note: null);
-        yield return NewRow("Data directory", paths.DataDirectory, isDirectory: true, note: paths.DataDirectoryOrigin.Description);
-        yield return NewRow(".env file", paths.EnvFilePath, isDirectory: false, note: null);
-        yield return NewRow("Audit database", paths.AuditDatabasePath, isDirectory: false, note: null);
-        yield return NewRow("Gateway log", paths.GatewayLogPath, isDirectory: false, note: null);
-
-        // The interpreter the installed DefenseClaw runs (CUST-329, SG15): the Setup layout's runtime, or the installer script's venv.
-        var python = paths.PythonInterpreterPath;
-        yield return NewRow(
-            "Python runtime",
-            python,
-            isDirectory: false,
-            note: string.Equals(python, paths.VenvPythonPath, StringComparison.OrdinalIgnoreCase)
-                ? "From the installer script's .venv under the data directory."
-                : "From the Setup install's runtime folder.");
-    }
-
-    private SettingsPathRow NewRow(string label, string path, bool isDirectory, string? note)
-    {
-        SettingsPathRow? row = null;
-        row = new SettingsPathRow(
-            label,
-            path,
-            isDirectory,
-            note,
-            new RelayCommand(() => CopyText(row!.FullPath, $"Copied the {label} path.")),
-            new AsyncRelayCommand(() => OpenFolderAsync(row!)));
-        return row;
-    }
-
     /// <summary>The endpoint and the token's standing, from what the app resolved (no I/O: the resolved config and token are in memory).</summary>
     private void ShowGateway()
     {
@@ -405,15 +373,15 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
             await Task.Run(Services.ReloadConfig).ConfigureAwait(true);
             ShowGateway();
 
-            ConnectionMessage = Services.ConfigLoadError is { Length: > 0 } error
+            Say(MessageCard.Cli, Services.ConfigLoadError is { Length: > 0 } error
                 ? $"config.yaml could not be applied; the last good configuration is still in use. {error}"
-                : "config.yaml and .env re-read.";
+                : "config.yaml and .env re-read.");
         }
 #pragma warning disable CA1031 // ReloadConfig does not throw; should it, the page says so rather than fault the dispatcher.
         catch (Exception ex)
 #pragma warning restore CA1031
         {
-            ConnectionMessage = $"Could not reload config.yaml: {ex.Message}";
+            Say(MessageCard.Cli, $"Could not reload config.yaml: {ex.Message}");
         }
         finally
         {
@@ -422,55 +390,6 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     }
 
     private bool CanReloadConfig() => !IsReloading;
-
-    private void CopyText(string text, string done)
-    {
-        try
-        {
-            _platform.CopyText(text);
-            ConnectionMessage = done;
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // Another program holds the clipboard: say so rather than pretend.
-            ConnectionMessage = "Could not copy: another program is holding the clipboard. Try again.";
-        }
-    }
-
-    /// <summary>
-    /// Opens the row's folder in Explorer: the directory itself for the data directory; for a file, the file selected in its folder, or the folder when
-    /// the file is not there (yet). Decided off the UI thread (a path under a network home can be slow to answer).
-    /// </summary>
-    private async Task OpenFolderAsync(SettingsPathRow row)
-    {
-        var (target, select) = await Task.Run(() => ResolveRevealTarget(row.FullPath, row.IsDirectory)).ConfigureAwait(true);
-        if (target is null)
-        {
-            ConnectionMessage = $"Could not open the {row.Label}'s folder: it does not exist.";
-            return;
-        }
-
-        ConnectionMessage = _platform.Reveal(target, select)
-            ? $"Opened the {row.Label}'s folder in Explorer."
-            : "Could not start Explorer.";
-    }
-
-    /// <summary>What to hand Explorer for <paramref name="path"/>: the file to select, else the folder to open; null when neither exists.</summary>
-    internal static (string? Target, bool SelectFile) ResolveRevealTarget(string path, bool isDirectory)
-    {
-        if (isDirectory)
-        {
-            return Directory.Exists(path) ? (path, false) : (null, false);
-        }
-
-        if (File.Exists(path))
-        {
-            return (path, true);
-        }
-
-        var parent = Path.GetDirectoryName(path);
-        return parent is { Length: > 0 } && Directory.Exists(parent) ? (parent, false) : (null, false);
-    }
 
     // ------------------------------------------------------------------ connection: the CLI
 
@@ -591,7 +510,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     {
         if (CliFound)
         {
-            CopyText(CliResolvedPath, "Copied the defenseclaw.exe path.");
+            CopyText(MessageCard.Cli, CliResolvedPath, "Copied the defenseclaw.exe path.");
         }
     }
 
@@ -605,9 +524,9 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
 
         var path = CliResolvedPath;
         var (target, select) = await Task.Run(() => ResolveRevealTarget(path, isDirectory: false)).ConfigureAwait(true);
-        ConnectionMessage = target is not null && _platform.Reveal(target, select)
+        Say(MessageCard.Cli, target is not null && _platform.Reveal(target, select)
             ? "Showed defenseclaw.exe in Explorer."
-            : "Could not open that folder.";
+            : "Could not open that folder.");
     }
 
     // ------------------------------------------------------------------ updates
@@ -636,8 +555,11 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     [NotifyCanExecuteChangedFor(nameof(CheckNowCommand))]
     private bool _isCheckingUpdates;
 
-    /// <summary>This app's own update status and actions (the "DefenseClaw for Windows" card). See <see cref="Services.Updates.SelfUpdate.SelfUpdateViewModel"/>.</summary>
-    internal Services.Updates.SelfUpdate.SelfUpdateViewModel AppUpdate => Services.AppUpdate.ViewModel;
+    /// <summary>
+    /// This app's own update status and actions (General → "Updates — DefenseClaw for Windows (this app)"). See
+    /// <see cref="Services.Updates.SelfUpdate.SelfUpdateViewModel"/>. Public: the card binds to it, and a binding does not reach an internal property.
+    /// </summary>
+    public Services.Updates.SelfUpdate.SelfUpdateViewModel AppUpdate => Services.AppUpdate.ViewModel;
 
     /// <summary>
     /// Shows what the runtime version and the update watcher know, from memory (no network, no I/O): the watcher's last answer, the time of the last
@@ -737,6 +659,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         Services.UpdateWatcher.Changed += OnUpdateWatcherChanged;
         Services.Runtime.Changed += OnRuntimeChanged;
         AdminGateway.Attach();
+        AttachAppearance();
 
         LoadFromSettings();
         ShowGateway();
@@ -757,6 +680,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
         Services.UpdateWatcher.Changed -= OnUpdateWatcherChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;
         AdminGateway.Detach();
+        DetachAppearance();
 
         // A slider moved a moment before the page went away is saved, not lost with the timer.
         if (_intervalTimer is { IsEnabled: true })
@@ -784,13 +708,7 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     {
         Sync(() => StartWithWindows = _platform.IsAutostartEnabled());
 
-        var rows = Files.ToArray();
-        var exists = await Task.Run(() => rows.Select(row => row.IsDirectory ? Directory.Exists(row.FullPath) : File.Exists(row.FullPath)).ToArray()).ConfigureAwait(true);
-        for (var i = 0; i < rows.Length; i++)
-        {
-            rows[i].Exists = exists[i];
-        }
-
+        await RefreshFilesAsync().ConfigureAwait(true);
         await RefreshCliAsync().ConfigureAwait(true);
     }
 
@@ -798,8 +716,9 @@ public sealed partial class SettingsPanelViewModel : PanelViewModelBase
     {
         // The palette's recents and the sidebar's "seen" markers are not on this page, and a command run from the palette (or a marker the
         // sidebar moves or baselines in the background, CUST-265) while this page is open would write them: copying the store into the form
-        // then would wipe what is half typed in a field that waits for its Apply (the archive path, the developer runtime).
-        if ((e.Sections & ~(AppSettingsSections.Palette | AppSettingsSections.Seen)) == AppSettingsSections.None)
+        // then would wipe what is half typed in a field that waits for its Apply (the archive path, the developer runtime). The appearance is on
+        // this page (General) but follows the appearance service, not the store, so Ctrl+Shift+L while a field is half typed leaves it alone too.
+        if ((e.Sections & ~(AppSettingsSections.Palette | AppSettingsSections.Seen | AppSettingsSections.Appearance)) == AppSettingsSections.None)
         {
             return;
         }

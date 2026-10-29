@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Appearance;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -45,6 +46,12 @@ internal sealed class SettingsPlatform
 
     /// <summary>Opens the Updates window (or brings it forward).</summary>
     public Action<AppServices> OpenUpdates { get; init; } = services => Views.Updates.UpdatesWindow.Show(services);
+
+    /// <summary>
+    /// The app's look (style and light/dark), as the title bar's Appearance flyout drives it: the running <see cref="AppearanceService"/>, which
+    /// keeps the choice in the <c>appearance</c> section of the same settings file. Null in a host built without one (Settings then hides the card).
+    /// </summary>
+    public Func<IAppearanceControl?> Appearance { get; init; } = () => AppearanceService.Current;
 
     private static string? PickFolderWithDialog(string title, string? startDirectory)
     {
