@@ -329,58 +329,91 @@ public sealed class NavigationShellWindowTests : IDisposable
     }
 
     [Fact]
-    public async Task A_count_badge_ends_before_the_scroll_bar_of_a_sidebar_that_scrolls_and_the_entries_take_the_width_back_when_it_goes()
+    public async Task A_count_badge_stays_clear_of_the_scroll_bar_of_a_sidebar_that_scrolls_and_folded_it_is_a_dot_on_its_icon()
     {
         var window = await OpenAsync(980, 692);
         var nav = window.RootNavigation;
-        DynamicScrollViewer viewer = null!;
-        DynamicScrollBar bar = null!;
-        InfoBadge badge = null!;
-
-        UiThread.Run(() =>
+        var (activity, viewer, bar) = UiThread.Run(() =>
         {
-            // A "9" on Activity, as an unread count shows it (CUST-265): the capsule sits at the entry's right edge.
-            var activity = nav.MenuItems.OfType<DcNavigationItem>().First(item => AutomationProperties.GetName(item) == "Activity");
-            badge = (InfoBadge)activity.InfoBadge!;
-            badge.Value = "9";
-            badge.Visibility = Visibility.Visible;
-            viewer = VisualTree.Find<DynamicScrollViewer>(nav, candidate => candidate.Name == "PART_ScrollViewer")!;
-            bar = VisualTree.Find<DynamicScrollBar>(viewer, candidate => candidate.Name == "PART_VerticalScrollBar")!;
+            var entry = nav.MenuItems.OfType<DcNavigationItem>().First(item => AutomationProperties.GetName(item) == "Activity");
+            var scroller = VisualTree.Find<DynamicScrollViewer>(nav, candidate => candidate.Name == "PART_ScrollViewer")!;
+            return (entry, scroller, VisualTree.Find<DynamicScrollBar>(scroller, candidate => candidate.Name == "PART_VerticalScrollBar")!);
         });
-        UiThread.Run(UiThread.Settle);
 
-        double BadgeRight() => badge.TranslatePoint(new Point(badge.ActualWidth, 0), nav).X;
-        double BarLeft() => bar.TranslatePoint(new Point(0, 0), nav).X;
+        // Two runs in the runner's list, and Activity not yet visited: its "new since last visit" capsule (CUST-265) reads 2.
+        var unread = _services.UnreadCounts;
+        _ = _services.Cli.RecordHandOff("defenseclaw", new[] { "keys", "set" }, "synthetic entry");
+        _ = _services.Cli.RecordHandOff("defenseclaw", new[] { "keys", "fill-missing" }, "synthetic entry");
+        await unread.RefreshAsync();
+        UiThread.WaitFor(() => AutomationProperties.GetName(activity) == "Activity, 2 new since last visit", "Activity's capsule");
+        UiThread.Run(UiThread.Settle);
+        var badge = UiThread.Run(() => (InfoBadge)activity.InfoBadge!);
+
+        // What the badge paints (WPF-UI's capsule is a border inside a 2 DIP margin; the dot is a border), the entry's icon and the bar, in the sidebar's coordinates.
+        Rect Bounds(FrameworkElement element) => element.TransformToAncestor(nav).TransformBounds(new Rect(element.RenderSize));
+        System.Windows.Controls.Border Fill() => VisualTree.Find<System.Windows.Controls.Border>(badge)!;
+        Rect Ink() => Bounds(Fill());
+        Rect Icon() => Bounds(VisualTree.Find<System.Windows.Controls.ContentPresenter>(activity, candidate => candidate.Name == "IconContentPresenter")!);
+        double BarLeft() => Bounds(bar).Left;
 
         var cleared = UiThread.Run(() =>
         {
-            // At the Mac's small size the sidebar scrolls, and its bar is drawn over the entries: the badge must end before it (it overlapped by ~9 DIPs).
+            // At the Mac's small size the sidebar scrolls, and its bar is drawn over the entries: the capsule must end before it (it overlapped by ~9 DIPs).
             Assert.True(viewer.ScrollableHeight > 0.5, $"the sidebar should scroll at 980x692 (it scrolls {viewer.ScrollableHeight:0.#} DIPs)");
             Assert.True(bar.IsVisible && bar.ActualWidth > 0, "the scroll bar should show while the sidebar scrolls");
-            Assert.True(BadgeRight() <= BarLeft(), $"the badge ends at {BadgeRight():0.#} but the scroll bar starts at {BarLeft():0.#}");
+            Assert.Equal("2", badge.Value);
+            Assert.True(Ink().Right <= BarLeft(), $"the capsule ends at {Ink().Right:0.#} but the scroll bar starts at {BarLeft():0.#}");
             return viewer.Padding.Right;
         });
         var resting = UiThread.Run(() => cleared - bar.ActualWidth);
-        Png(window, "shell-sidebar-badge-980x692");
+        Png(window, "shell-sidebar-badge-open-980x692");
 
+        // The pane slides between its widths; measure once it has arrived.
+        void SlidePane(bool open)
+        {
+            UiThread.Run(() => nav.IsPaneOpen = open);
+            UiThread.WaitFor(() => open ? viewer.ActualWidth >= nav.OpenPaneLength - 8 : viewer.ActualWidth <= nav.CompactPaneLength + 8, open ? "the pane to open" : "the pane to fold");
+            UiThread.Run(UiThread.Settle);
+        }
+
+        SlidePane(false);
         UiThread.Run(() =>
         {
-            // Folded to its icons the pane has nothing under the bar, so the entries keep their width.
-            nav.IsPaneOpen = false;
+            // Folded to its icons the pane has no room for the capsule beside the icon (it covered half the icon and ran under the bar): it is a dot in
+            // its colour on the icon's top-right corner, clear of the bar, and the entries keep their width. The count stays in the name and tooltip.
+            var dot = Ink();
+            var icon = Icon();
             Assert.Equal(resting, viewer.Padding.Right, 1);
-            nav.IsPaneOpen = true;
+            Assert.Empty(VisualTree.Descendants<System.Windows.Controls.TextBlock>(badge));
+            Assert.Equal(((SolidColorBrush)Application.Current.FindResource("InfoBadgeAttentionSeverityBackgroundBrush")).Color, ((SolidColorBrush)Fill().Background).Color);
+            Assert.InRange(dot.Width, 6, 10);
+            Assert.InRange(dot.Height, 6, 10);
+            Assert.True(dot.Right <= BarLeft(), $"the dot ends at {dot.Right:0.#} but the scroll bar starts at {BarLeft():0.#}");
+            var centre = new Point(dot.Left + (dot.Width / 2), dot.Top + (dot.Height / 2));
+            Assert.InRange(centre.X - icon.Right, -5, 5);
+            Assert.InRange(centre.Y - icon.Top, -5, 5);
+            Assert.Equal("Activity, 2 new since last visit", AutomationProperties.GetName(activity));
+            Assert.Contains("2 new since last visit", activity.ToolTip as string, StringComparison.Ordinal);
+        });
+        Png(window, "shell-sidebar-badge-folded-980x692");
+
+        SlidePane(true);
+        UiThread.Run(() =>
+        {
+            Assert.Equal("2", badge.Value);
             Assert.Equal(cleared, viewer.Padding.Right, 1);
+            Assert.True(Ink().Right <= BarLeft(), $"the capsule ends at {Ink().Right:0.#} but the scroll bar starts at {BarLeft():0.#}");
         });
 
         // Tall enough to show every entry, the bar goes and the entries reach the pane's edge again. A test machine whose screen caps the
-        // window's height may still scroll; then the badge is still clear of the bar.
+        // window's height may still scroll; then the capsule is still clear of the bar.
         UiThread.Run(() => window.Height = 900);
         UiThread.Run(UiThread.Settle);
         UiThread.Run(() =>
         {
             if (viewer.ScrollableHeight > 0.5)
             {
-                Assert.True(BadgeRight() <= BarLeft(), $"the badge ends at {BadgeRight():0.#} but the scroll bar starts at {BarLeft():0.#}");
+                Assert.True(Ink().Right <= BarLeft(), $"the capsule ends at {Ink().Right:0.#} but the scroll bar starts at {BarLeft():0.#}");
             }
             else
             {

@@ -53,10 +53,19 @@ public sealed class DcInfoBadge : InfoBadge
 /// </summary>
 internal sealed class SidebarBadge
 {
+    /// <summary>
+    /// The folded pane's dot, 8 DIPs across. WPF-UI puts a folded entry's badge at the top-right of its 40 DIP slot; this margin moves
+    /// the dot onto the top-right corner of the centred 16 DIP icon, where it ends just before the 14 DIP lane of the pane's scroll bar.
+    /// </summary>
+    private const double DotSize = 8;
+
+    private static readonly Thickness DotMargin = new(0, 9, 12, 0);
+
     private readonly DcNavigationItem _item;
     private readonly string _title;
     private readonly string _baseToolTip;
     private readonly DcInfoBadge _badge;
+    private readonly System.Windows.Controls.ControlTemplate _dot;
 
     /// <param name="item">The sidebar entry.</param>
     /// <param name="title">The entry's name without the badge ("Alerts").</param>
@@ -77,6 +86,7 @@ internal sealed class SidebarBadge
         };
 
         item.InfoBadge = _badge;
+        _dot = DotTemplate(severity);
     }
 
     /// <summary>The capsule itself (for a test or a render).</summary>
@@ -116,5 +126,39 @@ internal sealed class SidebarBadge
         {
             peer.RaisePropertyChangedEvent(AutomationElementIdentifiers.NameProperty, before, name);
         }
+    }
+
+    /// <summary>
+    /// Folded to its icons, the pane has no room for the capsule beside the icon (WPF-UI's capsule is at least 16 DIPs wide and covered
+    /// half the icon): the badge becomes a dot in its colour on the icon's corner, and the count stays in the entry's name and tooltip.
+    /// Opened, it is WPF-UI's capsule again.
+    /// </summary>
+    public void Fold(bool folded)
+    {
+        if (folded)
+        {
+            _badge.Template = _dot;
+            _badge.HorizontalAlignment = HorizontalAlignment.Right;
+            _badge.VerticalAlignment = VerticalAlignment.Top;
+            _badge.Margin = DotMargin;
+        }
+        else
+        {
+            _badge.ClearValue(System.Windows.Controls.Control.TemplateProperty);
+            _badge.ClearValue(FrameworkElement.MarginProperty);
+            _badge.HorizontalAlignment = HorizontalAlignment.Center;
+            _badge.VerticalAlignment = VerticalAlignment.Center;
+        }
+    }
+
+    /// <summary>A disc filled with the brush WPF-UI's capsule uses for <paramref name="severity"/>, by resource reference so it follows the look live.</summary>
+    private static System.Windows.Controls.ControlTemplate DotTemplate(InfoBadgeSeverity severity)
+    {
+        var disc = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
+        disc.SetValue(FrameworkElement.WidthProperty, DotSize);
+        disc.SetValue(FrameworkElement.HeightProperty, DotSize);
+        disc.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new CornerRadius(DotSize / 2));
+        disc.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, $"InfoBadge{severity}SeverityBackgroundBrush");
+        return new System.Windows.Controls.ControlTemplate(typeof(InfoBadge)) { VisualTree = disc };
     }
 }

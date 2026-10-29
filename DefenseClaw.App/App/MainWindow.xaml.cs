@@ -549,10 +549,10 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
 
         // Collapsed, the sidebar is a 40 px icon strip and a heading's text would be cut off mid-word
         // ("Gove", "Disc"). The heading keeps its height (so the groups stay visibly apart) and its
-        // accessible name; only the text is hidden.
-        RootNavigation.PaneOpened += (_, _) => ShowGroupHeadings(true);
-        RootNavigation.PaneClosed += (_, _) => ShowGroupHeadings(false);
-        ShowGroupHeadings(RootNavigation.IsPaneOpen);
+        // accessible name; only the text is hidden. The badges become dots on their icons' corners.
+        RootNavigation.PaneOpened += (_, _) => FitSidebarToPane(true);
+        RootNavigation.PaneClosed += (_, _) => FitSidebarToPane(false);
+        FitSidebarToPane(RootNavigation.IsPaneOpen);
 
         // The panel a navigation request raised before this window existed is waiting for, else the default one.
         RootNavigation.SetPageProviderService(_catalog);
@@ -624,11 +624,16 @@ public partial class MainWindow : FluentWindow, IDashboardWindow
     /// <summary>The title bar's sidebar toggle (CUST-383; the sidebar's own toggle row is gone): folds the sidebar to its icons, or opens it again.</summary>
     private void OnSidebarToggleClick(object sender, RoutedEventArgs e) => RootNavigation.IsPaneOpen = !RootNavigation.IsPaneOpen;
 
-    private void ShowGroupHeadings(bool paneOpen)
+    private void FitSidebarToPane(bool paneOpen)
     {
         foreach (var header in _navigationHeaders)
         {
             header.Opacity = paneOpen ? 1 : 0;
+        }
+
+        foreach (var badge in new[] { _alertsBadge, _overviewBadge }.Concat(_unreadBadges.Values))
+        {
+            badge?.Fold(!paneOpen);
         }
     }
 
