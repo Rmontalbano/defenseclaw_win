@@ -514,6 +514,12 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     private void ApplyProbeAnswers()
     {
+        // Posted while the hub was on screen, run after it left: the hub listens to nothing off screen, and OnActivated catches up.
+        if (!IsActive)
+        {
+            return;
+        }
+
         var moved = SyncLocalStack();
         moved |= SyncTerraform();
         if (moved)
