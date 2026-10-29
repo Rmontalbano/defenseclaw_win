@@ -1151,12 +1151,14 @@
                                            Padding="6,3,6,3"
                                            Command="{Binding ClearScopeCommand}"
                                            AutomationProperties.HelpText="Go back to every connector." />
-                                <ui:Button Content="{Binding ScopedAlertsText}"
-                                           Appearance="Transparent" BorderThickness="0"
+                                <!-- The connector's name is in it: a TextBlock, so a "_" in a name is not an access key. -->
+                                <ui:Button Appearance="Transparent" BorderThickness="0"
                                            Foreground="{DynamicResource DcAccentBrush}"
                                            Padding="6,3,6,3"
                                            Command="{Binding OpenScopedAlertsCommand}"
-                                           AutomationProperties.HelpText="Opens the Alerts panel." />
+                                           AutomationProperties.HelpText="Opens the Alerts panel.">
+                                    <TextBlock Text="{Binding ScopedAlertsText}" />
+                                </ui:Button>
                             </StackPanel>
                         </Grid>
                     </StackPanel>

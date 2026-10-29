@@ -132,7 +132,7 @@
                         <CheckBox Content="Force: overwrite an existing plugin of the same name"
                                   IsChecked="{Binding InstallForce, Mode=TwoWay}" />
                         <CheckBox Margin="0,6,0,0"
-                                  Content="Apply the configured plugin_actions policy based on scan severity"
+                                  Content="Apply the configured plugin__actions policy based on scan severity"
                                   IsChecked="{Binding InstallApplyActionPolicy, Mode=TwoWay}" />
 
                         <TextBlock Style="{StaticResource DcToneText}"

@@ -135,10 +135,12 @@
                                     <DataTemplate>
                                         <StackPanel Margin="0,2,0,2">
                                             <StackPanel Orientation="Horizontal">
+                                                <!-- A connector the app has no name for is labelled by the runtime's card title: a TextBlock, so a "_" is not an access key. -->
                                                 <CheckBox MinWidth="220"
-                                                          Content="{Binding Label}"
                                                           IsChecked="{Binding IsRegistered, Mode=TwoWay}"
-                                                          AutomationProperties.Name="{Binding Label, StringFormat='Register DefenseClaw for {0}'}" />
+                                                          AutomationProperties.Name="{Binding Label, StringFormat='Register DefenseClaw for {0}'}">
+                                                    <TextBlock Text="{Binding Label}" />
+                                                </CheckBox>
                                                 <CheckBox Content="Enforce"
                                                           IsChecked="{Binding IsAction, Mode=TwoWay}"
                                                           IsEnabled="{Binding IsRegistered}"

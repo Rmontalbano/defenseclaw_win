@@ -278,14 +278,16 @@
                                Text="{Binding HiddenText}" />
                 </Border>
 
+                <!-- The run id is the runtime's, so a TextBlock shows it: a string Content would make a "_" in it an access key. -->
                 <ui:Button Margin="0,0,12,8"
                            Appearance="Secondary"
                            Icon="{ctl:DcSymbolIcon Dismiss12}"
-                           Content="{Binding RunFilterText}"
                            Command="{Binding ClearRunFilterCommand}"
                            ToolTip="Showing one run's events. Click to show every run again."
                            AutomationProperties.Name="Clear the run filter"
-                           Visibility="{Binding HasRunFilter, Converter={StaticResource BoolToVisibility}}" />
+                           Visibility="{Binding HasRunFilter, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding RunFilterText}" />
+                </ui:Button>
 
                 <!-- Live: when the list was last known to be current (the panel looks every few seconds while it is on screen), or why it stopped looking. -->
                 <TextBlock Style="{StaticResource DcCaption}"

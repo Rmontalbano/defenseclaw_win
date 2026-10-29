@@ -216,10 +216,13 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
+                            <!-- A component name comes from the log, so it is shown by a TextBlock: a string Content would make a "_" its access key. -->
                             <CheckBox MinWidth="0"
-                                      Content="{Binding Name}"
                                       IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                      AutomationProperties.HelpText="Shows or hides log lines from this component." />
+                                      AutomationProperties.Name="{Binding Name}"
+                                      AutomationProperties.HelpText="Shows or hides log lines from this component.">
+                                <TextBlock Text="{Binding Name}" />
+                            </CheckBox>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
