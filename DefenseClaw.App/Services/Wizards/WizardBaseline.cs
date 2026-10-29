@@ -26,7 +26,7 @@ namespace DefenseClaw.App.Services.Wizards;
 /// not a number for a numeric flag, is left alone rather than forced into a control that cannot show it.
 /// </para>
 /// </summary>
-public static class WizardBaseline
+public static partial class WizardBaseline
 {
     /// <summary>What a configuration says about one flag, and whether that value is also "what omission leaves".</summary>
     private sealed record Fact(string Value, bool IsBaseline);
@@ -63,6 +63,10 @@ public static class WizardBaseline
                 Replace(definition, GuardrailFacts(yaml), "config.yaml → guardrail"),
                 GuardrailScopeContext.From(config, yaml.Get("guardrail", "mode"))),
             "llm" => RequireProviderAndModel(Replace(definition, LlmFacts(yaml), "config.yaml → llm"), yaml),
+
+            // The scanner wizards (CUST-390) are in WizardBaseline.Scanners.cs.
+            "skill-scanner" => ApplySkillScanner(definition, yaml),
+            "mcp-scanner" => ApplyMcpScanner(definition, yaml),
             _ => definition,
         };
     }
@@ -417,6 +421,25 @@ public static class WizardBaseline
             return node is null or IDictionary<object, object> or System.Collections.IEnumerable and not string
                 ? null
                 : Convert.ToString(node, CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>The scalars of the sequence at <paramref name="path"/> as text, or null when absent or not a sequence of scalars.</summary>
+        public IReadOnlyList<string>? GetList(params string[] path)
+        {
+            object? node = _root;
+            foreach (var segment in path)
+            {
+                node = node is IDictionary<object, object> map
+                    ? map.FirstOrDefault(pair => string.Equals(Convert.ToString(pair.Key, CultureInfo.InvariantCulture), segment, StringComparison.OrdinalIgnoreCase)).Value
+                    : null;
+            }
+
+            if (node is not IList<object> items || items.Any(static i => i is IDictionary<object, object> or IList<object>))
+            {
+                return null;
+            }
+
+            return items.Select(static i => Convert.ToString(i, CultureInfo.InvariantCulture) ?? string.Empty).ToArray();
         }
     }
 }

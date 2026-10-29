@@ -283,9 +283,9 @@ public class WizardBaselineTests
     {
         var other = new WizardDefinition
         {
-            Target = "skill-scanner",
-            Title = "Skill scanner",
-            Group = WizardGroups.Scanners,
+            Target = "rotate-token",
+            Title = "Rotate token",
+            Group = WizardGroups.Other,
             Steps = new[]
             {
                 new WizardStep
