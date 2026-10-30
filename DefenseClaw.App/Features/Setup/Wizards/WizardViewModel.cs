@@ -1169,6 +1169,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 .Concat(SplunkDashboardsReview.Warnings(argv))
                 .Concat(WizardCautions.For(argv))
                 .Concat(CodexRunningWarnings(argv))
+                .Concat(CodexHomeWarnings(argv))
                 .ToArray(),
         };
         review = SecretFieldWarnings.AppendTo(review, new[] { WizardReview.SecretValueWarning(argv) });

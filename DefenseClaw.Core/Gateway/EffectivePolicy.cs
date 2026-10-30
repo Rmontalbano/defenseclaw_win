@@ -35,6 +35,8 @@ public enum EffectivePolicyStatus
 /// <param name="Digest"><c>policy.effective_digest</c> of the live generation; empty when <c>/health</c> did not publish it.</param>
 /// <param name="Generation"><c>policy.generation</c>; empty when <c>/health</c> did not publish it.</param>
 /// <param name="Warnings">The gateway's own sentences about this resolution, cut and capped.</param>
+/// <param name="RefusedPaths">1.0.5's <c>refused_paths</c>: the request paths (<c>hook</c>, <c>inspect</c>, <c>sandbox</c>) this account's identity is refused on; empty from a gateway that does not say.</param>
+/// <param name="SandboxRefusedReason">1.0.5's <c>sandbox_refused_reason</c>: why a sandbox run of this account is refused while its hook and inspect requests are not; empty when it is not.</param>
 public sealed record EffectivePolicy(
     bool ProfilesConfigured,
     string Profile,
@@ -45,7 +47,13 @@ public sealed record EffectivePolicy(
     string RulePack,
     string Digest,
     string Generation,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<string>? RefusedPaths = null,
+    string SandboxRefusedReason = "")
+{
+    /// <summary>The request paths the account is refused on; never null.</summary>
+    public IReadOnlyList<string> RefusedOn => RefusedPaths ?? Array.Empty<string>();
+}
 
 /// <summary>The outcome of one read: the policy, or the sentence that says why there is none.</summary>
 public sealed record EffectivePolicyRead(EffectivePolicyStatus Status, EffectivePolicy? Policy, string Message)
@@ -77,6 +85,11 @@ public static class EffectivePolicyReader
 
     private const int MaxWarnings = 4;
     private const int MaxFieldLength = 160;
+    private const int MaxReasonLength = 320;
+    private const int MaxPaths = 4;
+
+    // guardrail_profile.go (1.0.5) writes refused_paths from explainOnRequestPaths: "hook" and "inspect" when one of them refuses, ["sandbox"] beside sandbox_refused_reason.
+    private static readonly string[] KnownPaths = ["hook", "inspect", "sandbox"];
 
     /// <summary>The path and query for <paramref name="user"/> and <paramref name="connector"/> (either may be empty: the gateway then resolves without it).</summary>
     public static string Path(string user, string connector)
@@ -142,7 +155,9 @@ public static class EffectivePolicyReader
             if (root.TryGetProperty("refused", out var refused) && refused.ValueKind == JsonValueKind.True)
             {
                 var reason = Text(root, "refused_reason");
-                return EffectivePolicyRead.Failed("The gateway refused to resolve a profile" + (reason.Length > 0 ? ": " + reason : "."));
+                var on = Paths(root);
+                var where = on.Count > 0 ? " for " + string.Join(" and ", on) + " requests" : string.Empty;
+                return EffectivePolicyRead.Failed("The gateway refused to resolve a profile" + where + (reason.Length > 0 ? ": " + reason : "."));
             }
 
             if (profile.Length == 0)
@@ -156,6 +171,10 @@ public static class EffectivePolicyReader
             return EffectivePolicyRead.Failed("The gateway returned no effective policy.");
         }
 
+        // 1.0.5: a sandbox run of the account is refused while its hook and inspect requests are not. The gateway also says so as a warning; the card has
+        // a row for it instead, so the same sentence is not on it twice.
+        var sandboxReason = Text(root, "sandbox_refused_reason", MaxReasonLength);
+
         var warnings = new List<string>();
         if (root.TryGetProperty("warnings", out var list) && list.ValueKind == JsonValueKind.Array)
         {
@@ -163,6 +182,11 @@ public static class EffectivePolicyReader
             {
                 if (item.ValueKind == JsonValueKind.String && Cut(AiRuntimeJson.Prose(item.GetString(), 320), 320) is { Length: > 0 } warning && warnings.Count < MaxWarnings)
                 {
+                    if (sandboxReason.Length > 0 && warning.StartsWith("a sandbox run of this account for ", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     warnings.Add(warning);
                 }
             }
@@ -178,7 +202,9 @@ public static class EffectivePolicyReader
             Text(effective, "rule_pack_dir").Length > 0 ? Text(effective, "rule_pack_dir") : Text(effective, "rule_pack"),
             identity?.Digest ?? Text(root, "digest"),
             identity?.Generation ?? string.Empty,
-            warnings);
+            warnings,
+            Paths(root),
+            sandboxReason);
         return new EffectivePolicyRead(EffectivePolicyStatus.Ok, policy, string.Empty);
     }
 
@@ -198,10 +224,22 @@ public static class EffectivePolicyReader
         return digest.Length == 0 && generation.Length == 0 ? null : (digest, generation);
     }
 
-    private static string Text(JsonElement element, string name) =>
+    private static string Text(JsonElement element, string name, int limit = MaxFieldLength) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? Cut(AiRuntimeJson.Prose(value.GetString(), MaxFieldLength), MaxFieldLength)
+            ? Cut(AiRuntimeJson.Prose(value.GetString(), limit), limit)
             : string.Empty;
+
+    /// <summary><c>refused_paths</c>: the request paths this runtime names, in the order it wrote them; nothing it did not mean (a name this app does not know is dropped).</summary>
+    private static IReadOnlyList<string> Paths(JsonElement root) =>
+        root.TryGetProperty("refused_paths", out var list) && list.ValueKind == JsonValueKind.Array
+            ? list.EnumerateArray()
+                .Where(static i => i.ValueKind == JsonValueKind.String)
+                .Select(static i => i.GetString() ?? string.Empty)
+                .Where(static p => KnownPaths.Contains(p, StringComparer.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .Take(MaxPaths)
+                .ToArray()
+            : Array.Empty<string>();
 
     private static string Cut(string text, int limit) => text.Length <= limit ? text : text[..limit];
 }

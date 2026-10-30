@@ -345,6 +345,13 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.ObserveBlocksSelfChange);
         }
 
+        // 1.0.5 ACP guard health and the linked Codex home refusal: no screen worth probing, so the version decides, on the same terms as 1.0.4 above.
+        if (identity.ParsedVersion is { } acp105 && acp105 >= Release105 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.AcpGuardHealth);
+            present.Add(RuntimeCapability.CodexHomeLinkRefusal);
+        }
+
         if (HasAll(setup, RegistryMarkers))
         {
             present.Add(RuntimeCapability.TuiRegistry);

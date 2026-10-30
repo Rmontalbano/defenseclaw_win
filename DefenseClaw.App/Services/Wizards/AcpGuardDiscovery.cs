@@ -15,6 +15,7 @@ namespace DefenseClaw.App.Services.Wizards;
 /// <param name="HasManagedFlags">The CLI's <c>acp setup</c> has <c>--managed</c>, <c>--runtime-data-dir</c> and <c>--token-file</c> (true when its help was not read: 1.0.4's does).</param>
 /// <param name="ChoiceNote">Where the editor and agent lists came from, and what the catalog lists that this CLI would refuse.</param>
 /// <param name="ProfileNote">Where the profile list came from.</param>
+/// <param name="Status"><c>acp status --json</c> as read on a 1.0.5 runtime (CUST-401); null where it was not read (an older runtime).</param>
 public sealed record AcpGuardContext(
     IReadOnlyList<WizardChoice> Clients,
     IReadOnlyList<WizardChoice> Agents,
@@ -22,7 +23,8 @@ public sealed record AcpGuardContext(
     string HelpText,
     bool HasManagedFlags,
     string ChoiceNote,
-    string ProfileNote)
+    string ProfileNote,
+    AcpRead<AcpGuardStatus>? Status = null)
 {
     /// <summary>
     /// The profile the wizard starts on: the gateway's <c>acp.default_profile</c> when it is one of the profiles, else the CLI's own default
@@ -64,11 +66,15 @@ public static class AcpGuardDiscovery
     /// <summary>The words of the help screen read: <c>defenseclaw acp setup --help</c>.</summary>
     public static IReadOnlyList<string> HelpPath => AcpGuardArgv.CommandWords;
 
-    /// <summary>Reads the three sources in parallel. Never throws for a failed source; <paramref name="cancellationToken"/> stops the wait.</summary>
+    /// <summary>
+    /// Reads the three sources in parallel, and the guard's status when <paramref name="readStatus"/> is given (a 1.0.5 runtime: <c>acp status --json</c>, a
+    /// background read). Never throws for a failed source; <paramref name="cancellationToken"/> stops the wait.
+    /// </summary>
     public static async Task<AcpGuardContext> ReadAsync(
         Func<IReadOnlyList<string>, CancellationToken, Task<HelpProbeResult>> readHelp,
         Func<string, int, CancellationToken, Task<GatewayResult<JsonDocument>>> fetch,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Func<CancellationToken, Task<AcpRead<AcpGuardStatus>>>? readStatus = null)
     {
         ArgumentNullException.ThrowIfNull(readHelp);
         ArgumentNullException.ThrowIfNull(fetch);
@@ -76,13 +82,15 @@ public static class AcpGuardDiscovery
         var help = readHelp(HelpPath, cancellationToken);
         var catalog = fetch(AcpGuardReader.CatalogRoute, AcpGuardReader.MaxBytes, cancellationToken);
         var profiles = fetch(AcpGuardReader.ProfilesRoute, AcpGuardReader.MaxBytes, cancellationToken);
+        var status = readStatus?.Invoke(cancellationToken);
 
         var helpResult = await help.ConfigureAwait(false);
         var catalogResult = await catalog.ConfigureAwait(false);
         var profilesResult = await profiles.ConfigureAwait(false);
+        var statusResult = status is null ? null : await status.ConfigureAwait(false);
         try
         {
-            return From(helpResult, AcpGuardReader.Catalog(catalogResult), AcpGuardReader.Profiles(profilesResult));
+            return From(helpResult, AcpGuardReader.Catalog(catalogResult), AcpGuardReader.Profiles(profilesResult), statusResult);
         }
         finally
         {
@@ -92,7 +100,7 @@ public static class AcpGuardDiscovery
     }
 
     /// <summary>Puts the three answers together. Pure: what a test hands it is all it looks at.</summary>
-    public static AcpGuardContext From(HelpProbeResult help, AcpRead<AcpCatalog> catalog, AcpRead<AcpProfiles> profiles)
+    public static AcpGuardContext From(HelpProbeResult help, AcpRead<AcpCatalog> catalog, AcpRead<AcpProfiles> profiles, AcpRead<AcpGuardStatus>? status = null)
     {
         ArgumentNullException.ThrowIfNull(help);
         ArgumentNullException.ThrowIfNull(catalog);
@@ -124,7 +132,7 @@ public static class AcpGuardDiscovery
             _ => "Profiles: not read from the gateway (" + profiles.Message.TrimEnd('.') + "), so type the name (the CLI's default is \"default\").",
         };
 
-        return new AcpGuardContext(clients, agents, loaded, help.Succeeded ? help.Text : string.Empty, hasManaged, choiceNote, profileNote);
+        return new AcpGuardContext(clients, agents, loaded, help.Succeeded ? help.Text : string.Empty, hasManaged, choiceNote, profileNote, status);
     }
 
     /// <summary>"Zed (zed) · tested".</summary>

@@ -114,6 +114,19 @@ public enum RuntimeCapability
     /// says observe, or fail-mode open, "never blocks" is wrong from this release on. Judged from the runtime's version (1.0.5 or later).
     /// </summary>
     ObserveBlocksSelfChange,
+
+    /// <summary>
+    /// ACP guard health that can be believed (1.0.5): <c>acp status --json</c> and <c>acp verify</c> report a binding healthy only for a lock and agent the guard
+    /// starts, and name the editor entries that start the guard with the lock (cmd_acp.py <c>_verify_binding</c>, <c>_pinned_entry_problem</c>). The ACP Guard
+    /// window shows the read-only status on it; 1.0.4 and earlier keep the wizard alone. Judged from the version (1.0.5 or later).
+    /// </summary>
+    AcpGuardHealth,
+
+    /// <summary>
+    /// Codex setup refuses a <c>.codex</c> home that is a symbolic link or junction before it changes anything (1.0.5, <c>codexHomeLinkRefusal</c>), so the
+    /// Codex wizard can say so before its review. Judged from the version (1.0.5 or later).
+    /// </summary>
+    CodexHomeLinkRefusal,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -152,6 +165,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.Config104Keys => "Config keys of 1.0.4",
         RuntimeCapability.SavedFailModeWins => "A saved per-user fail mode wins (1.0.5)",
         RuntimeCapability.ObserveBlocksSelfChange => "Observe blocks changes to DefenseClaw's own files (1.0.5)",
+        RuntimeCapability.AcpGuardHealth => "ACP guard status and verify of 1.0.5",
+        RuntimeCapability.CodexHomeLinkRefusal => "Codex setup refuses a linked .codex home",
         _ => capability.ToString(),
     };
 
@@ -183,6 +198,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.Config104Keys => "the runtime reports version 1.0.4 or later and lists its commands (mcp_scanner.unverified_server, openshell.trusted_ca_bundle and the Splunk local_stack record are in its schema)",
         RuntimeCapability.SavedFailModeWins => "the runtime reports version 1.0.5 or later and lists its commands (a saved per-user hook_fail_mode wins over the policy tier, which decides only when nothing is saved)",
         RuntimeCapability.ObserveBlocksSelfChange => "the runtime reports version 1.0.5 or later and lists its commands (observe mode blocks a proven change to DefenseClaw's own active state, and a call the gateway did not answer in time is blocked in every tier)",
+        RuntimeCapability.AcpGuardHealth => "the runtime reports version 1.0.5 or later and lists its commands ('acp status --json' and 'acp verify' report healthy only for a lock and agent the guard starts)",
+        RuntimeCapability.CodexHomeLinkRefusal => "the runtime reports version 1.0.5 or later and lists its commands (setup codex refuses a .codex home that is a link or junction before it changes anything)",
         _ => string.Empty,
     };
 }

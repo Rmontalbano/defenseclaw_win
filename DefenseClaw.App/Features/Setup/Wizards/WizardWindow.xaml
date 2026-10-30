@@ -113,6 +113,56 @@
                                 IsOpen="{Binding HasBaselineWarning, Mode=OneWay}"
                                 Message="{Binding BaselineWarning}" />
 
+                    <!-- Before the review (CUST-401): setup codex on a 1.0.5 runtime whose Codex home is a link, which that setup refuses. -->
+                    <ui:InfoBar Margin="{StaticResource DcCardGap}"
+                                IsClosable="False"
+                                Severity="Warning"
+                                Title="Codex home is a link"
+                                IsOpen="{Binding HasPreflightWarning, Mode=OneWay}"
+                                Message="{Binding PreflightWarning}" />
+
+                    <!-- Read-only facts the wizard opened with (CUST-401): the ACP Guard's pairs and whether each is healthy. Rows, not fields: nothing here is answered. -->
+                    <Border Style="{StaticResource DcCard}"
+                            Margin="{StaticResource DcCardGap}"
+                            Visibility="{Binding HasInfoBlock, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource FieldName}"
+                                       Margin="0,0,0,6"
+                                       Text="{Binding InfoBlock.Title}" />
+                            <ItemsControl ItemsSource="{Binding InfoBlock.Lines}"
+                                          Grid.IsSharedSizeScope="True"
+                                          AutomationProperties.Name="{Binding InfoBlock.Title}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2,0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" MinWidth="130" SharedSizeGroup="InfoLabel" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Style="{StaticResource DcBody}"
+                                                       Margin="0,0,12,0"
+                                                       TextWrapping="NoWrap"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding Label}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Style="{StaticResource DcToneText}"
+                                                       FontSize="{DynamicResource DcFontSize}"
+                                                       FontWeight="Normal"
+                                                       TextWrapping="Wrap"
+                                                       Tag="{Binding ToneKey}"
+                                                       Text="{Binding Value}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource DcCaption}"
+                                       Margin="0,6,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding InfoBlockNote}" />
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Margin="{StaticResource DcCardGap}"
                                Style="{StaticResource DcCaption}"
                                Visibility="{Binding HasBaselineNote, Converter={StaticResource BoolToVisibility}}"

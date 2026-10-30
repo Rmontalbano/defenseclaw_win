@@ -1,0 +1,36 @@
+{
+  "bindings": {
+    "jetbrains/copilot": {
+      "healthy": true,
+      "mode": "action",
+      "problems": [],
+      "profile": "locked",
+      "profile_source": "binding"
+    },
+    "zed/kiro": {
+      "healthy": false,
+      "mode": "observe",
+      "problems": [
+        "editor entry 'kiro-2' starts the guard with this pair's contract lock, which pins only the entries setup wrote, so the guard refuses to start",
+        "the 'defenseclaw-kiro' entry changed after setup (the contract lock pins it)"
+      ],
+      "profile": "default",
+      "profile_source": "inherited"
+    }
+  },
+  "clients": {
+    "jetbrains": "C:\\Users\\operator\\.jetbrains\\acp.json",
+    "zed": "C:\\Users\\operator\\AppData\\Roaming\\Zed\\settings.json"
+  },
+  "configured_agents": [
+    "copilot",
+    "kiro"
+  ],
+  "configured_clients": [
+    "jetbrains",
+    "zed"
+  ],
+  "default_profile": "default",
+  "enabled": true,
+  "mode": "observe"
+}

@@ -377,6 +377,9 @@ public sealed partial class WizardDefinition
     /// </summary>
     public string BaselineNote { get; init; } = string.Empty;
 
+    /// <summary>Read-only facts shown above the first page (the ACP Guard's current pairs and their health, CUST-401); null for every other wizard. Not carried by <see cref="With"/>: only a wizard built whole sets it.</summary>
+    public WizardInfoBlock? InfoBlock { get; init; }
+
     /// <summary>
     /// A caution about the pre-fill itself — set when the configuration could not be read, so the
     /// wizard cannot see what a setting currently is and an omitted flag may reset it. Shown as a warning

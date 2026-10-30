@@ -1,0 +1,33 @@
+{
+  "bindings": {
+    "zed/kiro": {
+      "healthy": true,
+      "mode": "observe",
+      "problems": [],
+      "profile": "default",
+      "profile_source": "inherited"
+    },
+    "jetbrains/copilot": {
+      "healthy": true,
+      "mode": "action",
+      "problems": [],
+      "profile": "locked",
+      "profile_source": "binding"
+    }
+  },
+  "clients": {
+    "jetbrains": "C:\\Users\\operator\\.jetbrains\\acp.json",
+    "zed": "C:\\Users\\operator\\AppData\\Roaming\\Zed\\settings.json"
+  },
+  "configured_agents": [
+    "copilot",
+    "kiro"
+  ],
+  "configured_clients": [
+    "jetbrains",
+    "zed"
+  ],
+  "default_profile": "default",
+  "enabled": true,
+  "mode": "observe"
+}

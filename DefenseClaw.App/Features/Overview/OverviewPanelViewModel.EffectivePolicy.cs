@@ -182,6 +182,9 @@ public sealed partial class OverviewPanelViewModel
         }
     }
 
+    /// <summary>The honest half of the sandbox row: the refusal is real, and it changes nothing here.</summary>
+    internal const string SandboxNotSupported = "DefenseClaw for Windows does not support sandboxes, so this has no effect on this PC.";
+
     private static List<ConfigRow> EffectivePolicyRowsOf(EffectivePolicy policy, string connector)
     {
         var rows = new List<(string Label, string Value)>
@@ -196,6 +199,11 @@ public sealed partial class OverviewPanelViewModel
         Add(rows, "Rule pack", policy.RulePack);
         Add(rows, "Policy digest", policy.Digest);
         Add(rows, "Generation", policy.Generation);
+
+        // 1.0.5 (CUST-401): the account would be refused on a sandbox run. Sandboxes are not supported on Windows, and the row says so rather than alarm.
+        Add(rows, "Sandbox runs", policy.SandboxRefusedReason.Length > 0
+            ? "Refused (" + policy.SandboxRefusedReason.TrimEnd('.') + "). " + SandboxNotSupported
+            : string.Empty);
 
         return rows.Select((row, index) => new ConfigRow { Label = row.Label, Value = row.Value, Alternate = index % 2 == 1 }).ToList();
 

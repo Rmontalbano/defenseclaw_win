@@ -3,7 +3,10 @@ using System.Text.Json;
 using System.Windows;
 using DefenseClaw.App.ViewModels.Wizards;
 using DefenseClaw.App.Views.Wizards;
+using System.IO;
+using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Gateway;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Services.Wizards;
 
@@ -43,19 +46,22 @@ public static class AcpGuardWizard
     /// </summary>
     /// <param name="readHelp">Reads a CLI help screen; null is the Setup help probe (cached, no Activity entry).</param>
     /// <param name="fetch">Reads a gateway route; null is the app's verified-peer gateway client.</param>
+    /// <param name="readStatus">Reads <c>acp status --json</c>; null is the app's CLI runner on a 1.0.5 runtime and no read on an older one.</param>
     public static async Task ShowAsync(
         AppServices services,
         Window? owner = null,
         CancellationToken cancellationToken = default,
         Func<IReadOnlyList<string>, CancellationToken, Task<HelpProbeResult>>? readHelp = null,
-        Func<string, int, CancellationToken, Task<GatewayResult<JsonDocument>>>? fetch = null)
+        Func<string, int, CancellationToken, Task<GatewayResult<JsonDocument>>>? fetch = null,
+        Func<CancellationToken, Task<AcpRead<AcpGuardStatus>>>? readStatus = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         var context = await AcpGuardDiscovery.ReadAsync(
                 readHelp ?? ((path, ct) => WizardCatalog.Shared(services).Probe.CliHelpAsync(path, ct)),
                 fetch ?? ((path, max, ct) => services.Gateway.GetBoundedJsonAsync(path, max, requiresAuth: true, ct)),
-                cancellationToken)
+                cancellationToken,
+                readStatus ?? (HasGuardStatus(services) ? ct => ReadStatusAsync(services, ct) : null))
             .ConfigureAwait(true);
 
         var viewModel = new WizardViewModel(services, Build(context, services.Installation.Context.IsManaged));
@@ -65,6 +71,43 @@ public static class AcpGuardWizard
         };
 
         window.ShowDialog();
+    }
+
+    /// <summary>True on a runtime whose ACP status can be believed (<see cref="RuntimeCapability.AcpGuardHealth"/>, 1.0.5 or later) and that has the guard.</summary>
+    internal static bool HasGuardStatus(AppServices services) =>
+        services.Runtime.Check(RuntimeCapability.AcpGuard).IsAvailable && services.Runtime.Check(RuntimeCapability.AcpGuardHealth).IsAvailable;
+
+    /// <summary>
+    /// <c>defenseclaw acp status --json</c> through the app's runner, as a background read (recorded in Activity like every command, not counted as new
+    /// activity). It writes nothing; a CLI without the command is "not supported", never a fault.
+    /// </summary>
+    private static async Task<AcpRead<AcpGuardStatus>> ReadStatusAsync(AppServices services, CancellationToken cancellationToken)
+    {
+        if (CommandTiers.Classify(AcpGuardStatusReader.Argv) != CommandTier.ReadOnly)
+        {
+            throw new InvalidOperationException("The ACP status command is not a read.");
+        }
+
+        try
+        {
+            var run = await services.Cli.RunAsync(
+                    AcpGuardStatusReader.Argv,
+                    cancellationToken: cancellationToken,
+                    options: CliRunOptions.BackgroundRead with { Timeout = TimeSpan.FromSeconds(30) })
+                .ConfigureAwait(false);
+            string Lines(CliStream stream) => string.Join('\n', run.OutputLines.Where(l => l.Stream == stream).Select(static l => l.Text));
+            return run.ExitCode is { } exit
+                ? AcpGuardStatusReader.FromRun(exit, Lines(CliStream.StandardOutput), Lines(CliStream.StandardError))
+                : AcpRead<AcpGuardStatus>.Unavailable("The command did not finish (" + (run.FailureReason ?? "no result") + ").");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            return AcpRead<AcpGuardStatus>.Unavailable("The command could not be run.");
+        }
     }
 
     /// <summary>
@@ -167,6 +210,7 @@ public static class AcpGuardWizard
             IsCurated = true,
             HelpText = context.HelpText,
             BaselineNote = context.SourceNote,
+            InfoBlock = AcpGuardStatusView.Block(context.Status),
             FinalArgvBuilder = (_, values) => AcpGuardArgv.Build(RequestFrom(values)),
             CrossValidator = values => AcpGuardArgv.Problem(RequestFrom(values), managedAllowed),
         };
