@@ -161,12 +161,24 @@ public sealed class StripPresentationTests
     }
 
     [Fact]
+    public void The_running_label_never_reads_as_the_gateway_state()
+    {
+        foreach (var count in new[] { 1, 2, 9 })
+        {
+            Assert.NotEqual("Running", StripPresentation.RunningText(count));
+            Assert.EndsWith(" running", StripPresentation.RunningText(count));
+            Assert.Contains("command", StripPresentation.RunningText(count));
+        }
+    }
+
+    [Fact]
     public void Running_and_stale_are_worded_for_one_and_for_many()
     {
-        Assert.Equal("Running", StripPresentation.RunningText(1));
-        Assert.Equal("Running 4", StripPresentation.RunningText(4));
-        Assert.Equal("1 command is running. Its output is in Activity.", StripPresentation.RunningDetail(1));
-        Assert.Equal("4 commands are running. Their output is in Activity.", StripPresentation.RunningDetail(4));
+        Assert.Equal("1 command running", StripPresentation.RunningText(1));
+        Assert.Equal("4 commands running", StripPresentation.RunningText(4));
+        Assert.Equal("1 command has been running for more than a moment. Its output is in Activity.", StripPresentation.RunningDetail(1));
+        Assert.Equal("4 commands have been running for more than a moment. Their output is in Activity.", StripPresentation.RunningDetail(4));
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), StripPresentation.RunningGrace);
 
         Assert.Equal(
             "No gateway poll has finished cleanly for 20 s, more than 3 times the 5 s check interval. What this strip shows may be out of date. Refresh polls the gateway now.",

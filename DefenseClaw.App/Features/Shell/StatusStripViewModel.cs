@@ -9,7 +9,7 @@ namespace DefenseClaw.App.ViewModels;
 
 /// <summary>
 /// The chips of the shell's status strip beside the gateway pill (CUST-273): what the TUI's <c>widgets/status_strip.py</c> shows - Watchdog,
-/// Guardrail, Keys, alerts, connector, redaction, policy posture, a command running, stale data, version - from what the app already holds.
+/// Guardrail, Keys, alerts, connector, redaction, policy posture, a command running (one that has run past a short grace, not a page's quick read), stale data, version - from what the app already holds.
 /// <para>
 /// <b>Nothing here reads anything.</b> Every chip is derived from state that exists for another reason: the monitor's snapshot (<c>/health</c>:
 /// the Watchdog, Guardrail and Policy chips, the alert list, the connector roster, the version), config.yaml (policy, when the gateway does not
@@ -89,7 +89,7 @@ public sealed partial class StatusStripViewModel : ObservableObject, IDisposable
         _time = time ?? TimeProvider.System;
         _post = post ?? UiPost.ToDispatcher;
         _ownsCommands = commands is null;
-        _commands = commands ?? new CommandActivity(services.Cli, _post);
+        _commands = commands ?? new CommandActivity(services.Cli, _post, _time, StripPresentation.RunningGrace);
 
         var chips = new List<StripChip>(ChipTable.Length);
         foreach (var (key, kind, priority) in ChipTable)

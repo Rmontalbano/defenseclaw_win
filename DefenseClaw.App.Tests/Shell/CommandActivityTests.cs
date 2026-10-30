@@ -231,6 +231,68 @@ public sealed class CommandActivityTests : IDisposable
         Assert.Equal(0, tracker.Count);
     }
 
+    // ---- The grace -----------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void With_a_grace_a_command_counts_only_once_it_has_run_that_long()
+    {
+        var clock = new TickingClock();
+        using var tracker = new CommandActivity(_runner, action => action(), clock, TimeSpan.FromMilliseconds(1500));
+        var counts = new List<int>();
+        tracker.Changed += (_, _) => counts.Add(tracker.Count);
+        var run = Running("doctor");
+
+        tracker.OnStarted(null, run);
+        clock.Advance(TimeSpan.FromMilliseconds(1499));
+        Assert.Equal(0, tracker.Count);
+        Assert.Empty(counts);
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.Equal(1, tracker.Count);
+
+        InvocationFactory.Finish(run);
+        tracker.OnCompleted(null, run);
+        Assert.Equal(0, tracker.Count);
+        Assert.Equal(new[] { 1, 0 }, counts);
+        Assert.Equal(0, clock.ActiveTimers);
+    }
+
+    [Fact]
+    public void A_command_that_ends_inside_the_grace_announces_nothing_and_leaves_no_timer()
+    {
+        var clock = new TickingClock();
+        using var tracker = new CommandActivity(_runner, action => action(), clock, TimeSpan.FromMilliseconds(1500));
+        var counts = new List<int>();
+        tracker.Changed += (_, _) => counts.Add(tracker.Count);
+        var run = Running("skill", "list");
+
+        tracker.OnStarted(null, run);
+        Assert.Equal(1, clock.ActiveTimers);
+        clock.Advance(TimeSpan.FromMilliseconds(300));
+        InvocationFactory.Finish(run);
+        tracker.OnCompleted(null, run);
+        clock.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(0, tracker.Count);
+        Assert.Empty(counts);
+        Assert.Equal(0, clock.ActiveTimers);
+    }
+
+    [Fact]
+    public void Disposing_the_tracker_disarms_the_commands_still_inside_the_grace()
+    {
+        var clock = new TickingClock();
+        var tracker = new CommandActivity(_runner, action => action(), clock, TimeSpan.FromMilliseconds(1500));
+        tracker.OnStarted(null, Running("doctor"));
+        Assert.Equal(1, clock.ActiveTimers);
+
+        tracker.Dispose();
+        clock.Advance(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(0, clock.ActiveTimers);
+        Assert.Equal(0, tracker.Count);
+    }
+
     // ---- Through the real runner ---------------------------------------------------------------------------------------
 
     [Fact]

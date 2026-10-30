@@ -271,14 +271,18 @@ internal static class StripPresentation
 
     // ---- Running and stale --------------------------------------------------------------------------------------------------------------
 
-    /// <summary><c>Running</c> for one command, <c>Running 3</c> for several.</summary>
-    public static string RunningText(int count) => count <= 1 ? "Running" : $"Running {count.ToString(CultureInfo.InvariantCulture)}";
+    /// <summary>How long a command runs before the Running chip counts it: a page's own quick read of the CLI finishes inside it and never shows.</summary>
+    public static readonly TimeSpan RunningGrace = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary><c>1 command running</c>, <c>3 commands running</c>: it says what runs, so it is not read as the gateway's state.</summary>
+    public static string RunningText(int count) =>
+        count == 1 ? "1 command running" : $"{count.ToString(CultureInfo.InvariantCulture)} commands running";
 
     /// <summary>The sentence for the running chip, its tooltip and its automation name.</summary>
     public static string RunningDetail(int count) =>
         count == 1
-            ? "1 command is running. Its output is in Activity."
-            : $"{count.ToString(CultureInfo.InvariantCulture)} commands are running. Their output is in Activity.";
+            ? "1 command has been running for more than a moment. Its output is in Activity."
+            : $"{count.ToString(CultureInfo.InvariantCulture)} commands have been running for more than a moment. Their output is in Activity.";
 
     /// <summary>What the Stale chip says it means: how long since the last good poll, against the interval it is counted in.</summary>
     public static string StaleDetail(TimeSpan since, TimeSpan cadence) =>

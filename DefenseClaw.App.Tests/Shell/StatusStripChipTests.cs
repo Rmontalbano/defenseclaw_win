@@ -502,22 +502,64 @@ public sealed class StatusStripChipTests : IDisposable
 
         var chip = Chip(StripChipKey.Running);
         Assert.True(chip.IsShown);
-        Assert.Equal("Running", chip.Text);
+        Assert.Equal("1 command running", chip.Text);
         Assert.Equal("Low", chip.Tone);
-        Assert.Equal("1 command is running. Its output is in Activity.", chip.ToolTip);
+        Assert.Equal("1 command has been running for more than a moment. Its output is in Activity.", chip.ToolTip);
         Assert.Equal(chip.ToolTip, chip.AutomationName);
 
         var status = StripScene.Running("status", "--json");
         _scene.Commands.OnStarted(null, status);
-        Assert.Equal("Running 2", chip.Text);
-        Assert.Equal("2 commands are running. Their output is in Activity.", chip.ToolTip);
+        Assert.Equal("2 commands running", chip.Text);
+        Assert.Equal("2 commands have been running for more than a moment. Their output is in Activity.", chip.ToolTip);
+        Assert.Equal(chip.ToolTip, chip.AutomationName);
 
         InvocationFactory.Finish(doctor);
         _scene.Commands.OnCompleted(null, doctor);
-        Assert.Equal("Running", chip.Text);
+        Assert.Equal("1 command running", chip.Text);
 
         InvocationFactory.Finish(status);
         _scene.Commands.OnCompleted(null, status);
+        Assert.False(chip.IsShown);
+    }
+
+    [Fact]
+    public void A_command_counts_only_after_the_grace_and_a_quick_one_never_shows()
+    {
+        using var scene = new StripScene();
+        using var commands = new CommandActivity(scene.Services.Cli, action => action(), scene.Clock, StripPresentation.RunningGrace);
+        using var strip = new StatusStripViewModel(scene.Services, new FakeFreshness(), scene.Clock, action => action(), commands);
+        var chip = strip.Chip(StripChipKey.Running);
+        var shown = new List<bool>();
+        chip.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(StripChip.IsShown))
+            {
+                shown.Add(chip.IsShown);
+            }
+        };
+
+        // A page's own read: over before the grace, so the chip never appears.
+        var read = StripScene.Running("skill", "list");
+        commands.OnStarted(null, read);
+        scene.Clock.Advance(TimeSpan.FromMilliseconds(400));
+        InvocationFactory.Finish(read);
+        commands.OnCompleted(null, read);
+        scene.Clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Empty(shown);
+        Assert.Equal(0, commands.Count);
+
+        // A command still going when the grace runs out.
+        var scan = StripScene.Running("skill", "scan", "--all");
+        commands.OnStarted(null, scan);
+        scene.Clock.Advance(TimeSpan.FromMilliseconds(1499));
+        Assert.False(chip.IsShown);
+
+        scene.Clock.Advance(TimeSpan.FromMilliseconds(2));
+        Assert.True(chip.IsShown);
+        Assert.Equal("1 command running", chip.Text);
+
+        InvocationFactory.Finish(scan);
+        commands.OnCompleted(null, scan);
         Assert.False(chip.IsShown);
     }
 
