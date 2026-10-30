@@ -463,7 +463,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
     /// <c>opa test</c> on the bundled Rego (nothing written; the generic verb list calls "test" a change, which is why the check is
     /// by exact command here and not by <see cref="CommandTiers.Classify"/>).
     /// </summary>
-    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv)
+    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv, bool background = false)
     {
         ArgumentNullException.ThrowIfNull(argv);
 
@@ -476,7 +476,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
             throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only policy command, so it has to be reviewed first.");
         }
 
-        return RunCliAsync(argv, CliRunOptions.JsonRead);
+        return RunCliAsync(argv, background ? CliRunOptions.BackgroundRead : CliRunOptions.JsonRead);
     }
 
     private async Task LoadAsync()
@@ -513,7 +513,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
         CliInvocation invocation;
         try
         {
-            invocation = await RunReadAsync(_backend.ListArgv).ConfigureAwait(true);
+            invocation = await RunReadAsync(_backend.ListArgv, background: true).ConfigureAwait(true);
         }
         catch (CliNotFoundException ex)
         {
@@ -704,7 +704,7 @@ public sealed partial class PoliciesPanelViewModel : PanelViewModelBase
         CliInvocation invocation;
         try
         {
-            invocation = await RunReadAsync(_backend.ShowArgv(name)).ConfigureAwait(true);
+            invocation = await RunReadAsync(_backend.ShowArgv(name), background: true).ConfigureAwait(true);
         }
         catch (CliNotFoundException ex)
         {

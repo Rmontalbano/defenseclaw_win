@@ -117,6 +117,12 @@ public sealed record CliRunOptions
     /// </summary>
     public static CliRunOptions JsonRead { get; } = new() { RetainFullOutput = true };
 
+    /// <summary>
+    /// <see cref="JsonRead"/> for a query a page starts on its own (see <see cref="Background"/>): recorded in Activity like any run, but not
+    /// counted as new activity by the sidebar.
+    /// </summary>
+    public static CliRunOptions BackgroundRead { get; } = new() { RetainFullOutput = true, Background = true };
+
     /// <summary>An explicit ceiling for this call, overriding the runner's inferred one.</summary>
     public static CliRunOptions WithTimeout(TimeSpan timeout) => new() { Timeout = timeout };
 
@@ -211,7 +217,7 @@ public sealed record CliRunOptions
     // variables here keeps a stray log of the options useful without printing a value, redacted or not.
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
-        builder.Append(System.Globalization.CultureInfo.InvariantCulture, $"RetainFullOutput = {RetainFullOutput}, Timeout = {Timeout}, SurvivesShutdown = {SurvivesShutdown}, RefuseExpandingTargets = {RefuseExpandingTargets}, EnvironmentNames = [{string.Join(", ", EnvironmentOverlay.Keys)}]");
+        builder.Append(System.Globalization.CultureInfo.InvariantCulture, $"RetainFullOutput = {RetainFullOutput}, Timeout = {Timeout}, SurvivesShutdown = {SurvivesShutdown}, Background = {Background}, RefuseExpandingTargets = {RefuseExpandingTargets}, EnvironmentNames = [{string.Join(", ", EnvironmentOverlay.Keys)}]");
         return true;
     }
 
@@ -235,6 +241,15 @@ public sealed record CliRunOptions
     /// </para>
     /// </summary>
     public bool RetainFullOutput { get; init; }
+
+    /// <summary>
+    /// True for a read-only query the app runs on its own to fill a page (<c>&lt;noun&gt; list --json</c>, a status probe, the update check):
+    /// the run is still recorded in <see cref="CliRunner.Activity"/>, with its whole transcript, but it is not something the operator started,
+    /// so <see cref="CliInvocation.IsBackground"/> is set and the sidebar's "new since last visit" count for Activity leaves it out. Default
+    /// <c>false</c>: a run is the operator's unless the call site that issues it says otherwise, so a mutation, a wizard step, a re-run or a
+    /// button's run (Doctor, Diagnose) always counts.
+    /// </summary>
+    public bool Background { get; init; }
 
     /// <summary>
     /// How long the child may run before its whole process tree is killed.
@@ -966,6 +981,7 @@ public sealed partial class CliRunner : IDisposable
         {
             UsedStdinSecret = stdinSecret is { IsEmpty: false },
             SurvivesShutdown = survivesShutdown,
+            IsBackground = options?.Background ?? false,
             EnvironmentNames = environment.Select(e => e.Name).ToArray(),
         };
 

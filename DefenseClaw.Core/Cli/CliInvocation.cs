@@ -252,6 +252,12 @@ public sealed class CliInvocation
     public bool SurvivesShutdown { get; internal set; }
 
     /// <summary>
+    /// True when the app ran this itself to fill a page (<see cref="CliRunOptions.Background"/>) rather than the operator starting it. The
+    /// Activity panel still lists it; the sidebar's unread count for Activity does not count it.
+    /// </summary>
+    public bool IsBackground { get; internal set; }
+
+    /// <summary>
     /// Set by <see cref="CliRunner.Cancel(CliInvocation, out string)"/> the moment a cancel is
     /// accepted, before the run has finished reporting. Lets a panel show "cancelling…" between
     /// the click and the process tree actually being gone. Once the run finishes,
@@ -450,6 +456,7 @@ public sealed class CliInvocation
             UsedPromptSecret = UsedPromptSecret,
             EnvironmentNames = EnvironmentNames,
             SurvivesShutdown = SurvivesShutdown,
+            IsBackground = IsBackground,
             CancelRequested = CancelRequested,
             ProcessId = ProcessId,
         };

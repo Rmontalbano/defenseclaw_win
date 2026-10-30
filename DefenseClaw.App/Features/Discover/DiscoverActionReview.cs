@@ -67,8 +67,8 @@ internal static class DiscoverCli
                 $"'{CommandLine(argv)}' is not a read-only command, so it has to be confirmed first.");
         }
 
-        // Read-only calls here are all --json reads the panels parse, so keep their full output.
-        return services.Cli.RunAsync(argv, cancellationToken: cancellationToken, options: CliRunOptions.JsonRead);
+        // Read-only calls here are all --json reads the panels parse, so keep their full output. A panel starts them on its own: background.
+        return services.Cli.RunAsync(argv, cancellationToken: cancellationToken, options: CliRunOptions.BackgroundRead);
     }
 
     public static string Stdout(CliInvocation invocation) =>

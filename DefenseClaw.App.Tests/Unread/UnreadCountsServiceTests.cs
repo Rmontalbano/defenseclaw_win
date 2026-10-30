@@ -345,6 +345,34 @@ public sealed class UnreadCountsServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task The_apps_own_background_reads_do_not_raise_the_Activity_count_but_a_started_run_and_a_hand_off_do()
+    {
+        var scene = Scene();
+        await scene.StartAsync();
+        await scene.Service.PanelShown(Activity);
+        await scene.Service.PanelLeft(Activity);
+        await UnreadScene.ClockMovesOnAsync();
+
+        // What switching pages does: list/status reads the page starts itself. Recorded in Activity, but not new to the operator.
+        await scene.RunCmdAsync(background: true);
+        await scene.RunCmdAsync(background: true);
+        Assert.Equal(2, scene.Services.Cli.Activity.Count(i => i.IsBackground));
+        await scene.PassAsync();
+        Assert.Equal(0, scene.CountOf(Activity));
+
+        // A run the operator started, and a command handed to a terminal, are.
+        await scene.RunCmdAsync(background: false);
+        Assert.Equal(1, scene.CountOf(Activity));
+        scene.RunCommands(1);
+        Assert.Equal(2, scene.CountOf(Activity));
+
+        // And a later background read leaves the count where it is, on a tick as much as on the start event.
+        await scene.RunCmdAsync(background: true);
+        await scene.PassAsync();
+        Assert.Equal(2, scene.CountOf(Activity));
+    }
+
+    [Fact]
     public async Task A_run_raises_the_count_at_once_through_the_runners_own_start_event_not_on_a_tick()
     {
         var scene = Scene();

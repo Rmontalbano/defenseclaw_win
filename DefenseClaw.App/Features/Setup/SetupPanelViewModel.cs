@@ -991,7 +991,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
         try
         {
-            var invocation = await Services.Cli.RunAsync(new[] { "guardrail", "status" }).ConfigureAwait(true);
+            var invocation = await Services.Cli.RunAsync(new[] { "guardrail", "status" }, options: new CliRunOptions { Background = true }).ConfigureAwait(true);
             ApplyGuardrailRead(invocation);
         }
         catch (CliNotFoundException ex)

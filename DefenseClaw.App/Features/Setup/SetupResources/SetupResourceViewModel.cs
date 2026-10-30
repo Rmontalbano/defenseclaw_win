@@ -51,6 +51,7 @@ public abstract partial class SetupResourceViewModel : ObservableObject, IDispos
     private static readonly CliRunOptions Reading = CliRunOptions.WithTimeout(ReadTimeout) with
     {
         RetainFullOutput = true,
+        Background = true, // the editor starts its list and detail reads itself
         OutputLineFilter = EndpointHost.ScrubLine,
     };
 

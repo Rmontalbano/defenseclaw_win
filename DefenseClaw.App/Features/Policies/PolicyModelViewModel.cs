@@ -354,7 +354,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
 
     // ---- reading -------------------------------------------------------------------------------------------------------------
 
-    private PolicyModelReader Reader => _reader ??= _backend.Reader((argv, token) => RunReadAsync(argv, token), _files);
+    private PolicyModelReader Reader => _reader ??= _backend.Reader((argv, token) => RunReadAsync(argv, token, background: true), _files);
 
     private Task<CliInvocation> RunCliAsync(IReadOnlyList<string> argv, CliRunOptions options, CancellationToken cancellationToken) =>
         RunCli is { } run ? run(argv, options) : Services.Cli.RunAsync(argv, cancellationToken: cancellationToken, options: options);
@@ -363,7 +363,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     /// Runs one of the read-only commands the panel starts on its own (the catalog reads, a pack validation, <c>policy validate</c>). Anything
     /// else throws: this is the one door the panel starts a command through without a review, and it is not a door for a change.
     /// </summary>
-    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv, CancellationToken cancellationToken = default)
+    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv, CancellationToken cancellationToken = default, bool background = false)
     {
         ArgumentNullException.ThrowIfNull(argv);
         if (!PolicyActionGuard.IsAllowedRead(argv))
@@ -371,7 +371,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
             throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only Policies command, so it has to be reviewed first.");
         }
 
-        return RunCliAsync(argv, CliRunOptions.JsonRead, cancellationToken);
+        return RunCliAsync(argv, background ? CliRunOptions.BackgroundRead : CliRunOptions.JsonRead, cancellationToken);
     }
 
     /// <summary>

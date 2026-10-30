@@ -282,7 +282,7 @@ internal sealed class RuntimeAlertsService
     public static Func<CancellationToken, Task<RuntimeAlertFetch>> FromCli(CliRunner cli)
     {
         ArgumentNullException.ThrowIfNull(cli);
-        var options = CliRunOptions.WithTimeout(CommandTimeout) with { RetainFullOutput = true };
+        var options = CliRunOptions.WithTimeout(CommandTimeout) with { RetainFullOutput = true, Background = true };
         return async token => Interpret(await cli.RunAsync(Argv, cancellationToken: token, options: options).ConfigureAwait(false));
     }
 

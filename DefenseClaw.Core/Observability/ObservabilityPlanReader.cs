@@ -119,7 +119,7 @@ public sealed class ObservabilityPlanReader
 
         return new ObservabilityPlanReader(
             async (argv, timeout, cancellationToken) =>
-                OutputOf(await cli.RunAsync(argv, cancellationToken: cancellationToken, options: CliRunOptions.JsonRead with { Timeout = timeout }).ConfigureAwait(false)),
+                OutputOf(await cli.RunAsync(argv, cancellationToken: cancellationToken, options: CliRunOptions.BackgroundRead with { Timeout = timeout }).ConfigureAwait(false)),
             configToken,
             timeProvider);
     }

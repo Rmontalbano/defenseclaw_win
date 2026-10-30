@@ -615,8 +615,8 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
         try
         {
             // Machine-parsed: JsonRead lifts the per-invocation retention cap so a long list can't be
-            // truncated at the head and fail to parse.
-            invocation = await RunCliAsync(argv, CliRunOptions.JsonRead).ConfigureAwait(true);
+            // truncated at the head and fail to parse. The page starts it itself, so it is a background read.
+            invocation = await RunCliAsync(argv, CliRunOptions.BackgroundRead).ConfigureAwait(true);
         }
         catch (CliNotFoundException ex)
         {

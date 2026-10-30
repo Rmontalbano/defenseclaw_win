@@ -151,6 +151,9 @@ public sealed partial class RedactionViewModel : ObservableObject, IDisposable
 
     private static CliRunOptions Reading { get; } = CliRunOptions.WithTimeout(ReadTimeout) with { RetainFullOutput = true };
 
+    /// <summary>The same read when the page starts it on its own (the status card, the profile and route lists): not counted as new activity.</summary>
+    private static CliRunOptions BackgroundReading { get; } = Reading with { Background = true };
+
     /// <summary>
     /// What a run came to: its output as text when it finished with exit 0, else why it did not. Never throws for a CLI that is missing or a
     /// run that fails: those are data.
@@ -163,7 +166,7 @@ public sealed partial class RedactionViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Runs one of the six read commands without a review. Anything else throws: this is a door for reading, not for a change.
     /// </summary>
-    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv)
+    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv, bool background = false)
     {
         ArgumentNullException.ThrowIfNull(argv);
         if (!RedactionArgv.IsRead(argv))
@@ -171,7 +174,7 @@ public sealed partial class RedactionViewModel : ObservableObject, IDisposable
             throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only redaction command, so it has to be previewed or reviewed.");
         }
 
-        return RunCliAsync(argv, Reading);
+        return RunCliAsync(argv, background ? BackgroundReading : Reading);
     }
 
     /// <summary>

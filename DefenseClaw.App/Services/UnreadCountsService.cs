@@ -600,7 +600,11 @@ internal sealed class UnreadCountsService : IDisposable
         }
     }
 
-    /// <summary>Activity: the entries of the runner's list that started after the marker; with no marker, all of them (the list is this session's own).</summary>
+    /// <summary>
+    /// Activity: the entries of the runner's list that started after the marker; with no marker, all of them (the list is this session's own).
+    /// Not the app's own page reads (<see cref="CliInvocation.IsBackground"/>): those are housekeeping, listed in the panel but not "new" to the
+    /// operator, and counting them made the badge climb just from switching pages. Runs, reviewed changes, re-runs and hand-offs count.
+    /// </summary>
     private void RecountActivity()
     {
         long marker;
@@ -612,7 +616,7 @@ internal sealed class UnreadCountsService : IDisposable
         var count = 0;
         foreach (var invocation in _cli.Activity)
         {
-            if (invocation.StartedAt.UtcTicks > marker)
+            if (!invocation.IsBackground && invocation.StartedAt.UtcTicks > marker)
             {
                 count++;
             }

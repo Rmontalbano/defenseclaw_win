@@ -445,7 +445,7 @@ public sealed class UpdateChecker : IDisposable
         try
         {
             var invocation = await _services.Cli
-                .RunAsync(["--version-json"], cancellationToken: cancellationToken)
+                .RunAsync(["--version-json"], cancellationToken: cancellationToken, options: new CliRunOptions { Background = true })
                 .ConfigureAwait(false);
 
             if (invocation.ExitCode != 0)
@@ -522,7 +522,7 @@ public sealed class UpdateChecker : IDisposable
         try
         {
             var invocation = await _services.Cli
-                .RunAsync(["--version"], cancellationToken: cancellationToken)
+                .RunAsync(["--version"], cancellationToken: cancellationToken, options: new CliRunOptions { Background = true })
                 .ConfigureAwait(false);
 
             if (invocation.ExitCode != 0)

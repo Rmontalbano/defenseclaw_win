@@ -149,7 +149,7 @@ public sealed partial class RedactionViewModel
     private async Task<RedactionStatus?> ReadStatusAsync()
     {
         var argv = RedactionArgv.Read(RedactionOperation.Status, new RedactionInputs());
-        var run = await ToRunAsync(() => RunReadAsync(argv), "setup redaction status").ConfigureAwait(true);
+        var run = await ToRunAsync(() => RunReadAsync(argv, background: true), "setup redaction status").ConfigureAwait(true);
         if (!run.Ok)
         {
             StatusError = DisplayNames.Visible("The redaction policy could not be read. " + run.Error);
@@ -168,7 +168,7 @@ public sealed partial class RedactionViewModel
     private async Task<IReadOnlyList<string>?> ReadProfileNamesAsync()
     {
         var argv = RedactionArgv.Read(RedactionOperation.ProfileList, new RedactionInputs());
-        var run = await ToRunAsync(() => RunReadAsync(argv), "setup redaction profile list").ConfigureAwait(true);
+        var run = await ToRunAsync(() => RunReadAsync(argv, background: true), "setup redaction profile list").ConfigureAwait(true);
         return run.Ok && RedactionReadings.TryParseProfileList(run.Stdout, out var list, out _) && list is not null ? list.Names : null;
     }
 
@@ -181,7 +181,7 @@ public sealed partial class RedactionViewModel
         }
 
         var argv = RedactionArgv.Read(RedactionOperation.RouteList, new RedactionInputs { Destination = destination });
-        var run = await ToRunAsync(() => RunReadAsync(argv), "setup redaction route list").ConfigureAwait(true);
+        var run = await ToRunAsync(() => RunReadAsync(argv, background: true), "setup redaction route list").ConfigureAwait(true);
         if (!run.Ok)
         {
             return (null, "The routes could not be read. " + run.Error);

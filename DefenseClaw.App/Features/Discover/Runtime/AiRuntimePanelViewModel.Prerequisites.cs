@@ -153,7 +153,7 @@ public sealed partial class AiRuntimePanelViewModel
                 : Services.Cli.RunAsync(
                     argv,
                     cancellationToken: CancellationToken.None,
-                    options: CliRunOptions.JsonRead with { Timeout = TimeSpan.FromSeconds(60) })).ConfigureAwait(true);
+                    options: CliRunOptions.BackgroundRead with { Timeout = TimeSpan.FromSeconds(60) })).ConfigureAwait(true);
 
             if (invocation.FailureReason is { Length: > 0 } reason)
             {

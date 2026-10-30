@@ -3,6 +3,7 @@ using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Settings;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.Core.Audit;
+using DefenseClaw.Core.Cli;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.Tests.Unread;
@@ -167,6 +168,20 @@ internal sealed class UnreadScene : IDisposable
         {
             _ = Services.Cli.RecordHandOff("defenseclaw", NoArguments, "synthetic entry");
         }
+    }
+
+    /// <summary>
+    /// A real, harmless run (the system's cmd.exe exiting 0) through the real runner: as a page's own read (<paramref name="background"/>, the way
+    /// <see cref="CliRunOptions.BackgroundRead"/> marks one) or as a run the operator started. Returns once the entry has finished.
+    /// </summary>
+    public async Task RunCmdAsync(bool background)
+    {
+        var run = await Services.Cli.RunExecutableAsync(
+            Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+            new[] { "/c", "exit", "0" },
+            options: new CliRunOptions { Background = background });
+        Assert.Equal(0, run.ExitCode);
+        Assert.Equal(background, run.IsBackground);
     }
 
     // ------------------------------------------------------------------ waiting

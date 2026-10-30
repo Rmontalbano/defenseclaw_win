@@ -124,7 +124,7 @@ internal static class GrafanaEndpoint
 
         return async cancellationToken =>
         {
-            var run = await cli.RunAsync(Argv, cancellationToken: cancellationToken, options: CliRunOptions.JsonRead with { Timeout = TimeSpan.FromSeconds(30) }).ConfigureAwait(false);
+            var run = await cli.RunAsync(Argv, cancellationToken: cancellationToken, options: CliRunOptions.BackgroundRead with { Timeout = TimeSpan.FromSeconds(30) }).ConfigureAwait(false);
             return run.ExitCode == 0
                 ? string.Join('\n', run.OutputLines.Where(static l => l.Stream == CliStream.StandardOutput).Select(static l => l.Text))
                 : null;
