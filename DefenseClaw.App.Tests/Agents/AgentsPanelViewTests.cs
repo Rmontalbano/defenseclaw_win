@@ -166,4 +166,57 @@ public sealed class AgentsPanelViewTests : IDisposable
             }
         });
     }
+
+    [Theory]
+    [InlineData("Default", "Dark")]
+    [InlineData("Default", "Light")]
+    [InlineData("Linear", "Dark")]
+    [InlineData("Linear", "Light")]
+    [InlineData("Tui", "Dark")]
+    [InlineData("Tui", "Light")]
+    [InlineData("Cisco", "Dark")]
+    [InlineData("Cisco", "Light")]
+    public async Task The_selected_directory_row_reads_in_the_on_accent_colour_on_every_line_in_every_style_and_mode(string style, string mode)
+    {
+        using var fixture = new Appearance.AppearanceFixture(
+            new Services.Appearance.AppearanceSettings(Enum.Parse<Services.Appearance.AppearanceStyle>(style), Enum.Parse<Services.Appearance.AppearanceMode>(mode)));
+        var vm = await _scene.OpenAsync();
+        _scene.Select("agt-0000000000000001");
+        var (view, host) = Host(vm);
+
+        UiThread.Run(() =>
+        {
+            using (host)
+            {
+                host.Relayout();
+                var list = Assert.Single(VisualTree.Descendants<ListBox>(view), l => l.Name == "AgentList");
+                var selected = VisualTree.Descendants<ListBoxItem>(list).Single(i => i.IsSelected);
+                var onAccent = Appearance.AppearanceFixture.ColorOf("DcOnAccentBrush");
+                var accent = Appearance.AppearanceFixture.ColorOf("DcAccentBrush");
+
+                // The id and both secondary lines (last seen, sessions and user): none is left grey.
+                var lines = VisualTree.Descendants<TextBlock>(selected).Where(t => t.Text.Length > 0).ToArray();
+                Assert.True(lines.Length >= 3, "the row shows its id and two secondary lines");
+                foreach (var line in lines)
+                {
+                    var colour = ((System.Windows.Media.SolidColorBrush)line.Foreground).Color;
+                    Assert.True(onAccent == colour, $"{style} {mode}: \"{line.Text}\" is {colour}, not the on-accent {onAccent}");
+                }
+
+                // And that colour reads on the accent the row is filled with.
+                Assert.True(Appearance.AppearanceContrastTests.Ratio(onAccent, accent) >= 4.5, $"{style} {mode}: on-accent on accent");
+
+                // A row that is not selected keeps the secondary text colour.
+                var other = VisualTree.Descendants<ListBoxItem>(list).FirstOrDefault(i => !i.IsSelected);
+                if (other is not null)
+                {
+                    var caption = VisualTree.Descendants<TextBlock>(other).First(t => t.Text.StartsWith("last seen", StringComparison.Ordinal));
+                    Assert.Equal(Appearance.AppearanceFixture.ColorOf("DcTextSecondaryBrush"), ((System.Windows.Media.SolidColorBrush)caption.Foreground).Color);
+                }
+
+                RenderTo.Png(host, $"cust395-agents-selected-{style.ToLowerInvariant()}-{mode.ToLowerInvariant()}");
+            }
+        });
+    }
 }
+

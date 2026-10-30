@@ -17,6 +17,22 @@
         order grouped by turn, paged from the gateway.
     -->
     <UserControl.Resources>
+        <!-- The directory row's text. DcMono and DcCaption set their own Foreground, so the row's selected (on-accent) foreground never reaches
+             them: the secondary lines stayed grey on the accent fill. A selected row reads in the on-accent token instead, as the log rows do. -->
+        <Style x:Key="AgentRowId" TargetType="TextBlock" BasedOn="{StaticResource DcMono}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource DcOnAccentBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="AgentRowCaption" TargetType="TextBlock" BasedOn="{StaticResource DcCaption}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource DcOnAccentBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
         <!-- One timeline line: a turn header, or an entry with its time, kind badge, title and detail. -->
         <DataTemplate x:Key="TimelineRowTemplate" DataType="{x:Type vm:TimelineRowVm}">
             <Grid AutomationProperties.Name="{Binding AutomationName}">
@@ -173,9 +189,9 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource DcMono}" Text="{Binding ShortId}" ToolTip="{Binding AgentId}" />
-                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding LastSeenText}" />
-                                        <TextBlock Style="{StaticResource DcCaption}" Text="{Binding MetaText}" TextWrapping="Wrap" />
+                                        <TextBlock Style="{StaticResource AgentRowId}" Text="{Binding ShortId}" ToolTip="{Binding AgentId}" />
+                                        <TextBlock Style="{StaticResource AgentRowCaption}" Text="{Binding LastSeenText}" />
+                                        <TextBlock Style="{StaticResource AgentRowCaption}" Text="{Binding MetaText}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
