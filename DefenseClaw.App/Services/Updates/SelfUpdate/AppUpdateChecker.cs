@@ -18,6 +18,9 @@ internal enum AppUpdateState
     /// <summary>This is a <c>-dev</c> build: never offered an update, but a manual check says what the latest release is.</summary>
     DevBuild,
 
+    /// <summary>GitHub answered, and this app has no published release yet. A real answer, not a failure: nothing to install, nothing wrong.</summary>
+    NoRelease,
+
     /// <summary>No trustworthy answer (unreachable, rate limited, unreadable, a newer release that cannot be installed). Never the same as up to date.</summary>
     Failed,
 }
@@ -124,7 +127,10 @@ internal sealed class AppUpdateChecker : IDisposable
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                return new AppUpdateCheck { State = AppUpdateState.Failed, Running = _running?.ToString(), Message = "No release of DefenseClaw for Windows has been published yet." };
+                // An authoritative answer (the repository has no release), so it counts as a check: stamp it, so the watcher waits its interval
+                // instead of asking every minute, and drop any stored release that has since been withdrawn.
+                _ = _store.Update(s => s with { LastCheckUnix = now.ToUnixTimeSeconds(), ETag = null, ReleaseJson = null });
+                return new AppUpdateCheck { State = AppUpdateState.NoRelease, Running = _running?.ToString(), Message = "No release of DefenseClaw for Windows has been published yet." };
             }
 
             if (response.StatusCode is HttpStatusCode.Forbidden or (HttpStatusCode)429)

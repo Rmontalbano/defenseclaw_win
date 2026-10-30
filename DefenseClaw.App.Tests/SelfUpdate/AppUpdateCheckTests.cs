@@ -273,7 +273,48 @@ public sealed class AppUpdateCheckTests : IDisposable
         var github = new SelfUpdateKit.FakeGitHub().ServeStatus(SelfUpdateRelease.LatestEndpoint.ToString(), HttpStatusCode.NotFound);
         using var checker = Checker(github, "1.0.0");
 
-        Assert.Contains("No release", (await checker.CheckAsync(manual: true)).Message);
+        var check = await checker.CheckAsync(manual: true);
+
+        // Its own outcome, not a failure: the check worked and there is nothing to install yet.
+        Assert.Equal(AppUpdateState.NoRelease, check.State);
+        Assert.Contains("No release", check.Message);
+        Assert.Null(check.Release);
+        Assert.False(check.LiveFailed);
+        Assert.False(check.IsUpdateAvailable);
+    }
+
+    [Fact]
+    public async Task No_published_release_counts_as_a_check_and_forgets_a_release_that_has_been_withdrawn()
+    {
+        var github = new SelfUpdateKit.FakeGitHub().ServeRelease("1.2.0");
+        var store = NewStore();
+        using var checker = new AppUpdateChecker(store, V("1.0.0"), new HttpClient(github), _clock);
+        Assert.Equal(AppUpdateState.UpdateAvailable, (await checker.CheckAsync(manual: true)).State);
+        Assert.NotNull(store.Current.ReleaseJson);
+
+        _ = github.ServeStatus(SelfUpdateRelease.LatestEndpoint.ToString(), HttpStatusCode.NotFound);
+        _clock.Advance(TimeSpan.FromHours(7));
+        var check = await checker.CheckAsync(manual: false);
+
+        Assert.Equal(AppUpdateState.NoRelease, check.State);
+        Assert.Null(store.Current.ReleaseJson);
+        Assert.Null(store.Current.ETag);
+        Assert.Equal(_clock.GetUtcNow().ToUnixTimeSeconds(), store.Current.LastCheckUnix);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    public async Task A_real_failure_from_github_is_still_could_not_check_and_not_no_release(HttpStatusCode status)
+    {
+        var github = new SelfUpdateKit.FakeGitHub().ServeStatus(SelfUpdateRelease.LatestEndpoint.ToString(), status);
+        using var checker = Checker(github, "1.0.0");
+
+        var check = await checker.CheckAsync(manual: true);
+
+        Assert.Equal(AppUpdateState.Failed, check.State);
+        Assert.DoesNotContain("No release", check.Message);
     }
 
     [Fact]

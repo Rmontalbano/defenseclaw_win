@@ -175,6 +175,12 @@ public sealed partial class SelfUpdateViewModel : ObservableObject, IDisposable
                 StatusTone = "Neutral";
                 DetailText = latest.Message;
                 break;
+            case AppUpdateState.NoRelease:
+                // Not a failure: the check worked and there is simply nothing to install yet. Neutral, and no banner (no release is on offer).
+                StatusText = "No release yet";
+                StatusTone = "Neutral";
+                DetailText = latest.Message;
+                break;
             case AppUpdateState.Failed:
                 StatusText = "Could not check";
                 StatusTone = "High";

@@ -52,6 +52,38 @@ public sealed class SelfUpdateViewTests : IDisposable
     };
 
     [Fact]
+    public void No_release_yet_is_a_neutral_status_and_never_raises_the_banner()
+    {
+        var services = NewServices(new AppUpdateCheck { State = AppUpdateState.NoRelease, Running = "1.0.0", Message = "No release of DefenseClaw for Windows has been published yet." });
+
+        UiThread.Run(() =>
+        {
+            var vm = services.AppUpdate.ViewModel;
+            vm.Refresh();
+            Assert.Equal("No release yet", vm.StatusText);
+            Assert.Equal("Neutral", vm.StatusTone);
+            Assert.Equal("No release of DefenseClaw for Windows has been published yet.", vm.DetailText);
+            Assert.False(vm.ShowBanner);
+            Assert.False(vm.CanReview);
+        });
+    }
+
+    [Fact]
+    public void A_real_failure_still_reads_could_not_check_in_the_failure_tone()
+    {
+        var services = NewServices(new AppUpdateCheck { State = AppUpdateState.Failed, Message = "GitHub was unreachable: no route", LiveFailed = true });
+
+        UiThread.Run(() =>
+        {
+            var vm = services.AppUpdate.ViewModel;
+            vm.Refresh();
+            Assert.Equal("Could not check", vm.StatusText);
+            Assert.Equal("High", vm.StatusTone);
+            Assert.False(vm.ShowBanner);
+        });
+    }
+
+    [Fact]
     public void The_banner_offers_three_named_choices_and_collapses_when_there_is_nothing()
     {
         var services = NewServices(Available());
