@@ -107,6 +107,13 @@ public enum RuntimeCapability
     /// save one; setup, init and adding a connector no longer do. Judged from the version (1.0.5 or later); 1.0.4 keeps <see cref="PerUserHookRules"/>' reading.
     /// </summary>
     SavedFailModeWins,
+
+    /// <summary>
+    /// The self-protection of 1.0.5: observe mode hard-blocks a proven change to DefenseClaw's own active state (<c>provenActiveStateMutation</c> in
+    /// agent_hook.go; the permissive pack only reports it), and a call the gateway took but did not answer in time is blocked in every tier. So copy that
+    /// says observe, or fail-mode open, "never blocks" is wrong from this release on. Judged from the runtime's version (1.0.5 or later).
+    /// </summary>
+    ObserveBlocksSelfChange,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -144,6 +151,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.GatewayConfigReload => "Gateway hot config reload",
         RuntimeCapability.Config104Keys => "Config keys of 1.0.4",
         RuntimeCapability.SavedFailModeWins => "A saved per-user fail mode wins (1.0.5)",
+        RuntimeCapability.ObserveBlocksSelfChange => "Observe blocks changes to DefenseClaw's own files (1.0.5)",
         _ => capability.ToString(),
     };
 
@@ -174,6 +182,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.GatewayConfigReload => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then applies a config.yaml change outside its restart keys in place)",
         RuntimeCapability.Config104Keys => "the runtime reports version 1.0.4 or later and lists its commands (mcp_scanner.unverified_server, openshell.trusted_ca_bundle and the Splunk local_stack record are in its schema)",
         RuntimeCapability.SavedFailModeWins => "the runtime reports version 1.0.5 or later and lists its commands (a saved per-user hook_fail_mode wins over the policy tier, which decides only when nothing is saved)",
+        RuntimeCapability.ObserveBlocksSelfChange => "the runtime reports version 1.0.5 or later and lists its commands (observe mode blocks a proven change to DefenseClaw's own active state, and a call the gateway did not answer in time is blocked in every tier)",
         _ => string.Empty,
     };
 }

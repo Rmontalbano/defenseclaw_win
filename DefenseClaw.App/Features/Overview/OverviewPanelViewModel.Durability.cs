@@ -74,7 +74,7 @@ public sealed partial class OverviewPanelViewModel
         var logPath = Services.Paths.GatewayLogPath;
         var lines = await Task.Run(() => GatewayLogClassifier.ReadTail(logPath)).ConfigureAwait(true);
         _ = Services.Config.Config.Guardrail.Connectors.TryGetValue("codex", out var codex);
-        var (mode, source) = DurabilityAttention.ResolveCodexMode(lines, codex?.Mode);
+        var (mode, source) = DurabilityAttention.ResolveCodexMode(lines, codex?.Mode, DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities));
         var argv = DurabilityAttention.ReselectArgv(mode);
 
         Review.Open(

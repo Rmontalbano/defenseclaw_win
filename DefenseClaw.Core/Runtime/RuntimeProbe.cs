@@ -66,11 +66,14 @@ public static class RuntimeProbe
     /// <summary>The release that removed the OpenHands and OmniGent connectors and made a per-user hook's outage mode follow the policy tier.</summary>
     internal static readonly Version Release104 = new(1, 0, 4);
 
+    /// <summary>
+    /// The release in which a saved per-user <c>hook_fail_mode</c> wins over the policy tier again (<c>hook_outage_fail_mode.go</c>) and observe mode started
+    /// blocking a proven change to DefenseClaw's own active state (internal/gateway/agent_hook.go, <c>provenActiveStateMutation</c>).
+    /// </summary>
+    internal static readonly Version Release105 = new(1, 0, 5);
+
     /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
     internal static readonly Version RepinVersion = new(1, 0, 4);
-
-    /// <summary>The release from which a saved per-user <c>hook_fail_mode</c> wins over the policy tier (<c>hook_outage_fail_mode.go</c> at tag 1.0.5).</summary>
-    internal static readonly Version SavedFailModeWinsVersion = new(1, 0, 5);
 
     /// <summary>
     /// The subcommand names a Click help screen lists under its column-0 <c>Commands:</c> heading. Empty when there is no such
@@ -331,9 +334,15 @@ public static class RuntimeProbe
         }
 
         // 1.0.5's fail-mode precedence is a resolver rule with no command to probe: the version decides, on the same terms as 1.0.4's rules above.
-        if (identity.ParsedVersion is { } saved && saved >= SavedFailModeWinsVersion && (root.Count > 0 || setup.Count > 0))
+        if (identity.ParsedVersion is { } saved && saved >= Release105 && (root.Count > 0 || setup.Count > 0))
         {
             present.Add(RuntimeCapability.SavedFailModeWins);
+        }
+
+        // 1.0.5 behaviour with no command to probe (observe now blocks a proven change to DefenseClaw's own state): the version decides, as above.
+        if (identity.ParsedVersion is { } selfProtect && selfProtect >= Release105 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.ObserveBlocksSelfChange);
         }
 
         if (HasAll(setup, RegistryMarkers))

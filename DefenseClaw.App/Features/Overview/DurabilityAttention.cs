@@ -63,9 +63,9 @@ internal static class DurabilityAttention
 
     /// <summary>
     /// The policy mode to hand <c>setup codex</c>, and where it came from: what the gateway last logged for Codex (<c>policy_mode=</c>, the mode that is
-    /// running), then the connector's mode in config.yaml (<c>enforce</c> is <c>action</c>), then <c>observe</c>, which never blocks.
+    /// running), then the connector's mode in config.yaml (<c>enforce</c> is <c>action</c>), then <c>observe</c>, which never blocks on policy findings (and, from 1.0.5, still blocks a change to DefenseClaw's own files).
     /// </summary>
-    public static (string Mode, string Source) ResolveCodexMode(IReadOnlyList<string> logLines, string? configuredMode)
+    public static (string Mode, string Source) ResolveCodexMode(IReadOnlyList<string> logLines, string? configuredMode, bool observeBlocksSelfChange = false)
     {
         ArgumentNullException.ThrowIfNull(logLines);
 
@@ -82,7 +82,7 @@ internal static class DurabilityAttention
         };
         return configured is not null
             ? (configured, "the Codex connector's mode in config.yaml")
-            : ("observe", "no current mode could be found, so observe, which never blocks");
+            : ("observe", "no current mode could be found, so " + DefenseClaw.Core.Runtime.ObserveModeCopy.ObserveFallbackClause(observeBlocksSelfChange));
     }
 
     /// <summary>The sentence the gateway-stopped row and the tray flyout add when gateway.log says why the last start ended, or empty.</summary>

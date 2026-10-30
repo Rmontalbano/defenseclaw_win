@@ -43,7 +43,7 @@ public sealed partial class AiDiscoveryPanelViewModel
         var label = ConnectorOnboarding.Label(row.Name);
         Review.Open(
             $"Add {label}?",
-            $"Configures DefenseClaw for {label} in observe mode, alongside any connector already configured. Observe records what the agent does and never blocks it.",
+            $"Configures DefenseClaw for {label} in observe mode, alongside any connector already configured. " + DefenseClaw.Core.Runtime.ObserveModeCopy.AddConnectorSentence(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)),
             new[]
             {
                 new DiscoverStep(argv, $"Add {label} in observe mode.", CommandTier.StateChanging, CliRunner.LongRunningTimeout),

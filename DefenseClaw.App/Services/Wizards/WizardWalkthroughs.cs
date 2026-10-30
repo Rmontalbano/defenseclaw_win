@@ -151,6 +151,16 @@ public static partial class WizardWalkthroughs
 
     // ------------------------------------------------------------------ splunk
 
+    /// <summary>
+    /// Whether the installed CLI says <c>setup splunk --enterprise</c> probes the HEC endpoint <i>before</i> saving, so a failed probe saves nothing (exit 1):
+    /// DefenseClaw 1.0.5 (cmd_setup.py, the <c>--enterprise</c> paragraph of the command's help). Earlier releases saved first and sent one best-effort probe
+    /// after ("Sends one best-effort HEC probe unless --skip-test is set"). Read from the CLI's own words, like the rest of the guide's CLI layer, so the card
+    /// follows the build that is installed and needs no version.
+    /// </summary>
+    public static bool ProbesBeforeSaving(string enterpriseHelp) =>
+        !string.IsNullOrEmpty(enterpriseHelp) &&
+        Regex.Replace(enterpriseHelp, @"\s+", " ").Contains("a failed probe saves nothing", StringComparison.OrdinalIgnoreCase);
+
     private static IReadOnlyList<WizardStep> Splunk(IReadOnlyList<WizardStep> steps, string help)
     {
         var all = steps.SelectMany(s => s.Fields).ToList();
@@ -233,8 +243,11 @@ public static partial class WizardWalkthroughs
                 {
                     new WizardGuideLink("Set up the HTTP Event Collector", "https://help.splunk.com/en/splunk-enterprise/get-started/get-data-in/10.6/get-data-with-http-event-collector/set-up-and-use-http-event-collector-in-splunk-web"),
                 },
-                WillDo = "Writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env, then sends one best-effort HEC probe to your endpoint — " +
-                         "turn on \"Skip test\" on that pipeline's page to skip the probe.",
+                WillDo = ProbesBeforeSaving(Says("--enterprise"))
+                    ? "Sends one live HEC probe to your endpoint first, and only if it succeeds writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env. " +
+                      "A failed probe saves nothing and the command exits 1 — turn on \"Skip test\" on that pipeline's page to save without the probe."
+                    : "Writes a Splunk Enterprise destination and stores the token in ~/.defenseclaw/.env, then sends one best-effort HEC probe to your endpoint — " +
+                      "turn on \"Skip test\" on that pipeline's page to skip the probe.",
             });
         }
 

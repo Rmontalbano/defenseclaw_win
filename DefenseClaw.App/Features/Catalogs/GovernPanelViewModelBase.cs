@@ -1359,7 +1359,10 @@ public abstract partial class GovernPanelViewModelBase : PanelViewModelBase, IGo
             if (invocation.ExitCode == 0 && invocation.FailureReason is null)
             {
                 succeeded = true;
-                ShowResult("Done", DisplayNames.Visible(plan.SuccessMessage) + " Recorded in Activity.", InfoBarSeverity.Success);
+
+                // 1.0.5's tool block/allow/unblock wait for the gateway and say whether it enforces the change yet (CUST-400).
+                var (title, message, severity) = GatewayEnforcementNotice.Done(DisplayNames.Visible(plan.SuccessMessage), invocation);
+                ShowResult(title, message, severity);
             }
             else
             {

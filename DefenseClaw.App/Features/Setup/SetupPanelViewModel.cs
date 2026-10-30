@@ -730,6 +730,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         var snapshot = Services.Monitor.Current;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var desired = new List<ConnectorChipViewModel>();
+        var selfChangeBlocked = DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities);
 
         foreach (var (name, settings) in config.Guardrail.Connectors.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
         {
@@ -743,14 +744,15 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
                 settings.Mode,
                 settings.HookFailMode,
                 settings.HasFailModeMismatchOn(DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(Services.Runtime.Capabilities, Services.Installation.Context.IsManaged)),
-                fromConfig: true));
+                fromConfig: true,
+                selfChangeBlocked: selfChangeBlocked));
         }
 
         foreach (var name in snapshot.ActiveConnectors)
         {
             if (seen.Add(name))
             {
-                desired.Add(new ConnectorChipViewModel(name, null, null, false, fromConfig: false));
+                desired.Add(new ConnectorChipViewModel(name, null, null, false, fromConfig: false, selfChangeBlocked: selfChangeBlocked));
             }
         }
 
@@ -1032,7 +1034,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
         var keepScope = SelectedGuardrailScope?.Key ?? string.Empty;
 
-        var rows = status.Connectors.Select(r => new GuardrailRowViewModel(r)).ToList();
+        var selfChangeBlocked = DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities);
+        var rows = status.Connectors.Select(r => new GuardrailRowViewModel(r, selfChangeBlocked)).ToList();
         SyncCollection(GuardrailRows, rows, r => r.Key + "|" + r.Name, static (a, b) => a.IsSameAs(b));
 
         GuardrailWarnings.Clear();
@@ -1128,7 +1131,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
             ("enable", _) => "Re-enables the guardrail from the existing configuration and runs connector setup at the next gateway start.",
             (_, "closed") => "Closed blocks a tool call or prompt whenever the gateway answers with an error or cannot be reached — " +
                              "including while the gateway restarts. Use it where every prompt must be inspected.",
-            _ => "Open allows the tool call or prompt and logs the failure, so a misbehaving gateway never blocks an agent. Recommended for almost all installs.",
+            _ => DefenseClaw.Core.Runtime.ObserveModeCopy.FailOpenNote(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)),
         };
 
         RefreshGuardrailReview();
@@ -1263,10 +1266,14 @@ public sealed record GuardrailScopeOption(string Label, string Key)
 public sealed class GuardrailRowViewModel
 {
     private readonly GuardrailConnectorRow _row;
+    private readonly bool _selfChangeBlocked;
 
-    public GuardrailRowViewModel(GuardrailConnectorRow row)
+    /// <param name="row">The connector as <c>guardrail status</c> printed it.</param>
+    /// <param name="selfChangeBlocked">The runtime blocks a change to its own files even in observe mode (1.0.5 or later), which the mismatch note says.</param>
+    public GuardrailRowViewModel(GuardrailConnectorRow row, bool selfChangeBlocked = false)
     {
         _row = row ?? throw new ArgumentNullException(nameof(row));
+        _selfChangeBlocked = selfChangeBlocked;
     }
 
     public string Name => _row.Name.Length > 0 ? _row.Name : _row.Key;
@@ -1303,14 +1310,14 @@ public sealed class GuardrailRowViewModel
         }
     }
 
-    public string MismatchNote =>
-        "observe + fail-closed: this connector never blocks on policy, but does block whenever the gateway errors.";
+    public string MismatchNote => DefenseClaw.Core.Runtime.ObserveModeCopy.ObserveFailClosedNote(_selfChangeBlocked);
 
     public bool IsSameAs(GuardrailRowViewModel other)
     {
         ArgumentNullException.ThrowIfNull(other);
 
-        return _row.Columns.Count == other._row.Columns.Count &&
+        return _selfChangeBlocked == other._selfChangeBlocked &&
+               _row.Columns.Count == other._row.Columns.Count &&
                _row.Columns.Zip(other._row.Columns).All(p => p.First.Key == p.Second.Key && p.First.Value == p.Second.Value);
     }
 
@@ -1625,8 +1632,11 @@ public sealed partial class WizardCardViewModel : ObservableObject
 /// <summary>One connector in the roster strip, with its mode and hook fail-mode.</summary>
 public sealed class ConnectorChipViewModel
 {
-    public ConnectorChipViewModel(string name, string? mode, string? failMode, bool hasMismatch, bool fromConfig)
+    private readonly bool _selfChangeBlocked;
+
+    public ConnectorChipViewModel(string name, string? mode, string? failMode, bool hasMismatch, bool fromConfig, bool selfChangeBlocked = false)
     {
+        _selfChangeBlocked = selfChangeBlocked;
         Name = name;
         Mode = string.IsNullOrWhiteSpace(mode) ? "mode unset" : mode.Trim().ToLowerInvariant();
         FailMode = string.IsNullOrWhiteSpace(failMode) ? "fail-mode unset" : "fail-" + failMode.Trim().ToLowerInvariant();
@@ -1645,8 +1655,7 @@ public sealed class ConnectorChipViewModel
 
     public bool FromConfig { get; }
 
-    public string MismatchNote =>
-        "observe + fail-closed: this connector never blocks on policy, but does block whenever the gateway errors.";
+    public string MismatchNote => DefenseClaw.Core.Runtime.ObserveModeCopy.ObserveFailClosedNote(_selfChangeBlocked);
 
     public string SourceNote => FromConfig ? "config.yaml" : "/health only";
 
@@ -1665,6 +1674,7 @@ public sealed class ConnectorChipViewModel
                string.Equals(Mode, other.Mode, StringComparison.Ordinal) &&
                string.Equals(FailMode, other.FailMode, StringComparison.Ordinal) &&
                HasMismatch == other.HasMismatch &&
+               _selfChangeBlocked == other._selfChangeBlocked &&
                FromConfig == other.FromConfig;
     }
 

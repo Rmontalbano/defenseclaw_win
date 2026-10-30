@@ -11,7 +11,7 @@ namespace DefenseClaw.App.ViewModels;
 /// <summary>
 /// The Connectors table's "Add" (CUST-210): the connectors the AI-discovery scan has seen that DefenseClaw is not configured for are listed
 /// after the configured ones with the Mac's orange "not configured" and an Add button, which opens the shared review of
-/// <c>defenseclaw setup &lt;alias&gt; --yes --mode observe</c> (observe never blocks; with other connectors configured <c>--yes</c> adds
+/// <c>defenseclaw setup &lt;alias&gt; --yes --mode observe</c> (observe never blocks on policy findings; with other connectors configured <c>--yes</c> adds
 /// alongside them). Nothing runs until the review is confirmed.
 /// <para>
 /// The detected set is read from <c>ai_discovery_state.json</c> together with the Agents card's read (same file, same cadence), so this adds
@@ -116,7 +116,7 @@ public sealed partial class OverviewPanelViewModel
         var label = row.Friendly.Length > 0 ? row.Friendly : row.Name;
         Review.Open(
             $"Add {label}?",
-            $"Configures DefenseClaw for {label} in observe mode, alongside any connector already configured. Observe records what the agent does and never blocks it.",
+            $"Configures DefenseClaw for {label} in observe mode, alongside any connector already configured. " + DefenseClaw.Core.Runtime.ObserveModeCopy.AddConnectorSentence(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)),
             new[]
             {
                 new DiscoverStep(

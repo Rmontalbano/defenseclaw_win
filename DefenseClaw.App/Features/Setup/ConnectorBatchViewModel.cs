@@ -148,7 +148,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
 
     public string ModeNote => Mode == ConnectorBatch.ActionMode
         ? "Action lets DefenseClaw block. If the CLI cannot verify a connector for action mode it configures observe for that one and says so."
-        : "Observe records what an agent does and never blocks it.";
+        : DefenseClaw.Core.Runtime.ObserveModeCopy.BatchObserveNote(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities));
 
     public string RosterLine => _roster.Count == 0
         ? "Configured now: none."
