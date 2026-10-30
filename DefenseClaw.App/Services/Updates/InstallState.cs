@@ -28,6 +28,9 @@ public enum InstallRunOutcome
 
     /// <summary>The run failed and the installer put the previous install back.</summary>
     Restored,
+
+    /// <summary>The installer refused before it changed anything, in a sentence that says so (CUST-399).</summary>
+    Refused,
 }
 
 /// <summary>
@@ -190,8 +193,13 @@ public static class InstallRunReader
             kind = prior is null ? InstallRunKind.Install : string.Equals(prior, installed, StringComparison.OrdinalIgnoreCase) ? InstallRunKind.Reinstall : InstallRunKind.Upgrade;
         }
 
+        var transcript = InstallTranscript.Parse(text);
         var outcome = InstallRunOutcome.Unknown;
-        if (NotInstalled.Match(text) is { Success: true } failed)
+        if (transcript.Refusal is not null)
+        {
+            outcome = InstallRunOutcome.Refused;
+        }
+        else if (NotInstalled.Match(text) is { Success: true } failed)
         {
             outcome = failed.Groups["rest"].Value.Contains("previous install is back", StringComparison.OrdinalIgnoreCase)
                 ? InstallRunOutcome.Restored
@@ -207,7 +215,6 @@ public static class InstallRunReader
             outcome = InstallRunOutcome.Restored;
         }
 
-        var transcript = InstallTranscript.Parse(text);
         return new InstallRunSummary(kind, from, to, StartOf(text, path, fileTime), outcome, path, ConfigCurrent.IsMatch(text), FromActivity: false)
         {
             FailureReason = outcome == InstallRunOutcome.Installed ? null : transcript.Reason,
@@ -272,7 +279,8 @@ public static class InstallRunReader
         {
             return log with
             {
-                Outcome = outcome == InstallRunOutcome.Unknown ? log.Outcome : outcome,
+                // The exit code says more than the wording, except where the transcript says the run was refused: exit 1 alone reads as "restored".
+                Outcome = outcome == InstallRunOutcome.Unknown || log.Outcome == InstallRunOutcome.Refused ? log.Outcome : outcome,
                 Kind = log.Kind == InstallRunKind.Unknown && activityRollback ? InstallRunKind.Rollback : log.Kind,
                 FromActivity = true,
             };
@@ -313,6 +321,7 @@ public static class InstallRunReader
         {
             InstallOutcome.Success or InstallOutcome.InstalledNeedsAttention => InstallRunOutcome.Installed,
             InstallOutcome.FailedRestored => InstallRunOutcome.Restored,
+            InstallOutcome.Refused => InstallRunOutcome.Refused,
             InstallOutcome.UsageError or InstallOutcome.Failed or InstallOutcome.CouldNotStart => InstallRunOutcome.Failed,
             _ => InstallRunOutcome.Unknown,
         };
@@ -385,12 +394,13 @@ public static class InstallRunReader
             InstallRunOutcome.Installed => "installed",
             InstallRunOutcome.Failed => "failed",
             InstallRunOutcome.Restored => "failed, previous install restored",
+            InstallRunOutcome.Refused => "refused; nothing was changed",
             InstallRunOutcome.Running => "still running",
             _ => "unknown",
         };
         var when = run.StartedAt is { } at ? FormatWhen(at, now) : "unknown time";
         var text = $"{what} {run.FromVersion ?? "unknown"} → {run.ToVersion ?? "unknown"}, {when}: {outcome}";
-        if (run.Outcome is InstallRunOutcome.Failed or InstallRunOutcome.Restored or InstallRunOutcome.Unknown && run.FailureReason is { Length: > 0 } reason)
+        if (run.Outcome is InstallRunOutcome.Failed or InstallRunOutcome.Restored or InstallRunOutcome.Refused or InstallRunOutcome.Unknown && run.FailureReason is { Length: > 0 } reason)
         {
             text += ". Installer said: " + reason;
             if (InstallScriptPlan.HintFor(reason) is { } hint)
@@ -406,7 +416,7 @@ public static class InstallRunReader
     public static string ToneKey(InstallRunOutcome outcome) => outcome switch
     {
         InstallRunOutcome.Installed => "Ok",
-        InstallRunOutcome.Restored => "Warn",
+        InstallRunOutcome.Restored or InstallRunOutcome.Refused => "Warn",
         InstallRunOutcome.Failed => "Bad",
         _ => "Neutral",
     };

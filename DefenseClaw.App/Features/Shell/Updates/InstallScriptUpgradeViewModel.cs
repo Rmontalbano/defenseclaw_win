@@ -515,7 +515,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
     private void ApplyRollbackState(RollbackAvailability rollback)
     {
         RollbackAvailable = rollback.IsAvailable && (!HasResult || _resultOffersRollback);
-        RollbackNote = HasResult && _resultRollbackNote is { } note ? note : rollback.Note;
+        RollbackNote = (HasResult && _resultRollbackNote is { } note ? note : rollback.Note) +
+            (RollbackAvailable && _rollbackAgentNote is { } agent ? " " + agent : string.Empty);
         OnPropertyChanged(nameof(RollbackBlockedReason));
     }
 
@@ -865,21 +866,19 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         ExitMessage = result.FailureReason is { } reason ? reason + " " + result.Exit.Message : result.Exit.Message;
         if (result.InstallerReason is { Length: > 0 } installerSaid)
         {
-            ExitMessage = "The installer said: " + installerSaid + " " + ExitMessage;
+            // The installer's lines often end without a full stop (CUST-399's refusal ends in its next step); end the quote before the app's sentence.
+            ExitMessage = "The installer said: " + installerSaid + (installerSaid.EndsWith('.') || installerSaid.EndsWith('…') ? " " : ". ") + ExitMessage;
         }
 
-        ExitHint = InstallScriptPlan.HintFor(result.InstallerReason) ?? string.Empty;
+        ExitHint = RefusalHint(result) ?? InstallScriptPlan.HintFor(result.InstallerReason) ?? string.Empty;
         HasExitHint = ExitHint.Length > 0;
         DurationText = result.Started ? $"{result.Duration.TotalSeconds:0} s" : string.Empty;
         LogPath = result.LogPath ?? string.Empty;
         HasLog = result.LogPath is not null;
+        ApplyNotices(result.Started ? result.Transcript : InstallTranscriptFacts.Empty);
 
         _resultOffersRollback = result.Exit.OffersRollback;
-        _resultRollbackNote = result.Exit.Outcome == InstallOutcome.UsageError
-            ? "Nothing was changed, so there is nothing to roll back."
-            : result.Rollback
-                ? "The rollback has run. Running it again goes forward to the newer install."
-                : null;
+        _resultRollbackNote = ResultRollbackNote(result);
         ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory));
     }
 
@@ -895,8 +894,12 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var dataDirectory = _services.Paths.DataDirectory;
             var activity = _services.Cli.Activity;
             var now = _time.GetLocalNow();
+            var (installer, installed) = (ScriptVersion, _installedVersion);
             var state = await Task.Run(() => InstallStateSnapshot.Read(dataDirectory, activity, now)).ConfigureAwait(true);
             var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers)).ConfigureAwait(true);
+
+            // What the 1.0.5 installer's rollback will do about a Codex that changed since the older install set it up (CUST-399); hashes codex.exe.
+            var agentNote = await Task.Run(() => RollbackAgentPreflight.Read(dataDirectory, installer, installed, now)).ConfigureAwait(true);
             if (generation != _readGeneration)
             {
                 return;
@@ -924,6 +927,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
 
             _previousVersion = state.PreviousVersion;
             OnPropertyChanged(nameof(RollbackLabel));
+            _rollbackAgentNote = agentNote;
             ApplyRollbackState(state.Rollback);
 
             LeftoverRows.Clear();

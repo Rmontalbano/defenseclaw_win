@@ -248,10 +248,19 @@ public static class UpgradeVerdicts
 
         if (run.Rollback)
         {
+            if (run.Exit.Outcome == InstallOutcome.Refused)
+            {
+                return new UpgradeVerdict(UpgradeResultState.InstallerFailed, "Rollback refused; nothing changed", "Warn",
+                    "install.ps1 -Rollback refused before it changed anything: nothing on this machine was changed, and the current install is still the live one. " +
+                    "The installer's reason and next step are above.");
+            }
+
             if (run.Exit.Outcome != InstallOutcome.Success)
             {
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, "Rollback failed", "Bad",
-                    "install.ps1 -Rollback did not finish. Read the install log before doing anything else.");
+                    run.LogPath is null && run.ExitCode == 1
+                        ? "install.ps1 -Rollback did not finish. " + InstallScriptPlan.NoLogNote
+                        : "install.ps1 -Rollback did not finish. Read the install log before doing anything else.");
             }
 
             if (transcript.GatewayUnhealthy || (facts is not null && facts.GatewayRunning == false && !transcript.GatewayLeftStopped))
@@ -271,6 +280,10 @@ public static class UpgradeVerdicts
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, run.Exit.Label, run.Exit.ToneKey,
                     "The installer refused before it changed anything; nothing on this machine was changed.");
 
+            case InstallOutcome.Refused:
+                return new UpgradeVerdict(UpgradeResultState.InstallerFailed, "Refused; nothing changed", "Warn",
+                    "The installer refused before it changed anything; nothing on this machine was changed. The installer's reason and next step are above.");
+
             case InstallOutcome.FailedRestored:
             case InstallOutcome.Failed:
             case InstallOutcome.Unknown:
@@ -289,7 +302,9 @@ public static class UpgradeVerdicts
                 return new UpgradeVerdict(UpgradeResultState.InstallerFailed, transcript.RestoreIncomplete ? "Failed; restore incomplete" : "Failed", "Bad",
                     transcript.RestoreIncomplete
                         ? "The upgrade failed and the installer says the previous install is not fully back; run the installer again to finish restoring it."
-                        : "The installer failed, and its log does not say that it put the previous install back. Read the install log before doing anything else.");
+                        : run.LogPath is null && run.ExitCode == 1
+                            ? "The installer failed. " + InstallScriptPlan.NoLogNote
+                            : "The installer failed, and its log does not say that it put the previous install back. Read the install log before doing anything else.");
         }
 
         // Installed (exit 0, 3 or 4): now the machine decides.
@@ -301,6 +316,14 @@ public static class UpgradeVerdicts
 
         if (facts.GatewayRunning != true)
         {
+            // The guardrail is off in the kept config: the installer left the gateway stopped and says so in its own words (install.ps1:5930-5934).
+            if (transcript.GuardrailOff)
+            {
+                return new UpgradeVerdict(UpgradeResultState.NeedsAttention, "Installed; protection is off", "Warn",
+                    "Installed. Protection is off in the kept config (guardrail.enabled = false), so the installer did not start the gateway and agent hooks " +
+                    "are not guarded. Turn it back on with: defenseclaw setup guardrail");
+            }
+
             return transcript.GatewayLeftStopped
                 ? new UpgradeVerdict(UpgradeResultState.NeedsAttention, "Installed; gateway not started", "Warn",
                     "Installed. The gateway was not running before the upgrade, so the installer did not start it; agent hooks are not guarded until it runs.")

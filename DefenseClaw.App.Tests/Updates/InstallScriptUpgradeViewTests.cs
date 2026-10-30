@@ -1005,6 +1005,242 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
         });
     }
 
+    // ------------------------------------------------------------------ CUST-399: install.ps1 1.0.5's refusals and notices
+
+    private const string StaleCodexRefusal =
+        @"  x Codex was updated after DefenseClaw set up Codex 0.46.0 (C:\Users\operator\AppData\Local\Programs\codex\bin\codex.exe changed). DefenseClaw 1.0.4 " +
+        "does not start with an agent program it did not set up, so the rollback would stop half-way. Nothing was changed. Put that version back and run " +
+        "'defenseclaw rollback' again, or stay on DefenseClaw 1.0.5";
+
+    private const string OutageNoticeLine =
+        "  Gateway outages now let calls run with a warning (the default and permissive policies). Run `defenseclaw guardrail fail-mode closed` to keep blocking them.";
+
+    /// <summary>A 1.0.5 install.ps1 transcript with <paramref name="host"/>'s arguments, written when the fake installer "starts".</summary>
+    private void WriteLogOnStart(Rig rig, string host, params string[] lines)
+    {
+        var logs = Directory.CreateDirectory(Path.Combine(_temp.Path, "logs")).FullName;
+        rig.Launcher.OnStart = () =>
+        {
+            var now = DateTime.Now;
+            File.WriteAllText(
+                Path.Combine(logs, $"install-{now:yyyyMMdd'T'HHmmss}.log"),
+                string.Join("\r\n", new[]
+                {
+                    "**********************",
+                    $"Start time: {now:yyyyMMddHHmmss}",
+                    @"Username: SYNTH\operator",
+                    @"Host Application: powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\staging\1.0.5\install.ps1 " + host,
+                    "**********************",
+                }.Concat(lines).Append(string.Empty)));
+        };
+    }
+
+    /// <summary>A 1.0.5 machine that keeps 1.0.4 in previous\, and the window's check on it.</summary>
+    private void On105With104Kept(Rig rig, string installed = "1.0.5")
+    {
+        KeepPrevious("1.0.4");
+        UiThread.Run(() => rig.Vm.ApplyCheck(Check(installed, installed, withSetupExe: false, update: false), UpgradeChannel.SetupInstaller));
+        UiThread.WaitFor(() => rig.PostFlight.Reads >= 1 && !rig.Vm.IsReadingPostFlight, "the install state read");
+    }
+
+    /// <summary>previous\data\hook_contract_lock.json sealing a synthetic codex.exe whose bytes have changed since.</summary>
+    private void SealCodexThatChangedSince()
+    {
+        var exe = Path.Combine(Directory.CreateDirectory(Path.Combine(_temp.Path, "codex-bin")).FullName, "codex.exe");
+        File.WriteAllText(exe, "synthetic codex 0.47.0");
+        var data = Directory.CreateDirectory(Path.Combine(_temp.Path, "previous", "data")).FullName;
+        File.WriteAllText(Path.Combine(data, "hook_contract_lock.json"), System.Text.Json.JsonSerializer.Serialize(new
+        {
+            connectors = new Dictionary<string, object>
+            {
+                ["codex"] = new Dictionary<string, object>
+                {
+                    ["agent_executable"] = exe,
+                    ["agent_executable_sha256"] = Sha256(System.Text.Encoding.UTF8.GetBytes("synthetic codex 0.46.0")),
+                    ["agent_executable_source"] = "setup-selected",
+                    ["raw_agent_version"] = "codex-cli 0.46.0",
+                },
+            },
+        }));
+    }
+
+    [Fact]
+    public void On_1_0_5_the_rollback_note_says_up_front_what_the_installer_does_about_a_codex_that_changed_since_setup()
+    {
+        var rig = Build();
+        SealCodexThatChangedSince();
+
+        On105With104Kept(rig);
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal("Roll back to 1.0.4…", rig.Vm.RollbackLabel);
+            Assert.StartsWith("The installer will swap back to the previous install. Codex was updated after DefenseClaw 1.0.4 set up Codex 0.46.0.", rig.Vm.RollbackNote, StringComparison.Ordinal);
+            Assert.Contains("if it cannot, it refuses the rollback and nothing is changed", rig.Vm.RollbackNote, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void An_older_installer_gets_no_codex_note_because_it_does_not_check()
+    {
+        var rig = Build();
+        SealCodexThatChangedSince();
+
+        On105With104Kept(rig, installed: "1.0.4");
+
+        UiThread.Run(() => Assert.Equal("The installer will swap back to the previous install.", rig.Vm.RollbackNote));
+    }
+
+    [Fact]
+    public async Task A_refused_rollback_says_refused_nothing_changed_with_the_installers_reason_and_next_step_and_can_be_run_again()
+    {
+        var rig = Build();
+        On105With104Kept(rig);
+        await StageAsync(rig);
+        rig.Launcher.Exit = 1;
+        WriteLogOnStart(rig, "-Rollback", "--- Rolling back to DefenseClaw 1.0.4  [12:00:01Z]", StaleCodexRefusal);
+
+        UiThread.Run(() => rig.Vm.OpenRollbackReviewCommand.Execute(null));
+        await UiThread.Run(() => rig.Vm.ConfirmReviewAsync());
+        UiThread.Run(UiThread.Settle);
+        UiThread.WaitFor(() => rig.Vm.HasPostFlight && !rig.Vm.IsReadingPostFlight, "the post-run read");
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal("Refused (exit 1)", rig.Vm.ExitLabel);
+            Assert.Equal("Warn", rig.Vm.ExitToneKey);
+            Assert.StartsWith("The installer said: Codex was updated after DefenseClaw set up Codex 0.46.0", rig.Vm.ExitMessage, StringComparison.Ordinal);
+            Assert.EndsWith("The rollback was refused before it changed anything (exit 1). Nothing was changed.", rig.Vm.ExitMessage, StringComparison.Ordinal);
+            Assert.Equal(
+                "Nothing was changed. The installer's next step: Put that version back and run 'defenseclaw rollback' again, or stay on DefenseClaw 1.0.5. " +
+                "Roll back here runs the same installer rollback as 'defenseclaw rollback'.",
+                rig.Vm.ExitHint);
+            Assert.Equal("Rollback refused; nothing changed", rig.Vm.VerdictLabel);
+            Assert.Equal("The rollback was refused before it changed anything. Do what the installer named, then roll back again.", rig.Vm.RollbackNote);
+            Assert.True(rig.Vm.CanRollback);
+            Assert.Contains("refused; nothing was changed", rig.Vm.LastInstallText, StringComparison.Ordinal);
+            foreach (var text in new[] { rig.Vm.ExitMessage, rig.Vm.ExitHint, rig.Vm.VerdictSummary, rig.Vm.RollbackNote, rig.Vm.LastInstallText })
+            {
+                Assert.DoesNotContain("The rollback has run", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("restores", text, StringComparison.Ordinal);
+                Assert.DoesNotContain(@"C:\Users\operator", text, StringComparison.OrdinalIgnoreCase);
+            }
+        });
+    }
+
+    [Fact]
+    public async Task A_rollback_that_failed_no_longer_says_it_has_run()
+    {
+        var rig = Build();
+        On105With104Kept(rig);
+        await StageAsync(rig);
+        rig.Launcher.Exit = 1;
+
+        UiThread.Run(() => rig.Vm.OpenRollbackReviewCommand.Execute(null));
+        await UiThread.Run(() => rig.Vm.ConfirmReviewAsync());
+        UiThread.Run(UiThread.Settle);
+        UiThread.WaitFor(() => rig.Vm.HasPostFlight && !rig.Vm.IsReadingPostFlight, "the post-run read");
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal("Rollback failed", rig.Vm.VerdictLabel);
+            Assert.Contains("No install log was found for this run", rig.Vm.VerdictSummary, StringComparison.Ordinal);
+            Assert.StartsWith("The rollback did not finish.", rig.Vm.RollbackNote, StringComparison.Ordinal);
+            Assert.False(rig.Vm.CanRollback);
+        });
+    }
+
+    [Fact]
+    public async Task The_outage_and_protection_off_notices_reach_the_verdict_and_protection_off_is_not_a_gateway_failure()
+    {
+        var rig = Build();
+        WriteTranscriptOnStart(
+            rig,
+            "  + Release signature verified",
+            "  + Assets match checksums.txt",
+            "  + Installed DefenseClaw 1.0.0",
+            "  Upgraded from 0.8.10. Undo with: defenseclaw rollback",
+            OutageNoticeLine,
+            "  ! Protection is off in the kept config (guardrail.enabled = false), so agent hooks are not guarded",
+            "  Turn it back on with: defenseclaw setup guardrail");
+
+        await RunUpgradeAsync(rig);
+
+        UiThread.Run(() =>
+        {
+            Assert.Equal(UpgradeResultState.NeedsAttention, rig.Vm.VerdictState);
+            Assert.Equal("Installed; protection is off", rig.Vm.VerdictLabel);
+            Assert.True(rig.Vm.HasInstallerNotices);
+            Assert.Equal(["Gateway outages", "Protection off"], rig.Vm.InstallerNoticeRows.Select(r => r.Title).ToArray());
+            Assert.Equal(OutageNoticeLine.Trim(), rig.Vm.InstallerNoticeRows[0].Reason);
+            Assert.EndsWith("Turn it back on with: defenseclaw setup guardrail", rig.Vm.InstallerNoticeRows[1].Reason, StringComparison.Ordinal);
+        });
+    }
+
+    [Theory]
+    [MemberData(nameof(Renders))]
+    public async Task The_refusal_and_the_notices_render_at_both_review_sizes(string size, string mode)
+    {
+        var parts = size.Split('x');
+        var (width, height) = (int.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture), int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture));
+        using var fixture = new DefenseClaw.App.Tests.Appearance.AppearanceFixture(
+            new DefenseClaw.App.Services.Appearance.AppearanceSettings(
+                DefenseClaw.App.Services.Appearance.AppearanceStyle.Default, Enum.Parse<DefenseClaw.App.Services.Appearance.AppearanceMode>(mode)));
+
+        // 1. The upgrade from 0.8.10 (any release before 1.0.4) with the guardrail off in the kept config: both notices under the verdict.
+        var upgraded = Build();
+        WriteTranscriptOnStart(
+            upgraded,
+            "  + Release signature verified",
+            "  + Assets match checksums.txt",
+            "  + Installed DefenseClaw 1.0.0",
+            "  Upgraded from 0.8.10. Undo with: defenseclaw rollback",
+            OutageNoticeLine,
+            "  ! Protection is off in the kept config (guardrail.enabled = false), so agent hooks are not guarded",
+            "  Turn it back on with: defenseclaw setup guardrail");
+        await RunUpgradeAsync(upgraded);
+
+        UiThread.Run(() =>
+        {
+            using var host = Page(new InstallScriptUpgradeCard { DataContext = upgraded.Vm }, width, height, out var scroll);
+            ScrollTo(host, scroll, e => e is TextBlock { Text: "Install state (read-only)" });
+            RenderTo.Png(host, $"cust399-notices-{size}-{mode.ToLowerInvariant()}");
+            var texts = VisibleTexts(host);
+            Assert.Contains("Installed; protection is off", texts);
+            Assert.Contains("Gateway outages", texts);
+            Assert.Contains("Protection off", texts);
+            Assert.True(scroll.ExtentWidth <= scroll.ViewportWidth + 0.5, $"{size} {mode}: the card overflows sideways");
+        });
+
+        // 2. On 1.0.5 with 1.0.4 kept: a Codex update since setup, then the installer's refusal.
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(_temp.Path, "logs")))
+        {
+            File.Delete(file);
+        }
+
+        var refused = Build();
+        SealCodexThatChangedSince();
+        On105With104Kept(refused);
+        await StageAsync(refused);
+        refused.Launcher.Exit = 1;
+        WriteLogOnStart(refused, "-Rollback", "--- Rolling back to DefenseClaw 1.0.4  [12:00:01Z]", StaleCodexRefusal);
+        UiThread.Run(() => refused.Vm.OpenRollbackReviewCommand.Execute(null));
+        await UiThread.Run(() => refused.Vm.ConfirmReviewAsync());
+        UiThread.Run(UiThread.Settle);
+        UiThread.WaitFor(() => refused.Vm.HasPostFlight && !refused.Vm.IsReadingPostFlight, "the post-run read");
+
+        UiThread.Run(() =>
+        {
+            using var host = Page(new InstallScriptUpgradeCard { DataContext = refused.Vm }, width, height, out var scroll);
+            ScrollTo(host, scroll, e => e is TextBlock { Text: "Install state (read-only)" });
+            RenderTo.Png(host, $"cust399-refused-{size}-{mode.ToLowerInvariant()}");
+            var texts = VisibleTexts(host);
+            Assert.Contains("Refused (exit 1)", texts);
+            Assert.Contains("Rollback refused; nothing changed", texts);
+            Assert.True(scroll.ExtentWidth <= scroll.ViewportWidth + 0.5, $"{size} {mode}: the card overflows sideways");
+        });
+    }
+
     private static List<string> VisibleTexts(OffscreenHost host) =>
         VisualTree.Descendants<TextBlock>(host.Content).Where(t => t.IsVisible && !string.IsNullOrEmpty(t.Text)).Select(t => t.Text)
             .Concat(VisualTree.Descendants<TextBox>(host.Content).Where(t => t.IsVisible && !string.IsNullOrEmpty(t.Text)).Select(t => t.Text))

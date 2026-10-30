@@ -77,6 +77,7 @@ public sealed partial class InstallScriptUpgradeViewModel
         var release = ReleaseIdentity.Of(transcript, _lastRun is { Started: true } ? _verification : PreflightVerification.NotStarted, facts.CliVersion, facts.GatewayVersion);
         ReleaseText = release.Text;
         ReleaseToneKey = release.ToneKey;
+        ApplyNotices(transcript);
 
         if (HasResult && _lastRun is { } last)
         {

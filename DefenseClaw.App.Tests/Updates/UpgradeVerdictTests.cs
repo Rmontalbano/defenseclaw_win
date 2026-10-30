@@ -23,6 +23,9 @@ public sealed class UpgradeVerdictTests
         Exit = InstallScriptPlan.MapExit(exit, rollback),
         Transcript = transcript ?? InstallTranscriptFacts.Empty,
         InstallerReason = reason,
+
+        // A run with a transcript of its own; one without is CUST-399's "no install log" case (InstallerRefusalTests).
+        LogPath = @"C:\Users\operator\.defenseclaw\logs\install-20261029T090000.log",
     };
 
     private static PostFlightFacts Facts(

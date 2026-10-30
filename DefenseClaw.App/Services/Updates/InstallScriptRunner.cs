@@ -272,11 +272,12 @@ public sealed class InstallScriptRunner
                     var exit = await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
                     var duration = _time.GetElapsedTime(clock);
                     var ended = _time.GetUtcNow();
-                    var info = InstallScriptPlan.MapExit(exit, request.Rollback);
-
                     // This run's transcript, by the start the installer names it after: never just the newest log (CUST-359).
                     var log = InstallScriptPlan.FindInstallLog(request.DataDirectory, started, ended);
                     var transcript = InstallTranscript.Read(log);
+
+                    // Exit 1 is "refused, nothing was changed" when the transcript says so in 1.0.5's words (CUST-399).
+                    var info = InstallScriptPlan.MapExit(exit, request.Rollback, transcript);
 
                     _cli.CompleteExternalRun(
                         invocation,

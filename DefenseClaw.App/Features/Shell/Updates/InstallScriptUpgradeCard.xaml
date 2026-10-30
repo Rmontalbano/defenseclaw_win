@@ -223,6 +223,30 @@
                     </Grid>
                 </Border>
 
+                <!-- What the installer told the operator after it finished, in its own words (CUST-399). Read-only. -->
+                <ItemsControl Margin="0,0,0,8" ItemsSource="{Binding InstallerNoticeRows}" AutomationProperties.Name="What the installer said"
+                              Visibility="{Binding HasInstallerNotices, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,6" AutomationProperties.Name="{Binding Title, StringFormat='Installer notice: {0}'}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="86" />
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource DcBadge}" Tag="{Binding ToneKey}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ctl:DcStatusGlyph Tone="{Binding ToneKey}" ShowDot="False" GlyphSize="12" Gap="5" />
+                                        <TextBlock Style="{StaticResource DcBadgeText}" Text="Notice" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Grid.Column="1" Margin="10,2,0,0" FontWeight="SemiBold" Style="{StaticResource DcBody}" Text="{Binding Title}" />
+                                <TextBlock Grid.Column="2" Margin="10,2,0,0" TextWrapping="Wrap" Style="{StaticResource DcCaption}" Text="{Binding Reason}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
                 <Border Margin="0,0,0,8" Padding="12" Style="{StaticResource DcSubtleRow}"
                         Visibility="{Binding HasPostFlight, Converter={StaticResource BoolToVisibility}}">
                     <Grid>

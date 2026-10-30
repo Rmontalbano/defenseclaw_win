@@ -129,6 +129,34 @@ public static class InstallScriptPlan
         };
     }
 
+    /// <summary>
+    /// <see cref="MapExit(int?, bool)"/>, refined by what the run's transcript says (CUST-399): exit 1 with a refusal sentence of install.ps1 1.0.5
+    /// (<see cref="InstallTranscriptFacts.Refusal"/>) is "refused; nothing was changed", not "did not finish, restored". Anything else maps as before.
+    /// </summary>
+    public static InstallExitInfo MapExit(int? exitCode, bool rollback, InstallTranscriptFacts? transcript)
+    {
+        if (exitCode != 1 || transcript?.Refusal is null)
+        {
+            return MapExit(exitCode, rollback);
+        }
+
+        var what = rollback ? "The rollback" : "The upgrade";
+
+        // A refused rollback can be run again once its cause is fixed; a refused upgrade changed nothing, so there is nothing of it to roll back.
+        return new InstallExitInfo(
+            InstallOutcome.Refused, "Refused", "Warn",
+            $"{what} was refused before it changed anything (exit 1). Nothing was changed.",
+            ChangedMachine: false, OffersRollback: rollback);
+    }
+
+    /// <summary>
+    /// Said for a run that failed with no install log of its own (CUST-399). install.ps1 starts its log only after it holds the install lock
+    /// (scripts/install.ps1:5536 in 1.0.5), so the refusals before that, such as another install or doctor run taking over the lock, are only in its console.
+    /// </summary>
+    public const string NoLogNote =
+        "No install log was found for this run. install.ps1 starts its log only after it takes the install lock, so a run that ends without one usually " +
+        "stopped before it changed anything (for example, another install or doctor run was taking over the install lock). Its console window says why.";
+
     /// <summary><c>%USERPROFILE%\.defenseclaw\logs</c> under <paramref name="dataDirectory"/>.</summary>
     public static string LogDirectory(string dataDirectory) => Path.Combine(dataDirectory, "logs");
 
@@ -405,6 +433,9 @@ public enum InstallOutcome
     InstalledNeedsAttention,
     CouldNotStart,
     Unknown,
+
+    /// <summary>Exit 1 with a refusal sentence: the installer refused before it changed anything (CUST-399).</summary>
+    Refused,
 }
 
 /// <summary>What an exit code means: a label, a tone key (Ok / Warn / Bad), a sentence, and whether the machine may have been changed.</summary>
