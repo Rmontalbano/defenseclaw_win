@@ -133,9 +133,20 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
         new("both", "Both"),
     };
 
-    public IReadOnlyList<FirstRunChoice> FailModes { get; } = new FirstRunChoice[]
+    /// <summary>The fail-mode choices: open and closed, and on a per-user 1.0.5 (CUST-397) first the choice that saves nothing, as its TUI offers.</summary>
+    public IReadOnlyList<FirstRunChoice> FailModes =>
+        FailModeQuestion == FirstRunFailModeQuestion.SavedOrPolicy ? SavedOrPolicyFailModes : PlainFailModes;
+
+    private static readonly FirstRunChoice[] PlainFailModes =
     {
         new("open", "Open - allow and log"),
+        new("closed", "Closed - block"),
+    };
+
+    private static readonly FirstRunChoice[] SavedOrPolicyFailModes =
+    {
+        new(FirstRunFailMode.Policy, "Policy tier - save nothing"),
+        new("open", "Open - allow with a warning"),
         new("closed", "Closed - block"),
     };
 
@@ -170,7 +181,10 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     /// <summary>The question the starting value was taken for.</summary>
     private FirstRunFailModeQuestion _failModeQuestion;
 
-    /// <summary>How this runtime asks the hook failure mode (CUST-390): every profile on 0.8.x, the Action profile on 1.0.x, not at all on a per-user 1.0.4.</summary>
+    /// <summary>
+    /// How this runtime asks the hook failure mode (CUST-390): every profile on 0.8.x, the Action profile on 1.0.x, not at all on a per-user 1.0.4, and the
+    /// Action profile with a save-nothing choice first on a per-user 1.0.5 (CUST-397).
+    /// </summary>
     public FirstRunFailModeQuestion FailModeQuestion =>
         FirstRunFailMode.For(_services.Runtime.Current, _services.Installation.Context.IsManaged);
 
@@ -273,8 +287,25 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     public string DetectLabel => _detectionRequested ? "Detect again" : "Detect installed agents";
 
     public string Subtitle => IsInstalled
-        ? "DefenseClaw registers the hook connectors you select. Observe mode records and never blocks; Action enforces policy on the connectors you choose."
+        ? ObserveBlocksSelfChanges
+            ? "DefenseClaw registers the hook connectors you select. Observe mode records and never blocks on policy findings (DefenseClaw still blocks changes to " +
+              "its own files); Action enforces policy on the connectors you choose."
+            : "DefenseClaw registers the hook connectors you select. Observe mode records and never blocks; Action enforces policy on the connectors you choose."
         : "Install the DefenseClaw runtime first, then return here to configure it.";
+
+    /// <summary>The release from which observe mode blocks a proven change to DefenseClaw's own files (1.0.5 changelog, "Observe mode blocks a proven change").</summary>
+    private static readonly Version SelfProtectionRelease = new(1, 0, 5);
+
+    /// <summary>
+    /// True on 1.0.5 and later, where observe mode is no longer "never blocks": it still blocks a proven change to DefenseClaw's own active state (the permissive
+    /// pack only reports it), so the form's observe sentences say so. Judged from the version, as the fail-mode question is (CUST-397).
+    /// </summary>
+    public bool ObserveBlocksSelfChanges => _services.Runtime.Current.Identity?.ParsedVersion is { } version && version >= SelfProtectionRelease;
+
+    /// <summary>The caption under the profile and enforce choices.</summary>
+    public string ProfileCaption => ObserveBlocksSelfChanges
+        ? "Observe never blocks on policy findings (DefenseClaw still blocks changes to its own files); Action applies only to the connectors marked Enforce."
+        : "Observe never blocks; Action applies only to the connectors marked Enforce.";
 
     /// <summary>Closes the window (raised for "Continue without setup").</summary>
     public event EventHandler? CloseRequested;
@@ -375,13 +406,19 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
         if (question != _failModeQuestion)
         {
             _failModeQuestion = question;
-            if (!_failModeChosen)
+
+            // The choices first, so the box holds the starting value when it moves (a per-user 1.0.5 has one more, CUST-397). A pick the new list
+            // does not hold (policy, once the runtime is not 1.0.5) goes back to the starting value rather than being sent as something else.
+            OnPropertyChanged(nameof(FailModes));
+            if (!_failModeChosen || !FailModes.Any(c => c.Value == FailMode))
             {
                 SetFailModeDefault(question);
             }
         }
 
         OnPropertyChanged(nameof(FailModeQuestion));
+        OnPropertyChanged(nameof(Subtitle));
+        OnPropertyChanged(nameof(ProfileCaption));
         OnPropertyChanged(nameof(OutageFollowsPolicy));
         OnPropertyChanged(nameof(AsksFailMode));
         OnPropertyChanged(nameof(FailModeHint));
@@ -452,7 +489,8 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
             ScannerMode = ScannerMode,
             LlmJudge = LlmJudge,
             FailMode = FailMode,
-            FailModeActionOnly = FailModeQuestion == FirstRunFailModeQuestion.ActionProfileOnly,
+            FailModeActionOnly = FailModeQuestion is FirstRunFailModeQuestion.ActionProfileOnly or FirstRunFailModeQuestion.SavedOrPolicy,
+            FailModeOnlyWhenChosen = FailModeQuestion == FirstRunFailModeQuestion.SavedOrPolicy,
             OutageFollowsPolicy = OutageFollowsPolicy,
             StrictOutage = StrictOutage,
             HumanApproval = HumanApproval,

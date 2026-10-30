@@ -48,6 +48,13 @@ public sealed record InitPlanOptions
     /// <summary>With <see cref="OutageFollowsPolicy"/>: block calls during a gateway outage, by switching to the strict rule pack as a step of its own after <c>init</c>.</summary>
     public bool StrictOutage { get; init; }
 
+    /// <summary>
+    /// The runtime is a 1.0.5 per-user one (<see cref="FirstRunFailModeQuestion.SavedOrPolicy"/>, CUST-397): a sent <c>--fail-mode</c> is saved and wins over the
+    /// policy tier, so it is sent only when <see cref="FailMode"/> is a typed <c>open</c> or <c>closed</c>; <see cref="FirstRunFailMode.Policy"/> (or anything else)
+    /// sends nothing and <c>init</c> saves nothing (cmd_init.py <c>--fail-mode</c> help, "Omitted, nothing is saved"). Used with <see cref="FailModeActionOnly"/>.
+    /// </summary>
+    public bool FailModeOnlyWhenChosen { get; init; }
+
     /// <summary>Human-in-the-loop approval; only meaningful (and only sent) for the Action profile.</summary>
     public bool HumanApproval { get; init; }
 
@@ -165,8 +172,10 @@ public static class InitPlanBuilder
         var scanner = options.ScannerMode is "remote" or "both" ? options.ScannerMode : "local";
         head.AddRange(new[] { "--scanner-mode", scanner, options.LlmJudge ? "--with-judge" : "--no-judge" });
         // 0.8.x: with every plan. 1.0.x: with the Action profile only (tui/panels/first_run.py args), so Observe keeps what is saved. Per-user 1.0.4:
-        // never. Only an explicit "open" is sent as open; any other value is closed.
-        if (!options.OutageFollowsPolicy && (!options.FailModeActionOnly || profile == "action"))
+        // never. Per-user 1.0.5: with the Action profile, and only a typed open or closed, because a sent value is saved and wins over the policy tier.
+        // Otherwise only an explicit "open" is sent as open; any other value is closed.
+        var chosen = options.FailMode is "open" or "closed";
+        if (!options.OutageFollowsPolicy && (!options.FailModeActionOnly || profile == "action") && (!options.FailModeOnlyWhenChosen || chosen))
         {
             head.AddRange(new[] { "--fail-mode", options.FailMode == "open" ? "open" : "closed" });
         }

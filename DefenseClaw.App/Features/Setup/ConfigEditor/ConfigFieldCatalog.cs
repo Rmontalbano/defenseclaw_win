@@ -29,12 +29,13 @@ public sealed record ConfigFieldInfo(string Hint, IReadOnlyList<string>? Options
 /// <param name="ExtendedConnectors">The pinned newer source's connector set.</param>
 /// <param name="ConnectorsRetired">The runtime removed OpenHands and OmniGent (1.0.4, <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ConnectorsRetired"/>): no picker offers them.</param>
 /// <param name="SavedFailModeIgnored">A per-user 1.0.4 runtime does not apply a saved <c>hook_fail_mode</c> (<see cref="DefenseClaw.Core.Config.HookFailModeRule"/>); the fail-mode fields say so.</param>
+/// <param name="SavedFailModeWins">A per-user 1.0.5 runtime: a saved <c>hook_fail_mode</c> wins over the policy tier (<see cref="DefenseClaw.Core.Config.HookFailModeRule.SavedValueWins"/>, CUST-397); the fail-mode fields say so.</param>
 /// <param name="Keys104">The runtime has the config keys 1.0.4 added (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.Config104Keys"/>, CUST-377): <c>scanners.mcp_scanner.unverified_server</c>, <c>openshell.trusted_ca_bundle</c> and the severity notes are in the catalogue; without it they are not, and the form is exactly what it was.</param>
-public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false, bool Keys104 = false)
+public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false, bool Keys104 = false, bool SavedFailModeWins = false)
 {
     /// <summary>This machine's operating system, with the 0.8.10 connector set: what the editor uses until the runtime says otherwise.</summary>
-    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false, bool keys104 = false) =>
-        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored, keys104);
+    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false, bool keys104 = false, bool savedFailModeWins = false) =>
+        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored, keys104, savedFailModeWins);
 
     /// <summary>Windows with the 0.8.10 connector set: this app's own profile when no runtime has been probed.</summary>
     public static ConfigChoiceProfile Windows { get; } = new("windows", false);
@@ -97,8 +98,17 @@ public static class ConfigFieldCatalog
         "Hook fail mode is not edited here, and this runtime does not apply a saved per-user value: the gateway-outage mode follows the connector's policy tier " +
         "(a strict rule pack fails closed, the default and permissive packs fail open). To fail closed during an outage, run " + HookFailModeRule.StrictPackCommand + ".";
 
+    /// <summary>
+    /// The same field on a per-user 1.0.5 runtime (CUST-397): a saved value wins over the policy tier, which decides only when nothing is saved
+    /// (<c>_PER_USER_OUTAGE_RULE</c> at tag 1.0.5; <c>config.py</c> <c>outage_block_hint</c>).
+    /// </summary>
+    private const string HookFailModeReasonSavedWins =
+        "Hook fail mode is not edited here: change it on the Setup panel (Guardrail) or with defenseclaw guardrail fail-mode, which update the installed hook " +
+        "registration as well as config.yaml. On this runtime a saved value decides what a connector's hook does while the gateway is not running (the connector's " +
+        "own, else the global one); with none saved, the policy tier decides (a strict rule pack blocks, the default and permissive packs let the call run with a warning).";
+
     private static string? HookFailModeReasonFor(ConfigChoiceProfile profile) =>
-        profile.SavedFailModeIgnored ? HookFailModeReasonFollowsTier : HookFailModeReason;
+        profile.SavedFailModeWins ? HookFailModeReasonSavedWins : profile.SavedFailModeIgnored ? HookFailModeReasonFollowsTier : HookFailModeReason;
 
     // ------------------------------------------------------------------ option lists (cli_choices.py)
 

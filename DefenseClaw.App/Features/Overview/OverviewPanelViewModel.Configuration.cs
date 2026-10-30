@@ -402,13 +402,27 @@ public sealed partial class OverviewPanelViewModel
                 parts.Add("drift: " + string.Join(", ", mode.Drift));
             }
 
+            // 1.0.5 per-user (CUST-397): which saved value, or the policy tier, decides the outage mode.
+            if (FailModeDecider(name) is { } decidedBy)
+            {
+                parts.Add(decidedBy);
+            }
+
             return (string.Join(" · ", parts), mode.HasDrift ? "Warn" : "Neutral");
         }
 
         Services.Config.Config.Guardrail.Connectors.TryGetValue(name, out var settings);
         _connectorModes.TryGetValue(name, out var runtime);
-        var value = runtime?.HookFailMode ?? settings?.HookFailMode;
-        return (value is { Length: > 0 } ? $"{value} ({(runtime?.HookFailMode is null ? "config.yaml" : "gateway")})" : "not set", "Neutral");
+        var decider = FailModeDecider(name);
+        // On 1.0.5 a saved global value decides a connector without its own (CUST-397), so it is the configured value too.
+        var value = runtime?.HookFailMode ?? settings?.HookFailMode ?? (decider is null ? null : Services.Config.Config.Guardrail.HookFailMode);
+        if (value is not { Length: > 0 })
+        {
+            return (decider ?? "not set", "Neutral");
+        }
+
+        var text = $"{value} ({(runtime?.HookFailMode is null ? "config.yaml" : "gateway")})";
+        return (decider is null ? text : text + " · " + decider, "Neutral");
     }
 
     private string PolicyPosture(IReadOnlyList<string> roster)

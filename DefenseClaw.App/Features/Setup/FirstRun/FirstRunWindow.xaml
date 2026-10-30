@@ -275,7 +275,7 @@
                             </StackPanel>
 
                             <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap"
-                                       Text="Observe never blocks; Action applies only to the connectors marked Enforce." />
+                                       Text="{Binding ProfileCaption}" />
                         </Grid>
                     </StackPanel>
                 </Border>

@@ -59,8 +59,8 @@ public sealed class ConnectorMode
 
     /// <summary>
     /// Observe mode paired with a fail-closed hook — the recurring bad default. What the gateway reports is what the hook contract does, so this holds on
-    /// every runtime; from 1.0.4 a per-user host reports the policy tier's mode, so the way out is a rule pack that is not strict
-    /// (<see cref="DefenseClaw.Core.Config.HookFailModeRule"/>), not a saved value.
+    /// every runtime; on 1.0.4 a per-user host reports the policy tier's mode, so the way out is a rule pack that is not strict, not a saved value, and from
+    /// 1.0.5 a saved value wins over the tier again (<see cref="DefenseClaw.Core.Config.HookFailModeRule"/>).
     /// </summary>
     public bool HasFailModeMismatch =>
         string.Equals(GuardrailMode, "observe", StringComparison.OrdinalIgnoreCase) &&

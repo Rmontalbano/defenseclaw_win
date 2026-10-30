@@ -74,7 +74,7 @@ public enum RuntimeCapability
 
     /// <summary>
     /// The per-user hook rules of 1.0.4: a per-user host's gateway-outage fail mode follows the connector's policy tier (closed for a strict rule pack,
-    /// open otherwise), a saved per-user <c>hook_fail_mode</c> is not applied, and an <c>.install.lock</c> an interrupted install left behind keeps
+    /// open otherwise), a saved per-user <c>hook_fail_mode</c> is not applied (until 1.0.5, see <see cref="SavedFailModeWins"/>), and an <c>.install.lock</c> an interrupted install left behind keeps
     /// every per-user hook blocking (the hooks of 1.0.3 and earlier never read it). Judged from the runtime's version (1.0.4 or later).
     /// </summary>
     PerUserHookRules,
@@ -99,6 +99,14 @@ public enum RuntimeCapability
     /// to the strictest. Judged from the version (1.0.4 or later).
     /// </summary>
     Config104Keys,
+
+    /// <summary>
+    /// The fail-mode rule of 1.0.5 (CUST-397): on a per-user host an explicitly saved <c>hook_fail_mode</c> (the connector's own, else the global one) decides what a
+    /// hook does while the gateway is down, and only when nothing is saved does the policy tier decide (Go <c>HookOutageFailMode</c>,
+    /// <c>config.py</c> <c>effective_hook_fail_mode</c>). Only <c>guardrail fail-mode</c>, <c>config set</c>, an explicit <c>--fail-mode</c> and a typed wizard answer
+    /// save one; setup, init and adding a connector no longer do. Judged from the version (1.0.5 or later); 1.0.4 keeps <see cref="PerUserHookRules"/>' reading.
+    /// </summary>
+    SavedFailModeWins,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -135,6 +143,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.GuardrailRepin => "Re-pin an edited guardrail pack",
         RuntimeCapability.GatewayConfigReload => "Gateway hot config reload",
         RuntimeCapability.Config104Keys => "Config keys of 1.0.4",
+        RuntimeCapability.SavedFailModeWins => "A saved per-user fail mode wins (1.0.5)",
         _ => capability.ToString(),
     };
 
@@ -164,6 +173,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.GuardrailRepin => "the runtime reports version 1.0.4 or later and lists its commands ('guardrail use-pack' gained --repin and --yes in 1.0.4)",
         RuntimeCapability.GatewayConfigReload => "the runtime reports version 1.0.0 or later and lists its commands (the gateway then applies a config.yaml change outside its restart keys in place)",
         RuntimeCapability.Config104Keys => "the runtime reports version 1.0.4 or later and lists its commands (mcp_scanner.unverified_server, openshell.trusted_ca_bundle and the Splunk local_stack record are in its schema)",
+        RuntimeCapability.SavedFailModeWins => "the runtime reports version 1.0.5 or later and lists its commands (a saved per-user hook_fail_mode wins over the policy tier, which decides only when nothing is saved)",
         _ => string.Empty,
     };
 }

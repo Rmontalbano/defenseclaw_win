@@ -50,8 +50,8 @@ public class RuntimeCapabilityTests
         Assert.Empty(snapshot.Capabilities.Notes);
     }
 
-    /// <summary>What 1.0.4 added and the pinned source (version 1.0.0) does not have (CUST-373).</summary>
-    private static readonly RuntimeCapability[] Release104Capabilities = [RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules, RuntimeCapability.GuardrailRepin, RuntimeCapability.Config104Keys];
+    /// <summary>What 1.0.4 and 1.0.5 added and the pinned source (version 1.0.0) does not have (CUST-373, CUST-397).</summary>
+    private static readonly RuntimeCapability[] Release104Capabilities = [RuntimeCapability.ConnectorsRetired, RuntimeCapability.PerUserHookRules, RuntimeCapability.GuardrailRepin, RuntimeCapability.Config104Keys, RuntimeCapability.SavedFailModeWins];
 
     [Fact]
     public void The_pinned_runtime_has_every_capability_that_predates_1_0_4()

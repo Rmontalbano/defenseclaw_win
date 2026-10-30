@@ -8,7 +8,9 @@ namespace DefenseClaw.App.Services.Wizards;
 /// There the runtime reports a gateway-outage mode from the connector's policy tier (<c>closed</c> for the strict rule pack, <c>open</c> otherwise) and does not apply a
 /// saved per-user <c>hook_fail_mode</c> (<see cref="HookFailModeRule"/>): <c>init --fail-mode open</c> is refused outright, and <c>setup &lt;connector&gt; --fail-mode</c>
 /// only saves a value nothing reads. So the question is not asked; the page says what decides the behaviour and names the command that changes it
-/// (<see cref="HookFailModeRule.StrictPackCommand"/>). On an older runtime, or on a managed install (the administrator's value is explicit), the definition is returned as it is.
+/// (<see cref="HookFailModeRule.StrictPackCommand"/>). On an older runtime, on a managed install (the administrator's value is explicit), and on 1.0.5 and later
+/// (where a typed <c>--fail-mode</c> is saved and wins over the policy tier, and the field starts on "unchanged" so nothing is sent unless the operator picks a
+/// value, CUST-397), the definition is returned as it is.
 /// </para>
 /// </summary>
 public static class WizardFailModeRule

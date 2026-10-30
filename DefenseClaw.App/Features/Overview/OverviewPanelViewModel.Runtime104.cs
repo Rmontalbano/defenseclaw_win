@@ -162,6 +162,13 @@ public sealed partial class OverviewPanelViewModel
     /// </summary>
     private void AppendFailModeMismatchAttention(List<AttentionRow> rows)
     {
+        // 1.0.5 and later (per-user): a saved value wins again, and its rows are in OverviewPanelViewModel.Runtime105.cs (CUST-397).
+        if (SavedFailModeWins)
+        {
+            AppendSavedFailModeAttention(rows);
+            return;
+        }
+
         var ignored = SavedFailModeIgnored;
         var configured = Services.Config.Config.Guardrail.Connectors;
         if (!ignored)

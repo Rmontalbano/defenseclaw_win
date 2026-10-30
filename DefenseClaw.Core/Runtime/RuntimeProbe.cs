@@ -69,6 +69,9 @@ public static class RuntimeProbe
     /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
     internal static readonly Version RepinVersion = new(1, 0, 4);
 
+    /// <summary>The release from which a saved per-user <c>hook_fail_mode</c> wins over the policy tier (<c>hook_outage_fail_mode.go</c> at tag 1.0.5).</summary>
+    internal static readonly Version SavedFailModeWinsVersion = new(1, 0, 5);
+
     /// <summary>
     /// The subcommand names a Click help screen lists under its column-0 <c>Commands:</c> heading. Empty when there is no such
     /// heading (a leaf command, or text that is not help at all).
@@ -325,6 +328,12 @@ public static class RuntimeProbe
         if (identity.ParsedVersion is { } repin && repin >= RepinVersion && (root.Count > 0 || setup.Count > 0))
         {
             present.Add(RuntimeCapability.GuardrailRepin);
+        }
+
+        // 1.0.5's fail-mode precedence is a resolver rule with no command to probe: the version decides, on the same terms as 1.0.4's rules above.
+        if (identity.ParsedVersion is { } saved && saved >= SavedFailModeWinsVersion && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.SavedFailModeWins);
         }
 
         if (HasAll(setup, RegistryMarkers))

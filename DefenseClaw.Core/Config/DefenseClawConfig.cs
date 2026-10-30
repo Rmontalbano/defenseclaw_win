@@ -173,6 +173,17 @@ public sealed class GuardrailSection
     public string? DetectionStrategyCompletion { get; set; }
 
     /// <summary>
+    /// The global <c>guardrail.hook_fail_mode</c>, which every connector without its own inherits; null or blank when none is saved. Read only to tell which
+    /// saved value decides a connector on 1.0.5 (<see cref="HookFailModeRule.SavedScope"/>).
+    /// </summary>
+    [YamlMember(Alias = "hook_fail_mode")]
+    public string? HookFailMode { get; set; }
+
+    /// <summary>The global rule pack's name (config_version 9 <c>guardrail.rule_pack</c>); blank for the built-in default. See <see cref="HookFailModeRule.KnownPolicyTier"/>.</summary>
+    [YamlMember(Alias = "rule_pack")]
+    public string? RulePack { get; set; }
+
+    /// <summary>
     /// Per-connector settings, keyed by connector name, matched case-insensitively. Never null,
     /// and no value in it is null — see <see cref="DefenseClawConfig"/> for why an empty
     /// <c>connectors:</c> or an empty <c>claudecode:</c> beneath it has to be handled.
@@ -236,6 +247,10 @@ public sealed class GuardrailConnectorSettings
     [YamlMember(Alias = "rule_pack_dir")]
     public string? RulePackDir { get; set; }
 
+    /// <summary>The connector's own rule pack name (config_version 9 <c>rule_pack</c>); blank to inherit the global one.</summary>
+    [YamlMember(Alias = "rule_pack")]
+    public string? RulePack { get; set; }
+
     /// <summary>True when observe mode is paired with a fail-closed hook.</summary>
     [YamlIgnore]
     public bool HasFailModeMismatch =>
@@ -249,7 +264,7 @@ public sealed class GuardrailConnectorSettings
     /// </summary>
     public bool HasFailModeMismatchOn(bool savedValueIgnored) => !savedValueIgnored && HasFailModeMismatch;
 
-    /// <summary>True when config.yaml saves <c>hook_fail_mode: closed</c> (the one value a per-user 1.0.4 runtime does not apply).</summary>
+    /// <summary>True when config.yaml saves <c>hook_fail_mode: closed</c> for this connector (the one value a per-user 1.0.4 runtime does not apply).</summary>
     [YamlIgnore]
     public bool SavesFailClosed => string.Equals(HookFailMode, "closed", StringComparison.OrdinalIgnoreCase);
 }
