@@ -100,6 +100,8 @@ public sealed class ArgvContractTests
             string.Join('\u001f', OverviewPanelViewModel.DoctorArgv),
             string.Join('\u001f', new[] { "doctor", "--fix", "--dry-run" }),
             string.Join('\u001f', new[] { "doctor", "--fix", "--yes" }),
+            // the stale install lock's repair (CUST-398): only doctor.install.stale-lock.clear
+            string.Join('\u001f', OverviewPanelViewModel.ClearStaleInstallLockArgv),
             string.Join('\u001f', new[] { "config", "validate" }),
             string.Join('\u001f', new[] { "skill", "list", "--json", "--connector", "claudecode" }),
             string.Join('\u001f', new[] { "mcp", "list", "--json", "--connector", "claudecode" }),

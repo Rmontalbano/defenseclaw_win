@@ -116,6 +116,21 @@ public sealed partial class OverviewPanelViewModel
         {
             var steps = left.Items.Select(static i =>
                 $"{i.Path}: {i.What}." + (i.Step.Length > 0 ? " To remove: " + i.Step + "." : string.Empty));
+
+            // 1.0.5 sends its notice with each entry: its teardown removes what an older setup wrote and never blocks, so what is left is information
+            // (removed_connectors.py NOTICE). The entry carries it; no capability is needed to know.
+            if (left.Notice is { } notice)
+            {
+                rows.Add(new AttentionRow
+                {
+                    Title = $"{left.Label}: {left.Items.Count.ToString(CultureInfo.CurrentCulture)} leftover{(left.Items.Count == 1 ? string.Empty : "s")} from an older setup",
+                    Detail = notice + " DefenseClaw removed what it could and none of this blocks your agents; what it could not remove is listed here, " +
+                             "to remove by hand if you want to. " + string.Join(" ", steps),
+                    SeverityKey = "Info",
+                });
+                continue;
+            }
+
             rows.Add(new AttentionRow
             {
                 Title = $"{left.Label} was removed; {left.Items.Count.ToString(CultureInfo.CurrentCulture)} leftover{(left.Items.Count == 1 ? string.Empty : "s")} to remove by hand",
@@ -138,6 +153,15 @@ public sealed partial class OverviewPanelViewModel
             ? $" It names process {pid.ToString(CultureInfo.InvariantCulture)}, which is not a running installer."
             : string.Empty;
         var blocked = InstallationBlockedReason;
+
+        // From 1.0.5 a lock whose installer is proven gone no longer blocks a hook (installLockStale), and doctor --fix removes it unless an interrupted
+        // install keeps it (OverviewPanelViewModel.Runtime105.cs). Every other lock, and every lock on 1.0.4, keeps the row below.
+        if (Services.Runtime.Capabilities.Has(RuntimeCapability.StaleInstallLockIgnored) && (found.IsStale || found.IsRecovery))
+        {
+            rows.Add(found.IsStale ? StaleInstallLockRow(found, blocked) : RecoveryInstallLockRow(found, blocked));
+            return;
+        }
+
         rows.Add(new AttentionRow
         {
             Title = InterruptedInstallTitle,

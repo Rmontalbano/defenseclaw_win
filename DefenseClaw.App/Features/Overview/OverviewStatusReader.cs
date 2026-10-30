@@ -26,7 +26,14 @@ internal sealed record HookFailModeState(
 internal sealed record RemovedConnectorItem(string Path, string What, string Step);
 
 /// <summary>What one removed connector (<c>openhands</c>, <c>omnigent</c>) left on this host, as <c>status --json</c> lists it.</summary>
-internal sealed record RemovedConnectorLeftovers(string Connector, string Label, IReadOnlyList<RemovedConnectorItem> Items);
+internal sealed record RemovedConnectorLeftovers(string Connector, string Label, IReadOnlyList<RemovedConnectorItem> Items)
+{
+    /// <summary>
+    /// The runtime's one-line notice (1.0.5, <c>removed_connectors.py</c> <c>NOTICE</c>): the teardown removed what an older setup wrote and blocks nothing, so
+    /// what is left is information. Null when the entry has none (1.0.4, whose leftovers could still block).
+    /// </summary>
+    public string? Notice { get; init; }
+}
 
 /// <summary>One entry of <c>connectors[]</c> in <c>defenseclaw status --json</c>.</summary>
 internal sealed record StatusConnector(string Name, string? Friendly, string? Mode, bool? Enabled, string? Source, HookFailModeState? FailMode);
@@ -70,7 +77,7 @@ internal sealed record DefenseClawStatus(
         null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, Array.Empty<StatusConnector>());
 }
 
-/// <summary>Parses <c>defenseclaw status --json</c> (0.8.10 to 1.0.4). Tolerant: a missing or oddly typed member is null, never an error.</summary>
+/// <summary>Parses <c>defenseclaw status --json</c> (0.8.10 to 1.0.5). Tolerant: a missing or oddly typed member is null, never an error.</summary>
 internal static class DefenseClawStatusReader
 {
     /// <exception cref="JsonException">Not JSON, or not a JSON object.</exception>
@@ -134,7 +141,7 @@ internal static class DefenseClawStatusReader
         return status;
     }
 
-    /// <summary><c>removed_connector_cleanup: [{connector, label, items: [{path, what, step}]}]</c> (<c>removed_connectors.py</c> <c>as_json</c>); a malformed entry is skipped.</summary>
+    /// <summary><c>removed_connector_cleanup: [{connector, label, notice, items: [{path, what, step}]}]</c> (<c>removed_connectors.py</c> <c>as_json</c>; <c>notice</c> from 1.0.5); a malformed entry is skipped.</summary>
     private static IReadOnlyList<RemovedConnectorLeftovers> ReadRemovedConnectorCleanup(JsonElement root)
     {
         if (!root.TryGetProperty("removed_connector_cleanup", out var list) || list.ValueKind != JsonValueKind.Array)
@@ -164,7 +171,10 @@ internal static class DefenseClawStatusReader
 
             if (items.Count > 0)
             {
-                found.Add(new RemovedConnectorLeftovers(connector, Text(entry, "label") is { Length: > 0 } label ? label : connector, items));
+                found.Add(new RemovedConnectorLeftovers(connector, Text(entry, "label") is { Length: > 0 } label ? label : connector, items)
+                {
+                    Notice = Text(entry, "notice") is { } notice && !string.IsNullOrWhiteSpace(notice) ? notice.Trim() : null,
+                });
             }
         }
 

@@ -791,6 +791,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         AppendFailModeMismatchAttention(rows);
         AppendRuntime104Attention(rows);
 
+        // 1.0.5 and any runtime (CUST-398): an agent whose own settings turn every hook off. Built in OverviewPanelViewModel.Runtime105.cs.
+        AppendRuntime105Attention(rows);
+
         // The third opinion, and the one that wins: Claude Code's own settings.json can
         // hold an env override the hook obeys over both config.yaml and /status.
         if (snapshot.FailModeDrift is { } drift)
@@ -840,7 +843,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         // The gateway's own admission that it cannot keep its event history (for instance sqlite_write_failed). It used to sit in /health
         // unread; if audit.db is not being written, what every other card here counts is going stale.
-        if (snapshot.Health is { } reported && FindFailure(reported) is { } historyFailure)
+        if (snapshot.Health is { } reported && EventHistoryFailureText(reported) is { } historyFailure)
         {
             rows.Add(new AttentionRow
             {

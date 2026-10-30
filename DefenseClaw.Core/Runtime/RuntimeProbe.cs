@@ -75,6 +75,7 @@ public static class RuntimeProbe
     /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
     internal static readonly Version RepinVersion = new(1, 0, 4);
 
+
     /// <summary>
     /// The subcommand names a Click help screen lists under its column-0 <c>Commands:</c> heading. Empty when there is no such
     /// heading (a leaf command, or text that is not help at all).
@@ -350,6 +351,12 @@ public static class RuntimeProbe
         {
             present.Add(RuntimeCapability.AcpGuardHealth);
             present.Add(RuntimeCapability.CodexHomeLinkRefusal);
+        }
+
+        // The 1.0.5 install-lock rule is hook behaviour with no command of its own to probe: the version decides, on the same terms as above.
+        if (identity.ParsedVersion is { } staleLock && staleLock >= Release105 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.StaleInstallLockIgnored);
         }
 
         if (HasAll(setup, RegistryMarkers))

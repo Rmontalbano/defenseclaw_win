@@ -328,6 +328,9 @@ public sealed class AppServices : IDisposable
     /// <summary>Read-only view of Claude Code's settings.json; the app never writes it.</summary>
     public ClaudeSettingsReader ClaudeSettings { get; }
 
+    /// <summary>Read-only view of the hooks switch in Codex's config.toml (CUST-398); the app never writes it. An isolated composition reads a scratch path.</summary>
+    public DefenseClaw.Core.Codex.CodexConfigReader CodexConfig { get; internal set; } = new();
+
     /// <summary>Tail of <c>gateway.log</c>. Not started — the Logs panel owns the lifecycle.</summary>
     public LogTailer GatewayLog { get; }
 
@@ -699,6 +702,8 @@ public sealed class AppServices : IDisposable
         // Likewise nothing looks at the real process list: an isolated composition sees no Codex running unless a test says it is.
         var isolated = new AppServices(BeginLoad(paths, readConfigOnPoolThread), claudeSettingsPath, settingsPath, updateWatcherFactory, runtimeProbeRunner, dockerProbe, terraformProbe, readerTimeouts, hookTotalsCacheDirectory, gatewayAdminFactory, adminLayout, adminFileSystem, appUpdateFactory);
         isolated.AgentProcesses = agentProcesses ?? AgentProcessProbe.None;
+        // Likewise the operator's own Codex config.toml is never read: an isolated composition's is a file in the scratch directory a test may write.
+        isolated.CodexConfig = new DefenseClaw.Core.Codex.CodexConfigReader(Path.Combine(paths.DataDirectory, "codex-home", "config.toml"));
         isolated.Agent360.Dispose();
         isolated.Agent360 = new Agent360Availability(null, new FixedGrafanaProbe(false));
         return isolated;

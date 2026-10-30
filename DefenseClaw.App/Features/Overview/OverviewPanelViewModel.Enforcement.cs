@@ -307,6 +307,7 @@ public sealed partial class OverviewPanelViewModel
             {
                 _ = RefreshSilentBypassAsync(cancellationToken);
                 _ = RefreshInstallLockAsync(cancellationToken);
+                _ = RefreshAgentHookSwitchesAsync(cancellationToken);
             }
 
             _metrics = await _metricsReader.ReadAsync(MetricsTimeout, cancellationToken).ConfigureAwait(true);

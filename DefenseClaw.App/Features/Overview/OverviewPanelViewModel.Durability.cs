@@ -59,6 +59,9 @@ public sealed partial class OverviewPanelViewModel
             case OpenInstallerActionId:
                 OpenInstallerForLock();
                 break;
+            case ClearStaleInstallLockActionId:
+                ClearStaleInstallLock();
+                break;
             default:
                 break;
         }

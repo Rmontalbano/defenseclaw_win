@@ -23,6 +23,12 @@ public sealed record ClaudeSettingsSnapshot
     public string? FailModeOverride { get; init; }
 
     /// <summary>
+    /// True when the file sets <c>disableAllHooks</c> to the JSON value <c>true</c>: Claude Code then runs none of its hooks, DefenseClaw's included, so
+    /// its tool calls are not guarded (the check of <c>agent_hook_switch_problems</c> in the runtime's hook_integrity.py). Any other value is false.
+    /// </summary>
+    public bool DisableAllHooks { get; init; }
+
+    /// <summary>
     /// Why the read failed, when it did. Null for both a clean parse and an absent file —
     /// the two "nothing to report" cases are distinguished by <see cref="Exists"/>.
     /// </summary>
@@ -57,6 +63,9 @@ public sealed class ClaudeSettingsReader
 {
     /// <summary>The env-var name the hook binary consults; wins over config.yaml.</summary>
     public const string FailModeVariableName = "DEFENSECLAW_FAIL_MODE";
+
+    /// <summary>The settings key that turns every Claude Code hook off.</summary>
+    public const string DisableAllHooksName = "disableAllHooks";
 
     /// <summary>
     /// Claude Code tolerates comments and trailing commas in its settings file, and
@@ -119,6 +128,9 @@ public sealed class ClaudeSettingsReader
                 Exists = true,
                 SettingsPath = SettingsPath,
                 FailModeOverride = ReadFailMode(document.RootElement),
+                DisableAllHooks = document.RootElement.ValueKind == JsonValueKind.Object &&
+                                  document.RootElement.TryGetProperty(DisableAllHooksName, out var disabled) &&
+                                  disabled.ValueKind == JsonValueKind.True,
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

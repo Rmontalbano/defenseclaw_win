@@ -291,7 +291,7 @@ public sealed partial class OverviewPanelViewModel
                 }
             }
 
-            failure = FindFailure(health);
+            failure = EventHistoryFailureText(health);
             ObservabilityEmptyText = "No runtime-loaded destinations. Configure one in Setup, then restart the gateway.";
         }
 

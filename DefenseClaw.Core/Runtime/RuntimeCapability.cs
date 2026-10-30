@@ -127,6 +127,13 @@ public enum RuntimeCapability
     /// Codex wizard can say so before its review. Judged from the version (1.0.5 or later).
     /// </summary>
     CodexHomeLinkRefusal,
+
+    /// <summary>
+    /// The install-lock rule of 1.0.5: a per-user hook ignores an <c>.install.lock</c> whose installer is proven gone (<c>installLockStale</c>,
+    /// hookexec/install_lock_state.go), and <c>doctor --fix</c> removes such a lock (<c>doctor.install.stale-lock.clear</c>). A lock an interrupted install
+    /// keeps (a recovery record beside it) still waits for the installer. Judged from the runtime's version (1.0.5 or later).
+    /// </summary>
+    StaleInstallLockIgnored,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -167,6 +174,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.ObserveBlocksSelfChange => "Observe blocks changes to DefenseClaw's own files (1.0.5)",
         RuntimeCapability.AcpGuardHealth => "ACP guard status and verify of 1.0.5",
         RuntimeCapability.CodexHomeLinkRefusal => "Codex setup refuses a linked .codex home",
+        RuntimeCapability.StaleInstallLockIgnored => "Stale install lock ignored (1.0.5)",
         _ => capability.ToString(),
     };
 
@@ -200,6 +208,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.ObserveBlocksSelfChange => "the runtime reports version 1.0.5 or later and lists its commands (observe mode blocks a proven change to DefenseClaw's own active state, and a call the gateway did not answer in time is blocked in every tier)",
         RuntimeCapability.AcpGuardHealth => "the runtime reports version 1.0.5 or later and lists its commands ('acp status --json' and 'acp verify' report healthy only for a lock and agent the guard starts)",
         RuntimeCapability.CodexHomeLinkRefusal => "the runtime reports version 1.0.5 or later and lists its commands (setup codex refuses a .codex home that is a link or junction before it changes anything)",
+        RuntimeCapability.StaleInstallLockIgnored => "the runtime reports version 1.0.5 or later and lists its commands (its hooks ignore an install lock whose installer is gone, and doctor --fix removes it)",
         _ => string.Empty,
     };
 }
