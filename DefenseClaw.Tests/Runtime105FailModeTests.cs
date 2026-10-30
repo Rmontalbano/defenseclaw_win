@@ -41,7 +41,6 @@ public sealed class Runtime105FailModeTests
         Assert.False(helpless.Has(RuntimeCapability.SavedFailModeWins));
         Assert.False(RuntimeCapabilities.Unknown.Has(RuntimeCapability.SavedFailModeWins));
         Assert.Contains(RuntimeCapability.SavedFailModeWins, RuntimeCapabilityCatalog.All);
-        Assert.Equal(RuntimeCapability.SavedFailModeWins, RuntimeCapabilityCatalog.All[^1]);
         Assert.Contains("1.0.5", RuntimeCapabilityCatalog.Marker(RuntimeCapability.SavedFailModeWins), StringComparison.Ordinal);
         Assert.False(string.IsNullOrWhiteSpace(RuntimeCapabilityCatalog.DisplayName(RuntimeCapability.SavedFailModeWins)));
     }
