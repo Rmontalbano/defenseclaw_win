@@ -9,7 +9,7 @@ using Wpf.Ui.Controls;
 
 namespace DefenseClaw.App.Tests.Wizards;
 
-/// <summary>The Setup hub's areas are an adaptive grid of 233 x 92 tiles, each a Fluent glyph, a title and a two-line blurb (CUST-225; the Mac's 23 areas since CUST-385).</summary>
+/// <summary>The Setup hub's areas are an adaptive grid of tiles 92 tall and at least 233 wide that share the row out, each a Fluent glyph, a title and a two-line blurb (CUST-225; the Mac's 23 areas since CUST-385).</summary>
 [Collection(UiCollection.Name)]
 public class SetupTileGridTests
 {
@@ -70,7 +70,7 @@ public class SetupTileGridTests
     }
 
     [Fact]
-    public void The_grid_is_233_by_92_tiles_that_open_the_wizard_and_the_guardrail_tile_waits_for_its_wiring()
+    public void The_grid_is_92_tall_tiles_at_least_233_wide_that_open_the_wizard_and_the_guardrail_tile_waits_for_its_wiring()
     {
         // CUST-385: the grid is the Mac's 23 setup areas (it was one tile per catalog card, grouped); the cards are what the tiles open.
         using var temp = new TempDirectory();
@@ -95,7 +95,7 @@ public class SetupTileGridTests
                 Assert.Equal(SetupAreas.All.Count, tiles.Length);
                 Assert.All(tiles, t =>
                 {
-                    Assert.Equal(233, t.ActualWidth, 0.5);
+                    Assert.True(t.ActualWidth >= 233 - 0.5, "a tile is never narrower than the Mac's 233");
                     Assert.Equal(92, t.ActualHeight, 0.5);
                     Assert.Equal(12, t.Margin.Right);
                     Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(t)));
@@ -174,6 +174,92 @@ public class SetupTileGridTests
                 Assert.Equal(SetupAreas.All.Count, Tiles(shell).Length);
                 Assert.DoesNotContain(vm.ConnectorChoices, c => c.Target == "cursor");
                 Assert.Contains(vm.ConnectorChoices, c => c.Target == "codex");
+            });
+        }
+        finally
+        {
+            UiThread.Run(shell.Dispose);
+        }
+    }
+
+    [Theory]
+    [InlineData(245, 1, 245)]
+    [InlineData(489.9, 1, 245)]
+    [InlineData(490, 2, 245)]
+    [InlineData(914, 3, 245)]
+    [InlineData(1160, 4, 245)]
+    [InlineData(100, 1, 245)]
+    public void The_column_count_follows_the_width_with_a_minimum_column(double width, int columns, double minimum) =>
+        Assert.Equal(columns, AdaptiveTileGrid.ColumnsFor(width, minimum));
+
+    [Theory]
+    [InlineData(980, 692)]
+    [InlineData(1200, 800)]
+    [InlineData(1468, 875)]
+    public void The_tiles_share_the_whole_row_with_no_gap_wider_than_a_gutter_at_every_window_size(int width, int height)
+    {
+        using var temp = new TempDirectory();
+        using var services = TestServices.Create(temp);
+        var shell = UiThread.Run(() =>
+        {
+            var s = new PanelShell(services, width, height);
+            _ = s.Show<SetupPanel>();
+            return s;
+        });
+        try
+        {
+            var vm = UiThread.Run(() => (SetupPanelViewModel)shell.ViewModel);
+            UiThread.WaitFor(() => !vm.IsLoading, "setup catalog read finished");
+
+            UiThread.Run(() =>
+            {
+                vm.ShowCards(Sample);
+                shell.Host.Relayout();
+
+                var grid = Assert.Single(VisualTree.Descendants<AdaptiveTileGrid>(shell.Page!));
+                var tiles = Tiles(shell);
+                Assert.Equal(SetupAreas.All.Count, tiles.Length);
+
+                // One width for every tile, never under the Mac's 233.
+                var widths = tiles.Select(t => Math.Round(t.ActualWidth)).Distinct().ToArray();
+                Assert.Single(widths);
+                Assert.True(widths[0] >= 233, $"tile width {widths[0]}");
+
+                // Per row: the tiles are side by side, and a full row ends at the grid's right edge (less the 12 DIP gutter the tile keeps itself).
+                var placed = tiles
+                    .Select(t => (Tile: t, Origin: t.TranslatePoint(new Point(), grid)))
+                    .ToArray();
+                var columns = placed.GroupBy(p => Math.Round(p.Origin.Y)).First().Count();
+                foreach (var row in placed.GroupBy(p => Math.Round(p.Origin.Y)))
+                {
+                    var ordered = row.OrderBy(p => p.Origin.X).ToArray();
+                    for (var i = 1; i < ordered.Length; i++)
+                    {
+                        var gap = ordered[i].Origin.X - (ordered[i - 1].Origin.X + ordered[i - 1].Tile.ActualWidth);
+                        Assert.Equal(12, gap, 1.0);
+                    }
+
+                    if (ordered.Length == columns)
+                    {
+                        var last = ordered[^1];
+                        Assert.Equal(grid.ActualWidth, last.Origin.X + last.Tile.ActualWidth + 12, 1.0);
+                    }
+                }
+
+                // The Mac's order is the order on screen: row by row, left to right.
+                var reading = placed.OrderBy(p => Math.Round(p.Origin.Y)).ThenBy(p => p.Origin.X).Select(p => p.Tile.DataContext).ToArray();
+                Assert.Equal(vm.Areas.Where(a => a.IsShown).Cast<object>().ToArray(), reading);
+
+                // The page does not scroll sideways.
+                var scroller = VisualTree.Descendants<ScrollViewer>(shell.Page!).FirstOrDefault(sv => sv.ScrollableHeight > 0);
+                if (scroller is not null)
+                {
+                    Assert.Equal(0, scroller.ScrollableWidth, 0.5);
+                    scroller.ScrollToTop();
+                    shell.Host.Relayout();
+                }
+
+                RenderTo.Png(shell.Host, $"cust395-setup-{width}x{height}");
             });
         }
         finally

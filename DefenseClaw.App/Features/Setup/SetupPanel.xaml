@@ -67,12 +67,11 @@
         </Style>
 
         <!--
-            A Mac area tile: 233 x 92, the whole tile opens the area (DcInteractiveTile). A tile that cannot work here stays in its place, disabled, and says
+            A Mac area tile: 92 tall, at least 233 wide (AdaptiveTileGrid shares the row out), the whole tile opens the area (DcInteractiveTile). A tile that cannot work here stays in its place, disabled, and says
             why instead of its blurb; the ACP guard on a runtime that has it wears a COMING chip. The search hides a tile rather than removing it.
         -->
         <DataTemplate x:Key="AreaTile" DataType="{x:Type vm:SetupAreaViewModel}">
-            <Button Width="233"
-                    Height="92"
+            <Button Height="92"
                     Margin="0,0,12,12"
                     Style="{StaticResource DcInteractiveTile}"
                     IsEnabled="{Binding CanOpen}"
@@ -411,16 +410,18 @@
                             Message="{Binding LoadError}" />
 
                 <!--
-                    The area grid (the Mac's LazyVGrid, adaptive): 233 x 92 tiles, 12 apart, wrapping to whatever the page is wide, in the Mac's order.
+                    The area grid (the Mac's LazyVGrid, adaptive): 92 DIP tall tiles, 12 apart, at least 233 wide; as many columns as fit, then the columns share
+                    the whole width so the row is full (the right margin of -12 puts the last column's gutter outside the page edge). In the Mac's order.
                 -->
                 <ItemsControl ItemsSource="{Binding Areas}"
                               ItemTemplate="{StaticResource AreaTile}"
+                              Margin="0,0,-12,0"
                               IsTabStop="False"
                               KeyboardNavigation.TabNavigation="Continue"
                               AutomationProperties.Name="Setup areas">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <WrapPanel />
+                            <panels:AdaptiveTileGrid MinColumnWidth="245" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>

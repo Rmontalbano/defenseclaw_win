@@ -128,7 +128,7 @@ public sealed class SetupHubStateLineTests
                 vm.IsConnectorSetupOpen = false;
                 shell.Host.Relayout();
 
-                var tiles = VisualTree.Descendants<Button>(shell.Page!).Where(b => b.Width == 233 && b.IsVisible && b.Height == 92).ToArray();
+                var tiles = VisualTree.Descendants<Button>(shell.Page!).Where(b => b.DataContext is SetupAreaViewModel && b.IsVisible && b.Height == 92).ToArray();
                 Assert.True(tiles.Length >= 4);
                 Assert.All(tiles, t => Assert.Equal(92, t.ActualHeight, 0.5));
 
