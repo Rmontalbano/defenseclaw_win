@@ -96,7 +96,18 @@ public static class InstallRunReader
         }
     }
 
-    /// <summary>The newest <c>install-*.log</c> (by write time, then name), or null; never throws.</summary>
+    /// <summary>
+    /// The transcripts in a logs folder: <c>install-*.log</c> without the <c>install-*-audit.log</c> that install.ps1 1.0.6 writes beside its log
+    /// (<c>Write-AgentIdentityAudit</c>, scripts/install.ps1:933-940), which a verdict must never read as the run's transcript.
+    /// </summary>
+    internal static IEnumerable<FileInfo> TranscriptFiles(string logDirectory) =>
+        new DirectoryInfo(logDirectory)
+            .EnumerateFiles("install-*.log")
+            .Where(static f => !f.Name.EndsWith(AuditLogSuffix, StringComparison.OrdinalIgnoreCase));
+
+    private const string AuditLogSuffix = "-audit.log";
+
+    /// <summary>The newest transcript (<see cref="TranscriptFiles"/>, by write time, then name), or null; never throws.</summary>
     public static string? FindNewestLog(string dataDirectory)
     {
         try
@@ -107,8 +118,7 @@ public static class InstallRunReader
                 return null;
             }
 
-            return new DirectoryInfo(directory)
-                .EnumerateFiles("install-*.log")
+            return TranscriptFiles(directory)
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .ThenByDescending(f => f.Name, StringComparer.Ordinal)
                 .Select(f => f.FullName)
@@ -195,7 +205,7 @@ public static class InstallRunReader
 
         var transcript = InstallTranscript.Parse(text);
         var outcome = InstallRunOutcome.Unknown;
-        if (transcript.Refusal is not null)
+        if (transcript.Refusal is not null && installed is null)
         {
             outcome = InstallRunOutcome.Refused;
         }
@@ -403,7 +413,12 @@ public static class InstallRunReader
         if (run.Outcome is InstallRunOutcome.Failed or InstallRunOutcome.Restored or InstallRunOutcome.Refused or InstallRunOutcome.Unknown && run.FailureReason is { Length: > 0 } reason)
         {
             text += ". Installer said: " + reason;
-            if (InstallScriptPlan.HintFor(reason) is { } hint)
+            if (run.Transcript.Refusal is { } refusal && !reason.Contains(refusal.NextStep, StringComparison.Ordinal))
+            {
+                // The refusal's step is apart from its reason, so the cap on the reason cannot lose it.
+                text += (reason.EndsWith('.') ? " " : ". ") + refusal.NextStep;
+            }
+            else if (InstallScriptPlan.HintFor(reason) is { } hint)
             {
                 text += " " + hint;
             }

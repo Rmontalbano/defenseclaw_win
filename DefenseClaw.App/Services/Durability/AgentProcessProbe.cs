@@ -98,6 +98,12 @@ public sealed class AgentProcessProbe
     /// <summary>True for <c>claude</c>: Claude Code, or the Claude desktop app, which has the same process name.</summary>
     public static bool IsClaudeName(string name) => string.Equals(name, "claude", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>True for <c>opencode</c>: the OpenCode program (V1 or V2), or the background server V2 keeps after its window closes.</summary>
+    public static bool IsOpenCodeName(string name) => string.Equals(name, "opencode", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True for <c>amp</c>: the Amp program. An Amp that runs under node.exe has node's name, and is not seen by name.</summary>
+    public static bool IsAmpName(string name) => string.Equals(name, "amp", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Names (no extension, any case) of the processes running now.</summary>
     public static IReadOnlyList<string> RunningProcessNames() => RunningProcesses().Select(static p => p.Name).ToArray();
 

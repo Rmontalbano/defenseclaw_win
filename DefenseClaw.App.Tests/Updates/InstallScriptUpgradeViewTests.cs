@@ -18,7 +18,7 @@ namespace DefenseClaw.App.Tests.Updates;
 /// rollback, the leftovers) and how it looks. Nothing starts a process; the launcher records what it was asked.
 /// </summary>
 [Collection(UiCollection.Name)]
-public sealed class InstallScriptUpgradeViewTests : IDisposable
+public sealed partial class InstallScriptUpgradeViewTests : IDisposable
 {
     private const string Script = UpgradeRunner.InstallScriptAssetName;
     private const string Checksums = UpgradeRunner.ChecksumsAssetName;
@@ -61,6 +61,10 @@ public sealed class InstallScriptUpgradeViewTests : IDisposable
         public long? FreeDiskBytes(string path) => Free;
 
         public long DatabaseBytes(string dataDirectory) => Databases;
+
+        public DefenseClaw.Core.Gateway.Durability.OpenCodeInstallFacts OpenCodeFacts { get; set; } = DefenseClaw.Core.Gateway.Durability.OpenCodeInstallFacts.NotConfigured;
+
+        public DefenseClaw.Core.Gateway.Durability.OpenCodeInstallFacts OpenCode(string dataDirectory) => OpenCodeFacts;
     }
 
     private sealed class PostFlight : IPostFlightProbe

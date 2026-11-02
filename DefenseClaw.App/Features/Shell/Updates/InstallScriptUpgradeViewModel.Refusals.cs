@@ -4,13 +4,14 @@ using DefenseClaw.App.Services.Updates;
 namespace DefenseClaw.App.ViewModels.Updates;
 
 /// <summary>
-/// What install.ps1 1.0.5 says beyond its exit code (CUST-399): a refusal before it changed anything (exit 1, which alone reads as "did not finish,
+/// What install.ps1 says beyond its exit code (CUST-399, CUST-424): a refusal before it changed anything (exit 1, which alone reads as "did not finish,
 /// restored"), the notices it prints after it finished (the gateway-outage notice, protection off, Codex hooks after a rollback), and what its rollback
-/// will do about a Codex that changed since the older install set it up. All of it is read from the transcript and the files; nothing is run.
+/// will do about a Codex that changed since the older install set it up or an OpenCode V2 an older release cannot guard. All of it is read from the
+/// transcript and the files; nothing is run.
 /// </summary>
 public sealed partial class InstallScriptUpgradeViewModel
 {
-    // What the 1.0.5 installer's rollback will do about a changed Codex (RollbackAgentPreflight), from the last install-state read; null when nothing.
+    // What the installer's rollback will do about a changed Codex or an OpenCode V2 (RollbackAgentPreflight), from the last install-state read; null when nothing.
     private string? _rollbackAgentNote;
 
     /// <summary>The installer's notices from the run's transcript, as read-only rows under the verdict.</summary>
@@ -31,11 +32,24 @@ public sealed partial class InstallScriptUpgradeViewModel
     }
 
     /// <summary>The installer's own next step for a refusal, as the hint under the result line; null for any other run.</summary>
-    private static string? RefusalHint(InstallScriptRunResult result) =>
-        result.Exit.Outcome == InstallOutcome.Refused && result.Transcript.Refusal is { } refusal
-            ? "Nothing was changed. The installer's next step: " + refusal.NextStep + "." +
-              (result.Rollback ? " Roll back here runs the same installer rollback as 'defenseclaw rollback'." : string.Empty)
-            : null;
+    private static string? RefusalHint(InstallScriptRunResult result)
+    {
+        if (result.Exit.Outcome != InstallOutcome.Refused || result.Transcript.Refusal is not { } refusal)
+        {
+            return null;
+        }
+
+        var step = refusal.NextStep.TrimEnd('.') + ".";
+        var said = refusal.Kind switch
+        {
+            // These steps are the app's own wording, not the installer's: the line did not name one.
+            InstallerRefusalKind.NothingChanged => step,
+            InstallerRefusalKind.OpenCodeV2Rollback when refusal.NextStep == InstallTranscript.OpenCodeV2FallbackStep => step,
+            InstallerRefusalKind.OpenCodeV2Rollback => "Releases before 1.0.6 cannot guard OpenCode V2. The installer's next step: " + step,
+            _ => "The installer's next step: " + step,
+        };
+        return "Nothing was changed. " + said + (result.Rollback ? " Roll back here runs the same installer rollback as 'defenseclaw rollback'." : string.Empty);
+    }
 
     /// <summary>What the Roll back note says after a run in this window; null to keep the install state's own note.</summary>
     private static string? ResultRollbackNote(InstallScriptRunResult result) => result.Exit.Outcome switch

@@ -130,7 +130,7 @@ public static class InstallScriptPlan
     }
 
     /// <summary>
-    /// <see cref="MapExit(int?, bool)"/>, refined by what the run's transcript says (CUST-399): exit 1 with a refusal sentence of install.ps1 1.0.5
+    /// <see cref="MapExit(int?, bool)"/>, refined by what the run's transcript says (CUST-399, CUST-424): exit 1 with a refusal sentence of install.ps1
     /// (<see cref="InstallTranscriptFacts.Refusal"/>) is "refused; nothing was changed", not "did not finish, restored". Anything else maps as before.
     /// </summary>
     public static InstallExitInfo MapExit(int? exitCode, bool rollback, InstallTranscriptFacts? transcript)
@@ -178,7 +178,7 @@ public static class InstallScriptPlan
                 return null;
             }
 
-            var files = new DirectoryInfo(directory).EnumerateFiles("install-*.log").ToArray();
+            var files = InstallRunReader.TranscriptFiles(directory).ToArray();
             var from = startedAtUtc - LogClockSlack;
             var to = (endedAtUtc ?? DateTimeOffset.UtcNow) + LogClockSlack;
             var named = files
@@ -696,6 +696,9 @@ public interface IUpgradeProbes
         Directory.Exists(dataDirectory)
             ? Directory.EnumerateFileSystemEntries(dataDirectory, CasReceipts.ReceiptPrefix + "*").Select(f => Path.GetFileName(f)).ToArray()
             : Array.Empty<string>();
+
+    /// <summary>What the files say about OpenCode here, for a target that guards OpenCode V2 only (CUST-424). Reads files, runs nothing.</summary>
+    OpenCodeInstallFacts OpenCode(string dataDirectory) => OpenCodeInstallEvidence.Read(dataDirectory);
 }
 
 /// <summary>The probes over the real machine (read-only).</summary>
@@ -739,6 +742,8 @@ public static class InstallScriptPreflight
     public const string InstallationId = "installation";
     public const string CodexId = "codex";
     public const string ClaudeCodeId = "claude-code";
+    public const string PluginAgentsId = "opencode-amp";
+    public const string OpenCodeV1Id = "opencode-v1";
     public const string ProcessesId = "processes";
     public const string DiskId = "disk";
     public const string VerificationId = "verification";
@@ -752,12 +757,14 @@ public static class InstallScriptPreflight
     /// <param name="dataDirectory">The DefenseClaw data directory (<c>~\.defenseclaw</c>).</param>
     /// <param name="verification">Where the staged install.ps1 stands.</param>
     /// <param name="verificationDetail">One sentence about it, shown as the row's reason.</param>
+    /// <param name="targetVersion">The version the run installs, when known: a target of 1.0.6 or later adds the OpenCode and Amp rows (CUST-424).</param>
     public static PreflightReport Evaluate(
         IUpgradeProbes probes,
         string? installationBlockedReason,
         string dataDirectory,
         PreflightVerification verification,
-        string verificationDetail)
+        string verificationDetail,
+        string? targetVersion = null)
     {
         ArgumentNullException.ThrowIfNull(probes);
         ArgumentException.ThrowIfNullOrEmpty(dataDirectory);
@@ -794,6 +801,15 @@ public static class InstallScriptPreflight
                 "claude.exe is running (Claude Code, or the Claude desktop app, which has the same process name). Quit it first: the installer rewrites " +
                 "Claude Code's hook configuration, and a running session keeps the old hooks.")
             : new PreflightRow(ClaudeCodeId, "Claude Code", PreflightStatus.Pass, "Claude Code is not running."));
+
+        if (GuardsOpenCodeV2(targetVersion, out var target))
+        {
+            rows.Add(PluginAgentsRow(running));
+            if (OpenCodeV1Row(probes, dataDirectory, target) is { } v1)
+            {
+                rows.Add(v1);
+            }
+        }
 
         var others = running
             .Where(n => n.StartsWith("defenseclaw", StringComparison.OrdinalIgnoreCase))
@@ -840,6 +856,54 @@ public static class InstallScriptPreflight
         });
 
         return new PreflightReport(rows);
+    }
+
+    private static bool GuardsOpenCodeV2(string? targetVersion, out string target) =>
+        InstallScriptPlan.TryNormalizeVersion(targetVersion, out target) && Version.TryParse(target, out var version) && version >= OpenCodeInstallEvidence.FirstV2Release;
+
+    /// <summary>
+    /// install.ps1's <c>Assert-NoLoadedPluginAgents</c> (scripts/install.ps1:1147-1176 at 1.0.6, called at :5730 and :5746) stops the run while OpenCode or Amp holds
+    /// an older plugin. It goes by the program's path and owner; this goes by the process name, so a warning can be for a program the installer leaves alone,
+    /// and an Amp that runs under node.exe is not seen here. The installer is the judge either way.
+    /// </summary>
+    private static PreflightRow PluginAgentsRow(IReadOnlyList<string> running)
+    {
+        const string title = "OpenCode and Amp";
+        var openCode = running.Any(AgentProcessProbe.IsOpenCodeName);
+        var amp = running.Any(AgentProcessProbe.IsAmpName);
+        if (!openCode && !amp)
+        {
+            return new PreflightRow(PluginAgentsId, title, PreflightStatus.Pass, "OpenCode and Amp are not running.");
+        }
+
+        var who = openCode && amp ? "OpenCode and Amp are running" : openCode ? "OpenCode is running" : "Amp is running";
+        return new PreflightRow(PluginAgentsId, title, PreflightStatus.Warn,
+            who + (openCode && amp ? ". Close them" : ". Close it") + " completely first: the installer stops, before it changes anything, while OpenCode or Amp still holds DefenseClaw's plugin." +
+            (openCode ? " OpenCode V2 keeps a background server after its window closes: stop it with 'opencode service stop'." : string.Empty));
+    }
+
+    /// <summary>
+    /// A guarded OpenCode V1 that 1.0.6's <c>migrate --check</c> will refuse (cli/defenseclaw/migrations.py:3319). A warning only: the app reads files where the
+    /// check runs the program, so the installer stays the judge. No row when there is nothing to say.
+    /// </summary>
+    private static PreflightRow? OpenCodeV1Row(IUpgradeProbes probes, string dataDirectory, string target)
+    {
+        OpenCodeInstallFacts facts;
+        try
+        {
+            facts = probes.OpenCode(dataDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+
+        return facts is { Configured: true, V1: { } v1 }
+            ? new PreflightRow(OpenCodeV1Id, "OpenCode version", PreflightStatus.Warn,
+                $"DefenseClaw guards OpenCode here, and the OpenCode on record is {v1.Version}, which is OpenCode V1. DefenseClaw {target} guards OpenCode V2 only, so its " +
+                "installer is expected to refuse this upgrade before it changes anything, and the DefenseClaw you have keeps guarding it. Install OpenCode V2 (" +
+                OpenCodeInstallEvidence.InstallV2Command + "), then upgrade. To upgrade without OpenCode instead, run 'defenseclaw setup remove opencode' first.")
+            : null;
     }
 
     /// <summary>

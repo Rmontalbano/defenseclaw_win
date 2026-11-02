@@ -551,8 +551,9 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var blocked = _services.Installation.UpgradeBlockedReason;
             var verification = _verification;
             var detail = _verificationDetail;
+            var target = InstallVersion;
 
-            var report = await Task.Run(() => InstallScriptPreflight.Evaluate(_probes, blocked, dataDirectory, verification, detail)).ConfigureAwait(true);
+            var report = await Task.Run(() => InstallScriptPreflight.Evaluate(_probes, blocked, dataDirectory, verification, detail, target)).ConfigureAwait(true);
 
             PreflightRows.Clear();
             foreach (var row in report.Rows)
@@ -898,7 +899,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var state = await Task.Run(() => InstallStateSnapshot.Read(dataDirectory, activity, now)).ConfigureAwait(true);
             var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers)).ConfigureAwait(true);
 
-            // What the 1.0.5 installer's rollback will do about a Codex that changed since the older install set it up (CUST-399); hashes codex.exe.
+            // What the installer's rollback will do about a Codex that changed since the older install set it up (CUST-399; hashes codex.exe) or an OpenCode V2 (CUST-424).
             var agentNote = await Task.Run(() => RollbackAgentPreflight.Read(dataDirectory, installer, installed, now)).ConfigureAwait(true);
             if (generation != _readGeneration)
             {

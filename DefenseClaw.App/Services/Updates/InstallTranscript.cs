@@ -47,8 +47,8 @@ public sealed record InstallTranscriptFacts
     public bool LocalAssets { get; init; }
 
     /// <summary>
-    /// The installer refused before it changed anything, in one of the sentences that say so and that only 1.0.5 and later print (CUST-399); null
-    /// otherwise. A refusal is exit 1, which alone reads as "did not finish, restored".
+    /// The installer refused before it changed anything, in a sentence that says so (CUST-399, CUST-424); null otherwise. A refusal is exit 1, which alone
+    /// reads as "did not finish, restored".
     /// </summary>
     public InstallerRefusal? Refusal { get; init; }
 
@@ -70,6 +70,18 @@ public enum InstallerRefusalKind
     /// it, and the target is 1.0.4 or later, whose gateway does not start without the program it set up (GAP-2299, GAP-2513).
     /// </summary>
     StaleAgentRollback,
+
+    /// <summary>install.ps1 1.0.6: the upgrade's <c>migrate --check</c> refuses a guarded OpenCode V1, because 1.0.6 guards OpenCode V2 only.</summary>
+    OpenCodeV1Upgrade,
+
+    /// <summary>install.ps1 1.0.6: the rollback refuses a target before 1.0.6 while OpenCode V2 is set up, because those releases guard OpenCode V1 only.</summary>
+    OpenCodeV2Rollback,
+
+    /// <summary>install.ps1's stop while OpenCode or Amp holds its plugin, which does not itself say that nothing changed; its control flow does.</summary>
+    AgentsRunning,
+
+    /// <summary>Any other last <c>x</c> line that ends by saying nothing was changed, of any release.</summary>
+    NothingChanged,
 }
 
 /// <summary>A refusal: the installer's line (sanitized, capped) and the next step it named.</summary>
@@ -92,7 +104,7 @@ public enum InstallerNoticeKind
 public sealed record InstallerNotice(InstallerNoticeKind Kind, string Title, string Text);
 
 /// <summary>Reads install.ps1's PowerShell transcript (<c>~\.defenseclaw\logs\install-*.log</c>). Pure apart from <see cref="Read"/>; never throws.</summary>
-public static class InstallTranscript
+public static partial class InstallTranscript
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
@@ -184,9 +196,12 @@ public static class InstallTranscript
             var signature = SignatureVerified.IsMatch(text);
             var assets = AssetsMatch.IsMatch(text);
 
+            var refusal = RefusalOf(lines, failures, text, host);
+
             return new InstallTranscriptFacts
             {
-                Reason = ReasonOf(failures),
+                // A refusal's reason can be a CLI line above its x line, or only part of a line that also carries the next step.
+                Reason = refusal is { Kind: not InstallerRefusalKind.StaleAgentRollback } ? refusal.Reason : ReasonOf(failures),
                 PreviousRestored = text.Contains("Your previous install is back", StringComparison.Ordinal),
                 RestoreIncomplete = text.Contains("previous install is not fully back", StringComparison.Ordinal) ||
                                     text.Contains("previous install is not proven back", StringComparison.Ordinal),
@@ -195,7 +210,7 @@ public static class InstallTranscript
                 GatewayLeftStopped = LeftStopped.IsMatch(text),
                 AssetCheck = assets ? signature ? TranscriptAssetCheck.SignatureVerified : TranscriptAssetCheck.ChecksumsOnly : TranscriptAssetCheck.None,
                 LocalAssets = LocalVerify.IsMatch(text) || LocalSwitch.IsMatch(host),
-                Refusal = RefusalOf(failures),
+                Refusal = refusal,
                 GuardrailOff = lines.Any(l => ProtectionOffLine.IsMatch(l)),
                 Notices = NoticesOf(lines),
             };
@@ -206,8 +221,8 @@ public static class InstallTranscript
         }
     }
 
-    /// <summary>The refusal in the installer's <c>x</c> lines (the last one wins), or null. Keyed on the exact sentence, so older installers never match.</summary>
-    private static InstallerRefusal? RefusalOf(IReadOnlyList<string> failures)
+    /// <summary>The refusal in the installer's <c>x</c> lines (the last one wins), or null. Keyed on the exact sentence.</summary>
+    private static InstallerRefusal? RefusalOf(IReadOnlyList<string> lines, IReadOnlyList<string> failures, string text, string host)
     {
         for (var i = failures.Count - 1; i >= 0; i--)
         {
@@ -218,7 +233,7 @@ public static class InstallTranscript
             }
         }
 
-        return null;
+        return RefusalOfLastLine(lines, text, host);
     }
 
     /// <summary>The installer's notices, in the order it printed them, each once.</summary>

@@ -86,16 +86,26 @@ public sealed class InstallerRefusalTests : IDisposable
 
     [Theory]
     [InlineData("  x Rollback failed part-way; see the log")]
-    [InlineData("  x Rollback cancelled; nothing was changed")]
-    [InlineData("  x The gateway did not stop; nothing was changed")]
-    [InlineData("  x DefenseClaw 1.0.4 does not start, so the rollback would stop half-way. Nothing was changed.")]
-    public void Older_or_other_failure_lines_are_not_read_as_the_1_0_5_refusal(string line)
+    [InlineData("  x DefenseClaw 1.0.4 does not start, so the rollback would stop half-way. Nothing was changed, as far as is known")]
+    public void Other_failure_lines_are_not_read_as_a_refusal(string line)
     {
-        // The refusal is keyed on 1.0.5's exact sentence; 1.0.4 prints none of it, and a near miss is not it.
         var facts = InstallTranscript.Parse(Transcript("\r\n", "-Rollback", "--- Rolling back to DefenseClaw 1.0.3  [12:00:01Z]", line));
 
         Assert.Null(facts.Refusal);
         Assert.Equal(InstallOutcome.FailedRestored, InstallScriptPlan.MapExit(1, rollback: true, facts).Outcome);
+    }
+
+    [Theory]
+    [InlineData("  x Rollback cancelled; nothing was changed")]
+    [InlineData("  x The gateway did not stop; nothing was changed")]
+    [InlineData("  x DefenseClaw 1.0.4 does not start, so the rollback would stop half-way. Nothing was changed.")]
+    public void A_last_line_that_says_nothing_was_changed_is_a_refusal_but_not_the_stale_codex_one(string line)
+    {
+        // CUST-424: these say so themselves, so they read as refused; only 1.0.5's exact sentence is the stale Codex refusal.
+        var facts = InstallTranscript.Parse(Transcript("\r\n", "-Rollback", "--- Rolling back to DefenseClaw 1.0.3  [12:00:01Z]", line));
+
+        Assert.Equal(InstallerRefusalKind.NothingChanged, facts.Refusal!.Kind);
+        Assert.Equal(InstallOutcome.Refused, InstallScriptPlan.MapExit(1, rollback: true, facts).Outcome);
     }
 
     [Fact]

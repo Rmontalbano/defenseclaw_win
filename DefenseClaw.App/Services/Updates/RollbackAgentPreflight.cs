@@ -50,8 +50,41 @@ public static class RollbackAgentPreflight
               "if it cannot, it refuses the rollback and nothing is changed.";
     }
 
-    /// <summary>Reads <c>previous\data</c> under <paramref name="dataDirectory"/> and returns <see cref="Note"/>. Hashes the program, so call it off the UI thread.</summary>
-    public static string? Read(string dataDirectory, string? installerVersion, string? installedVersion, DateTimeOffset now)
+    /// <summary>
+    /// What install.ps1 1.0.6's rollback will do while OpenCode V2 is set up here, or null (CUST-424). It asks the installed CLI before it changes anything
+    /// (<c>Assert-OlderReleaseGuardsAgents</c>, scripts/install.ps1:639-652, called at :5218; <c>check_opencode_rollback</c>, cli/defenseclaw/migrations.py:3400) and refuses a
+    /// target before 1.0.6. Nothing to say for an older installer or installed CLI (it has no such check, :643), a rollback that goes forward again (:5215), or a later target.
+    /// </summary>
+    /// <param name="installerVersion">The version of the install.ps1 the rollback runs.</param>
+    /// <param name="installedVersion">The version installed now, when known.</param>
+    /// <param name="backTo">The version in <c>previous\VERSION</c>.</param>
+    /// <param name="v2">The guarded OpenCode V2 (<see cref="OpenCodeInstallFacts.V2"/>), or null.</param>
+    public static string? OpenCodeNote(string? installerVersion, string? installedVersion, string? backTo, OpenCodeInstall? v2)
+    {
+        if (v2 is null || !IsAtLeast(installerVersion, OpenCodeInstallEvidence.FirstV2Release) ||
+            !InstallScriptPlan.TryNormalizeVersion(backTo, out var target) || !Version.TryParse(target, out var targetVersion) ||
+            targetVersion >= OpenCodeInstallEvidence.FirstV2Release)
+        {
+            return null;
+        }
+
+        if (InstallScriptPlan.TryNormalizeVersion(installedVersion, out var current) && Version.TryParse(current, out var currentVersion) &&
+            (currentVersion < OpenCodeInstallEvidence.FirstV2Release || currentVersion < targetVersion))
+        {
+            return null;
+        }
+
+        return $"OpenCode V2 ({v2.Version}) is set up here, and releases before {OpenCodeInstallEvidence.FirstV2Release.ToString(3)} cannot guard it: DefenseClaw {target} guards OpenCode V1 only. " +
+               "The installer refuses this rollback and nothing is changed. To roll back, put OpenCode V1 back first (" + OpenCodeInstallEvidence.PutV1BackCommand + "), " +
+               "then run 'defenseclaw agent discover --refresh' so DefenseClaw sees it, or stay on this release.";
+    }
+
+    /// <summary>
+    /// Reads <c>previous\data</c> under <paramref name="dataDirectory"/> and returns <see cref="Note"/>, with <see cref="OpenCodeNote"/> beside it. Hashes the program, so call
+    /// it off the UI thread.
+    /// </summary>
+    /// <param name="openCode">What the files say about OpenCode; <see cref="OpenCodeInstallEvidence.Read"/> when null.</param>
+    public static string? Read(string dataDirectory, string? installerVersion, string? installedVersion, DateTimeOffset now, Func<OpenCodeInstallFacts>? openCode = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(dataDirectory);
 
@@ -63,9 +96,17 @@ public static class RollbackAgentPreflight
 
         var backTo = InstallFiles.ReadPreviousVersion(dataDirectory);
         var stale = RollbackAgentEvidence.Find(Path.Combine(dataDirectory, "previous", "data"), now);
-        return Note(installerVersion, installedVersion, backTo, stale);
+        var codex = Note(installerVersion, installedVersion, backTo, stale);
+
+        // Nothing more is read for an installer without the OpenCode check.
+        var guards = IsAtLeast(installerVersion, OpenCodeInstallEvidence.FirstV2Release)
+            ? OpenCodeNote(installerVersion, installedVersion, backTo, (openCode?.Invoke() ?? OpenCodeInstallEvidence.Read(dataDirectory)).V2)
+            : null;
+        return codex is not null && guards is not null ? codex + " " + guards : codex ?? guards;
     }
 
-    private static bool Checks(string? installerVersion) =>
-        InstallScriptPlan.TryNormalizeVersion(installerVersion, out var v) && Version.TryParse(v, out var version) && version >= FirstCheckingInstaller;
+    private static bool Checks(string? installerVersion) => IsAtLeast(installerVersion, FirstCheckingInstaller);
+
+    private static bool IsAtLeast(string? installerVersion, Version floor) =>
+        InstallScriptPlan.TryNormalizeVersion(installerVersion, out var v) && Version.TryParse(v, out var version) && version >= floor;
 }
