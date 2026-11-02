@@ -59,6 +59,10 @@ public sealed partial class OverviewPanelViewModel
             case OpenInstallerActionId:
                 OpenInstallerForLock();
                 break;
+            case OpenProtectedFileAlertsActionId:
+                RequestNavigation("alerts", new AlertsFilter(Kind: AlertKinds.ProtectedFiles));
+                break;
+
             case ClearStaleInstallLockActionId:
                 ClearStaleInstallLock();
                 break;

@@ -103,6 +103,7 @@ public sealed class AlertCounts
         var tally = SeverityTally.Zero;
         var byConnector = new Dictionary<string, SeverityTally>(StringComparer.OrdinalIgnoreCase);
         var newest = new List<AlertQueueItem>(Math.Min(newestLimit, window.Count));
+        var protectedFiles = new List<AlertQueueItem>();
 
         foreach (var item in window)
         {
@@ -120,8 +121,14 @@ public sealed class AlertCounts
             {
                 newest.Add(item);
             }
+
+            if (ProtectedFileAlert.IsAction(item.Action))
+            {
+                protectedFiles.Add(item);
+            }
         }
 
+        ProtectedFileChanges = protectedFiles;
         Tally = tally;
         _byConnector = byConnector;
         Newest = newest;
@@ -150,6 +157,9 @@ public sealed class AlertCounts
     public IReadOnlyList<AlertQueueItem> Newest { get; }
 
     public AlertCountsSource Source { get; }
+
+    /// <summary>The window's <c>protected-file-changed</c> rows, newest first, wherever they fall in it: what the Overview's row names. Counted in <see cref="Tally"/> like any other row.</summary>
+    public IReadOnlyList<AlertQueueItem> ProtectedFileChanges { get; }
 
     /// <summary>
     /// The window's counts per connector, for a connector-scoped badge. The key is the connector as stored (compared
@@ -198,6 +208,7 @@ public sealed class AlertCounts
             HasMore != other.HasMore ||
             Source != other.Source ||
             _byConnector.Count != other._byConnector.Count ||
+            ProtectedFileChanges.Count != other.ProtectedFileChanges.Count ||
             !string.Equals(Newest.Count == 0 ? null : Newest[0].Id, other.Newest.Count == 0 ? null : other.Newest[0].Id, StringComparison.Ordinal))
         {
             return false;

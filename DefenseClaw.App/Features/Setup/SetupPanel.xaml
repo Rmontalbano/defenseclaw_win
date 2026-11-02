@@ -8,7 +8,8 @@
              xmlns:govern="clr-namespace:DefenseClaw.App.Views.Panels.Govern"
              xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
              xmlns:vm="clr-namespace:DefenseClaw.App.ViewModels"
-             xmlns:vc="clr-namespace:DefenseClaw.App.Views.ConfigEditor">
+             xmlns:vc="clr-namespace:DefenseClaw.App.Views.ConfigEditor"
+             xmlns:guardrail="clr-namespace:DefenseClaw.App.Views.Guardrail">
     <!--
         The Setup page, in the Mac's order (CUST-385; Features/SetupView.swift at v1.1.34): "Setup Areas", the Redaction Policy entry, the area grid
         (the Mac's 23 tiles, in its order, SetupAreas.All), then the config editor inline beneath it (ConfigEditorView over the app's one draft, which
@@ -915,6 +916,11 @@
                                                  OutputName="Verbatim output of defenseclaw guardrail status"
                                                  Visibility="{Binding ShowGuardrailRaw, Converter={StaticResource BoolToVisibility}}"
                                                  Text="{Binding GuardrailRaw, Mode=OneWay}" />
+
+                            <!-- The protected-file watch (CUST-422): only on a per-user 1.0.6 or later; its own view keeps the setting's text in one place. -->
+                            <guardrail:ProtectedFilesWatchView Margin="0,12,0,0"
+                                                               DataContext="{Binding ProtectedFiles}"
+                                                               Visibility="{Binding IsShown, Converter={StaticResource BoolToVisibility}}" />
 
                             <!-- The outcome of the last change. -->
                             <Border Margin="0,8,0,0"

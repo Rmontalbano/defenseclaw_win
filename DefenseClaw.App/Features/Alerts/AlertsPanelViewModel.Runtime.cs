@@ -44,6 +44,7 @@ public sealed partial class AlertsPanelViewModel
     /// </summary>
     private RuntimeAlertState? RuntimeForQueue()
     {
+        RefreshKindChoices();
         var service = Services.RuntimeAlerts;
         if (!service.IsEnabled)
         {
@@ -138,7 +139,7 @@ public sealed partial class AlertItem
             copy.TargetRef = target;
         }
 
-        return copy;
+        return copy.WithProtectedFile(row);
     }
 
     /// <summary>A row for an alert only the runtime listed and whose audit row could not be read: what the runtime's list says, nothing invented.</summary>
@@ -164,7 +165,7 @@ public sealed partial class AlertItem
             SessionId = FactOf(row, "session_id"),
             StructuredText = "{}",
             Fields = row.Facts.Select(f => new AlertField("runtime." + f.Name, f.Value)).ToList(),
-        };
+        }.WithProtectedFile(row);
     }
 
     private static string FactOf(RuntimeAlertRow row, string name) =>

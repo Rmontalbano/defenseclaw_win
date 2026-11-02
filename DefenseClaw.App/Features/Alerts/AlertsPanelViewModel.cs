@@ -2142,7 +2142,7 @@ public sealed partial class AlertItem : ObservableObject
         _ => 0,
     };
 
-    public string RuleId { get; private init; } = string.Empty;
+    public string RuleId { get; private set; } = string.Empty;
 
     /// <summary>The run (agent session) the alert came from, as far as the source says; empty when it does not.</summary>
     public string RunId { get; private init; } = string.Empty;
@@ -2192,7 +2192,7 @@ public sealed partial class AlertItem : ObservableObject
     public bool IsOversized => OversizedNotice.Length > 0;
 
     /// <summary>Collapse axis: the same signature firing on the same action.</summary>
-    public string GroupKey => $"{RuleId}|{Action}";
+    public string GroupKey => ProtectedFile is null ? $"{RuleId}|{Action}" : $"{RuleId}|{Action}|{RawTarget}";
 
     public bool HasEvidence => Evidence.Length > 0;
 
@@ -2249,7 +2249,7 @@ public sealed partial class AlertItem : ObservableObject
                 : string.Empty,
             StructuredText = Pretty(structured),
             Fields = ToFields(structured),
-        };
+        }.WithProtectedFile();
     }
 
     public static AlertItem FromAudit(AuditEvent row)
@@ -2288,7 +2288,7 @@ public sealed partial class AlertItem : ObservableObject
                 : $"({structuredOver.Reason}; it is left in the database, so its attributes are not shown here)",
             Fields = WithNotice(ToFields(structured), notice),
             OversizedNotice = notice,
-        };
+        }.WithProtectedFile();
     }
 
     /// <summary>"Too large to display: ..." for the values of an audit row the reader left in the database; empty when it left none.</summary>
@@ -2319,7 +2319,7 @@ public sealed partial class AlertItem : ObservableObject
             Source = item.Connector ?? string.Empty,
             Connector = item.Connector,
             StructuredText = "{}",
-        };
+        }.WithProtectedFile();
     }
 
     /// <summary>Copy used as a collapsed group's representative row.</summary>
@@ -2347,6 +2347,7 @@ public sealed partial class AlertItem : ObservableObject
         StructuredText = StructuredText,
         Fields = Fields,
         OversizedNotice = OversizedNotice,
+        ProtectedFile = ProtectedFile,
     };
 
     private static bool HasUsableId(string? id) =>

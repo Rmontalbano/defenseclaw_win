@@ -59,12 +59,13 @@ public sealed class ConfigReloadRulesTests
     [Fact]
     public void The_restart_set_is_the_one_configwrite_ships()
     {
-        // restartKeys, in order (internal/config/configwrite/restart_keys.go at 1.0.4; config_writer.RESTART_KEYS is its Python mirror).
+        // restartKeys, in order (internal/config/configwrite/restart_keys.go at 1.0.4, plus guardrail.protected_files from configwrite.go:641 at 1.0.6; config_writer.RESTART_KEYS is its Python mirror).
         Assert.Equal(
             [
                 "data_dir", "observability.local.path", "observability.local.judge_bodies_path", "gateway",
                 "guardrail.host", "guardrail.port", "guardrail.enabled", "guardrail.connector",
                 "guardrail.scanner_mode", "guardrail.retain_judge_bodies", "guardrail.hook_self_heal", "guardrail.hook_self_heal_debounce_ms",
+                "guardrail.protected_files",
                 "claw", "agent", "routing", "plugin_dir",
                 "deployment_mode", "enterprise.profile", "enterprise.network", "enterprise.openshell",
                 "environment", "tenant_id", "workspace_id", "discovery_source",

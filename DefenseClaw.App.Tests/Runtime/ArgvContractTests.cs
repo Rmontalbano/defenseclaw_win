@@ -24,6 +24,9 @@ public sealed class ArgvContractTests
 
     private static readonly Command[] Tree0810 = Load("cli-tree-0.8.10.json");
 
+    /// <summary>A hand-written excerpt of 1.0.6's <c>config set</c> and <c>config unset</c> (cmd_config.py); the pin's tree has neither.</summary>
+    private static readonly Command[] Tree106ConfigWrites = Load(System.IO.Path.Combine("runtime-1.0.6", "cli", "protected-files-config-tree.json"));
+
     private static Command[] Load(string relative)
     {
         var file = System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", relative);
@@ -245,6 +248,20 @@ public sealed class ArgvContractTests
     [MemberData(nameof(Cust271Argvs))]
     public void The_setup_dialog_argv_are_commands_of_the_newer_cli_with_options_it_has(string packed) =>
         Assert.Null(Check(packed.Split('\u001f')));
+
+    /// <summary>The protected-file watch's setting (CUST-422), against 1.0.6's own commands: the card is hidden on every runtime before it.</summary>
+    [Theory]
+    [InlineData("restore")]
+    [InlineData("off")]
+    [InlineData("alert")]
+    public void The_protected_file_setting_argv_are_commands_of_1_0_6(string mode)
+    {
+        var argv = ProtectedFilesWatchViewModel.ArgvFor(mode);
+
+        Assert.Null(Check(argv, Tree106ConfigWrites));
+        Assert.Equal("guardrail.protected_files.on_change", argv[2]);
+        Assert.Contains(Tree106ConfigWrites, c => c.Path == argv[0] + " " + argv[1]);
+    }
 
     [Fact]
     public void The_checker_notices_a_renamed_flag_and_a_removed_command()

@@ -1,0 +1,66 @@
+<UserControl x:Class="DefenseClaw.App.Views.Guardrail.ProtectedFilesWatchView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+             AutomationProperties.Name="Protected-file watch">
+    <!--
+        The protected-file watch's setting (CUST-422, runtime 1.0.6, per-user): what config.yaml says, what is checked, and a reviewed change of on_change. See
+        ProtectedFilesWatchViewModel. The review is the Setup panel's own overlay. Shared styling only.
+    -->
+    <Border Style="{StaticResource DcSubtleRow}">
+        <StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource DcBody}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           AutomationProperties.HeadingLevel="Level3"
+                           Text="Protected files" />
+                <Border Margin="10,0,0,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource DcBadge}"
+                        Tag="{Binding BadgeKey}">
+                    <TextBlock Style="{StaticResource DcBadgeText}"
+                               AutomationProperties.LiveSetting="Polite"
+                               AutomationProperties.Name="{Binding BadgeText, StringFormat='on_change in config.yaml: {0}'}"
+                               Text="{Binding BadgeText}" />
+                </Border>
+            </StackPanel>
+
+            <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap" Text="{Binding Summary}" />
+            <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding WatchedText}" />
+            <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding AttributionText}" />
+            <TextBlock Margin="0,4,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource DcToneHighBrush}"
+                       Style="{StaticResource DcCaption}"
+                       Visibility="{Binding HasUnrecognized, Converter={StaticResource BoolToVisibility}}"
+                       Text="{Binding UnrecognizedText}" />
+
+            <WrapPanel Margin="0,8,0,0" Style="{StaticResource DcToolbarPanel}">
+                <TextBlock Style="{StaticResource DcToolbarLabel}" Text="On change" />
+                <ComboBox Margin="0,0,12,8"
+                          MinWidth="200"
+                          VerticalAlignment="Center"
+                          ItemsSource="{Binding Choices}"
+                          DisplayMemberPath="Label"
+                          SelectedValuePath="Value"
+                          SelectedValue="{Binding SelectedMode, Mode=TwoWay}"
+                          IsEnabled="{Binding CanChange}"
+                          ToolTip="{Binding BlockedReason}"
+                          ToolTipService.ShowOnDisabled="True"
+                          AutomationProperties.Name="What the gateway does on a protected-file change" />
+                <ui:Button Margin="0,0,12,8"
+                           Appearance="Secondary"
+                           Content="Review change"
+                           Icon="{ctl:DcSymbolIcon ShieldCheckmark24}"
+                           Command="{Binding ReviewChangeCommand}"
+                           AutomationProperties.Name="Review the change to the protected-file watch"
+                           AutomationProperties.HelpText="Shows the exact defenseclaw config command and what it does; nothing runs until you confirm." />
+            </WrapPanel>
+
+            <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding SelectedNote}" />
+            <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding RollbackText}" />
+        </StackPanel>
+    </Border>
+</UserControl>

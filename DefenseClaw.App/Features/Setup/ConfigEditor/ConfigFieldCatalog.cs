@@ -383,6 +383,7 @@ public static class ConfigFieldCatalog
         Hint("guardrail.block_message", "Response text returned when blocked.");
         Hint("guardrail.stream_buffer_bytes", "Chunk size for streaming inspection.");
         Hint("guardrail.retain_judge_bodies", "Persist raw judge verdicts locally.");
+        Choice("guardrail.protected_files.on_change", "Protected-file watch: alert (default), restore or off. Restart required.", "alert", "restore", "off");
         Choice("guardrail.detection_strategy", "Global detection strategy.", "regex_only", "regex_judge", "judge_first");
         Choice("guardrail.detection_strategy_prompt", "Prompt override; blank=inherit.", string.Empty, "regex_only", "regex_judge", "judge_first");
         Choice("guardrail.detection_strategy_completion", "Completion override; blank=inherit.", string.Empty, "regex_only", "regex_judge", "judge_first");

@@ -113,6 +113,7 @@ public sealed partial class OverviewPanelViewModel
         var snapshot = _snapshot;
         BuildConnectors(snapshot, snapshot.Health);
         RenderEnforcementCards();
+        RefreshProtectedFileAttention();
     }
 
     /// <summary>Titles, caption, tiles, scanners and configuration for the scope as it is now. No I/O.</summary>

@@ -17,6 +17,7 @@ public static class AlertKinds
     public const string Audit = "audit";
     public const string Scan = "scan";
     public const string Egress = "egress";
+    public const string ProtectedFiles = "protected-files";
 
     /// <summary>The popup's choices, in the Mac's order.</summary>
     public static IReadOnlyList<AlertKindChoice> Choices { get; } = new[]
@@ -28,6 +29,9 @@ public static class AlertKinds
         new AlertKindChoice(Egress, "Egress"),
     };
 
+    /// <summary>The choices on a runtime with the protected-file watch (1.0.6): the same list and the watch's own kind at its end, so an older runtime's popup is what it was.</summary>
+    public static IReadOnlyList<AlertKindChoice> ChoicesWithProtectedFiles { get; } = Choices.Append(new AlertKindChoice(ProtectedFiles, "Protected files")).ToArray();
+
     /// <summary>The canonical value for a name a deep link or a person might spell ("Scans", "scan", "BLOCKS"); null for one this panel does not know.</summary>
     public static string? Normalize(string? name) => name?.Trim().ToLowerInvariant() switch
     {
@@ -36,6 +40,7 @@ public static class AlertKinds
         "audit" or "findings" => Audit,
         "scan" or "scans" => Scan,
         "egress" => Egress,
+        "protected-files" or "protected files" => ProtectedFiles,
         _ => null,
     };
 }
@@ -129,7 +134,8 @@ public sealed partial class AlertsPanelViewModel
     // ---- The kind filter ---------------------------------------------------------------------------------
 
     /// <summary>The Kind popup's choices.</summary>
-    public IReadOnlyList<AlertKindChoice> KindChoices => AlertKinds.Choices;
+    public IReadOnlyList<AlertKindChoice> KindChoices =>
+        Services.Runtime.Capabilities.Has(DefenseClaw.Core.Runtime.RuntimeCapability.ProtectedFileWatch) ? AlertKinds.ChoicesWithProtectedFiles : AlertKinds.Choices;
 
     /// <summary>Which kind of row the list shows: an <see cref="AlertKinds"/> value.</summary>
     [ObservableProperty]
@@ -198,7 +204,7 @@ public sealed partial class AlertsPanelViewModel
     private bool KindAllows(AlertItem item) => KindFilter switch
     {
         AlertKinds.Blocks => item.IsBlock,
-        AlertKinds.Audit or AlertKinds.Scan or AlertKinds.Egress => string.Equals(item.Kind, KindFilter, StringComparison.Ordinal),
+        AlertKinds.Audit or AlertKinds.Scan or AlertKinds.Egress or AlertKinds.ProtectedFiles => string.Equals(item.Kind, KindFilter, StringComparison.Ordinal),
         _ => true,
     };
 
@@ -544,6 +550,7 @@ public sealed partial class AlertItem
     }
 
     private static string KindOf(string action, string scanner) =>
+        ProtectedFileAlert.IsAction(action) ? AlertKinds.ProtectedFiles :
         scanner.Length > 0 || action.Contains("scan", StringComparison.OrdinalIgnoreCase) ? AlertKinds.Scan : AlertKinds.Audit;
 
     /// <summary>An egress decision as an alert row: the decision is the action, the host the target, the network attributes the attribute list.</summary>

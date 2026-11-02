@@ -205,7 +205,8 @@ public sealed class AppServices : IDisposable
             Paths.AuditDatabasePath,
             probe: AuditChanges,
             readTimeout: ReaderTimeouts.AlertQueue,
-            excludeDetectionOnly: () => Runtime.Check(RuntimeCapability.RuntimeAlerts).IsAvailable);
+            excludeDetectionOnly: () => Runtime.Check(RuntimeCapability.RuntimeAlerts).IsAvailable,
+            includeProtectedFileChanges: () => Runtime.Check(RuntimeCapability.ProtectedFileWatch).IsAvailable);
         RuntimeAlerts = new RuntimeAlertsService(
             () => Runtime.Check(RuntimeCapability.RuntimeAlerts).IsAvailable,
             RuntimeAlertsService.FromCli(Cli),

@@ -129,6 +129,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         Routing = new NotificationRoutingViewModel(services);
         Batch = new ConnectorBatchViewModel(services, applied: _ => RefreshAsync());
         Monitoring = new RuntimeMonitoringViewModel(services, services.GatewayAdmin);
+        ProtectedFiles = new ProtectedFilesWatchViewModel(services, Review);
 
         // The credential read feeds the "Required Credentials" row.
         Credentials.Loaded += (_, _) => Readiness.Rebuild();
@@ -142,6 +143,9 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     /// <summary>The shared review the readiness fixes go through.</summary>
     public DiscoverActionReview Review { get; }
+
+    /// <summary>The protected-file watch's setting (1.0.6, per-user), under the guardrail quick controls.</summary>
+    public ProtectedFilesWatchViewModel ProtectedFiles { get; }
 
     /// <summary>
     /// The notification routing dialog (CUST-271): the Notifications and Notification categories tiles open it instead of a one-slot wizard.
@@ -262,6 +266,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     private void OnRuntimeChanged(object? sender, EventArgs e)
     {
         RaiseRedactionTile();
+
+        ProtectedFiles.Refresh();
 
         // The ACP Guard tile follows the runtime's answer (CUST-385).
         RefreshAreas();
@@ -443,6 +449,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     /// </summary>
     private void RefreshCardStates()
     {
+        ProtectedFiles.Refresh();
         foreach (var card in _all)
         {
             _ = card.ApplyState(WizardCardStates.For(card.Target, card.Definition.Group, Services.Config));

@@ -42,6 +42,7 @@ public static class ConfigReloadRules
         "guardrail.host", "guardrail.port", "guardrail.enabled", "guardrail.connector",
         "guardrail.scanner_mode", "guardrail.retain_judge_bodies",
         "guardrail.hook_self_heal", "guardrail.hook_self_heal_debounce_ms",
+        "guardrail.protected_files",
         "claw", "agent", "routing", "plugin_dir",
         "deployment_mode", "enterprise.profile", "enterprise.network", "enterprise.openshell",
         "environment", "tenant_id", "workspace_id", "discovery_source",

@@ -184,6 +184,17 @@ public sealed class GuardrailSection
     public string? RulePack { get; set; }
 
     /// <summary>
+    /// <c>guardrail.protected_files</c> as the YAML had it, whatever its shape: the runtime validates this block, the app only reads it, and a value of the
+    /// wrong shape must not make the whole file unreadable here. Read it through <see cref="ProtectedFiles"/>.
+    /// </summary>
+    [YamlMember(Alias = "protected_files")]
+    public object? ProtectedFilesRaw { get; set; }
+
+    /// <summary>What <c>guardrail.protected_files</c> says (1.0.6). Read-only; unset is the runtime's default, <c>alert</c> and the built-in list.</summary>
+    [YamlIgnore]
+    public ProtectedFilesSettings ProtectedFiles => ProtectedFilesSettings.From(ProtectedFilesRaw);
+
+    /// <summary>
     /// Per-connector settings, keyed by connector name, matched case-insensitively. Never null,
     /// and no value in it is null — see <see cref="DefenseClawConfig"/> for why an empty
     /// <c>connectors:</c> or an empty <c>claudecode:</c> beneath it has to be handled.

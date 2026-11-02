@@ -794,6 +794,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // 1.0.5 and any runtime (CUST-398): an agent whose own settings turn every hook off. Built in OverviewPanelViewModel.Runtime105.cs.
         AppendRuntime105Attention(rows);
 
+        // 1.0.6 (CUST-422): an agent changed a protected file. Built in OverviewPanelViewModel.ProtectedFiles.cs.
+        AppendProtectedFileAttention(rows);
+
         // The third opinion, and the one that wins: Claude Code's own settings.json can
         // hold an env override the hook obeys over both config.yaml and /status.
         if (snapshot.FailModeDrift is { } drift)

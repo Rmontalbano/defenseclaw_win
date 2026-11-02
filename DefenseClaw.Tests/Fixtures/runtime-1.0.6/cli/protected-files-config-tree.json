@@ -1,0 +1,25 @@
+{
+  "source": "Excerpt written by hand from cli/defenseclaw/commands/cmd_config.py at tag 1.0.6 (config_set :1072-1078, config_unset :1129-1133), in the shape of cli-tree.json. Not a capture: no 1.0.6 runtime has been run for this.",
+  "commands": [
+    {
+      "path": "config",
+      "group": true,
+      "options": []
+    },
+    {
+      "path": "config set",
+      "group": false,
+      "options": [
+        { "names": ["--json"], "flag": true },
+        { "names": ["--expect-sha256"], "flag": false }
+      ]
+    },
+    {
+      "path": "config unset",
+      "group": false,
+      "options": [
+        { "names": ["--expect-sha256"], "flag": false }
+      ]
+    }
+  ]
+}

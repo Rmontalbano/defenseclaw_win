@@ -94,6 +94,7 @@ public sealed class AlertQueueReader
     private readonly AuditChangeProbe? _probe;
     private readonly TimeSpan _readTimeout;
     private readonly Func<bool>? _excludeDetectionOnly;
+    private readonly Func<bool>? _includeProtectedFileChanges;
 
     /// <summary>The finished answers, by <c>newestLimit</c>: the object a repeat read of an unchanged database gets back.</summary>
     private readonly SnapshotMemo<int, AlertQueueResult> _results;
@@ -119,13 +120,19 @@ public sealed class AlertQueueReader
     /// Asked at every read that touches the database: true leaves detection-only findings (<see cref="DetectionOnlyFindings"/>) out of the queue, as a
     /// 1.x runtime's own alert list does. The app answers with the runtime's capability; null (and 0.8.10) lists them, as it always did.
     /// </param>
+    /// <param name="includeProtectedFileChanges">
+    /// Asked at every read that touches the database: true adds <c>protected-file-changed</c> rows, which 1.0.6 files as <c>security.finding</c> under a
+    /// <c>legacy.audit.*</c> event name, so neither ordinary arm holds them (see <see cref="ProtectedFileAlert.QueueArm"/>). The app answers with the runtime's
+    /// capability; null (and every runtime before 1.0.6) runs the two arms it always did.
+    /// </param>
     public AlertQueueReader(
         string databasePath,
         int windowLimit = DefaultWindowLimit,
         AuditChangeProbe? probe = null,
         TimeProvider? timeProvider = null,
         TimeSpan? readTimeout = null,
-        Func<bool>? excludeDetectionOnly = null)
+        Func<bool>? excludeDetectionOnly = null,
+        Func<bool>? includeProtectedFileChanges = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(windowLimit, 1);
@@ -140,6 +147,7 @@ public sealed class AlertQueueReader
         _connectionString = AuditReader.BuildReadOnlyConnectionString(databasePath);
         _probe = probe;
         _excludeDetectionOnly = excludeDetectionOnly;
+        _includeProtectedFileChanges = includeProtectedFileChanges;
         _results = new SnapshotMemo<int, AlertQueueResult>(capacity: 4, time: timeProvider);
         _windows = new SnapshotMemo<int, QueueWindow>(capacity: 1, time: timeProvider);
     }
@@ -241,7 +249,7 @@ public sealed class AlertQueueReader
 
         await using var command = connection.CreateCommand();
         // nosemgrep: csharp-sqli -- allow-list: BuildSql picks fixed fragments by whether the database has a column or table (a boolean, never the name itself); $limit is bound
-        command.CommandText = BuildSql(schema, ExcludesDetectionOnly(schema));
+        command.CommandText = BuildSql(schema, ExcludesDetectionOnly(schema), _includeProtectedFileChanges?.Invoke() == true);
 
         // One past the window, so "there are more" needs no second query.
         command.Parameters.AddWithValue("$limit", _windowLimit + 1);
@@ -303,7 +311,7 @@ public sealed class AlertQueueReader
 
         await using var command = connection.CreateCommand();
         // nosemgrep: csharp-sqli -- allow-list: the EXPLAIN prefix and BuildSql, as annotated above; $limit is bound
-        command.CommandText = "EXPLAIN QUERY PLAN " + BuildSql(schema, ExcludesDetectionOnly(schema));
+        command.CommandText = "EXPLAIN QUERY PLAN " + BuildSql(schema, ExcludesDetectionOnly(schema), _includeProtectedFileChanges?.Invoke() == true);
         command.Parameters.AddWithValue("$limit", _windowLimit + 1);
 
         // Columns: id, parent, notused, detail.
@@ -360,7 +368,7 @@ public sealed class AlertQueueReader
     /// The statement: two newest-first arms merged (see the type documentation). Optional parts follow the database: no
     /// acknowledgement table, no acknowledgement condition; no <c>connector</c> or <c>target</c> column, a NULL in their place.
     /// </summary>
-    private static string BuildSql(Schema schema, bool excludeDetectionOnly)
+    private static string BuildSql(Schema schema, bool excludeDetectionOnly, bool includeProtectedFileChanges)
     {
         var connector = schema.Has("connector") ? "e.connector" : "NULL";
         var target = schema.Has("target") ? $"substr(e.target, 1, {TargetLimit.ToString(CultureInfo.InvariantCulture)})" : "NULL";
@@ -375,13 +383,16 @@ public sealed class AlertQueueReader
 
         var findings = Arm(FindingArm);
         var legacy = Arm(LegacyArm);
+        var protectedFiles = includeProtectedFileChanges
+            ? $" UNION ALL SELECT * FROM ({Arm(ProtectedFileAlert.QueueArm)})"
+            : string.Empty;
 
         return
             $"""
             SELECT rid, id, ts, action, target, severity, connector FROM (
                 SELECT * FROM ({findings})
                 UNION ALL
-                SELECT * FROM ({legacy})
+                SELECT * FROM ({legacy}){protectedFiles}
             ) ORDER BY ts DESC, rid DESC LIMIT $limit
             """;
 

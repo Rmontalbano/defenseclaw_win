@@ -543,6 +543,37 @@
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding ConfidenceText, StringFormat='confidence: {0}'}" />
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,2,0,0" Text="{Binding Tags, StringFormat='tags: {0}'}" />
 
+                            <!-- A protected-file change (CUST-422): the file, who was running, the hashes before and after; never the content, which the row does not hold. -->
+                            <StackPanel Visibility="{Binding IsProtectedFileChange, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcCardHeader Margin="0,14,0,4" Symbol="ShieldError24" Section="Observe" Content="What changed" />
+                                <ItemsControl Grid.IsSharedSizeScope="True"
+                                              ItemsSource="{Binding ProtectedFileFacts}"
+                                              AutomationProperties.Name="What changed">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="AlertProtectedFileKey" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcCaption}"
+                                                           Margin="0,0,10,0"
+                                                           Text="{Binding Name}" />
+                                                <TextBox Grid.Column="1"
+                                                         Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="{Binding Name}"
+                                                         Text="{Binding Value, Mode=OneWay}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding ProtectedFileNote}" />
+                            </StackPanel>
+
                             <!-- Run, trace, request and session id (CUST-261): selectable, so one can be copied into another tool or pasted into a search here. -->
                             <StackPanel Visibility="{Binding HasCorrelation, Converter={StaticResource BoolToVisibility}}">
                                 <ctl:DcCardHeader Margin="0,14,0,4" Symbol="Link24" Section="Observe" Content="Correlation" />

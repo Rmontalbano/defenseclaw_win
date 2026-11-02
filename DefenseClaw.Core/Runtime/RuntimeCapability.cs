@@ -134,6 +134,14 @@ public enum RuntimeCapability
     /// keeps (a recovery record beside it) still waits for the installer. Judged from the runtime's version (1.0.5 or later).
     /// </summary>
     StaleInstallLockIgnored,
+
+    /// <summary>
+    /// The protected-file watch of 1.0.6 (internal/protectedfiles, internal/gateway/protected_files.go): a per-user gateway raises a HIGH
+    /// <c>protected-file-changed</c> alert for a change to a short list of files while an agent tool call runs, and <c>guardrail.protected_files</c> is in
+    /// its config schema. A release before 1.0.6 refuses a config that sets that key. A managed gateway has no watch, whatever its version, so this answers
+    /// "does this runtime know the setting and the alert", not "is something watching". Judged from the runtime's version (1.0.6 or later).
+    /// </summary>
+    ProtectedFileWatch,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -175,6 +183,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.AcpGuardHealth => "ACP guard status and verify of 1.0.5",
         RuntimeCapability.CodexHomeLinkRefusal => "Codex setup refuses a linked .codex home",
         RuntimeCapability.StaleInstallLockIgnored => "Stale install lock ignored (1.0.5)",
+        RuntimeCapability.ProtectedFileWatch => "Protected-file watch (1.0.6)",
         _ => capability.ToString(),
     };
 
@@ -209,6 +218,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.AcpGuardHealth => "the runtime reports version 1.0.5 or later and lists its commands ('acp status --json' and 'acp verify' report healthy only for a lock and agent the guard starts)",
         RuntimeCapability.CodexHomeLinkRefusal => "the runtime reports version 1.0.5 or later and lists its commands (setup codex refuses a .codex home that is a link or junction before it changes anything)",
         RuntimeCapability.StaleInstallLockIgnored => "the runtime reports version 1.0.5 or later and lists its commands (its hooks ignore an install lock whose installer is gone, and doctor --fix removes it)",
+        RuntimeCapability.ProtectedFileWatch => "the runtime reports version 1.0.6 or later and lists its commands (a per-user gateway alerts on an agent's change to a protected file, and guardrail.protected_files is in its schema)",
         _ => string.Empty,
     };
 }

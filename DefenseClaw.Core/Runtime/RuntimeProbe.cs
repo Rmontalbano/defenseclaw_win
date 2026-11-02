@@ -72,6 +72,9 @@ public static class RuntimeProbe
     /// </summary>
     internal static readonly Version Release105 = new(1, 0, 5);
 
+    /// <summary>The 1.0.6 release: among other things, the protected-file watch (internal/protectedfiles, absent at 1.0.5).</summary>
+    internal static readonly Version Release106 = new(1, 0, 6);
+
     /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
     internal static readonly Version RepinVersion = new(1, 0, 4);
 
@@ -357,6 +360,12 @@ public static class RuntimeProbe
         if (identity.ParsedVersion is { } staleLock && staleLock >= Release105 && (root.Count > 0 || setup.Count > 0))
         {
             present.Add(RuntimeCapability.StaleInstallLockIgnored);
+        }
+
+        // The protected-file watch is gateway behaviour with no command of its own to probe: the version decides, on the same terms as above.
+        if (identity.ParsedVersion is { } protectedFiles && protectedFiles >= Release106 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.ProtectedFileWatch);
         }
 
         if (HasAll(setup, RegistryMarkers))
