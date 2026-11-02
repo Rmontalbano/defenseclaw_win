@@ -33,13 +33,21 @@ public sealed record ConfiguredDestination(string Name, string Kind, string Endp
 /// <param name="JudgeBodiesPath"><c>observability.local.judge_bodies_path</c>, as written; null when not set.</param>
 /// <param name="JudgeCapture"><c>guardrail.retain_judge_bodies</c>: true unless config.yaml says anything but true (the runtime's default is on).</param>
 /// <param name="Destinations">The entries of <c>observability.destinations</c> that have a name.</param>
+/// <param name="MaxStoreMb"><c>observability.local.max_store_mb</c> (1.0.6), the audit store's size cap in MiB; null when config.yaml sets none, or sets one outside the runtime's range (<see cref="MinStoreMb"/> to <see cref="MaxStoreMbLimit"/>).</param>
 public sealed record ObservabilityConfigFacts(
     long? RetentionDays,
     string? LocalPath,
     string? JudgeBodiesPath,
     bool JudgeCapture,
-    IReadOnlyList<ConfiguredDestination> Destinations)
+    IReadOnlyList<ConfiguredDestination> Destinations,
+    long? MaxStoreMb = null)
 {
+    /// <summary>The smallest size cap the runtime accepts (<c>ObservabilityV8MinStoreMB</c>, internal/config/observability_v8_types.go at 1.0.6); 0 is no cap.</summary>
+    public const long MinStoreMb = 64;
+
+    /// <summary>The largest size cap the runtime accepts (<c>ObservabilityV8MaxStoreMB</c>, 1 &lt;&lt; 20).</summary>
+    public const long MaxStoreMbLimit = 1 << 20;
+
     /// <summary>The longest config.yaml read (it is a few KiB).</summary>
     public const int MaxLength = 1024 * 1024;
 
@@ -92,7 +100,8 @@ public sealed record ObservabilityConfigFacts(
             FilePath(local?.GetValueOrDefault("path")),
             FilePath(local?.GetValueOrDefault("judge_bodies_path")),
             guardrail is null || !guardrail.ContainsKey("retain_judge_bodies") || IsTrue(guardrail["retain_judge_bodies"]),
-            ReadDestinations(observability?.GetValueOrDefault("destinations")));
+            ReadDestinations(observability?.GetValueOrDefault("destinations")),
+            StoreCap(local?.GetValueOrDefault("max_store_mb")));
     }
 
     private static List<ConfiguredDestination> ReadDestinations(object? node)
@@ -174,6 +183,12 @@ public sealed record ObservabilityConfigFacts(
     private static long? Days(object? node) =>
         node is string text && long.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var days) && days <= MaxRetentionDays
             ? days
+            : null;
+
+    /// <summary>A size cap in MiB the runtime accepts; null for any other text, including 0 (no cap), a fraction, or a number outside its range.</summary>
+    private static long? StoreCap(object? node) =>
+        node is string text && long.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var megabytes) && megabytes is >= MinStoreMb and <= MaxStoreMbLimit
+            ? megabytes
             : null;
 
     private static bool IsTrue(object? node) => node is string text && string.Equals(text.Trim(), "true", StringComparison.OrdinalIgnoreCase);

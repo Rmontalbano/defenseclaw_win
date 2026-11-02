@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Gateway.Models;
+using DefenseClaw.Core.Observability;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -524,9 +525,15 @@ public sealed partial class OverviewPanelViewModel
         return DetailNumber(telemetry, "destination_count") is { } count ? Counted((int)Math.Clamp(count, 0, int.MaxValue), "destination", Array.Empty<string>()) : string.Empty;
     }
 
-    /// <summary>Telemetry's retention, which this app shows and the TUI's card does not: <c>retention 90 days</c>.</summary>
+    /// <summary>
+    /// Telemetry's retention, which this app shows and the TUI's card does not: <c>retention 90 days</c>, and from 1.0.6, when the audit store has a size cap,
+    /// <c>retention 90 days, size cap 512 MiB</c> (<c>retention_max_store_mb</c> is reported only beside <c>retention_days</c>, health.go:1732). Without the cap the text is the same as before.
+    /// </summary>
     private static string TelemetryPosture(ServiceState telemetry) =>
-        DetailNumber(telemetry, "retention_days") is { } days ? $"retention {days.ToString(CultureInfo.InvariantCulture)} days" : string.Empty;
+        DetailNumber(telemetry, "retention_days") is { } days
+            ? $"retention {days.ToString(CultureInfo.InvariantCulture)} days" +
+              (DetailNumber(telemetry, "retention_max_store_mb") is > 0 and var cap ? ", " + RetentionHealth.SizeCap(cap) : string.Empty)
+            : string.Empty;
 
     /// <summary><c>2 destinations: a (healthy), b (healthy)</c>; <c>1 sink: x</c>; <c>0 destinations</c>.</summary>
     private static string Counted(int count, string noun, IReadOnlyList<string> labels) =>

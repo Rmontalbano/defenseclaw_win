@@ -368,6 +368,12 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.ProtectedFileWatch);
         }
 
+        // Which OpenCode is guarded changed with the release too (gateway and setup behaviour, no command to probe): the version decides, as above.
+        if (identity.ParsedVersion is { } openCodeV2 && openCodeV2 >= Release106 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.OpenCodeV2Only);
+        }
+
         if (HasAll(setup, RegistryMarkers))
         {
             present.Add(RuntimeCapability.TuiRegistry);

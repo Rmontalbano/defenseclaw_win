@@ -91,10 +91,14 @@ public sealed record DestinationHealth(
 /// <param name="State"><c>healthy</c>, <c>waiting_for_readiness</c>, <c>degraded</c>, <c>disabled</c> or <c>stopped</c>; empty when the gateway names none of them.</param>
 /// <param name="Failure">The reaper's failure code, a plain token; empty when there is none.</param>
 /// <param name="Days">The retention window the gateway runs with; 0 is without limit.</param>
-public sealed record RetentionHealth(string State, string Failure, long? Days)
+/// <param name="MaxStoreMb">The audit store's size cap in MiB (<c>retention_max_store_mb</c>, 1.0.6); null when the gateway reports none, which is also what a build before 1.0.6 does.</param>
+public sealed record RetentionHealth(string State, string Failure, long? Days, long? MaxStoreMb = null)
 {
     /// <summary>Nothing reported.</summary>
     public static RetentionHealth None { get; } = new(string.Empty, string.Empty, null);
+
+    /// <summary>The size cap the way the runtime's status prints it (<c>size cap 64 MiB</c>).</summary>
+    public static string SizeCap(long megabytes) => $"size cap {megabytes.ToString(System.Globalization.CultureInfo.InvariantCulture)} MiB";
 
     /// <summary><c>healthy</c>, <c>degraded (sqlite_busy)</c>, or <c>unavailable</c> (<c>storage.retention_health or "unavailable"</c> in the TUI).</summary>
     public string ControllerLabel => State.Length == 0 ? DestinationHealth.Unavailable : Failure.Length > 0 ? State + " (" + Failure + ")" : State;
@@ -195,9 +199,10 @@ public static partial class DestinationHealthReader
 
         var state = Token(details, "retention_state");
         var days = Count(details, "retention_days");
+        var cap = Count(details, "retention_max_store_mb") is > 0 and var megabytes ? (long?)megabytes : null;
         if (!RetentionStates.Contains(state, StringComparer.Ordinal))
         {
-            return new RetentionHealth(string.Empty, string.Empty, days);
+            return new RetentionHealth(string.Empty, string.Empty, days, cap);
         }
 
         var failure = Token(details, "retention_failure");
@@ -206,7 +211,7 @@ public static partial class DestinationHealthReader
             failure = Token(details, "failure");
         }
 
-        return new RetentionHealth(state, failure, days);
+        return new RetentionHealth(state, failure, days, cap);
     }
 
     /// <summary>A member that is a short lower-case token (<c>healthy</c>, <c>sqlite_write_failed</c>); empty for anything else, free text included.</summary>

@@ -797,6 +797,12 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // 1.0.6 (CUST-422): an agent changed a protected file. Built in OverviewPanelViewModel.ProtectedFiles.cs.
         AppendProtectedFileAttention(rows);
 
+        // 1.0.6 guards OpenCode V2 and refuses V1; 1.0.5 and earlier guard V1 only (CUST-426). Built in OverviewPanelViewModel.OpenCode.cs.
+        AppendOpenCodeAttention(rows);
+
+        // 1.0.6 counts the hook checks the rules decided because the judge gave no verdict in time (CUST-426). Built in OverviewPanelViewModel.JudgeFallbacks.cs.
+        AppendJudgeFallbackAttention(rows);
+
         // The third opinion, and the one that wins: Claude Code's own settings.json can
         // hold an env override the hook obeys over both config.yaml and /status.
         if (snapshot.FailModeDrift is { } drift)

@@ -441,10 +441,19 @@ public sealed partial class OverviewPanelViewModel
 
         // config.yaml's own value, else the window the running gateway reports (the runtime's default when config.yaml is silent), else nothing to say.
         var days = facts.RetentionDays ?? retention.Days;
-        var unbounded = days == 0;
+
+        // The size cap (1.0.6) goes with the window as the runtime's own status words it: "7 days, size cap 64 MiB", and "size cap 64 MiB" alone for a window
+        // of 0. A store with a cap is bounded, so it is not "without limit". With neither set the line reads as it did.
+        var cap = facts.MaxStoreMb ?? retention.MaxStoreMb;
+        var unbounded = days == 0 && cap is null;
+        var window = days is { } span ? (span == 0 ? "unbounded" : span == 1 ? "1 day" : span.ToString(CultureInfo.InvariantCulture) + " days") : "runtime default";
+        if (cap is { } megabytes)
+        {
+            window = days == 0 ? RetentionHealth.SizeCap(megabytes) : window + ", " + RetentionHealth.SizeCap(megabytes);
+        }
 
         var info = new LocalStorageInfo(
-            days is { } window ? (window == 0 ? "unbounded" : window == 1 ? "1 day" : window.ToString(CultureInfo.InvariantCulture) + " days") : "runtime default",
+            window,
             retention.ControllerLabel,
             facts.JudgeCapture ? "enabled" : "disabled",
             DisplayNames.Visible(Services.Paths.ResolveConfiguredFile(facts.LocalPath, Services.Paths.AuditDatabasePath)),

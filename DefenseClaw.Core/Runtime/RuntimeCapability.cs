@@ -142,6 +142,13 @@ public enum RuntimeCapability
     /// "does this runtime know the setting and the alert", not "is something watching". Judged from the runtime's version (1.0.6 or later).
     /// </summary>
     ProtectedFileWatch,
+
+    /// <summary>
+    /// OpenCode V2 is the only OpenCode DefenseClaw guards (1.0.6, <c>RequireOpenCodeV2</c> in internal/gateway/connector/opencode_v2.go): setup and the gateway refuse
+    /// V1 and any other major, and doctor fails the OpenCode hooks row while the account runs V1. A release before 1.0.6 guards V1 only, loads no V2 plugin, and still
+    /// reports OpenCode protected. Judged from the runtime's version (1.0.6 or later).
+    /// </summary>
+    OpenCodeV2Only,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -184,6 +191,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.CodexHomeLinkRefusal => "Codex setup refuses a linked .codex home",
         RuntimeCapability.StaleInstallLockIgnored => "Stale install lock ignored (1.0.5)",
         RuntimeCapability.ProtectedFileWatch => "Protected-file watch (1.0.6)",
+        RuntimeCapability.OpenCodeV2Only => "OpenCode V2 guarded, V1 refused (1.0.6)",
         _ => capability.ToString(),
     };
 
@@ -219,6 +227,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.CodexHomeLinkRefusal => "the runtime reports version 1.0.5 or later and lists its commands (setup codex refuses a .codex home that is a link or junction before it changes anything)",
         RuntimeCapability.StaleInstallLockIgnored => "the runtime reports version 1.0.5 or later and lists its commands (its hooks ignore an install lock whose installer is gone, and doctor --fix removes it)",
         RuntimeCapability.ProtectedFileWatch => "the runtime reports version 1.0.6 or later and lists its commands (a per-user gateway alerts on an agent's change to a protected file, and guardrail.protected_files is in its schema)",
+        RuntimeCapability.OpenCodeV2Only => "the runtime reports version 1.0.6 or later and lists its commands (the gateway and setup guard OpenCode V2 and refuse OpenCode V1; a release before 1.0.6 guards V1 only)",
         _ => string.Empty,
     };
 }
