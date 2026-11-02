@@ -783,11 +783,11 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         var needle = SearchText.Trim();
 
         // "Hide uncertified connectors": what it removes is a connector the CLI says is
-        // not_certified / unsupported here, or one whose help is not read yet. A flow that
+        // not_certified / preview / unsupported here, or one whose help is not read yet. A flow that
         // is not a connector (NotApplicable) has nothing to certify, so the filter leaves it
         // alone — exactly what it did before those cards stopped being mislabelled Certified.
         var matching = _all.Where(card =>
-            (!CertifiedOnly || card.PlatformStatus is PlatformStatus.Certified or PlatformStatus.NotApplicable) &&
+            (!CertifiedOnly || PassesCertificationFilter(card.PlatformStatus)) &&
             (needle.Length == 0 || card.Matches(needle)))
             .ToList();
 
@@ -807,6 +807,15 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         EmptyState = ClassifyEmpty(IsLoading, HasLoadError, _all.Count, shown);
         UpdateStatusNote();
     }
+
+    /// <summary>
+    /// What "Hide uncertified connectors" keeps: a certified connector, and a flow certification does not apply to. A
+    /// <see cref="PlatformStatus.Preview"/> connector is not certified (DefenseClaw 1.0.6 offers it, but makes no certification claim), so the filter
+    /// hides it like <see cref="PlatformStatus.NotCertified"/>; with the filter off it is shown, badged Preview. Upstream has no such filter
+    /// (its pickers keep a preview connector selectable and label it "(preview)"), so this is the app's own reading of its own control.
+    /// </summary>
+    internal static bool PassesCertificationFilter(PlatformStatus status) =>
+        status is PlatformStatus.Certified or PlatformStatus.NotApplicable;
 
     /// <summary>
     /// Which empty state the grid is in. The order is the point: a failed read leaves no cards, and "the search hides

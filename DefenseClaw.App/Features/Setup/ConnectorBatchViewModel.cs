@@ -31,6 +31,9 @@ public sealed partial class BatchRow : ObservableObject
 
     public bool HasCaution => Connector.HasCaution;
 
+    /// <summary>The caution is the preview one (1.0.6), not "not certified": the batch review words each its own way.</summary>
+    internal bool IsPreview => Connector.IsPreview;
+
     /// <summary>config.yaml has the connector in <c>guardrail.connectors</c> now.</summary>
     public bool Configured { get; }
 
@@ -453,12 +456,20 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
                 "In action mode DefenseClaw can block an agent's tool calls. A connector the CLI cannot verify for action mode is configured in observe mode instead."));
         }
 
-        var uncertified = Rows.Where(static r => r.IsOn && r.HasCaution).Select(static r => r.Label).ToArray();
+        var uncertified = Rows.Where(static r => r.IsOn && r.HasCaution && !r.IsPreview).Select(static r => r.Label).ToArray();
         if (uncertified.Length > 0)
         {
             warnings.Add(new CommandReviewWarning(
                 "Not certified on Windows",
                 string.Join(", ", uncertified) + (uncertified.Length == 1 ? " is" : " are") + " not certified on Windows. They can be added; expect rough edges."));
+        }
+
+        var previews = Rows.Where(static r => r.IsOn && r.IsPreview).Select(static r => r.Label).ToArray();
+        if (previews.Length > 0)
+        {
+            warnings.Add(new CommandReviewWarning(
+                "Preview on Windows",
+                string.Join(", ", previews) + (previews.Length == 1 ? " is a preview" : " are previews") + " on Windows. They can be added, but they have not completed Windows certification; expect rough edges."));
         }
 
         if (!restart)

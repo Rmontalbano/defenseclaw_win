@@ -151,7 +151,7 @@ public sealed class ReviewStreamingTests : IDisposable
         Assert.True(lines.Length <= 35, $"{lines.Length} lines");
         Assert.Contains("471 earlier line(s) omitted", output, StringComparison.Ordinal);
         Assert.DoesNotContain("chatty 1" + Environment.NewLine, output, StringComparison.Ordinal);
-        Assert.DoesNotContain(new string('x', 400), output, StringComparison.Ordinal);
+        Assert.DoesNotContain(new string('x', 700), output, StringComparison.Ordinal); // a 1000-character line is cut at the 600-character line cap (CUST-425 raised it from 300)
     }
 
     [Fact]

@@ -126,7 +126,9 @@ internal static class DiscoverCli
 public sealed partial class DiscoverActionReview : ObservableObject
 {
     private const int MaxOutputLinesPerStep = 30;
-    private const int MaxLineChars = 300;
+    // 600, not 300 (CUST-425): DefenseClaw 1.0.6's OpenCode V1 refusal is one ~360-character line whose second half is the install
+    // guidance (the --prefix command and the re-run command); cut at 300 it lost exactly that. The Activity panel keeps every character regardless.
+    private const int MaxLineChars = 600;
 
     private readonly AppServices _services;
     private readonly List<DiscoverStep> _plan = new();

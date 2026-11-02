@@ -10,10 +10,17 @@ namespace DefenseClaw.App.Services.FirstRun;
 /// <param name="Platform">What the CLI says about the connector on Windows; <see cref="PlatformStatus.Unknown"/> before its help was read.</param>
 public sealed record OfferedConnector(string Id, string Label, string Alias, PlatformStatus Platform)
 {
-    /// <summary>Why the operator should hesitate (not certified on Windows), or empty.</summary>
-    public string Caution => Platform == PlatformStatus.NotCertified
-        ? $"{Label} is not certified on Windows. It can be added; expect rough edges."
-        : string.Empty;
+    /// <summary>Why the operator should hesitate (not certified, or a preview, on Windows), or empty. A caution, never a block: both can be added.</summary>
+    public string Caution => Platform switch
+    {
+        PlatformStatus.NotCertified => $"{Label} is not certified on Windows. It can be added; expect rough edges.",
+        // 1.0.6: the CLI offers a preview connector (platform_support.py "Preview connectors are deliberately available") but does not certify it.
+        PlatformStatus.Preview => $"{Label} is a preview on Windows. It can be added, but it has not completed Windows certification; expect rough edges.",
+        _ => string.Empty,
+    };
+
+    /// <summary>The connector is a preview here rather than not certified: the batch review words its warning for each.</summary>
+    public bool IsPreview => Platform == PlatformStatus.Preview;
 
     public bool HasCaution => Caution.Length > 0;
 }

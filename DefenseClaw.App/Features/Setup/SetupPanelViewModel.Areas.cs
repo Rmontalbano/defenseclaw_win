@@ -222,7 +222,7 @@ public sealed partial class SetupPanelViewModel
         // The chooser: every connector wizard (not `setup remove`, which is its own button), the certification filter applied as it always was.
         var choices = connectors
             .Where(c => !string.Equals(c.Target, "remove", StringComparison.Ordinal))
-            .Where(c => !CertifiedOnly || c.PlatformStatus is PlatformStatus.Certified or PlatformStatus.NotApplicable)
+            .Where(c => !CertifiedOnly || PassesCertificationFilter(c.PlatformStatus))
             .OrderBy(c => c.IsAvailable ? 0 : 1)
             .ThenBy(c => c.Title, StringComparer.CurrentCultureIgnoreCase)
             .ToList();

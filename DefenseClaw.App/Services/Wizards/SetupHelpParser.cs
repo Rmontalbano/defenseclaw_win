@@ -102,6 +102,13 @@ public static class SetupHelpParser
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         TimeSpan.FromSeconds(1));
 
+    // The top-level summary the CLI prints for a connector that is not plain "supported" (1.0.6 cmd_setup.py: "{label}: {status} on {os}.").
+    // Anchored on the whole phrase so a summary that merely mentions a preview ("Preview the changes...") is not read as one.
+    private static readonly Regex PreviewSummaryPattern = new(
+        @"\bpreview on windows\b",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
+        TimeSpan.FromSeconds(1));
+
     private static readonly Regex DefaultPattern = new(
         @"\[default:\s*(?<value>[^\]]+)\]",
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
@@ -182,6 +189,7 @@ public static class SetupHelpParser
         {
             "NOT_CERTIFIED" => PlatformStatus.NotCertified,
             "UNSUPPORTED" => PlatformStatus.Unsupported,
+            "PREVIEW" => PlatformStatus.Preview,
             "CERTIFIED" or "SUPPORTED" => PlatformStatus.Certified,
             _ => PlatformStatus.Unknown,
         };
@@ -206,9 +214,12 @@ public static class SetupHelpParser
             return PlatformStatus.NotCertified;
         }
 
-        return summary.Contains("unsupported", StringComparison.OrdinalIgnoreCase)
-            ? PlatformStatus.Unsupported
-            : PlatformStatus.Unknown;
+        if (summary.Contains("unsupported", StringComparison.OrdinalIgnoreCase))
+        {
+            return PlatformStatus.Unsupported;
+        }
+
+        return PreviewSummaryPattern.IsMatch(summary) ? PlatformStatus.Preview : PlatformStatus.Unknown;
     }
 
     /// <summary>

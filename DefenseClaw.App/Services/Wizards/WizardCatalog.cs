@@ -66,6 +66,18 @@ public sealed class WizardCatalog
         // ever grows a setup entry that is not an operator-facing flow.
     };
 
+    /// <summary>
+    /// Setup targets the runtime lists but this app deliberately does not offer yet (CUST-423). DefenseClaw 1.0.6 added
+    /// <c>setup decision-model</c>, which would otherwise appear on its own as an "Other" card (and in the hub's search); the feature could
+    /// still change, so there is no decision-model UI until DefenseClaw 1.0.7 ships. To lift the hold, delete the entry here: nothing else
+    /// needs to change. Only the card is held: the config editor's read-only "Decision Model" section and the doctor row report what the
+    /// runtime has, and stay. The command palette is not fed by this list (its registry has no decision-model entry), so it needs no filter.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> HeldUntilRelease = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "decision-model",
+    };
+
     private static readonly object InstanceGate = new();
     private static WizardCatalog? _shared;
 
@@ -328,7 +340,7 @@ public sealed class WizardCatalog
 
                 foreach (var command in help.Commands)
                 {
-                    if (HiddenTargets.Contains(command.Name))
+                    if (HiddenTargets.Contains(command.Name) || HeldUntilRelease.Contains(command.Name))
                     {
                         continue;
                     }

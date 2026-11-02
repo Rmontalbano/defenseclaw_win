@@ -1277,7 +1277,7 @@
                                 <CheckBox Grid.Column="1"
                                           Content="Hide uncertified connectors"
                                           IsChecked="{Binding CertifiedOnly, Mode=TwoWay}"
-                                          ToolTip="Hides connectors the CLI reports as not_certified or unsupported on Windows." />
+                                          ToolTip="Hides connectors the CLI reports as not_certified, preview or unsupported on Windows." />
                             </Grid>
 
                             <ItemsControl ItemsSource="{Binding ConnectorChoices}"

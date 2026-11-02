@@ -37,6 +37,14 @@ public enum PlatformStatus
     /// Neutral badge, no in-wizard warning, and never counted as certified.
     /// </summary>
     NotApplicable,
+
+    /// <summary>
+    /// Declared <c>preview</c> (DefenseClaw 1.0.6 <c>platform_support.py</c>: OpenCode V2 on Windows). The CLI offers and accepts a preview
+    /// connector, so it is launchable, but it is not a certified one: the same caution tone as <see cref="NotCertified"/>, never counted as
+    /// certified, and hidden by the certification filter. Appended last so no existing numeric value moves. Read from the help, never from
+    /// a list of connector names here, so any connector a runtime calls preview gets it.
+    /// </summary>
+    Preview,
 }
 
 /// <summary>The control a field renders as, and how it turns into argv.</summary>
@@ -669,6 +677,7 @@ public static class PlatformStatusText
         PlatformStatus.NotCertified => "Not certified on Windows",
         PlatformStatus.Unsupported => "Unsupported on Windows",
         PlatformStatus.NotApplicable => "No platform rating",
+        PlatformStatus.Preview => "Preview on Windows",
         _ => "Certification unknown",
     };
 
@@ -677,6 +686,7 @@ public static class PlatformStatusText
     {
         PlatformStatus.Certified => "Ok",
         PlatformStatus.NotCertified => "Warn",
+        PlatformStatus.Preview => "Warn",
         PlatformStatus.Unsupported => "Bad",
         _ => "Neutral", // Unknown and NotApplicable: never a green light, never an alarm.
     };
@@ -695,6 +705,13 @@ public static class PlatformStatusText
                 string.Format(
                     CultureInfo.CurrentCulture,
                     "The CLI reports this integration as unsupported on Windows.{0} Running it here is expected to fail.",
+                    detail),
+            // 1.0.6 platform_support.py: "Preview connectors are deliberately available" (they pass the CLI's availability check), while
+            // certification is a separate claim a preview does not make.
+            PlatformStatus.Preview =>
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    "The CLI reports this integration as preview on Windows.{0} Setup is available, but a preview integration has not completed Windows certification.",
                     detail),
             PlatformStatus.Unknown =>
                 "The per-target help could not be read, so certification could not be confirmed. Treat the result as unverified.",
