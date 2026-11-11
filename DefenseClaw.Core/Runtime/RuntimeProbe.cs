@@ -389,6 +389,8 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.HookFailureBlockRows);
             present.Add(RuntimeCapability.JudgeEscalation);
             present.Add(RuntimeCapability.PerUserCliLauncher);
+            present.Add(RuntimeCapability.SecretRefGatewayTokenSkipped);
+            present.Add(RuntimeCapability.RuntimeMonitoringDegradedReasons);
         }
 
         // What 1.0.8 changed is gateway, hook and config behaviour with no command of its own to probe: the version decides, on the same terms as above.

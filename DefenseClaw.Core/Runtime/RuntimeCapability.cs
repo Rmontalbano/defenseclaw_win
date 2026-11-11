@@ -219,6 +219,18 @@ public enum RuntimeCapability
     /// The LLM provider list includes <c>openai-compatible</c> and <c>custom-openai</c> (1.0.8); both need a base URL. Judged from the runtime's version (1.0.8 or later).
     /// </summary>
     OpenAiCompatibleProviders,
+
+    /// <summary>
+    /// The gateway skips a gateway token that is an OpenClaw secret reference (<c>{"source": ...}</c> text 1.0.5/1.0.6 could save) instead of using the
+    /// text as the bearer, and <c>doctor --fix</c> drops it (1.0.7; config.go and cmd_doctor.py). Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    SecretRefGatewayTokenSkipped,
+
+    /// <summary>
+    /// The Overview shows the gateway's runtime-monitoring degraded reasons as information (the app shows them from 1.0.7 on; older runtimes keep the
+    /// Overview they had). Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    RuntimeMonitoringDegradedReasons,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -276,6 +288,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.OtlpReplay => "OTLP records kept through an outage (1.0.8)",
         RuntimeCapability.JudgeFallbackOnHookRows => "judge_fallback on hook audit rows (1.0.8)",
         RuntimeCapability.OpenAiCompatibleProviders => "openai-compatible and custom-openai providers (1.0.8)",
+        RuntimeCapability.SecretRefGatewayTokenSkipped => "Secret-reference gateway token skipped (1.0.7)",
+        RuntimeCapability.RuntimeMonitoringDegradedReasons => "Runtime monitoring degraded reasons (1.0.7)",
         _ => capability.ToString(),
     };
 
@@ -326,6 +340,8 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.OtlpReplay => "the runtime reports version 1.0.8 or later and lists its commands (OTLP records are kept through a collector outage and replayed, and /health counts rejections per destination (counters_scope))",
         RuntimeCapability.JudgeFallbackOnHookRows => "the runtime reports version 1.0.8 or later and lists its commands (a late or missing LLM judge verdict is written to the hook's audit row as judge_fallback (1.0.7 counted it in health only))",
         RuntimeCapability.OpenAiCompatibleProviders => "the runtime reports version 1.0.8 or later and lists its commands (the LLM provider list includes openai-compatible and custom-openai, which need a base URL)",
+        RuntimeCapability.SecretRefGatewayTokenSkipped => "the runtime reports version 1.0.7 or later and lists its commands (the gateway skips a gateway token that is a secret reference, and doctor --fix drops it)",
+        RuntimeCapability.RuntimeMonitoringDegradedReasons => "the runtime reports version 1.0.7 or later and lists its commands (the Overview shows the gateway's runtime-monitoring degraded reasons)",
         _ => string.Empty,
     };
 }

@@ -26,6 +26,8 @@ public sealed class Release107And108CapabilityTests
         { RuntimeCapability.OtlpReplay, "1.0.8" },
         { RuntimeCapability.JudgeFallbackOnHookRows, "1.0.8" },
         { RuntimeCapability.OpenAiCompatibleProviders, "1.0.8" },
+        { RuntimeCapability.SecretRefGatewayTokenSkipped, "1.0.7" },
+        { RuntimeCapability.RuntimeMonitoringDegradedReasons, "1.0.7" },
     };
 
     private static RuntimeSnapshot Probe(string version, string? help = Help) =>
