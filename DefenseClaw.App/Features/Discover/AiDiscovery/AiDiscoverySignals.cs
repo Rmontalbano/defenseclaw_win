@@ -386,6 +386,7 @@ internal static class DiscoverySignalParser
             Model = ParseModel(Object(element, "model"), options),
             Runtime = ParseRuntime(Object(element, "runtime")),
             LastActiveAt = Time(Text(element, "last_active_at")),
+            ClaudeDesktop = ClaudeDesktopDiscovery.Parse(Object(element, ClaudeDesktopDiscovery.BlockKey)),
         };
     }
 

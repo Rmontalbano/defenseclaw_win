@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using DefenseClaw.Core.Inventory;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -66,6 +67,13 @@ internal sealed record DiscoveredAgents(
 }
 
 /// <summary>
+/// What the card adds on a runtime that reports Claude Desktop (1.0.8). <paramref name="ClaudeDesktop"/> words the Claude Desktop row's vendor
+/// with the deployments found; <paramref name="ClaudeCodeOnDesktopEngine"/> says the Claude Code row runs on Claude Desktop's engine.
+/// No options, or both off, is the card as it was.
+/// </summary>
+internal sealed record OverviewAgentOptions(bool ClaudeDesktop, bool ClaudeCodeOnDesktopEngine);
+
+/// <summary>
 /// Reads <c>ai_discovery_state.json</c> for the Overview card, with the Mac's rules (<c>AIOverviewGrouping</c>): only agents (local
 /// models belong to the full AI Discovery page and never take one of the eight rows), ordered new, changed, present, gone and then by
 /// confidence and recency, one row per connector or component however many signals back it.
@@ -76,7 +84,7 @@ internal static class OverviewAgentReader
     public const int MaxRows = 8;
 
     /// <exception cref="JsonException">Not JSON, or not a JSON object.</exception>
-    public static DiscoveredAgents Parse(string json, DateTimeOffset now)
+    public static DiscoveredAgents Parse(string json, DateTimeOffset now, OverviewAgentOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(json);
 
@@ -129,7 +137,7 @@ internal static class OverviewAgentReader
             }
         }
 
-        var rows = unique.Take(MaxRows).Select(s => ToRow(s, now)).ToList();
+        var rows = unique.Take(MaxRows).Select(s => ToRow(Annotate(s, agents, options), now)).ToList();
         return new DiscoveredAgents(
             rows,
             Math.Max(0, unique.Count - MaxRows),
@@ -157,6 +165,76 @@ internal static class OverviewAgentReader
             < 86400 => $"{seconds / 3600}h ago",
             _ => $"{seconds / 86400}d ago",
         };
+    }
+
+    /// <summary>The connector key of Claude Code.</summary>
+    private const string ClaudeCodeKey = "connector:claudecode";
+
+    /// <summary>
+    /// True when <c>agent_discovery.json</c> says Claude Code was found in Claude Desktop (<c>agents.claudecode.source</c> is
+    /// <c>claude-desktop</c>) and is installed. False for anything else, including text that is not JSON; never throws.
+    /// </summary>
+    internal static bool ClaudeCodeOnDesktopEngine(string agentDiscoveryJson)
+    {
+        if (string.IsNullOrWhiteSpace(agentDiscoveryJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(agentDiscoveryJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("agents", out var agents)
+                && agents.ValueKind == JsonValueKind.Object
+                && agents.TryGetProperty("claudecode", out var code)
+                && code.ValueKind == JsonValueKind.Object
+                && code.TryGetProperty("source", out var source)
+                && source.ValueKind == JsonValueKind.String
+                && string.Equals(source.GetString(), ClaudeDesktopDiscovery.EngineSource, StringComparison.Ordinal)
+                && code.TryGetProperty("installed", out var installed)
+                && installed.ValueKind == JsonValueKind.True;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The row's signal with the Claude Desktop wording of <paramref name="options"/>. 1p and 3p signals have no version, so they share a
+    /// key and collapse into one row; its vendor then names every deployment found among the signals of that key, 1p first.
+    /// </summary>
+    private static Signal Annotate(Signal signal, List<Signal> all, OverviewAgentOptions? options)
+    {
+        if (options is null)
+        {
+            return signal;
+        }
+
+        var label = signal.VendorLabel;
+        if (options.ClaudeDesktop)
+        {
+            var found = all.Where(s => s.HasClaudeDesktop && string.Equals(s.Key, signal.Key, StringComparison.Ordinal)).ToList();
+            if (found.Count > 0)
+            {
+                var texts = new[] { "1p", "3p" }
+                    .Where(d => found.Any(s => s.Deployment == d))
+                    .Select(static d => ClaudeDesktopDiscovery.DeploymentText(d))
+                    .ToList();
+                if (texts.Count > 0)
+                {
+                    label += " · " + string.Join(", ", texts);
+                }
+            }
+        }
+
+        if (options.ClaudeCodeOnDesktopEngine && signal.Key == ClaudeCodeKey)
+        {
+            label += " · Claude Desktop engine";
+        }
+
+        return label == signal.VendorLabel ? signal : signal with { VendorLabel = label };
     }
 
     private static DiscoveredAgentRow ToRow(Signal signal, DateTimeOffset now)
@@ -233,6 +311,8 @@ internal static class OverviewAgentReader
             ? Math.Clamp(number, 0, 1)
             : 0;
 
+        var block = ClaudeDesktopDiscovery.Parse(item.TryGetProperty(ClaudeDesktopDiscovery.BlockKey, out var blockElement) ? blockElement : default);
+
         return new Signal(
             key,
             category,
@@ -241,7 +321,11 @@ internal static class OverviewAgentReader
             vendorLabel,
             confidence,
             ParseTime(Text(item, "last_seen")),
-            order);
+            order)
+        {
+            HasClaudeDesktop = block is not null,
+            Deployment = block?.Deployment ?? string.Empty,
+        };
     }
 
     private static string? First(params string[] candidates) => candidates.FirstOrDefault(static c => c.Length > 0);
@@ -260,5 +344,12 @@ internal static class OverviewAgentReader
         string VendorLabel,
         double Confidence,
         DateTimeOffset? LastSeen,
-        int Order);
+        int Order)
+    {
+        /// <summary>The signal carries a <c>claude_desktop</c> block.</summary>
+        public bool HasClaudeDesktop { get; init; }
+
+        /// <summary>The block's deployment, <c>1p</c> or <c>3p</c>, or empty.</summary>
+        public string Deployment { get; init; } = string.Empty;
+    }
 }

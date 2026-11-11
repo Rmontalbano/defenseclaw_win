@@ -453,6 +453,57 @@
                                         </StackPanel>
                                     </Grid>
 
+                                    <!-- Claude Desktop (runtime 1.0.8): one block per data folder, 1p before 3p. Empty, so hidden, on an older runtime. -->
+                                    <StackPanel Visibility="{Binding HasClaudeDesktop, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,4,0,6" Text="Claude Desktop" />
+                                        <ItemsControl Focusable="False"
+                                                      ItemsSource="{Binding ClaudeDesktopEntries}"
+                                                      AutomationProperties.Name="Claude Desktop">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="0,0,0,8" AutomationProperties.Name="{Binding Mode=OneWay}">
+                                                        <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="{Binding Title}" />
+                                                        <TextBlock Style="{StaticResource DcCaption}" TextWrapping="Wrap" Text="{Binding DetailText}" />
+                                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                                   Text="{Binding PluginsText}"
+                                                                   Visibility="{Binding HasNoPlugins, Converter={StaticResource BoolToVisibility}}" />
+                                                        <ItemsControl Focusable="False"
+                                                                      ItemsSource="{Binding Plugins}"
+                                                                      Visibility="{Binding HasPlugins, Converter={StaticResource BoolToVisibility}}"
+                                                                      AutomationProperties.Name="Cowork plugins">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <WrapPanel />
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Grid>
+                                                                        <Border Margin="0,4,6,0"
+                                                                                Style="{StaticResource DcBadge}"
+                                                                                Tag="Ok"
+                                                                                Visibility="{Binding IsDefenseClaw, Converter={StaticResource BoolToVisibility}}">
+                                                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Label}" />
+                                                                        </Border>
+                                                                        <Border Margin="0,4,6,0"
+                                                                                Style="{StaticResource DcChip}"
+                                                                                Visibility="{Binding IsOther, Converter={StaticResource BoolToVisibility}}">
+                                                                            <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding Label}" />
+                                                                        </Border>
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Style="{StaticResource DcCaption}"
+                                                   Margin="0,0,0,8"
+                                                   TextWrapping="Wrap"
+                                                   Text="Cowork plugins as Claude Desktop lists them on this machine. Discovery reports no protection state." />
+                                    </StackPanel>
+
                                     <!-- Each signal: its state, name and confidence, then the detector, model, process (pid, user) and activity lines it has. -->
                                     <TextBlock Style="{StaticResource DcFieldLabel}" Margin="0,4,0,6" Text="Signals" />
                                     <ItemsControl Focusable="False"
@@ -694,7 +745,7 @@
                                 <ui:DataGrid.Columns>
                                     <DataGridTextColumn Width="120" Header="Connector" Binding="{Binding Name}" />
                                     <DataGridTextColumn Width="110" Header="Status" Binding="{Binding StatusDisplay}" />
-                                    <DataGridTextColumn Width="120" Header="Version" Binding="{Binding Version}" />
+                                    <DataGridTextColumn Width="120" Header="Version" Binding="{Binding VersionDisplay}" />
                                     <DataGridTextColumn Width="*" Header="Config path" Binding="{Binding ConfigPath}" />
                                     <DataGridTextColumn Width="*" Header="Binary path" Binding="{Binding BinaryPath}" />
                                     <DataGridTextColumn Width="140" Header="Error" Binding="{Binding Error}" />

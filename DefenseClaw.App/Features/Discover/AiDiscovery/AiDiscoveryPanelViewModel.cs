@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
 using DefenseClaw.Core.Audit;
 using DefenseClaw.Core.Cli;
+using DefenseClaw.Core.Inventory;
 using Microsoft.Data.Sqlite;
 
 namespace DefenseClaw.App.ViewModels;
@@ -55,6 +56,12 @@ public sealed record DiscoverySignalRecord(
     public DiscoveryRuntimeInfo? Runtime { get; init; }
 
     public DateTimeOffset? LastActiveAt { get; init; }
+
+    /// <summary>
+    /// The <c>claude_desktop</c> block of a Claude Desktop signal (runtime 1.0.8): the app, its deployment, Cowork and its plugins. Only the
+    /// state file and the gateway's report carry it; null for every other signal and for a database row.
+    /// </summary>
+    public ClaudeDesktopInfo? ClaudeDesktop { get; init; }
 
     /// <summary>
     /// How sure the confidence engine is of what the signal's component is (identity) and that it is there (presence), from the component's
@@ -169,6 +176,11 @@ public sealed class DiscoveryComponentCard
             .Select(pair => DiscoverySignalLine.For(pair.signal, Now, forModel: false))
             .ToList();
 
+    /// <summary>The Claude Desktop data folders among the signals (1p first); empty unless the card was built with Claude Desktop on.</summary>
+    public IReadOnlyList<ClaudeDesktopEntry> ClaudeDesktopEntries { get; init; } = [];
+
+    public bool HasClaudeDesktop => ClaudeDesktopEntries.Count > 0;
+
     public bool HasSignalOverflow => Signals.Count > MaxSignalLines;
 
     public string SignalOverflow => HasSignalOverflow
@@ -195,6 +207,12 @@ public sealed class DiscoveryComponentCard
             parts.Add(signal.Component?.Ecosystem);
             parts.Add(signal.Component?.Name);
             parts.Add(signal.Model?.Id);
+        }
+
+        foreach (var entry in ClaudeDesktopEntries)
+        {
+            parts.Add(entry.Title);
+            parts.AddRange(entry.Plugins.Select(static p => p.Name));
         }
 
         return string.Join(' ', parts.Where(static part => !string.IsNullOrEmpty(part))).Contains(query.Trim(), StringComparison.OrdinalIgnoreCase);
@@ -286,6 +304,18 @@ public sealed record AgentDiscoveryRow(
     string? BinaryPath,
     string? Error)
 {
+    /// <summary>Who found it (<c>source</c>): "cli" or "claude-desktop" on a runtime that says; null otherwise.</summary>
+    public string? Source { get; init; }
+
+    private string? _versionDisplay;
+
+    /// <summary>The Version column: <see cref="Version"/>, or "2.1.309 (Claude Desktop engine)" when the runtime found the agent in Claude Desktop.</summary>
+    public string? VersionDisplay
+    {
+        get => _versionDisplay ?? Version;
+        init => _versionDisplay = value;
+    }
+
     /// <summary>
     /// An installed agent DefenseClaw is not set up for, that is offered on Windows: the row's Add (CUST-210). Decided where the row is built
     /// (<see cref="AiDiscoveryPanelViewModel.AddConnectorCommand"/>), since it depends on the Setup catalog.
@@ -305,7 +335,7 @@ public sealed record AgentDiscoveryRow(
         };
 
     public override string ToString() =>
-        $"Connector {Name}: {StatusDisplay}{(string.IsNullOrEmpty(Version) ? string.Empty : ", version " + Version)}";
+        $"Connector {Name}: {StatusDisplay}{(string.IsNullOrEmpty(VersionDisplay) ? string.Empty : ", version " + VersionDisplay)}";
 }
 
 /// <summary>The currently selected/pinned connector (agent_selection.json), if any.</summary>
@@ -898,6 +928,10 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         }
     }
 
+    /// <summary>True on a runtime that reports Claude Desktop, its deployment and Cowork (1.0.8): the panel then shows them. Off, it is as it was.</summary>
+    internal bool ClaudeDesktopGate =>
+        Services.Runtime.Check(DefenseClaw.Core.Runtime.RuntimeCapability.ClaudeDesktopDiscovery).IsAvailable;
+
     internal async Task LoadAgentDiscoveryAsync(CancellationToken cancellationToken)
     {
         ConnectorDiscovery.Clear();
@@ -917,19 +951,24 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
 
             if (root.TryGetProperty("agents", out var agents) && agents.ValueKind == JsonValueKind.Object)
             {
+                var claudeDesktop = ClaudeDesktopGate;
                 foreach (var property in agents.EnumerateObject())
                 {
                     var value = property.Value;
+                    var version = NullIfEmpty(GetString(value, "version"));
+                    var source = NullIfEmpty(GetString(value, "source"));
                     ConnectorDiscovery.Add(new AgentDiscoveryRow(
                         GetString(value, "name") ?? property.Name,
                         GetBool(value, "installed"),
                         GetBool(value, "configured"),
                         GetBool(value, "active"),
-                        NullIfEmpty(GetString(value, "version")),
+                        version,
                         NullIfEmpty(GetString(value, "config_path")),
                         NullIfEmpty(GetString(value, "binary_path")),
                         NullIfEmpty(GetString(value, "error")))
                     {
+                        Source = source,
+                        VersionDisplay = claudeDesktop ? ClaudeDesktopDiscovery.EngineVersionText(version, source) : version,
                         CanAdd = CanAddConnector(
                             GetString(value, "name") ?? property.Name,
                             GetBool(value, "installed"),
@@ -1040,13 +1079,13 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// product. Most actionable state first - a product with a new or changed signal ahead of one that is only seen, and one that is gone
     /// last - then the strongest detection, then by name.
     /// </summary>
-    internal static IEnumerable<DiscoveryComponentCard> BuildCards(IReadOnlyList<DiscoverySignalRecord> signals, DateTimeOffset now) =>
+    internal static IEnumerable<DiscoveryComponentCard> BuildCards(IReadOnlyList<DiscoverySignalRecord> signals, DateTimeOffset now, bool claudeDesktop = false) =>
         signals
             .Where(static s => !DiscoveryModelRow.IsModelSignal(s))
             .GroupBy(s => (Vendor: string.IsNullOrWhiteSpace(s.Vendor) ? "(unknown vendor)" : s.Vendor,
                            Product: string.IsNullOrWhiteSpace(s.Product) ? "(unknown product)" : s.Product),
                 StringTupleComparer.Instance)
-            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList(), Now = now })
+            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList(), Now = now, ClaudeDesktopEntries = claudeDesktop ? ClaudeDesktopEntry.For(g) : Array.Empty<ClaudeDesktopEntry>() })
             .OrderBy(c => c.StateWeight)
             .ThenByDescending(c => c.MaxConfidence)
             .ThenBy(c => c.Vendor, StringComparer.OrdinalIgnoreCase)

@@ -373,7 +373,7 @@ public sealed partial class AiDiscoveryPanelViewModel
         _signals = signals;
 
         _allCards.Clear();
-        foreach (var card in BuildCards(signals, now))
+        foreach (var card in BuildCards(signals, now, ClaudeDesktopGate))
         {
             _allCards.Add(card);
         }

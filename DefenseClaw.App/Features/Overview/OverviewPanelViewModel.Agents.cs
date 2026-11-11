@@ -58,11 +58,19 @@ public sealed partial class OverviewPanelViewModel
             }
 
             var now = DateTimeOffset.UtcNow;
+            var claudeDesktop = Services.Runtime.Check(DefenseClaw.Core.Runtime.RuntimeCapability.ClaudeDesktopDiscovery).IsAvailable;
+            var agentDiscoveryPath = Services.Paths.AgentDiscoveryStatePath;
             var (agents, detected, novelty) = await Task.Run(
                 () =>
                 {
                     var text = DefenseClaw.Core.IO.SharedFile.ReadAllText(path);
-                    return (OverviewAgentReader.Parse(text, now), OverviewDetectedConnectors.Parse(text), AiDiscoveryNovelty.Parse(text));
+                    OverviewAgentOptions? options = null;
+                    if (claudeDesktop)
+                    {
+                        options = new OverviewAgentOptions(true, ReadClaudeCodeOnDesktopEngine(agentDiscoveryPath));
+                    }
+
+                    return (OverviewAgentReader.Parse(text, now, options), OverviewDetectedConnectors.Parse(text), AiDiscoveryNovelty.Parse(text));
                 },
                 cancellationToken).ConfigureAwait(true);
             SetDetectedConnectors(detected);
@@ -80,6 +88,19 @@ public sealed partial class OverviewPanelViewModel
         {
             SetDetectedConnectors(Array.Empty<string>());
             SetAgents(DiscoveredAgents.None, $"ai_discovery_state.json could not be read: {ex.Message}");
+        }
+    }
+
+    /// <summary>Whether <c>agent_discovery.json</c> says Claude Code was found in Claude Desktop; false when the file is missing or unreadable.</summary>
+    private static bool ReadClaudeCodeOnDesktopEngine(string path)
+    {
+        try
+        {
+            return File.Exists(path) && OverviewAgentReader.ClaudeCodeOnDesktopEngine(DefenseClaw.Core.IO.SharedFile.ReadAllText(path));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
