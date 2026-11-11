@@ -118,6 +118,7 @@ public sealed partial class OverviewPanelViewModel
                 _status = DefenseClawStatusReader.Parse(DiscoverCli.TrimToJson(DiscoverCli.Stdout(invocation)));
                 _statusProblem = null;
                 _statusLoadedAt = DateTimeOffset.UtcNow;
+                PublishCowork();
             }
         }
         catch (OperationCanceledException)
@@ -156,6 +157,7 @@ public sealed partial class OverviewPanelViewModel
         _status = status;
         _statusProblem = null;
         _statusLoadedAt = readAt ?? DateTimeOffset.UtcNow;
+        PublishCowork();
         RebuildAfterStatus();
     }
 
@@ -256,6 +258,7 @@ public sealed partial class OverviewPanelViewModel
                 rows.Add((roster.Count > 1 ? $"Hook fail mode ({name})" : "Hook fail mode", text, tone));
             }
 
+            AddCoworkRow(rows);
             rows.Add(("Guardrail", GuardrailText(config), "Neutral"));
         }
 

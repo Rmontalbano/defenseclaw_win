@@ -688,6 +688,7 @@ internal sealed partial class ShellActions
                     Warnings = (restarts ? new[] { CommandReviewWarning.GatewayRestart(CommandReview.RestartNoticeFor(argv)) } : Array.Empty<CommandReviewWarning>())
                         .Concat(LocalStackReview.Warnings(argv, LocalStack.Status))
                         .Concat(SplunkDashboardsReview.Warnings(argv, TokenPresenceFor(argv)))
+                        .Concat(ArgvHazards.AppliesTo(command.Executable) ? CoworkUninstallReview.Warnings(argv, _services.Runtime.Capabilities, _services.Paths.DataDirectory) : Array.Empty<CommandReviewWarning>())
                         .ToArray(),
                 };
 

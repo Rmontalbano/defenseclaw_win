@@ -32,6 +32,13 @@ public static class WizardLauncher
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrEmpty(target);
 
+        // 1.0.8 (CUST-445): Cowork has its own wizard; the generic one called a run "completed" while Cowork was still unprotected.
+        if (CoworkWizard.Handles(services, target))
+        {
+            await CoworkWizard.ShowAsync(services, owner, cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
         var catalog = WizardCatalog.Shared(services);
         var definition = await catalog.EnsureDetailAsync(target, cancellationToken).ConfigureAwait(true);
 

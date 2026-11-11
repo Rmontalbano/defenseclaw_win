@@ -1,3 +1,5 @@
+using DefenseClaw.App.Services.Wizards;
+using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Config;
 
@@ -91,6 +93,12 @@ public sealed record ReadinessInputs
 
     /// <summary>Why a gateway restart is queued; empty when none is.</summary>
     public string RestartReason { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The <c>cowork</c> object of the last <c>status --json</c> (runtime 1.0.8). Null below 1.0.8 and when the CLI sent none (no plugin and no Claude
+    /// Desktop on this account), and then the checklist has no Cowork row.
+    /// </summary>
+    public CoworkProtection? Cowork { get; init; }
 }
 
 /// <summary>The gateway states the checklist tells apart (a narrowing of <c>AppGatewayState</c> that the model does not need to import).</summary>
@@ -151,6 +159,11 @@ public static class SetupReadiness
                 "Guardrail is disabled or config is unavailable.",
                 ReadinessStatus.Warn,
                 Wizard("setup guardrail", "guardrail", "setup", "guardrail")));
+
+        if (inputs.Cowork is { } cowork)
+        {
+            checks.Add(CoworkRow(cowork));
+        }
 
         var missing = inputs.Credentials.Count(c => c.IsMissingRequired);
         if (missing == 0)
@@ -271,6 +284,42 @@ public static class SetupReadiness
         return IsHealthy(gateway, orDisabled: true) && IsHealthy(api, orDisabled: false)
             ? new ReadinessCheck(Title, "Gateway and API are healthy.", ReadinessStatus.Pass)
             : new ReadinessCheck(Title, $"gateway={gateway} api={api}", ReadinessStatus.Warn, GatewayRestart());
+    }
+
+    /// <summary>
+    /// The Cowork row (1.0.8, CUST-445), in the CLI's own words: pass only when <c>status --json</c> says protected. A built plugin nobody uploaded or no plugin
+    /// at all opens the Cowork wizard; Claude Code being off opens the Claude Code wizard; a state that depends on the gateway offers nothing here, as the
+    /// gateway's own row says what to do.
+    /// </summary>
+    private static ReadinessCheck CoworkRow(CoworkProtection cowork)
+    {
+        const string Title = "Cowork";
+        if (cowork.Protected)
+        {
+            return new ReadinessCheck(Title, cowork.Detail.Length > 0 ? cowork.Detail : "protected", ReadinessStatus.Pass);
+        }
+
+        var detail = cowork.Detail.Length > 0 ? cowork.Detail : "not protected";
+        if (cowork.Step.Length > 0)
+        {
+            detail += " Next: " + cowork.Step;
+        }
+
+        ReadinessFix? fix = null;
+        if (cowork.AwaitsUpload || cowork.IsNotBuilt)
+        {
+            fix = new ReadinessFix(
+                ReadinessFixKind.Wizard,
+                "setup cowork",
+                new[] { new ReadinessFixStep(Cli, CoworkProtectionFacts.SetupArgv, "Build the Cowork plugin, then upload it in Claude Desktop") },
+                WizardTarget: CoworkWizard.Target);
+        }
+        else if (cowork.IsClaudeCodeOff)
+        {
+            fix = Wizard("setup claude-code", "claude-code", "setup", "claude-code");
+        }
+
+        return new ReadinessCheck(Title, detail, ReadinessStatus.Warn, fix);
     }
 
     private static bool IsHealthy(string state, bool orDisabled) =>

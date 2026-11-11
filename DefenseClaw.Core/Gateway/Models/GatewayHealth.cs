@@ -86,6 +86,21 @@ public sealed class ConnectorStatus
     [JsonPropertyName("subprocess_blocks")]
     public long SubprocessBlocks { get; init; }
 
+    /// <summary>
+    /// <c>surfaces</c> (runtime 1.0.8): the calls callers labelled with a surface name, per surface (Claude Cowork is <c>cowork</c> of <c>claudecode</c>).
+    /// Empty when the gateway sends none, which is until the first labelled call. Read from <see cref="AdditionalData"/> rather than bound to a typed
+    /// member so a <c>surfaces</c> of the wrong shape can never fail the whole <c>/health</c> parse. These counters are caller-reported labels, not
+    /// proof of coverage: the gateway counts the hook's own header and never uses it as a policy input. Not named <c>Surfaces</c>: System.Text.Json matches an ignored property by name and would then keep <c>surfaces</c> out of <see cref="AdditionalData"/>.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyDictionary<string, ConnectorSurfaceHealth> LabelledSurfaces => _surfaces ??= ConnectorSurfaceHealth.Read(AdditionalData);
+
+    /// <summary>The <c>cowork</c> surface (without case), or null when no Cowork call was labelled since the gateway started. A label, not proof of coverage.</summary>
+    [JsonIgnore]
+    public ConnectorSurfaceHealth? Cowork => LabelledSurfaces.TryGetValue(ConnectorSurfaceHealth.CoworkSurface, out var cowork) ? cowork : null;
+
+    private IReadOnlyDictionary<string, ConnectorSurfaceHealth>? _surfaces;
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; init; }
 }

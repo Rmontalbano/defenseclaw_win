@@ -108,7 +108,32 @@ public sealed partial class ReadinessViewModel : ObservableObject
     public async Task ReloadAsync()
     {
         _doctorMissing = await ReadDoctorMissingAsync().ConfigureAwait(true);
+        await RefreshCoworkAsync().ConfigureAwait(true);
         Rebuild();
+    }
+
+    /// <summary>
+    /// 1.0.8 (CUST-445): the Cowork row's state comes from the Overview's own <c>status --json</c> read; a Setup visit that finds none within
+    /// <see cref="OverviewPanelViewModel.StatusRefreshInterval"/> reads it once itself (read-only). Nothing below 1.0.8, and a failure never throws.
+    /// </summary>
+    private async Task RefreshCoworkAsync()
+    {
+        var store = CoworkProtectionStore.For(_services);
+        if (!store.Applies || store.IsFresh(OverviewPanelViewModel.StatusRefreshInterval))
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await store.RefreshAsync().ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // A failed read leaves the row without a Cowork state; the checklist must still build.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            System.Diagnostics.Trace.TraceWarning($"setup: Cowork state could not be read: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private async Task<IReadOnlyList<string>> ReadDoctorMissingAsync()
@@ -157,6 +182,7 @@ public sealed partial class ReadinessViewModel : ObservableObject
             Credentials = _credentials.Snapshot,
             DoctorMissingCredentials = _doctorMissing,
             Config = ReadinessConfig.From(_services.Config),
+            Cowork = CoworkProtectionStore.For(_services).Current,
 
             // The TUI's "Restart Pending" row is its restart queue's reasons (CUST-267): the app-wide queue, so a save made in the config editor or a
             // run made from any other panel is here too, until a restart or Clear.

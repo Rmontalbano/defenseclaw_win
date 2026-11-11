@@ -1,3 +1,4 @@
+using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Text;
 
@@ -43,6 +44,24 @@ public static class SetupStateLines
         return new CardState(
             $"Main: {main} · Judge: {judge}",
             $"Main: {main}  ·  Judge: {judge}  ·  Connectors: {(active.Count == 0 ? "none" : string.Join(", ", active.Select(Shown)))} ({role})");
+    }
+
+    /// <summary>
+    /// The Cowork card (runtime 1.0.8): the CLI's own verdict from <c>status --json</c>, in the words <c>setup cowork</c> uses. Null (no line) when
+    /// there is no state: an older runtime, a read that has not happened, or a <c>status --json</c> with no <c>cowork</c> object.
+    /// </summary>
+    public static CardState? Cowork(CoworkProtection? state)
+    {
+        if (state is null)
+        {
+            return null;
+        }
+
+        var text = state.Protected ? "Protected"
+            : state.AwaitsUpload ? "Built, not uploaded yet"
+            : state.IsNotBuilt ? "Not set up"
+            : "Not protected";
+        return new CardState(text, state.Detail.Length > 0 ? state.Detail : text);
     }
 
     /// <summary>The guardrail card: <c>Guardrail: on  ·  Mode: observe  ·  Strategy: regex_only</c>.</summary>

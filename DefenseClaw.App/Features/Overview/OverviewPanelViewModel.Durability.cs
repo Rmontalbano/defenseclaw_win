@@ -62,6 +62,12 @@ public sealed partial class OverviewPanelViewModel
             case OpenProtectedFileAlertsActionId:
                 RequestNavigation("alerts", new AlertsFilter(Kind: AlertKinds.ProtectedFiles));
                 break;
+            case OpenCoworkWizardActionId:
+                await OpenCoworkWizardAsync().ConfigureAwait(true);
+                break;
+            case OpenClaudeCodeWizardActionId:
+                await OpenClaudeCodeWizardAsync().ConfigureAwait(true);
+                break;
 
             case ClearStaleInstallLockActionId:
                 ClearStaleInstallLock();

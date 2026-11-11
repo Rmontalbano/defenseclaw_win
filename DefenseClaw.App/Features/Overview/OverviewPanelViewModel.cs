@@ -800,6 +800,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // 1.0.6 guards OpenCode V2 and refuses V1; 1.0.5 and earlier guard V1 only (CUST-426). Built in OverviewPanelViewModel.OpenCode.cs.
         AppendOpenCodeAttention(rows);
 
+        // 1.0.8 (CUST-445): Claude Cowork is not protected until its plugin is uploaded in Claude Desktop. Built in OverviewPanelViewModel.Cowork.cs.
+        AppendCoworkAttention(rows);
+
         // 1.0.6 counts the hook checks the rules decided because the judge gave no verdict in time (CUST-426). Built in OverviewPanelViewModel.JudgeFallbacks.cs.
         AppendJudgeFallbackAttention(rows);
 
@@ -1209,7 +1212,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                       $"{status.Errors.ToString("N0", CultureInfo.CurrentCulture)} errors · " +
                       $"{status.ToolInspections.ToString("N0", CultureInfo.CurrentCulture)} inspections · " +
                       $"{status.ToolBlocks.ToString("N0", CultureInfo.CurrentCulture)} tool blocks · " +
-                      $"{status.SubprocessBlocks.ToString("N0", CultureInfo.CurrentCulture)} subprocess blocks",
+                      $"{status.SubprocessBlocks.ToString("N0", CultureInfo.CurrentCulture)} subprocess blocks" + CoworkSurfaceNote(name, status),
                 Surface = status is null
                     ? string.Empty
                     : $"tool inspection: {status.ToolInspectionMode ?? "—"} · subprocess: {status.SubprocessPolicy ?? "—"}" +

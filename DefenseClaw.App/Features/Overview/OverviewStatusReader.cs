@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using DefenseClaw.Core.ClaudeCode;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -67,6 +68,12 @@ internal sealed record DefenseClawStatus(
     /// positional form every reader of this record uses is unchanged.
     /// </summary>
     public IReadOnlyList<RemovedConnectorLeftovers> RemovedConnectorCleanup { get; init; } = Array.Empty<RemovedConnectorLeftovers>();
+
+    /// <summary>
+    /// <c>cowork</c> (1.0.8): whether Claude Cowork is protected, as the CLI judges it. Null when the object is absent (older runtimes; an account with neither
+    /// a Cowork plugin nor Claude Desktop; invalid config.yaml), which means nothing to say.
+    /// </summary>
+    public CoworkProtection? Cowork { get; init; }
 
     /// <summary>The entry for <paramref name="name"/> (without case), or null.</summary>
     public StatusConnector? Connector(string name) =>
@@ -137,6 +144,7 @@ internal static class DefenseClawStatusReader
             connectors)
         {
             RemovedConnectorCleanup = ReadRemovedConnectorCleanup(root),
+            Cowork = CoworkProtection.FromStatus(root),
         };
         return status;
     }

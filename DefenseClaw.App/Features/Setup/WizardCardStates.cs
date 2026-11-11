@@ -1,4 +1,5 @@
 using DefenseClaw.App.Services.Wizards;
+using DefenseClaw.Core.ClaudeCode;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Setup;
 
@@ -13,7 +14,7 @@ namespace DefenseClaw.App.ViewModels;
 internal static class WizardCardStates
 {
     /// <summary>The line for a card, or null when the target has none.</summary>
-    public static CardState? For(string target, string group, ConfigDocument? document)
+    public static CardState? For(string target, string group, ConfigDocument? document, CoworkProtection? cowork = null)
     {
         ArgumentNullException.ThrowIfNull(target);
 
@@ -29,6 +30,8 @@ internal static class WizardCardStates
                 return SetupStateLines.NotificationsSwitch(document);
             case "notifications-set":
                 return SetupStateLines.NotificationCategories(document);
+            case "cowork":
+                return SetupStateLines.Cowork(cowork);
         }
 
         // A connector's own card: not the proxy connectors (Windows does not run them, and the card is disabled with its reason).

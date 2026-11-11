@@ -444,7 +444,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         // A card that needs Docker or Terraform starts from what is known now: the held answer, or "Checking for …" before the first.
         card.ApplyDocker(_localStack.Decision);
         card.ApplyTerraform(_terraform.Decision);
-        card.ApplyState(WizardCardStates.For(card.Target, definition.Group, Services.Config));
+        card.ApplyState(WizardCardStates.For(card.Target, definition.Group, Services.Config, CoworkProtectionStore.For(Services).Current));
         _all.Add(card);
     }
 
@@ -457,7 +457,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         ProtectedFiles.Refresh();
         foreach (var card in _all)
         {
-            _ = card.ApplyState(WizardCardStates.For(card.Target, card.Definition.Group, Services.Config));
+            _ = card.ApplyState(WizardCardStates.For(card.Target, card.Definition.Group, Services.Config, CoworkProtectionStore.For(Services).Current));
         }
 
         // The area tiles carry their card's line (CUST-385).

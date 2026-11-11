@@ -1,0 +1,165 @@
+<ui:FluentWindow x:Class="DefenseClaw.App.Views.Cowork.CoworkSetupWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:ctl="clr-namespace:DefenseClaw.App.Views.Controls"
+                 xmlns:panels="clr-namespace:DefenseClaw.App.Views.Panels"
+                 Title="Claude Cowork"
+                 Width="720"
+                 Height="720"
+                 MinWidth="520"
+                 MinHeight="480"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterOwner"
+                 AutomationProperties.Name="Claude Cowork setup">
+    <!--
+        Claude Cowork setup (runtime 1.0.8, CUST-445). State first, from the CLI's own cowork state (the status command's JSON); then the one reviewed command that
+        builds the plugin; then, until Cowork is protected, what to do by hand in Claude Desktop. See CoworkSetupViewModel. The review is the shared
+        DiscoverReviewOverlay over the whole window. Shared styling only.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Claude Cowork" ShowMinimize="False" ShowMaximize="False" />
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False">
+            <StackPanel Margin="24,8,24,24">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource DcSectionHeader}"
+                               AutomationProperties.HeadingLevel="Level1"
+                               VerticalAlignment="Center"
+                               Text="Claude Cowork" />
+                    <Border Margin="12,0,0,0"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource DcBadge}"
+                            Tag="{Binding BadgeKey}">
+                        <TextBlock Style="{StaticResource DcBadgeText}"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   AutomationProperties.Name="{Binding BadgeText, StringFormat='Cowork state: {0}'}"
+                                   Text="{Binding BadgeText}" />
+                    </Border>
+                    <ui:ProgressRing Width="16"
+                                     Height="16"
+                                     Margin="10,0,0,0"
+                                     IsIndeterminate="True"
+                                     AutomationProperties.Name="Checking the Cowork state"
+                                     Visibility="{Binding IsChecking, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+
+                <!-- State, as the CLI wrote it -->
+                <Border Style="{StaticResource DcSubtleRow}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding DetailText}"
+                                   Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding NextText}"
+                                   Visibility="{Binding HasNext, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Text="{Binding ProtectedText}"
+                                   Visibility="{Binding HasProtectedText, Converter={StaticResource BoolToVisibility}}" />
+                        <ui:Button Margin="0,8,0,0"
+                                   HorizontalAlignment="Left"
+                                   Appearance="Secondary"
+                                   Content="Check again"
+                                   Icon="{ctl:DcSymbolIcon ArrowClockwise24}"
+                                   Command="{Binding CheckAgainCommand}"
+                                   AutomationProperties.Name="Check the Cowork state again"
+                                   AutomationProperties.HelpText="Runs defenseclaw status --json again. Changes nothing." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Build -->
+                <TextBlock Style="{StaticResource DcBody}" Margin="0,16,0,0" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" Text="Build the plugin" />
+                <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding BeforeRun}" />
+                <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SettingsNote}" />
+                <TextBlock Style="{StaticResource DcCaption}"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           Text="{Binding RebuildNote}"
+                           Visibility="{Binding HasRebuildNote, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource DcToneHighBrush}"
+                           Style="{StaticResource DcCaption}"
+                           Text="{Binding BlockedReason}"
+                           Visibility="{Binding HasBlock, Converter={StaticResource BoolToVisibility}}" />
+                <ui:Button Margin="0,8,0,0"
+                           HorizontalAlignment="Left"
+                           Appearance="Primary"
+                           Content="{Binding BuildText}"
+                           Icon="{ctl:DcSymbolIcon Play24}"
+                           Command="{Binding BuildPluginCommand}"
+                           ToolTipService.ShowOnDisabled="True"
+                           ToolTip="{Binding BlockedReason}"
+                           AutomationProperties.HelpText="Shows the exact defenseclaw command; nothing runs until you confirm." />
+
+                <!-- What the run said -->
+                <Border Style="{StaticResource DcSubtleRow}"
+                        Margin="0,12,0,0"
+                        AutomationProperties.LiveSetting="Polite"
+                        Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource DcBody}" TextWrapping="Wrap" Text="{Binding ResultText}" />
+                </Border>
+
+                <!-- Do this in Claude Desktop -->
+                <Border Style="{StaticResource DcSubtleRow}"
+                        Margin="0,16,0,0"
+                        Visibility="{Binding ShowUpload, Converter={StaticResource BoolToVisibility}}"
+                        AutomationProperties.Name="Do this in Claude Desktop">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcBody}"
+                                   FontWeight="SemiBold"
+                                   AutomationProperties.HeadingLevel="Level2"
+                                   Text="Do this in Claude Desktop" />
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="DefenseClaw cannot add the plugin to your Claude account. Cowork stays unprotected until you do these steps." />
+                        <ItemsControl Margin="0,8,0,0"
+                                      ItemsSource="{Binding UploadSteps}"
+                                      IsTabStop="False"
+                                      AutomationProperties.Name="Steps in Claude Desktop">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource DcBody}" Margin="0,0,0,4" TextWrapping="Wrap" Text="{Binding}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource DcCaption}"
+                                   Margin="0,2,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding ZipNote}"
+                                   Visibility="{Binding HasZipNote, Converter={StaticResource BoolToVisibility}}" />
+                        <WrapPanel Margin="0,8,0,0">
+                            <ui:Button Margin="0,0,8,0"
+                                       Appearance="Secondary"
+                                       Content="Copy path"
+                                       Icon="{ctl:DcSymbolIcon Copy24}"
+                                       Command="{Binding CopyPathCommand}"
+                                       AutomationProperties.Name="Copy the plugin zip's path" />
+                            <ui:Button Appearance="Secondary"
+                                       Content="Open folder"
+                                       Icon="{ctl:DcSymbolIcon Folder24}"
+                                       Command="{Binding OpenFolderCommand}"
+                                       AutomationProperties.Name="Open the plugin zip's folder in Explorer" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <panels:DiscoverReviewOverlay Grid.Row="0" Grid.RowSpan="2" DataContext="{Binding Review}" />
+    </Grid>
+</ui:FluentWindow>
