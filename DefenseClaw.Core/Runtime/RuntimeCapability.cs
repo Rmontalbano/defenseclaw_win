@@ -149,6 +149,76 @@ public enum RuntimeCapability
     /// reports OpenCode protected. Judged from the runtime's version (1.0.6 or later).
     /// </summary>
     OpenCodeV2Only,
+
+    /// <summary>
+    /// The decision model can be the only AI check for chosen hook connectors (1.0.7): <c>setup decision-model --connectors</c> and <c>decision_model.hook_connectors</c>. A release before 1.0.7 refuses the key. Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    DecisionModelCascade,
+
+    /// <summary>
+    /// Retention warns when a completed pass leaves the audit store above its size cap (1.0.7): <c>retention_state</c> <c>warning</c> with the used bytes, the cap and a reason in /health. Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    AuditStoreCapWarning,
+
+    /// <summary>
+    /// The gateway names the connectors it did not start and why (1.0.7): <c>connectors_not_started</c> and <c>connectors_refused_by_agent_settings</c> in the guardrail details of /health. Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    AgentNotInstalledSkip,
+
+    /// <summary>
+    /// A call the hook refused on its own, with no gateway decision, is written to the audit trail as a block row (1.0.7). A release before 1.0.7 records none. Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    HookFailureBlockRows,
+
+    /// <summary>
+    /// Under <c>regex_judge</c> a CRITICAL detection-only finding goes to the LLM judge, and a missing verdict follows <c>hook_fail_mode</c> (1.0.7, finding <c>JUDGE-UNAVAILABLE-ESCALATED</c>). Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    JudgeEscalation,
+
+    /// <summary>
+    /// The per-user <c>defenseclaw.exe</c> is a native launcher for the bundled CLI (1.0.7); a damaged install or a linked home folder now fails with the launcher's own message. Judged from the runtime's version (1.0.7 or later).
+    /// </summary>
+    PerUserCliLauncher,
+
+    /// <summary>
+    /// Claude Cowork is protected as a surface of the Claude Code connector (1.0.8): <c>setup cowork</c>, the <c>cowork</c> object of <c>status --json</c> and <c>connectors[].surfaces.cowork</c> in /health. Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    CoworkProtection,
+
+    /// <summary>
+    /// AI Discovery reports Claude Desktop and Cowork (1.0.8), including Claude Desktop on third-party inference. Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    ClaudeDesktopDiscovery,
+
+    /// <summary>
+    /// <c>guardrail.judge.extra_body</c> passes extra request fields to an OpenAI-compatible judge (1.0.8). A release before 1.0.8 refuses a config that carries the key. Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    JudgeExtraBody,
+
+    /// <summary>
+    /// <c>openshell.middleware.enabled</c> is retired (1.0.8): a config that carries it still loads, and <c>config set</c> refuses it. Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    OpenShellMiddlewareRetired,
+
+    /// <summary>
+    /// <c>doctor</c> fails a Windows PowerShell EncodedCommand hook bridge written by an earlier release (1.0.8) and names the <c>setup</c> command that rewrites it. Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    PowerShellBridgeFailClosed,
+
+    /// <summary>
+    /// OTLP records are kept through a collector outage and replayed, and /health counts rejections per destination (1.0.8). Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    OtlpReplay,
+
+    /// <summary>
+    /// A late or missing LLM judge verdict is written to the hook's audit row as <c>judge_fallback</c> (1.0.8; 1.0.7 counted it in health only). Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    JudgeFallbackOnHookRows,
+
+    /// <summary>
+    /// The LLM provider list includes <c>openai-compatible</c> and <c>custom-openai</c> (1.0.8); both need a base URL. Judged from the runtime's version (1.0.8 or later).
+    /// </summary>
+    OpenAiCompatibleProviders,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -192,6 +262,20 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.StaleInstallLockIgnored => "Stale install lock ignored (1.0.5)",
         RuntimeCapability.ProtectedFileWatch => "Protected-file watch (1.0.6)",
         RuntimeCapability.OpenCodeV2Only => "OpenCode V2 guarded, V1 refused (1.0.6)",
+        RuntimeCapability.DecisionModelCascade => "Decision model for chosen connectors (1.0.7)",
+        RuntimeCapability.AuditStoreCapWarning => "Audit store size-cap warning (1.0.7)",
+        RuntimeCapability.AgentNotInstalledSkip => "Connector skipped when its agent is not installed (1.0.7)",
+        RuntimeCapability.HookFailureBlockRows => "Hook self-block rows in the audit trail (1.0.7)",
+        RuntimeCapability.JudgeEscalation => "CRITICAL pattern findings go to the LLM judge (1.0.7)",
+        RuntimeCapability.PerUserCliLauncher => "Native per-user CLI launcher (1.0.7)",
+        RuntimeCapability.CoworkProtection => "Claude Cowork protection (1.0.8)",
+        RuntimeCapability.ClaudeDesktopDiscovery => "Claude Desktop and Cowork in AI Discovery (1.0.8)",
+        RuntimeCapability.JudgeExtraBody => "Extra request fields for the LLM judge (1.0.8)",
+        RuntimeCapability.OpenShellMiddlewareRetired => "openshell.middleware.enabled retired (1.0.8)",
+        RuntimeCapability.PowerShellBridgeFailClosed => "Doctor fails old PowerShell hook bridges (1.0.8)",
+        RuntimeCapability.OtlpReplay => "OTLP records kept through an outage (1.0.8)",
+        RuntimeCapability.JudgeFallbackOnHookRows => "judge_fallback on hook audit rows (1.0.8)",
+        RuntimeCapability.OpenAiCompatibleProviders => "openai-compatible and custom-openai providers (1.0.8)",
         _ => capability.ToString(),
     };
 
@@ -228,6 +312,20 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.StaleInstallLockIgnored => "the runtime reports version 1.0.5 or later and lists its commands (its hooks ignore an install lock whose installer is gone, and doctor --fix removes it)",
         RuntimeCapability.ProtectedFileWatch => "the runtime reports version 1.0.6 or later and lists its commands (a per-user gateway alerts on an agent's change to a protected file, and guardrail.protected_files is in its schema)",
         RuntimeCapability.OpenCodeV2Only => "the runtime reports version 1.0.6 or later and lists its commands (the gateway and setup guard OpenCode V2 and refuse OpenCode V1; a release before 1.0.6 guards V1 only)",
+        RuntimeCapability.DecisionModelCascade => "the runtime reports version 1.0.7 or later and lists its commands ('setup decision-model' takes --connectors and config accepts decision_model.hook_connectors; a release before 1.0.7 refuses the key)",
+        RuntimeCapability.AuditStoreCapWarning => "the runtime reports version 1.0.7 or later and lists its commands (/health telemetry reports retention_state 'warning' with the used size and the cap when a completed pass leaves the store above observability.local.max_store_mb)",
+        RuntimeCapability.AgentNotInstalledSkip => "the runtime reports version 1.0.7 or later and lists its commands (/health guardrail details list connectors_not_started and connectors_refused_by_agent_settings)",
+        RuntimeCapability.HookFailureBlockRows => "the runtime reports version 1.0.7 or later and lists its commands (a call the hook itself refused during an outage is recorded as a 'guardrail-block' row taken from hook-failures.jsonl)",
+        RuntimeCapability.JudgeEscalation => "the runtime reports version 1.0.7 or later and lists its commands (under regex_judge a CRITICAL finding the rules cannot enforce waits for the LLM judge, and a missing verdict follows hook_fail_mode (finding JUDGE-UNAVAILABLE-ESCALATED))",
+        RuntimeCapability.PerUserCliLauncher => "the runtime reports version 1.0.7 or later and lists its commands (the per-user defenseclaw.exe is a native launcher that starts the bundled CLI and prints its own errors when the install is damaged)",
+        RuntimeCapability.CoworkProtection => "the runtime reports version 1.0.8 or later and lists its commands ('setup cowork' exists, 'status --json' carries a cowork object and /health lists a cowork surface under the claudecode connector)",
+        RuntimeCapability.ClaudeDesktopDiscovery => "the runtime reports version 1.0.8 or later and lists its commands (AI Discovery reports Claude Desktop, its deployment (first or third party), Cowork and its plugins)",
+        RuntimeCapability.JudgeExtraBody => "the runtime reports version 1.0.8 or later and lists its commands (config accepts guardrail.judge.extra_body; a release before 1.0.8 refuses a config that carries it)",
+        RuntimeCapability.OpenShellMiddlewareRetired => "the runtime reports version 1.0.8 or later and lists its commands ('config set' refuses openshell.middleware.enabled; a config that still carries it loads and ignores it)",
+        RuntimeCapability.PowerShellBridgeFailClosed => "the runtime reports version 1.0.8 or later and lists its commands (doctor fails a hook bridge an earlier release wrote as a Windows PowerShell EncodedCommand and names the setup command that rewrites it)",
+        RuntimeCapability.OtlpReplay => "the runtime reports version 1.0.8 or later and lists its commands (OTLP records are kept through a collector outage and replayed, and /health counts rejections per destination (counters_scope))",
+        RuntimeCapability.JudgeFallbackOnHookRows => "the runtime reports version 1.0.8 or later and lists its commands (a late or missing LLM judge verdict is written to the hook's audit row as judge_fallback (1.0.7 counted it in health only))",
+        RuntimeCapability.OpenAiCompatibleProviders => "the runtime reports version 1.0.8 or later and lists its commands (the LLM provider list includes openai-compatible and custom-openai, which need a base URL)",
         _ => string.Empty,
     };
 }

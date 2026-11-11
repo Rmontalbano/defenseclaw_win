@@ -75,6 +75,12 @@ public static class RuntimeProbe
     /// <summary>The 1.0.6 release: among other things, the protected-file watch (internal/protectedfiles, absent at 1.0.5).</summary>
     internal static readonly Version Release106 = new(1, 0, 6);
 
+    /// <summary>The 1.0.7 release: the decision model for chosen hook connectors, the audit size-cap warning and the native per-user launcher.</summary>
+    internal static readonly Version Release107 = new(1, 0, 7);
+
+    /// <summary>The 1.0.8 release: Claude Cowork protection, Claude Desktop in AI Discovery and <c>guardrail.judge.extra_body</c>.</summary>
+    internal static readonly Version Release108 = new(1, 0, 8);
+
     /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
     internal static readonly Version RepinVersion = new(1, 0, 4);
 
@@ -372,6 +378,30 @@ public static class RuntimeProbe
         if (identity.ParsedVersion is { } openCodeV2 && openCodeV2 >= Release106 && (root.Count > 0 || setup.Count > 0))
         {
             present.Add(RuntimeCapability.OpenCodeV2Only);
+        }
+
+        // What 1.0.7 changed is gateway, hook and config behaviour with no command of its own to probe: the version decides, on the same terms as above.
+        if (identity.ParsedVersion is { } release107 && release107 >= Release107 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.DecisionModelCascade);
+            present.Add(RuntimeCapability.AuditStoreCapWarning);
+            present.Add(RuntimeCapability.AgentNotInstalledSkip);
+            present.Add(RuntimeCapability.HookFailureBlockRows);
+            present.Add(RuntimeCapability.JudgeEscalation);
+            present.Add(RuntimeCapability.PerUserCliLauncher);
+        }
+
+        // What 1.0.8 changed is gateway, hook and config behaviour with no command of its own to probe: the version decides, on the same terms as above.
+        if (identity.ParsedVersion is { } release108 && release108 >= Release108 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.CoworkProtection);
+            present.Add(RuntimeCapability.ClaudeDesktopDiscovery);
+            present.Add(RuntimeCapability.JudgeExtraBody);
+            present.Add(RuntimeCapability.OpenShellMiddlewareRetired);
+            present.Add(RuntimeCapability.PowerShellBridgeFailClosed);
+            present.Add(RuntimeCapability.OtlpReplay);
+            present.Add(RuntimeCapability.JudgeFallbackOnHookRows);
+            present.Add(RuntimeCapability.OpenAiCompatibleProviders);
         }
 
         if (HasAll(setup, RegistryMarkers))
