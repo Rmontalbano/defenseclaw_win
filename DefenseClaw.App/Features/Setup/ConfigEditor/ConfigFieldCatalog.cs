@@ -31,11 +31,15 @@ public sealed record ConfigFieldInfo(string Hint, IReadOnlyList<string>? Options
 /// <param name="SavedFailModeIgnored">A per-user 1.0.4 runtime does not apply a saved <c>hook_fail_mode</c> (<see cref="DefenseClaw.Core.Config.HookFailModeRule"/>); the fail-mode fields say so.</param>
 /// <param name="SavedFailModeWins">A per-user 1.0.5 runtime: a saved <c>hook_fail_mode</c> wins over the policy tier (<see cref="DefenseClaw.Core.Config.HookFailModeRule.SavedValueWins"/>, CUST-397); the fail-mode fields say so.</param>
 /// <param name="Keys104">The runtime has the config keys 1.0.4 added (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.Config104Keys"/>, CUST-377): <c>scanners.mcp_scanner.unverified_server</c>, <c>openshell.trusted_ca_bundle</c> and the severity notes are in the catalogue; without it they are not, and the form is exactly what it was.</param>
-public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false, bool Keys104 = false, bool SavedFailModeWins = false)
+/// <param name="JudgeExtraBody">The runtime has <c>guardrail.judge.extra_body</c> (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.JudgeExtraBody"/>, 1.0.8): the catalogue offers the key and the form checks it; releases before 1.0.8 refuse a config that carries it, so without the flag the key is not offered.</param>
+/// <param name="OpenAiCompatibleProviders">The runtime has the <c>openai-compatible</c> and <c>custom-openai</c> LLM providers (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.OpenAiCompatibleProviders"/>, 1.0.8): the provider lists offer them and the form warns when they have no base URL.</param>
+/// <param name="OpenShellMiddlewareRetired">The runtime retired <c>openshell.middleware.enabled</c> (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.OpenShellMiddlewareRetired"/>, 1.0.8): the form shows it read-only and warns that it does nothing.</param>
+public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false, bool Keys104 = false, bool SavedFailModeWins = false, bool JudgeExtraBody = false, bool OpenAiCompatibleProviders = false, bool OpenShellMiddlewareRetired = false)
 {
     /// <summary>This machine's operating system, with the 0.8.10 connector set: what the editor uses until the runtime says otherwise.</summary>
-    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false, bool keys104 = false, bool savedFailModeWins = false) =>
-        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored, keys104, savedFailModeWins);
+    public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false, bool keys104 = false, bool savedFailModeWins = false,
+        bool judgeExtraBody = false, bool openAiCompatibleProviders = false, bool openShellMiddlewareRetired = false) =>
+        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored, keys104, savedFailModeWins, judgeExtraBody, openAiCompatibleProviders, openShellMiddlewareRetired);
 
     /// <summary>Windows with the 0.8.10 connector set: this app's own profile when no runtime has been probed.</summary>
     public static ConfigChoiceProfile Windows { get; } = new("windows", false);
@@ -146,6 +150,34 @@ public static class ConfigFieldCatalog
     /// <summary><c>LLM_OVERRIDE_PROVIDERS</c> (<c>cli_choices.py:116</c>): the same, with a leading blank for "inherit the unified LLM".</summary>
     public static IReadOnlyList<string> LlmOverrideProviders { get; } = new[] { string.Empty }.Concat(LlmProviders).ToArray();
 
+    /// <summary>The providers 1.0.8 added (<c>internal/config/config.go</c> <c>openAIStyleLLMProviders</c>): OpenAI-style servers that have no default address, so each needs a base URL.</summary>
+    public static IReadOnlyList<string> OpenAiCompatibleProviderNames { get; } = new[] { "openai-compatible", "custom-openai" };
+
+    /// <summary><see cref="LlmProviders"/>, plus <see cref="OpenAiCompatibleProviderNames"/> for a runtime that has them; the list itself otherwise.</summary>
+    public static IReadOnlyList<string> LlmProvidersFor(ConfigChoiceProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return profile.OpenAiCompatibleProviders ? LlmProviders.Concat(OpenAiCompatibleProviderNames).ToArray() : LlmProviders;
+    }
+
+    /// <summary><see cref="LlmOverrideProviders"/> with the same additions as <see cref="LlmProvidersFor"/>.</summary>
+    public static IReadOnlyList<string> LlmOverrideProvidersFor(ConfigChoiceProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return profile.OpenAiCompatibleProviders ? new[] { string.Empty }.Concat(LlmProvidersFor(profile)).ToArray() : LlmOverrideProviders;
+    }
+
+    private const string CompatibleProviderHint =
+        "openai-compatible and custom-openai have no default address: set a base URL here or in the top-level llm block.";
+
+    private const string ExtraBodyHint =
+        "Extra fields added to the request body of an OpenAI-compatible LLM judge, for example chat_template_kwargs: {enable_thinking: false} to turn off a model's " +
+        "reasoning step. Used only when the judge has a base URL. Judge-owned and credential-like names are refused. At most 32 fields. " +
+        "Releases before 1.0.8 refuse it; unset it before you go back.";
+
+    private const string MiddlewareRetiredReason =
+        "Retired in 1.0.8: it had no effect. config set refuses it; remove it from config.yaml. Existing files with the key still load.";
+
     /// <summary>Every connector name the profile's runtime knows, in the order its pickers show them (<c>CONNECTORS</c>).</summary>
     public static IReadOnlyList<string> AllConnectors(ConfigChoiceProfile profile)
     {
@@ -210,7 +242,7 @@ public static class ConfigFieldCatalog
         profile ??= ConfigChoiceProfile.ForHost();
         if (ExactEntries.TryGetValue(path, out var entry))
         {
-            return entry.Since104 && !profile.Keys104 ? null : entry.Resolve(profile, Array.Empty<string>());
+            return Hidden(entry, profile) ? null : entry.Resolve(profile, Array.Empty<string>());
         }
 
         var segments = path.Split('.');
@@ -218,15 +250,21 @@ public static class ConfigFieldCatalog
         {
             if (pattern.Segments.Length == segments.Length && pattern.TryMatch(segments, out var captures))
             {
-                return pattern.Entry.Since104 && !profile.Keys104 ? null : pattern.Entry.Resolve(profile, captures);
+                return Hidden(pattern.Entry, profile) ? null : pattern.Entry.Resolve(profile, captures);
             }
         }
 
         return null;
     }
 
+    /// <summary>True when the profile's runtime does not have the key: <see cref="Entry.Since104"/> without 1.0.4's keys, or an <see cref="Entry.Available"/> test the profile fails.</summary>
+    private static bool Hidden(Entry entry, ConfigChoiceProfile profile) =>
+        (entry.Since104 && !profile.Keys104) || (entry.Available is { } available && !available(profile));
+
     /// <summary>Every exact key in the catalogue (the patterns are not expanded): for the tests that pin its shape.</summary>
     internal static IReadOnlyCollection<string> ExactPaths => ExactEntries.Keys;
+
+    private static string? CompatibleProviderNote(ConfigChoiceProfile profile) => profile.OpenAiCompatibleProviders ? CompatibleProviderHint : null;
 
     private static bool IsWindows(string osName) => osName.Trim().StartsWith("win", StringComparison.OrdinalIgnoreCase);
 
@@ -238,14 +276,20 @@ public static class ConfigFieldCatalog
         string? ReadOnlyReason = null,
         Func<ConfigChoiceProfile, string?>? ReadOnlyReasonFor = null,
         bool Since104 = false,
-        string? HintSuffix104 = null)
+        string? HintSuffix104 = null,
+        Func<ConfigChoiceProfile, bool>? Available = null,
+        Func<ConfigChoiceProfile, string?>? HintSuffixFor = null)
     {
+        /// <summary>A key only some runtimes have, by something other than 1.0.4's keys: when this says no for the profile, the catalogue does not know the key.</summary>
+        public Func<ConfigChoiceProfile, bool>? Available { get; } = Available;
+
         /// <summary>A key the runtime has only from 1.0.4 (<see cref="ConfigChoiceProfile.Keys104"/>): without it the catalogue does not know the key.</summary>
         public bool Since104 { get; } = Since104;
 
         public ConfigFieldInfo Resolve(ConfigChoiceProfile profile, string[] captures) =>
             new(
-                profile.Keys104 && HintSuffix104 is not null ? Hint(captures) + " " + HintSuffix104 : Hint(captures),
+                (profile.Keys104 && HintSuffix104 is not null ? Hint(captures) + " " + HintSuffix104 : Hint(captures)) +
+                (HintSuffixFor?.Invoke(profile) is { Length: > 0 } extra ? " " + extra : string.Empty),
                 Options?.Invoke(profile),
                 ReadOnlyReasonFor?.Invoke(profile) ?? ReadOnlyReason);
     }
@@ -309,7 +353,7 @@ public static class ConfigFieldCatalog
         Hint("plugin_dir", "Directory DefenseClaw scans for installed plugins.");
         Hint("policy_dir", "Root of policy packs.");
         Hint("environment", "Free-form deployment label.");
-        ChoiceOf("llm.provider", "LLM provider family.", LlmProviders);
+        Add("llm.provider", new Entry(_ => "LLM provider family.", LlmProvidersFor, HintSuffixFor: CompatibleProviderNote));
         Hint("llm.model", "Model identifier.");
         Hint("llm.api_key_env", "Env var NAME holding the unified key.");
         Hint("llm.api_key", "Inline key; prefer API Key Env.");
@@ -403,6 +447,7 @@ public static class ConfigFieldCatalog
         Hint("guardrail.judge.pii_prompt", "Flag PII on inbound prompts.");
         Hint("guardrail.judge.pii_completion", "Flag PII on completions.");
         Hint("guardrail.judge.tool_injection", "Detect payloads in tool-call args.");
+        Add("guardrail.judge.extra_body", new Entry(_ => ExtraBodyHint, Available: static p => p.JudgeExtraBody));
 
         // ---- Guardrail, one connector's overrides: _per_connector_guardrail_fields, setup.py:5688-5834
         Add("guardrail.connectors.*.mode", new Entry(c => $"Per-connector mode for {c[0]} (blank inherits the global mode).", _ => new[] { "observe", "action" }));
@@ -416,7 +461,7 @@ public static class ConfigFieldCatalog
         // ---- The LLM override block of a component: _llm_override_fields, setup.py:6415-6429
         foreach (var prefix in new[] { "guardrail.llm", "guardrail.judge.llm", "scanners.skill_scanner.llm", "scanners.mcp_scanner.llm", "scanners.plugin_llm" })
         {
-            ChoiceOf(prefix + ".provider", "Blank inherits Unified LLM.", LlmOverrideProviders);
+            Add(prefix + ".provider", new Entry(_ => "Blank inherits Unified LLM.", LlmOverrideProvidersFor, HintSuffixFor: CompatibleProviderNote));
             Hint(prefix + ".model", "Blank inherits Unified LLM model.");
             Hint(prefix + ".api_key_env", "Env var NAME for this component.");
             Hint(prefix + ".api_key", "Inline component key.");
@@ -488,6 +533,10 @@ public static class ConfigFieldCatalog
         Hint("openshell.policy_dir", "OpenShell policy YAML directory.");
         Choice("openshell.mode", "docker, standalone, or blank auto-detect.", string.Empty, "docker", "standalone");
         Hint("openshell.version", "Pinned OpenShell version.");
+        Add("openshell.middleware.enabled", new Entry(
+            _ => "Retired: this setting does nothing.",
+            ReadOnlyReason: MiddlewareRetiredReason,
+            Available: static p => p.OpenShellMiddlewareRetired));
 
         // ---- Keys of 1.0.4 (config.py, schemas/config/v8): shown only for a runtime that has them (Since104). CUST-377.
         Add("openshell.trusted_ca_bundle", new Entry(

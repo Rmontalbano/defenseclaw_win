@@ -237,6 +237,8 @@ internal sealed class CuratedCommandCatalog
 
     private static readonly CuratedCommandCatalog BaselineCommands = new(TuiRegistryCatalogues.Baseline);
     private static readonly CuratedCommandCatalog ExtendedCommands = new(TuiRegistryCatalogues.Extended);
+    private static readonly CuratedCommandCatalog CurrentCommands = new(TuiRegistryCatalogues.Current);
+    private static readonly CuratedCommandCatalog CurrentWithoutCoworkCommands = new(TuiRegistryCatalogues.CurrentWithoutCowork);
 
     private readonly Dictionary<string, CuratedCommand> _byId;
 
@@ -254,8 +256,21 @@ internal sealed class CuratedCommandCatalog
     }
 
     /// <summary>The catalogue for a runtime with these capabilities (see <see cref="TuiRegistryCatalogues.For"/>).</summary>
-    public static CuratedCommandCatalog For(RuntimeCapabilities? capabilities) =>
-        ReferenceEquals(TuiRegistryCatalogues.For(capabilities), TuiRegistryCatalogues.Extended) ? ExtendedCommands : BaselineCommands;
+    public static CuratedCommandCatalog For(RuntimeCapabilities? capabilities)
+    {
+        var registry = TuiRegistryCatalogues.For(capabilities);
+        if (ReferenceEquals(registry, TuiRegistryCatalogues.Current))
+        {
+            return CurrentCommands;
+        }
+
+        if (ReferenceEquals(registry, TuiRegistryCatalogues.CurrentWithoutCowork))
+        {
+            return CurrentWithoutCoworkCommands;
+        }
+
+        return ReferenceEquals(registry, TuiRegistryCatalogues.Extended) ? ExtendedCommands : BaselineCommands;
+    }
 
     /// <summary>The registry these commands are read from.</summary>
     public TuiRegistryCatalogue Source { get; }

@@ -57,6 +57,16 @@ public sealed class ConfigReloadRulesTests
     }
 
     [Fact]
+    public void The_decision_model_block_is_hot_alone_and_beside_another_hot_key()
+    {
+        // internal/gateway/config_manager.go hot set at 1.0.6 and 1.0.8; config_writer.RESTART_KEYS has no decision_model.
+        Assert.False(ConfigReloadRules.NeedsRestart(new[] { "decision_model" }));
+        Assert.False(ConfigReloadRules.NeedsRestart(new[] { "decision_model", "enabled" }));
+        Assert.False(ConfigReloadRules.NeedsRestart(new[] { "decision_model", "hook_connectors" }));
+        Assert.DoesNotContain("decision_model", ConfigReloadRules.RestartKeys);
+    }
+
+    [Fact]
     public void The_restart_set_is_the_one_configwrite_ships()
     {
         // restartKeys, in order (internal/config/configwrite/restart_keys.go at 1.0.4, plus guardrail.protected_files from configwrite.go:641 at 1.0.6; config_writer.RESTART_KEYS is its Python mirror).

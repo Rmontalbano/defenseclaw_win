@@ -154,17 +154,58 @@ public static class TuiRegistryCatalogues
         TuiRegistryData.ExtendedSourceEntries - Extended.Entries.Count(static e => IsRemovedSetup(e)),
         Extended.Entries.Where(static e => !IsRemovedSetup(e)).ToArray());
 
+    /// <summary>The 1.0.8 release's registry (250 entries), the newest one the app has read.</summary>
+    public static TuiRegistryCatalogue Current { get; } = new(
+        TuiRegistryData.CurrentRuntime,
+        TuiRegistryData.CurrentSource,
+        TuiRegistryData.CurrentSourceSha256,
+        TuiRegistryData.CurrentSourceEntries,
+        TuiRegistryData.Current);
+
+    /// <summary>
+    /// <see cref="Current"/> without <c>setup cowork</c>: the 1.0.7 release's registry differs from 1.0.8's in exactly that one tuple (checked against
+    /// both <c>tui/registry_data.py</c> files, 249 entries against 250), so the catalogue is derived rather than generated a fourth time.
+    /// </summary>
+    public static TuiRegistryCatalogue CurrentWithoutCowork { get; } = new(
+        TuiRegistryData.CurrentRuntime + ", without the entry 1.0.8 added (setup cowork)",
+        TuiRegistryData.CurrentSource,
+        TuiRegistryData.CurrentSourceSha256,
+        TuiRegistryData.CurrentSourceEntries - Current.Entries.Count(static e => IsCoworkSetup(e)),
+        Current.Entries.Where(static e => !IsCoworkSetup(e)).ToArray());
+
+    private static bool IsCoworkSetup(TuiRegistryEntry entry) =>
+        entry.Argv.Count >= 2 && entry.Argv[0] == "setup" && entry.Argv[1] == "cowork";
+
     private static bool IsRemovedSetup(TuiRegistryEntry entry) =>
         entry.Argv.Count >= 2 && entry.Argv[0] == "setup" && RemovedConnectors.IsRemoved(entry.Argv[1]);
 
     /// <summary>
-    /// The catalogue for a runtime with these capabilities: <see cref="Extended"/> when it has <see cref="RuntimeCapability.TuiRegistry"/> (without the
-    /// removed connectors when it has <see cref="RuntimeCapability.ConnectorsRetired"/>), otherwise <see cref="Baseline"/>.
+    /// The catalogue for a runtime with these capabilities: <see cref="Current"/> when it has <see cref="RuntimeCapability.CoworkProtection"/> (1.0.8),
+    /// <see cref="CurrentWithoutCowork"/> when it has <see cref="RuntimeCapability.DecisionModelCascade"/> (1.0.7), otherwise <see cref="Extended"/> when it
+    /// has <see cref="RuntimeCapability.TuiRegistry"/> (without the removed connectors when it has <see cref="RuntimeCapability.ConnectorsRetired"/>),
+    /// otherwise <see cref="Baseline"/>.
     /// </summary>
-    public static TuiRegistryCatalogue For(RuntimeCapabilities? capabilities) =>
-        capabilities is not null && capabilities.Has(RuntimeCapability.TuiRegistry)
+    public static TuiRegistryCatalogue For(RuntimeCapabilities? capabilities)
+    {
+        if (capabilities is null)
+        {
+            return Baseline;
+        }
+
+        if (capabilities.Has(RuntimeCapability.CoworkProtection))
+        {
+            return Current;
+        }
+
+        if (capabilities.Has(RuntimeCapability.DecisionModelCascade))
+        {
+            return CurrentWithoutCowork;
+        }
+
+        return capabilities.Has(RuntimeCapability.TuiRegistry)
             ? (capabilities.Has(RuntimeCapability.ConnectorsRetired) ? ExtendedWithoutRemovedConnectors : Extended)
             : Baseline;
+    }
 
     /// <summary>
     /// Why <paramref name="argv"/> must not be run from a catalogue, or null when it may: it is empty, a token is empty, has whitespace or

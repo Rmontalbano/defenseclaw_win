@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using DefenseClaw.Core.Paths;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Services.Wizards;
 
@@ -57,25 +58,13 @@ public sealed class WizardDefinitionChangedEventArgs : EventArgs
 /// and flags would stay invisible until the operator found the Re-read catalog button.
 /// </para>
 /// </summary>
-public sealed class WizardCatalog
+public sealed partial class WizardCatalog
 {
     /// <summary>Targets that are plumbing rather than a configuration flow.</summary>
     private static readonly IReadOnlySet<string> HiddenTargets = new HashSet<string>(StringComparer.Ordinal)
     {
         // Nothing is hidden today. Kept as the one place to make that decision if the CLI
         // ever grows a setup entry that is not an operator-facing flow.
-    };
-
-    /// <summary>
-    /// Setup targets the runtime lists but this app deliberately does not offer yet (CUST-423). DefenseClaw 1.0.6 added
-    /// <c>setup decision-model</c>, which would otherwise appear on its own as an "Other" card (and in the hub's search); the feature could
-    /// still change, so there is no decision-model UI until DefenseClaw 1.0.7 ships. To lift the hold, delete the entry here: nothing else
-    /// needs to change. Only the card is held: the config editor's read-only "Decision Model" section and the doctor row report what the
-    /// runtime has, and stay. The command palette is not fed by this list (its registry has no decision-model entry), so it needs no filter.
-    /// </summary>
-    internal static readonly IReadOnlySet<string> HeldUntilRelease = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "decision-model",
     };
 
     private static readonly object InstanceGate = new();
@@ -101,9 +90,10 @@ public sealed class WizardCatalog
     }
 
     /// <summary>Test seam: a catalog over a probe whose CLI is a fake.</summary>
-    internal WizardCatalog(SetupHelpProbe probe)
+    internal WizardCatalog(SetupHelpProbe probe, Func<RuntimeCapabilities?>? capabilities = null)
     {
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+        _capabilities = capabilities;
     }
 
     /// <summary>Raised (off the UI thread) when a definition is replaced by a richer one.</summary>
@@ -131,6 +121,7 @@ public sealed class WizardCatalog
             if (_shared is null)
             {
                 var catalog = new WizardCatalog(services.Paths);
+                catalog.UseRuntime(services.Runtime);
 
                 // Seeded with what is running now, so only a later, different version counts as a change.
                 _ = catalog.ObserveBinaryVersionAsync(services.Monitor.Current.TrustedBinaryVersion);
@@ -338,9 +329,11 @@ public sealed class WizardCatalog
                     return Array.Empty<WizardDefinition>();
                 }
 
+                var capabilities = CapabilitiesForRoster();
                 foreach (var command in help.Commands)
                 {
-                    if (HiddenTargets.Contains(command.Name) || HeldUntilRelease.Contains(command.Name))
+                    // The decision-model card is offered only on a runtime that has it (DecisionModelCard, CUST-446).
+                    if (HiddenTargets.Contains(command.Name) || DecisionModelCard.IsHeld(command.Name, capabilities))
                     {
                         continue;
                     }
@@ -549,6 +542,7 @@ public sealed class WizardCatalog
         "migrate-llm" => "Migrate LLM config",
         "local-observability" => "Local observability stack",
         "galileo" => "Galileo",
+        DecisionModelCard.Target => "Decision model",
         "splunk" => "Splunk",
         SplunkDashboards.Target => SplunkDashboards.Title,
         "rotate-token" => "Rotate gateway token",
@@ -569,7 +563,7 @@ public sealed class WizardCatalog
         "openhands" or "antigravity" or "opencode" or "omnigent" or "hermes" or "openclaw" or
         "zeptoclaw" or "remove" => WizardGroups.Connectors,
 
-        "guardrail" or "trusted-paths" or "provider" or "registry" => WizardGroups.GuardrailAndPolicy,
+        "guardrail" or "trusted-paths" or "provider" or "registry" or DecisionModelCard.Target => WizardGroups.GuardrailAndPolicy,
 
         "skill-scanner" or "mcp-scanner" => WizardGroups.Scanners,
 

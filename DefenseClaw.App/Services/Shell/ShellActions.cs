@@ -685,7 +685,7 @@ internal sealed partial class ShellActions
                     Summary = (summary + notListed).Trim(),
                     Steps = new[] { new CommandReviewStep(argv, floor: CommandReview.Stricter(command.Tier, CommandTier.StateChanging), executable: command.Executable) },
                     RestartsGateway = restarts,
-                    Warnings = (restarts ? new[] { CommandReviewWarning.GatewayRestart() } : Array.Empty<CommandReviewWarning>())
+                    Warnings = (restarts ? new[] { CommandReviewWarning.GatewayRestart(CommandReview.RestartNoticeFor(argv)) } : Array.Empty<CommandReviewWarning>())
                         .Concat(LocalStackReview.Warnings(argv, LocalStack.Status))
                         .Concat(SplunkDashboardsReview.Warnings(argv, TokenPresenceFor(argv)))
                         .ToArray(),

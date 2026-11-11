@@ -157,6 +157,9 @@ public static class ConfigFormBuilder
             sections.Add(section);
         }
 
+        // Findings that need the whole document (a mapping's field names, a provider and its sibling base URL): empty unless the runtime has the key.
+        warnings.AddRange(ConfigFieldFindings.For(root, profile));
+
         return new BuildResult(sections, warnings);
     }
 

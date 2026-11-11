@@ -55,14 +55,14 @@ public static class ConfigReloadRules
     /// <summary>
     /// The top-level sections <c>diffConfigs</c> lists as reloadable for a per-user gateway (config_manager.go, <c>hotReloadable</c>), plus the two directory
     /// keys it applies in place (<c>policy_dir</c>, <c>quarantine_dir</c>), the fleet block (only its connection keys are in the restart set), and the keys the
-    /// gateway never reads (the CLI owns them), which have nothing to apply. A managed host's <c>enterprise</c> block is not edited here and is not hot.
+    /// gateway never reads (the CLI owns them), which have nothing to apply. A managed host's <c>enterprise</c> block is not edited here and is not hot. <c>decision_model</c> is in the gateway's hot set from 1.0.6 (config_manager.go); older gateways have no such section, so listing it is harmless there.
     /// </summary>
     private static readonly HashSet<string> HotSections = new(StringComparer.Ordinal)
     {
         "acp", "guardrail", "webhooks", "observability", "notifications", "registries", "openshell", "ai_discovery", "admission", "asset_policy",
         "llm_providers", "update", "llm", "scanners", "watch", "connector_hooks", "application_protection", "cisco_ai_defense",
         "policy_dir", "quarantine_dir", "fleet",
-        "skill_actions", "mcp_actions", "plugin_actions", "config_version",
+        "skill_actions", "mcp_actions", "plugin_actions", "config_version", "decision_model",
     };
 
     /// <summary>True when the running gateway applies a change to <paramref name="segments"/> only after a restart.</summary>

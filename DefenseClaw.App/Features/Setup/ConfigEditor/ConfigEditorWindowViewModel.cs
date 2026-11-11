@@ -1323,7 +1323,10 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             connectorsRetired: RemovedConnectors.AreRetired(_services.Runtime.Capabilities),
             savedFailModeIgnored: DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(_services.Runtime.Capabilities, _services.Installation.Context.IsManaged),
             keys104: HasConfig104Keys,
-            savedFailModeWins: DefenseClaw.Core.Config.HookFailModeRule.SavedValueWins(_services.Runtime.Capabilities, _services.Installation.Context.IsManaged));
+            savedFailModeWins: DefenseClaw.Core.Config.HookFailModeRule.SavedValueWins(_services.Runtime.Capabilities, _services.Installation.Context.IsManaged),
+            judgeExtraBody: _services.Runtime.Capabilities.Has(RuntimeCapability.JudgeExtraBody),
+            openAiCompatibleProviders: _services.Runtime.Capabilities.Has(RuntimeCapability.OpenAiCompatibleProviders),
+            openShellMiddlewareRetired: _services.Runtime.Capabilities.Has(RuntimeCapability.OpenShellMiddlewareRetired));
 
     /// <summary>Empties the FORM tree. The held-back values go with it: they were boxes of that tree, and RAW never had them.</summary>
     private void ClearSections()

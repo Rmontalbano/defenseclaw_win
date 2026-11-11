@@ -221,6 +221,9 @@ public static partial class WizardStepFactory
             case "mcp-scanner":
                 return McpScannerSteps(help);
 
+            case DecisionModelCard.Target:
+                return DecisionModelSteps(help);
+
             default:
                 // Shape, not name: every hook/lifecycle connector shares this option set, so
                 // claude-code, codex, cursor and every future connector get the same layout

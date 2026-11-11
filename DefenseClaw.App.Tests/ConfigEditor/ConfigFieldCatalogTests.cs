@@ -306,7 +306,9 @@ public class ConfigFieldCatalogTests
                      ("cisco_ai_defense.endpoint", "Cisco AI Defense API endpoint."),
                  })
         {
-            var info = (ConfigFieldCatalog.Resolve(path, Windows) ?? ConfigFieldCatalog.Resolve(path, Windows with { Keys104 = true }))!;
+            var info = (ConfigFieldCatalog.Resolve(path, Windows)
+                ?? ConfigFieldCatalog.Resolve(path, Windows with { Keys104 = true })
+                ?? ConfigFieldCatalog.Resolve(path, Windows with { Keys104 = true, JudgeExtraBody = true, OpenAiCompatibleProviders = true, OpenShellMiddlewareRetired = true }))!;
             Assert.Equal(hint, info.Hint);
             Assert.False(info.IsChoice);
             Assert.Null(info.ReadOnlyReason);
@@ -343,7 +345,9 @@ public class ConfigFieldCatalogTests
 
         foreach (var path in ConfigFieldCatalog.ExactPaths)
         {
-            var info = (ConfigFieldCatalog.Resolve(path, Windows) ?? ConfigFieldCatalog.Resolve(path, Windows with { Keys104 = true }))!;
+            var info = (ConfigFieldCatalog.Resolve(path, Windows)
+                ?? ConfigFieldCatalog.Resolve(path, Windows with { Keys104 = true })
+                ?? ConfigFieldCatalog.Resolve(path, Windows with { Keys104 = true, JudgeExtraBody = true, OpenAiCompatibleProviders = true, OpenShellMiddlewareRetired = true }))!;
 
             if (info.IsChoice)
             {

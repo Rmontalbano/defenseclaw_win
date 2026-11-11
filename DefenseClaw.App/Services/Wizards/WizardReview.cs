@@ -26,7 +26,7 @@ public static class WizardReview
         }
 
         var offersToggle = definition.VisibleFields(values).Any(f => f.Kind == WizardFieldKind.Toggle && f.NegativeFlag == "--no-restart");
-        return CommandReview.RestartNotice +
+        return CommandReview.RestartNoticeFor(argv) +
                (offersToggle ? " Choose \"Disable (--no-restart)\" for Restart on the last page to skip the restart." : string.Empty);
     }
 

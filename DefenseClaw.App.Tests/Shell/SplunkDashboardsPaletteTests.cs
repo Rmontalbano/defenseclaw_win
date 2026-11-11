@@ -138,7 +138,7 @@ public sealed class SplunkDashboardsPaletteTests : IDisposable
     [Fact]
     public void Neither_registry_has_a_dashboards_entry_so_the_rows_are_added_beside_the_registrys_and_only_with_them()
     {
-        foreach (var catalogue in new[] { TuiRegistryCatalogues.Baseline, TuiRegistryCatalogues.Extended })
+        foreach (var catalogue in new[] { TuiRegistryCatalogues.Baseline, TuiRegistryCatalogues.Extended, TuiRegistryCatalogues.Current, TuiRegistryCatalogues.CurrentWithoutCowork })
         {
             Assert.DoesNotContain(catalogue.OnWindows, e => e.Argv.Count >= 3 && e.Argv[2] == "dashboards");
             Assert.DoesNotContain(catalogue.HiddenOnWindows, e => e.Argv.Count >= 3 && e.Argv[2] == "dashboards");

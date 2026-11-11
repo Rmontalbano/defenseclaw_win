@@ -22,7 +22,15 @@ public sealed class TuiRegistryCatalogueTests
 
     public static TheoryData<string> Runtimes => new() { "baseline", "extended" };
 
-    private static TuiRegistryCatalogue Of(string runtime) => runtime == "baseline" ? Baseline : Extended;
+    /// <summary>The generic invariants (shape, no bare gateway, argv hygiene) hold for the 1.0.8 catalogue too; the lists pinned to 0.8.10 and 95159fd stay on <see cref="Runtimes"/>.</summary>
+    public static TheoryData<string> RuntimesWithCurrent => new() { "baseline", "extended", "current" };
+
+    private static TuiRegistryCatalogue Of(string runtime) => runtime switch
+    {
+        "baseline" => Baseline,
+        "current" => TuiRegistryCatalogues.Current,
+        _ => Extended,
+    };
 
     // ------------------------------------------------------------------ counts
 
@@ -122,7 +130,7 @@ public sealed class TuiRegistryCatalogueTests
     // ------------------------------------------------------------------ shape
 
     [Theory]
-    [MemberData(nameof(Runtimes))]
+    [MemberData(nameof(RuntimesWithCurrent))]
     public void Every_entry_has_the_registry_shape(string runtime)
     {
         var catalogue = Of(runtime);
@@ -143,7 +151,7 @@ public sealed class TuiRegistryCatalogueTests
     }
 
     [Theory]
-    [MemberData(nameof(Runtimes))]
+    [MemberData(nameof(RuntimesWithCurrent))]
     public void Registry_names_that_share_one_command_are_all_kept(string runtime)
     {
         // The TUI keeps its aliases so that the names operators know still work; the palette offers every one.
@@ -155,7 +163,7 @@ public sealed class TuiRegistryCatalogueTests
     }
 
     [Theory]
-    [MemberData(nameof(Runtimes))]
+    [MemberData(nameof(RuntimesWithCurrent))]
     public void No_entry_is_a_bare_gateway_and_none_starts_with_an_option(string runtime)
     {
         // `defenseclaw-gateway` with no arguments starts a second sidecar daemon. Nothing a catalogue holds may be that.
@@ -213,7 +221,7 @@ public sealed class TuiRegistryCatalogueTests
     }
 
     [Theory]
-    [MemberData(nameof(Runtimes))]
+    [MemberData(nameof(RuntimesWithCurrent))]
     public void Every_argv_passes_the_hygiene_check_and_carries_only_reviewed_options(string runtime)
     {
         var catalogue = Of(runtime);

@@ -221,6 +221,30 @@ public sealed record CommandReview
         RestartSentence + " Agents that use DefenseClaw hooks may lose the gateway for a few seconds while it comes back.";
 
     /// <summary>
+    /// The restart paragraph for <c>setup cowork</c>, which restarts the gateway only when it has to set up the Claude Code connector first
+    /// (it runs <c>setup claude-code</c>, which restarts); with Claude Code already set up it builds the plugin and restarts nothing. The argv
+    /// alone cannot say which, so the review keeps the restart badge and this paragraph says "may".
+    /// </summary>
+    public const string CoworkRestartNotice =
+        "This may restart the DefenseClaw gateway: when the Claude Code connector is not set up yet, setup cowork sets it up first, and that " +
+        "restarts the gateway. When Claude Code is already set up, it builds the plugin only and nothing restarts. " +
+        "Agents that use DefenseClaw hooks may lose the gateway for a few seconds while it comes back.";
+
+    /// <summary>
+    /// The restart paragraph for <paramref name="argv"/>: <see cref="RestartNotice"/> for every command that restarts the gateway for certain,
+    /// <see cref="CoworkRestartNotice"/> for <c>setup cowork</c>, which only may.
+    /// </summary>
+    public static string RestartNoticeFor(IReadOnlyList<string> argv)
+    {
+        ArgumentNullException.ThrowIfNull(argv);
+        return argv.Count >= 2 &&
+               string.Equals(argv[0], "setup", StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(argv[1], "cowork", StringComparison.OrdinalIgnoreCase)
+            ? CoworkRestartNotice
+            : RestartNotice;
+    }
+
+    /// <summary>
     /// Path words that make a <c>setup</c> command a read or a probe rather than a configuration write, so
     /// it does not restart anything (<c>setup observability list</c>, <c>setup … test</c>).
     /// </summary>
@@ -562,6 +586,13 @@ public sealed record CommandReview
         }
 
         if (argv.Count == 0 || !string.Equals(argv[0], "setup", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // `setup decision-model` writes only the decision_model block, which the running gateway applies without a restart (and it writes no
+        // .env, so the setup result callback has nothing to restart for either).
+        if (argv.Count >= 2 && string.Equals(argv[1], "decision-model", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

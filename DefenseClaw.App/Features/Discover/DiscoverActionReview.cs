@@ -281,7 +281,10 @@ public sealed partial class DiscoverActionReview : ObservableObject
         var warnings = new List<CommandReviewWarning>();
         if (restartsGateway)
         {
-            warnings.Add(CommandReviewWarning.GatewayRestart());
+            // A step that restarts for certain wins; a lone `setup cowork` (which only may) gets its own wording.
+            var notices = steps.Where(static s => CommandReview.RestartsGatewayFor(s.Argv)).Select(static s => CommandReview.RestartNoticeFor(s.Argv)).ToList();
+            warnings.Add(CommandReviewWarning.GatewayRestart(
+                notices.Count == 0 || notices.Contains(CommandReview.RestartNotice) ? null : notices[0]));
         }
 
         if (!string.IsNullOrWhiteSpace(warning))

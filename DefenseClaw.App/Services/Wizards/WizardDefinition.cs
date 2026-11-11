@@ -39,7 +39,7 @@ public enum PlatformStatus
     NotApplicable,
 
     /// <summary>
-    /// Declared <c>preview</c> (DefenseClaw 1.0.6 <c>platform_support.py</c>: OpenCode V2 on Windows). The CLI offers and accepts a preview
+    /// Declared <c>preview</c> (DefenseClaw 1.0.6 and 1.0.7 <c>platform_support.py</c>: OpenCode V2 on Windows, which 1.0.8 declares supported). The CLI offers and accepts a preview
     /// connector, so it is launchable, but it is not a certified one: the same caution tone as <see cref="NotCertified"/>, never counted as
     /// certified, and hidden by the certification filter. Appended last so no existing numeric value moves. Read from the help, never from
     /// a list of connector names here, so any connector a runtime calls preview gets it.

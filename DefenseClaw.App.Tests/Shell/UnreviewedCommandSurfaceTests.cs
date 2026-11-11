@@ -91,7 +91,7 @@ public sealed class UnreviewedCommandSurfaceTests
 
         // Three exist as TUI registry entries of both runtimes with this very argv, so the palette's rows and the buttons cannot drift apart; the
         // fourth is the registry's `setup notifications` with the argument its hint names (`<status|on|off> [--yes]`).
-        foreach (var catalogue in new[] { TuiRegistryCatalogues.Baseline, TuiRegistryCatalogues.Extended })
+        foreach (var catalogue in new[] { TuiRegistryCatalogues.Baseline, TuiRegistryCatalogues.Extended, TuiRegistryCatalogues.Current, TuiRegistryCatalogues.CurrentWithoutCowork })
         {
             Assert.Contains(catalogue.Entries, e => e.Name == "agent discovery enable" && e.Argv.SequenceEqual(OverviewPanelViewModel.EnableAiDiscoveryArgv));
             Assert.Contains(catalogue.Entries, e => e.Name == "agent discovery scan" && e.Argv.SequenceEqual(OverviewPanelViewModel.ScanAiDiscoveryArgv));

@@ -203,7 +203,7 @@ internal sealed class CommandRerun
         var warnings = new List<CommandReviewWarning>();
         if (restarts)
         {
-            warnings.Add(CommandReviewWarning.GatewayRestart());
+            warnings.Add(CommandReviewWarning.GatewayRestart(CommandReview.RestartNoticeFor(argv)));
         }
 
         if (string.Equals(tool, CommandReview.DefaultExecutable, StringComparison.Ordinal))
