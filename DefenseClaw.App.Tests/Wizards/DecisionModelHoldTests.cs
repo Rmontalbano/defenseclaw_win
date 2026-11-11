@@ -2,6 +2,7 @@ using DefenseClaw.App.Services;
 using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.App.ViewModels.Wizards;
 using DefenseClaw.Core.Cli;
 using DefenseClaw.Core.Paths;
 using DefenseClaw.Core.Runtime;
@@ -303,6 +304,50 @@ public sealed class DecisionModelHoldTests
     }
 
     [Fact]
+    public async Task An_open_hub_gains_the_card_when_the_capability_arrives_and_loses_it_when_it_goes()
+    {
+        var current = Runtime("1.0.6");
+        var catalog = CatalogOver(() => current);
+        var reloads = 0;
+        catalog.RosterReloaded += (_, _) => Interlocked.Increment(ref reloads);
+        var roster = await catalog.LoadAsync();
+        using var temp = new TempDirectory();
+        using var services = TestServices.Create(temp);
+        SetupPanelViewModel? vm = null;
+
+        UiThread.Run(() =>
+        {
+            vm = new SetupPanelViewModel(services, catalog);
+            vm.ShowCards(roster);
+            Assert.DoesNotContain(vm.Groups.SelectMany(g => g.Cards), c => c.Target == "decision-model");
+
+            // Same roster: nothing to redraw.
+            Assert.False(vm.SyncRosterWithCatalog());
+        });
+
+        current = Runtime("1.0.7");
+        await catalog.ObserveRuntimeAsync();
+        Assert.Equal(1, Volatile.Read(ref reloads));
+
+        UiThread.Run(() =>
+        {
+            Assert.True(vm!.SyncRosterWithCatalog());
+            Assert.Contains(vm.Groups.SelectMany(g => g.Cards), c => c.Target == "decision-model");
+            Assert.False(vm.SyncRosterWithCatalog());
+        });
+
+        current = Runtime("1.0.6");
+        await catalog.ObserveRuntimeAsync();
+
+        UiThread.Run(() =>
+        {
+            Assert.True(vm!.SyncRosterWithCatalog());
+            Assert.DoesNotContain(vm.Groups.SelectMany(g => g.Cards), c => c.Target == "decision-model");
+            Assert.Equal(OtherTargets.Length, vm.Groups.SelectMany(g => g.Cards).Count());
+        });
+    }
+
+    [Fact]
     public async Task A_runtime_change_before_the_first_load_reads_nothing()
     {
         var topReads = 0;
@@ -391,6 +436,40 @@ public sealed class DecisionModelHoldTests
             Argv(v => { v["connectors-mode"] = "only"; v["connectors"] = " claudecode,codex "; }));
 
         Assert.DoesNotContain("--connectors", Argv(v => v["connectors-mode"] = "only"));
+    }
+
+    [Fact]
+    public void Only_these_with_an_empty_names_box_is_a_validation_error_on_its_page_and_names_let_it_through()
+    {
+        var definition = Definition();
+        using var temp = new TempDirectory();
+
+        StaThread.Run(() =>
+        {
+            using var services = TestServices.Create(temp);
+            using var vm = new WizardViewModel(services, definition);
+            var mode = vm.Steps.SelectMany(s => s.Fields).Single(f => f.Field.Id == DecisionModelCard.ConnectorsModeFieldId);
+            var names = vm.Steps.SelectMany(s => s.Fields).Single(f => f.Field.Id == "connectors");
+            mode.Value = DecisionModelCard.OnlyConnectors;
+
+            while (!vm.IsReview && vm.CurrentStep?.Step.Id != "decision-model-connectors")
+            {
+                vm.Next();
+                Assert.False(vm.HasValidationSummary, vm.ValidationSummary);
+            }
+
+            Assert.False(vm.IsReview);
+            names.Value = "   ";
+            vm.Next();
+            Assert.Equal("decision-model-connectors", vm.CurrentStep?.Step.Id);
+            Assert.True(vm.HasValidationSummary);
+            Assert.Equal("Connectors is required.", names.ValidationError);
+
+            names.Value = "claudecode";
+            vm.Next();
+            Assert.NotEqual("decision-model-connectors", vm.CurrentStep?.Step.Id);
+            Assert.False(vm.HasValidationSummary, vm.ValidationSummary);
+        });
     }
 
     [Fact]

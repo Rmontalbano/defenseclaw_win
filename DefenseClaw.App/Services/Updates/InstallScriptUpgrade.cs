@@ -526,11 +526,8 @@ public sealed class RegistryLeftoverProbes : ILeftoverProbes
 /// </summary>
 internal static class CoworkUninstall
 {
-    // Upstream's _COWORK_REMOVAL_STEP, verbatim.
-    private const string CoworkRemovalStep =
-        "remove it in Claude Desktop (Customize > Plugins, then the ... menu > Remove). Until then Cowork tool calls are blocked.";
-
-    internal const string Sentence = "'defenseclaw uninstall' cannot remove the DefenseClaw Cowork plugin from your Claude account: " + CoworkRemovalStep;
+    /// <summary>The app's one Cowork removal sentence (the CLI's own uninstall warning), shared with the uninstall and reset reviews.</summary>
+    internal const string Sentence = DefenseClaw.Core.ClaudeCode.CoworkProtectionFacts.RemovePluginStep;
 
     /// <summary>The file whose presence means a Cowork plugin was installed.</summary>
     internal static string StatePath(string dataDirectory) => Path.Combine(dataDirectory, "cowork", "plugin-state.json");

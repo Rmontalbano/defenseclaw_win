@@ -14,6 +14,24 @@ public sealed partial class WizardCatalog
     private bool? _decisionModelHeldAtLoad;
 
     /// <summary>
+    /// Raised (on a pool thread) after <see cref="RefreshAfterCliChangeAsync"/> read the roster again, before the details are warmed. The Setup hub
+    /// compares <see cref="LoadedRoster"/> with its cards and redraws when a target came or went.
+    /// </summary>
+    public event EventHandler? RosterReloaded;
+
+    /// <summary>The roster of the last load that finished, or null while one is running, after it failed, or before the first.</summary>
+    internal IReadOnlyList<WizardDefinition>? LoadedRoster
+    {
+        get
+        {
+            lock (InstanceGate)
+            {
+                return _load is { IsCompletedSuccessfully: true } load && load.Result.Count > 0 ? load.Result : null;
+            }
+        }
+    }
+
+    /// <summary>
     /// What the runtime can do right now, as the roster being read sees it; records whether that holds the decision-model card back so a later
     /// change of the answer is noticed (<see cref="ObserveRuntimeAsync"/>).
     /// </summary>

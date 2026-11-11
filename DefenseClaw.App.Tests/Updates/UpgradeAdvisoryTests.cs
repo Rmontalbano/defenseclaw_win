@@ -200,8 +200,6 @@ public sealed class UpgradeAdvisoryTests : IDisposable
 
     // ------------------------------------------------------------------ Cowork uninstall sentence
 
-    private const string Step = "remove it in Claude Desktop (Customize > Plugins, then the ... menu > Remove). Until then Cowork tool calls are blocked.";
-
     private string DataWithSetupPrevious()
     {
         var previous = Path.Combine(_temp.Path, "previous");
@@ -214,7 +212,7 @@ public sealed class UpgradeAdvisoryTests : IDisposable
     public void The_cowork_sentence_is_added_to_the_setup_rollback_note_and_the_leftover_row_when_asked()
     {
         var data = DataWithSetupPrevious();
-        var sentence = "'defenseclaw uninstall' cannot remove the DefenseClaw Cowork plugin from your Claude account: " + Step;
+        var sentence = DefenseClaw.Core.ClaudeCode.CoworkProtectionFacts.RemovePluginStep;
 
         Assert.EndsWith(" " + sentence, InstallScriptPlan.CheckRollback(data, coworkPluginLeft: true).Note, StringComparison.Ordinal);
         Assert.DoesNotContain("Cowork", InstallScriptPlan.CheckRollback(data).Note, StringComparison.Ordinal);

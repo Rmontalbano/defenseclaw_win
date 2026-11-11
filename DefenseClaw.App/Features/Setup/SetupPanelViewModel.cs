@@ -116,10 +116,16 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     private string _connectorNote = string.Empty;
 
     public SetupPanelViewModel(AppServices services)
+        : this(services, WizardCatalog.Shared(services))
+    {
+    }
+
+    /// <summary>The hub over <paramref name="catalog"/> (tests give their own; the app uses the shared one).</summary>
+    internal SetupPanelViewModel(AppServices services, WizardCatalog catalog)
         : base(services)
     {
         // No subscriptions here: OnActivated attaches them and OnDeactivated lets go.
-        _catalog = WizardCatalog.Shared(services);
+        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _localStack = services.LocalStack;
         _terraform = services.Terraform;
 
@@ -356,6 +362,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     protected override void OnActivated()
     {
         _catalog.DefinitionChanged += OnDefinitionChanged;
+        _catalog.RosterReloaded += OnRosterReloaded;
+        CoworkProtectionStore.For(Services).Changed += OnCoworkStateChanged;
         Services.Monitor.StateChanged += OnGatewayStateChanged;
         _localStack.Changed += OnProbeAnswerChanged;
         _terraform.Changed += OnProbeAnswerChanged;
@@ -374,7 +382,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
         // Either may have moved while the panel was off screen: the cards behind the catalog, and the Docker and Terraform answers that gate
         // the stack's card and the dashboards' card.
-        var moved = SyncCardsWithCatalog();
+        var moved = SyncRosterWithCatalog();
+        moved |= SyncCardsWithCatalog();
         moved |= SyncLocalStack();
         moved |= SyncTerraform();
         if (moved)
@@ -409,6 +418,8 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
         Credentials.CancelEntries();
 
         _catalog.DefinitionChanged -= OnDefinitionChanged;
+        _catalog.RosterReloaded -= OnRosterReloaded;
+        CoworkProtectionStore.For(Services).Changed -= OnCoworkStateChanged;
         Services.Monitor.StateChanged -= OnGatewayStateChanged;
         Services.Runtime.Changed -= OnRuntimeChanged;
         Services.RestartQueue.Changed -= OnRestartQueueChanged;

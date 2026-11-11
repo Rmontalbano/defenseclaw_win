@@ -46,7 +46,10 @@ public sealed record ClaudeDesktopEntry
     /// <summary>The line under the title: app, Cowork, engine and data folder.</summary>
     public string DetailText => string.Join(" · ", new[] { AppText, CoworkText, EngineText, DataFolderText }.Where(static t => t.Length > 0));
 
-    /// <summary>The hook for a Cowork setup link; null until something supplies one.</summary>
+    /// <summary>
+    /// "Set up Cowork protection": opens the Cowork wizard. Supplied by the panel only on a runtime with Cowork protection (1.0.8) while the
+    /// Cowork store does not report Cowork protected; null (no button) otherwise.
+    /// </summary>
     public ICommand? OpenCoworkSetupCommand { get; init; }
 
     public bool HasOpenCoworkSetup => OpenCoworkSetupCommand is not null;
@@ -55,7 +58,7 @@ public sealed record ClaudeDesktopEntry
     public override string ToString() =>
         $"{Title}: {DetailText}. Cowork plugins: {PluginsText}.";
 
-    public static ClaudeDesktopEntry From(ClaudeDesktopInfo info, string? dataFolder)
+    public static ClaudeDesktopEntry From(ClaudeDesktopInfo info, string? dataFolder, ICommand? openCoworkSetup = null)
     {
         ArgumentNullException.ThrowIfNull(info);
 
@@ -79,11 +82,12 @@ public sealed record ClaudeDesktopEntry
                     name,
                     string.Equals(name.Trim(), ClaudeDesktopDiscovery.DefenseClawPluginName, StringComparison.OrdinalIgnoreCase)))
                 .ToList(),
+            OpenCoworkSetupCommand = openCoworkSetup,
         };
     }
 
     /// <summary>One entry per signal that has a block: 1p first, then 3p, then the rest, then by data folder name.</summary>
-    public static IReadOnlyList<ClaudeDesktopEntry> For(IEnumerable<DiscoverySignalRecord> signals)
+    public static IReadOnlyList<ClaudeDesktopEntry> For(IEnumerable<DiscoverySignalRecord> signals, ICommand? openCoworkSetup = null)
     {
         ArgumentNullException.ThrowIfNull(signals);
 
@@ -92,7 +96,7 @@ public sealed record ClaudeDesktopEntry
             .Select(static s => (Info: s.ClaudeDesktop!, Folder: FolderOf(s)))
             .OrderBy(static pair => pair.Info.Deployment switch { "1p" => 0, "3p" => 1, _ => 2 })
             .ThenBy(static pair => pair.Folder, StringComparer.OrdinalIgnoreCase)
-            .Select(static pair => From(pair.Info, pair.Folder))
+            .Select(pair => From(pair.Info, pair.Folder, openCoworkSetup))
             .ToList();
     }
 

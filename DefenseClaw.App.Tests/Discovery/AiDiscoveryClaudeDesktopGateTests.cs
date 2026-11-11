@@ -1,6 +1,7 @@
 using DefenseClaw.App.Services;
 using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
+using DefenseClaw.Core.ClaudeCode;
 
 namespace DefenseClaw.App.Tests.Discovery;
 
@@ -73,4 +74,47 @@ public sealed class AiDiscoveryClaudeDesktopGateTests : IDisposable
         Assert.Equal("2.1.309 (Claude Desktop engine)", vm.ConnectorDiscovery.Single(r => r.Name == "claudecode").VersionDisplay);
         Assert.Equal("0.9.0", vm.ConnectorDiscovery.Single(r => r.Name == "codex").VersionDisplay);
     }
+
+    [Fact]
+    public async Task On_a_1_0_8_runtime_each_entry_offers_cowork_setup_until_the_store_says_protected_and_the_button_opens_the_cowork_wizard()
+    {
+        var vm = await LoadedAsync("1.0.8");
+        var opened = 0;
+        vm.CoworkWizardOpener = () =>
+        {
+            opened++;
+            return Task.CompletedTask;
+        };
+
+        // Nothing read yet: not reported protected, so offered.
+        var entries = Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries;
+        Assert.All(entries, static e => Assert.True(e.HasOpenCoworkSetup));
+        entries[0].OpenCoworkSetupCommand!.Execute(null);
+        Assert.Equal(1, opened);
+
+        var store = CoworkProtectionStore.For(_services!);
+        store.Publish(State(isProtected: false, CoworkReasonCodes.NoEvents));
+        vm.FollowCoworkState();
+        Assert.All(Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries, static e => Assert.True(e.HasOpenCoworkSetup));
+
+        store.Publish(State(isProtected: true, string.Empty));
+        vm.FollowCoworkState();
+        Assert.All(Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries, static e => Assert.False(e.HasOpenCoworkSetup));
+
+        store.Publish(State(isProtected: false, CoworkReasonCodes.PluginNotBuilt));
+        vm.FollowCoworkState();
+        Assert.All(Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries, static e => Assert.True(e.HasOpenCoworkSetup));
+    }
+
+    [Fact]
+    public async Task On_a_1_0_7_runtime_there_is_no_cowork_setup_offer()
+    {
+        var vm = await LoadedAsync("1.0.7");
+
+        Assert.False(vm.OffersCoworkSetup);
+        Assert.Empty(Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries);
+    }
+
+    private static DefenseClaw.Core.ClaudeCode.CoworkProtection State(bool isProtected, string code) =>
+        new(isProtected, "the CLI's sentence", string.Empty, code, null, null, null);
 }

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Data;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
@@ -494,6 +495,7 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     protected override void OnActivated()
     {
         Services.ConfigReloaded += OnConfigReloaded;
+        CoworkProtectionStore.For(Services).Changed += OnCoworkStateChanged;
 
         // A change to config.yaml or .env while the panel was away is not heard: compare the files with what the read saw.
         _ = Trust.CheckConfig();
@@ -662,7 +664,11 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
         return Trust.Reason;
     }
 
-    protected override void OnDeactivated() => Services.ConfigReloaded -= OnConfigReloaded;
+    protected override void OnDeactivated()
+    {
+        Services.ConfigReloaded -= OnConfigReloaded;
+        CoworkProtectionStore.For(Services).Changed -= OnCoworkStateChanged;
+    }
 
     private void OnConfigReloaded(object? sender, EventArgs e)
     {
@@ -1079,13 +1085,14 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// product. Most actionable state first - a product with a new or changed signal ahead of one that is only seen, and one that is gone
     /// last - then the strongest detection, then by name.
     /// </summary>
-    internal static IEnumerable<DiscoveryComponentCard> BuildCards(IReadOnlyList<DiscoverySignalRecord> signals, DateTimeOffset now, bool claudeDesktop = false) =>
+    internal static IEnumerable<DiscoveryComponentCard> BuildCards(
+        IReadOnlyList<DiscoverySignalRecord> signals, DateTimeOffset now, bool claudeDesktop = false, ICommand? openCoworkSetup = null) =>
         signals
             .Where(static s => !DiscoveryModelRow.IsModelSignal(s))
             .GroupBy(s => (Vendor: string.IsNullOrWhiteSpace(s.Vendor) ? "(unknown vendor)" : s.Vendor,
                            Product: string.IsNullOrWhiteSpace(s.Product) ? "(unknown product)" : s.Product),
                 StringTupleComparer.Instance)
-            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList(), Now = now, ClaudeDesktopEntries = claudeDesktop ? ClaudeDesktopEntry.For(g) : Array.Empty<ClaudeDesktopEntry>() })
+            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList(), Now = now, ClaudeDesktopEntries = claudeDesktop ? ClaudeDesktopEntry.For(g, openCoworkSetup) : Array.Empty<ClaudeDesktopEntry>() })
             .OrderBy(c => c.StateWeight)
             .ThenByDescending(c => c.MaxConfidence)
             .ThenBy(c => c.Vendor, StringComparer.OrdinalIgnoreCase)

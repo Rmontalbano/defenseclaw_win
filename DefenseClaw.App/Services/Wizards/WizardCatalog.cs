@@ -217,6 +217,9 @@ public sealed partial class WizardCatalog
 
             var definitions = await ReloadAsync().ConfigureAwait(false);
 
+            // The roster itself may have changed (a target came or went, e.g. the decision-model card with the runtime): an open hub redraws from it.
+            RosterReloaded?.Invoke(this, EventArgs.Empty);
+
             // The Splunk dashboards are not in the roster (a nested group), but their card is derived from the splunk one being there, so a
             // build that changed under the hub changes what that card says too.
             var targets = definitions.Select(d => d.Target).ToList();
