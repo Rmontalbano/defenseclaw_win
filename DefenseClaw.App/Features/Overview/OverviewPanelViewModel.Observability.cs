@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway.Models;
 using DefenseClaw.Core.Observability;
+using DefenseClaw.Core.Runtime;
 using DefenseClaw.Core.Text;
 
 namespace DefenseClaw.App.ViewModels;
@@ -257,6 +258,7 @@ public sealed partial class OverviewPanelViewModel
         var sinkRows = new List<ObservabilityRow>();
         var retention = RetentionHealth.None;
         string? failure = null;
+        var otlpReplay = Services.Runtime.Capabilities.Has(RuntimeCapability.OtlpReplay);
 
         if (health is null)
         {
@@ -267,9 +269,15 @@ public sealed partial class OverviewPanelViewModel
             if (health.Telemetry?.Details is { ValueKind: JsonValueKind.Object } telemetry)
             {
                 retention = DestinationHealthReader.ReadRetention(telemetry);
+                if (retention.IsCapWarning && !Services.Runtime.Capabilities.Has(RuntimeCapability.AuditStoreCapWarning))
+                {
+                    // A runtime before 1.0.7 does not say this; read as the state it did not know, so nothing changes for it.
+                    retention = new RetentionHealth(string.Empty, string.Empty, retention.Days, retention.MaxStoreMb);
+                }
+
                 foreach (var item in Items(telemetry, "destinations"))
                 {
-                    if (Destination(item) is { } row)
+                    if (Destination(item, otlpReplay) is { } row)
                     {
                         live.Add(new LiveDestination(
                             row,
@@ -464,7 +472,7 @@ public sealed partial class OverviewPanelViewModel
         HasLocalStorage = true;
         LocalStorageSummary = info.Summary;
         LocalStoragePaths = info.Paths;
-        LocalStorageToneKey = info.NeedsAttention ? "Warn" : "Neutral";
+        LocalStorageToneKey = info.NeedsAttention || retention.IsCapWarning ? "Warn" : "Neutral";
     }
 
     /// <summary>The note under the card: where the plan columns come from, or why there are none.</summary>
@@ -560,7 +568,7 @@ public sealed partial class OverviewPanelViewModel
     /// <summary>The name a destination is shown under: Galileo's preset has a proper name; every other destination is its own.</summary>
     private static string DisplayName(string name) => string.Equals(name, "galileo", StringComparison.OrdinalIgnoreCase) ? "Galileo" : name;
 
-    private static ObservabilityRow? Destination(JsonElement item)
+    private static ObservabilityRow? Destination(JsonElement item, bool otlpReplay)
     {
         if (Text(item, "name") is not { Length: > 0 } name)
         {
@@ -579,7 +587,7 @@ public sealed partial class OverviewPanelViewModel
             State = stateText,
             StateKey = ObservabilityTone(stateText),
             Signals = SignalsOf(item),
-            Detail = DetailOf(item),
+            Detail = DetailOf(item, otlpReplay),
         };
     }
 
@@ -602,7 +610,7 @@ public sealed partial class OverviewPanelViewModel
             State = stateText,
             StateKey = ObservabilityTone(stateText),
             Signals = "audit-events",
-            Detail = DetailOf(item),
+            Detail = DetailOf(item, otlpReplay: false),
         };
     }
 
@@ -634,7 +642,7 @@ public sealed partial class OverviewPanelViewModel
     }
 
     /// <summary>The reason and the delivery counters, when there are any: what the gateway says about how it is going.</summary>
-    private static string DetailOf(JsonElement item)
+    private static string DetailOf(JsonElement item, bool otlpReplay)
     {
         // Both are sentences the gateway built from a request that may have carried a credential (an address with a token in it, a header): shown
         // only after every URL in them is cut to its host and anything that looks like a credential is masked.
@@ -649,6 +657,7 @@ public sealed partial class OverviewPanelViewModel
             parts.Add("last error: " + error);
         }
 
+        long retried = 0;
         if (item.TryGetProperty("counters", out var counters) && counters.ValueKind == JsonValueKind.Object)
         {
             foreach (var property in counters.EnumerateObject())
@@ -656,7 +665,26 @@ public sealed partial class OverviewPanelViewModel
                 if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt64(out var value))
                 {
                     parts.Add($"{value.ToString("N0", CultureInfo.CurrentCulture)} {property.Name}");
+                    if (property.Name == "retried")
+                    {
+                        retried = value;
+                    }
                 }
+            }
+        }
+
+        // 1.0.8 (OtlpReplay): what the counters count, and what an open circuit means for an OTLP destination (dispatch.go): the records wait in the queue and go again.
+        if (otlpReplay)
+        {
+            if (EndpointDisplay.ScrubText(Text(item, "counters_scope")) is { Length: > 0 } scope)
+            {
+                parts.Add("counters: " + scope);
+            }
+
+            var circuit = Text(item, "circuit_state");
+            if (Text(item, "kind") == "otlp" && retried > 0 && circuit is "open" or "half_open")
+            {
+                parts.Add($"circuit {circuit}: the gateway keeps these records queued and sends them again when the collector answers; retried counts those attempts, dropped counts what a full queue could not keep");
             }
         }
 

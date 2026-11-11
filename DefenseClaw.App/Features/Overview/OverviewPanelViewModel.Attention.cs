@@ -357,7 +357,7 @@ public sealed partial class OverviewPanelViewModel : IAcceptsNavigation
         {
             var name = connector.Name?.Trim() ?? string.Empty;
             var running = string.IsNullOrWhiteSpace(connector.State) || string.Equals(connector.State, "running", StringComparison.OrdinalIgnoreCase);
-            if (name.Length == 0 || connector.Requests != 0 || !running)
+            if (name.Length == 0 || connector.Requests != 0 || !running || IsSkippedAtStart(name, health))
             {
                 continue;
             }

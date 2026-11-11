@@ -8,6 +8,9 @@ public sealed record ConfigEditorFocus
 {
     /// <summary>The one value the payload needs.</summary>
     public static ConfigEditorFocus Instance { get; } = new();
+
+    /// <summary>A setting to find in the editor's search box (<c>observability.local.max_store_mb</c>); empty leaves the search as it is.</summary>
+    public string Search { get; init; } = string.Empty;
 }
 
 /// <summary>

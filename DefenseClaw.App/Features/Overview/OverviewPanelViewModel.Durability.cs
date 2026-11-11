@@ -66,6 +66,9 @@ public sealed partial class OverviewPanelViewModel
             case ClearStaleInstallLockActionId:
                 ClearStaleInstallLock();
                 break;
+            case { } healthId when IsOverviewHealthAction(healthId):
+                await RunOverviewHealthActionAsync(healthId).ConfigureAwait(true);
+                break;
             default:
                 break;
         }

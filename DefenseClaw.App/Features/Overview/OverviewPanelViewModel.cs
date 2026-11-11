@@ -803,6 +803,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // 1.0.6 counts the hook checks the rules decided because the judge gave no verdict in time (CUST-426). Built in OverviewPanelViewModel.JudgeFallbacks.cs.
         AppendJudgeFallbackAttention(rows);
 
+        // 1.0.7 / 1.0.8 (CUST-448): audit store over its cap, connectors the gateway did not start, stale PowerShell hook bridges. Built in OverviewPanelViewModel.HealthActions.cs.
+        AppendOverviewHealthAttention(rows);
+
         // The third opinion, and the one that wins: Claude Code's own settings.json can
         // hold an env override the hook obeys over both config.yaml and /status.
         if (snapshot.FailModeDrift is { } drift)
@@ -1195,7 +1198,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
                 Calls = status?.Requests ?? 0,
                 Blocks = (status?.ToolBlocks ?? 0) + (status?.SubprocessBlocks ?? 0),
                 LastActivityShort = status?.LastActivityAt is { } seen ? Relative(seen) : "never",
-                StateText = status?.State ?? (settings is null ? "not configured" : "not running"),
+                StateText = status?.State ?? (settings is null ? "not configured" : NotRunningText(name, health)),
                 StateKey = status is null ? "Neutral" : ClassifyText(status.State),
                 Mode = mode,
                 FailMode = failMode,

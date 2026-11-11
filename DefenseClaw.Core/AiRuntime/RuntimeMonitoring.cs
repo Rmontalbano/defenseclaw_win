@@ -52,13 +52,21 @@ public sealed record RuntimeHealthPlane(bool Available, bool Running, string Mec
 /// <param name="LastError">The gateway's own error text, when it has one.</param>
 /// <param name="Degraded">The gateway's <c>details.degraded</c>.</param>
 /// <param name="Planes">The plane letter (<c>a</c>, <c>b</c>, <c>c</c>) to its entry; a plane the gateway did not list is absent.</param>
+/// <param name="DegradedReasons">The gateway's <c>details.degraded_reasons</c> (sent only while it is degraded): each a trimmed string of at most 300 characters, at most 8; null when it sent none.</param>
 public sealed record RuntimeHealthView(
     bool Reported,
     string State,
     string LastError,
     bool Degraded,
-    IReadOnlyDictionary<string, RuntimeHealthPlane> Planes)
+    IReadOnlyDictionary<string, RuntimeHealthPlane> Planes,
+    IReadOnlyList<string>? DegradedReasons = null)
 {
+    /// <summary>The reasons the gateway gives for being degraded; empty when it gives none.</summary>
+    public IReadOnlyList<string> Reasons => DegradedReasons ?? Array.Empty<string>();
+
+    private const int MaxReasons = 8;
+    private const int MaxReasonLength = 300;
+
     /// <summary>No reply, or no block.</summary>
     public static RuntimeHealthView NotReported { get; } = new(false, string.Empty, string.Empty, false, new Dictionary<string, RuntimeHealthPlane>());
 
@@ -97,7 +105,35 @@ public sealed record RuntimeHealthView(
             block.State?.Trim() ?? string.Empty,
             block.LastError?.Trim() ?? string.Empty,
             block.DetailBool("degraded") == true,
-            planes);
+            planes,
+            ReadReasons(block.Details));
+    }
+
+    private static List<string>? ReadReasons(JsonElement? details)
+    {
+        if (details is not { ValueKind: JsonValueKind.Object } d ||
+            !d.TryGetProperty("degraded_reasons", out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var reasons = new List<string>();
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String || (item.GetString()?.Trim() ?? string.Empty) is not { Length: > 0 } text)
+            {
+                continue;
+            }
+
+            text = DefenseClaw.Core.Text.DisplayNames.Visible(text);
+            reasons.Add(text.Length > MaxReasonLength ? text[..MaxReasonLength] : text);
+            if (reasons.Count == MaxReasons)
+            {
+                break;
+            }
+        }
+
+        return reasons;
     }
 
     private static bool Bool(JsonElement element, string name) =>

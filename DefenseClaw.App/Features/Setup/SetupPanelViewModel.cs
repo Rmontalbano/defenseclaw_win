@@ -341,8 +341,13 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
             // The Overview's Runtime monitoring row (CUST-348): opens the card. Nothing is changed by it; the dialog still reviews every change.
             Monitoring.Open();
         }
-        else if (payload is ConfigEditorFocus)
+        else if (payload is ConfigEditorFocus focus)
         {
+            if (focus.Search.Length > 0)
+            {
+                ConfigEditor.Editor.FieldSearch = focus.Search;
+            }
+
             // The inline config editor (CUST-385): brought into view with the draft it holds. Nothing is loaded, saved or run by it.
             RequestSection(ConfigEditorSection);
         }

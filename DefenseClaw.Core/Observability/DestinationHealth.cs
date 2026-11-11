@@ -88,12 +88,17 @@ public sealed record DestinationHealth(
 }
 
 /// <summary>The retention reaper's state as the gateway reports it (<c>/health</c> <c>telemetry.details.retention_*</c>).</summary>
-/// <param name="State"><c>healthy</c>, <c>waiting_for_readiness</c>, <c>degraded</c>, <c>disabled</c> or <c>stopped</c>; empty when the gateway names none of them.</param>
+/// <param name="State"><c>healthy</c>, <c>waiting_for_readiness</c>, <c>warning</c>, <c>degraded</c>, <c>disabled</c> or <c>stopped</c>; empty when the gateway names none of them.</param>
 /// <param name="Failure">The reaper's failure code, a plain token; empty when there is none.</param>
 /// <param name="Days">The retention window the gateway runs with; 0 is without limit.</param>
 /// <param name="MaxStoreMb">The audit store's size cap in MiB (<c>retention_max_store_mb</c>, 1.0.6); null when the gateway reports none, which is also what a build before 1.0.6 does.</param>
-public sealed record RetentionHealth(string State, string Failure, long? Days, long? MaxStoreMb = null)
+/// <param name="CapUsedBytes">With <c>warning</c> (1.0.7): the bytes the audit store holds (<c>retention_cap_used_bytes</c>); null otherwise.</param>
+/// <param name="CapBytes">With <c>warning</c> (1.0.7): the cap in bytes (<c>retention_cap_bytes</c>); null otherwise.</param>
+/// <param name="CapReason">With <c>warning</c> (1.0.7): <c>active_correlation_state</c> or <c>retained_history_or_pending_work</c>, a plain token; empty otherwise.</param>
+public sealed record RetentionHealth(string State, string Failure, long? Days, long? MaxStoreMb = null, long? CapUsedBytes = null, long? CapBytes = null, string CapReason = "")
 {
+    private const string CapFallback = "audit store cap not reached; inspect the gateway retention health";
+
     /// <summary>Nothing reported.</summary>
     public static RetentionHealth None { get; } = new(string.Empty, string.Empty, null);
 
@@ -105,6 +110,46 @@ public sealed record RetentionHealth(string State, string Failure, long? Days, l
 
     /// <summary>True for a reaper that is not doing its job: degraded or stopped (the doctor warns for both).</summary>
     public bool NeedsAttention => State is "degraded" or "stopped";
+
+    /// <summary>True when the gateway says the audit store is over its size cap and cannot trim it yet (<c>retention_state</c> <c>warning</c>, 1.0.7). Not a fault of the reaper, so <see cref="NeedsAttention"/> is unchanged.</summary>
+    public bool IsCapWarning => State == "warning";
+
+    /// <summary>
+    /// The runtime status's sentence for the warning (<c>v8_status.py</c>): <c>audit store cap not reached: 67.2 MiB used, cap 64.0 MiB; ...</c> with the advice for the
+    /// reason, or the plain fallback when the numbers or the reason cannot be trusted. Empty unless <see cref="IsCapWarning"/>.
+    /// </summary>
+    public string CapWarningSentence
+    {
+        get
+        {
+            if (!IsCapWarning)
+            {
+                return string.Empty;
+            }
+
+            const long MaxUsed = 1L << 53;
+            const long MaxCap = 1L << 40;
+            if (CapUsedBytes is not { } used || CapBytes is not { } cap || cap <= 0 || cap >= used || used > MaxUsed || cap > MaxCap)
+            {
+                return CapFallback;
+            }
+
+            var advice = CapReason switch
+            {
+                "active_correlation_state" => "active correlation state is retained; end unused sessions or raise observability.local.max_store_mb",
+                "retained_history_or_pending_work" => "recent history or pending retention work remains; allow another pass or raise observability.local.max_store_mb",
+                _ => null,
+            };
+            if (advice is null)
+            {
+                return CapFallback;
+            }
+
+            const double Mib = 1 << 20;
+            return "audit store cap not reached: " + ((double)used / Mib).ToString("F1", CultureInfo.InvariantCulture) + " MiB used, cap " +
+                   ((double)cap / Mib).ToString("F1", CultureInfo.InvariantCulture) + " MiB; " + advice;
+        }
+    }
 }
 
 /// <summary>
@@ -119,7 +164,7 @@ public static partial class DestinationHealthReader
         "last_error_class", "last_error_code", "error_code", "failure", "warning", "last_failure_class", "last_failure_code",
     };
 
-    private static readonly string[] RetentionStates = { "waiting_for_readiness", "healthy", "degraded", "disabled", "stopped" };
+    private static readonly string[] RetentionStates = { "waiting_for_readiness", "healthy", "warning", "degraded", "disabled", "stopped" };
 
     [GeneratedRegex("^[a-z0-9][a-z0-9_.:-]{0,127}$", RegexOptions.CultureInvariant, 250)]
     private static partial Regex PlainToken();
@@ -211,7 +256,9 @@ public static partial class DestinationHealthReader
             failure = Token(details, "failure");
         }
 
-        return new RetentionHealth(state, failure, days, cap);
+        return state == "warning"
+            ? new RetentionHealth(state, failure, days, cap, Count(details, "retention_cap_used_bytes"), Count(details, "retention_cap_bytes"), Token(details, "retention_cap_reason"))
+            : new RetentionHealth(state, failure, days, cap);
     }
 
     /// <summary>A member that is a short lower-case token (<c>healthy</c>, <c>sqlite_write_failed</c>); empty for anything else, free text included.</summary>
