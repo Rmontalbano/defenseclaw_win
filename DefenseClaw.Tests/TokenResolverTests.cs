@@ -237,4 +237,81 @@ public class TokenResolverTests
         Assert.Equal(TokenSource.DotEnvFile, resolution.Source);
         Assert.Equal("abc123XYZ", resolution.Token!.Reveal());
     }
+
+    private const string PythonRepr = "{'source': 'file', 'id': 'y'}";
+    private const string JsonRef = "{\"source\": \"env\", \"id\": \"X\"}";
+
+    [Theory]
+    [InlineData("{'source': 'file', 'id': 'y'}")]
+    [InlineData("{\"source\": \"env\", \"id\": \"X\"}")]
+    [InlineData("  {'source':'env','id':'Z'}\r\n")]
+    public void Secret_reference_text_is_treated_as_absent_at_every_rung(string reference)
+    {
+        var inEnvironment = Resolver(environment: new Dictionary<string, string> { [VariableName] = reference }).Resolve(ConfigWith());
+        var inDotEnv = Resolver(dotEnv: new Dictionary<string, string> { [VariableName] = reference }).Resolve(ConfigWith());
+        var inConfig = Resolver().Resolve(ConfigWith(literalToken: reference));
+
+        Assert.False(inEnvironment.Found);
+        Assert.False(inDotEnv.Found);
+        Assert.False(inConfig.Found);
+        Assert.Equal(TokenSource.None, inConfig.Source);
+    }
+
+    [Fact]
+    public void Secret_reference_in_the_environment_falls_through_to_dot_env()
+    {
+        var resolution = Resolver(
+            environment: new Dictionary<string, string> { [VariableName] = PythonRepr },
+            dotEnv: new Dictionary<string, string> { [VariableName] = "from-dotenv" }).Resolve(ConfigWith(literalToken: "from-config"));
+
+        Assert.Equal(TokenSource.DotEnvFile, resolution.Source);
+        Assert.Equal("from-dotenv", resolution.Token!.Reveal());
+    }
+
+    [Fact]
+    public void Secret_reference_in_the_environment_and_dot_env_falls_through_to_config()
+    {
+        var resolution = Resolver(
+            environment: new Dictionary<string, string> { [VariableName] = JsonRef },
+            dotEnv: new Dictionary<string, string> { [VariableName] = PythonRepr }).Resolve(ConfigWith(literalToken: "from-config"));
+
+        Assert.Equal(TokenSource.ConfigLiteral, resolution.Source);
+        Assert.Equal("from-config", resolution.Token!.Reveal());
+    }
+
+    [Fact]
+    public void Secret_reference_note_names_the_rung_and_the_fix_but_never_the_value()
+    {
+        var resolution = Resolver(dotEnv: new Dictionary<string, string> { [VariableName] = "{'source': 'file', 'id': 'invented-id'}" }).Resolve(ConfigWith());
+
+        Assert.NotNull(resolution.Note);
+        Assert.Contains("defenseclaw doctor --fix", resolution.Note, StringComparison.Ordinal);
+        Assert.Contains(".env", resolution.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain("invented-id", resolution.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("tok{en}with{braces}")]
+    [InlineData("{no-source-key-here}")]
+    [InlineData("{\"id\": \"abc\"}")]
+    [InlineData("{source}")]
+    [InlineData("plain-source:value")]
+    public void A_token_with_braces_but_no_source_key_is_kept(string token)
+    {
+        var resolution = Resolver(environment: new Dictionary<string, string> { [VariableName] = token }).Resolve(ConfigWith());
+
+        Assert.True(resolution.Found);
+        Assert.Equal(token, resolution.Token!.Reveal());
+        Assert.Null(resolution.Note);
+    }
+
+    [Fact]
+    public void A_source_key_split_across_lines_is_not_secret_reference_text()
+    {
+        // The runtime's "." does not match a newline, and neither does ours; the control-character rule then applies as before.
+        var resolution = Resolver(environment: new Dictionary<string, string> { [VariableName] = "{\n'source': 'env'}" }).Resolve(ConfigWith(literalToken: "from-config"));
+
+        Assert.Equal(TokenSource.ConfigLiteral, resolution.Source);
+        Assert.Contains("control character", resolution.Note, StringComparison.Ordinal);
+    }
 }

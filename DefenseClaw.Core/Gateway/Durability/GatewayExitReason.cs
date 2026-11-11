@@ -17,6 +17,19 @@ public abstract record GatewayExitReason
     /// <summary>One plain sentence for the Overview row and the tray flyout, e.g. "Codex's executable moved after a Codex update." The detail (a path) is in the record.</summary>
     public abstract string Describe();
 
+    /// <summary>The runtime's remedy text as a sentence: first letter up, a full stop at the end.</summary>
+    private static string Sentence(string text)
+    {
+        var t = text.Trim();
+        if (t.Length == 0)
+        {
+            return t;
+        }
+
+        t = char.ToUpperInvariant(t[0]) + t[1..];
+        return t.EndsWith('.') ? t : t + ".";
+    }
+
     /// <summary>The agent's executable that setup pinned is gone: the agent updated itself into a new folder and removed the old one.</summary>
     public sealed record StaleAgentExecutable(string ConnectorName, string Path) : GatewayExitReason
     {
@@ -42,6 +55,24 @@ public abstract record GatewayExitReason
 
         public override string Describe() =>
             $"{GatewayLogClassifier.FriendlyConnector(ConnectorName)}'s connector setup failed: {Message}";
+    }
+
+    /// <summary>The API port is inside a Windows excluded port range (or held by another account), so the gateway cannot bind it and stops.</summary>
+    public sealed record PortReserved(string Address, string Remedy) : GatewayExitReason
+    {
+        public override string Connector => "unknown";
+
+        public override string Describe() =>
+            $"Port reserved by Windows (excluded port range){(Address.Length > 0 ? $": {Address}" : string.Empty)}. {Sentence(Remedy)}";
+    }
+
+    /// <summary>Another process already listens on the API address, so the gateway cannot bind it and stops.</summary>
+    public sealed record PortInUse(string Address, string Remedy) : GatewayExitReason
+    {
+        public override string Connector => "unknown";
+
+        public override string Describe() =>
+            $"Port already in use by another process{(Address.Length > 0 ? $": {Address}" : string.Empty)}. {Sentence(Remedy)}";
     }
 
     /// <summary>The start ended with an error that is not a connector setup failure; <paramref name="Line"/> is the last error line, as written.</summary>

@@ -49,7 +49,9 @@ public sealed record RuntimeCatalogRequest(DefenseClawPaths Paths, InstallationC
 /// <list type="bullet">
 /// <item><description><b>install.ps1 of 1.0.x</b> (<c>scripts/install.ps1</c>): a uv-created virtual environment, <c>&lt;DEFENSECLAW_HOME or %USERPROFILE%\.defenseclaw&gt;\.venv</c>
 /// (Python 3.12, else 3.11-3.13, <c>:1962-1964</c>), and in <c>%USERPROFILE%\.local\bin</c> a copy of the venv's console-script <c>defenseclaw.exe</c> plus
-/// <c>.cmd</c> shims (<c>:93-123</c>). The CLI's folder has no Python, so a CLI found in one of the install-script folders
+/// <c>.cmd</c> shims (<c>:93-123</c>; 1.0.0 to 1.0.6). From 1.0.7 (install.ps1@1.0.7 <c>Install-New</c>, about <c>:3579-3589</c>) the <c>defenseclaw.exe</c> there is a
+/// copy of <c>defenseclaw-gateway.exe</c> acting as a native launcher that starts <c>&lt;home&gt;\.venv\Scripts\defenseclaw.exe</c>, and <c>defenseclaw.cmd</c> enters
+/// that launcher. This loader still uses the venv's Python, so its behaviour is the same for both. The CLI's folder has no Python, so a CLI found in one of the install-script folders
 /// (<see cref="DefenseClawPaths.FallbackBinDirectories"/>) uses <see cref="DefenseClawPaths.VenvPythonPath"/>. No embedded runtime, no frozen executable.</description></item>
 /// <item><description><b>The Setup exe of 0.8.7-0.8.10</b> ("the per-user DefenseClaw Setup of 0.8.7-0.8.10, which an upgrade replaces", install.ps1 <c>:100</c>):
 /// <c>%LOCALAPPDATA%\Programs\DefenseClaw\bin\defenseclaw.exe</c> with an embedded CPython beside the program folder, <c>runtime\python\python.exe</c>

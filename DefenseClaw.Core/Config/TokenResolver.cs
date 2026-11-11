@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace DefenseClaw.Core.Config;
 
 /// <summary>Which rung of the token ladder produced a value.</summary>
@@ -82,7 +84,7 @@ public sealed class DictionaryEnvironmentReader : IEnvironmentReader
 /// the walk continues, and <see cref="TokenResolution.Note"/> says which rung was skipped.
 /// </para>
 /// </summary>
-public sealed class TokenResolver
+public sealed partial class TokenResolver
 {
     private readonly IEnvironmentReader _environment;
     private readonly Func<IReadOnlyDictionary<string, string>> _dotEnvProvider;
@@ -128,6 +130,10 @@ public sealed class TokenResolver
         return new TokenResolution(null, TokenSource.None, variableName) { Note = note };
     }
 
+    // Same shape as the runtime's check: one line, braces around a "source" key. No Singleline, so "." stops at a newline.
+    [GeneratedRegex(@"^\{.*[""']source[""']\s*:.*\}$", RegexOptions.CultureInvariant, 250)]
+    private static partial Regex SecretRefText();
+
     /// <summary>
     /// The trimmed value, or null when it is absent, blank or holds a control character (in which
     /// case <paramref name="note"/> gains a sentence naming <paramref name="where"/>).
@@ -140,6 +146,14 @@ public sealed class TokenResolver
         }
 
         var trimmed = raw.Trim();
+        if (SecretRefText().IsMatch(trimmed))
+        {
+            // DefenseClaw 1.0.5/1.0.6 could save an OpenClaw secret reference as the token (upstream issue #1404). Never echo the value.
+            var sentence = $"{where} holds an OpenClaw secret reference that an earlier DefenseClaw saved as the gateway token, so it was ignored; run defenseclaw doctor --fix.";
+            note = note is null ? sentence : $"{note} {sentence}";
+            return null;
+        }
+
         foreach (var c in trimmed)
         {
             if (char.IsControl(c))

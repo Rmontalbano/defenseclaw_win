@@ -502,7 +502,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         {
             // Every check re-reads the state (the first one after the window opens, Check again, the one after a run): nothing is kept from
             // the last time, because previous\, migration-v9.json and the install log are changed by the installer, not by this app.
-            ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory));
+            ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory, CoworkPluginLeft()));
             _ = ReadPostFlightAsync();
         }
     }
@@ -516,7 +516,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
     {
         RollbackAvailable = rollback.IsAvailable && (!HasResult || _resultOffersRollback);
         RollbackNote = (HasResult && _resultRollbackNote is { } note ? note : rollback.Note) +
-            (RollbackAvailable && _rollbackAgentNote is { } agent ? " " + agent : string.Empty);
+            (RollbackAvailable && _rollbackAgentNote is { } agent ? " " + agent : string.Empty) +
+            (RollbackAvailable && _rollbackConfig is { } config ? " " + config.Note : string.Empty);
         OnPropertyChanged(nameof(RollbackBlockedReason));
     }
 
@@ -552,8 +553,9 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var verification = _verification;
             var detail = _verificationDetail;
             var target = InstallVersion;
+            var installedNow = _installedVersion;
 
-            var report = await Task.Run(() => InstallScriptPreflight.Evaluate(_probes, blocked, dataDirectory, verification, detail, target)).ConfigureAwait(true);
+            var report = await Task.Run(() => InstallScriptPreflight.Evaluate(_probes, blocked, dataDirectory, verification, detail, target, installedNow)).ConfigureAwait(true);
 
             PreflightRows.Clear();
             foreach (var row in report.Rows)
@@ -685,17 +687,23 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         var staged = _staged ?? throw new InvalidOperationException("Nothing is staged.");
         var argv = InstallScriptPlan.BuildRollbackArgv(staged.FilePath, UseYes);
 
+        var warnings = new List<CommandReviewWarning>
+        {
+            CommandReviewWarning.GatewayRestart(),
+            new("Runs in its own window", "install.ps1 -Rollback opens a console window of its own and may ask you to confirm there."),
+        };
+        if (_rollbackConfig is { } config)
+        {
+            warnings.Add(new CommandReviewWarning(RollbackConfigKeys.WarningTitle, config.Warning));
+        }
+
         return new CommandReview
         {
             Title = "Roll DefenseClaw back with install.ps1 -Rollback?",
             Steps = [new CommandReviewStep(argv, "Swaps back to the install the last upgrade replaced.", CommandTier.StateChanging, ShownExecutable)],
             Summary = "The installer exchanges the live install and previous\\ by renaming, restarts the gateway, and writes its own log.",
             RestartsGateway = true,
-            Warnings =
-            [
-                CommandReviewWarning.GatewayRestart(),
-                new("Runs in its own window", "install.ps1 -Rollback opens a console window of its own and may ask you to confirm there."),
-            ],
+            Warnings = warnings,
             ConfirmLabel = "Run rollback",
         }.GuardedBy(_services.Installation);
     }
@@ -880,7 +888,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
 
         _resultOffersRollback = result.Exit.OffersRollback;
         _resultRollbackNote = ResultRollbackNote(result);
-        ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory));
+        ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory, CoworkPluginLeft()));
     }
 
     private async Task ReadPostFlightAsync()
@@ -897,7 +905,9 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var now = _time.GetLocalNow();
             var (installer, installed) = (ScriptVersion, _installedVersion);
             var state = await Task.Run(() => InstallStateSnapshot.Read(dataDirectory, activity, now)).ConfigureAwait(true);
-            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers)).ConfigureAwait(true);
+            var coworkLeft = CoworkPluginLeft();
+            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers, coworkLeft)).ConfigureAwait(true);
+            var rollbackConfig = await Task.Run(() => ReadRollbackConfig(state.PreviousVersion)).ConfigureAwait(true);
 
             // What the installer's rollback will do about a Codex that changed since the older install set it up (CUST-399; hashes codex.exe) or an OpenCode V2 (CUST-424).
             var agentNote = await Task.Run(() => RollbackAgentPreflight.Read(dataDirectory, installer, installed, now)).ConfigureAwait(true);
@@ -929,7 +939,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             _previousVersion = state.PreviousVersion;
             OnPropertyChanged(nameof(RollbackLabel));
             _rollbackAgentNote = agentNote;
-            ApplyRollbackState(state.Rollback);
+            _rollbackConfig = rollbackConfig;
+            ApplyRollbackState(InstallScriptPlan.CheckRollback(dataDirectory, coworkLeft));
 
             LeftoverRows.Clear();
             foreach (var row in leftovers)

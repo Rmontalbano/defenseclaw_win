@@ -396,7 +396,7 @@ public static class InstallScriptPlan
     /// Whether <c>-Rollback</c> can work: it needs <c>previous\VERSION</c>, and the installer refuses when <c>previous\legacy-setup</c> exists (a Setup
     /// install it cannot restore automatically). Read-only.
     /// </summary>
-    public static RollbackAvailability CheckRollback(string dataDirectory)
+    public static RollbackAvailability CheckRollback(string dataDirectory, bool coworkPluginLeft = false)
     {
         try
         {
@@ -411,7 +411,8 @@ public static class InstallScriptPlan
                 return new RollbackAvailability(
                     false,
                     "The previous install is DefenseClaw Setup, which the installer cannot restore automatically. To go back: run 'defenseclaw uninstall', " +
-                    "then run that release's DefenseClawSetup-x64.exe. Its files and your pre-upgrade data are in " + previous + ".");
+                    "then run that release's DefenseClawSetup-x64.exe. Its files and your pre-upgrade data are in " + previous + "." +
+                    (coworkPluginLeft ? " " + CoworkUninstall.Sentence : string.Empty));
             }
 
             return new RollbackAvailability(true, "The installer will swap back to the previous install.");
@@ -520,6 +521,35 @@ public sealed class RegistryLeftoverProbes : ILeftoverProbes
 }
 
 /// <summary>
+/// What 'defenseclaw uninstall' cannot do about Claude Cowork (cmd_uninstall.py@1.0.8:418-428; cowork.py@1.0.8:50-52,83-92). Shown only where the app's copy points
+/// the user at that command AND the runtime knows Cowork AND <c>cowork\plugin-state.json</c> exists; the caller decides, so the helpers stay pure.
+/// </summary>
+internal static class CoworkUninstall
+{
+    // Upstream's _COWORK_REMOVAL_STEP, verbatim.
+    private const string CoworkRemovalStep =
+        "remove it in Claude Desktop (Customize > Plugins, then the ... menu > Remove). Until then Cowork tool calls are blocked.";
+
+    internal const string Sentence = "'defenseclaw uninstall' cannot remove the DefenseClaw Cowork plugin from your Claude account: " + CoworkRemovalStep;
+
+    /// <summary>The file whose presence means a Cowork plugin was installed.</summary>
+    internal static string StatePath(string dataDirectory) => Path.Combine(dataDirectory, "cowork", "plugin-state.json");
+
+    /// <summary>True when the capability is present and the state file exists; a file that cannot be checked counts as absent.</summary>
+    internal static bool Applies(bool capabilityPresent, string dataDirectory)
+    {
+        try
+        {
+            return capabilityPresent && File.Exists(StatePath(dataDirectory));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
+        }
+    }
+}
+
+/// <summary>
 /// Two things the 1.0 installer leaves behind from a Setup install, shown as read-only warnings after an upgrade (CUST-346). This app changes neither.
 /// </summary>
 public static class PostUpgradeLeftovers
@@ -533,7 +563,7 @@ public static class PostUpgradeLeftovers
     /// <summary>The Add/Remove Programs key DefenseClaw Setup 0.8.x registered.</summary>
     public const string UninstallKeyName = "DefenseClaw";
 
-    public static IReadOnlyList<PreflightRow> Evaluate(ILeftoverProbes probes)
+    public static IReadOnlyList<PreflightRow> Evaluate(ILeftoverProbes probes, bool coworkPluginLeft = false)
     {
         ArgumentNullException.ThrowIfNull(probes);
         var rows = new List<PreflightRow>();
@@ -558,7 +588,8 @@ public static class PostUpgradeLeftovers
                 "Add/Remove Programs entry",
                 PreflightStatus.Warn,
                 $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. Do not uninstall it from Windows Settings on a 1.0 machine: " +
-                "it is the old Setup's entry, not the 1.0 install's. To remove DefenseClaw 1.0 use 'defenseclaw uninstall'. This app does not change that entry."));
+                "it is the old Setup's entry, not the 1.0 install's. To remove DefenseClaw 1.0 use 'defenseclaw uninstall'. " +
+                (coworkPluginLeft ? CoworkUninstall.Sentence + " " : string.Empty) + "This app does not change that entry."));
         }
 
         return rows;
@@ -699,6 +730,22 @@ public interface IUpgradeProbes
 
     /// <summary>What the files say about OpenCode here, for a target that guards OpenCode V2 only (CUST-424). Reads files, runs nothing.</summary>
     OpenCodeInstallFacts OpenCode(string dataDirectory) => OpenCodeInstallEvidence.Read(dataDirectory);
+
+    /// <summary>The <c>DEFENSECLAW_HOME</c> environment variable, or null when it is not set. A seam so tests can fake it.</summary>
+    string? DefenseClawHome() => Environment.GetEnvironmentVariable("DEFENSECLAW_HOME");
+
+    /// <summary>Whether <paramref name="path"/> is a reparse point (a junction or symbolic link). A folder that does not exist is not one.</summary>
+    bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 }
 
 /// <summary>The probes over the real machine (read-only).</summary>
@@ -758,13 +805,15 @@ public static class InstallScriptPreflight
     /// <param name="verification">Where the staged install.ps1 stands.</param>
     /// <param name="verificationDetail">One sentence about it, shown as the row's reason.</param>
     /// <param name="targetVersion">The version the run installs, when known: a target of 1.0.6 or later adds the OpenCode and Amp rows (CUST-424).</param>
+    /// <param name="installedVersion">The version installed now, when known: a target whose release notes state a source range warns about a version outside it.</param>
     public static PreflightReport Evaluate(
         IUpgradeProbes probes,
         string? installationBlockedReason,
         string dataDirectory,
         PreflightVerification verification,
         string verificationDetail,
-        string? targetVersion = null)
+        string? targetVersion = null,
+        string? installedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(probes);
         ArgumentException.ThrowIfNullOrEmpty(dataDirectory);
@@ -854,6 +903,17 @@ public static class InstallScriptPreflight
             PreflightVerification.Failed => new PreflightRow(VerificationId, "Release verification", PreflightStatus.Block, verificationDetail),
             _ => new PreflightRow(VerificationId, "Release verification", PreflightStatus.Warn, verificationDetail),
         });
+
+        // Conditional rows: absent on a quiet machine, and for a target with nothing to say.
+        if (UpgradeSourceRange.Row(targetVersion, installedVersion) is { } source)
+        {
+            rows.Add(source);
+        }
+
+        if (DataFolderLink.Row(probes, dataDirectory, targetVersion) is { } link)
+        {
+            rows.Add(link);
+        }
 
         return new PreflightReport(rows);
     }

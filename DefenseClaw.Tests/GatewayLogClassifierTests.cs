@@ -216,4 +216,117 @@ public sealed class GatewayLogClassifierTests : IDisposable
         Assert.DoesNotContain(fakeToken, failed.Message, StringComparison.Ordinal);
         Assert.DoesNotContain('\u202E', failed.Message);
     }
+
+    private const string ReservedReason = "port is reserved (excluded port range) or held by another account";
+    private const string ReservedRemedy = "check `netsh int ipv4 show excludedportrange protocol=tcp` and move gateway.api_port out of the range";
+    private const string InUseReason = "address in use by another process";
+    private const string InUseRemedy = "stop the other listener or change gateway.api_port";
+    private const string AccessOsError = "listen tcp 127.0.0.1:18971: bind: An attempt was made to access a socket in a way forbidden by its access permissions.";
+    private const string InUseOsError = "listen tcp 127.0.0.1:18971: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.";
+
+    private static string ApiExited(string reason, string remedy, string osError, string stamp = "2026-11-11T10:00:02Z ") =>
+        $"{stamp}[sidecar] api server exited with error: api: listen 127.0.0.1:18971: {reason} (127.0.0.1:18971; {remedy}): {osError}";
+
+    [Fact]
+    public void A_reserved_port_stop_line_is_port_reserved_with_the_runtimes_remedy()
+    {
+        var reason = GatewayLogClassifier.Classify(new[] { ApiExited(ReservedReason, ReservedRemedy, AccessOsError) });
+
+        var reserved = Assert.IsType<GatewayExitReason.PortReserved>(reason);
+        Assert.Equal("127.0.0.1:18971", reserved.Address);
+        Assert.Equal(ReservedRemedy, reserved.Remedy);
+        Assert.StartsWith("Port reserved by Windows (excluded port range)", reserved.Describe(), StringComparison.Ordinal);
+        Assert.Contains("move gateway.api_port out of the range.", reserved.Describe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_address_in_use_stop_line_is_port_in_use_with_the_runtimes_remedy()
+    {
+        var reason = GatewayLogClassifier.Classify(new[] { ApiExited(InUseReason, InUseRemedy, InUseOsError, stamp: string.Empty) });
+
+        var inUse = Assert.IsType<GatewayExitReason.PortInUse>(reason);
+        Assert.Equal("127.0.0.1:18971", inUse.Address);
+        Assert.Equal(InUseRemedy, inUse.Remedy);
+        Assert.Contains("Stop the other listener or change gateway.api_port.", inUse.Describe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_final_error_line_and_the_prereq_line_name_the_same_reasons()
+    {
+        var final = GatewayLogClassifier.Classify(new[]
+        {
+            $"Error: sidecar: api subsystem stopped: api: listen 127.0.0.1:18971: {ReservedReason} (127.0.0.1:18971; {ReservedRemedy}): {AccessOsError}",
+        });
+        var prereq = GatewayLogClassifier.Classify(new[]
+        {
+            $"2026/11/11 10:00:00 defenseclaw_prereq addr=\"127.0.0.1:18971\" reason=\"{InUseReason}\" remedy=\"{InUseRemedy}\" subsystem=\"api\"",
+        });
+
+        Assert.IsType<GatewayExitReason.PortReserved>(final);
+        var inUse = Assert.IsType<GatewayExitReason.PortInUse>(prereq);
+        Assert.Equal("127.0.0.1:18971", inUse.Address);
+        Assert.Equal(InUseRemedy, inUse.Remedy);
+    }
+
+    [Fact]
+    public void A_generic_resilience_line_for_another_subsystem_is_not_a_stop_reason()
+    {
+        var lines = new[]
+        {
+            "2026/11/11 10:00:00 defenseclaw_prereq reason=\"x\" remedy=\"y\" subsystem=\"service\"",
+        };
+
+        Assert.Null(GatewayLogClassifier.Classify(lines));
+        Assert.Null(GatewayLogClassifier.Classify(new[] { Listening(0), lines[0] }));
+    }
+
+    [Fact]
+    public void A_stop_line_that_names_a_port_reason_beats_the_generic_exited_with_error()
+    {
+        var reason = GatewayLogClassifier.Classify(new[]
+        {
+            Listening(0),
+            "2026-11-11T10:00:01Z [sidecar] guardrail exited with error: something else entirely",
+            ApiExited(ReservedReason, ReservedRemedy, AccessOsError),
+            "2026-11-11T10:00:03Z [sidecar] gateway exited with error: sidecar stopped",
+        });
+
+        Assert.IsType<GatewayExitReason.PortReserved>(reason);
+    }
+
+    [Fact]
+    public void The_retry_line_alone_is_not_a_stop_in_either_wording()
+    {
+        Assert.Null(GatewayLogClassifier.Classify(new[]
+        {
+            $"2026-11-11T10:00:00Z [sidecar-api] 127.0.0.1:18971 unavailable ({AccessOsError}), retrying bind (attempt 2)",
+            "[sidecar-api] 127.0.0.1:18971 still in use after restart, retrying bind (attempt 3)",
+        }));
+    }
+
+    [Fact]
+    public void A_port_stop_after_the_retries_is_a_stop_and_a_listening_line_after_it_clears_it()
+    {
+        var lines = new List<string>
+        {
+            "[sidecar-api] 127.0.0.1:18971 still in use after restart, retrying bind (attempt 1)",
+            ApiExited(InUseReason, InUseRemedy, InUseOsError),
+        };
+        Assert.IsType<GatewayExitReason.PortInUse>(GatewayLogClassifier.Classify(lines));
+
+        lines.Add(Listening(30));
+        Assert.Null(GatewayLogClassifier.Classify(lines));
+    }
+
+    [Fact]
+    public void A_log_with_neither_port_reason_classifies_as_before()
+    {
+        var reason = GatewayLogClassifier.Classify(new[]
+        {
+            Listening(),
+            "2026-10-15T21:18:02Z [sidecar] guardrail exited with error: listen tcp 127.0.0.1:4000: bind: address already in use",
+        });
+
+        Assert.IsType<GatewayExitReason.Other>(reason);
+    }
 }

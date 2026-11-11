@@ -172,7 +172,7 @@ public static class RuntimeEnvironment
 
             // Click prints usage and exits 0 for --help. A non-zero exit that still printed a usage screen (an older Click) is an answer too;
             // one that printed "No such command" is the answer "this runtime does not have it", which is not an error worth keeping text for.
-            return process.ExitCode == 0 ? RuntimeProbeOutput.Ok(text) : RuntimeProbeOutput.Fail($"exit {process.ExitCode}");
+            return process.ExitCode == 0 ? RuntimeProbeOutput.Ok(text) : RuntimeProbeOutput.FailedExit(process.ExitCode, text);
         }
         catch (OperationCanceledException)
         {

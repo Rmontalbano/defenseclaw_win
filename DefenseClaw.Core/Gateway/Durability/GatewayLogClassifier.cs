@@ -36,11 +36,31 @@ public static partial class GatewayLogClassifier
 
     private const int RegexTimeoutMilliseconds = 250;
 
+    private const string ReservedRemedy = "check `netsh int ipv4 show excludedportrange protocol=tcp` and move gateway.api_port out of the range";
+
+    private const string InUseRemedy = "stop the other listener or change gateway.api_port";
+
     [GeneratedRegex(@"\[sidecar-api\]\s+listening on\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
     private static partial Regex Listening();
 
-    [GeneratedRegex(@"setup failed|exited with error|\bfatal\b|\bpanic:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
+    // defenseclaw_prereq is a generic resilience marker (managed hosts emit it for non-fatal findings too);
+    // only the API bind one (subsystem="api", api.go@1.0.8 describeBindConflict) precedes a stop.
+    [GeneratedRegex(@"setup failed|exited with error|api subsystem stopped|defenseclaw_prereq\b[^\r\n]*\bsubsystem=""api""|\bfatal\b|\bpanic:",RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
     private static partial Regex Failure();
+
+    [GeneratedRegex(@"port is reserved \(excluded port range\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
+    private static partial Regex PortReservedReason();
+
+    [GeneratedRegex(@"address in use by another process", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
+    private static partial Regex PortInUseReason();
+
+    // "api: listen 127.0.0.1:18970: <reason>" or the prereq line's addr="127.0.0.1:18970".
+    [GeneratedRegex(@"(?:\blisten\s+(?<addr>[^\s:]*:\d+):|\baddr=""(?<addr>[^""]*)"")", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
+    private static partial Regex ListenAddress();
+
+    // remedy="..." on the prereq line, or "(<addr>; <remedy>)" on the stop lines. The remedy may hold backticks, not parentheses.
+    [GeneratedRegex(@"(?:\bremedy=""(?<remedy>[^""]*)""|\([^;()]*;\s*(?<remedy>[^()]*)\))", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
+    private static partial Regex PortRemedy();
 
     [GeneratedRegex(@"GetFileAttributesEx\s+(?<path>.+?):\s*The system cannot find", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeoutMilliseconds)]
     private static partial Regex StatFailure();
@@ -205,6 +225,17 @@ public static partial class GatewayLogClassifier
     private static (GatewayExitReason Reason, int Rank) Describe(string line)
     {
         var connector = Run(SetupFailed(), line) is { Success: true } named ? named.Groups["name"].Value.ToLowerInvariant() : string.Empty;
+
+        // The API port cannot be bound. The reason phrase is what the runtime logs; it wins over the generic "exited with error".
+        var reserved = IsMatch(PortReservedReason(), line);
+        if (reserved || IsMatch(PortInUseReason(), line))
+        {
+            var address = Run(ListenAddress(), line) is { Success: true } addr ? Shown(addr.Groups["addr"].Value) : string.Empty;
+            var remedy = Run(PortRemedy(), line) is { Success: true } found && found.Groups["remedy"].Value.Trim().Length > 0
+                ? Shown(found.Groups["remedy"].Value)
+                : reserved ? ReservedRemedy : InUseRemedy;
+            return (reserved ? new GatewayExitReason.PortReserved(address, remedy) : new GatewayExitReason.PortInUse(address, remedy), 4);
+        }
 
         // Incident A: the pinned executable is gone.
         if (Run(StatFailure(), line) is { Success: true } stat)

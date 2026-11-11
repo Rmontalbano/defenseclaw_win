@@ -3,11 +3,22 @@ namespace DefenseClaw.Core.Runtime;
 /// <summary>What one read-only probe returned. A failure is data (<see cref="Text"/> null), never an exception.</summary>
 /// <param name="Text">Combined stdout and stderr, or null when the probe did not answer (could not start, timed out, failed with no usage text).</param>
 /// <param name="Error">Why, when <paramref name="Text"/> is null.</param>
-public sealed record RuntimeProbeOutput(string? Text, string? Error = null)
+/// <param name="Launcher">The per-user launcher's own failure line, when a non-zero exit printed one (<see cref="LauncherFailure"/>); null otherwise.</param>
+public sealed record RuntimeProbeOutput(string? Text, string? Error = null, LauncherFailure? Launcher = null)
 {
     public static RuntimeProbeOutput Ok(string text) => new(text);
 
     public static RuntimeProbeOutput Fail(string error) => new(null, error);
+
+    /// <summary>
+    /// A non-zero exit. Without a launcher failure line in <paramref name="printed"/> this is exactly <c>Fail("exit N")</c>; with one, the line is
+    /// kept in <see cref="Error"/> and <see cref="Launcher"/>.
+    /// </summary>
+    public static RuntimeProbeOutput FailedExit(int exitCode, string? printed)
+    {
+        var launcher = LauncherFailure.Recognise(printed);
+        return launcher is null ? Fail($"exit {exitCode}") : new RuntimeProbeOutput(null, $"exit {exitCode}: {launcher.Line}", launcher);
+    }
 }
 
 /// <summary>
@@ -180,8 +191,14 @@ public sealed class RuntimeDetector
             try
             {
                 var source = _source();
-                var screens = await CollectAsync(source, total.Token).ConfigureAwait(false);
+                var (screens, launcher) = await CollectAsync(source, total.Token).ConfigureAwait(false);
                 snapshot = RuntimeProbe.Evaluate(screens, source, fingerprint, _time.GetUtcNow());
+
+                // The per-user launcher stopped before the CLI ran and said why: that beats "no usable answer".
+                if (snapshot.Identity is null && launcher is not null)
+                {
+                    snapshot = snapshot with { UnknownReason = launcher.UserReason() };
+                }
             }
             catch (OperationCanceledException)
             {
@@ -219,12 +236,16 @@ public sealed class RuntimeDetector
         a.Capabilities.SetupCommands.Order(StringComparer.Ordinal).SequenceEqual(b.Capabilities.SetupCommands.Order(StringComparer.Ordinal)) &&
         a.Capabilities.AiRuntimeCommands.Order(StringComparer.Ordinal).SequenceEqual(b.Capabilities.AiRuntimeCommands.Order(StringComparer.Ordinal));
 
-    private async Task<RuntimeProbeScreens> CollectAsync(string source, CancellationToken token)
+    private async Task<(RuntimeProbeScreens Screens, LauncherFailure? Launcher)> CollectAsync(string source, CancellationToken token)
     {
         using var throttle = new SemaphoreSlim(MaxParallelProbes, MaxParallelProbes);
 
+        // Set only by the --version-json probe: a per-user launcher that stopped before the CLI ran.
+        LauncherFailure? versionLauncher = null;
+
         async Task<string?> Run(params string[] arguments)
         {
+            var isVersion = arguments.Length == 1 && arguments[0] == "--version-json";
             await throttle.WaitAsync(token).ConfigureAwait(false);
             try
             {
@@ -233,6 +254,11 @@ public sealed class RuntimeDetector
                 try
                 {
                     var output = await _runner(arguments, one.Token).ConfigureAwait(false);
+                    if (isVersion && output.Text is null)
+                    {
+                        versionLauncher = output.Launcher;
+                    }
+
                     return output.Text;
                 }
                 catch (OperationCanceledException) when (!token.IsCancellationRequested)
@@ -250,7 +276,7 @@ public sealed class RuntimeDetector
         var version = await Run("--version-json").ConfigureAwait(false);
         if (RuntimeProbe.ParseVersionJson(version, source) is null)
         {
-            return new RuntimeProbeScreens(version, null, null, null, null, null, null, null, null, null);
+            return (new RuntimeProbeScreens(version, null, null, null, null, null, null, null, null, null), versionLauncher);
         }
 
         var rootTask = Run("--help");
@@ -275,7 +301,7 @@ public sealed class RuntimeDetector
         var discoveryRuntimeTask = discovery.Contains("runtime") ? Run("agent", "discovery", "runtime", "--help") : Task.FromResult<string?>(null);
         await Task.WhenAll(acpTask, sandboxTask, redactionTask, discoveryRuntimeTask).ConfigureAwait(false);
 
-        return new RuntimeProbeScreens(
+        return (new RuntimeProbeScreens(
             version,
             rootTask.Result,
             setupTask.Result,
@@ -285,7 +311,7 @@ public sealed class RuntimeDetector
             acpTask.Result,
             redactionTask.Result,
             discoveryTask.Result,
-            discoveryRuntimeTask.Result);
+            discoveryRuntimeTask.Result), null);
     }
 }
 
