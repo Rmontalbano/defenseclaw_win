@@ -77,7 +77,7 @@ public sealed partial class OverviewPanelViewModel
                 rows.Add(new AttentionRow
                 {
                     Title = $"{name}: observe mode with a fail-closed hook",
-                    Detail = $"The connector only observes, but {why}, so a gateway outage blocks the agent anyway. {way} {HookFailModeRule.SavedWinsOutageRule}",
+                    Detail = $"The connector only observes, but {why}, so a gateway outage blocks the agent anyway. {way} {HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities)}",
                     SeverityKey = "High",
                 });
             }
@@ -89,7 +89,7 @@ public sealed partial class OverviewPanelViewModel
                     Title = $"{name}: a saved hook_fail_mode: open overrides the strict rule pack",
                     Detail = $"config.yaml saves hook_fail_mode: open {where}. On this runtime a saved fail mode wins over the policy tier, so calls run with a " +
                              $"warning while the gateway is not running, although the rule pack is strict. To block them during an outage, run {hint}. " +
-                             HookFailModeRule.SavedWinsOutageRule,
+                             HookFailModeRule.SavedWinsOutageRuleFor(Services.Runtime.Capabilities),
                     SeverityKey = "Medium",
                     Command = hint,
                 });

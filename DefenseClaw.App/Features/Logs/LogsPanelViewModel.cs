@@ -1214,7 +1214,8 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         state.Loaded = true;
 
         // The reader hands back the list it read last while the database has not changed (a quiet five seconds): nothing to compare.
-        if (ReferenceEquals(result.Rows, state.LastRows))
+        var gate = HookGate;
+        if (gate == state.EntryGate && ReferenceEquals(result.Rows, state.LastRows))
         {
             UpdateStatusText();
             return;
@@ -1223,7 +1224,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         // Oldest first, like a log; the reader returns newest first.
         var ids = result.Rows.Select(r => r.Id).ToArray();
         state.LastRows = result.Rows;
-        if (ids.AsSpan().SequenceEqual(state.LastIds))
+        if (gate == state.EntryGate && ids.AsSpan().SequenceEqual(state.LastIds))
         {
             UpdateStatusText();
             return;
@@ -1240,9 +1241,10 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         var entries = new List<LogEntry>(result.Rows.Count);
         for (var i = result.Rows.Count - 1; i >= 0; i--)
         {
-            entries.Add(new LogEntry(result.Rows[i], result.Rows.Count - 1 - i, state.Name.ToLowerInvariant()));
+            entries.Add(new LogEntry(result.Rows[i], result.Rows.Count - 1 - i, state.Name.ToLowerInvariant(), gate));
         }
 
+        state.EntryGate = gate;
         state.Entries = entries;
         ApplyFilters();
     }
@@ -1303,6 +1305,9 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
         /// <summary>The list the reader returned last: the same object again means the database did not change (see <see cref="EventStreamReader"/>).</summary>
         public IReadOnlyList<StreamEvent>? LastRows { get; set; }
 
+        /// <summary>The hook-row labels the runtime had earned when <see cref="Entries"/> was built; a runtime change that earns others builds them again.</summary>
+        public HookRowGate EntryGate { get; set; }
+
         /// <summary>True once a read has come back (even with no rows).</summary>
         public bool Loaded { get; set; }
 
@@ -1318,6 +1323,7 @@ public sealed partial class LogsPanelViewModel : PanelViewModelBase, IAcceptsNav
             Entries = new List<LogEntry>();
             LastIds = Array.Empty<string>();
             LastRows = null;
+            EntryGate = default;
             Loaded = false;
             Missing = false;
         }

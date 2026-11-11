@@ -484,6 +484,13 @@
                                                     Visibility="{Binding IsRepeated, Converter={StaticResource BoolToVisibility}}">
                                                 <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding RepeatText}" />
                                             </Border>
+                                            <Border DockPanel.Dock="Left"
+                                                    Style="{StaticResource DcChip}"
+                                                    Margin="0,0,6,0"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{Binding IsCowork, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Style="{StaticResource DcBadgeText}" Text="{Binding CoworkMarker}" />
+                                            </Border>
                                             <TextBlock Style="{StaticResource DcCellTextQuiet}" Text="{Binding Headline}" />
                                         </DockPanel>
                                     </DataTemplate>
@@ -572,6 +579,37 @@
                                            Margin="0,4,0,0"
                                            TextWrapping="Wrap"
                                            Text="{Binding ProtectedFileNote}" />
+                            </StackPanel>
+
+                            <!-- A hook's own refusal, the judge-unavailable finding, a judge fallback or a Cowork call (CUST-449, runtime 1.0.7 / 1.0.8); empty on older runtimes. -->
+                            <StackPanel Visibility="{Binding HasHookRowNotes, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:DcCardHeader Margin="0,14,0,4" Symbol="ShieldError24" Section="Observe" Content="Hook decision" />
+                                <ItemsControl Grid.IsSharedSizeScope="True"
+                                              ItemsSource="{Binding HookRowFacts}"
+                                              AutomationProperties.Name="Hook decision">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" MinWidth="{StaticResource DcFieldKeyMinWidth}" SharedSizeGroup="AlertHookRowKey" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Style="{StaticResource DcCaption}"
+                                                           Margin="0,0,10,0"
+                                                           Text="{Binding Name}" />
+                                                <TextBox Grid.Column="1"
+                                                         Style="{StaticResource DcMonoTextBox}"
+                                                         AutomationProperties.Name="{Binding Name}"
+                                                         Text="{Binding Value, Mode=OneWay}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource DcCaption}"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding HookRowNote}" />
                             </StackPanel>
 
                             <!-- Run, trace, request and session id (CUST-261): selectable, so one can be copied into another tool or pasted into a search here. -->

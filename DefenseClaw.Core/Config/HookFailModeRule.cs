@@ -32,6 +32,24 @@ public static class HookFailModeRule
         "a missing token, an install or upgrade) blocks.";
 
     /// <summary>
+    /// What 1.0.7 added to the mode's reach (<c>runHookJudgeSingle</c>, internal/gateway/inspect.go at tags 1.0.7 and 1.0.8): under <c>regex_judge</c>, in
+    /// action mode, a CRITICAL pattern finding the rules cannot enforce waits for the LLM judge, and a missing verdict follows <c>hook_fail_mode</c>.
+    /// </summary>
+    public const string JudgeEscalationRule =
+        "From 1.0.7 the same mode also covers a missing judge verdict: under the regex_judge strategy in action mode, a CRITICAL pattern finding the rules " +
+        "cannot enforce on their own waits for the LLM judge, and when the judge gives no verdict the call is refused where hook_fail_mode is closed " +
+        "(finding JUDGE-UNAVAILABLE-ESCALATED) and runs with a warning where it is open.";
+
+    /// <summary>
+    /// The outage rule as the runtime has it: <see cref="SavedWinsOutageRule"/>, followed by <see cref="JudgeEscalationRule"/> on a runtime with
+    /// <see cref="RuntimeCapability.JudgeEscalation"/>. 1.0.5 and 1.0.6 get <see cref="SavedWinsOutageRule"/> alone, word for word.
+    /// </summary>
+    public static string SavedWinsOutageRuleFor(RuntimeCapabilities? capabilities) =>
+        capabilities is not null && capabilities.Has(RuntimeCapability.JudgeEscalation)
+            ? SavedWinsOutageRule + " " + JudgeEscalationRule
+            : SavedWinsOutageRule;
+
+    /// <summary>
     /// True when a saved per-user <c>hook_fail_mode</c> is not what the hooks obey: the runtime follows 1.0.4's policy-tier rule and the installation is not
     /// managed. <paramref name="managed"/> is true for a managed-enterprise installation. False on 1.0.5 and later, where a saved value wins again
     /// (<see cref="SavedValueWins"/>).

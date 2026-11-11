@@ -93,6 +93,20 @@ public sealed record StreamEvent(
     /// that was too large to read, which <see cref="Oversized"/> says.
     /// </summary>
     public EventDetail Detail { get; init; } = EventDetail.Empty;
+
+    /// <summary>
+    /// The row's own <c>action</c> column (<c>guardrail-block</c>, <c>connector-hook</c>, <c>scan-finding</c> ...), trimmed; <see cref="Action"/> is the payload's decision when
+    /// it has one. The raw input the hook-row labels read (<see cref="HookFailureRow"/>); no label is made here.
+    /// </summary>
+    public string RowAction { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The row's <c>details</c> text, masked, for the few actions whose labels read it (a hook call, a guardrail block or warning, a scan finding); empty for any other row.
+    /// </summary>
+    public string RowDetails { get; init; } = string.Empty;
+
+    /// <summary>The payload's <c>defenseclaw.agent.surface</c> (<c>cowork</c> on a Claude Cowork decision record), masked; empty when it has none.</summary>
+    public string PayloadSurface { get; init; } = string.Empty;
 }
 
 /// <summary>What <see cref="EventStreamReader.ReadAsync"/> found.</summary>
@@ -627,6 +641,10 @@ public sealed class EventStreamReader
             // A connector's hook call keeps its decision, mode and timing in the key=value details, which the TUI's detail lays out row by row.
             var hookDetails = StructuredDetailParser.IsHook(rowAction) ? DisplayRedaction.Text(details) : null;
 
+            // The hook-row labels (a hook's own refusal, a judge-unavailable finding, a judge fallback, a Cowork call) read the row's action and details.
+            var labelAction = rowAction.Trim();
+            var rowDetails = hookDetails ?? (LabelledAction(labelAction) ? DisplayRedaction.Text(details) : string.Empty);
+
             // The TUI's Alerts panel judges a row on its action, target and a details line that names the bucket, event, source and connector
             // (tui/panels/alerts.py _v8_alert_event); the row's own action is searched as well as the decision the payload carries.
             var actionable = omitted
@@ -652,6 +670,9 @@ public sealed class EventStreamReader
                 Target = DisplayRedaction.Text(target),
                 IsActionable = actionable,
                 Detail = EventDetail.Read(root, eventName, source, runId, traceId, requestId, sessionId, summary, hookDetails),
+                RowAction = labelAction,
+                RowDetails = rowDetails,
+                PayloadSurface = DisplayRedaction.Text(FirstValue(root, SurfaceKeys)),
             };
         }
         finally
@@ -659,6 +680,14 @@ public sealed class EventStreamReader
             document?.Dispose();
         }
     }
+
+    private static readonly string[] SurfaceKeys = { CoworkRow.PayloadSurfaceKey };
+
+    /// <summary>True for an action whose row the hook-row labels read the details of.</summary>
+    private static bool LabelledAction(string action) =>
+        action.Equals("guardrail-block", StringComparison.OrdinalIgnoreCase)
+        || action.Equals("guardrail-warn", StringComparison.OrdinalIgnoreCase)
+        || action.Equals("scan-finding", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The Mac's coarse kind of an event, from its bucket (and, for the judge, its name).</summary>
     internal static string TypeOf(string bucket, string eventName, AuditSeverity severity)

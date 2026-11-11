@@ -401,7 +401,7 @@ public sealed partial class AuditPanelViewModel
                 continue;
             }
 
-            fresh.Add(new AuditRow(audit));
+            fresh.Add(new AuditRow(audit, HookGate));
         }
 
         var fromNanos = ToNanos(from);

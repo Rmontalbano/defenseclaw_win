@@ -297,7 +297,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         }
         else
         {
-            wanted = Connectors.FirstOrDefault(c => !c.IncludeNull && !c.PlatformOnly && string.Equals(c.Connector, scope, StringComparison.OrdinalIgnoreCase))
+            wanted = Connectors.FirstOrDefault(c => !c.IncludeNull && !c.PlatformOnly && !c.CoworkOnly && string.Equals(c.Connector, scope, StringComparison.OrdinalIgnoreCase))
                      ?? ConnectorOption.Named(scope);
             if (!Connectors.Contains(wanted))
             {
@@ -499,12 +499,17 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             foreach (var connector in connectors)
             {
                 // A connector the shared scope already added (before the database was read) is not listed twice.
-                if (!Connectors.Any(c => !c.IncludeNull && string.Equals(c.Connector, connector, StringComparison.OrdinalIgnoreCase)))
+                if (!Connectors.Any(c => !c.IncludeNull && !c.CoworkOnly && string.Equals(c.Connector, connector, StringComparison.OrdinalIgnoreCase)))
                 {
                     Connectors.Add(ConnectorOption.Named(connector));
                 }
 
                 Connectors.Add(ConnectorOption.WithPlatform(connector));
+                if (HookGate.Cowork && string.Equals(connector, CoworkRow.Connector, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Cowork is a surface of claudecode, not a connector: one more choice beside it, only where the runtime knows Cowork.
+                    Connectors.Add(ConnectorOption.CoworkOnlyOption);
+                }
             }
 
             // ListConnectorsAsync deliberately omits NULL, so the platform bucket is added here.
@@ -641,6 +646,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
             }
 
             var truncated = false;
+            var hookGate = HookGate;
             foreach (var row in page.Events)
             {
                 if (platformOnly && row.Connector is not null)
@@ -654,7 +660,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
                     break;
                 }
 
-                Rows.Add(new AuditRow(row));
+                Rows.Add(new AuditRow(row, hookGate));
             }
 
             // At the cap with anything left over - unread rows in this page, or another page
@@ -731,6 +737,7 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         MinimumSeverity = PresetMinimumSeverity(ActivePreset, SelectedSeverity.Value),
         Connector = SelectedConnector.Connector,
         IncludeNullConnector = SelectedConnector.IncludeNull,
+        CoworkOnly = SelectedConnector.CoworkOnly,
         ActionContains = string.IsNullOrWhiteSpace(ActionFilter) ? null : ActionFilter.Trim(),
         ActionAnyOf = PresetActionTerms(ActivePreset),
         RunId = string.IsNullOrWhiteSpace(RunFilter) ? null : RunFilter.Trim(),
@@ -841,12 +848,13 @@ public sealed class SeverityOption
 /// </summary>
 public sealed class ConnectorOption
 {
-    private ConnectorOption(string label, string? connector, bool includeNull, bool platformOnly)
+    private ConnectorOption(string label, string? connector, bool includeNull, bool platformOnly, bool coworkOnly = false)
     {
         Label = label;
         Connector = connector;
         IncludeNull = includeNull;
         PlatformOnly = platformOnly;
+        CoworkOnly = coworkOnly;
     }
 
     public static ConnectorOption All { get; } = new("All connectors", null, false, false);
@@ -863,6 +871,15 @@ public sealed class ConnectorOption
 
     /// <summary>Refined over the keyset stream; Core has no <c>connector IS NULL</c> predicate.</summary>
     public bool PlatformOnly { get; }
+
+    /// <summary>
+    /// Claude Cowork rows of the claudecode connector (<see cref="AuditQuery.CoworkOnly"/>). Cowork is a surface of claudecode, not a connector: this option scopes to
+    /// claudecode and narrows by the row's surface, and is offered only on a runtime that knows Cowork.
+    /// </summary>
+    public static ConnectorOption CoworkOnlyOption { get; } = new("claudecode: Cowork only", CoworkRow.Connector, false, false, true);
+
+    /// <summary>True for <see cref="CoworkOnlyOption"/>: the connector is claudecode and only its Cowork rows are listed.</summary>
+    public bool CoworkOnly { get; }
 
     public static ConnectorOption Named(string name) => new(name, name, false, false);
 
@@ -920,10 +937,20 @@ public sealed class AuditRow
 
     private readonly Lazy<string> _structuredJson;
     private readonly Lazy<IReadOnlyList<DetailPair>> _detailPairs;
+    private readonly HookFailureRefusal? _hookRefusal;
+    private readonly CoworkCall? _cowork;
 
     public AuditRow(AuditEvent source)
+        : this(source, HookRowGate.None)
+    {
+    }
+
+    /// <summary>A row labelled as far as <paramref name="gate"/> says the runtime has earned (hook refusals, the judge-unavailable finding, judge fallbacks, Cowork).</summary>
+    internal AuditRow(AuditEvent source, HookRowGate gate)
     {
         ArgumentNullException.ThrowIfNull(source);
+        _hookRefusal = AuditHookRows.Refusal(source, gate);
+        _cowork = AuditHookRows.Cowork(source, gate);
 
         Id = source.Id;
         Timestamp = source.Timestamp;
@@ -970,7 +997,7 @@ public sealed class AuditRow
             ? source.TimestampNanos
             : source.Timestamp == DateTimeOffset.MinValue ? 0 : (source.Timestamp.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks) * 100L;
         _detailPairs = new Lazy<IReadOnlyList<DetailPair>>(
-            () => ParseDetailPairs(Details),
+            () => AuditHookRows.Pairs(ParseDetailPairs(Details), source, gate, _hookRefusal, _cowork),
             LazyThreadSafetyMode.ExecutionAndPublication);
         var rawStructured = source.StructuredJsonRaw;
         var structuredOversized = source.Oversized.FirstOrDefault(static o => string.Equals(o.Column, "structured_json", StringComparison.Ordinal));
@@ -1030,7 +1057,13 @@ public sealed class AuditRow
     /// The Target cell. A hook call's row says only the phase (<c>preToolUse</c>), so the cell says who made the call too: <c>claudecode · preToolUse</c>
     /// (the connector from the details, else the row's own). Every other row shows its target.
     /// </summary>
-    public string TargetText => _targetText ??= IsHook ? StructuredDetailParser.HookTarget(Target, Details, IsPlatform ? null : Connector) : Target;
+    public string TargetText => _targetText ??= IsHook ? StructuredDetailParser.HookTarget(HookPhase, Details, IsPlatform ? null : Connector) : Target;
+
+    /// <summary>True for a Claude Cowork call on a runtime that knows Cowork: its target reads <c>claudecode · cowork:PreToolUse</c>.</summary>
+    public bool IsCowork => _cowork is not null;
+
+    /// <summary>The hook phase the Target cell and the title name: the row's target, as <c>cowork:&lt;event&gt;</c> for a Cowork call.</summary>
+    private string HookPhase => _cowork is not null && Target.Trim().Length > 0 ? CoworkRow.Target(Target.Trim()) : Target;
 
     /// <summary>
     /// The Details cell. A hook call's details are a wall of <c>key=value</c> that cut off after <c>connector=claudecod</c>, so the cell reads the decision,
@@ -1039,7 +1072,8 @@ public sealed class AuditRow
     public string DetailsText => _detailsText ??= IsHook && StructuredDetailParser.HookSummary(Details) is { Length: > 0 } hook ? hook : Summary;
 
     /// <summary>The inspector's title: <c>claudecode preToolUse</c> for a hook call (every one would otherwise be titled <c>connector-hook</c>), the action for any other row.</summary>
-    public string Title => _title ??= (IsHook ? StructuredDetailParser.HookTitle(Target, Details, IsPlatform ? null : Connector) : null) ?? Action;
+    public string Title => _title ??= _hookRefusal?.Headline
+        ?? (IsHook ? StructuredDetailParser.HookTitle(HookPhase, Details, IsPlatform ? null : Connector) : null) ?? Action;
 
     private string? _targetText;
     private string? _detailsText;

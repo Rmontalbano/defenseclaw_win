@@ -292,7 +292,7 @@ public sealed partial class AuditPanelViewModel
 
             foreach (var e in related.Events)
             {
-                RelatedEvents.Add(new AuditRow(e));
+                RelatedEvents.Add(new AuditRow(e, HookGate));
             }
 
             RelatedNote = (related.Basis, related.Events.Count) switch

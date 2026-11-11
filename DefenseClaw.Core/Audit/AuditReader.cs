@@ -1178,6 +1178,7 @@ public sealed class AuditReader
             || !string.IsNullOrWhiteSpace(query.ActionContains)
             || !string.IsNullOrWhiteSpace(query.SearchText)
             || !string.IsNullOrWhiteSpace(query.RunId)
+            || query.CoworkOnly
             || query.ActionAnyOf is { Count: > 0 }
             || query.FieldFilters is { Count: > 0 }
             || BucketsOf(query).Count > 0)
@@ -1357,6 +1358,12 @@ public sealed class AuditReader
             clauses.Add(query.IncludeNullConnector
                 ? $"({connector} = $connector OR e.connector IS NULL)"
                 : $"{connector} = $connector");
+        }
+
+        if (query.CoworkOnly)
+        {
+            // Claude Cowork rows: a constant predicate over the alias e (CoworkRow.SqlPredicate); no value is bound.
+            clauses.Add(CoworkRow.SqlPredicate);
         }
 
         if (!string.IsNullOrWhiteSpace(query.ActionContains))

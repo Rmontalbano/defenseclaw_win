@@ -29,7 +29,7 @@ public sealed partial class AlertsPanelViewModel
     private void OnRosterChanged(object? sender, EventArgs e) => ConnectorColumn.Notify(() => OnPropertyChanged(nameof(ShowConnectorColumn)));
 
     /// <summary>The filter box, parsed. Cheap: a pass over the typed text.</summary>
-    private SearchQuery ActiveSearch => SearchQuery.Parse(FilterText);
+    private SearchQuery ActiveSearch => SearchQuery.Parse(WithoutSurfaceToken(FilterText));
 }
 
 public sealed partial class AlertItem
@@ -168,6 +168,10 @@ public sealed partial class AlertItem
         yield return TraceId;
         yield return RequestId;
         yield return SessionId;
+        if (IsCowork)
+        {
+            yield return CoworkMarker;
+        }
     }
 
     /// <summary>A string out of a gateway alert's unmodelled members, under any of <paramref name="names"/> (the gateway spells ids <c>trace_id</c>); empty when there is none.</summary>

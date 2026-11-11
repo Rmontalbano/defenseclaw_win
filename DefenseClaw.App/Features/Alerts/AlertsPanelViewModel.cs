@@ -1461,7 +1461,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             }
             else
             {
-                projected.Add(AlertItem.FromGateway(alert));
+                projected.Add(AlertItem.FromGateway(alert).WithHookRows(HookGate));
             }
         }
 
@@ -1508,7 +1508,7 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             _all.Clear();
             foreach (var row in page.Events)
             {
-                _all.Add(AlertItem.FromAudit(row));
+                _all.Add(AlertItem.FromAudit(row).WithHookRows(HookGate));
             }
 
             _allFromAudit = true;
@@ -1636,7 +1636,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
 
         // A row flattens and pretty-prints its attribute bag, and a first load builds hundreds: not on the UI thread.
         var runtimeById = runtime is null ? null : RuntimeRowsById(runtime.Rows);
-        var rows = await Task.Run(() => BuildQueueRows(window, shown, details, runtimeById)).ConfigureAwait(true);
+        var gate = HookGate;
+        var rows = await Task.Run(() => BuildQueueRows(window, shown, details, runtimeById, gate)).ConfigureAwait(true);
 
         var egress = EgressRows(egressEvents, shown);
         if (egress.Count > 0)
@@ -1708,7 +1709,8 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         IReadOnlyList<AlertQueueItem> window,
         Dictionary<string, AlertItem> shown,
         IReadOnlyList<AuditEvent> details,
-        IReadOnlyDictionary<string, RuntimeAlertRow>? runtime = null)
+        IReadOnlyDictionary<string, RuntimeAlertRow>? runtime = null,
+        HookRowGate gate = default)
     {
         Dictionary<string, AuditEvent>? byId = null;
         if (details.Count > 0)
@@ -1729,16 +1731,16 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
             if (item.Id.Length > 0 && shown.TryGetValue(item.Id, out var existing))
             {
                 // A row shown before the runtime's list arrived gains its facts; one that has them keeps them.
-                rows.Add(fromRuntime is not null && !existing.HasRuntimeFacts ? existing.WithRuntime(fromRuntime) : existing);
+                rows.Add((fromRuntime is not null && !existing.HasRuntimeFacts ? existing.WithRuntime(fromRuntime) : existing).WithHookRows(gate, fromRuntime));
             }
             else if (item.Id.Length > 0 && byId is not null && byId.TryGetValue(item.Id, out var detail))
             {
                 var audited = AlertItem.FromAudit(detail);
-                rows.Add(fromRuntime is not null ? audited.WithRuntime(fromRuntime) : audited);
+                rows.Add((fromRuntime is not null ? audited.WithRuntime(fromRuntime) : audited).WithHookRows(gate, fromRuntime));
             }
             else
             {
-                rows.Add(fromRuntime is not null ? AlertItem.FromRuntime(fromRuntime) : AlertItem.FromQueue(item));
+                rows.Add((fromRuntime is not null ? AlertItem.FromRuntime(fromRuntime) : AlertItem.FromQueue(item)).WithHookRows(gate, fromRuntime));
             }
         }
 
@@ -1905,6 +1907,11 @@ public sealed partial class AlertsPanelViewModel : PanelViewModelBase, IAcceptsN
         if (!string.Equals(KindFilter, AlertKinds.All, StringComparison.Ordinal))
         {
             query = query.Where(KindAllows);
+        }
+
+        if (CoworkOnly)
+        {
+            query = query.Where(item => item.IsCowork);
         }
 
         if (!search.IsEmpty)
@@ -2249,6 +2256,7 @@ public sealed partial class AlertItem : ObservableObject
                 : string.Empty,
             StructuredText = Pretty(structured),
             Fields = ToFields(structured),
+            HookStructured = structured,
         }.WithProtectedFile();
     }
 
@@ -2287,6 +2295,7 @@ public sealed partial class AlertItem : ObservableObject
                 ? Pretty(structured)
                 : $"({structuredOver.Reason}; it is left in the database, so its attributes are not shown here)",
             Fields = WithNotice(ToFields(structured), notice),
+            HookStructured = structured,
             OversizedNotice = notice,
         }.WithProtectedFile();
     }
@@ -2348,6 +2357,8 @@ public sealed partial class AlertItem : ObservableObject
         Fields = Fields,
         OversizedNotice = OversizedNotice,
         ProtectedFile = ProtectedFile,
+        HookStructured = HookStructured,
+        HookRows = HookRows,
     };
 
     private static bool HasUsableId(string? id) =>

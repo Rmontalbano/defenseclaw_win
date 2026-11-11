@@ -283,7 +283,7 @@ public sealed class HourlyActivityReader
         await using (var events = connection.CreateCommand())
         {
             events.Transaction = transaction;
-            events.CommandText = BuildBlockSql();
+            events.CommandText = BuildBlockSql(shape == Shape.WithDetails);
             Bind(events, from, to);
 
             await using var reader = await events.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -325,7 +325,7 @@ public sealed class HourlyActivityReader
 
         var from = to.AddHours(-Hours);
         var lines = new List<string>();
-        foreach (var sql in new[] { BuildHookSql(shape == Shape.WithDetails), BuildBlockSql() })
+        foreach (var sql in new[] { BuildHookSql(shape == Shape.WithDetails), BuildBlockSql(shape == Shape.WithDetails) })
         {
             await using var command = connection.CreateCommand();
             // nosemgrep: csharp-sqli -- constant: the EXPLAIN prefix and BuildHookSql / BuildBlockSql (const IndexName and HookAction, the fixed BlockActions list); $from and $to are bound
@@ -374,11 +374,16 @@ public sealed class HourlyActivityReader
                $"WHERE action = '{HookAction}' AND timestamp >= $from AND timestamp < $to";
     }
 
-    private static string BuildBlockSql()
+    /// <summary>
+    /// The block rows by hour. A call the hook refused itself while the gateway did not answer (<see cref="HookFailureRow"/>, 1.0.7 and later) is a
+    /// <c>guardrail-block</c> row no policy decided, so it is left out when the database has a details column; no row an older runtime writes matches.
+    /// </summary>
+    private static string BuildBlockSql(bool withDetails)
     {
         var actions = string.Join(", ", BlockActions.Select(static a => "'" + a + "'"));
+        var hookRefusals = withDetails ? $" AND NOT {HookFailureRow.RefusalSql}" : string.Empty;
         return $"SELECT substr(timestamp, 1, 13), COUNT(*) FROM audit_events INDEXED BY {IndexName} " +
-               $"WHERE action IN ({actions}) AND timestamp >= $from AND timestamp < $to GROUP BY 1";
+               $"WHERE action IN ({actions}) AND timestamp >= $from AND timestamp < $to{hookRefusals} GROUP BY 1";
     }
 
     private enum Shape

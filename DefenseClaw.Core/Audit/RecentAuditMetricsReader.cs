@@ -151,7 +151,8 @@ public sealed class RecentAuditMetricsReader
         var kind = (action ?? string.Empty).ToLowerInvariant();
         if (kind is "block" or "guardrail-block" or "deny" or "quarantine")
         {
-            return true;
+            // A call the hook refused itself while the gateway did not answer (1.0.7 and later) is no policy's block.
+            return !HookFailureRow.IsRefusal(action, details);
         }
 
         var decision = DetailValue("action", details).ToLowerInvariant();

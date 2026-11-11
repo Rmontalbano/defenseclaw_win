@@ -299,7 +299,7 @@ public sealed class HourlyActivityReaderTests : IDisposable
     // ---- The plan ----
 
     [Fact]
-    public async Task Both_statements_are_a_range_search_on_the_action_timestamp_index_and_the_block_events_are_a_covering_one()
+    public async Task Both_statements_are_a_range_search_on_the_action_timestamp_index()
     {
         for (var i = 0; i < 40; i++)
         {
@@ -317,7 +317,9 @@ public sealed class HourlyActivityReaderTests : IDisposable
             Assert.Contains("timestamp>?", line, StringComparison.Ordinal);
             Assert.StartsWith("SEARCH", line, StringComparison.Ordinal);
         });
-        Assert.Contains("COVERING INDEX", hookPlan[1], StringComparison.Ordinal);
+        // The block statement reads details to leave out a hook's own refusals (CUST-449), so on a database with a details column it is no longer a
+        // covering index search; it stays a range search on the index, and block rows are few.
+        Assert.DoesNotContain("SCAN", hookPlan[1], StringComparison.Ordinal);
     }
 
     // ---- The real database, where there is one ----

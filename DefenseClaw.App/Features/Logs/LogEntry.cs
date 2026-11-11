@@ -24,6 +24,7 @@ public sealed partial class LogEntry : ObservableObject
     private readonly LogLine? _line;
     private readonly StreamEvent? _event;
     private readonly string _stream;
+    private readonly HookRowGate _gate;
     private Derived? _derived;
 
     /// <summary>How many adjacent identical rows this one stands for (1 when it is alone); the "Repeated N times" chip shows from 2.</summary>
@@ -49,9 +50,16 @@ public sealed partial class LogEntry : ObservableObject
 
     /// <summary>A canonical event of the Verdicts / Events streams; <paramref name="sequence"/> is its position in the read (oldest 0).</summary>
     public LogEntry(StreamEvent streamEvent, long sequence, string stream)
+        : this(streamEvent, sequence, stream, HookRowGate.None)
+    {
+    }
+
+    /// <summary>A canonical event, labelled as far as <paramref name="gate"/> says the runtime has earned (hook refusals, the judge-unavailable finding, judge fallbacks, Cowork).</summary>
+    internal LogEntry(StreamEvent streamEvent, long sequence, string stream, HookRowGate gate)
     {
         ArgumentNullException.ThrowIfNull(streamEvent);
         _event = streamEvent;
+        _gate = gate;
         _stream = stream;
         Sequence = sequence;
         HasComponent = streamEvent.Connector.Length > 0;
@@ -69,6 +77,7 @@ public sealed partial class LogEntry : ObservableObject
         _event = source._event;
         _stream = source._stream;
         _derived = source._derived;
+        _gate = source._gate;
         Sequence = source.Sequence;
         HasComponent = source.HasComponent;
         ComponentText = source.ComponentText;
@@ -138,6 +147,9 @@ public sealed partial class LogEntry : ObservableObject
     public bool IsActionable => _event?.IsActionable ?? true;
 
     public string Action => Get().Action;
+
+    /// <summary>True for a Claude Cowork call, on a runtime that knows Cowork (otherwise always false): the <c>surface:cowork</c> filter keeps these.</summary>
+    public bool IsCowork => Get().IsCowork;
 
     public string Connector => Get().Connector;
 
@@ -304,9 +316,10 @@ public sealed partial class LogEntry : ObservableObject
         Add("Event type", e.EventType);
         Add("Severity", severityText);
         Add("Action", e.Action);
+        var labels = LogHookRows.Read(e, _gate);
         foreach (var row in e.Detail.Rows(e.SeverityText))
         {
-            Add(row.Label, row.Value);
+            Add(row.Label, row.Label == "Categories" ? LogHookRows.Categories(e, _gate, row.Value) : row.Value);
         }
 
         // What the TUI shows as Subsystem and Transition (the bucket and the event name), and then, for a connector's hook call, the decision laid out as its
@@ -315,7 +328,18 @@ public sealed partial class LogEntry : ObservableObject
         Add("Event name", e.EventName);
         foreach (var row in e.Detail.Hook)
         {
+            // The labelled fallback row below says the same in words.
+            if (labels.SkipFallbackRow && string.Equals(row.Label, HookJudgeFallback.FieldName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             Add(row.Label, row.Value);
+        }
+
+        foreach (var field in labels.Fields)
+        {
+            Add(field.Name, field.Value);
         }
 
         Add("Error code", e.Detail.ErrorCode);
@@ -340,10 +364,10 @@ public sealed partial class LogEntry : ObservableObject
         var severityWord = severityText.Length > 0 ? severityText : "INFO";
         var matchText = string.Concat(" ", severityWord.PadRight(8), " ", e.Bucket, " ", e.Message, " ", e.Target).ToLowerInvariant();
 
-        return Build(e.RawJson, e.Message, e.Severity, e.EventType, e.Action, e.Connector, matchText, fields);
+        return Build(e.RawJson, labels.Message, e.Severity, e.EventType, e.Action, e.Connector, matchText, fields, labels.IsCowork);
     }
 
-    private static Derived Build(string raw, string message, AuditSeverity severity, string eventType, string action, string connector, string matchText, List<LogField> fields)
+    private static Derived Build(string raw, string message, AuditSeverity severity, string eventType, string action, string connector, string matchText, List<LogField> fields, bool isCowork = false)
     {
         var human = Humanise(message);
         var parts = new[] { eventType, action }.Where(p => p.Length > 0 && p != "event").ToArray();
@@ -371,6 +395,7 @@ public sealed partial class LogEntry : ObservableObject
             Label = label,
             MatchText = matchText,
             Fields = fields,
+            IsCowork = isCowork,
         };
     }
 
@@ -454,6 +479,8 @@ public sealed partial class LogEntry : ObservableObject
         public string Label { get; init; } = string.Empty;
 
         public string MatchText { get; init; } = string.Empty;
+
+        public bool IsCowork { get; init; }
 
         public IReadOnlyList<LogField> Fields { get; init; } = Array.Empty<LogField>();
     }

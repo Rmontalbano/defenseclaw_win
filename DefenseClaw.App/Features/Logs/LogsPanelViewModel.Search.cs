@@ -17,6 +17,7 @@ namespace DefenseClaw.App.ViewModels;
 public sealed partial class LogsPanelViewModel
 {
     private string? _searchFor;
+    private bool _searchCowork;
     private SearchQuery _search = SearchQuery.Empty;
     private string[] _connectors = Array.Empty<string>();
     private Regex[] _connectorMentions = Array.Empty<Regex>();
@@ -27,9 +28,14 @@ public sealed partial class LogsPanelViewModel
         get
         {
             var text = FilterText;
-            if (!string.Equals(text, _searchFor, StringComparison.Ordinal))
+            var cowork = HookGate.Cowork;
+            if (!string.Equals(text, _searchFor, StringComparison.Ordinal) || cowork != _searchCowork)
             {
-                _search = SearchQuery.Parse(text, SearchField.Connector);
+                // A surface:cowork word (on a runtime that knows Cowork) is a filter of its own, not text to search for.
+                var split = SplitSurfaceToken(text);
+                _coworkOnly = split.CoworkOnly;
+                _searchCowork = cowork;
+                _search = SearchQuery.Parse(split.Text, SearchField.Connector);
                 _connectors = _search.ValuesOf(SearchField.Connector).ToArray();
                 _connectorMentions = _connectors.Select(Mention).ToArray();
                 _searchFor = text;
@@ -43,6 +49,11 @@ public sealed partial class LogsPanelViewModel
     private bool PassesSearch(LogEntry entry)
     {
         var search = ActiveSearch;
+        if (_coworkOnly && !entry.IsCowork)
+        {
+            return false;
+        }
+
         if (search.IsEmpty)
         {
             return true;

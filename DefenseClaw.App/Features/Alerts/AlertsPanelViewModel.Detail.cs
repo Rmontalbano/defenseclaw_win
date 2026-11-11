@@ -544,6 +544,11 @@ public sealed partial class AlertItem
     {
         get
         {
+            if (IsHookRefusal)
+            {
+                return false;
+            }
+
             var text = $"{Action} {Headline}";
             return Contains(text, "block") || Contains(text, "reject") || Contains(text, "deny") || Contains(text, "quarantine");
         }

@@ -30,6 +30,12 @@ public sealed record AuditQuery
     /// <summary>Keep rows whose connector is NULL alongside a <see cref="Connector"/> match.</summary>
     public bool IncludeNullConnector { get; init; }
 
+    /// <summary>
+    /// Keep only Claude Cowork rows (<see cref="CoworkRow.SqlPredicate"/>): <c>claudecode</c> hook rows whose envelope says <c>surface = cowork</c>. Cowork is a surface of
+    /// that connector, not a connector, so this is a filter of its own and never a <see cref="Connector"/>.
+    /// </summary>
+    public bool CoworkOnly { get; init; }
+
     /// <summary>Case-insensitive substring match on <c>action</c>.</summary>
     public string? ActionContains { get; init; }
 
@@ -100,6 +106,11 @@ public sealed record AuditQuery
            .Append(Field).Append(IncludeNullConnector ? '1' : '0')
            .Append(Field).Append(ActionContains)
            .Append(Field).Append(RunId).Append(Field);
+        if (CoworkOnly)
+        {
+            key.Append("cowork").Append(Field);
+        }
+
         AppendList(key, ActionAnyOf);
         key.Append(Field).Append(SearchText)
            .Append(Field).Append(From?.UtcTicks.ToString(CultureInfo.InvariantCulture))
