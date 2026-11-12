@@ -349,7 +349,7 @@
                                 Style="{StaticResource DcSubtleRow}"
                                 Visibility="{Binding CurrentStep.Goals.HasStateSummary, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Style="{StaticResource DcBody}"
-                                       AutomationProperties.Name="What is configured today"
+                                       AutomationProperties.Name="{Binding CurrentStep.Goals.StateSummary, StringFormat='What is configured today: {0}'}"
                                        Text="{Binding CurrentStep.Goals.StateSummary}" />
                         </Border>
 

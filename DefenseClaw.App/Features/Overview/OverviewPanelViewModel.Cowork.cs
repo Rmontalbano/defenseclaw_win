@@ -54,12 +54,9 @@ public sealed partial class OverviewPanelViewModel
             return;
         }
 
-        var value = cowork.Detail.Length > 0 ? cowork.Detail : cowork.Protected ? "protected" : "not protected";
-        if (cowork.IsNotBuilt)
-        {
-            // Never set up: nothing the user asked for is missing, so this reads as optional (the CLI's sentence follows).
-            value = "Not set up · " + value;
-        }
+        // Never set up: nothing the user asked for is missing, so this reads as optional (the CLI's sentence follows, minus its own "not protected: ").
+        var value = cowork.IsNotBuilt ? cowork.NotSetUpText
+            : cowork.Detail.Length > 0 ? cowork.Detail : cowork.Protected ? "protected" : "not protected";
 
         if (cowork.Step.Length > 0)
         {

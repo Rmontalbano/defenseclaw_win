@@ -306,10 +306,11 @@ public static class SetupReadiness
             return new ReadinessCheck(Title, cowork.Detail.Length > 0 ? cowork.Detail : "protected", ReadinessStatus.Pass);
         }
 
-        var detail = cowork.Detail.Length > 0 ? cowork.Detail : "not protected";
+        // Never set up (cowork_plugin_not_built): "Not set up: <the CLI's sentence>", the same line the Overview Configuration row shows.
+        var detail = cowork.IsNotBuilt ? cowork.NotSetUpText : cowork.Detail.Length > 0 ? cowork.Detail : "not protected";
         if (cowork.Step.Length > 0)
         {
-            detail += " Next: " + cowork.Step;
+            detail += " · Next: " + cowork.Step;
         }
 
         ReadinessFix? fix = null;
@@ -327,7 +328,7 @@ public static class SetupReadiness
         }
 
         // Never set up (cowork_plugin_not_built): nothing the user asked for is missing, so the row is optional and not counted; the wizard is still the action.
-        return new ReadinessCheck(Title, cowork.IsNotBuilt ? "Not set up · " + detail : detail, cowork.IsNotBuilt ? ReadinessStatus.Optional : ReadinessStatus.Warn, fix);
+        return new ReadinessCheck(Title, detail, cowork.IsNotBuilt ? ReadinessStatus.Optional : ReadinessStatus.Warn, fix);
     }
 
     private static bool IsHealthy(string state, bool orDisabled) =>

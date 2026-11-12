@@ -236,7 +236,7 @@
                 <TextBlock Style="{StaticResource DcResultCaption}"
                            Margin="0,0,0,8"
                            Text="{Binding StatusLineCount}"
-                           AutomationProperties.Name="Row counts" />
+                           AutomationProperties.Name="{Binding StatusLineCount, StringFormat='Row counts: {0}'}" />
             </WrapPanel>
 
             <ui:InfoBar Margin="0,0,0,8"

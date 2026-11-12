@@ -237,7 +237,7 @@
                            Margin="0,0,12,0"
                            VerticalAlignment="Center"
                            Text="{Binding SelectionText}"
-                           AutomationProperties.Name="Selection"
+                           AutomationProperties.Name="{Binding SelectionText, StringFormat='Selection: {0}'}"
                            AutomationProperties.LiveSetting="Polite" />
                 <ui:Button Content="Select all"
                            Margin="0,0,8,0"
@@ -269,7 +269,7 @@
                            VerticalAlignment="Center"
                            Text="{Binding HiddenUntilRelaunchText}"
                            Visibility="{Binding HasHiddenUntilRelaunch, Converter={StaticResource BoolToVisibility}}"
-                           AutomationProperties.Name="Hidden until relaunch" />
+                           AutomationProperties.Name="{Binding HiddenUntilRelaunchText, StringFormat='Hidden until relaunch: {0}'}" />
                 <ui:Button Content="{Binding ShowHiddenText}"
                            Margin="0,0,8,0"
                            Appearance="Secondary"
@@ -302,7 +302,7 @@
                        TextWrapping="Wrap"
                        Text="{Binding DetectionOnlyText}"
                        Visibility="{Binding HasDetectionOnly, Converter={StaticResource BoolToVisibility}}"
-                       AutomationProperties.Name="Detection-only findings not listed" />
+                       AutomationProperties.Name="{Binding DetectionOnlyText, StringFormat='Detection-only findings not listed: {0}'}" />
         </StackPanel>
 
         <!--

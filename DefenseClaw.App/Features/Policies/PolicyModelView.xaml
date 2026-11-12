@@ -165,7 +165,7 @@
                                    VerticalAlignment="Center"
                                    TextWrapping="Wrap"
                                    Text="{Binding Headline}"
-                                   AutomationProperties.Name="View summary" />
+                                   AutomationProperties.Name="{Binding Headline, StringFormat='View summary: {0}'}" />
                         <StackPanel Grid.Column="1"
                                     Orientation="Horizontal"
                                     Margin="12,0,0,0"

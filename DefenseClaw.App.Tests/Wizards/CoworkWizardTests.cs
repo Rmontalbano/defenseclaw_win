@@ -392,7 +392,8 @@ public sealed class CoworkWizardTests : IDisposable
 
         Assert.NotNull(line);
         Assert.Equal(expected, line.Text);
-        Assert.Equal("the CLI's sentence", line.Detail);
+        // A Cowork that was never set up carries the label in its detail too (CUST-444): "Not set up: <the CLI's sentence>".
+        Assert.Equal(code == CoworkReasonCodes.PluginNotBuilt ? "Not set up: the CLI's sentence" : "the CLI's sentence", line.Detail);
         Assert.Null(WizardCardStates.For("cowork", WizardGroups.Other, null, null));
     }
 }

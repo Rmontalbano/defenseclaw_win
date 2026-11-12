@@ -185,7 +185,7 @@
                     </Grid.ColumnDefinitions>
                     <ctl:DcCardHeader Grid.Column="0" Margin="0" Symbol="CheckmarkCircle24" Section="Updates" Content="Install state (read-only)" />
                     <TextBlock Grid.Column="1" Margin="0,0,10,0" VerticalAlignment="Center" Style="{StaticResource DcCaption}"
-                               AutomationProperties.Name="When the install state was read"
+                               AutomationProperties.Name="{Binding ReadAtText, StringFormat='When the install state was read: {0}'}"
                                Text="{Binding ReadAtText}" />
                     <ui:Button Grid.Column="2"
                                Appearance="Secondary"

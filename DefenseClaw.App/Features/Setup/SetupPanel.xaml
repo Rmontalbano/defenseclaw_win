@@ -670,7 +670,7 @@
                                                 <ui:Button Grid.Column="2"
                                                            Margin="12,0,0,0"
                                                            VerticalAlignment="Center"
-                                                           Content="Fix"
+                                                           Content="{Binding FixLabel}"
                                                            Icon="{ctl:DcSymbolIcon Wrench24}"
                                                            Command="{Binding FixCommand}"
                                                            ToolTip="{Binding FixToolTip}"

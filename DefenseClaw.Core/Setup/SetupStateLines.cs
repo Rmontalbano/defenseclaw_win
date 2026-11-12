@@ -61,7 +61,7 @@ public static class SetupStateLines
             : state.AwaitsUpload ? "Built, not uploaded yet"
             : state.IsNotBuilt ? "Not set up"
             : "Not protected";
-        return new CardState(text, state.Detail.Length > 0 ? state.Detail : text);
+        return new CardState(text, state.IsNotBuilt ? state.NotSetUpText : state.Detail.Length > 0 ? state.Detail : text);
     }
 
     /// <summary>The guardrail card: <c>Guardrail: on  ·  Mode: observe  ·  Strategy: regex_only</c>.</summary>

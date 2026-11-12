@@ -58,7 +58,13 @@ public sealed class ReadinessRowViewModel
         var fix => $"Review, then run: {fix.CommandText}",
     };
 
-    public string FixAutomationName => $"Fix {Check.Title}";
+    /// <summary>The button's word: <c>Set up</c> on an optional row (nothing is broken, the step is a choice), <c>Fix</c> on every other.</summary>
+    public string FixLabel => Check.Status == ReadinessStatus.Optional ? "Set up" : "Fix";
+
+    public string FixAutomationName => $"{FixLabel} {Check.Title}";
+
+    /// <summary>A line for a screen reader (the list item's name): <c>optional: Cowork. Not set up: ...</c>.</summary>
+    public override string ToString() => Detail.Length > 0 ? $"{StatusText}: {Title}. {Detail}" : $"{StatusText}: {Title}";
 
     public IRelayCommand FixCommand { get; }
 }

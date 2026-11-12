@@ -129,7 +129,7 @@
                                           Symbol="ChatWarning24" Section="Govern" Content="Block message" />
                         <TextBlock Style="{StaticResource DcCaption}" Text="In force" />
                         <TextBlock Margin="0,2,0,8" Style="{StaticResource RowName}" TextWrapping="Wrap"
-                                   AutomationProperties.Name="Block message in force"
+                                   AutomationProperties.Name="{Binding CurrentBlockMessage, StringFormat='Block message in force: {0}'}"
                                    Text="{Binding CurrentBlockMessage}" />
                         <ui:TextBox MinWidth="320"
                                  Margin="0,0,0,6"

@@ -47,6 +47,25 @@ public sealed record CoworkProtection(
     /// </summary>
     public bool IsGatewayCondition => !Protected && ReasonCode is CoworkReasonCodes.GatewayDown or CoworkReasonCodes.ClaudeCodeNotStarted or CoworkReasonCodes.HealthUnavailable;
 
+    /// <summary>The label the app puts before the CLI's sentence when Cowork was never set up.</summary>
+    public const string NotSetUpLabel = "Not set up";
+
+    /// <summary>The CLI's own lead-in on a not-protected detail (cli/defenseclaw/cowork.py, 1.0.8); dropped after <see cref="NotSetUpLabel"/>, which says it already.</summary>
+    private const string NotProtectedPrefix = "not protected: ";
+
+    /// <summary>
+    /// The never-set-up line: <c>Not set up: Claude Desktop is installed, but ...</c>. The CLI's sentence is kept as written, minus its leading
+    /// <c>not protected: </c>; a sentence without that prefix follows the label unchanged, and an empty one leaves the label alone.
+    /// </summary>
+    public string NotSetUpText
+    {
+        get
+        {
+            var detail = Detail.StartsWith(NotProtectedPrefix, StringComparison.Ordinal) ? Detail[NotProtectedPrefix.Length..] : Detail;
+            return detail.Length > 0 ? NotSetUpLabel + ": " + detail : NotSetUpLabel;
+        }
+    }
+
     /// <summary>The zip's folder, or null when no plugin was built.</summary>
     public string? PluginFolder => string.IsNullOrWhiteSpace(PluginZip) ? null : Path.GetDirectoryName(PluginZip);
 

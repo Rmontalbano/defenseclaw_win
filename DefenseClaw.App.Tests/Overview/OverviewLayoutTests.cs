@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DefenseClaw.App.Services;
@@ -544,5 +545,32 @@ public sealed class OverviewLayoutTests
         var pixels = new byte[4];
         bitmap.CopyPixels(new Int32Rect(Math.Clamp(x, 0, bitmap.PixelWidth - 1), Math.Clamp(y, 0, bitmap.PixelHeight - 1), 1, 1), pixels, 4, 0);
         return Color.FromArgb(pixels[3], pixels[2], pixels[1], pixels[0]);
+    }
+
+    /// <summary>
+    /// The two Runtime monitoring lines are read by their text (CUST-444): a fixed automation name on them made a screen reader say "Runtime
+    /// monitoring degraded" and never the reasons.
+    /// </summary>
+    [Fact]
+    public void The_runtime_monitoring_lines_are_named_by_what_they_say()
+    {
+        using var scene = Scene.Open(1400, 900);
+
+        UiThread.Run(() =>
+        {
+            scene.ViewModel.RuntimeMonitoringText = "Runtime monitoring: on · example plane running";
+            scene.ViewModel.RuntimeMonitoringDegradedText = "The gateway reports runtime monitoring degraded: example reason.";
+            scene.Host.Relayout();
+
+            foreach (var path in new[] { "RuntimeMonitoringText", "RuntimeMonitoringDegradedText" })
+            {
+                var line = VisualTree.Descendants<TextBlock>(scene.Panel)
+                    .Single(t => BindingOperations.GetBindingExpression(t, TextBlock.TextProperty)?.ParentBinding.Path.Path == path);
+                var peer = UIElementAutomationPeer.CreatePeerForElement(line);
+                Assert.Equal(line.Text, peer.GetName());
+            }
+
+            Assert.Contains("example reason", scene.ViewModel.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+        });
     }
 }

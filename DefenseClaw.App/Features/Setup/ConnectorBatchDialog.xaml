@@ -152,7 +152,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" FontFamily="Consolas" TextWrapping="Wrap"
-                                   AutomationProperties.Name="The command that would run"
+                                   AutomationProperties.Name="{Binding CommandPreview, StringFormat='The command that would run: {0}'}"
                                    Text="{Binding CommandPreview}"
                                    Visibility="{Binding HasCommandPreview, Converter={StaticResource BoolToVisibility}}" />
                         <Grid Margin="0,10,0,0">

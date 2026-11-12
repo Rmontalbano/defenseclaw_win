@@ -215,7 +215,7 @@ public sealed class CoworkOverviewTests : IDisposable
         var row = CoworkRow(vm);
         Assert.NotNull(row);
         Assert.Equal("Neutral", row.ToneKey);
-        Assert.StartsWith("Not set up", row.Value, StringComparison.Ordinal);
+        Assert.StartsWith("Not set up: Claude Desktop is installed, but Cowork has no DefenseClaw plugin · Next: defenseclaw setup cowork · ", row.Value, StringComparison.Ordinal);
         Assert.Contains("Next: defenseclaw setup cowork", row.Value, StringComparison.Ordinal);
     }
 

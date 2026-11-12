@@ -65,7 +65,7 @@ public sealed class CoworkReadinessTests
         Assert.NotNull(row);
         Assert.Equal(ReadinessStatus.Optional, row.Status);
         Assert.False(row.NeedsAttention);
-        Assert.Equal("Not set up · not protected: example Next: defenseclaw setup cowork", row.Detail);
+        Assert.Equal("Not set up: example · Next: defenseclaw setup cowork", row.Detail);
         Assert.Equal(0, SetupReadiness.Build(inputs).Count(static c => c.NeedsAttention));
         var fix = Assert.IsType<ReadinessFix>(row.Fix);
         Assert.Equal("cowork", fix.WizardTarget);
@@ -80,7 +80,7 @@ public sealed class CoworkReadinessTests
         Assert.NotNull(row);
         Assert.Equal(ReadinessStatus.Warn, row.Status);
         Assert.True(row.NeedsAttention);
-        Assert.Equal("not protected: example Next: defenseclaw setup cowork", row.Detail);
+        Assert.Equal("not protected: example · Next: defenseclaw setup cowork", row.Detail);
         var fix = Assert.IsType<ReadinessFix>(row.Fix);
         Assert.Equal(ReadinessFixKind.Wizard, fix.Kind);
         Assert.Equal("setup cowork", fix.Label);
@@ -134,5 +134,39 @@ public sealed class CoworkReadinessTests
         var checks = SetupReadiness.Build(Healthy() with { Cowork = State(false, CoworkReasonCodes.NoEvents, "not protected: example") });
 
         Assert.Equal(1, checks.Count(static c => c.NeedsAttention));
+    }
+
+    /// <summary>The owner-machine shape: Claude Desktop installed, Cowork never set up; the CLI's sentence once, after the label, then the step.</summary>
+    [Fact]
+    public void A_never_set_up_cowork_reads_the_label_once_then_the_step_with_the_overviews_separator()
+    {
+        var row = CoworkRow(Healthy() with
+        {
+            Cowork = State(false, CoworkReasonCodes.PluginNotBuilt, "not protected: Claude Desktop is installed, but Cowork has no DefenseClaw plugin", "defenseclaw setup cowork"),
+        });
+
+        Assert.NotNull(row);
+        Assert.Equal("Not set up: Claude Desktop is installed, but Cowork has no DefenseClaw plugin · Next: defenseclaw setup cowork", row.Detail);
+    }
+
+    [Fact]
+    public void The_optional_row_says_set_up_and_a_warning_row_still_says_fix()
+    {
+        var optional = new ReadinessRowViewModel(CoworkRow(Healthy() with { Cowork = State(false, CoworkReasonCodes.PluginNotBuilt, "not protected: example", "defenseclaw setup cowork") })!, static _ => { });
+        var warn = new ReadinessRowViewModel(CoworkRow(Healthy() with { Cowork = State(false, CoworkReasonCodes.NoEvents, "not protected yet: example", "upload the zip") })!, static _ => { });
+
+        Assert.Equal("Set up", optional.FixLabel);
+        Assert.Equal("Set up Cowork", optional.FixAutomationName);
+        Assert.Equal("Fix", warn.FixLabel);
+        Assert.Equal("Fix Cowork", warn.FixAutomationName);
+    }
+
+    [Fact]
+    public void A_readiness_row_names_itself_for_a_screen_reader_not_by_its_type()
+    {
+        var row = new ReadinessRowViewModel(CoworkRow(Healthy() with { Cowork = State(false, CoworkReasonCodes.PluginNotBuilt, "not protected: example", "defenseclaw setup cowork") })!, static _ => { });
+
+        Assert.Equal("optional: Cowork. Not set up: example · Next: defenseclaw setup cowork", row.ToString());
+        Assert.Equal("pass: Cowork", new ReadinessRowViewModel(new ReadinessCheck("Cowork", string.Empty, ReadinessStatus.Pass), static _ => { }).ToString());
     }
 }
