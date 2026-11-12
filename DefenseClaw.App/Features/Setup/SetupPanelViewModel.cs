@@ -70,6 +70,9 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
     private static readonly TimeSpan GuardrailFreshFor = TimeSpan.FromMinutes(2);
 
     private readonly WizardCatalog _catalog;
+
+    // The dispatcher of the thread that built the panel (its UI thread): events that may arrive on another thread are posted here.
+    private readonly System.Windows.Threading.Dispatcher _ownDispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
     private readonly LocalStackAvailability _localStack;
     private readonly TerraformAvailability _terraform;
     private readonly List<WizardCardViewModel> _all = new();

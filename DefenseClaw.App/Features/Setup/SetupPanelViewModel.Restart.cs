@@ -41,8 +41,28 @@ public sealed partial class SetupPanelViewModel
     [RelayCommand(CanExecute = nameof(HasRestartPending))]
     private void ClearRestart() => _ = Services.RestartQueue.Clear();
 
-    /// <summary>The queue changed (UI thread): the banner and the readiness row are drawn again.</summary>
+    /// <summary>
+    /// The queue changed: the banner and the readiness row are drawn again, on the thread that owns this panel. The queue raises Changed through the
+    /// application's dispatcher, but where there is no WPF application (a headless run) it raises it in place on the thread that queued, which may
+    /// be a runner's or a save's thread; rebuilding <see cref="ReadinessViewModel.Rows"/> there raced a reader on the panel's thread (a row read as null
+    /// mid-Clear/Add). So it is posted to the panel's own dispatcher whenever it arrives elsewhere.
+    /// </summary>
     private void OnRestartQueueChanged(object? sender, EventArgs e)
+    {
+        if (!_ownDispatcher.CheckAccess())
+        {
+            if (!_ownDispatcher.HasShutdownStarted)
+            {
+                _ = _ownDispatcher.BeginInvoke(RedrawRestart);
+            }
+
+            return;
+        }
+
+        RedrawRestart();
+    }
+
+    private void RedrawRestart()
     {
         RefreshRestartBanner();
         Readiness.Rebuild();
