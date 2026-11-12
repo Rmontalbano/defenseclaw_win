@@ -48,9 +48,9 @@ public sealed class CoworkWizardTests : IDisposable
         "1.0.20261101120000",
         Zip);
 
-    private async Task<AppServices> ServicesAsync(string? version = "1.0.8", bool managed = false)
+    private async Task<AppServices> ServicesAsync(string? version = "1.0.8", bool managed = false, string config = "guardrail:\n  enabled: true\n")
     {
-        var services = TestServices.Create(_temp, "guardrail:\n  enabled: true\n", version is null ? null : FirstRun.FirstRunFailModeTests.Versioned(version));
+        var services = TestServices.Create(_temp, config, version is null ? null : FirstRun.FirstRunFailModeTests.Versioned(version));
         _services.Add(services);
         if (version is not null)
         {
@@ -108,6 +108,34 @@ public sealed class CoworkWizardTests : IDisposable
 
         await UiThread.Run(() => vm.Review.ConfirmCommand.ExecuteAsync(null));
         UiThread.WaitFor(() => UiThread.Run(() => vm.HasResult), "the build result");
+    }
+
+    // ------------------------------------------------------------------ the review says Claude Code is turned on too
+
+    [Fact]
+    public async Task The_review_warns_a_codex_only_user_that_setup_cowork_also_turns_on_claude_code()
+    {
+        var services = await ServicesAsync(config: "guardrail:\n  enabled: true\n  connectors:\n    codex:\n      enabled: true\n");
+        var vm = Create(services, new CoworkStateRead(null, null));
+
+        UiThread.Run(() => vm.BuildPluginCommand.Execute(null));
+
+        var warnings = UiThread.Run(() => vm.Review.CommandReview!.Warnings);
+        var bar = Assert.Single(warnings, w => w.Title == CoworkProtectionFacts.ClaudeCodeToo);
+        Assert.Contains("restarts the gateway", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("hooks", bar.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_review_has_no_claude_code_bar_when_claude_code_is_already_a_connector()
+    {
+        var services = await ServicesAsync(config: "guardrail:\n  enabled: true\n  connectors:\n    claudecode:\n      enabled: true\n    codex:\n      enabled: true\n");
+        var vm = Create(services, new CoworkStateRead(null, null));
+
+        UiThread.Run(() => vm.BuildPluginCommand.Execute(null));
+
+        var warnings = UiThread.Run(() => vm.Review.CommandReview!.Warnings);
+        Assert.DoesNotContain(warnings, w => w.Title == CoworkProtectionFacts.ClaudeCodeToo);
     }
 
     // ------------------------------------------------------------------ the command and the gate

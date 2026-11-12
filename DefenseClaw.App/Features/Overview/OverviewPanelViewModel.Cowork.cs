@@ -12,7 +12,8 @@ namespace DefenseClaw.App.ViewModels;
 /// Claude Cowork on the Overview (runtime 1.0.8, CUST-445): the Configuration card's "Cowork" row, the "What needs attention" row and its buttons, and the
 /// Cowork line under the Claude Code connector. All of it comes from the <c>cowork</c> object of the Overview's own <c>defenseclaw status --json</c> read
 /// (<see cref="CoworkProtection"/>); green means the CLI said <c>protected: true</c> and nothing else does. The live <c>/health</c> surface counters only add
-/// a note: they are the hook's own label on a call, not proof that Cowork is covered. Below 1.0.8 nothing here draws anything.
+/// a note: they are the hook's own label on a call, not a verdict. A Cowork that was never set up (<c>cowork_plugin_not_built</c>) is optional: no attention row,
+/// a neutral Configuration row. Below 1.0.8 nothing here draws anything.
 /// </summary>
 public sealed partial class OverviewPanelViewModel
 {
@@ -54,6 +55,12 @@ public sealed partial class OverviewPanelViewModel
         }
 
         var value = cowork.Detail.Length > 0 ? cowork.Detail : cowork.Protected ? "protected" : "not protected";
+        if (cowork.IsNotBuilt)
+        {
+            // Never set up: nothing the user asked for is missing, so this reads as optional (the CLI's sentence follows).
+            value = "Not set up · " + value;
+        }
+
         if (cowork.Step.Length > 0)
         {
             value += " · Next: " + cowork.Step;
@@ -67,7 +74,7 @@ public sealed partial class OverviewPanelViewModel
             value += " · last Cowork call seen live " + Relative(seen);
         }
 
-        rows.Add((CoworkRowLabel, value, cowork.Protected ? "Ok" : "Warn"));
+        rows.Add((CoworkRowLabel, value, cowork.Protected ? "Ok" : cowork.IsNotBuilt ? "Neutral" : "Warn"));
     }
 
     /// <summary>The <c>cowork</c> surface of the Claude Code connector in the last /health, or null (no gateway, no Claude Code connector, no labelled call yet).</summary>
@@ -91,7 +98,7 @@ public sealed partial class OverviewPanelViewModel
     }
 
     /// <summary>
-    /// The Cowork line appended to the Claude Code connector's counters: <c>Cowork: 12 calls, last 3m ago (labels, not proof of coverage)</c>. Empty for any other
+    /// The Cowork line appended to the Claude Code connector's counters: <c>Cowork: 12 calls, last 3m ago (the hook's own label; the Cowork row above is the verdict)</c>. Empty for any other
     /// connector, below 1.0.8, or while the gateway has counted no Cowork call. The counters are the hook's own label on each call, since the gateway started.
     /// </summary>
     private string CoworkSurfaceNote(string connectorName, ConnectorStatus status)
@@ -105,13 +112,15 @@ public sealed partial class OverviewPanelViewModel
 
         var calls = surface.Requests.ToString("N0", CultureInfo.CurrentCulture);
         var last = surface.LastActivityAt is { } seen ? ", last " + Relative(seen) : string.Empty;
-        return $" · Cowork: {calls} {(surface.Requests == 1 ? "call" : "calls")}{last} (labels, not proof of coverage)";
+        return $" · Cowork: {calls} {(surface.Requests == 1 ? "call" : "calls")}{last} (the hook's own label; the Cowork row above is the verdict)";
     }
 
     /// <summary>
-    /// The attention row for a Cowork that is not protected. A built plugin nobody uploaded is High: the user may believe Cowork is covered while every
-    /// Cowork call runs unchecked. Nothing when protected, when the state depends on the gateway (its own rows say what to do), on a managed installation
-    /// (the administrator's side; per-user Cowork setup is disabled there), or without the capability.
+    /// The attention row for a Cowork the user asked for and lacks: a plugin that was built but not uploaded, or whose Claude Code connector is off. Medium: the
+    /// CLI itself only warns for every reason (cmd_status.py:1298 at 1.0.8 draws each not-protected state in yellow, none as a failure). Nothing for a Cowork
+    /// that was never set up (<c>cowork_plugin_not_built</c>: Claude Desktop is installed, nothing was asked), when protected, when the state depends on the
+    /// gateway (its own rows say what to do), on a managed installation (the administrator's side), or without the capability.
+    /// The buttons are drawn off, with <see cref="AttentionActionBlockedReason"/> as their tip, when a press would be refused (a read-only installation), as the connector-skip rows do.
     /// </summary>
     private void AppendCoworkAttention(List<AttentionRow> rows)
     {
@@ -123,36 +132,39 @@ public sealed partial class OverviewPanelViewModel
         var detail = cowork.Detail;
         var withStep = cowork.Step.Length > 0 ? (detail + " " + cowork.Step).Trim() : detail;
 
+        if (cowork.IsNotBuilt)
+        {
+            return;
+        }
+
         if (cowork.AwaitsUpload)
         {
-            rows.Add(CoworkRow("Cowork is not protected yet: upload the plugin in Claude Desktop", withStep, "High", OpenCoworkWizardActionId, "Set up Cowork",
-                "Opens the Cowork wizard: where the plugin zip is, the upload steps in Claude Desktop, and a check of the result."));
-        }
-        else if (cowork.IsNotBuilt)
-        {
-            rows.Add(CoworkRow("Cowork is not protected", detail, "Medium", OpenCoworkWizardActionId, "Set up Cowork",
-                "Opens the Cowork wizard: builds the plugin, then shows the upload steps in Claude Desktop."));
+            rows.Add(CoworkRow("Cowork is not protected yet: upload the plugin in Claude Desktop", withStep, "Medium", OpenCoworkWizardActionId, "Set up Cowork",
+                "Opens the Cowork wizard: where the plugin zip is, the upload steps in Claude Desktop, and a check of the result.", AttentionActionBlockedReason(OpenCoworkWizardActionId, _snapshot)));
         }
         else if (cowork.IsClaudeCodeOff)
         {
             rows.Add(CoworkRow("Cowork is not protected: Claude Code is off", detail, "Medium", OpenClaudeCodeWizardActionId, "Set up Claude Code",
-                "Opens the Claude Code setup: the Cowork plugin runs the Claude Code connector's hooks."));
+                "Opens the Claude Code setup: the Cowork plugin runs the Claude Code connector's hooks.", AttentionActionBlockedReason(OpenClaudeCodeWizardActionId, _snapshot)));
         }
         else if (cowork.ReasonCode.Length > 0)
         {
             // A reason code a later runtime adds: say what the CLI says, offer nothing the app cannot back.
-            rows.Add(CoworkRow("Cowork is not protected", withStep, "Medium", null, null, null));
+            rows.Add(CoworkRow("Cowork is not protected", withStep, "Medium", null, null, null, null));
         }
     }
 
-    private static AttentionRow CoworkRow(string title, string detail, string severity, string? actionId, string? label, string? tip) => new()
+    private static AttentionRow CoworkRow(string title, string detail, string severity, string? actionId, string? label, string? tip, string? blockedReason) => new()
     {
         Title = title,
         Detail = detail,
         SeverityKey = severity,
         Actions = actionId is null
             ? AttentionActions.None
-            : new AttentionActions(new[] { new AttentionAction(actionId, label ?? actionId, tip ?? string.Empty) }),
+            : new AttentionActions(new[]
+            {
+                new AttentionAction(actionId, label ?? actionId, blockedReason ?? tip ?? string.Empty, Enabled: blockedReason is null),
+            }),
     };
 
     /// <summary>"Set up Cowork": the Cowork wizard, then a fresh <c>status --json</c> so the row shows what the wizard changed.</summary>

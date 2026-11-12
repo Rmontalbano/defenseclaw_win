@@ -741,7 +741,8 @@ public sealed partial class AuditPanelViewModel : PanelViewModelBase, IAcceptsNa
         ActionContains = string.IsNullOrWhiteSpace(ActionFilter) ? null : ActionFilter.Trim(),
         ActionAnyOf = PresetActionTerms(ActivePreset),
         RunId = string.IsNullOrWhiteSpace(RunFilter) ? null : RunFilter.Trim(),
-        From = SelectedRange.Since is { } window ? WindowStart(window) : null,
+        From = SelectedRange.Since is { } window ? WindowStart(window)
+            : SelectedConnector.CoworkOnly ? WindowStart(ConnectorOption.CoworkOnlyMaxWindow) : null,
         Limit = PageSize,
         After = after,
     }.WithSearch(ActiveSearch);
@@ -876,7 +877,13 @@ public sealed class ConnectorOption
     /// Claude Cowork rows of the claudecode connector (<see cref="AuditQuery.CoworkOnly"/>). Cowork is a surface of claudecode, not a connector: this option scopes to
     /// claudecode and narrows by the row's surface, and is offered only on a runtime that knows Cowork.
     /// </summary>
-    public static ConnectorOption CoworkOnlyOption { get; } = new("claudecode: Cowork only", CoworkRow.Connector, false, false, true);
+    public static ConnectorOption CoworkOnlyOption { get; } = new("claudecode: Cowork only (last 7 days at most)", CoworkRow.Connector, false, false, true);
+
+    /// <summary>
+    /// The longest look-back of the Cowork-only choice. Its rows are found by reading each claudecode row's stored envelope, which no index covers, so the choice
+    /// never runs without a lower bound: under "All time" it still starts this far back, and the option's label says so.
+    /// </summary>
+    public static TimeSpan CoworkOnlyMaxWindow { get; } = TimeSpan.FromDays(7);
 
     /// <summary>True for <see cref="CoworkOnlyOption"/>: the connector is claudecode and only its Cowork rows are listed.</summary>
     public bool CoworkOnly { get; }

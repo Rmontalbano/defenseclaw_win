@@ -1362,8 +1362,9 @@ public sealed class AuditReader
 
         if (query.CoworkOnly)
         {
-            // Claude Cowork rows: a constant predicate over the alias e (CoworkRow.SqlPredicate); no value is bound.
-            clauses.Add(CoworkRow.SqlPredicate);
+            // Claude Cowork rows: a constant predicate over the alias e; no value is bound. When the connector is already filtered to claudecode (the panel's
+            // choice), only the surface part is added, so the connector term above stays the one the planner is steered by.
+            clauses.Add(string.Equals(query.Connector?.Trim(), CoworkRow.Connector, StringComparison.OrdinalIgnoreCase) ? CoworkRow.SqlSurfacePredicate : CoworkRow.SqlPredicate);
         }
 
         if (!string.IsNullOrWhiteSpace(query.ActionContains))

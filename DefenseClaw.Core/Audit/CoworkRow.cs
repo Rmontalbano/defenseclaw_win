@@ -38,8 +38,14 @@ public static partial class CoworkRow
     /// <summary>
     /// The SQL condition (over <c>audit_events e</c>) for a Cowork row: upstream's filter. <c>instr</c> keeps the JSON parse to rows that can match. Constant text.
     /// </summary>
-    public const string SqlPredicate =
-        "(e.connector = '" + Connector + "' AND instr(e.structured_json, '\"surface\":\"cowork\"') > 0 AND " +
+    public const string SqlPredicate = "(e.connector = '" + Connector + "' AND " + SqlSurfacePredicate + ")";
+
+    /// <summary>
+    /// <see cref="SqlPredicate"/> without its connector term, for a query that already filters the connector (and so can steer the planner by it: a second, unsteerable
+    /// <c>e.connector = ...</c> inside this condition would pull the planner to <c>idx_audit_connector</c> and a sort of every claudecode row). Constant text.
+    /// </summary>
+    public const string SqlSurfacePredicate =
+        "(instr(e.structured_json, '\"surface\":\"cowork\"') > 0 AND " +
         "(json_extract(e.structured_json, '$.surface') = 'cowork' OR json_extract(e.structured_json, '$.extra.surface') = 'cowork'))";
 
     /// <summary>
@@ -77,14 +83,17 @@ public static partial class CoworkRow
 
         if (!string.IsNullOrEmpty(details))
         {
-            var legacy = HookJudgeFallback.LegacyPart(details);
+            // Only the closing run of key=value tokens counts, and only with a Cowork key beside the surface: a sentence in free details text
+            // (a tool argument, a user message) that happens to contain "surface=cowork" is not a Cowork row.
+            var legacy = KeyValueTail(HookJudgeFallback.LegacyPart(details));
             var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (Match match in Pair().Matches(legacy))
             {
                 _ = pairs.TryAdd(match.Groups[1].Value, match.Groups[2].Value);
             }
 
-            if (pairs.TryGetValue("surface", out var surface) && IsCowork(surface))
+            if (pairs.TryGetValue("surface", out var surface) && IsCowork(surface) &&
+                (pairs.ContainsKey("cowork_session_id") || pairs.ContainsKey("cowork_tool_class")))
             {
                 return new CoworkCall(
                     Identifier(pairs.GetValueOrDefault("cowork_session_id")),
@@ -94,6 +103,50 @@ public static partial class CoworkRow
         }
 
         return IsCowork(payloadSurface) ? new CoworkCall(string.Empty, string.Empty, string.Empty) : null;
+    }
+
+    /// <summary>The closing run of whitespace-separated <c>key=value</c> tokens of a details text (at most 64 of them); empty when the text does not end in one.</summary>
+    internal static string KeyValueTail(string text)
+    {
+        var start = text.Length;
+        var end = text.Length;
+        for (var count = 0; count < 64; count++)
+        {
+            while (end > 0 && char.IsWhiteSpace(text[end - 1]))
+            {
+                end--;
+            }
+
+            var tokenStart = end;
+            while (tokenStart > 0 && !char.IsWhiteSpace(text[tokenStart - 1]))
+            {
+                tokenStart--;
+            }
+
+            var equals = text.IndexOf('=', tokenStart, end - tokenStart);
+            if (end == tokenStart || equals <= tokenStart || !IsKey(text.AsSpan(tokenStart, equals - tokenStart)))
+            {
+                break;
+            }
+
+            start = tokenStart;
+            end = tokenStart;
+        }
+
+        return text[start..];
+    }
+
+    private static bool IsKey(ReadOnlySpan<char> key)
+    {
+        foreach (var c in key)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c == '_'))
+            {
+                return false;
+            }
+        }
+
+        return key.Length > 0;
     }
 
     /// <summary>The TUI's form of a Cowork row's event: <c>cowork:PreToolUse</c>.</summary>

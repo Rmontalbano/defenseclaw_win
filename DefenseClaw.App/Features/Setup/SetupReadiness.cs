@@ -11,6 +11,9 @@ public enum ReadinessStatus
     Pass,
     Warn,
     Fail,
+
+    /// <summary>A step the user never asked for (Cowork, Claude Desktop installed, never set up): drawn neutral, never counted as needing attention.</summary>
+    Optional,
 }
 
 /// <summary>What pressing a row's Fix does.</summary>
@@ -56,7 +59,11 @@ public sealed record ReadinessFix(
 }
 
 /// <summary>One row of the readiness checklist (the TUI's <c>ReadinessCheck</c>).</summary>
-public sealed record ReadinessCheck(string Title, string Detail, ReadinessStatus Status, ReadinessFix? Fix = null);
+public sealed record ReadinessCheck(string Title, string Detail, ReadinessStatus Status, ReadinessFix? Fix = null)
+{
+    /// <summary>True for a row that warns or fails: what the checklist counts as "needs attention". Passing and optional rows do not.</summary>
+    public bool NeedsAttention => Status is ReadinessStatus.Warn or ReadinessStatus.Fail;
+}
 
 /// <summary>
 /// What the checklist is built from: values the Setup panel already holds (the loaded config.yaml, the monitor's snapshot, the
@@ -319,7 +326,8 @@ public static class SetupReadiness
             fix = Wizard("setup claude-code", "claude-code", "setup", "claude-code");
         }
 
-        return new ReadinessCheck(Title, detail, ReadinessStatus.Warn, fix);
+        // Never set up (cowork_plugin_not_built): nothing the user asked for is missing, so the row is optional and not counted; the wizard is still the action.
+        return new ReadinessCheck(Title, cowork.IsNotBuilt ? "Not set up · " + detail : detail, cowork.IsNotBuilt ? ReadinessStatus.Optional : ReadinessStatus.Warn, fix);
     }
 
     private static bool IsHealthy(string state, bool orDisabled) =>

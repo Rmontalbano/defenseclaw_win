@@ -56,15 +56,30 @@ public sealed class CoworkReadinessTests
         Assert.Equal(titles.IndexOf("Guardrail") + 1, titles.IndexOf("Cowork"));
     }
 
-    [Theory]
-    [InlineData(CoworkReasonCodes.PluginNotBuilt)]
-    [InlineData(CoworkReasonCodes.NoEvents)]
-    public void A_plugin_that_is_not_built_or_not_uploaded_warns_and_opens_the_cowork_wizard(string code)
+    [Fact]
+    public void A_cowork_that_was_never_set_up_is_optional_not_counted_and_still_opens_the_cowork_wizard()
     {
-        var row = CoworkRow(Healthy() with { Cowork = State(false, code, "not protected: example", "defenseclaw setup cowork") });
+        var inputs = Healthy() with { Cowork = State(false, CoworkReasonCodes.PluginNotBuilt, "not protected: example", "defenseclaw setup cowork") };
+        var row = CoworkRow(inputs);
+
+        Assert.NotNull(row);
+        Assert.Equal(ReadinessStatus.Optional, row.Status);
+        Assert.False(row.NeedsAttention);
+        Assert.Equal("Not set up · not protected: example Next: defenseclaw setup cowork", row.Detail);
+        Assert.Equal(0, SetupReadiness.Build(inputs).Count(static c => c.NeedsAttention));
+        var fix = Assert.IsType<ReadinessFix>(row.Fix);
+        Assert.Equal("cowork", fix.WizardTarget);
+        Assert.Equal(CoworkProtectionFacts.SetupArgv, Assert.Single(fix.Steps).Argv);
+    }
+
+    [Fact]
+    public void A_plugin_that_is_not_uploaded_warns_and_opens_the_cowork_wizard()
+    {
+        var row = CoworkRow(Healthy() with { Cowork = State(false, CoworkReasonCodes.NoEvents, "not protected: example", "defenseclaw setup cowork") });
 
         Assert.NotNull(row);
         Assert.Equal(ReadinessStatus.Warn, row.Status);
+        Assert.True(row.NeedsAttention);
         Assert.Equal("not protected: example Next: defenseclaw setup cowork", row.Detail);
         var fix = Assert.IsType<ReadinessFix>(row.Fix);
         Assert.Equal(ReadinessFixKind.Wizard, fix.Kind);
@@ -116,8 +131,8 @@ public sealed class CoworkReadinessTests
     [Fact]
     public void A_cowork_row_that_warns_counts_as_one_item_needing_attention_in_the_checklist()
     {
-        var checks = SetupReadiness.Build(Healthy() with { Cowork = State(false, CoworkReasonCodes.PluginNotBuilt, "not protected: example") });
+        var checks = SetupReadiness.Build(Healthy() with { Cowork = State(false, CoworkReasonCodes.NoEvents, "not protected: example") });
 
-        Assert.Equal(1, checks.Count(static c => c.Status != ReadinessStatus.Pass));
+        Assert.Equal(1, checks.Count(static c => c.NeedsAttention));
     }
 }

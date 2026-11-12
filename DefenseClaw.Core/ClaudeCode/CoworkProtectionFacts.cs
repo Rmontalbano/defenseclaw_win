@@ -1,3 +1,6 @@
+using DefenseClaw.Core.Config;
+using DefenseClaw.Core.Setup;
+
 namespace DefenseClaw.Core.ClaudeCode;
 
 /// <summary>
@@ -44,6 +47,28 @@ public static class CoworkProtectionFacts
     /// </summary>
     public const string SurfaceCountersAreLabels =
         "These counters are the hook's own label on each call, counted since the gateway started; they do not prove Cowork is covered.";
+
+    /// <summary>The heading of the review bar that says <c>setup cowork</c> also turns on the Claude Code connector.</summary>
+    public const string ClaudeCodeToo = "This also turns on the Claude Code connector";
+
+    /// <summary>
+    /// What the review says when Claude Code is not a configured connector: <c>setup cowork --yes</c> sets it up first (cmd_setup_cowork.py:56-74, 230-234
+    /// at 1.0.8), which adds Claude Code's hooks and restarts the gateway.
+    /// </summary>
+    public const string ClaudeCodeTooMessage =
+        "Claude Code is not a configured connector on this computer. Cowork runs through the Claude Code connector's hooks, so this command also sets that connector up: " +
+        "it adds the DefenseClaw hooks to Claude Code's settings and restarts the gateway. If you only want Cowork and not Claude Code, cancel here.";
+
+    /// <summary>
+    /// True when the connector roster of <paramref name="config"/> holds Claude Code and the guardrail is not switched off: the app's reading of the CLI's
+    /// <c>_claudecode_enabled</c> (cowork.py:393-406 at 1.0.8). The per-connector switch is not read here, so a roster entry the CLI treats as off still reads as on.
+    /// </summary>
+    public static bool ClaudeCodeConfigured(ConfigDocument? config)
+    {
+        var reader = ConfigYamlReader.From(config);
+        return SetupStateLines.ActiveConnectors(reader).Contains("claudecode", StringComparer.Ordinal) &&
+               reader.Bool("guardrail", "enabled") != false;
+    }
 
     /// <summary>
     /// The command the Cowork wizard runs: build the plugin, set up Claude Code first if it is off (<c>--yes</c>), and neither open Claude nor wait for a

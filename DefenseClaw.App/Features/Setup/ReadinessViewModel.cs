@@ -32,6 +32,7 @@ public sealed class ReadinessRowViewModel
     {
         ReadinessStatus.Pass => "pass",
         ReadinessStatus.Warn => "warn",
+        ReadinessStatus.Optional => "optional",
         _ => "fail",
     };
 
@@ -40,6 +41,7 @@ public sealed class ReadinessRowViewModel
     {
         ReadinessStatus.Pass => "Ok",
         ReadinessStatus.Warn => "Warn",
+        ReadinessStatus.Optional => "Neutral",
         _ => "Bad",
     };
 
@@ -201,7 +203,7 @@ public sealed partial class ReadinessViewModel : ObservableObject
             Rows.Add(new ReadinessRowViewModel(check, OnFix));
         }
 
-        AttentionCount = checks.Count(c => c.Status != ReadinessStatus.Pass);
+        AttentionCount = checks.Count(static c => c.NeedsAttention);
         Summary = AttentionCount == 0
             ? "Everything the TUI checks is ready."
             : AttentionCount == 1 ? "1 item needs attention." : $"{AttentionCount} items need attention.";

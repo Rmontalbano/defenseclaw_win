@@ -36,10 +36,10 @@ public sealed class CoworkOverviewTests : IDisposable
             ? RuntimeProbeOutput.Ok("{\"name\":\"defenseclaw-cli\",\"version\":\"" + version + "\",\"schema_version\":1}")
             : RuntimeProbeOutput.Ok("Usage: defenseclaw [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  setup  Configure.\n"));
 
-    private async Task<OverviewPanelViewModel> PanelAsync(string version, InstallationContext? installation = null)
+    private async Task<OverviewPanelViewModel> PanelAsync(string version, InstallationContext? installation = null, string? config = null)
     {
         _services?.Dispose();
-        _services = TestServices.Create(_temp, Config, Runtime(version), installation);
+        _services = TestServices.Create(_temp, config ?? Config, Runtime(version), installation);
         _ = await _services.Runtime.RefreshAsync(force: true);
         return new OverviewPanelViewModel(_services);
     }
@@ -174,8 +174,7 @@ public sealed class CoworkOverviewTests : IDisposable
     // ------------------------------------------------------------------ the attention row
 
     [Theory]
-    [InlineData(CoworkReasonCodes.NoEvents, "Cowork is not protected yet: upload the plugin in Claude Desktop", "High", "open-cowork-wizard", "Set up Cowork")]
-    [InlineData(CoworkReasonCodes.PluginNotBuilt, "Cowork is not protected", "Medium", "open-cowork-wizard", "Set up Cowork")]
+    [InlineData(CoworkReasonCodes.NoEvents, "Cowork is not protected yet: upload the plugin in Claude Desktop", "Medium", "open-cowork-wizard", "Set up Cowork")]
     [InlineData(CoworkReasonCodes.ClaudeCodeOff, "Cowork is not protected: Claude Code is off", "Medium", "open-claude-code-wizard", "Set up Claude Code")]
     public async Task Each_state_that_is_not_protected_gets_its_row_and_its_button(string code, string title, string severity, string actionId, string label)
     {
@@ -193,7 +192,7 @@ public sealed class CoworkOverviewTests : IDisposable
     }
 
     [Fact]
-    public async Task A_plugin_that_awaits_upload_says_the_step_too_and_a_plugin_not_built_says_the_detail_alone()
+    public async Task A_plugin_that_awaits_upload_says_the_step_too_and_a_plugin_not_built_raises_no_row()
     {
         var vm = await PanelAsync("1.0.8");
 
@@ -201,7 +200,36 @@ public sealed class CoworkOverviewTests : IDisposable
         Assert.Equal("not protected yet: nothing since the build upload the zip, then start a Cowork task", Assert.Single(CoworkAttention(vm)).Detail);
 
         Show(vm, NotProtected(CoworkReasonCodes.PluginNotBuilt, "not protected: Claude Desktop is installed, but Cowork has no DefenseClaw plugin", "defenseclaw setup cowork"));
-        Assert.Equal("not protected: Claude Desktop is installed, but Cowork has no DefenseClaw plugin", Assert.Single(CoworkAttention(vm)).Detail);
+        Assert.Empty(CoworkAttention(vm));
+    }
+
+    /// <summary>The owner-machine shape: 1.0.8, one connector (codex), Claude Desktop installed, Cowork never set up.</summary>
+    [Fact]
+    public async Task A_never_set_up_cowork_on_a_codex_only_machine_raises_no_row_and_reads_neutral()
+    {
+        var vm = await PanelAsync("1.0.8", config: "guardrail:\n  enabled: true\n  connector: codex\n  connectors:\n    codex:\n      mode: observe\n      hook_fail_mode: open\n");
+
+        Show(vm, NotProtected(CoworkReasonCodes.PluginNotBuilt, "not protected: Claude Desktop is installed, but Cowork has no DefenseClaw plugin", "defenseclaw setup cowork"));
+
+        Assert.Empty(CoworkAttention(vm));
+        var row = CoworkRow(vm);
+        Assert.NotNull(row);
+        Assert.Equal("Neutral", row.ToneKey);
+        Assert.StartsWith("Not set up", row.Value, StringComparison.Ordinal);
+        Assert.Contains("Next: defenseclaw setup cowork", row.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_buttons_are_off_with_the_reason_as_their_tip_when_a_press_would_be_refused()
+    {
+        var vm = await PanelAsync("1.0.8", TestInstallations.Invalid());
+
+        Show(vm, NotProtected(CoworkReasonCodes.ClaudeCodeOff, "not protected: Claude Code is off", "defenseclaw setup claude-code"));
+
+        var action = Assert.Single(Assert.Single(CoworkAttention(vm)).Actions.Items);
+        Assert.False(action.Enabled);
+        Assert.Equal(vm.AttentionActionBlockedReason(action.Id, Snapshot()), action.Tip);
+        Assert.False(string.IsNullOrWhiteSpace(action.Tip));
     }
 
     [Theory]
@@ -315,7 +343,7 @@ public sealed class CoworkOverviewTests : IDisposable
         vm.Apply(Snapshot(HealthWithCowork(ClaudeCodeWithCowork(12))));
 
         var row = Assert.Single(vm.ConnectorRows, static r => r.Name == "claudecode");
-        Assert.Contains("Cowork: 12 calls, last 3m ago (labels, not proof of coverage)", row.Counters, StringComparison.Ordinal);
+        Assert.Contains("Cowork: 12 calls, last 3m ago (the hook's own label; the Cowork row above is the verdict)", row.Counters, StringComparison.Ordinal);
         Assert.StartsWith("40 requests", row.Counters, StringComparison.Ordinal);
     }
 

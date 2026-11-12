@@ -339,8 +339,18 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
             },
             onFinished: OnFinishedAsync,
             restartsGateway: CommandReview.RestartsGatewayFor(argv),
-            primaryText: again ? "Build the plugin again" : "Build the plugin");
+            primaryText: again ? "Build the plugin again" : "Build the plugin",
+            extraWarnings: ReviewWarnings());
     }
+
+    /// <summary>
+    /// What the review says beyond the generic bars: when Claude Code is not a configured connector, <c>setup cowork --yes</c> turns it on first
+    /// (cmd_setup_cowork.py:56-74, 230-234 at 1.0.8), adding Claude Code's hooks and restarting the gateway. A user of another agent only must read that before confirming.
+    /// </summary>
+    internal IReadOnlyList<CommandReviewWarning> ReviewWarnings() =>
+        CoworkProtectionFacts.ClaudeCodeConfigured(_services.Config)
+            ? Array.Empty<CommandReviewWarning>()
+            : new[] { new CommandReviewWarning(CoworkProtectionFacts.ClaudeCodeToo, CoworkProtectionFacts.ClaudeCodeTooMessage) };
 
     /// <summary>What the run did. Exit 0 is never shown as success: the state is read again and the upload block comes up.</summary>
     internal async Task OnFinishedAsync(DiscoverReviewResult result)

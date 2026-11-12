@@ -212,6 +212,26 @@ public sealed class HookRowLabelsTests : IDisposable
     }
 
     [Fact]
+    public void Free_text_in_the_details_that_mentions_the_surface_is_not_a_cowork_row()
+    {
+        // The pair is only read from the closing run of key=value tokens, and only beside a Cowork key.
+        Assert.Null(CoworkRow.Read("claudecode", null, "connector=claudecode surface=cowork was what the user typed in the prompt"));
+        Assert.Null(CoworkRow.Read("claudecode", null, "connector=claudecode surface=cowork"));
+        Assert.Null(CoworkRow.Read("claudecode", null, "tool said: surface=cowork cowork_tool_class=shell then more words"));
+        Assert.NotNull(CoworkRow.Read("claudecode", null, "free text first cowork_tool_class=shell surface=cowork"));
+        Assert.Equal("surface=cowork", CoworkRow.KeyValueTail("some words surface=cowork"));
+        Assert.Equal(string.Empty, CoworkRow.KeyValueTail("no pairs at the end"));
+    }
+
+    [Fact]
+    public void The_sql_predicate_keeps_its_connector_term_and_the_surface_part_has_none()
+    {
+        Assert.Contains("e.connector = 'claudecode'", CoworkRow.SqlPredicate, StringComparison.Ordinal);
+        Assert.Contains(CoworkRow.SqlSurfacePredicate, CoworkRow.SqlPredicate, StringComparison.Ordinal);
+        Assert.DoesNotContain("e.connector", CoworkRow.SqlSurfacePredicate, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Another_connector_is_never_cowork_and_bad_ids_are_dropped()
     {
         var structured = Structured("""{"extra":{"surface":"cowork","cowork_session_id":"not an id!","prompt_id":"ok-1","cowork_tool_class":"Shell!"}}""");

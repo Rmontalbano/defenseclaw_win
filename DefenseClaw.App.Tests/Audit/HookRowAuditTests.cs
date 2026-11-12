@@ -50,7 +50,7 @@ public sealed class HookRowAuditTests : IDisposable
 
     private string DbPath => Path.Combine(_temp.Path, "audit.db");
 
-    private async Task<AuditPanelViewModel> OpenAsync(string version)
+    private async Task<AuditPanelViewModel> OpenAsync(string version, bool withOldCoworkRow = false)
     {
         AuditTestDatabase.Create(DbPath, 0, newest: _clock.GetUtcNow());
         void Add(string id, double secondsAgo, string action, string severity, string? connector, string eventName, string target, string? details, string? structured = null) =>
@@ -64,6 +64,11 @@ public sealed class HookRowAuditTests : IDisposable
         Add("escalated", 5, "connector-hook", "CRITICAL", "claudecode", "legacy.audit.connector.hook", "PreToolUse", EscalatedDetails, EscalatedEnvelope);
         Add("finding", 6, "scan-finding", "CRITICAL", "claudecode", "finding.observed", "claudecode", "scanner=hook-rules rule_id=JUDGE-UNAVAILABLE-ESCALATED category=");
         Add("codex", 7, "connector-hook", "INFO", "codex", "legacy.audit.connector.hook", "PreToolUse", CoworkDetails.Replace("claudecode", "codex", StringComparison.Ordinal), CoworkEnvelope.Replace("claudecode", "codex", StringComparison.Ordinal));
+
+        if (withOldCoworkRow)
+        {
+            Add("cowork-old", 10 * 86400, "connector-hook", "INFO", "claudecode", "legacy.audit.connector.hook", "PreToolUse", CoworkDetails, CoworkEnvelope);
+        }
 
         _services = TestServices.Create(_temp, runtimeProbeRunner: FirstRun.FirstRunFailModeTests.Versioned(version));
         _ = await _services.Runtime.RefreshAsync();
@@ -150,7 +155,7 @@ public sealed class HookRowAuditTests : IDisposable
         var panel = await OpenAsync("1.0.8");
 
         var option = Assert.Single(panel.Connectors, c => c.CoworkOnly);
-        Assert.Equal("claudecode: Cowork only", option.Label);
+        Assert.Equal("claudecode: Cowork only (last 7 days at most)", option.Label);
         Assert.Equal("claudecode", option.Connector);
 
         // Cowork is no connector: the connector choices are the ones the database has, and nothing else is named cowork.
@@ -161,6 +166,25 @@ public sealed class HookRowAuditTests : IDisposable
         await panel.LastLoad;
 
         Assert.Equal(["cowork"], panel.Rows.Select(r => r.Id));
+    }
+
+    [Fact]
+    public async Task The_cowork_choice_never_runs_without_a_lower_bound_even_under_all_time()
+    {
+        var panel = await OpenAsync("1.0.8", withOldCoworkRow: true);
+        panel.SelectedRange = TimeRangeOption.AllTime;
+        await panel.LastLoad;
+
+        // All time, plain claudecode: the ten-day-old Cowork row is listed.
+        panel.SelectedConnector = panel.Connectors.First(c => c is { CoworkOnly: false, IncludeNull: false, PlatformOnly: false } && c.Connector == "claudecode");
+        await panel.LastLoad;
+        Assert.Contains(panel.Rows, r => r.Id == "cowork-old");
+
+        // All time, Cowork only: it starts seven days back, so the old row is not read, and the option's label says so.
+        panel.SelectedConnector = ConnectorOption.CoworkOnlyOption;
+        await panel.LastLoad;
+        Assert.Equal(["cowork"], panel.Rows.Select(r => r.Id));
+        Assert.Contains("7 days", ConnectorOption.CoworkOnlyOption.Label, StringComparison.Ordinal);
     }
 
     [Fact]
