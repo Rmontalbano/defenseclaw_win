@@ -63,6 +63,19 @@ public sealed class RecentAuditMetricsReaderTests : IDisposable
         Assert.Equal(4, result.Blocks);
     }
 
+    [Fact]
+    public async Task A_long_hook_refusal_is_not_a_policy_block_but_a_long_policy_block_is()
+    {
+        var reason = new string('r', 3000);
+        Add("guardrail-block", "hook blocked the call itself (fail-closed, PreToolUse): the agent got this block: \"" + reason + "\"; see logs/hook-failures.jsonl");
+        Add("guardrail-block", "policy decided this: " + reason);
+        Add("guardrail-block", "hook blocked the call itself (fail-closed, PreToolUse): short; see logs/hook-failures.jsonl");
+
+        var result = await Reader().ReadAsync();
+
+        Assert.Equal(1, result.Blocks);
+    }
+
     // ---- Per connector (the Overview scoped to one) ----
 
     [Fact]

@@ -55,7 +55,7 @@ internal static partial class AuditHookRows
         var structuredIds = gate.JudgeEscalation ? RuleIds(source) : Array.Empty<string>();
         var escalated = gate.JudgeEscalation
             && (JudgeEscalationFinding.AnyIn(structuredIds)
-                || (isHook && source.Details?.Contains(JudgeEscalationFinding.ReasonPrefix, StringComparison.Ordinal) == true));
+                || (isHook && JudgeEscalationFinding.ReasonIn(source.Details)));
 
         var rows = new List<DetailPair>(parsed.Count + 6);
         var labelled = false;

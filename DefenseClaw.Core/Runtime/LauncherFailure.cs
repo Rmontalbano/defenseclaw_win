@@ -33,6 +33,12 @@ public sealed partial record LauncherFailure(LauncherFailureKind Kind, string Li
 {
     private const string StatePrefix = "read per-user launcher state: ";
 
+    /// <summary>Longest line (or folder) kept for display; a longer one ends in an ellipsis.</summary>
+    internal const int MaxDisplayLength = 400;
+
+    private static string Clip(string text) =>
+        text.Length <= MaxDisplayLength ? text : string.Concat(text.AsSpan(0, MaxDisplayLength - 1), "\u2026");
+
     // Every line starts with "defenseclaw: " at the start of a line and is matched on its known phrase, so a Python traceback, a Click error
     // ("Error: ...", "Usage: defenseclaw ...") or a line that merely mentions the program name never matches.
     [GeneratedRegex(@"^defenseclaw: (?<body>[^\r\n]*)\r?$",RegexOptions.Multiline | RegexOptions.CultureInvariant, 250)]
@@ -57,16 +63,16 @@ public sealed partial record LauncherFailure(LauncherFailureKind Kind, string Li
             foreach (Match match in LineRegex().Matches(text))
             {
                 var body = match.Groups["body"].Value.TrimEnd();
-                var line = "defenseclaw: " + body;
+                var line = Clip("defenseclaw: " + body);
 
                 if (LinkRegex().Match(body) is { Success: true } link)
                 {
-                    return new LauncherFailure(LauncherFailureKind.DataFolderLink, line, link.Groups["path"].Value);
+                    return new LauncherFailure(LauncherFailureKind.DataFolderLink, line, Clip(link.Groups["path"].Value));
                 }
 
                 if (InspectRegex().Match(body) is { Success: true } inspect)
                 {
-                    return new LauncherFailure(LauncherFailureKind.InspectFailed, line, inspect.Groups["path"].Value);
+                    return new LauncherFailure(LauncherFailureKind.InspectFailed, line, Clip(inspect.Groups["path"].Value));
                 }
 
                 if (body.StartsWith("per-user launcher state is invalid", StringComparison.Ordinal))

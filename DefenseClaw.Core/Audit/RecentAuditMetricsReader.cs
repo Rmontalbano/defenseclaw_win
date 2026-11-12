@@ -280,10 +280,16 @@ public sealed class RecentAuditMetricsReader
     /// The statement. A database with no <c>details</c> column (a very old schema) reads NULL there: only the action can then count; one with no
     /// <c>connector</c> column reads NULL there, so nothing is attributed to a connector.
     /// </summary>
+    // At most DetailsLimit characters: a longer text keeps its start (the decision token, the refusal's prefix) and its last 128 characters (the
+    // refusal's "; see logs/hook-failures.jsonl" tail, which HookFailureRow.Parse needs), so a long refusal is still not counted as a policy block.
+    private static readonly string DetailsExpression = string.Create(
+        CultureInfo.InvariantCulture,
+        $"CASE WHEN length(details) > {DetailsLimit} THEN substr(details, 1, {DetailsLimit - 128}) || substr(details, -128) ELSE details END");
+
     private static string BuildSql(HashSet<string> columns)
     {
         var details = columns.Contains("details")
-            ? $"substr(details, 1, {DetailsLimit.ToString(CultureInfo.InvariantCulture)})"
+            ? DetailsExpression
             : "NULL";
 
         var connector = columns.Contains("connector") ? "connector" : "NULL";

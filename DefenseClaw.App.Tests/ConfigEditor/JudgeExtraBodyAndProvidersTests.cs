@@ -253,8 +253,8 @@ public class JudgeExtraBodyAndProvidersTests
         Assert.Contains(lines, l => l.StartsWith("guardrail.judge.extra_body:", StringComparison.Ordinal) && l.Contains("max_tokens", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.StartsWith("llm:", StringComparison.Ordinal) && l.Contains("requires base_url", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.StartsWith("guardrail.judge.llm:", StringComparison.Ordinal) && l.Contains("requires base_url", StringComparison.Ordinal));
-        Assert.Contains(lines, l => l.StartsWith("openshell.middleware.enabled:", StringComparison.Ordinal) && l.Contains("Remove it", StringComparison.Ordinal));
-        Assert.Equal(4, lines.Count);
+        Assert.DoesNotContain(lines, l => l.Contains("openshell", StringComparison.Ordinal));
+        Assert.Equal(3, lines.Count);
     }
 
     [Fact]
@@ -280,7 +280,7 @@ public class JudgeExtraBodyAndProvidersTests
         var newer = ConfigFormBuilder.Build(file, ConfigStore.Parse(file), _ => { }, _ => { }, Newer);
         var older = ConfigFormBuilder.Build(file, ConfigStore.Parse(file), _ => { }, _ => { }, Older);
 
-        Assert.Equal(4, newer.Warnings.Count);
+        Assert.Equal(3, newer.Warnings.Count);
         Assert.Empty(older.Warnings);
 
         var middleware = Flatten(newer.Sections).Single(f => f.Path == "openshell.middleware.enabled");
@@ -290,4 +290,20 @@ public class JudgeExtraBodyAndProvidersTests
 
     private static IEnumerable<FormField> Flatten(IEnumerable<FormGroup> groups) =>
         groups.SelectMany(g => g.Fields.Concat(Flatten(g.SubGroups)));
+
+    [Theory]
+    [InlineData("true")]
+    [InlineData("false")]
+    public void The_retired_middleware_key_is_information_not_a_warning_whatever_its_value(string value)
+    {
+        var yaml = "openshell:" + Environment.NewLine + "  middleware:" + Environment.NewLine + "    enabled: " + value + Environment.NewLine;
+
+        Assert.Empty(ConfigFieldFindings.For(Root(yaml), Newer));
+
+        var built = ConfigFormBuilder.Build(yaml, ConfigStore.Parse(yaml), _ => { }, _ => { }, Newer);
+        Assert.Empty(built.Warnings);
+        var field = Flatten(built.Sections).Single(f => f.Path == "openshell.middleware.enabled");
+        Assert.False(field.IsEditable);
+        Assert.Contains("Retired in 1.0.8", field.DisabledReason, StringComparison.Ordinal);
+    }
 }

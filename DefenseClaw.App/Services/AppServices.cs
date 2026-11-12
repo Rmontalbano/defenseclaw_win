@@ -182,6 +182,10 @@ public sealed class AppServices : IDisposable
 
         // What the connected runtime can do (Settings -> Advanced selects which one). Idle until Start; every capability is absent until it has answered.
         Runtime = new RuntimeService(Paths, runtimeProbeRunner);
+        // 1.0.7+ gateways skip a secret-reference gateway token; 1.0.5/1.0.6 use it as is, so the app does too until the runtime says otherwise.
+        TokenResolver.SkipSecretReferences = () => Runtime.Check(RuntimeCapability.SecretRefGatewayTokenSkipped).IsAvailable;
+        _tokenSkipApplied = TokenResolver.SkipSecretReferences();
+        Runtime.Changed += OnRuntimeChangedForToken;
 
         // "Use this defenseclaw.exe" (Settings → Connection) reaches every CLI lookup through the paths, before anything has looked one
         // up (the monitor and the tray start later) and again whenever the setting changes.
@@ -458,6 +462,21 @@ public sealed class AppServices : IDisposable
     };
 
     private void OnMonitorStateForAdmin(object? sender, GatewaySnapshotEventArgs e) => GatewayAdmin.RequestRefresh();
+
+    private bool _tokenSkipApplied;
+
+    // The token is resolved at config load and cached, so a runtime that turns out to be 1.0.7+ (or changes version) re-resolves it.
+    private void OnRuntimeChangedForToken(object? sender, EventArgs e)
+    {
+        var skip = TokenResolver.SkipSecretReferences();
+        if (skip == _tokenSkipApplied)
+        {
+            return;
+        }
+
+        _tokenSkipApplied = skip;
+        _ = Task.Run(ReloadConfig);
+    }
 
     private void OnRuntimeChangedForAdmin(object? sender, EventArgs e) => GatewayAdmin.RequestRefresh();
 
@@ -875,6 +894,7 @@ public sealed class AppServices : IDisposable
         Settings.Changed -= OnSettingsChangedForAdmin;
         Monitor.StateChanged -= OnMonitorStateForAdmin;
         Runtime.Changed -= OnRuntimeChangedForAdmin;
+        Runtime.Changed -= OnRuntimeChangedForToken;
         UnreadCounts.Dispose();
         AlertCounts.Dispose();
         RestartQueue.Dispose();

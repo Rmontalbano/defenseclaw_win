@@ -62,7 +62,7 @@ internal static partial class LogHookRows
             }
 
             hit |= StructuredDetailParser.IsHook(e.RowAction)
-                && e.RowDetails.Contains(JudgeEscalationFinding.ReasonPrefix, StringComparison.Ordinal);
+                && JudgeEscalationFinding.ReasonIn(e.RowDetails);
             if (hit)
             {
                 fields.Add(new LogField("Rule note", JudgeEscalationFinding.Explanation));

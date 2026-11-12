@@ -30,6 +30,16 @@ public class TokenResolverTests
             () => dotEnv ?? new Dictionary<string, string>(),
             new DictionaryEnvironmentReader(environment ?? new Dictionary<string, string>()));
 
+    /// <summary>The 1.0.7+ gateway skips a secret-reference token (RuntimeCapability.SecretRefGatewayTokenSkipped); the app then does too.</summary>
+    private static TokenResolver SkippingResolver(
+        IReadOnlyDictionary<string, string>? environment = null,
+        IReadOnlyDictionary<string, string>? dotEnv = null)
+    {
+        var resolver = Resolver(environment, dotEnv);
+        resolver.SkipSecretReferences = () => true;
+        return resolver;
+    }
+
     [Fact]
     public void Rung1_process_environment_wins()
     {
@@ -247,9 +257,9 @@ public class TokenResolverTests
     [InlineData("  {'source':'env','id':'Z'}\r\n")]
     public void Secret_reference_text_is_treated_as_absent_at_every_rung(string reference)
     {
-        var inEnvironment = Resolver(environment: new Dictionary<string, string> { [VariableName] = reference }).Resolve(ConfigWith());
-        var inDotEnv = Resolver(dotEnv: new Dictionary<string, string> { [VariableName] = reference }).Resolve(ConfigWith());
-        var inConfig = Resolver().Resolve(ConfigWith(literalToken: reference));
+        var inEnvironment = SkippingResolver(environment: new Dictionary<string, string> { [VariableName] = reference }).Resolve(ConfigWith());
+        var inDotEnv = SkippingResolver(dotEnv: new Dictionary<string, string> { [VariableName] = reference }).Resolve(ConfigWith());
+        var inConfig = SkippingResolver().Resolve(ConfigWith(literalToken: reference));
 
         Assert.False(inEnvironment.Found);
         Assert.False(inDotEnv.Found);
@@ -260,7 +270,7 @@ public class TokenResolverTests
     [Fact]
     public void Secret_reference_in_the_environment_falls_through_to_dot_env()
     {
-        var resolution = Resolver(
+        var resolution = SkippingResolver(
             environment: new Dictionary<string, string> { [VariableName] = PythonRepr },
             dotEnv: new Dictionary<string, string> { [VariableName] = "from-dotenv" }).Resolve(ConfigWith(literalToken: "from-config"));
 
@@ -271,7 +281,7 @@ public class TokenResolverTests
     [Fact]
     public void Secret_reference_in_the_environment_and_dot_env_falls_through_to_config()
     {
-        var resolution = Resolver(
+        var resolution = SkippingResolver(
             environment: new Dictionary<string, string> { [VariableName] = JsonRef },
             dotEnv: new Dictionary<string, string> { [VariableName] = PythonRepr }).Resolve(ConfigWith(literalToken: "from-config"));
 
@@ -282,7 +292,7 @@ public class TokenResolverTests
     [Fact]
     public void Secret_reference_note_names_the_rung_and_the_fix_but_never_the_value()
     {
-        var resolution = Resolver(dotEnv: new Dictionary<string, string> { [VariableName] = "{'source': 'file', 'id': 'invented-id'}" }).Resolve(ConfigWith());
+        var resolution = SkippingResolver(dotEnv: new Dictionary<string, string> { [VariableName] = "{'source': 'file', 'id': 'invented-id'}" }).Resolve(ConfigWith());
 
         Assert.NotNull(resolution.Note);
         Assert.Contains("defenseclaw doctor --fix", resolution.Note, StringComparison.Ordinal);

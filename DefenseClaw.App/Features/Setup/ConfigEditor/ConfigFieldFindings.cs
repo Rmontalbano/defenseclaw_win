@@ -48,10 +48,8 @@ public static class ConfigFieldFindings
             }
         }
 
-        if (profile.OpenShellMiddlewareRetired && Find(root, "openshell", "middleware", "enabled") is not null)
-        {
-            lines.Add("openshell.middleware.enabled: retired in 1.0.8, it had no effect. Remove it from config.yaml (config set refuses it; existing files with the key still load).");
-        }
+        // openshell.middleware.enabled (retired in 1.0.8) is not a finding: whatever its value, the form shows it read-only with the
+        // neutral "Retired in 1.0.8" note (ConfigFieldCatalog), and a warning here would also turn off the catalogue layout.
 
         return lines;
     }

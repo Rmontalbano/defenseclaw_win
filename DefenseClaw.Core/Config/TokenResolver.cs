@@ -103,26 +103,34 @@ public sealed partial class TokenResolver
     {
     }
 
+    /// <summary>
+    /// Whether the runtime ignores a secret-reference text used as the gateway token (RuntimeCapability.SecretRefGatewayTokenSkipped,
+    /// 1.0.7+). Read at every resolve. The default, and the answer while the runtime is unknown, is false: a 1.0.5/1.0.6 gateway
+    /// uses that text as its bearer, so the app sends it too.
+    /// </summary>
+    public Func<bool> SkipSecretReferences { get; set; } = static () => false;
+
     public TokenResolution Resolve(DefenseClawConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
 
         var variableName = config.Gateway.TokenEnv;
         string? note = null;
+        var skipReferences = SkipSecretReferences();
 
-        if (Clean(_environment.GetVariable(variableName), $"{variableName} in the process environment", ref note) is { } fromEnvironment)
+        if (Clean(_environment.GetVariable(variableName), $"{variableName} in the process environment", skipReferences, ref note) is { } fromEnvironment)
         {
             return new TokenResolution(new SecretValue(fromEnvironment), TokenSource.Environment, variableName) { Note = note };
         }
 
         var dotEnv = _dotEnvProvider();
         dotEnv.TryGetValue(variableName, out var rawDotEnv);
-        if (Clean(rawDotEnv, $"{variableName} in .env", ref note) is { } fromDotEnv)
+        if (Clean(rawDotEnv, $"{variableName} in .env", skipReferences, ref note) is { } fromDotEnv)
         {
             return new TokenResolution(new SecretValue(fromDotEnv), TokenSource.DotEnvFile, variableName) { Note = note };
         }
 
-        if (Clean(config.Gateway.Token, "gateway.token in config.yaml", ref note) is { } fromConfig)
+        if (Clean(config.Gateway.Token, "gateway.token in config.yaml", skipReferences, ref note) is { } fromConfig)
         {
             return new TokenResolution(new SecretValue(fromConfig), TokenSource.ConfigLiteral, variableName) { Note = note };
         }
@@ -134,11 +142,24 @@ public sealed partial class TokenResolver
     [GeneratedRegex(@"^\{.*[""']source[""']\s*:.*\}$", RegexOptions.CultureInvariant, 250)]
     private static partial Regex SecretRefText();
 
+    /// <summary>A pathological value that times the pattern out is simply not a reference (and never fails the config load).</summary>
+    internal static bool IsSecretRefText(string value)
+    {
+        try
+        {
+            return SecretRefText().IsMatch(value);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// The trimmed value, or null when it is absent, blank or holds a control character (in which
     /// case <paramref name="note"/> gains a sentence naming <paramref name="where"/>).
     /// </summary>
-    private static string? Clean(string? raw, string where, ref string? note)
+    private static string? Clean(string? raw, string where, bool skipReferences, ref string? note)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
@@ -146,7 +167,7 @@ public sealed partial class TokenResolver
         }
 
         var trimmed = raw.Trim();
-        if (SecretRefText().IsMatch(trimmed))
+        if (skipReferences && IsSecretRefText(trimmed))
         {
             // DefenseClaw 1.0.5/1.0.6 could save an OpenClaw secret reference as the token (upstream issue #1404). Never echo the value.
             var sentence = $"{where} holds an OpenClaw secret reference that an earlier DefenseClaw saved as the gateway token, so it was ignored; run defenseclaw doctor --fix.";

@@ -135,4 +135,17 @@ public sealed class LauncherFailureTests
 
         Assert.Equal(GenericReason, snapshot.UnknownReason);
     }
+
+    [Fact]
+    public void A_very_long_launcher_line_is_clipped_for_display_with_an_ellipsis()
+    {
+        var line = "defenseclaw: start per-user CLI: " + new string('x', 5000);
+
+        var failure = LauncherFailure.Recognise(line);
+
+        Assert.NotNull(failure);
+        Assert.Equal(LauncherFailure.MaxDisplayLength, failure.Line.Length);
+        Assert.EndsWith("\u2026", failure.Line, StringComparison.Ordinal);
+        Assert.True(failure.UserReason().Length < LauncherFailure.MaxDisplayLength + 200);
+    }
 }
