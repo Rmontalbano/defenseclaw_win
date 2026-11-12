@@ -1,6 +1,11 @@
 # Updating DefenseClaw for Windows
 
 This page covers updating the companion app itself. The DefenseClaw runtime (CLI and gateway) is upgraded from the Updates window; see "DefenseClaw 1.0" in the README.
+The app works with runtime 0.8.10 and 1.0.0 to 1.0.8. Updating the app does not change which runtime is installed; the app offers what the installed runtime has.
+
+For a runtime upgrade to 1.0.8, the Updates pre-flight warns when the installed version is outside the range that release supports upgrading from (1.0.2 to 1.0.7)
+and, from 1.0.7, when the data folder or `DEFENSECLAW_HOME` is a link, which the 1.0.7 launcher refuses. The upgrade still runs. A rollback puts back the
+config.yaml saved at upgrade time; its note names the settings made since then that the older release does not accept.
 
 ## Automatic checks
 

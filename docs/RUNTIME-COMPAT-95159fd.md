@@ -4,6 +4,18 @@ This page records what the app was checked against and what changed for it. It w
 `95159fd`; it requires a compatible runtime**. That commit is unreleased source that reports its own version as 1.0.0; nothing here is a
 statement about a release, and the 0.8.10 behaviour is unchanged (the 0.8.10 fixtures and suites are untouched and still pass).
 
+## Releases 1.0.0 to 1.0.8
+
+The app also covers the published releases 1.0.0 to 1.0.8. What a release added is gated by a capability judged from the version the runtime reports
+(`DefenseClaw.Core/Runtime/RuntimeCapability.cs`, `RuntimeProbe.cs`): a runtime that reports an older version, or none, gets what it got before. The 1.0.7 and
+1.0.8 behaviour was read from the release source at those tags and is tested with synthetic fixtures; no release was run by the tests.
+
+- 1.0.7: `DecisionModelCascade`, `AuditStoreCapWarning`, `AgentNotInstalledSkip`, `HookFailureBlockRows`, `JudgeEscalation`, `PerUserCliLauncher`,
+  `SecretRefGatewayTokenSkipped` (the gateway skips a gateway token that is a secret reference; below 1.0.7 the app uses that text as the token, as the gateway
+  does), `RuntimeMonitoringDegradedReasons`.
+- 1.0.8: `CoworkProtection`, `ClaudeDesktopDiscovery`, `JudgeExtraBody`, `OpenShellMiddlewareRetired`, `PowerShellBridgeFailClosed`, `OtlpReplay`,
+  `JudgeFallbackOnHookRows`, `OpenAiCompatibleProviders`.
+
 ## What "verified" means
 
 Nothing in this repository runs that source. The evidence is a set of **synthetic fixtures** under
