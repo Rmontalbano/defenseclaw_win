@@ -34,6 +34,7 @@ public sealed partial class OverviewPanelViewModel
 
     private const string OwnSocketsReason = "egress attribution is limited to this process's own sockets";
 
+    /// <summary>The reassurance is true only when every reason listed is the own-sockets one; a second, real reason is not "how a gateway that runs as you works".</summary>
     private static string DegradedTextFor(RuntimeHealthView view)
     {
         if (!view.Reported || !view.Degraded)
@@ -47,7 +48,7 @@ public sealed partial class OverviewPanelViewModel
         }
 
         var text = "The gateway reports runtime monitoring degraded: " + string.Join("; ", view.Reasons) + ".";
-        return view.Reasons.Any(static r => r.Contains(OwnSocketsReason, StringComparison.Ordinal))
+        return view.Reasons.All(static r => r.Contains(OwnSocketsReason, StringComparison.Ordinal))
             ? text + " That is how a gateway that runs as you normally works; this app keeps the gateway unelevated, so nothing needs to change."
             : text;
     }
@@ -72,7 +73,11 @@ public sealed partial class OverviewPanelViewModel
             GatewayElevation.Unknown,
             commandLineAudit: null);
         RuntimeMonitoringText = "Runtime monitoring: " + state.Summary;
-        RuntimeMonitoringDegradedText = DegradedTextFor(view);
+
+        // The line is new with 1.0.7 (RuntimeMonitoringDegradedReasons): a 1.0.3 to 1.0.6 gateway also sends degraded_reasons, but the Overview showed nothing for it there.
+        RuntimeMonitoringDegradedText = Services.Runtime.Capabilities.Has(RuntimeCapability.RuntimeMonitoringDegradedReasons)
+            ? DegradedTextFor(view)
+            : string.Empty;
     }
 
     /// <summary>Opens the Setup hub on the Runtime monitoring card. Changes nothing.</summary>

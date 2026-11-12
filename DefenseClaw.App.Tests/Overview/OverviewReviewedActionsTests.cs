@@ -620,4 +620,20 @@ public sealed class OverviewReviewedActionsTests : IDisposable
         Assert.Equal("List policies", vm.DiagnosticTitle);
         Assert.Contains("'defenseclaw' was not found", vm.DiagnosticMessage, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [MemberData(nameof(ReadOnlyInstallations))]
+    public async Task The_buttons_that_only_open_another_page_still_work_on_a_read_only_installation(string which)
+    {
+        var vm = Panel(AiOn, installation: ReadOnly(which));
+
+        await vm.RunAttentionActionCommand.ExecuteAsync(OverviewPanelViewModel.OpenAuditCapConfigActionId);
+        Assert.Equal("setup", Services.Navigation.Pending!.PanelId);
+
+        await vm.RunAttentionActionCommand.ExecuteAsync(OverviewPanelViewModel.OpenProtectedFileAlertsActionId);
+        Assert.Equal("alerts", Services.Navigation.Pending!.PanelId);
+
+        // The installation's sentence is still the reason for every button that changes something.
+        Assert.NotNull(vm.AttentionActionBlockedReason("hook-bridge-setup:codex", Running()));
+    }
 }

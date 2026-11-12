@@ -673,7 +673,7 @@ public sealed partial class OverviewPanelViewModel
             }
         }
 
-        // 1.0.8 (OtlpReplay): what the counters count, and what an open circuit means for an OTLP destination (dispatch.go): the records wait in the queue and go again.
+        // 1.0.8 (OtlpReplay): what the counters count, and what an open circuit means for an OTLP destination (dispatch.go: RetryUntilClosed is set only when the install is not a Secure Client one, and /health does not say which it is, so the sentence covers both).
         if (otlpReplay)
         {
             if (EndpointDisplay.ScrubText(Text(item, "counters_scope")) is { Length: > 0 } scope)
@@ -684,7 +684,7 @@ public sealed partial class OverviewPanelViewModel
             var circuit = Text(item, "circuit_state");
             if (Text(item, "kind") == "otlp" && retried > 0 && circuit is "open" or "half_open")
             {
-                parts.Add($"circuit {circuit}: the gateway keeps these records queued and sends them again when the collector answers; retried counts those attempts, dropped counts what a full queue could not keep");
+                parts.Add($"circuit {circuit}: the gateway is not sending to this collector. On a standard install it keeps these records queued and sends them again when the collector answers; a Secure Client install does not retry without limit, so some may be dropped. retried counts the attempts, dropped counts what could not be kept");
             }
         }
 

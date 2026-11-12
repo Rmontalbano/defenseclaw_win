@@ -12,7 +12,7 @@ namespace DefenseClaw.App.Tests.Overview;
 /// <summary>
 /// What the Overview says about the gateway's own health signals from DefenseClaw 1.0.7 and 1.0.8, synthetic and verified from source only: the audit store's
 /// size-cap warning (1.0.7; telemetry.details.retention_state "warning"), the OTLP counters' scope and an open circuit (1.0.8), and the reasons the runtime
-/// monitoring block gives for being degraded (1.0.3 on). Each runs against the same fixture on a runtime that has the capability and one that does not.
+/// monitoring block gives for being degraded (1.0.7). Each runs against the same fixture on a runtime that has the capability and one that does not.
 /// </summary>
 [Collection(UiCollection.Name)]
 public sealed class OverviewHealthSignalsTests : IDisposable
@@ -152,7 +152,10 @@ public sealed class OverviewHealthSignalsTests : IDisposable
         var detail = Assert.Single(vm.ObservabilityRows).Detail;
         Assert.StartsWith("activated · 5 accepted · 3 delivered · 2 retried · 0 dropped · 0 rejected", detail, StringComparison.Ordinal);
         Assert.Contains("counters: log and trace records", detail, StringComparison.Ordinal);
-        Assert.Contains("circuit open: the gateway keeps these records queued and sends them again when the collector answers", detail, StringComparison.Ordinal);
+        Assert.Contains("circuit open: the gateway is not sending to this collector. On a standard install it keeps these records queued and sends them again when the collector answers", detail, StringComparison.Ordinal);
+
+        // dispatch.go sets RetryUntilClosed only off a Secure Client install and /health does not say which this is, so the sentence says both.
+        Assert.Contains("a Secure Client install does not retry without limit", detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -182,7 +185,7 @@ public sealed class OverviewHealthSignalsTests : IDisposable
     [Fact]
     public async Task A_degraded_runtime_block_names_the_reasons_and_the_per_user_one_is_calm()
     {
-        var vm = await PanelAsync("1.0.6");
+        var vm = await PanelAsync("1.0.7");
 
         vm.Apply(Snapshot(
             "\"destination_count\":0",
@@ -197,9 +200,45 @@ public sealed class OverviewHealthSignalsTests : IDisposable
     }
 
     [Fact]
+    public async Task The_calm_sentence_needs_every_reason_to_be_the_per_user_one()
+    {
+        var vm = await PanelAsync("1.0.7");
+
+        vm.Apply(Snapshot(
+            "\"destination_count\":0",
+            "{\"state\":\"running\",\"details\":{\"degraded\":true,\"degraded_reasons\":[\"" + OwnSockets + "\",\"security event log reader failed: access denied\"]}}"));
+
+        var text = vm.RuntimeMonitoringDegradedText;
+        Assert.Contains("shadow egress partially covered", text, StringComparison.Ordinal);
+        Assert.Contains("security event log reader failed: access denied", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("nothing needs to change", text, StringComparison.Ordinal);
+
+        vm.Apply(Snapshot(
+            "\"destination_count\":0",
+            "{\"state\":\"running\",\"details\":{\"degraded\":true,\"degraded_reasons\":[\"" + OwnSockets + "\",\"" + OwnSockets + "\"]}}"));
+        Assert.Contains("nothing needs to change", vm.RuntimeMonitoringDegradedText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("1.0.3")]
+    [InlineData("1.0.6")]
+    public async Task Before_1_0_7_the_degraded_line_is_not_shown_as_it_never_was(string version)
+    {
+        var vm = await PanelAsync(version);
+
+        vm.Apply(Snapshot(
+            "\"destination_count\":0",
+            "{\"state\":\"running\",\"details\":{\"degraded\":true,\"degraded_reasons\":[\"" + OwnSockets + "\"]}}"));
+
+        Assert.True(vm.ShowRuntimeMonitoring);
+        Assert.Equal(string.Empty, vm.RuntimeMonitoringDegradedText);
+        Assert.False(vm.HasRuntimeMonitoringDegraded);
+    }
+
+    [Fact]
     public async Task Another_reason_gets_no_per_user_sentence_and_no_reason_says_so()
     {
-        var vm = await PanelAsync("1.0.6");
+        var vm = await PanelAsync("1.0.7");
 
         vm.Apply(Snapshot("\"destination_count\":0", "{\"state\":\"running\",\"details\":{\"degraded\":true,\"degraded_reasons\":[\"process table unreadable: access denied\"]}}"));
         Assert.Equal("The gateway reports runtime monitoring degraded: process table unreadable: access denied.", vm.RuntimeMonitoringDegradedText);
@@ -211,7 +250,7 @@ public sealed class OverviewHealthSignalsTests : IDisposable
     [Fact]
     public async Task A_runtime_that_is_not_degraded_or_sends_no_block_says_nothing()
     {
-        var vm = await PanelAsync("1.0.6");
+        var vm = await PanelAsync("1.0.7");
 
         vm.Apply(Snapshot("\"destination_count\":0", "{\"state\":\"running\",\"details\":{\"degraded\":false}}"));
         Assert.Equal(string.Empty, vm.RuntimeMonitoringDegradedText);

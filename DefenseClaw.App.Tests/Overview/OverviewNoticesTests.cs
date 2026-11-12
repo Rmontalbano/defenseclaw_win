@@ -321,7 +321,7 @@ public sealed class OverviewNoticesTests : IDisposable
     // ------------------------------------------------------------------ order, and the quiet case
 
     [Fact]
-    public void The_new_rows_sit_where_the_tui_puts_them_gateway_first_then_the_roster_then_the_scanner_after_the_guardrail()
+    public void The_new_rows_sit_most_severe_first_then_where_the_tui_puts_them_the_scanner_after_the_guardrail()
     {
         var vm = Panel("guardrail:\n  enabled: false\n  connectors:\n    claudecode: {}\n    ClaudeCode: {}\n");
 
@@ -332,9 +332,10 @@ public sealed class OverviewNoticesTests : IDisposable
         var roster = titles.IndexOf("Connector roster degraded");
         var guardrail = titles.IndexOf("Guardrail not configured");
         var scanner = titles.IndexOf("skill-scanner not on PATH");
-        Assert.True(starting >= 0 && starting < roster, string.Join(" | ", titles));
-        Assert.True(roster < guardrail, string.Join(" | ", titles));
+        // Sorted by severity (stable): the Critical roster row, then the High guardrail and scanner rows in the TUI's order, then the Info "starting" row.
+        Assert.True(roster >= 0 && roster < guardrail, string.Join(" | ", titles));
         Assert.True(guardrail < scanner, string.Join(" | ", titles));
+        Assert.True(scanner < starting, string.Join(" | ", titles));
     }
 
     [Fact]

@@ -907,7 +907,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             }
         }
 
-        SyncByEquality(Attention, rows, static row => row.Title);
+        // Only the first AttentionRowsShown rows are on screen, so the most severe come first. A stable sort: rows of one severity keep the order they were built in.
+        var ordered = rows.Select(static (row, index) => (row, index)).OrderBy(static pair => AttentionSeverityRank(pair.row.SeverityKey)).ThenBy(static pair => pair.index).Select(static pair => pair.row).ToList();
+        SyncByEquality(Attention, ordered, static row => row.Title);
         RenderVisibleAttention();
 
         // Every input of the reviewed buttons (config.yaml, the doctor cache, the snapshot) changes with a rebuild of this list: they follow it.
@@ -915,6 +917,17 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         RefreshRestartPendingActions();
         RefreshStartGatewayAttention();
     }
+
+    /// <summary>Critical first, then High, Medium, Low (and any word not known), Info, and the all-clear row last.</summary>
+    private static int AttentionSeverityRank(string severityKey) => severityKey switch
+    {
+        "Critical" => 0,
+        "High" => 1,
+        "Medium" => 2,
+        "Info" => 4,
+        "Ok" => 5,
+        _ => 3,
+    };
 
     /// <summary>How many rows "What needs attention" shows before "Show all": the Mac's top three.</summary>
     internal const int AttentionRowsShown = 3;

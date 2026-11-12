@@ -33,11 +33,17 @@ public sealed partial class OverviewPanelViewModel
             : null;
     }
 
+    /// <summary>
+    /// Buttons that only open another page of this app (the config editor on the audit cap, Alerts on protected files) and change nothing, so a read-only
+    /// installation does not switch them off.
+    /// </summary>
+    private static bool IsNavigationOnlyAction(string id) => id is OpenAuditCapConfigActionId or OpenProtectedFileAlertsActionId;
+
     /// <summary>A button on an attention row: opens its review. Does nothing for an id it does not know or one that is off now.</summary>
     [RelayCommand]
     private async Task RunAttentionAction(string? id)
     {
-        if (string.IsNullOrEmpty(id) || AttentionActionBlockedReason(id, _snapshot) is not null)
+        if (string.IsNullOrEmpty(id) || (!IsNavigationOnlyAction(id) && AttentionActionBlockedReason(id, _snapshot) is not null))
         {
             return;
         }

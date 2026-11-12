@@ -341,7 +341,7 @@ public sealed class AttentionRowTests : IDisposable
     }
 
     [Fact]
-    public void Several_signals_stack_in_the_order_they_are_checked_and_the_ok_row_disappears()
+    public void Several_signals_stack_most_severe_first_and_in_the_order_they_are_checked_within_a_severity_and_the_ok_row_disappears()
     {
         var vm = Panel("guardrail:\n  connectors:\n    claudecode:\n      mode: observe\n      hook_fail_mode: closed\n");
         var drift = Drift("closed", "closed", "observe");
@@ -359,11 +359,11 @@ public sealed class AttentionRowTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "The gateway answered, but not cleanly",
-                "claudecode: observe mode with a fail-closed hook",
                 "claudecode: settings.json overrides the hook fail mode",
                 "2 CRITICAL alerts in the last poll",
+                "claudecode: observe mode with a fail-closed hook",
                 "1 HIGH finding in the last 25 alerts",
+                "The gateway answered, but not cleanly",
             },
             vm.Attention.Select(r => r.Title).ToArray());
         Assert.DoesNotContain(vm.Attention, r => r.Title == "Nothing needs attention");
