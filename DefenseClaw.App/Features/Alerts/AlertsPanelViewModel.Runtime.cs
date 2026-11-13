@@ -171,5 +171,6 @@ public sealed partial class AlertItem
     private static string FactOf(RuntimeAlertRow row, string name) =>
         row.Facts.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.Ordinal))?.Value ?? string.Empty;
 
-    private static string RuntimeRule(RuntimeAlertRow row) => FactOf(row, "rule");
+    /// <summary>The runtime's rule as the headline: the sentence of <see cref="RuleIdLabels"/> for an id that has one, else the runtime's own <c>ID: title</c>.</summary>
+    private static string RuntimeRule(RuntimeAlertRow row) => RuleIdLabels.HeadlineOfRuleFact(FactOf(row, "rule"));
 }

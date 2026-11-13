@@ -12,16 +12,17 @@ namespace DefenseClaw.App.ViewModels;
 /// <param name="JudgeEscalation">1.0.7: the judge-unavailable finding (<see cref="RuntimeCapability.JudgeEscalation"/>).</param>
 /// <param name="JudgeFallback">1.0.8: <c>judge_fallback</c> on a hook row (<see cref="RuntimeCapability.JudgeFallbackOnHookRows"/>).</param>
 /// <param name="Cowork">1.0.8: Claude Cowork rows (<see cref="RuntimeCapability.CoworkProtection"/>).</param>
-internal readonly record struct HookRowGate(bool HookFailure, bool JudgeEscalation, bool JudgeFallback, bool Cowork)
+/// <param name="AlertRan">1.0.9: an <c>allow</c> hook row in action mode reads <c>alert</c> in <c>alerts --json</c> (<see cref="RuntimeCapability.ShellProtectedFileFloor"/> marks a 1.0.9 runtime).</param>
+internal readonly record struct HookRowGate(bool HookFailure, bool JudgeEscalation, bool JudgeFallback, bool Cowork, bool AlertRan = false)
 {
     /// <summary>No label: what runtimes before 1.0.7 get.</summary>
     public static HookRowGate None => default;
 
     /// <summary>Every label (a test's shorthand for a 1.0.8 runtime).</summary>
-    public static HookRowGate All => new(true, true, true, true);
+    public static HookRowGate All => new(true, true, true, true, true);
 
     /// <summary>True when any label is on.</summary>
-    public bool Any => HookFailure || JudgeEscalation || JudgeFallback || Cowork;
+    public bool Any => HookFailure || JudgeEscalation || JudgeFallback || Cowork || AlertRan;
 
     /// <summary>The gate for what the runtime can do.</summary>
     public static HookRowGate From(RuntimeCapabilities capabilities)
@@ -31,7 +32,8 @@ internal readonly record struct HookRowGate(bool HookFailure, bool JudgeEscalati
             capabilities.Has(RuntimeCapability.HookFailureBlockRows),
             capabilities.Has(RuntimeCapability.JudgeEscalation),
             capabilities.Has(RuntimeCapability.JudgeFallbackOnHookRows),
-            capabilities.Has(RuntimeCapability.CoworkProtection));
+            capabilities.Has(RuntimeCapability.CoworkProtection),
+            capabilities.Has(RuntimeCapability.ShellProtectedFileFloor));
     }
 }
 
@@ -136,24 +138,91 @@ public sealed partial class AlertItem
             notes.Add(JudgeEscalationFinding.Explanation);
         }
 
+        AddRuleIdLabels(row, details, notes);
+        if (gate.AlertRan && StructuredDetailParser.IsHook(Action) && string.Equals(RowFact(row, "decision"), "alert", StringComparison.OrdinalIgnoreCase))
+        {
+            // alerts --json prints decision "alert" for a call that ran and was recorded as an alert (cmd_alerts.py@1.0.9:296-297; 1.0.8 said "allow").
+            facts.Add(new AlertField("Call outcome", "Ran; recorded as an alert"));
+        }
+
         if (gate.JudgeFallback && StructuredDetailParser.IsHook(Action) && HookJudgeFallback.Read(HookStructured, details) is { Length: > 0 } reason)
         {
             facts.Add(new AlertField(HookJudgeFallback.FieldName, HookJudgeFallback.Short(reason)));
             notes.Add(HookJudgeFallback.Describe(reason));
         }
 
-        if (gate.Cowork && CoworkRow.Read(row?.Connector ?? Connector, HookStructured, details) is { } call)
+        var connector = row?.Connector ?? Connector;
+        var fromRuntimeSurface = false;
+        var coworkCall = gate.Cowork ? CoworkRow.Read(connector, HookStructured, details) : null;
+        if (gate.Cowork && coworkCall is null && CoworkRow.FromRuntimeSurface(connector, RowFact(row, "surface")) is { } bySurface)
+        {
+            // A row only the runtime listed has no envelope; 1.0.9 prints its surface (cmd_alerts.py@1.0.9:829-830). A row both sources return was read above, so it is marked once.
+            coworkCall = bySurface;
+            fromRuntimeSurface = true;
+        }
+
+        if (coworkCall is { } call)
         {
             cowork = true;
             facts.AddRange(CoworkRow.Facts(call).Select(p => new AlertField(p.Key, p.Value)));
-            if (StructuredDetailParser.IsHook(Action) && HookEvent(details) is { Length: > 0 } hookEvent && !TargetRef.StartsWith(CoworkRow.Surface + ":", StringComparison.Ordinal))
+            if (!TargetRef.StartsWith(CoworkRow.Surface + ":", StringComparison.Ordinal))
             {
-                TargetRef = CoworkRow.Target(hookEvent);
+                if (fromRuntimeSurface && CoworkRow.RetargetStored(TargetRef) is { Length: > 0 } stored)
+                {
+                    TargetRef = stored;
+                }
+                else if (StructuredDetailParser.IsHook(Action) && HookEvent(details) is { Length: > 0 } hookEvent)
+                {
+                    TargetRef = CoworkRow.Target(hookEvent);
+                }
             }
         }
 
         HookRows = facts.Count == 0 && notes.Count == 0 && !refusalRow && !cowork ? HookRowState.Empty : new HookRowState(refusalRow, cowork, facts, notes);
         return this;
+    }
+
+    /// <summary>
+    /// The sentence for a rule id of <see cref="RuleIdLabels"/> in place of a raw headline, and for the shell-command limit rule what happened to the call, from the
+    /// row's own decision and action fields (never from the runtime version). The judge-unavailable id is labelled above.
+    /// </summary>
+    private void AddRuleIdLabels(RuntimeAlertRow? row, string? details, List<string> notes)
+    {
+        var ids = RuleIdList(row).Prepend(RuleId).Where(id => id.Length > 0 && !JudgeEscalationFinding.Is(id)).ToList();
+        if (RuleIdLabels.Sentence(RuleId) is { } sentence && !JudgeEscalationFinding.Is(RuleId) && HeadlineIsRaw(details))
+        {
+            Headline = sentence;
+        }
+
+        if (ids.Any(RuleIdLabels.IsCompoundLimit) && RuleIdLabels.CompoundLimitOutcome(RowFact(row, "decision"), details) is { } outcome)
+        {
+            notes.Add(outcome);
+        }
+    }
+
+    private static string RowFact(RuntimeAlertRow? row, string name) =>
+        row?.Facts.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.Ordinal))?.Value ?? string.Empty;
+
+    /// <summary>The rule ids the row names: the structured <c>rule_ids</c> array, the runtime's <c>rule_ids</c> fact and the id of its <c>rule</c> fact.</summary>
+    private IEnumerable<string> RuleIdList(RuntimeAlertRow? row)
+    {
+        var ids = new List<string>();
+        if (HookStructured is { } structured && structured.TryGetValue("rule_ids", out var array) && array.ValueKind == JsonValueKind.Array)
+        {
+            ids.AddRange(array.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString() ?? string.Empty));
+        }
+
+        if (RowFact(row, "rule_ids") is { Length: > 0 } fact)
+        {
+            ids.AddRange(fact.Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        if (RuleIdLabels.IdOfRuleFact(RowFact(row, "rule")) is { Length: > 0 } fromRule)
+        {
+            ids.Add(fromRule);
+        }
+
+        return ids;
     }
 
     /// <summary>True when the headline is no better than the raw text of the finding: empty, the action, the rule id, <c>finding.observed</c> or the scanner's details line.</summary>

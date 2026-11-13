@@ -42,6 +42,12 @@ public sealed record CoworkProtection(
     public bool IsClaudeCodeOff => !Protected && string.Equals(ReasonCode, CoworkReasonCodes.ClaudeCodeOff, StringComparison.Ordinal);
 
     /// <summary>
+    /// The plugin was built by an older DefenseClaw and uses an older Windows hook command (1.0.9, <c>cowork_plugin_stale</c>): it has to be built again and
+    /// uploaded again. Every Windows plugin built by 1.0.8 reads this way on 1.0.9.
+    /// </summary>
+    public bool IsPluginStale => !Protected && string.Equals(ReasonCode, CoworkReasonCodes.PluginStale, StringComparison.Ordinal);
+
+    /// <summary>
     /// The state depends on the gateway (down, skipped Claude Code at start, authenticated status unreadable): the gateway's own rows say what to do,
     /// so these are not Cowork's to raise again.
     /// </summary>
@@ -111,7 +117,7 @@ public sealed record CoworkProtection(
             : null;
 }
 
-/// <summary>The six <c>reason_code</c> values of the <c>cowork</c> status object (cli/defenseclaw/cowork.py, <c>cowork_status</c>, 1.0.8).</summary>
+/// <summary>The seven <c>reason_code</c> values of the <c>cowork</c> status object (cli/defenseclaw/cowork.py, <c>cowork_status</c>; six at 1.0.8, <see cref="PluginStale"/> added at 1.0.9).</summary>
 public static class CoworkReasonCodes
 {
     /// <summary>Claude Desktop is installed, but no Cowork plugin was built. Step: <c>defenseclaw setup cowork</c>.</summary>
@@ -129,12 +135,18 @@ public static class CoworkReasonCodes
     /// <summary>The gateway's authenticated status is unavailable. Step: <c>defenseclaw-gateway status</c>.</summary>
     public const string HealthUnavailable = "cowork_health_unavailable";
 
+    /// <summary>
+    /// The plugin uses an older Windows hook command (cowork.py@1.0.9:685-692). Evaluated after <see cref="HealthUnavailable"/> and before <see cref="NoEvents"/>;
+    /// only runtimes from 1.0.9 send it. Step: <c>defenseclaw setup cowork</c>, then upload the new zip.
+    /// </summary>
+    public const string PluginStale = "cowork_plugin_stale";
+
     /// <summary>A plugin was built, but no Cowork event reached DefenseClaw since. Step: upload the zip in Claude Desktop, then start a Cowork task.</summary>
     public const string NoEvents = "cowork_no_events";
 
-    /// <summary>All six, in the CLI's order of evaluation.</summary>
+    /// <summary>All seven, in the CLI's order of evaluation.</summary>
     public static IReadOnlyList<string> All { get; } = new[]
     {
-        PluginNotBuilt, ClaudeCodeOff, GatewayDown, ClaudeCodeNotStarted, HealthUnavailable, NoEvents,
+        PluginNotBuilt, ClaudeCodeOff, GatewayDown, ClaudeCodeNotStarted, HealthUnavailable, PluginStale, NoEvents,
     };
 }

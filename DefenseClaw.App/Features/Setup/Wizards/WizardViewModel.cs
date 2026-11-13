@@ -1167,6 +1167,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                     : Array.Empty<CommandReviewWarning>())
                 .Concat(LocalStackReview.Warnings(argv, _services.LocalStack.Status))
                 .Concat(SplunkDashboardsReview.Warnings(argv))
+                .Concat(CoworkUninstallReview.Warnings(argv, _services.Runtime.Capabilities, _services.Paths.DataDirectory))
                 .Concat(WizardCautions.For(argv))
                 .Concat(DecisionModelReview.Warnings(argv))
                 .Concat(CodexRunningWarnings(argv))

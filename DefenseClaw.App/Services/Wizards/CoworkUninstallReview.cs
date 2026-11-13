@@ -14,9 +14,17 @@ public static class CoworkUninstallReview
     /// <summary>The heading of the bar.</summary>
     public const string Title = "Remove the Cowork plugin in Claude Desktop";
 
+    /// <summary>The heading of the bar for <c>setup remove claudecode</c> (1.0.9, CUST-453).</summary>
+    public const string ConnectorTitle = "Cowork stops being protected";
+
+    /// <summary>The message of that bar, from the CLI's own sentence (cmd_setup.py@1.0.9:14786-14792, printed only after the removal).</summary>
+    public const string ConnectorMessage = "Cowork is no longer protected after this; remove the DefenseClaw plugin in Claude (Customize > Plugins).";
+
     /// <summary>
     /// The warning for the <c>defenseclaw</c> command <paramref name="argv"/> (the arguments without the executable): one bar when the runtime has Cowork
-    /// protection, the first verb is <c>uninstall</c> or <c>reset</c>, and the plugin state exists under <paramref name="dataDirectory"/>; otherwise none.
+    /// protection, the plugin state exists under <paramref name="dataDirectory"/>, and the command is <c>uninstall</c> or <c>reset</c> (the remove-plugin
+    /// sentence for the runtime), or <c>setup remove</c> of the Claude Code connector under any of its names (<c>claudecode</c>, <c>claude</c>,
+    /// <c>claude-code</c>, <c>claude_code</c>, any case; connector_contracts.py@1.0.9:120-124); otherwise none.
     /// The caller passes only the DefenseClaw CLI's argv (the gateway's verbs are not this CLI's).
     /// </summary>
     /// <param name="pluginStateExists">Tells whether the plugin state exists for a data directory; a test supplies its own. Defaults to <see cref="CoworkProtectionFacts.PluginStateExists"/>.</param>
@@ -29,15 +37,54 @@ public static class CoworkUninstallReview
         ArgumentNullException.ThrowIfNull(argv);
         ArgumentNullException.ThrowIfNull(capabilities);
 
-        if (!capabilities.Has(RuntimeCapability.CoworkProtection) || !RemovesDefenseClaw(argv))
+        if (!capabilities.Has(RuntimeCapability.CoworkProtection))
+        {
+            return Array.Empty<CommandReviewWarning>();
+        }
+
+        var removesAll = RemovesDefenseClaw(argv);
+        if (!removesAll && !RemovesClaudeCodeConnector(argv))
         {
             return Array.Empty<CommandReviewWarning>();
         }
 
         var exists = pluginStateExists ?? CoworkProtectionFacts.PluginStateExists;
-        return exists(dataDirectory)
-            ? new[] { new CommandReviewWarning(Title, CoworkProtectionFacts.RemovePluginStep) }
-            : Array.Empty<CommandReviewWarning>();
+        if (!exists(dataDirectory))
+        {
+            return Array.Empty<CommandReviewWarning>();
+        }
+
+        return removesAll
+            ? new[] { new CommandReviewWarning(Title, CoworkProtectionFacts.RemovePluginStepFor(capabilities)) }
+            : new[] { new CommandReviewWarning(ConnectorTitle, ConnectorMessage) };
+    }
+
+    /// <summary>
+    /// True for <c>setup remove &lt;connector&gt;</c> where the connector is Claude Code under any of the CLI's names (connector_contracts.py@1.0.9:120-124: stripped,
+    /// lower-cased; <c>claude</c>, <c>claude-code</c> and <c>claude_code</c> mean <c>claudecode</c>). The connector is the first argument after <c>remove</c> that
+    /// is not an option; every option of the command is a flag.
+    /// </summary>
+    internal static bool RemovesClaudeCodeConnector(IReadOnlyList<string> argv)
+    {
+        if (argv.Count < 3 ||
+            !string.Equals(argv[0], "setup", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(argv[1], "remove", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        for (var i = 2; i < argv.Count; i++)
+        {
+            var token = argv[i].Trim();
+            if (token.Length == 0 || token.StartsWith('-'))
+            {
+                continue;
+            }
+
+            return token.ToLowerInvariant() is "claudecode" or "claude" or "claude-code" or "claude_code";
+        }
+
+        return false;
     }
 
     /// <summary>True when the first verb is <c>uninstall</c> or <c>reset</c>, the two commands that take DefenseClaw (and its hooks) away.</summary>

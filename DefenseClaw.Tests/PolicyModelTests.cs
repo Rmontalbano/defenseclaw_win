@@ -400,7 +400,7 @@ public sealed class PolicyModelTests
         });
 
         Assert.Equal("strict+1", model.ScopePackLabel(codex));
-        Assert.Contains("Rule pack: protected-codex = strict + 1 opt-in pack; its folder name gives it strict levels (the gateway reads them from there).", model.Detail("posture", "codex").Lines);
+        Assert.Contains("Rule pack: protected-codex = strict + 1 opt-in pack; its manifest posture (defenseclaw-pack.json), else its folder name, gives it strict levels (the gateway reads them from there).", model.Detail("posture", "codex").Lines);
         Assert.Equal("strict+1 (own)", model.Table("posture").Rows.Single(r => r.Key == "codex").Cells[5].Text);
         Assert.Equal("action (own)", model.Table("posture").Rows.Single(r => r.Key == "codex").Cells[1].Text);
         Assert.Equal("Opt-in: Kubernetes production protection", model.Detail("posture", "codex").Lines.Single(l => l.StartsWith("Opt-in:", StringComparison.Ordinal)));

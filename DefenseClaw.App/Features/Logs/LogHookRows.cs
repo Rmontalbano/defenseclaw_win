@@ -55,10 +55,19 @@ internal static partial class LogHookRows
         if (gate.JudgeEscalation)
         {
             var hit = JudgeEscalationFinding.AnyIn(e.Detail.Categories);
-            if (RuleIdOf(e.RowDetails) is { Length: > 0 } rule && JudgeEscalationFinding.Is(rule))
+            if (RuleIdOf(e.RowDetails) is { Length: > 0 } rule && RuleIdLabels.Has(rule))
             {
-                fields.Add(new LogField("Rule ID", JudgeEscalationFinding.WithLabel(rule)));
-                hit = true;
+                fields.Add(new LogField("Rule ID", RuleIdLabels.WithLabel(rule)));
+                hit |= JudgeEscalationFinding.Is(rule);
+                if (RuleIdLabels.IsCompoundLimit(rule) && RuleIdLabels.CompoundLimitOutcome(null, e.RowDetails) is { } outcome)
+                {
+                    fields.Add(new LogField("Call outcome", outcome));
+                }
+            }
+            else if (RuleIdLabels.AnyIn(e.Detail.Categories.Where(RuleIdLabels.IsCompoundLimit))
+                && RuleIdLabels.CompoundLimitOutcome(null, e.RowDetails) is { } categoryOutcome)
+            {
+                fields.Add(new LogField("Call outcome", categoryOutcome));
             }
 
             hit |= StructuredDetailParser.IsHook(e.RowAction)
@@ -93,10 +102,10 @@ internal static partial class LogHookRows
         return new Labels(message, isCowork, fields, skipFallback);
     }
 
-    /// <summary>The Categories row's value: the rule ids, each with its label where it has one (the judge-unavailable id), when the runtime has earned it.</summary>
+    /// <summary>The Categories row's value: the rule ids, each with its label where it has one (the judge-unavailable id and the ids of RuleIdLabels), when the runtime has earned it.</summary>
     public static string Categories(StreamEvent e, HookRowGate gate, string unlabelled) =>
-        gate.JudgeEscalation && JudgeEscalationFinding.AnyIn(e.Detail.Categories)
-            ? string.Join(", ", e.Detail.Categories.Select(JudgeEscalationFinding.WithLabel))
+        gate.JudgeEscalation && RuleIdLabels.AnyIn(e.Detail.Categories)
+            ? string.Join(", ", e.Detail.Categories.Select(RuleIdLabels.WithLabel))
             : unlabelled;
 
     /// <summary>The <c>rule_id=</c> value of a finding row's details; empty when it has none.</summary>

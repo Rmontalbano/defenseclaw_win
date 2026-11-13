@@ -3,8 +3,9 @@ namespace DefenseClaw.Core.Runtime;
 /// <summary>
 /// The sentences that say what observe mode (and a fail-open hook) does and does not do, in one place so every screen that says it says the same thing
 /// (CUST-400). Through 1.0.4 observe "never blocks" on policy; from 1.0.5 it still never blocks on a policy finding but it does hard-block a proven change to
-/// DefenseClaw's own active state (<c>provenActiveStateMutation</c>, internal/gateway/agent_hook.go; the changelog: "blocked in every mode. The permissive pack
-/// only reports it"), and a call the gateway took but did not answer in time is blocked in every tier. Each member takes the flag that
+/// DefenseClaw's own active state (<c>provenActiveStateMutation</c>, internal/gateway/agent_hook.go; the 1.0.5 changelog: "blocked in every mode. The permissive pack
+/// only reports it", which held for action mode only through 1.0.8; 1.0.9 blocks it in every pack, permissive included,
+/// shell_protected_file_profile.go@1.0.9:75-77,:99-100), and a call the gateway took but did not answer in time is blocked in every tier. Each member takes the flag that
 /// <see cref="BlocksSelfChange"/> decides and returns exactly today's text when the runtime does not have <see cref="RuntimeCapability.ObserveBlocksSelfChange"/>.
 /// </summary>
 public static class ObserveModeCopy

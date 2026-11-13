@@ -30,6 +30,9 @@
             <TextBlock Style="{StaticResource DcCaption}" Margin="0,6,0,0" TextWrapping="Wrap" Text="{Binding Summary}" />
             <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding WatchedText}" />
             <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding AttributionText}" />
+            <TextBlock Style="{StaticResource DcCaption}" Margin="0,4,0,0" TextWrapping="Wrap"
+                       Visibility="{Binding HasSelfProtection, Converter={StaticResource BoolToVisibility}}"
+                       Text="{Binding SelfProtectionText}" />
             <TextBlock Margin="0,4,0,0"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource DcToneHighBrush}"

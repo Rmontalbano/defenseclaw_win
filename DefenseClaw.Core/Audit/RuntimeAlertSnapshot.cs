@@ -78,6 +78,8 @@ public static class RuntimeAlertSnapshotParser
     [
         "decision", "route", "rule", "scanner", "location", "sandbox", "path", "moved_to", "description", "next_step",
         "user", "agent_identity_id", "agent_instance_id", "session_id", "agent_depth",
+        // 1.0.9 (cmd_alerts.py@1.0.9:811-841): "cowork" for a Cowork call, else empty (and then no fact); the json target stays the stored claudecode spelling.
+        "surface",
     ];
 
     public static RuntimeAlertParseResult Parse(string? output)

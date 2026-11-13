@@ -72,6 +72,26 @@ public sealed class ProtectedFilesWatchViewModelTests : IDisposable
         Assert.Contains("DataContext=\"{Binding ProtectedFiles}\"", xaml, StringComparison.Ordinal);
     }
 
+    // ------------------------------------------------------------------ the 1.0.9 self-protection sentence
+
+    [Theory]
+    [InlineData("1.0.9", true)]
+    [InlineData("1.1.0", true)]
+    [InlineData("1.0.8", false)]
+    [InlineData("1.0.6", false)]
+    public async Task The_shell_floor_sentence_shows_only_on_a_runtime_that_has_it_and_the_old_text_stays(string version, bool shown)
+    {
+        var vm = await CreateAsync(version);
+
+        Assert.Equal(shown, vm.HasSelfProtection);
+        Assert.Equal(shown ? ProtectedFileWatchFacts.ShellFloorCoverage : string.Empty, vm.SelfProtectionText);
+
+        // The 1.0.6 text is word for word what it was.
+        Assert.EndsWith("Shell startup files and autostart entries are watched on Linux and macOS only.", vm.WatchedText, StringComparison.Ordinal);
+        Assert.Equal("The gateway checks a short list of files every 2 seconds while it runs. The watch blocks nothing: it reports a change after it happened.", vm.Summary);
+        Assert.DoesNotContain("authorized_keys, a shell startup file", vm.WatchedText, StringComparison.Ordinal);
+    }
+
     // ------------------------------------------------------------------ what it says
 
     [Fact]

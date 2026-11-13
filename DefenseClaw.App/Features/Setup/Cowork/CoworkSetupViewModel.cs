@@ -29,6 +29,14 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
     /// <summary>Said when <c>status --json</c> has no <c>cowork</c> object (cowork.py: no state file and no Claude Desktop, or live health skipped).</summary>
     internal const string NoStateText = "status --json reported no Cowork state: Claude Desktop was not found for this account and no plugin was built.";
 
+    /// <summary>
+    /// Said when the CLI reports <c>cowork_plugin_stale</c> (cowork.py@1.0.9:685-692): the plugin was built by an older DefenseClaw. Every Windows plugin built
+    /// by 1.0.8 reads this way on 1.0.9. Build again, then upload the new zip.
+    /// </summary>
+    internal const string PluginStaleText =
+        "This plugin was built by an older DefenseClaw and uses an older Windows hook command, so Cowork is not protected. " +
+        "Build the plugin again below, then upload the new zip in Claude Desktop (" + CoworkProtectionFacts.UploadPath + ").";
+
     /// <summary>Said before the run.</summary>
     internal const string BeforeRunText = "Builds the DefenseClaw plugin for Claude Cowork. Sets up Claude Code hooks first if they are off.";
 
@@ -252,9 +260,9 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
         }
         else
         {
-            BadgeText = state.Protected ? "Protected" : state.AwaitsUpload ? "Not protected yet" : "Not protected";
+            BadgeText = state.Protected ? "Protected" : state.AwaitsUpload ? "Not protected yet" : state.IsPluginStale ? "Plugin out of date" : "Not protected";
             BadgeKey = state.Protected ? "Ok" : "Warn";
-            DetailText = state.Detail;
+            DetailText = state.IsPluginStale ? (state.Detail + " " + PluginStaleText).Trim() : state.Detail;
             NextText = !state.Protected && state.Step.Length > 0 ? $"Next: {state.Step}" : string.Empty;
         }
 
@@ -276,7 +284,9 @@ public sealed partial class CoworkSetupViewModel : ObservableObject
     {
         var state = _state;
         var notProtected = state is not { Protected: true };
+        // A stale plugin's old zip is not the one to upload: the steps come up once the plugin was built again (the next read then says it awaits upload).
         var show = _loaded && !IsChecking && _problem is null && notProtected &&
+                   (state is not { IsPluginStale: true } || _justBuilt) &&
                    (state?.PluginZip is not null || _justBuilt || state is { AwaitsUpload: true });
         ShowUpload = show;
         if (!show)

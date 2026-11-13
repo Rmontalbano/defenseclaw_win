@@ -256,4 +256,17 @@ public static class ProtectedFileWatchFacts
 
     /// <summary>What Windows does not get, whatever the docs' table says for other systems.</summary>
     public const string WindowsCoverage = "Shell startup files and autostart entries are watched on Linux and macOS only.";
+
+    /// <summary>
+    /// What 1.0.9 adds that has no Windows gate and is a separate rule from the file watch: a shell command's write to SSH authorized keys, a shell startup file or
+    /// a Git hook is at least an alert in every pack (internal/gateway/shell_protected_file_profile.go@1.0.9:28-33,:90-106; shell commands only, not the native
+    /// write tools); DefenseClaw's own state files block in every pack (:75-77,:99-100); an agent edit that turns the DefenseClaw hooks off in the agent's settings
+    /// (tamper.agent_hook_config_disable) blocks in action mode, a shell write to those settings (tamper.agent_hook_config_write) is an alert and blocks in the
+    /// strict pack (agent_hook_config_guard.go@1.0.9; cognitive.yaml@1.0.9:112-135). Observe mode records the two hook-settings rules and does not block them.
+    /// Shown only on a runtime with <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ShellProtectedFileFloor"/>.
+    /// </summary>
+    public const string ShellFloorCoverage =
+        "On Windows too, a shell command the agent runs that writes ~\\.ssh\\authorized_keys, a shell startup file or a Git hook is at least an alert in every rule pack, " +
+        "permissive included, and changes to DefenseClaw's own files are blocked in every pack. In action mode an agent edit that turns DefenseClaw's hooks off in its " +
+        "settings is blocked; a shell command that writes those settings is an alert (the strict pack blocks it).";
 }

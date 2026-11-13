@@ -105,6 +105,27 @@ public static partial class CoworkRow
         return IsCowork(payloadSurface) ? new CoworkCall(string.Empty, string.Empty, string.Empty) : null;
     }
 
+    /// <summary>
+    /// The Cowork call of a row only the runtime listed (<c>alerts --json</c> at 1.0.9 prints <c>surface</c>: <c>cowork</c> or empty, cmd_alerts.py@1.0.9:215-262,:829-830),
+    /// which has no envelope to read. Null unless the connector is <c>claudecode</c> and the surface is <c>cowork</c> (any case). The row's session, tool class and
+    /// prompt are not in that output, so they are empty. A row both sources return is read from its envelope first; the caller uses this only when that finds nothing.
+    /// </summary>
+    public static CoworkCall? FromRuntimeSurface(string? connector, string? surface) =>
+        string.Equals(connector?.Trim(), Connector, StringComparison.OrdinalIgnoreCase) && IsCowork(surface)
+            ? new CoworkCall(string.Empty, string.Empty, string.Empty)
+            : null;
+
+    /// <summary>
+    /// The TUI's <c>cowork:&lt;event&gt;</c> form of a stored hook target (<c>claudecode:PreToolUse</c>, alert_semantics.cowork_hook_target); empty when the target
+    /// is not in that form. <c>alerts --json</c> keeps the stored spelling.
+    /// </summary>
+    public static string RetargetStored(string? target)
+    {
+        const string stored = Connector + ":";
+        var text = target?.Trim() ?? string.Empty;
+        return text.StartsWith(stored, StringComparison.OrdinalIgnoreCase) && text.Length > stored.Length ? Surface + ":" + text[stored.Length..] : string.Empty;
+    }
+
     /// <summary>The closing run of whitespace-separated <c>key=value</c> tokens of a details text (at most 64 of them); empty when the text does not end in one.</summary>
     internal static string KeyValueTail(string text)
     {

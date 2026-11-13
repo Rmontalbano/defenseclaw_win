@@ -297,8 +297,8 @@ public sealed partial class FirstRunViewModel : ObservableObject, IDisposable
     private static readonly Version SelfProtectionRelease = new(1, 0, 5);
 
     /// <summary>
-    /// True on 1.0.5 and later, where observe mode is no longer "never blocks": it still blocks a proven change to DefenseClaw's own active state (the permissive
-    /// pack only reports it), so the form's observe sentences say so. Judged from the version, as the fail-mode question is (CUST-397).
+    /// True on 1.0.5 and later, where observe mode is no longer "never blocks": it still blocks a proven change to DefenseClaw's own active state (through 1.0.8 the permissive
+    /// pack only reported it in action mode; 1.0.9 blocks it in every pack), so the form's observe sentences say so. Judged from the version, as the fail-mode question is (CUST-397).
     /// </summary>
     public bool ObserveBlocksSelfChanges => _services.Runtime.Current.Identity?.ParsedVersion is { } version && version >= SelfProtectionRelease;
 

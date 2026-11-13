@@ -529,7 +529,7 @@ public sealed partial class PolicyModel
                 weakens = true;
                 var (oldBlock, oldAlert) = PolicyLevels.ProfileLevelsFor(row.PackFolder);
                 var (newBlock, newAlert) = PolicyLevels.ProfileLevelsFor(target);
-                warning = $"This weakens protection: the gateway takes tool-call levels from the pack folder's name, so {profileFolder} is treated as {after}: blocks {newBlock} and alerts on {newAlert} instead of {oldBlock} and {oldAlert} ({before}).";
+                warning = $"This weakens protection: the gateway takes tool-call levels from the pack's manifest posture (defenseclaw-pack.json), else its folder name, so {profileFolder} is treated as {after}: blocks {newBlock} and alerts on {newAlert} instead of {oldBlock} and {oldAlert} ({before}).";
             }
         }
         else

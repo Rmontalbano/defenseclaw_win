@@ -294,7 +294,7 @@ public static class SetupReadiness
     }
 
     /// <summary>
-    /// The Cowork row (1.0.8, CUST-445), in the CLI's own words: pass only when <c>status --json</c> says protected. A built plugin nobody uploaded or no plugin
+    /// The Cowork row (1.0.8, CUST-445), in the CLI's own words: pass only when <c>status --json</c> says protected. A built plugin nobody uploaded, a plugin built by an older DefenseClaw (1.0.9) or no plugin
     /// at all opens the Cowork wizard; Claude Code being off opens the Claude Code wizard; a state that depends on the gateway offers nothing here, as the
     /// gateway's own row says what to do.
     /// </summary>
@@ -314,12 +314,15 @@ public static class SetupReadiness
         }
 
         ReadinessFix? fix = null;
-        if (cowork.AwaitsUpload || cowork.IsNotBuilt)
+        if (cowork.AwaitsUpload || cowork.IsNotBuilt || cowork.IsPluginStale)
         {
+            // cowork_plugin_stale (1.0.9) is a real warning (the user did set Cowork up): the same wizard builds the plugin again and shows the upload steps.
             fix = new ReadinessFix(
                 ReadinessFixKind.Wizard,
                 "setup cowork",
-                new[] { new ReadinessFixStep(Cli, CoworkProtectionFacts.SetupArgv, "Build the Cowork plugin, then upload it in Claude Desktop") },
+                new[] { new ReadinessFixStep(Cli, CoworkProtectionFacts.SetupArgv, cowork.IsPluginStale
+                    ? "Build the Cowork plugin again, then upload the new zip in Claude Desktop"
+                    : "Build the Cowork plugin, then upload it in Claude Desktop") },
                 WizardTarget: CoworkWizard.Target);
         }
         else if (cowork.IsClaudeCodeOff)

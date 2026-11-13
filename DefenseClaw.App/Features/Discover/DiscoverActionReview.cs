@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.Input;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Wizards;
 using DefenseClaw.Core.Cli;
 
 namespace DefenseClaw.App.ViewModels;
@@ -295,6 +296,18 @@ public sealed partial class DiscoverActionReview : ObservableObject
         if (extraWarnings is not null)
         {
             warnings.AddRange(extraWarnings);
+        }
+
+        // `setup remove claudecode` leaves a Cowork plugin in the Claude account unprotected (1.0.9): every step on the DefenseClaw CLI is checked, as the palette's and the wizards' reviews do.
+        foreach (var step in steps.Where(static s => string.Equals(s.Executable, CommandReview.DefaultExecutable, StringComparison.Ordinal)))
+        {
+            foreach (var coworkWarning in CoworkUninstallReview.Warnings(step.Argv, _services.Runtime.Capabilities, _services.Paths.DataDirectory))
+            {
+                if (!warnings.Any(w => w.Title == coworkWarning.Title))
+                {
+                    warnings.Add(coworkWarning);
+                }
+            }
         }
 
         // A command that rewrites Codex's config.toml (setup codex, a fail-mode change) while Codex is running can collide with Codex's own write (CUST-352).

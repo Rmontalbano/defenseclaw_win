@@ -162,6 +162,32 @@ public sealed class CoworkReadinessTests
     }
 
     [Fact]
+    public void A_stale_plugin_is_a_real_warning_and_opens_the_cowork_wizard_to_build_it_again()
+    {
+        var row = CoworkRow(Healthy() with { Cowork = State(false, CoworkReasonCodes.PluginStale, "not protected: plugin 1.0.20261101120000 uses an older Windows hook command", "defenseclaw setup cowork") });
+
+        Assert.NotNull(row);
+        Assert.Equal(ReadinessStatus.Warn, row.Status);
+        Assert.True(row.NeedsAttention);
+        Assert.StartsWith("not protected: plugin", row.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("Not set up", row.Detail, StringComparison.Ordinal);
+        var fix = Assert.IsType<ReadinessFix>(row.Fix);
+        Assert.Equal(ReadinessFixKind.Wizard, fix.Kind);
+        Assert.Equal(CoworkWizard.Target, fix.WizardTarget);
+        Assert.Equal("Build the Cowork plugin again, then upload the new zip in Claude Desktop", Assert.Single(fix.Steps).Purpose);
+    }
+
+    [Fact]
+    public void A_never_set_up_cowork_stays_optional_and_not_counted()
+    {
+        var row = CoworkRow(Healthy() with { Cowork = State(false, CoworkReasonCodes.PluginNotBuilt, "not protected: example", "defenseclaw setup cowork") });
+
+        Assert.NotNull(row);
+        Assert.Equal(ReadinessStatus.Optional, row.Status);
+        Assert.False(row.NeedsAttention);
+    }
+
+    [Fact]
     public void A_readiness_row_names_itself_for_a_screen_reader_not_by_its_type()
     {
         var row = new ReadinessRowViewModel(CoworkRow(Healthy() with { Cowork = State(false, CoworkReasonCodes.PluginNotBuilt, "not protected: example", "defenseclaw setup cowork") })!, static _ => { });

@@ -59,6 +59,7 @@ public static class SetupStateLines
 
         var text = state.Protected ? "Protected"
             : state.AwaitsUpload ? "Built, not uploaded yet"
+            : state.IsPluginStale ? "Plugin out of date"
             : state.IsNotBuilt ? "Not set up"
             : "Not protected";
         return new CardState(text, state.IsNotBuilt ? state.NotSetUpText : state.Detail.Length > 0 ? state.Detail : text);

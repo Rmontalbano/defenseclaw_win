@@ -109,6 +109,14 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
 
     public bool HasUnrecognized => UnrecognizedText.Length > 0;
 
+    /// <summary>
+    /// What 1.0.9 protects beyond the watch (<see cref="ProtectedFileWatchFacts.ShellFloorCoverage"/>); empty on a runtime before it, whose card reads as it
+    /// always did.
+    /// </summary>
+    public string SelfProtectionText => _services.Runtime.Capabilities.Has(RuntimeCapability.ShellProtectedFileFloor) ? ProtectedFileWatchFacts.ShellFloorCoverage : string.Empty;
+
+    public bool HasSelfProtection => SelfProtectionText.Length > 0;
+
     /// <summary>True when the choice box can be used.</summary>
     public bool CanChange => BlockedReason is null;
 
@@ -176,6 +184,8 @@ public sealed partial class ProtectedFilesWatchViewModel : ObservableObject
             ? $"config.yaml sets on_change to \"{value}\", which is not alert, restore or off: the runtime's validation refuses that value. Choose one and review the change."
             : string.Empty;
 
+        OnPropertyChanged(nameof(SelfProtectionText));
+        OnPropertyChanged(nameof(HasSelfProtection));
         OnPropertyChanged(nameof(CanReview));
         ReviewChangeCommand.NotifyCanExecuteChanged();
     }

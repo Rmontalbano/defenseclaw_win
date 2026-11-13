@@ -59,6 +59,7 @@ internal static partial class AuditHookRows
 
         var rows = new List<DetailPair>(parsed.Count + 6);
         var labelled = false;
+        var limited = false;
         foreach (var pair in parsed)
         {
             if (fallback.Length > 0 && string.Equals(pair.Label, HookJudgeFallback.FieldName, StringComparison.OrdinalIgnoreCase))
@@ -71,11 +72,12 @@ internal static partial class AuditHookRows
                 continue;
             }
 
-            if (gate.JudgeEscalation && IsRuleLabel(pair.Label) && MentionsEscalation(pair.Value))
+            if (gate.JudgeEscalation && IsRuleLabel(pair.Label) && RuleIdLabels.Mentions(pair.Value))
             {
-                rows.Add(new DetailPair(pair.Label, LabelEscalation(pair.Value)));
+                rows.Add(new DetailPair(pair.Label, RuleIdLabels.Replace(pair.Value)));
                 labelled = true;
-                escalated = true;
+                escalated |= MentionsEscalation(pair.Value);
+                limited |= RuleIdLabels.MentionsCompoundLimit(pair.Value);
                 continue;
             }
 
@@ -95,9 +97,15 @@ internal static partial class AuditHookRows
 
         if (gate.JudgeEscalation)
         {
-            if (!labelled && JudgeEscalationFinding.AnyIn(structuredIds))
+            if (!labelled && RuleIdLabels.AnyIn(structuredIds))
             {
-                rows.Add(new DetailPair("Rule IDs", string.Join(", ", structuredIds.Select(JudgeEscalationFinding.WithLabel))));
+                rows.Add(new DetailPair("Rule IDs", string.Join(", ", structuredIds.Select(RuleIdLabels.WithLabel))));
+                limited |= structuredIds.Any(RuleIdLabels.IsCompoundLimit);
+            }
+
+            if (limited && RuleIdLabels.CompoundLimitOutcome(null, source.Details) is { } outcome)
+            {
+                rows.Add(new DetailPair("Call outcome", outcome));
             }
 
             if (escalated)
@@ -154,9 +162,6 @@ internal static partial class AuditHookRows
         || label.Equals("Rule ID", StringComparison.OrdinalIgnoreCase);
 
     private static bool MentionsEscalation(string value) => EscalationId().IsMatch(value);
-
-    private static string LabelEscalation(string value) =>
-        EscalationId().Replace(value, static match => JudgeEscalationFinding.WithLabel(match.Value));
 
     [GeneratedRegex(@"(?:llm-judge:)?" + JudgeEscalationFinding.RuleId, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 250)]
     private static partial Regex EscalationId();

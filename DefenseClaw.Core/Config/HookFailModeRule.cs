@@ -114,7 +114,20 @@ public static class HookFailModeRule
     /// <c>permissive</c>: the connector's <c>rule_pack</c>, else the global one, else the folder name of the connector's <c>rule_pack_dir</c>), or null when it
     /// cannot be told without reading the pack (a custom pack, whose manifest posture decides). Used only to add a note, never to hide one.
     /// </summary>
-    public static string? KnownPolicyTier(GuardrailSection guardrail, string connector)
+    public static string? KnownPolicyTier(GuardrailSection guardrail, string connector) => KnownPolicyTier(guardrail, connector, null);
+
+    /// <summary>
+    /// <see cref="KnownPolicyTier(GuardrailSection, string)"/> that also reads the manifest posture of a connector's <c>rule_pack_dir</c> folder
+    /// (<c>defenseclaw-pack.json</c>, see <see cref="DefenseClaw.Core.Policy.Model.RulePackPosture"/>) before the folder's name.
+    /// <para>
+    /// A rule pack named by <c>rule_pack</c> that is not strict, default or permissive is a <c>custom_packs</c> entry, which this app does not model: it stays
+    /// unknown (null). A broken selected custom entry (folder missing or unreadable, the loader rejects it, the digest does not match) makes the gateway's hook
+    /// outage tier strict (internal/config/hook_outage_fail_mode.go@1.0.9:151-162), but the app cannot run the loader or the digest check, so it never claims
+    /// strict for one.
+    /// </para>
+    /// </summary>
+    /// <param name="readManifest">Reads a file's text (null when missing); null reads the file system. A test seam.</param>
+    public static string? KnownPolicyTier(GuardrailSection guardrail, string connector, Func<string, string?>? readManifest)
     {
         ArgumentNullException.ThrowIfNull(guardrail);
 
@@ -130,8 +143,9 @@ public static class HookFailModeRule
             return null;
         }
 
-        var folder = Path.GetFileName(own!.RulePackDir.Trim().TrimEnd('/', '\\'));
-        return BuiltInTier(folder);
+        var dir = own!.RulePackDir.Trim();
+        var folder = Path.GetFileName(dir.TrimEnd('/', '\\'));
+        return DefenseClaw.Core.Policy.Model.RulePackPosture.FromManifest(dir, readManifest) ?? BuiltInTier(folder);
     }
 
     private static string? BuiltInTier(string name) => name.Trim().ToLowerInvariant() switch

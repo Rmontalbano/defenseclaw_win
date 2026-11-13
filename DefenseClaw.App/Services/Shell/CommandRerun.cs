@@ -209,6 +209,7 @@ internal sealed class CommandRerun
         if (string.Equals(tool, CommandReview.DefaultExecutable, StringComparison.Ordinal))
         {
             warnings.AddRange(LocalStackReview.Warnings(argv, _services.LocalStack.Status));
+            warnings.AddRange(CoworkUninstallReview.Warnings(argv, _services.Runtime.Capabilities, _services.Paths.DataDirectory));
         }
 
         return new CommandReview

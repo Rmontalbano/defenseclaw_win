@@ -369,7 +369,7 @@ public sealed partial class PolicyModel
         if (Catalog.PackBases.TryGetValue(row.PackFolder, out var baseName) && baseName.Length > 0)
         {
             var on = ScopeProtection(row).Count;
-            return $"Rule pack: {pack} = {baseName} + {I(on)} opt-in pack{(on != 1 ? "s" : string.Empty)}; its folder name gives it {profile} levels (the gateway reads them from there).";
+            return $"Rule pack: {pack} = {baseName} + {I(on)} opt-in pack{(on != 1 ? "s" : string.Empty)}; its manifest posture (defenseclaw-pack.json), else its folder name, gives it {profile} levels (the gateway reads them from there).";
         }
 
         return $"Rule pack: {pack} ({profile} levels)";

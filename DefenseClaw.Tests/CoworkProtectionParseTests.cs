@@ -41,6 +41,7 @@ public class CoworkProtectionParseTests
     [InlineData(CoworkReasonCodes.GatewayDown, false, false, false, true)]
     [InlineData(CoworkReasonCodes.ClaudeCodeNotStarted, false, false, false, true)]
     [InlineData(CoworkReasonCodes.HealthUnavailable, false, false, false, true)]
+    [InlineData(CoworkReasonCodes.PluginStale, false, false, false, false)]
     public void Each_reason_code_of_a_state_that_is_not_protected_reads_as_its_kind(string code, bool notBuilt, bool awaitsUpload, bool claudeCodeOff, bool gateway)
     {
         var state = Parse("{\"protected\":false,\"detail\":\"not protected: example\",\"step\":\"example step\",\"reason_code\":\"" + code + "\",\"last_event_at\":null,\"plugin_version\":null,\"plugin_zip\":null}");
@@ -58,10 +59,27 @@ public class CoworkProtectionParseTests
     }
 
     [Fact]
-    public void The_six_codes_are_the_whole_list()
+    public void The_seven_codes_are_the_whole_list()
     {
-        Assert.Equal(6, CoworkReasonCodes.All.Count);
-        Assert.Equal(6, CoworkReasonCodes.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(7, CoworkReasonCodes.All.Count);
+        Assert.Equal(7, CoworkReasonCodes.All.Distinct(StringComparer.Ordinal).Count());
+        // cowork.py@1.0.9:685-692: evaluated after cowork_health_unavailable and before cowork_no_events.
+        Assert.Equal(CoworkReasonCodes.HealthUnavailable, CoworkReasonCodes.All[4]);
+        Assert.Equal(CoworkReasonCodes.PluginStale, CoworkReasonCodes.All[5]);
+        Assert.Equal(CoworkReasonCodes.NoEvents, CoworkReasonCodes.All[6]);
+        Assert.Equal("cowork_plugin_stale", CoworkReasonCodes.PluginStale);
+    }
+
+    [Fact]
+    public void A_stale_plugin_is_its_own_kind_and_no_other()
+    {
+        var state = Parse("{\"protected\":false,\"reason_code\":\"cowork_plugin_stale\"}");
+
+        Assert.NotNull(state);
+        Assert.True(state.IsPluginStale);
+        Assert.False(state.AwaitsUpload);
+        Assert.False(state.IsNotBuilt);
+        Assert.False(state.IsGatewayCondition);
     }
 
     [Fact]

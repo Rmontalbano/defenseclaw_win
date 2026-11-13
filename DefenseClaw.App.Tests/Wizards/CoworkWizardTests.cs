@@ -300,6 +300,36 @@ public sealed class CoworkWizardTests : IDisposable
         Assert.False(vm.ShowUpload);
     }
 
+    private static CoworkProtection Stale() => new(
+        false,
+        "not protected: plugin 1.0.20261101120000 uses an older Windows hook command; rebuild and upload the Cowork plugin",
+        "defenseclaw setup cowork",
+        CoworkReasonCodes.PluginStale,
+        null,
+        "1.0.20261101120000",
+        Zip);
+
+    [Fact]
+    public async Task A_stale_plugin_says_it_was_built_by_an_older_defenseclaw_and_leads_to_the_rebuild_not_the_old_zip()
+    {
+        var services = await ServicesAsync("1.0.9");
+        var vm = Create(services, new CoworkStateRead(Stale(), null), new CoworkStateRead(Awaiting(), null));
+        await UiThread.Run(() => vm.LoadAsync());
+
+        Assert.Equal("Plugin out of date", vm.BadgeText);
+        Assert.Equal("Warn", vm.BadgeKey);
+        Assert.Contains("uses an older Windows hook command", vm.DetailText, StringComparison.Ordinal);
+        Assert.Contains("built by an older DefenseClaw", vm.DetailText, StringComparison.Ordinal);
+        Assert.Contains("Customize > Plugins > Add > Upload plugin", vm.DetailText, StringComparison.Ordinal);
+        Assert.Equal("Build the plugin again", vm.BuildText);
+        Assert.False(vm.ShowUpload); // the old zip is not the one to upload
+
+        await BuildAsync(vm, Run(0, "built"));
+
+        Assert.True(vm.ShowUpload);
+        Assert.Equal("Not protected yet", vm.BadgeText);
+    }
+
     [Fact]
     public async Task Exit_3_shows_the_managed_host_message_and_stays_not_protected()
     {

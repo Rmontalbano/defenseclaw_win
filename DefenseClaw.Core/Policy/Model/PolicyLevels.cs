@@ -244,22 +244,12 @@ public static class PolicyLevels
     // ---- rule-pack profiles ------------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// The posture profile the gateway derives from a rule-pack folder: its base name, lowercased; <c>strict</c> and <c>permissive</c> keep
-    /// theirs, everything else reads as <c>default</c> (<c>guardrailProfileForDir</c>). A composed pack (<c>protected-SCOPE/PROFILE</c>)
-    /// ends in its base pack's profile.
+    /// The posture profile the gateway derives from a rule-pack folder: the <c>posture</c> of its <c>defenseclaw-pack.json</c> (the 1.0.9 built-in packs
+    /// ship one), else the folder's base name, lowercased, where <c>strict</c> and <c>permissive</c> keep theirs and everything else reads as <c>default</c>
+    /// (<c>ReadPackPosture</c>, <c>guardrailProfileForDir</c>; see <see cref="RulePackPosture"/>). A composed pack (<c>protected-SCOPE/PROFILE</c>)
+    /// ends in its base pack's profile and its manifest names no posture.
     /// </summary>
-    public static string PackProfile(string? folder)
-    {
-        var raw = (folder ?? string.Empty).Trim().TrimEnd('/', '\\');
-        if (raw.Length == 0)
-        {
-            return "default";
-        }
-
-        var cut = raw.LastIndexOfAny(new[] { '/', '\\' });
-        var name = (cut >= 0 ? raw[(cut + 1)..] : raw).ToLowerInvariant();
-        return name is "strict" or "permissive" ? name : "default";
-    }
+    public static string PackProfile(string? folder) => RulePackPosture.For(folder);
 
     /// <summary>The (blocks at, alerts at) labels for tool calls under the pack in <paramref name="folder"/>.</summary>
     public static (string Block, string Alert) ProfileLevelsFor(string? folder) => ProfileLevelLabels[PackProfile(folder)];

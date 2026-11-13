@@ -1,4 +1,5 @@
 using DefenseClaw.Core.Config;
+using DefenseClaw.Core.Runtime;
 using DefenseClaw.Core.Setup;
 
 namespace DefenseClaw.Core.ClaudeCode;
@@ -33,6 +34,25 @@ public static class CoworkProtectionFacts
     public const string RemovePluginStep =
         "DefenseClaw cannot remove its Cowork plugin from your Claude account: remove it in Claude Desktop (Customize > Plugins, then the ... menu > Remove). " +
         "Until then Cowork tool calls are blocked.";
+
+    /// <summary>
+    /// The uninstall and reset sentence from 1.0.9 (cmd_uninstall.py@1.0.9:509-512 <c>_COWORK_REMOVAL_STEP</c>): a plugin built with 1.0.9 lets Cowork calls run
+    /// after the data folder is removed; older plugins may block. <see cref="RemovePluginStep"/> stays the 1.0.8 sentence.
+    /// </summary>
+    public const string RemovePluginStepRunsAfterRemoval =
+        "DefenseClaw cannot remove its Cowork plugin from your Claude account: remove it in Claude Desktop (Customize > Plugins, then the ... menu > Remove). " +
+        "A plugin built with 1.0.9 lets Cowork calls run after the data folder is removed; older plugins may block.";
+
+    /// <summary>The remove-plugin sentence for a runtime whose plugin does (1.0.9) or does not (1.0.8) keep running after the data folder is removed.</summary>
+    public static string RemovePluginStepFor(bool pluginRunsAfterRemoval) =>
+        pluginRunsAfterRemoval ? RemovePluginStepRunsAfterRemoval : RemovePluginStep;
+
+    /// <summary>The remove-plugin sentence for <paramref name="capabilities"/>: the 1.0.9 one when it has <see cref="RuntimeCapability.CoworkPluginRunsAfterRemoval"/>.</summary>
+    public static string RemovePluginStepFor(RuntimeCapabilities capabilities)
+    {
+        ArgumentNullException.ThrowIfNull(capabilities);
+        return RemovePluginStepFor(capabilities.Has(RuntimeCapability.CoworkPluginRunsAfterRemoval));
+    }
 
     /// <summary>
     /// Why Claude Code's settings are Cowork's: the plugin runs the Claude Code connector's hooks, so its mode, fail mode and rules apply to Cowork too

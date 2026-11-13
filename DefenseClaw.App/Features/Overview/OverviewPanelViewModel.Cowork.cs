@@ -113,7 +113,7 @@ public sealed partial class OverviewPanelViewModel
     }
 
     /// <summary>
-    /// The attention row for a Cowork the user asked for and lacks: a plugin that was built but not uploaded, or whose Claude Code connector is off. Medium: the
+    /// The attention row for a Cowork the user asked for and lacks: a plugin that was built but not uploaded, one built by an older DefenseClaw (1.0.9, <c>cowork_plugin_stale</c>), or whose Claude Code connector is off. Medium: the
     /// CLI itself only warns for every reason (cmd_status.py:1298 at 1.0.8 draws each not-protected state in yellow, none as a failure). Nothing for a Cowork
     /// that was never set up (<c>cowork_plugin_not_built</c>: Claude Desktop is installed, nothing was asked), when protected, when the state depends on the
     /// gateway (its own rows say what to do), on a managed installation (the administrator's side), or without the capability.
@@ -138,6 +138,12 @@ public sealed partial class OverviewPanelViewModel
         {
             rows.Add(CoworkRow("Cowork is not protected yet: upload the plugin in Claude Desktop", withStep, "Medium", OpenCoworkWizardActionId, "Set up Cowork",
                 "Opens the Cowork wizard: where the plugin zip is, the upload steps in Claude Desktop, and a check of the result.", AttentionActionBlockedReason(OpenCoworkWizardActionId, _snapshot)));
+        }
+        else if (cowork.IsPluginStale)
+        {
+            // cowork_plugin_stale (1.0.9): the plugin the user did set up uses an older Windows hook command; build it again and upload the new zip.
+            rows.Add(CoworkRow("Cowork is not protected: build the plugin again and upload it", withStep, "Medium", OpenCoworkWizardActionId, "Rebuild the Cowork plugin",
+                "Opens the Cowork wizard: the plugin is built again, then the upload steps in Claude Desktop and a check of the result are shown.", AttentionActionBlockedReason(OpenCoworkWizardActionId, _snapshot)));
         }
         else if (cowork.IsClaudeCodeOff)
         {

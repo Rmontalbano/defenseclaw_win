@@ -384,4 +384,44 @@ public sealed class CoworkOverviewTests : IDisposable
         Assert.Contains("last Cowork call seen live 3m ago", row.Value, StringComparison.Ordinal);
         _ = Assert.Single(CoworkAttention(vm));
     }
+
+    // ------------------------------------------------------------------ cowork_plugin_stale (1.0.9)
+
+    [Fact]
+    public async Task A_stale_plugin_gets_a_medium_row_with_the_clis_sentence_and_step_and_a_rebuild_button()
+    {
+        var vm = await PanelAsync("1.0.9");
+
+        Show(vm, NotProtected(CoworkReasonCodes.PluginStale, "not protected: plugin 1.0.20261101120000 uses an older Windows hook command; rebuild and upload the Cowork plugin", "defenseclaw setup cowork"));
+
+        var row = Assert.Single(CoworkAttention(vm));
+        Assert.Equal("Cowork is not protected: build the plugin again and upload it", row.Title);
+        Assert.Equal("Medium", row.SeverityKey);
+        Assert.Equal("not protected: plugin 1.0.20261101120000 uses an older Windows hook command; rebuild and upload the Cowork plugin defenseclaw setup cowork", row.Detail);
+        var action = Assert.Single(row.Actions.Items);
+        Assert.Equal(("open-cowork-wizard", "Rebuild the Cowork plugin"), (action.Id, action.Label));
+        Assert.Equal("Warn", CoworkRow(vm)!.ToneKey);
+    }
+
+    /// <summary>The owner-machine shape at 1.0.9: one connector (codex), Claude Desktop installed, Cowork never set up.</summary>
+    [Fact]
+    public async Task A_never_set_up_cowork_on_a_codex_only_1_0_9_machine_raises_no_row()
+    {
+        var vm = await PanelAsync("1.0.9", config: "guardrail:\n  enabled: true\n  connector: codex\n  connectors:\n    codex:\n      mode: observe\n      hook_fail_mode: open\n");
+
+        Show(vm, NotProtected(CoworkReasonCodes.PluginNotBuilt, "not protected: Claude Desktop is installed, but Cowork has no DefenseClaw plugin", "defenseclaw setup cowork"));
+
+        Assert.Empty(CoworkAttention(vm));
+        Assert.Equal("Neutral", CoworkRow(vm)!.ToneKey);
+    }
+
+    [Fact]
+    public async Task A_1_0_8_runtime_shows_the_same_row_as_before_for_its_codes()
+    {
+        var vm = await PanelAsync("1.0.8");
+
+        Show(vm, NotProtected(CoworkReasonCodes.NoEvents, "not protected yet: nothing since the build", "upload the zip"));
+
+        Assert.Equal("Cowork is not protected yet: upload the plugin in Claude Desktop", Assert.Single(CoworkAttention(vm)).Title);
+    }
 }
