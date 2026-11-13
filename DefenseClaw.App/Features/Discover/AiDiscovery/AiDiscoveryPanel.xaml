@@ -497,10 +497,10 @@
                                                         <!-- Cowork protection runtime (1.0.8) while Cowork is not reported protected: opens the Cowork wizard. Hidden otherwise. -->
                                                         <ui:Button Margin="0,6,0,0"
                                                                    HorizontalAlignment="Left"
-                                                                   Content="Set up Cowork protection"
+                                                                   Content="{Binding OpenCoworkSetupLabel}"
                                                                    Command="{Binding OpenCoworkSetupCommand}"
                                                                    Visibility="{Binding HasOpenCoworkSetup, Converter={StaticResource BoolToVisibility}}"
-                                                                   AutomationProperties.Name="Set up Cowork protection" />
+                                                                   AutomationProperties.Name="{Binding OpenCoworkSetupLabel}" />
                                                     </StackPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>

@@ -142,6 +142,9 @@ public sealed partial class AlertItem
         if (gate.AlertRan && StructuredDetailParser.IsHook(Action) && string.Equals(RowFact(row, "decision"), "alert", StringComparison.OrdinalIgnoreCase))
         {
             // alerts --json prints decision "alert" for a call that ran and was recorded as an alert (cmd_alerts.py@1.0.9:296-297; 1.0.8 said "allow").
+            // Checked for both modes: action mode labels an allowed finding "alert" (hook_metrics.py@1.0.9:121-130); observe mode never does (it prints
+            // "allow" or "would block (observe mode)"), so there "alert" is only a hook row whose own action was alert, a call the hook let run. A block
+            // returns "blocked" (or the post-tool label) before any of these (cmd_alerts.py@1.0.9:283-285).
             facts.Add(new AlertField("Call outcome", "Ran; recorded as an alert"));
         }
 

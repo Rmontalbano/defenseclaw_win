@@ -502,7 +502,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
         {
             // Every check re-reads the state (the first one after the window opens, Check again, the one after a run): nothing is kept from
             // the last time, because previous\, migration-v9.json and the install log are changed by the installer, not by this app.
-            ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory, CoworkPluginLeft()));
+            ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory, CoworkPluginLeft(), CoworkPluginRunsAfterRemoval()));
             _ = ReadPostFlightAsync();
         }
     }
@@ -889,7 +889,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
 
         _resultOffersRollback = result.Exit.OffersRollback;
         _resultRollbackNote = ResultRollbackNote(result);
-        ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory, CoworkPluginLeft()));
+        ApplyRollbackState(InstallScriptPlan.CheckRollback(_services.Paths.DataDirectory, CoworkPluginLeft(), CoworkPluginRunsAfterRemoval()));
     }
 
     private async Task ReadPostFlightAsync()
@@ -908,7 +908,8 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var (installer, installed) = (ScriptVersion, _installedVersion);
             var state = await Task.Run(() => InstallStateSnapshot.Read(dataDirectory, activity, now, recoverConfigNow)).ConfigureAwait(true);
             var coworkLeft = CoworkPluginLeft();
-            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers, coworkLeft, UninstallRemovesSetup(installed) || recoverConfigNow)).ConfigureAwait(true);
+            var coworkRuns = CoworkPluginRunsAfterRemoval();
+            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers, coworkLeft, UninstallRemovesSetup(installed) || recoverConfigNow, coworkRuns)).ConfigureAwait(true);
             var rollbackConfig = await Task.Run(() => ReadRollbackConfig(state.PreviousVersion)).ConfigureAwait(true);
 
             // What the installer's rollback will do about a Codex that changed since the older install set it up (CUST-399; hashes codex.exe) or an OpenCode V2 (CUST-424).
@@ -942,7 +943,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             OnPropertyChanged(nameof(RollbackLabel));
             _rollbackAgentNote = agentNote;
             _rollbackConfig = rollbackConfig;
-            ApplyRollbackState(InstallScriptPlan.CheckRollback(dataDirectory, coworkLeft));
+            ApplyRollbackState(InstallScriptPlan.CheckRollback(dataDirectory, coworkLeft, coworkRuns));
 
             LeftoverRows.Clear();
             foreach (var row in leftovers)

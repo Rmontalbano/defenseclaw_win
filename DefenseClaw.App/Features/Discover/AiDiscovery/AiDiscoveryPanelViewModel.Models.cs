@@ -374,7 +374,8 @@ public sealed partial class AiDiscoveryPanelViewModel
 
         _allCards.Clear();
         _coworkSetupOffered = OffersCoworkSetup;
-        foreach (var card in BuildCards(signals, now, ClaudeDesktopGate, _coworkSetupOffered ? OpenCoworkSetupCommand : null))
+        _coworkSetupLabel = CoworkSetupLabel;
+        foreach (var card in BuildCards(signals, now, ClaudeDesktopGate, _coworkSetupOffered ? OpenCoworkSetupCommand : null, _coworkSetupLabel))
         {
             _allCards.Add(card);
         }

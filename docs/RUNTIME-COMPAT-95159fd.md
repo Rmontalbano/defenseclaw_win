@@ -4,17 +4,28 @@ This page records what the app was checked against and what changed for it. It w
 `95159fd`; it requires a compatible runtime**. That commit is unreleased source that reports its own version as 1.0.0; nothing here is a
 statement about a release, and the 0.8.10 behaviour is unchanged (the 0.8.10 fixtures and suites are untouched and still pass).
 
-## Releases 1.0.0 to 1.0.8
+## Releases 1.0.0 to 1.0.9
 
-The app also covers the published releases 1.0.0 to 1.0.8. What a release added is gated by a capability judged from the version the runtime reports
-(`DefenseClaw.Core/Runtime/RuntimeCapability.cs`, `RuntimeProbe.cs`): a runtime that reports an older version, or none, gets what it got before. The 1.0.7 and
-1.0.8 behaviour was read from the release source at those tags and is tested with synthetic fixtures; no release was run by the tests.
+The app also covers the published releases 1.0.0 to 1.0.9. What a release added is gated by a capability judged from the version the runtime reports
+(`DefenseClaw.Core/Runtime/RuntimeCapability.cs`, `RuntimeProbe.cs`): a runtime that reports an older version, or none, gets what it got before. The 1.0.7, 1.0.8 and
+1.0.9 behaviour was read from the release source at those tags and is tested with synthetic fixtures; no release was run by the tests.
 
 - 1.0.7: `DecisionModelCascade`, `AuditStoreCapWarning`, `AgentNotInstalledSkip`, `HookFailureBlockRows`, `JudgeEscalation`, `PerUserCliLauncher`,
   `SecretRefGatewayTokenSkipped` (the gateway skips a gateway token that is a secret reference; below 1.0.7 the app uses that text as the token, as the gateway
   does), `RuntimeMonitoringDegradedReasons`.
 - 1.0.8: `CoworkProtection`, `ClaudeDesktopDiscovery`, `JudgeExtraBody`, `OpenShellMiddlewareRetired`, `PowerShellBridgeFailClosed`, `OtlpReplay`,
   `JudgeFallbackOnHookRows`, `OpenAiCompatibleProviders`.
+- 1.0.9 (`RuntimeProbe.Release109`): `ConnectorRecoverConfig` (`defenseclaw-gateway connector recover-config` finishes an interrupted agent config change; below 1.0.9 the
+  only way past a stuck receipt is to move its files aside), `CoworkPluginStale` (`status --json` reports `cowork_plugin_stale` for a plugin an older release
+  built), `CoworkPluginRunsAfterRemoval` (a plugin built by 1.0.9 lets Cowork calls run after the data folder is removed; an older plugin may block them),
+  `ShellProtectedFileFloor` (a shell command that writes SSH authorized keys, a shell startup file or an active Git hook is at least an alert in every rule pack,
+  and DefenseClaw's own files block with every pack; through 1.0.8 the permissive pack only reported self-protection findings),
+  `JudgeLocalParallelDefault` (`guardrail.judge.max_parallel` defaults to 1 for a local judge), `HostSensorDropLatch` (one dropped host sensor event keeps the
+  host sensor degraded until the gateway restarts; before it the state cleared by itself).
+- Signals with no gate, because an older runtime does not emit them: the rule ids `ACTION-OPERAND-BOUND`, `ACTION-SHARE-BODY-UNREAD`, `TOOL-PATH-UNVERIFIED`,
+  `ACTION-COMPOUND-LIMIT`, `tamper.agent_hook_config_disable` and `tamper.agent_hook_config_write`; the `surface` field of `alerts --json` (Cowork calls listed only by the runtime);
+  the installer's "uv cache folder is N characters long" stop (judged from the target version); and `defenseclaw-pack.json` posture for a rule pack folder.
+  The app's rule-pack selection (connector entry before global, `rule_pack` before `rule_pack_dir`) is the runtime's own since 1.0.0 and is not gated.
 
 ## What "verified" means
 

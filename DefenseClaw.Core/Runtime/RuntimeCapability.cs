@@ -110,7 +110,8 @@ public enum RuntimeCapability
 
     /// <summary>
     /// The self-protection of 1.0.5: observe mode hard-blocks a proven change to DefenseClaw's own active state (<c>provenActiveStateMutation</c> in
-    /// agent_hook.go; the permissive pack only reports it), and a call the gateway took but did not answer in time is blocked in every tier. So copy that
+    /// agent_hook.go; through 1.0.8 the permissive pack only reported it, and from 1.0.9 it blocks there too, <c>selfProtectionRules</c> in
+    /// shell_protected_file_profile.go@1.0.9:69-77), and a call the gateway took but did not answer in time is blocked in every tier. So copy that
     /// says observe, or fail-mode open, "never blocks" is wrong from this release on. Judged from the runtime's version (1.0.5 or later).
     /// </summary>
     ObserveBlocksSelfChange,

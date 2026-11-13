@@ -111,8 +111,8 @@ public static class HookFailModeRule
 
     /// <summary>
     /// The built-in policy tier of <paramref name="connector"/>'s rule pack when config.yaml names one plainly (<c>strict</c>, <c>default</c> or
-    /// <c>permissive</c>: the connector's <c>rule_pack</c>, else the global one, else the folder name of the connector's <c>rule_pack_dir</c>), or null when it
-    /// cannot be told without reading the pack (a custom pack, whose manifest posture decides). Used only to add a note, never to hide one.
+    /// <c>permissive</c>), or null when it cannot be told without reading the pack (a custom pack, whose manifest posture decides). The pack is the one
+    /// <see cref="RulePackSelection"/> picks (connector entry before global, <c>rule_pack</c> before <c>rule_pack_dir</c>). Used only to add a note, never to hide one.
     /// </summary>
     public static string? KnownPolicyTier(GuardrailSection guardrail, string connector) => KnownPolicyTier(guardrail, connector, null);
 
@@ -127,34 +127,8 @@ public static class HookFailModeRule
     /// </para>
     /// </summary>
     /// <param name="readManifest">Reads a file's text (null when missing); null reads the file system. A test seam.</param>
-    public static string? KnownPolicyTier(GuardrailSection guardrail, string connector, Func<string, string?>? readManifest)
-    {
-        ArgumentNullException.ThrowIfNull(guardrail);
-
-        guardrail.Connectors.TryGetValue(connector, out var own);
-        var name = !string.IsNullOrWhiteSpace(own?.RulePack) ? own!.RulePack : guardrail.RulePack;
-        if (!string.IsNullOrWhiteSpace(name))
-        {
-            return BuiltInTier(name);
-        }
-
-        if (string.IsNullOrWhiteSpace(own?.RulePackDir))
-        {
-            return null;
-        }
-
-        var dir = own!.RulePackDir.Trim();
-        var folder = Path.GetFileName(dir.TrimEnd('/', '\\'));
-        return DefenseClaw.Core.Policy.Model.RulePackPosture.FromManifest(dir, readManifest) ?? BuiltInTier(folder);
-    }
-
-    private static string? BuiltInTier(string name) => name.Trim().ToLowerInvariant() switch
-    {
-        "strict" => "strict",
-        "default" => "default",
-        "permissive" => "permissive",
-        _ => null,
-    };
+    public static string? KnownPolicyTier(GuardrailSection guardrail, string connector, Func<string, string?>? readManifest) =>
+        RulePackSelection.For(guardrail, connector).KnownTier(readManifest);
 }
 
 /// <summary>Where the saved <c>hook_fail_mode</c> that decides a connector lives (<see cref="HookFailModeRule.SavedScope"/>).</summary>

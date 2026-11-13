@@ -183,6 +183,10 @@ public sealed class GuardrailSection
     [YamlMember(Alias = "rule_pack")]
     public string? RulePack { get; set; }
 
+    /// <summary>The global rule-pack folder (the v8 key <c>guardrail.rule_pack_dir</c>); a global <c>rule_pack</c> wins over it. See <see cref="RulePackSelection"/>.</summary>
+    [YamlMember(Alias = "rule_pack_dir")]
+    public string? RulePackDir { get; set; }
+
     /// <summary>
     /// <c>guardrail.protected_files</c> as the YAML had it, whatever its shape: the runtime validates this block, the app only reads it, and a value of the
     /// wrong shape must not make the whole file unreadable here. Read it through <see cref="ProtectedFiles"/>.

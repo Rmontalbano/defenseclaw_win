@@ -107,6 +107,29 @@ public sealed class AiDiscoveryClaudeDesktopGateTests : IDisposable
     }
 
     [Fact]
+    public async Task A_stale_plugin_offers_rebuild_as_the_overview_does_and_other_states_keep_set_up()
+    {
+        var vm = await LoadedAsync("1.0.9");
+        var store = CoworkProtectionStore.For(_services!);
+
+        Assert.All(Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries,
+            static e => Assert.Equal("Set up Cowork protection", e.OpenCoworkSetupLabel));
+
+        store.Publish(State(isProtected: false, CoworkReasonCodes.PluginStale));
+        vm.FollowCoworkState();
+        Assert.All(Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries, static e =>
+        {
+            Assert.True(e.HasOpenCoworkSetup);
+            Assert.Equal("Rebuild the Cowork plugin", e.OpenCoworkSetupLabel);
+        });
+
+        store.Publish(State(isProtected: false, CoworkReasonCodes.PluginNotBuilt));
+        vm.FollowCoworkState();
+        Assert.All(Assert.Single(vm.CardsView.Cast<DiscoveryComponentCard>()).ClaudeDesktopEntries,
+            static e => Assert.Equal("Set up Cowork protection", e.OpenCoworkSetupLabel));
+    }
+
+    [Fact]
     public async Task On_a_1_0_7_runtime_there_is_no_cowork_setup_offer()
     {
         var vm = await LoadedAsync("1.0.7");

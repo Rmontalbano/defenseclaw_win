@@ -220,6 +220,29 @@ public sealed class UpgradeAdvisoryTests : IDisposable
         Assert.DoesNotContain("Cowork", PostUpgradeLeftovers.Evaluate(new Leftovers()).Single().Reason, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_cowork_sentence_is_the_installed_releases_as_in_the_uninstall_review(bool runsAfterRemoval)
+    {
+        // 1.0.8 (false): calls are blocked until the plugin is removed. 1.0.9 (true): a 1.0.9-built plugin lets calls run, older ones may block.
+        var data = DataWithSetupPrevious();
+        var expected = DefenseClaw.Core.ClaudeCode.CoworkProtectionFacts.RemovePluginStepFor(runsAfterRemoval);
+        var other = DefenseClaw.Core.ClaudeCode.CoworkProtectionFacts.RemovePluginStepFor(!runsAfterRemoval);
+
+        var note = InstallScriptPlan.CheckRollback(data, coworkPluginLeft: true, coworkPluginRunsAfterRemoval: runsAfterRemoval).Note;
+        Assert.EndsWith(" " + expected, note, StringComparison.Ordinal);
+        Assert.DoesNotContain(other, note, StringComparison.Ordinal);
+
+        foreach (var removesSetup in new[] { false, true })
+        {
+            var probes = new Leftovers();
+            var reason = PostUpgradeLeftovers.Evaluate(probes, coworkPluginLeft: true, uninstallRemovesSetup: removesSetup, coworkPluginRunsAfterRemoval: runsAfterRemoval).Single().Reason;
+            Assert.Contains(expected, reason, StringComparison.Ordinal);
+            Assert.DoesNotContain(other, reason, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public void The_cowork_sentence_needs_both_the_capability_and_the_state_file()
     {

@@ -1086,13 +1086,13 @@ public sealed partial class AiDiscoveryPanelViewModel : PanelViewModelBase, IAcc
     /// last - then the strongest detection, then by name.
     /// </summary>
     internal static IEnumerable<DiscoveryComponentCard> BuildCards(
-        IReadOnlyList<DiscoverySignalRecord> signals, DateTimeOffset now, bool claudeDesktop = false, ICommand? openCoworkSetup = null) =>
+        IReadOnlyList<DiscoverySignalRecord> signals, DateTimeOffset now, bool claudeDesktop = false, ICommand? openCoworkSetup = null, string? openCoworkSetupLabel = null) =>
         signals
             .Where(static s => !DiscoveryModelRow.IsModelSignal(s))
             .GroupBy(s => (Vendor: string.IsNullOrWhiteSpace(s.Vendor) ? "(unknown vendor)" : s.Vendor,
                            Product: string.IsNullOrWhiteSpace(s.Product) ? "(unknown product)" : s.Product),
                 StringTupleComparer.Instance)
-            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList(), Now = now, ClaudeDesktopEntries = claudeDesktop ? ClaudeDesktopEntry.For(g, openCoworkSetup) : Array.Empty<ClaudeDesktopEntry>() })
+            .Select(g => new DiscoveryComponentCard { Vendor = g.Key.Vendor, Product = g.Key.Product, Signals = g.ToList(), Now = now, ClaudeDesktopEntries = claudeDesktop ? ClaudeDesktopEntry.For(g, openCoworkSetup, openCoworkSetupLabel) : Array.Empty<ClaudeDesktopEntry>() })
             .OrderBy(c => c.StateWeight)
             .ThenByDescending(c => c.MaxConfidence)
             .ThenBy(c => c.Vendor, StringComparer.OrdinalIgnoreCase)

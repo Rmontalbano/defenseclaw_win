@@ -400,7 +400,7 @@ public static class InstallScriptPlan
     /// Whether <c>-Rollback</c> can work: it needs <c>previous\VERSION</c>, and the installer refuses when <c>previous\legacy-setup</c> exists (a Setup
     /// install it cannot restore automatically). Read-only.
     /// </summary>
-    public static RollbackAvailability CheckRollback(string dataDirectory, bool coworkPluginLeft = false)
+    public static RollbackAvailability CheckRollback(string dataDirectory, bool coworkPluginLeft = false, bool coworkPluginRunsAfterRemoval = false)
     {
         try
         {
@@ -416,7 +416,7 @@ public static class InstallScriptPlan
                     false,
                     "The previous install is DefenseClaw Setup, which the installer cannot restore automatically. To go back: run 'defenseclaw uninstall', " +
                     "then run that release's DefenseClawSetup-x64.exe. Its files and your pre-upgrade data are in " + previous + "." +
-                    (coworkPluginLeft ? " " + CoworkUninstall.Sentence : string.Empty));
+                    (coworkPluginLeft ? " " + CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) : string.Empty));
             }
 
             return new RollbackAvailability(true, "The installer will swap back to the previous install.");
@@ -530,8 +530,11 @@ public sealed class RegistryLeftoverProbes : ILeftoverProbes
 /// </summary>
 internal static class CoworkUninstall
 {
-    /// <summary>The app's one Cowork removal sentence (the CLI's own uninstall warning), shared with the uninstall and reset reviews.</summary>
-    internal const string Sentence = DefenseClaw.Core.ClaudeCode.CoworkProtectionFacts.RemovePluginStep;
+    /// <summary>
+    /// The app's one Cowork removal sentence (the CLI's own uninstall warning) for the installed runtime, shared with the uninstall and reset reviews:
+    /// 1.0.9's wording when <paramref name="pluginRunsAfterRemoval"/>, else 1.0.8's.
+    /// </summary>
+    internal static string SentenceFor(bool pluginRunsAfterRemoval) => DefenseClaw.Core.ClaudeCode.CoworkProtectionFacts.RemovePluginStepFor(pluginRunsAfterRemoval);
 
     /// <summary>The file whose presence means a Cowork plugin was installed.</summary>
     internal static string StatePath(string dataDirectory) => Path.Combine(dataDirectory, "cowork", "plugin-state.json");
@@ -570,8 +573,9 @@ public static class PostUpgradeLeftovers
 
     /// <param name="probes">The registry and file facts.</param>
     /// <param name="coworkPluginLeft">Whether the Cowork removal sentence is added.</param>
+    /// <param name="coworkPluginRunsAfterRemoval">The installed runtime has <c>CoworkPluginRunsAfterRemoval</c> (1.0.9): the Cowork sentence is that release's.</param>
     /// <param name="uninstallRemovesSetup">The installed DefenseClaw is 1.0.9 or later, whose 'defenseclaw uninstall' also removes a 0.8.x Setup install kept beside it.</param>
-    public static IReadOnlyList<PreflightRow> Evaluate(ILeftoverProbes probes, bool coworkPluginLeft = false, bool uninstallRemovesSetup = false)
+    public static IReadOnlyList<PreflightRow> Evaluate(ILeftoverProbes probes, bool coworkPluginLeft = false, bool uninstallRemovesSetup = false, bool coworkPluginRunsAfterRemoval = false)
     {
         ArgumentNullException.ThrowIfNull(probes);
         var rows = new List<PreflightRow>();
@@ -600,10 +604,10 @@ public static class PostUpgradeLeftovers
                     ? $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. DefenseClaw Setup 0.8.x is still installed beside 1.0. " +
                       "'defenseclaw uninstall' removes it (its data folder is kept), but it also stops this release's gateway and removes the hooks of the connectors it has configured, " +
                       "so run setup again afterwards. 'defenseclaw init' will not set up hooks while Setup's hooks remain in the agent's settings. " +
-                      (coworkPluginLeft ? CoworkUninstall.Sentence + " " : string.Empty) + "This app does not change that entry."
+                      (coworkPluginLeft ? CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) + " " : string.Empty) + "This app does not change that entry."
                     : $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. Do not uninstall it from Windows Settings on a 1.0 machine: " +
                       "it is the old Setup's entry, not the 1.0 install's. To remove DefenseClaw 1.0 use 'defenseclaw uninstall'. " +
-                      (coworkPluginLeft ? CoworkUninstall.Sentence + " " : string.Empty) + "This app does not change that entry."));
+                      (coworkPluginLeft ? CoworkUninstall.SentenceFor(coworkPluginRunsAfterRemoval) + " " : string.Empty) + "This app does not change that entry."));
         }
 
         return rows;

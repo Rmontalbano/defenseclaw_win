@@ -14,7 +14,7 @@ internal static class UvCacheDepth
     public const string RowId = "uv-cache";
 
     /// <summary>The first release whose installer has the check.</summary>
-    public static readonly Version FirstRelease = new(1, 0, 9);
+    public static readonly Version FirstRelease = DefenseClaw.Core.Runtime.RuntimeProbe.Release109;
 
     /// <summary>What uv needs after the cache path (install.ps1@1.0.9:1914).</summary>
     public const int Extra = 151;

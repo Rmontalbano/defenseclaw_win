@@ -54,11 +54,20 @@ public sealed record ClaudeDesktopEntry
 
     public bool HasOpenCoworkSetup => OpenCoworkSetupCommand is not null;
 
+    /// <summary>The button's text: "Rebuild the Cowork plugin" for a plugin built by an older DefenseClaw (1.0.9 <c>cowork_plugin_stale</c>), as the Overview row says; else "Set up Cowork protection".</summary>
+    public string OpenCoworkSetupLabel { get; init; } = SetUpCoworkLabel;
+
+    /// <summary>The button's text while Cowork is not set up.</summary>
+    public const string SetUpCoworkLabel = "Set up Cowork protection";
+
+    /// <summary>The button's text for a stale plugin (the Overview row's action).</summary>
+    public const string RebuildCoworkLabel = "Rebuild the Cowork plugin";
+
     /// <summary>A line for a screen reader.</summary>
     public override string ToString() =>
         $"{Title}: {DetailText}. Cowork plugins: {PluginsText}.";
 
-    public static ClaudeDesktopEntry From(ClaudeDesktopInfo info, string? dataFolder, ICommand? openCoworkSetup = null)
+    public static ClaudeDesktopEntry From(ClaudeDesktopInfo info, string? dataFolder, ICommand? openCoworkSetup = null, string? openCoworkSetupLabel = null)
     {
         ArgumentNullException.ThrowIfNull(info);
 
@@ -83,11 +92,12 @@ public sealed record ClaudeDesktopEntry
                     string.Equals(name.Trim(), ClaudeDesktopDiscovery.DefenseClawPluginName, StringComparison.OrdinalIgnoreCase)))
                 .ToList(),
             OpenCoworkSetupCommand = openCoworkSetup,
+            OpenCoworkSetupLabel = openCoworkSetupLabel ?? SetUpCoworkLabel,
         };
     }
 
     /// <summary>One entry per signal that has a block: 1p first, then 3p, then the rest, then by data folder name.</summary>
-    public static IReadOnlyList<ClaudeDesktopEntry> For(IEnumerable<DiscoverySignalRecord> signals, ICommand? openCoworkSetup = null)
+    public static IReadOnlyList<ClaudeDesktopEntry> For(IEnumerable<DiscoverySignalRecord> signals, ICommand? openCoworkSetup = null, string? openCoworkSetupLabel = null)
     {
         ArgumentNullException.ThrowIfNull(signals);
 
@@ -96,7 +106,7 @@ public sealed record ClaudeDesktopEntry
             .Select(static s => (Info: s.ClaudeDesktop!, Folder: FolderOf(s)))
             .OrderBy(static pair => pair.Info.Deployment switch { "1p" => 0, "3p" => 1, _ => 2 })
             .ThenBy(static pair => pair.Folder, StringComparer.OrdinalIgnoreCase)
-            .Select(pair => From(pair.Info, pair.Folder, openCoworkSetup))
+            .Select(pair => From(pair.Info, pair.Folder, openCoworkSetup, openCoworkSetupLabel))
             .ToList();
     }
 

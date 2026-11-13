@@ -1108,13 +1108,12 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // Scoped to one connector the Mac puts that connector's policy first: its mode and rule pack.
         if (Services.ConnectorScope.Current is { } scope)
         {
-            Services.Config.Config.Guardrail.Connectors.TryGetValue(scope, out var settings);
             rows.Insert(0, new ScannerRow
             {
                 Name = "policy",
                 StateText = ModeOf(scope) ?? "—",
                 StateKey = "Medium",
-                Detail = $"{scope.ToLowerInvariant()} · rule pack {RulePackName(settings?.RulePackDir)}",
+                Detail = $"{scope.ToLowerInvariant()} · rule pack {RulePackLabel(scope)}",
             });
         }
 
@@ -1209,7 +1208,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
             {
                 Name = name,
                 Friendly = reported?.Friendly ?? string.Empty,
-                RulePack = RulePackName(settings?.RulePackDir),
+                RulePack = RulePackLabel(name),
                 Alerts = alertCounts.TryGetValue(name, out var tally) ? tally.Total : 0,
                 Calls = status?.Requests ?? 0,
                 Blocks = (status?.ToolBlocks ?? 0) + (status?.SubprocessBlocks ?? 0),

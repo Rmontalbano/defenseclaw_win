@@ -376,7 +376,7 @@ public sealed partial class OverviewPanelViewModel
 
         rows.Add(("Connector", $"{(string.IsNullOrWhiteSpace(friendly) ? scope : friendly)} ({scope.ToLowerInvariant()})", "Neutral"));
         rows.Add((ConfiguredModeLabel, connector?.Mode ?? settings?.Mode ?? "?", "Neutral"));
-        rows.Add(("Rule pack", RulePackName(settings?.RulePackDir), "Neutral"));
+        rows.Add(("Rule pack", RulePackLabel(scope), "Neutral"));
         rows.Add(("Guardrail", Services.Config.Config.Guardrail.Enabled ? "enabled" : "disabled", "Neutral"));
 
         var (failMode, tone) = FailModeText(scope);
@@ -432,7 +432,7 @@ public sealed partial class OverviewPanelViewModel
     {
         var modes = roster.Select(ModeOf).Where(static m => m is { Length: > 0 }).Select(static m => m!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var packs = roster
-            .Select(n => Services.Config.Config.Guardrail.Connectors.TryGetValue(n, out var s) ? RulePackName(s.RulePackDir) : "default")
+            .Select(RulePackLabel)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -488,6 +488,12 @@ public sealed partial class OverviewPanelViewModel
         config.Guardrail.Enabled
             ? "enabled" + (config.Guardrail.ScannerMode is { Length: > 0 } scanner ? $" · scanner {scanner}" : string.Empty)
             : "disabled";
+
+    /// <summary>
+    /// The rule pack config.yaml selects for <paramref name="connector"/>, as the runtime picks it (<see cref="RulePackSelection"/>: the connector's entry before the
+    /// global one, <c>rule_pack</c> before <c>rule_pack_dir</c>), with its manifest posture in brackets when that differs from the name.
+    /// </summary>
+    internal string RulePackLabel(string connector) => RulePackSelection.For(Services.Config.Config.Guardrail, connector).Label();
 
     /// <summary>The last segment of a rule-pack directory (<c>default</c> when none is named), as the table prints it.</summary>
     internal static string RulePackName(string? directory)

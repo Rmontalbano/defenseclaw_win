@@ -1,11 +1,23 @@
 # Updating DefenseClaw for Windows
 
 This page covers updating the companion app itself. The DefenseClaw runtime (CLI and gateway) is upgraded from the Updates window; see "DefenseClaw 1.0" in the README.
-The app works with runtime 0.8.10 and 1.0.0 to 1.0.8. Updating the app does not change which runtime is installed; the app offers what the installed runtime has.
+The app works with runtime 0.8.10 and 1.0.0 to 1.0.9. Updating the app does not change which runtime is installed; the app offers what the installed runtime has.
 
 For a runtime upgrade to 1.0.8, the Updates pre-flight warns when the installed version is outside the range that release supports upgrading from (1.0.2 to 1.0.7)
 and, from 1.0.7, when the data folder or `DEFENSECLAW_HOME` is a link, which the 1.0.7 launcher refuses. The upgrade still runs. A rollback puts back the
 config.yaml saved at upgrade time; its note names the settings made since then that the older release does not accept.
+
+For a runtime upgrade to 1.0.9, three more things apply:
+
+- **A stuck pending connector write.** On 1.0.9 it is finished with `defenseclaw-gateway connector recover-config`, which Overview offers as "Finish the
+  interrupted change" (reviewed before it runs). On 1.0.8 and older the way out is still to move the files aside, as the row says. With the 1.0.9 installer and
+  an older runtime installed, the Updates card says the command needs 1.0.9.
+- **The uv cache path.** The 1.0.9 installer stops with "uv cache folder is N characters long" and changes nothing when the uv cache folder path is longer than
+  108 characters (uv needs 151 more characters for one package, and the total must stay under 260) and Windows long paths are off. The pre-flight shows a
+  "uv cache path" row as a warning first. To fix it, set the user environment variable `UV_CACHE_DIR` to a short folder only your account can write, then restart
+  this app (the installer reads the app's environment, so a variable set after the app started is not seen), or have an administrator turn on long paths.
+- **A 0.8.x Setup install kept beside 1.0.** With 1.0.9, `defenseclaw uninstall` also removes it (its data folder is kept), but it stops this release's gateway and
+  removes the connectors' hooks, so run setup again afterwards. `defenseclaw init` will not set up hooks while Setup's hooks remain in the agent's settings.
 
 ## Automatic checks
 

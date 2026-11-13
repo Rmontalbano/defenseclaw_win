@@ -81,8 +81,8 @@ public static class RuntimeProbe
     /// <summary>The 1.0.8 release: Claude Cowork protection, Claude Desktop in AI Discovery and <c>guardrail.judge.extra_body</c>.</summary>
     internal static readonly Version Release108 = new(1, 0, 8);
 
-    /// <summary>The 1.0.9 release: <c>connector recover-config</c>, the stale Cowork plugin reason and the shell-write alert floor for protected files.</summary>
-    internal static readonly Version Release109 = new(1, 0, 9);
+    /// <summary>The 1.0.9 release: <c>connector recover-config</c>, the stale Cowork plugin reason and the shell-write alert floor for protected files. Public so the app's installer checks compare with the same number.</summary>
+    public static readonly Version Release109 = new(1, 0, 9);
 
     /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
     internal static readonly Version RepinVersion = new(1, 0, 4);
