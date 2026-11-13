@@ -71,6 +71,7 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
         Assert.DoesNotContain("Clear", row.Detail, StringComparison.Ordinal);
         Assert.Contains("connector recover-config", row.Detail, StringComparison.Ordinal);
         Assert.Contains("unrecognized inode", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("the upgrade stays refused until that config can be finished", row.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -173,14 +174,22 @@ public sealed class ConnectorRecoveryOverviewTests : IDisposable
             "A change it cannot prove is kept and named",
             "a file you saved is never replaced",
             "finished N interrupted agent config change(s)",
-            "0 means nothing was left to finish",
-            "the recovery files are kept",
+            "finished 0 means nothing was finished; if the Overview still shows a stuck write, check that the folder it prints is your data folder.",
+            "the recovery files (the .defenseclaw-cas-v2-* receipts in the data folder) are kept",
+            "the upgrade stays refused until that config can be finished",
             "names each config it could not finish",
-            "The installer asks for this command before it stops the gateway, so the gateway can keep running.",
+            "The installer refuses to change version while these recovery files remain and prints this command for you to run; it does not run it.",
         })
         {
             Assert.Contains(phrase, review.Summary, StringComparison.Ordinal);
         }
+
+        // Only what the source shows: nothing about the gateway running or stopping, nothing about closing the agent, and no all-clear for a 0.
+        Assert.DoesNotContain("keep running", review.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("before it stops the gateway", review.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nothing was left", review.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("quit", review.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("close the agent", review.Summary, StringComparison.OrdinalIgnoreCase);
 
         Assert.Empty(ran);
 

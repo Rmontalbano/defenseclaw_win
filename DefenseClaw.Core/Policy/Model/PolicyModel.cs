@@ -254,10 +254,10 @@ public sealed partial class PolicyModel
         var shared = globalOwn ?? OwnLevels(ScopeRow(PolicyScopes.Global));
         if (ConnectorOf(row).Length == 0)
         {
-            return PolicyLevels.ResolveLevels(row.PackFolder, shared);
+            return PolicyLevels.ResolveLevels(row.PackFolder, shared, postures: Catalog.PackPostures);
         }
 
-        return PolicyLevels.ResolveLevels(row.PackFolder, shared, own ?? OwnLevels(row));
+        return PolicyLevels.ResolveLevels(row.PackFolder, shared, own ?? OwnLevels(row), Catalog.PackPostures);
     }
 
     /// <summary>The (blocks at, alerts at) labels for the scope's tool calls: the catalog's, else resolved the same way.</summary>
@@ -283,7 +283,7 @@ public sealed partial class PolicyModel
         var shared = OwnLevels(ScopeRow(PolicyScopes.Global));
         var row = connector.Length > 0 ? ScopeRow(connector) : null;
         (string Block, string Alert)? own = row is null ? null : OwnLevels(row);
-        return (PolicyLevels.ResolveLevels(packFolder, shared, own), PolicyLevels.ResolveLevels(packFolder));
+        return (PolicyLevels.ResolveLevels(packFolder, shared, own, Catalog.PackPostures), PolicyLevels.ResolveLevels(packFolder, postures: Catalog.PackPostures));
     }
 
     /// <summary>What picking <paramref name="choice"/> (a picker value, or <see cref="PolicyLevels.Inherit"/>) on <paramref name="row"/> changes.</summary>
@@ -353,7 +353,7 @@ public sealed partial class PolicyModel
         var levels = RowLevels(row);
         var scope = row.Scope.Length > 0 ? row.Scope : PolicyScopes.Global;
         var pack = row.Pack;
-        var profile = PolicyLevels.PackProfile(row.PackFolder);
+        var profile = PolicyLevels.PackProfile(row.PackFolder, Catalog.PackPostures);
         string line;
         if (string.Equals(levels.BlockSource, levels.AlertSource, StringComparison.Ordinal))
         {

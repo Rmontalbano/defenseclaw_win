@@ -109,6 +109,51 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
     }
 
     [Fact]
+    public void On_1_0_9_the_hint_says_what_stays_when_the_recovery_cannot_finish_a_receipt_and_invents_no_other_step()
+    {
+        var hint = InstallScriptPlan.HintFor(Refusal109, recoverConfigInstalled: true)!;
+
+        Assert.Contains("Do not remove or move the receipts yourself.", hint, StringComparison.Ordinal);
+        Assert.Contains(".defenseclaw-cas-v2-* receipts in the data folder", hint, StringComparison.Ordinal);
+        Assert.Contains("the upgrade stays refused until that config can be finished", hint, StringComparison.Ordinal);
+        Assert.Contains("give no other step", hint, StringComparison.Ordinal);
+        Assert.DoesNotContain("close the agent", hint, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("move aside", hint, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\operator\.defenseclaw", @"defenseclaw-gateway connector recover-config --data-dir C:\Users\operator\.defenseclaw")]
+    [InlineData(@"C:\Users\Jane Doe\.defenseclaw", "defenseclaw-gateway connector recover-config --data-dir \"C:\\Users\\Jane Doe\\.defenseclaw\"")]
+    [InlineData(@"D:\data (x86)\dc&co", "defenseclaw-gateway connector recover-config --data-dir \"D:\\data (x86)\\dc&co\"")]
+    [InlineData(@"C:\dc dir\", "defenseclaw-gateway connector recover-config --data-dir \"C:\\dc dir\"")]
+    public void The_copyable_command_pastes_in_PowerShell_and_cmd_with_double_quotes_when_the_path_needs_them(string folder, string expected)
+    {
+        var text = ConnectorRecovery.CommandText(folder);
+
+        Assert.Equal(expected, text);
+        Assert.DoesNotContain("'", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_folder_with_a_dollar_sign_or_percent_gets_a_check_sentence_and_a_plain_one_does_not()
+    {
+        Assert.Contains("check that the command prints this folder", ConnectorRecovery.ReceiptsOnlyStep(@"C:\dc$data"), StringComparison.Ordinal);
+        Assert.Contains("check that the command prints this folder", ConnectorRecovery.ReceiptsOnlyStep(@"C:\dc%data"), StringComparison.Ordinal);
+        Assert.DoesNotContain("check that the command prints", ConnectorRecovery.ReceiptsOnlyStep(@"C:\Users\operator\.defenseclaw"), StringComparison.Ordinal);
+        Assert.DoesNotContain("in a terminal", ConnectorRecovery.ReceiptsOnlyStep(FakeData), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_zero_is_never_called_nothing_left()
+    {
+        Assert.DoesNotContain("nothing was left", ConnectorRecovery.SuccessText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("finished 0 means nothing was finished", ConnectorRecovery.SuccessText, StringComparison.Ordinal);
+        Assert.Contains("check that the folder it prints is your data folder", ConnectorRecovery.SuccessText, StringComparison.Ordinal);
+        Assert.Contains("the upgrade stays refused", ConnectorRecovery.FailureText, StringComparison.Ordinal);
+        Assert.DoesNotContain("keep running", ConnectorRecovery.InstallerSentence, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void The_other_hints_do_not_depend_on_the_installed_runtime()
     {
         Assert.Equal(InstallScriptPlan.AcceptCurrentInstallHint, InstallScriptPlan.HintFor("retry with -AcceptCurrentInstall", true));
@@ -151,7 +196,9 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
         var newer = Evaluate(new Probes { ReceiptsOnly = true }, "1.0.9", "1.0.9", recoverConfig: true).Rows.Single(r => r.Id == InstallScriptPreflight.PendingWritesId);
 
         Assert.EndsWith("and they are not a pending write this app can clear.", older.Reason, StringComparison.Ordinal);
-        Assert.Contains("defenseclaw-gateway connector recover-config --data-dir '" + _temp.Path + "'", newer.Reason, StringComparison.Ordinal);
+        Assert.Contains(ConnectorRecovery.CommandText(_temp.Path), newer.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("--data-dir '", newer.Reason, StringComparison.Ordinal);
+        Assert.Contains("in PowerShell or a Command Prompt", newer.Reason, StringComparison.Ordinal);
         Assert.DoesNotContain("can clear", newer.Reason, StringComparison.Ordinal);
         Assert.Equal(PreflightStatus.Block, newer.Status);
     }
@@ -191,10 +238,13 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
 
         var refusal = Assert.IsType<InstallerRefusal>(facts.Refusal);
         Assert.Equal(InstallerRefusalKind.UvCacheTooDeep, refusal.Kind);
-        Assert.Equal(line, refusal.Reason);
-        Assert.Equal(line, facts.Reason);
-        Assert.Contains("$env:UV_CACHE_DIR = 'C:\\dcuv'", facts.Reason, StringComparison.Ordinal);
-        Assert.Contains("LongPathsEnabled", facts.Reason, StringComparison.Ordinal);
+        // The sentence to "Nothing was changed."; the installer's own terminal fix after it is dropped, so only the app's next step is shown.
+        var shown = line[..(line.IndexOf("Nothing was changed.", StringComparison.Ordinal) + "Nothing was changed.".Length)];
+        Assert.Equal(shown, refusal.Reason);
+        Assert.Equal(shown, facts.Reason);
+        Assert.DoesNotContain("$env:UV_CACHE_DIR", facts.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("run the installer again", facts.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("$env:", refusal.NextStep, StringComparison.Ordinal);
 
         // The path keeps its profile folder, so the number in "is N characters long" is the length of the path that is shown.
         Assert.Contains(DeepProfile, facts.Reason, StringComparison.Ordinal);
@@ -219,6 +269,17 @@ public sealed class ConnectorRecoveryUpgradeTests : IDisposable
 
         Assert.Equal(InstallerRefusalKind.UvCacheTooDeep, facts.Refusal?.Kind);
         Assert.Null(InstallTranscript.Parse(Transcript("  > " + line)).Refusal);
+    }
+
+    [Fact]
+    public void A_uv_refusal_with_a_huge_path_is_capped()
+    {
+        var huge = @"C:\" + new string('d', 5000) + @"\.uv\cache";
+        var facts = InstallTranscript.Parse(Transcript("  x " + UvLine(huge)));
+
+        Assert.Equal(InstallerRefusalKind.UvCacheTooDeep, facts.Refusal?.Kind);
+        Assert.True(facts.Reason!.Length <= InstallTranscript.MaxUvCacheReasonChars);
+        Assert.EndsWith("…", facts.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -136,6 +136,33 @@ public sealed class CoworkConnectorRemovalReviewTests : IDisposable
         _ = Assert.Single(Bars(services, "setup", "remove", "claudecode", "--yes"));
     }
 
+    [Fact]
+    public async Task On_1_0_8_the_bar_says_only_what_1_0_8_shows_and_not_the_1_0_9_line_or_the_blocked_claim()
+    {
+        var services = await ServicesAsync("1.0.8");
+
+        var bar = Assert.Single(Bars(services, "setup", "remove", "claudecode", "--yes"));
+
+        Assert.Equal("Cowork stops being protected", bar.Title);
+        Assert.Equal(CoworkUninstallReview.ConnectorMessage108, bar.Message);
+        Assert.StartsWith("If the removal succeeds, Cowork is no longer protected", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("reports it as not protected", bar.Message, StringComparison.Ordinal);
+        Assert.Contains("Customize > Plugins, then the ... menu > Remove", bar.Message, StringComparison.Ordinal);
+        Assert.NotEqual(CoworkUninstallReview.ConnectorMessage, bar.Message);
+        Assert.DoesNotContain("blocked", bar.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("runs after", bar.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task On_1_0_9_the_bar_is_the_clis_own_line_and_the_message_follows_the_capability()
+    {
+        var current = await ServicesAsync("1.0.9", pluginState: false);
+        Assert.Equal(CoworkUninstallReview.ConnectorMessage, CoworkUninstallReview.ConnectorMessageFor(current.Runtime.Capabilities));
+
+        var old = await ServicesAsync("1.0.8", pluginState: false);
+        Assert.Equal(CoworkUninstallReview.ConnectorMessage108, CoworkUninstallReview.ConnectorMessageFor(old.Runtime.Capabilities));
+    }
+
     // ------------------------------------------------------------------ the uninstall / reset sentence by release
 
     [Fact]

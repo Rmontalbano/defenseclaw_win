@@ -138,7 +138,11 @@ public sealed partial class AlertItem
             notes.Add(JudgeEscalationFinding.Explanation);
         }
 
-        AddRuleIdLabels(row, details, notes);
+        if (gate.AlertRan)
+        {
+            AddRuleIdLabels(row, details, notes);
+        }
+
         if (gate.AlertRan && StructuredDetailParser.IsHook(Action) && string.Equals(RowFact(row, "decision"), "alert", StringComparison.OrdinalIgnoreCase))
         {
             // alerts --json prints decision "alert" for a call that ran and was recorded as an alert (cmd_alerts.py@1.0.9:296-297; 1.0.8 said "allow").
@@ -186,15 +190,17 @@ public sealed partial class AlertItem
     }
 
     /// <summary>
-    /// The sentence for a rule id of <see cref="RuleIdLabels"/> in place of a raw headline, and for the shell-command limit rule what happened to the call, from the
-    /// row's own decision and action fields (never from the runtime version). The judge-unavailable id is labelled above.
+    /// The sentence for a rule id of <see cref="RuleIdLabels"/> as a note of its own (the runtime's own rule title stays the headline), and for the shell-command
+    /// limit rule what happened to the call, from the row's own decision and action fields. Called only when <see cref="HookRowGate.AlertRan"/> is on:
+    /// <see cref="RuntimeCapability.ShellProtectedFileFloor"/> is used as the 1.0.9 release marker because the rule labels and the alert decision change shipped in the
+    /// same release and no separate capability exists, so a 1.0.7 or 1.0.8 runtime's rows read as they always did. The judge-unavailable id is labelled above.
     /// </summary>
     private void AddRuleIdLabels(RuntimeAlertRow? row, string? details, List<string> notes)
     {
         var ids = RuleIdList(row).Prepend(RuleId).Where(id => id.Length > 0 && !JudgeEscalationFinding.Is(id)).ToList();
-        if (RuleIdLabels.Sentence(RuleId) is { } sentence && !JudgeEscalationFinding.Is(RuleId) && HeadlineIsRaw(details))
+        foreach (var sentence in ids.Select(RuleIdLabels.Sentence).Where(x => x is { Length: > 0 }).Distinct(StringComparer.Ordinal))
         {
-            Headline = sentence;
+            notes.Add(sentence!);
         }
 
         if (ids.Any(RuleIdLabels.IsCompoundLimit) && RuleIdLabels.CompoundLimitOutcome(RowFact(row, "decision"), details) is { } outcome)

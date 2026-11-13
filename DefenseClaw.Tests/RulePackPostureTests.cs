@@ -29,7 +29,7 @@ public sealed class RulePackPostureTests : IDisposable
     public void The_built_in_default_folder_reads_default_with_the_1_0_9_manifest_and_without_it()
     {
         Assert.Equal("default", RulePackPosture.For(Pack(@"with\default", "{\"posture\":\"default\"}")));
-        Assert.Equal("default", PolicyLevels.PackProfile(Pack(@"with2\default", "{\"posture\":\"default\"}")));
+        Assert.Equal("default", PolicyLevels.PackProfile(Pack(@"with2\default", "{\"posture\":\"default\"}"), null));
 
         // The 1.0.8 layout: the same folder name, no manifest.
         Assert.Equal("default", RulePackPosture.For(Pack(@"without\default", null)));
@@ -46,7 +46,37 @@ public sealed class RulePackPostureTests : IDisposable
     {
         var folder = Pack(name, manifest);
         Assert.Equal(expected, RulePackPosture.For(folder));
-        Assert.Equal(expected, PolicyLevels.PackProfile(folder));
+        Assert.Equal(expected, PolicyLevels.PackProfile(folder, PackPostures.Read(new[] { folder }, f => RulePackPosture.FromManifest(f))));
+    }
+
+    [Fact]
+    public void PackProfile_and_ResolveLevels_read_no_file_and_use_the_postures_they_are_given()
+    {
+        var folder = Pack("mypack", "{\"posture\":\"strict\"}");
+
+        // Without postures the name decides, even though the folder holds a strict manifest: nothing was read from the disk.
+        Assert.Equal("default", PolicyLevels.PackProfile(folder));
+        Assert.Equal(4, PolicyLevels.ResolveLevels(folder).BlockRank);
+
+        var reads = new List<string>();
+        var postures = PackPostures.Read(new[] { folder, folder.ToUpperInvariant(), string.Empty, null }, f =>
+        {
+            reads.Add(f);
+            return RulePackPosture.FromManifest(f);
+        });
+
+        // Each distinct folder is read once, however many rows use it.
+        Assert.Single(reads);
+        Assert.Equal("strict", PolicyLevels.PackProfile(folder, postures));
+        Assert.Equal(2, PolicyLevels.ResolveLevels(folder, default, null, postures).BlockRank);
+        Assert.Equal("default", PolicyLevels.PackProfile(Path.Combine(_temp.Path, "other"), postures));
+        for (var i = 0; i < 5; i++)
+        {
+            _ = PolicyLevels.PackProfile(folder, postures);
+            _ = PolicyLevels.ProfileLevelsFor(folder, postures);
+        }
+
+        Assert.Single(reads);
     }
 
     [Theory]
@@ -62,6 +92,23 @@ public sealed class RulePackPostureTests : IDisposable
     [InlineData("permissive", "garbage", "permissive")]
     public void A_manifest_that_cannot_be_used_falls_back_to_the_folder_name(string name, string manifest, string expected) =>
         Assert.Equal(expected, RulePackPosture.For(Pack(name, manifest)));
+
+    [Theory]
+    [InlineData("{\"Posture\":\"strict\"}", "strict")]
+    [InlineData("{\"POSTURE\":\"permissive\"}", "permissive")]
+    [InlineData("{\"posture\":\"default\",\"POSTURE\":\"strict\"}", "strict")]
+    [InlineData("{\"POSTURE\":\"strict\",\"posture\":\"default\"}", "default")]
+    [InlineData("{\"posture\":\"strict\",\"posture\":\"permissive\"}", "permissive")]
+    [InlineData("{\"posture\":\"strict\",\"Posture\":null}", "strict")]
+    public void The_manifest_key_matches_the_way_Gos_json_decoder_does_and_the_last_match_wins(string manifest, string expected) =>
+        Assert.Equal(expected, RulePackPosture.FromManifest(@"X:\packs\mypack", _ => manifest));
+
+    [Theory]
+    [InlineData("{\"posture\":\"default\",\"POSTURE\":5}")]
+    [InlineData("{\"posture\":5,\"Posture\":\"strict\"}")]
+    [InlineData("{\"Posture\":[\"strict\"]}")]
+    public void A_matching_key_with_a_value_that_is_not_a_string_means_no_posture(string manifest) =>
+        Assert.Null(RulePackPosture.FromManifest(@"X:\packs\mypack", _ => manifest));
 
     [Fact]
     public void A_manifest_over_1_MiB_is_ignored()

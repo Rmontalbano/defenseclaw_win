@@ -55,19 +55,10 @@ internal static partial class LogHookRows
         if (gate.JudgeEscalation)
         {
             var hit = JudgeEscalationFinding.AnyIn(e.Detail.Categories);
-            if (RuleIdOf(e.RowDetails) is { Length: > 0 } rule && RuleIdLabels.Has(rule))
+            if (RuleIdOf(e.RowDetails) is { Length: > 0 } rule && JudgeEscalationFinding.Is(rule))
             {
-                fields.Add(new LogField("Rule ID", RuleIdLabels.WithLabel(rule)));
-                hit |= JudgeEscalationFinding.Is(rule);
-                if (RuleIdLabels.IsCompoundLimit(rule) && RuleIdLabels.CompoundLimitOutcome(null, e.RowDetails) is { } outcome)
-                {
-                    fields.Add(new LogField("Call outcome", outcome));
-                }
-            }
-            else if (RuleIdLabels.AnyIn(e.Detail.Categories.Where(RuleIdLabels.IsCompoundLimit))
-                && RuleIdLabels.CompoundLimitOutcome(null, e.RowDetails) is { } categoryOutcome)
-            {
-                fields.Add(new LogField("Call outcome", categoryOutcome));
+                fields.Add(new LogField("Rule ID", JudgeEscalationFinding.WithLabel(rule)));
+                hit = true;
             }
 
             hit |= StructuredDetailParser.IsHook(e.RowAction)
@@ -76,6 +67,11 @@ internal static partial class LogHookRows
             {
                 fields.Add(new LogField("Rule note", JudgeEscalationFinding.Explanation));
             }
+        }
+
+        if (gate.AlertRan)
+        {
+            AddRuleMeanings(e, fields);
         }
 
         if (gate.JudgeFallback && StructuredDetailParser.IsHook(e.RowAction))
@@ -102,10 +98,35 @@ internal static partial class LogHookRows
         return new Labels(message, isCowork, fields, skipFallback);
     }
 
-    /// <summary>The Categories row's value: the rule ids, each with its label where it has one (the judge-unavailable id and the ids of RuleIdLabels), when the runtime has earned it.</summary>
+    /// <summary>
+    /// The 1.0.9 rule labels: a "Rule meaning" line for each id of <see cref="RuleIdLabels"/> the row names, and for the shell-command limit rule what happened to the
+    /// call. Added after the row's own fields; the runtime's value is never replaced. Only called when <see cref="HookRowGate.AlertRan"/> is on:
+    /// <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ShellProtectedFileFloor"/> is used as the 1.0.9 release marker because the rule labels and the alert decision shipped in the
+    /// same release and no separate capability exists.
+    /// </summary>
+    private static void AddRuleMeanings(StreamEvent e, List<LogField> fields)
+    {
+        var ids = e.Detail.Categories.ToList();
+        if (RuleIdOf(e.RowDetails) is { Length: > 0 } rule)
+        {
+            ids.Add(rule);
+        }
+
+        foreach (var meaning in RuleIdLabels.NewSentencesOf(ids))
+        {
+            fields.Add(new LogField("Rule meaning", meaning));
+        }
+
+        if (ids.Any(RuleIdLabels.IsCompoundLimit) && RuleIdLabels.CompoundLimitOutcome(null, e.RowDetails) is { } outcome)
+        {
+            fields.Add(new LogField("Call outcome", outcome));
+        }
+    }
+
+    /// <summary>The Categories row's value: the rule ids, each with its label where it has one (the judge-unavailable id), when the runtime has earned it.</summary>
     public static string Categories(StreamEvent e, HookRowGate gate, string unlabelled) =>
-        gate.JudgeEscalation && RuleIdLabels.AnyIn(e.Detail.Categories)
-            ? string.Join(", ", e.Detail.Categories.Select(RuleIdLabels.WithLabel))
+        gate.JudgeEscalation && JudgeEscalationFinding.AnyIn(e.Detail.Categories)
+            ? string.Join(", ", e.Detail.Categories.Select(JudgeEscalationFinding.WithLabel))
             : unlabelled;
 
     /// <summary>The <c>rule_id=</c> value of a finding row's details; empty when it has none.</summary>

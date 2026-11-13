@@ -197,6 +197,9 @@ public sealed record PolicyCatalog
     /// <summary>For a composed pack folder, the pack it was built on.</summary>
     public IReadOnlyDictionary<string, string> PackBases { get; init; } = NoBases;
 
+    /// <summary>The manifest posture of each pack folder in use, read once per refresh (see <see cref="PackPostures"/>); the levels are resolved from it without touching the disk.</summary>
+    public PackPostures PackPostures { get; init; } = PackPostures.None;
+
     /// <summary>Why the protection settings (postures, opt-in packs) could not be read; empty when they were.</summary>
     public string PostureError { get; init; } = string.Empty;
 

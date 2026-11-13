@@ -522,13 +522,13 @@ public sealed partial class PolicyModel
                 }
             }
 
-            var before = PolicyLevels.PackProfile(row.PackFolder);
-            var after = PolicyLevels.PackProfile(target);
+            var before = PolicyLevels.PackProfile(row.PackFolder, Catalog.PackPostures);
+            var after = PolicyLevels.PackProfile(target, Catalog.PackPostures);
             if (!string.Equals(before, after, StringComparison.Ordinal))
             {
                 weakens = true;
-                var (oldBlock, oldAlert) = PolicyLevels.ProfileLevelsFor(row.PackFolder);
-                var (newBlock, newAlert) = PolicyLevels.ProfileLevelsFor(target);
+                var (oldBlock, oldAlert) = PolicyLevels.ProfileLevelsFor(row.PackFolder, Catalog.PackPostures);
+                var (newBlock, newAlert) = PolicyLevels.ProfileLevelsFor(target, Catalog.PackPostures);
                 warning = $"This weakens protection: the gateway takes tool-call levels from the pack's manifest posture (defenseclaw-pack.json), else its folder name, so {profileFolder} is treated as {after}: blocks {newBlock} and alerts on {newAlert} instead of {oldBlock} and {oldAlert} ({before}).";
             }
         }
@@ -555,7 +555,7 @@ public sealed partial class PolicyModel
     {
         var scope = row.Scope.Length > 0 ? row.Scope : PolicyScopes.Global;
         var root = Catalog.PolicyFolder.Length > 0 ? Catalog.PolicyFolder : "<policy dir>";
-        return Path.Combine(root, "guardrail", $"protected-{scope}", PolicyLevels.PackProfile(row.PackFolder));
+        return Path.Combine(root, "guardrail", $"protected-{scope}", PolicyLevels.PackProfile(row.PackFolder, Catalog.PackPostures));
     }
 
     // ---- named policies ----------------------------------------------------------------------------------------------------

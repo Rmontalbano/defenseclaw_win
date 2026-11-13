@@ -25,20 +25,21 @@ workflow uses that section as the release's Highlights and fails when it is empt
   Observability card; the upgrade-path warning and the config.yaml settings a rollback leaves behind.
 - DefenseClaw 1.0.9: a stuck pending connector write offers "Finish the interrupted change" on Overview (`defenseclaw-gateway connector recover-config`,
   reviewed) in place of moving the files aside, and the upgrade hint and pre-flight say the same; 1.0.8 and older are unchanged, and with the 1.0.9
-  installer over an older runtime the card says that command needs 1.0.9. The installer's "uv cache folder is N characters long" stop shows as a refusal with
-  nothing changed and its fix, and a pre-flight "uv cache path" row warns first (Warn, not Block) and says to restart the app after setting `UV_CACHE_DIR`.
+  installer over an older runtime the card says that command needs 1.0.9. If the command cannot finish a change, the text says the recovery files stay in the
+  data folder and the upgrade stays refused; the copyable command pastes in PowerShell and Command Prompt. The installer's "uv cache folder is N characters
+  long" stop shows as a refusal with nothing changed and the app's fix (not the installer's terminal-only one), and a pre-flight "uv cache path" row warns first (Warn, not Block) and says to restart the app after setting `UV_CACHE_DIR`.
   The 0.8.x Setup leftover row explains what 1.0.9 `defenseclaw uninstall` and `init` do with a Setup install kept beside 1.0. Overview shows when the watcher
   turns admission scanning off for linked skill or plugin folders; the gateway's repair for a connector it did not start (copy only, never run); a hook launcher
   or guard that differs from the installer's recorded copy or has no record (from a recent doctor run); and that the host sensor's dropped-events count stays
   until the gateway restarts. The judge `max_parallel` hint is dropped for a local judge when the key is unset.
 - DefenseClaw 1.0.9, Cowork: a plugin built by an older release (`cowork_plugin_stale`) is flagged on Overview ("Rebuild the Cowork plugin", also the AI Discovery button's text then), in Setup readiness
   and in the Cowork wizard, which leads to building it again and uploading the new zip. Removing the Claude Code connector (any of its names) warns in the review
-  that Cowork stops being protected. The Cowork removal sentence follows the installed runtime in the uninstall and reset review, the Updates card's rollback
+  that Cowork stops being protected (1.0.8 and 1.0.9 each in their own words). The Cowork removal sentence follows the installed runtime in the uninstall and reset review, the Updates card's rollback
   note and the Add/Remove Programs leftover row (on 1.0.9 a plugin built by it lets calls run after the data folder is removed; older plugins may block them).
-- DefenseClaw 1.0.9, rules: Alerts, Logs and Audit explain `ACTION-OPERAND-BOUND`, `ACTION-SHARE-BODY-UNREAD`, `TOOL-PATH-UNVERIFIED`,
+- DefenseClaw 1.0.9, rules: on 1.0.9, Alerts, Logs and Audit add a plain-words line beside the runtime's own rule title for `ACTION-OPERAND-BOUND`, `ACTION-SHARE-BODY-UNREAD`, `TOOL-PATH-UNVERIFIED`,
   `tamper.agent_hook_config_disable` and `tamper.agent_hook_config_write`, and an `ACTION-COMPOUND-LIMIT` row says whether the call ran or was blocked. Alerts mark
   Cowork calls listed only by the runtime. The protected-files card states 1.0.9's shell-write floor and self-protection. Rule-pack levels follow
-  `defenseclaw-pack.json` when present, else the folder name.
+  `defenseclaw-pack.json` when present (read once per Policy refresh, its key matched as the gateway matches it), else the folder name.
 - In-app upgrade to DefenseClaw 1.0, with an install-state panel showing what was changed and how to roll back.
 - Runtime monitoring: gateway, audit and alert status kept current, with start-gateway buttons where the gateway is down.
 - Administrator mode: an optional, separately confirmed helper (`DefenseClaw.GatewayAdmin.exe`) that starts, stops and restarts

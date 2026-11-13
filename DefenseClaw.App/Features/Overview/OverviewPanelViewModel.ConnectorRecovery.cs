@@ -7,7 +7,7 @@ namespace DefenseClaw.App.ViewModels;
 /// <summary>
 /// "Finish the interrupted change" (DefenseClaw 1.0.9 and later): the review of <c>defenseclaw-gateway connector recover-config --data-dir &lt;data dir&gt;</c>,
 /// offered on the stuck-pending-write row in place of the move-aside, which 1.0.9's installer says not to do (it says not to remove or replay the receipts).
-/// A DefenseClaw command, run through the shared review like any other; the gateway may keep running.
+/// A DefenseClaw command, run through the shared review like any other. The review makes no claim about the gateway or the agent: upstream says nothing about either.
 /// </summary>
 public sealed partial class OverviewPanelViewModel
 {
@@ -17,7 +17,7 @@ public sealed partial class OverviewPanelViewModel
 
         Review.Open(
             ConnectorRecovery.ActionLabel + "?",
-            ConnectorRecovery.RunsWhat + " " + ConnectorRecovery.SuccessText + " " + ConnectorRecovery.FailureText + " " + ConnectorRecovery.GatewaySentence,
+            ConnectorRecovery.RunsWhat + " " + ConnectorRecovery.SuccessText + " " + ConnectorRecovery.FailureText + " " + ConnectorRecovery.InstallerSentence,
             new[]
             {
                 new DiscoverStep(

@@ -74,11 +74,32 @@ public static class RuleIdLabels
     }
 
     /// <summary>
-    /// The runtime's <c>rule</c> value (<c>ID: title</c>) with a sentence in place of the title when the id has one; the value as it is otherwise.
-    /// The sentence is shown without the id, which the row's rule-id column and the raw runtime.rule field keep.
+    /// The sentence of an id the app labels for DefenseClaw 1.0.9 (every id here except the judge-unavailable one, which has been labelled since 1.0.7); null for
+    /// any other id. The caller shows it as a line of its own, next to the runtime's own rule title and never in place of it.
     /// </summary>
-    public static string HeadlineOfRuleFact(string ruleFact) =>
-        !JudgeEscalationFinding.Is(IdOfRuleFact(ruleFact)) && Sentence(IdOfRuleFact(ruleFact)) is { } sentence ? sentence : ruleFact;
+    public static string? NewSentence(string? ruleId) => JudgeEscalationFinding.Is(ruleId?.Trim() ?? string.Empty) ? null : Sentence(ruleId);
+
+    /// <summary>The distinct <see cref="NewSentence"/> of each id in <paramref name="ruleIds"/>, in order.</summary>
+    public static IReadOnlyList<string> NewSentencesOf(IEnumerable<string>? ruleIds) =>
+        (ruleIds ?? Array.Empty<string>()).Select(NewSentence).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>The distinct <see cref="NewSentence"/> of each id <paramref name="text"/> names (a rule value such as <c>ID: title</c>, or a list of ids).</summary>
+    public static IReadOnlyList<string> NewSentencesIn(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return NewSentencesOf(AnyId.Matches(text).Select(static m => m.Value.StartsWith("llm-judge:", StringComparison.OrdinalIgnoreCase) ? m.Value["llm-judge:".Length..] : m.Value));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return Array.Empty<string>();
+        }
+    }
 
     /// <summary>True when <paramref name="text"/> names a rule id that has a sentence.</summary>
     public static bool Mentions(string? text) => Match(text, static m => m.Success);

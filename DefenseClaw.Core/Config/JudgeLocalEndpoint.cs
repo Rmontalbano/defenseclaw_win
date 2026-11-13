@@ -109,7 +109,9 @@ public static class JudgeLocalEndpoint
             host = host[..zone];
         }
 
-        if (!IPAddress.TryParse(host, out var address))
+        // Uri writes 127.1, 2130706433 or 127.000.0.1 as 127.0.0.1, which Go's netip.ParseAddr rejects: an IPv4 host counts only when the endpoint spells it that way.
+        if (!IPAddress.TryParse(host, out var address) ||
+            (address.AddressFamily == AddressFamily.InterNetwork && !endpoint.Contains(host, StringComparison.Ordinal)))
         {
             return false;
         }

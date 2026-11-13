@@ -9,8 +9,17 @@ namespace DefenseClaw.App.ViewModels;
 /// </summary>
 public sealed partial class OverviewPanelViewModel
 {
-    /// <summary>The words added to the row's detail when the gateway left part of the repair out.</summary>
-    internal const string RepairTooLongText = "Part of the repair is too long to show; the gateway log has it.";
+    /// <summary>
+    /// The words added to the row's detail when the gateway left part of the repair out, or the app did not show all of it (a fix over
+    /// <see cref="ConnectorStartHealth.MaxFixDisplayLength"/> or not plain text is dropped, a manual step over <see cref="ConnectorStartHealth.MaxByHandDisplayLength"/> is cut).
+    /// </summary>
+    internal const string RepairTooLongText = "Part of the repair is too long or not plain text to show here; the gateway log has it.";
+
+    /// <summary>What the row says about the box when it holds the gateway's repair.</summary>
+    internal const string RepairBoxSentence = "The command below is the gateway's repair; the app never runs it.";
+
+    /// <summary>What is left of the setup-failed row's closing words when the box holds the gateway's repair.</summary>
+    internal const string SetupFailedLogSentence = " Read gateway.log for the cause.";
 
     /// <summary>Adds <paramref name="skip"/>'s repair to <paramref name="row"/>; the row itself when the gateway sent none.</summary>
     internal static AttentionRow WithRepair(AttentionRow row, ConnectorSkip skip)
@@ -26,7 +35,13 @@ public sealed partial class OverviewPanelViewModel
         var detail = row.Detail;
         if (repair.Fix is not null)
         {
-            detail += " The command below is the gateway's fix.";
+            // The box will hold the gateway's repair, so the row must not also send the reader to "the command below" as if it were setup.
+            if (detail.EndsWith(SetupFailedRunSentence, StringComparison.Ordinal))
+            {
+                detail = detail[..^SetupFailedRunSentence.Length] + SetupFailedLogSentence;
+            }
+
+            detail += " " + RepairBoxSentence;
         }
 
         if (repair.ByHand is not null)
@@ -41,7 +56,7 @@ public sealed partial class OverviewPanelViewModel
 
         if (repair.Fix is not null && row.Command is { Length: > 0 } after)
         {
-            detail += $" Then run: {after}.";
+            detail += $" After that, run: {after}.";
         }
 
         return row with { Detail = detail, Command = repair.Fix ?? row.Command };

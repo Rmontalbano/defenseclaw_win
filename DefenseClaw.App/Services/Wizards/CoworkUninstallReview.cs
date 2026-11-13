@@ -17,8 +17,24 @@ public static class CoworkUninstallReview
     /// <summary>The heading of the bar for <c>setup remove claudecode</c> (1.0.9, CUST-453).</summary>
     public const string ConnectorTitle = "Cowork stops being protected";
 
-    /// <summary>The message of that bar, from the CLI's own sentence (cmd_setup.py@1.0.9:14786-14792, printed only after the removal).</summary>
+    /// <summary>The message of that bar on 1.0.9, from the CLI's own sentence (cmd_setup.py@1.0.9:14786-14792, printed only after the removal).</summary>
     public const string ConnectorMessage = "Cowork is no longer protected after this; remove the DefenseClaw plugin in Claude (Customize > Plugins).";
+
+    /// <summary>
+    /// The message on 1.0.8, which prints no such line. What 1.0.8 does show: with the Claude Code connector off, <c>cowork status</c> reports "not protected" with
+    /// reason <c>cowork_claudecode_off</c> (cowork.py@1.0.8:503-510), and only the user can take the plugin out of the Claude account (REMOVE_PATH_TEXT).
+    /// It does not repeat the uninstall sentence's "tool calls are blocked", which 1.0.8 states for uninstall and reset only.
+    /// </summary>
+    public const string ConnectorMessage108 =
+        "If the removal succeeds, Cowork is no longer protected: its plugin runs the Claude Code connector's hooks, and Cowork status then reports it as not protected. " +
+        "The plugin stays in your Claude account until you remove it there (" + CoworkProtectionFacts.RemovePath + ").";
+
+    /// <summary>The connector bar's message for <paramref name="capabilities"/>: the CLI's own line from 1.0.9, the 1.0.8 wording before.</summary>
+    public static string ConnectorMessageFor(RuntimeCapabilities capabilities)
+    {
+        ArgumentNullException.ThrowIfNull(capabilities);
+        return capabilities.Has(RuntimeCapability.CoworkPluginRunsAfterRemoval) ? ConnectorMessage : ConnectorMessage108;
+    }
 
     /// <summary>
     /// The warning for the <c>defenseclaw</c> command <paramref name="argv"/> (the arguments without the executable): one bar when the runtime has Cowork
@@ -56,7 +72,7 @@ public static class CoworkUninstallReview
 
         return removesAll
             ? new[] { new CommandReviewWarning(Title, CoworkProtectionFacts.RemovePluginStepFor(capabilities)) }
-            : new[] { new CommandReviewWarning(ConnectorTitle, ConnectorMessage) };
+            : new[] { new CommandReviewWarning(ConnectorTitle, ConnectorMessageFor(capabilities)) };
     }
 
     /// <summary>

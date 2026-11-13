@@ -55,12 +55,15 @@ public sealed class RuleIdLabelsTests
     }
 
     [Fact]
-    public void The_runtimes_rule_value_gives_its_id_and_the_sentence_replaces_a_known_title()
+    public void The_runtimes_rule_value_gives_its_id_and_a_new_sentence_never_covers_the_judge_id()
     {
         Assert.Equal("ACTION-COMPOUND-LIMIT", RuleIdLabels.IdOfRuleFact("ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit"));
-        Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), RuleIdLabels.HeadlineOfRuleFact("ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit"));
-        Assert.Equal("CMD-X: Something", RuleIdLabels.HeadlineOfRuleFact("CMD-X: Something"));
-        Assert.Equal("JUDGE-UNAVAILABLE-ESCALATED: Judge", RuleIdLabels.HeadlineOfRuleFact("JUDGE-UNAVAILABLE-ESCALATED: Judge"));
+        Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), RuleIdLabels.NewSentence("ACTION-COMPOUND-LIMIT"));
+        Assert.Null(RuleIdLabels.NewSentence("CMD-X"));
+        Assert.Null(RuleIdLabels.NewSentence("JUDGE-UNAVAILABLE-ESCALATED"));
+        Assert.Null(RuleIdLabels.NewSentence("llm-judge:JUDGE-UNAVAILABLE-ESCALATED"));
+        Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), Assert.Single(RuleIdLabels.NewSentencesIn("ACTION-COMPOUND-LIMIT: Shell command exceeds, ACTION-COMPOUND-LIMIT, JUDGE-UNAVAILABLE-ESCALATED")));
+        Assert.Empty(RuleIdLabels.NewSentencesIn("CMD-X"));
     }
 
     // ------------------------------------------------------------------ the call outcome

@@ -106,12 +106,15 @@ public sealed partial class OverviewPanelViewModel
             _ => new AttentionRow
             {
                 Title = $"{friendly} is not enforced: setup failed when the gateway started",
-                Detail = $"The gateway did not start this connector. It says: {reason} Read gateway.log for the cause, then run the command below. The app never runs it.",
+                Detail = $"The gateway did not start this connector. It says: {reason}{SetupFailedRunSentence}",
                 SeverityKey = "High",
                 Command = $"defenseclaw setup {skip.Name}",
             },
         };
     }
+
+    /// <summary>The setup-failed row's closing words: the box holds <c>defenseclaw setup &lt;name&gt;</c>. When the gateway sends its own repair the box holds that instead, and <see cref="WithRepair"/> replaces this sentence.</summary>
+    internal const string SetupFailedRunSentence = " Read gateway.log for the cause, then run the command below. The app never runs it.";
 
     /// <summary>"Remove connector": the review of <c>setup remove &lt;name&gt; --yes</c>. Only for a connector the last answer says is not installed.</summary>
     private void RemoveSkippedConnector(string name)

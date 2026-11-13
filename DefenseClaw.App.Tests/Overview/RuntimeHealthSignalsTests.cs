@@ -187,9 +187,12 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
 
         var row = Assert.Single(vm.Attention, IsSkipRow);
         Assert.Equal(@"icacls C:\Users\operator\.claude\plugins /inheritance:r", row.Command);
-        Assert.Contains("The command below is the gateway's fix.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("The command below is the gateway's repair; the app never runs it.", row.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("then run the command below", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("Read gateway.log for the cause.", row.Detail, StringComparison.Ordinal);
+        _ = Assert.Single(System.Text.RegularExpressions.Regex.Matches(row.Detail, "the command below", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
         Assert.Contains("By hand: Remove write access for other accounts from the plugin folder.", row.Detail, StringComparison.Ordinal);
-        Assert.Contains("Then run: defenseclaw setup claudecode.", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("After that, run: defenseclaw setup claudecode.", row.Detail, StringComparison.Ordinal);
         Assert.False(row.HasActions);
     }
 
@@ -202,9 +205,40 @@ public sealed class RuntimeHealthSignalsTests : IDisposable
         var row = Assert.Single(vm.Attention, IsSkipRow);
         Assert.Contains(OverviewPanelViewModel.RepairTooLongText, row.Detail, StringComparison.Ordinal);
         Assert.Contains("defenseclaw setup claudecode", row.Command, StringComparison.Ordinal);
+        Assert.Contains("then run the command below. The app never runs it.", row.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("gateway's repair", row.Detail, StringComparison.Ordinal);
 
         vm.Apply(Snapshot(guardrailDetails: Skipped(new { fix = new string('a', ConnectorStartHealth.MaxRepairLength + 1) })));
         Assert.Equal("defenseclaw setup claudecode", Assert.Single(vm.Attention, IsSkipRow).Command);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_fix_over_the_display_cap_or_with_a_control_character_is_dropped_and_said_so(bool control)
+    {
+        var vm = await PanelAsync("1.0.9");
+        var fix = control ? "icacls C:\\x\u001b[2J /inheritance:r" : "icacls " + new string('a', ConnectorStartHealth.MaxFixDisplayLength);
+
+        vm.Apply(Snapshot(guardrailDetails: Skipped(new { fix })));
+
+        var row = Assert.Single(vm.Attention, IsSkipRow);
+        Assert.Equal("defenseclaw setup claudecode", row.Command);
+        Assert.Contains(OverviewPanelViewModel.RepairTooLongText, row.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("gateway's repair", row.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_long_by_hand_step_is_cut_for_display()
+    {
+        var vm = await PanelAsync("1.0.9");
+
+        vm.Apply(Snapshot(guardrailDetails: Skipped(new { by_hand = new string('b', 3000) })));
+
+        var row = Assert.Single(vm.Attention, IsSkipRow);
+        Assert.Contains(new string('b', ConnectorStartHealth.MaxByHandDisplayLength - 1) + "…", row.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(new string('b', ConnectorStartHealth.MaxByHandDisplayLength), row.Detail, StringComparison.Ordinal);
+        Assert.Contains(OverviewPanelViewModel.RepairTooLongText, row.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -301,9 +301,17 @@ public sealed class PolicyCatalogReadTests
 
     // ---- the reader ------------------------------------------------------------------------------------------------------
 
-    private sealed class FakeData(IReadOnlyList<ToolChain>? chains = null, string? baseName = null) : IPolicyDataFiles
+    private sealed class FakeData(IReadOnlyList<ToolChain>? chains = null, string? baseName = null, Func<string, string?>? posture = null) : IPolicyDataFiles
     {
         public List<string> FamilyReads { get; } = new();
+
+        public List<string> PostureReads { get; } = new();
+
+        public string? ReadPackPosture(string packFolder)
+        {
+            PostureReads.Add(packFolder);
+            return posture?.Invoke(packFolder);
+        }
 
         public IReadOnlyList<ToolChain> ReadToolChains(IReadOnlyList<NamedPolicy> policies) => chains ?? Array.Empty<ToolChain>();
 
@@ -314,6 +322,35 @@ public sealed class PolicyCatalogReadTests
         }
 
         public string? ReadPackBase(string packFolder) => packFolder.EndsWith(@"protected-codex\strict", StringComparison.Ordinal) ? baseName : null;
+    }
+
+    [Fact]
+    public async Task Each_pack_folders_manifest_posture_is_read_once_per_refresh_and_the_model_never_reads_it_again()
+    {
+        var data = new FakeData(posture: folder => folder.EndsWith(@"\guardrail\default", StringComparison.Ordinal) ? "strict" : null);
+        var reader = new PolicyModelReader(PolicyModelFixtures.Runner(PolicyModelFixtures.Connectors, new List<string>()), data);
+
+        var read = await reader.ReadAsync();
+
+        Assert.NotEmpty(data.PostureReads);
+        Assert.Equal(data.PostureReads.Count, data.PostureReads.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        var afterRefresh = data.PostureReads.Count;
+
+        // The manifest's posture reached the levels carried on the catalog.
+        Assert.True(read.Catalog.PackPostures.Count > 0);
+        Assert.Equal("LOW+", read.Catalog.Postures.First(p => p.Scope == "global").AlertAt);
+
+        // Building rows, levels, lines and previews from the catalog reads nothing more.
+        var model = new PolicyModel(read.Catalog);
+        foreach (var row in model.Postures)
+        {
+            _ = model.RowLevels(row);
+            _ = model.ScopeLevelLabels(row);
+            _ = model.LevelsLine(row);
+            _ = model.LevelsWithPack(row.Scope == "global" ? string.Empty : row.Scope, row.PackFolder);
+        }
+
+        Assert.Equal(afterRefresh, data.PostureReads.Count);
     }
 
     [Fact]

@@ -139,9 +139,10 @@ public static partial class InstallTranscript
 
             if (UvCacheLine.IsMatch(line))
             {
-                // The whole sentence: its tail is the fix, and the path keeps its home folder so the length it states is the one shown.
+                // The sentence up to "Nothing was changed.", with the path whole so the length it states is the one shown. The installer's own fix after it
+                // (`$env:UV_CACHE_DIR = ...` and run again) only reaches a terminal session, not this app's run, so the next step is the app's alone.
                 var whole = Sanitize(FailureLine.Match(candidate).Groups["r"].Value, shortenHome: false);
-                return new InstallerRefusal(InstallerRefusalKind.UvCacheTooDeep, whole, UvCacheDepth.NextStep);
+                return new InstallerRefusal(InstallerRefusalKind.UvCacheTooDeep, UvCacheReason(whole), UvCacheDepth.NextStep);
             }
 
             if (EndsNothingChanged.IsMatch(line))
@@ -151,6 +152,19 @@ public static partial class InstallTranscript
         }
 
         return null;
+    }
+
+    /// <summary>The longest uv cache refusal shown: the installer's sentence to "Nothing was changed." is about 330 characters plus the cache path (up to 32,767).</summary>
+    internal const int MaxUvCacheReasonChars = 1200;
+
+    private const string NothingWasChanged = "Nothing was changed.";
+
+    /// <summary>The uv cache refusal up to and including "Nothing was changed.", capped at <see cref="MaxUvCacheReasonChars"/>.</summary>
+    internal static string UvCacheReason(string sentence)
+    {
+        var end = sentence.IndexOf(NothingWasChanged, StringComparison.Ordinal);
+        var reason = end >= 0 ? sentence[..(end + NothingWasChanged.Length)] : sentence;
+        return reason.Length <= MaxUvCacheReasonChars ? reason : reason[..(MaxUvCacheReasonChars - 1)].TrimEnd() + "…";
     }
 
     /// <summary>

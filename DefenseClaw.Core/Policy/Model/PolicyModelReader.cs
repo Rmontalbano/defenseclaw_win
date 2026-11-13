@@ -121,9 +121,21 @@ public sealed class PolicyModelReader
 
         IReadOnlyList<ScopePosture> postures = previous?.Postures ?? Array.Empty<ScopePosture>();
         IReadOnlyList<ProtectionPack> protection = previous?.Protection ?? Array.Empty<ProtectionPack>();
+
+        // Each pack folder's manifest posture is read once here, on the background thread, and carried on the catalog; nothing after this touches the disk for it.
+        var packPostures = previous?.PackPostures ?? PackPostures.None;
+        if (packsDoc is not null)
+        {
+            var postureFolders = packsDoc.Packs.Select(p => p.Folder)
+                .Concat(packsDoc.Connectors.Select(c => c.Folder))
+                .Concat(packsDoc.Global is { } globalPack ? new[] { globalPack.Folder } : Array.Empty<string>())
+                .ToArray();
+            packPostures = await Task.Run(() => PackPostures.Read(postureFolders, _files.ReadPackPosture), cancellationToken).ConfigureAwait(true);
+        }
+
         if (packsDoc is not null && protectionDoc is not null && settings is not null)
         {
-            postures = PolicyPostureComposer.Compose(packsDoc, protectionDoc, settings, out var composeIssues);
+            postures = PolicyPostureComposer.Compose(packsDoc, protectionDoc, settings, out var composeIssues, packPostures);
             protection = protectionDoc.Packs;
             read = true;
             if (composeIssues.Count > 0)
@@ -176,6 +188,7 @@ public sealed class PolicyModelReader
             Families = data.families,
             Chains = data.chains,
             PackBases = data.bases,
+            PackPostures = packPostures,
             PostureError = postureError,
             MultiConnector = settings is not null ? settings.Connectors.Count > 0 : previous?.MultiConnector ?? false,
             PolicyFolder = PolicyFolderOf(packsDoc) ?? previous?.PolicyFolder ?? string.Empty,

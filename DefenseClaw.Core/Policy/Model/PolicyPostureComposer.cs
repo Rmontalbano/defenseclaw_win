@@ -22,7 +22,8 @@ public static class PolicyPostureComposer
     /// <param name="protection">What <c>guardrail protection list --json</c> printed.</param>
     /// <param name="settings">The guardrail section.</param>
     /// <param name="problems">What did not line up (empty when the documents agree on the scopes).</param>
-    public static IReadOnlyList<ScopePosture> Compose(ListPacksDocument packs, ProtectionDocument protection, GuardrailSettings settings, out IReadOnlyList<string> problems)
+    /// <param name="postures">The pack manifests read for this refresh (<see cref="PackPostures"/>); null reads none and the folder names decide.</param>
+    public static IReadOnlyList<ScopePosture> Compose(ListPacksDocument packs, ProtectionDocument protection, GuardrailSettings settings, out IReadOnlyList<string> problems, PackPostures? postures = null)
     {
         ArgumentNullException.ThrowIfNull(packs);
         ArgumentNullException.ThrowIfNull(protection);
@@ -33,7 +34,7 @@ public static class PolicyPostureComposer
         var global = packs.Global ?? new ScopePack(PolicyScopes.Global, "default", string.Empty, "default");
         var globalOwn = (PolicyLevels.LevelValue(settings.BlockAt), PolicyLevels.LevelValue(settings.AlertAt));
 
-        var levels = PolicyLevels.ResolveLevels(global.Folder, globalOwn);
+        var levels = PolicyLevels.ResolveLevels(global.Folder, globalOwn, postures: postures);
         rows.Add(new ScopePosture(
             PolicyScopes.Global,
             PolicyLevels.ModeLabel(settings.Mode),
@@ -61,7 +62,7 @@ public static class PolicyPostureComposer
                 : PolicyLevels.HiltLabel(settings.HiltEnabled, settings.HiltMinSeverity);
 
             var own = (PolicyLevels.LevelValue(block?.BlockAt), PolicyLevels.LevelValue(block?.AlertAt));
-            var resolved = PolicyLevels.ResolveLevels(row.Folder, globalOwn, own);
+            var resolved = PolicyLevels.ResolveLevels(row.Folder, globalOwn, own, postures);
             rows.Add(new ScopePosture(
                 row.Scope,
                 PolicyLevels.ModeLabel(mode),

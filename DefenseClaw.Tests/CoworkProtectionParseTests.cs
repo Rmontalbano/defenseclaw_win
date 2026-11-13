@@ -16,6 +16,22 @@ public class CoworkProtectionParseTests
     private static CoworkProtection? Parse(string cowork) => CoworkProtection.FromStatusJson(Status(cowork));
 
     [Fact]
+    public void Long_detail_step_and_version_are_cut_for_display()
+    {
+        var longText = new string('d', 5000);
+        var state = Parse("{\"protected\":false,\"detail\":\"" + longText + "\",\"step\":\"" + longText + "\",\"reason_code\":\"cowork_plugin_stale\",\"plugin_version\":\"" + longText + "\"}");
+
+        Assert.NotNull(state);
+        foreach (var text in new[] { state.Detail, state.Step, state.PluginVersion! })
+        {
+            Assert.Equal(CoworkProtection.MaxTextLength, text.Length);
+            Assert.EndsWith("…", text, StringComparison.Ordinal);
+        }
+
+        Assert.True(state.IsPluginStale);
+    }
+
+    [Fact]
     public void A_protected_state_reads_every_member()
     {
         var state = Parse(

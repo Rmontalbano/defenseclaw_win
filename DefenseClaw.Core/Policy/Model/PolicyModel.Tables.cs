@@ -365,7 +365,7 @@ public sealed partial class PolicyModel
     private string PackLine(ScopePosture row)
     {
         var pack = PolicyLevels.Or(row.Pack, "-");
-        var profile = PolicyLevels.PackProfile(row.PackFolder);
+        var profile = PolicyLevels.PackProfile(row.PackFolder, Catalog.PackPostures);
         if (Catalog.PackBases.TryGetValue(row.PackFolder, out var baseName) && baseName.Length > 0)
         {
             var on = ScopeProtection(row).Count;

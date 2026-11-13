@@ -10,7 +10,8 @@ config.yaml saved at upgrade time; its note names the settings made since then t
 For a runtime upgrade to 1.0.9, three more things apply:
 
 - **A stuck pending connector write.** On 1.0.9 it is finished with `defenseclaw-gateway connector recover-config`, which Overview offers as "Finish the
-  interrupted change" (reviewed before it runs). On 1.0.8 and older the way out is still to move the files aside, as the row says. With the 1.0.9 installer and
+  interrupted change" (reviewed before it runs). If it names an agent config it cannot finish, its recovery files stay in the data folder and the installer
+  keeps refusing; do not remove or replay them. On 1.0.8 and older the way out is still to move the files aside, as the row says. With the 1.0.9 installer and
   an older runtime installed, the Updates card says the command needs 1.0.9.
 - **The uv cache path.** The 1.0.9 installer stops with "uv cache folder is N characters long" and changes nothing when the uv cache folder path is longer than
   108 characters (uv needs 151 more characters for one package, and the total must stay under 260) and Windows long paths are off. The pre-flight shows a

@@ -18,6 +18,12 @@ public interface IPolicyDataFiles
 
     /// <summary>The pack a composed pack folder was built on (its <c>defenseclaw-pack.json</c>); null when it has none.</summary>
     string? ReadPackBase(string packFolder);
+
+    /// <summary>
+    /// The posture the pack folder's <c>defenseclaw-pack.json</c> names (<see cref="RulePackPosture.FromManifest"/>); null when it names none. Reads a file: the catalog
+    /// reader calls it once per folder per refresh, off the UI thread. The default reads none, so a fake that does not care reads nothing.
+    /// </summary>
+    string? ReadPackPosture(string packFolder) => null;
 }
 
 /// <summary>No files: the chains and families views then say the catalog was not found. For a runtime whose files this app cannot reach.</summary>
@@ -123,6 +129,8 @@ public sealed class FileSystemPolicyData : IPolicyDataFiles
 
     public string? ReadPackBase(string packFolder) =>
         packFolder.Length == 0 ? null : PolicyCatalogJson.ParsePackBase(ReadText(Path.Combine(packFolder, "defenseclaw-pack.json")));
+
+    public string? ReadPackPosture(string packFolder) => RulePackPosture.FromManifest(packFolder);
 
     /// <summary>
     /// The rule families an effective pack enforces, as the runtime's <c>rule_families</c> computes them: the built-in (default pack)

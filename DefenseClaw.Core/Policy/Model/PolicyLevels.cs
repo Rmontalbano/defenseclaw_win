@@ -247,12 +247,13 @@ public static class PolicyLevels
     /// The posture profile the gateway derives from a rule-pack folder: the <c>posture</c> of its <c>defenseclaw-pack.json</c> (the 1.0.9 built-in packs
     /// ship one), else the folder's base name, lowercased, where <c>strict</c> and <c>permissive</c> keep theirs and everything else reads as <c>default</c>
     /// (<c>ReadPackPosture</c>, <c>guardrailProfileForDir</c>; see <see cref="RulePackPosture"/>). A composed pack (<c>protected-SCOPE/PROFILE</c>)
-    /// ends in its base pack's profile and its manifest names no posture.
+    /// ends in its base pack's profile and its manifest names no posture. Reads no file: <paramref name="postures"/> holds the manifests the Policy refresh read once
+    /// (<see cref="PackPostures"/>); with none, or for a folder it has no entry for, the folder's name decides.
     /// </summary>
-    public static string PackProfile(string? folder) => RulePackPosture.For(folder);
+    public static string PackProfile(string? folder, PackPostures? postures = null) => (postures ?? PackPostures.None).ProfileOf(folder);
 
     /// <summary>The (blocks at, alerts at) labels for tool calls under the pack in <paramref name="folder"/>.</summary>
-    public static (string Block, string Alert) ProfileLevelsFor(string? folder) => ProfileLevelLabels[PackProfile(folder)];
+    public static (string Block, string Alert) ProfileLevelsFor(string? folder, PackPostures? postures = null) => ProfileLevelLabels[PackProfile(folder, postures)];
 
     /// <summary>
     /// The tool-call levels a scope resolves to, exactly as the gateway does (<c>guardrailLevelThresholds</c>): each of block and alert takes
@@ -261,9 +262,10 @@ public static class PolicyLevels
     /// <param name="packFolder">The scope's rule-pack folder.</param>
     /// <param name="globalOwn">The global <c>block_at</c> / <c>alert_at</c> as stored ("" for unset).</param>
     /// <param name="connectorOwn">The connector's own values, or null for the global scope.</param>
-    public static ScopeLevels ResolveLevels(string? packFolder, (string Block, string Alert) globalOwn = default, (string Block, string Alert)? connectorOwn = null)
+    /// <param name="postures">The pack manifests the refresh read; null reads none (the folder's name decides).</param>
+    public static ScopeLevels ResolveLevels(string? packFolder, (string Block, string Alert) globalOwn = default, (string Block, string Alert)? connectorOwn = null, PackPostures? postures = null)
     {
-        var (packBlock, packAlert) = ProfileRanks[PackProfile(packFolder)];
+        var (packBlock, packAlert) = ProfileRanks[PackProfile(packFolder, postures)];
 
         (int Rank, string Source) Pick(bool block, int packRank)
         {

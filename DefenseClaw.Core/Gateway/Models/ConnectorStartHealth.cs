@@ -135,7 +135,10 @@ public static class ConnectorStartHealth
             var omitted = entry.Value.TryGetProperty("omitted_bytes", out var bytes) && bytes.ValueKind == JsonValueKind.Number && bytes.TryGetInt64(out var count)
                 ? Math.Max(count, 0)
                 : 0;
-            var repair = new ConnectorRepair(RepairText(entry.Value, "fix"), RepairText(entry.Value, "by_hand"), omitted);
+            // Shown, never run: a fix that is long or not plain text is dropped (a cut or escaped command must not be copied); a long manual step is cut.
+            var (fix, fixDropped) = FixText(entry.Value);
+            var (byHand, byHandCut) = ByHandText(entry.Value);
+            var repair = new ConnectorRepair(fix, byHand, omitted > 0 || !fixDropped && !byHandCut ? omitted : Math.Max(omitted, 1));
             if (repair.HasContent)
             {
                 map[name] = repair;
@@ -145,6 +148,37 @@ public static class ConnectorStartHealth
         return map;
     }
 
+    /// <summary>The longest gateway fix shown as a copyable command; a longer one is dropped, never cut.</summary>
+    public const int MaxFixDisplayLength = 512;
+
+    /// <summary>The longest manual step shown; a longer one is cut with an ellipsis.</summary>
+    public const int MaxByHandDisplayLength = 400;
+
+    private static (string? Text, bool Dropped) FixText(JsonElement repair)
+    {
+        if (RepairText(repair, "fix") is not { } raw)
+        {
+            return (null, Present(repair, "fix"));
+        }
+
+        return raw.Length <= MaxFixDisplayLength && string.Equals(DisplayNames.Visible(raw), raw, StringComparison.Ordinal) ? (raw, false) : (null, true);
+    }
+
+    private static (string? Text, bool Cut) ByHandText(JsonElement repair)
+    {
+        if (RepairText(repair, "by_hand") is not { } raw)
+        {
+            return (null, Present(repair, "by_hand"));
+        }
+
+        var shown = DisplayNames.Visible(raw);
+        return shown.Length <= MaxByHandDisplayLength ? (shown, false) : (shown[..(MaxByHandDisplayLength - 1)].TrimEnd() + "…", true);
+    }
+
+    private static bool Present(JsonElement repair, string key) =>
+        repair.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String && value.GetString()?.Trim() is { Length: > 0 };
+
+    /// <summary>The field's raw text (trimmed), or null when missing, empty or over <see cref="MaxRepairLength"/>.</summary>
     private static string? RepairText(JsonElement repair, string key)
     {
         if (!repair.TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.String ||
@@ -153,7 +187,7 @@ public static class ConnectorStartHealth
             return null;
         }
 
-        return DisplayNames.Visible(text);
+        return text;
     }
 
     private static Dictionary<string, string> ReadMap(JsonElement details, string key)

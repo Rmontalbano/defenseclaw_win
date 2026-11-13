@@ -90,11 +90,11 @@ public sealed record CoworkProtection(
 
         return new CoworkProtection(
             cowork.TryGetProperty("protected", out var flag) && flag.ValueKind == JsonValueKind.True,
-            Text(cowork, "detail") ?? string.Empty,
-            Text(cowork, "step") ?? string.Empty,
+            Capped(Text(cowork, "detail")),
+            Capped(Text(cowork, "step")),
             Text(cowork, "reason_code") ?? string.Empty,
             Timestamp(Text(cowork, "last_event_at")),
-            Text(cowork, "plugin_version") is { Length: > 0 } version ? version : null,
+            Text(cowork, "plugin_version") is { Length: > 0 } version ? Capped(version) : null,
             Text(cowork, "plugin_zip") is { Length: > 0 } zip ? zip : null);
     }
 
@@ -106,6 +106,12 @@ public sealed record CoworkProtection(
         using var document = JsonDocument.Parse(json);
         return FromStatus(document.RootElement);
     }
+
+    /// <summary>The longest <c>detail</c>, <c>step</c> or <c>plugin_version</c> kept for display; longer text is cut with an ellipsis (status --json text, partly from the plugin state file).</summary>
+    public const int MaxTextLength = 400;
+
+    private static string Capped(string? text) =>
+        text is null ? string.Empty : text.Length <= MaxTextLength ? text : text[..(MaxTextLength - 1)].TrimEnd() + "…";
 
     private static string? Text(JsonElement parent, string name) =>
         parent.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()?.Trim() : null;

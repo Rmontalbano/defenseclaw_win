@@ -52,13 +52,14 @@ internal static partial class AuditHookRows
 
         var isHook = StructuredDetailParser.IsHook(source.Action);
         var fallback = gate.JudgeFallback && isHook ? HookJudgeFallback.Read(source.StructuredJson, source.Details) : string.Empty;
-        var structuredIds = gate.JudgeEscalation ? RuleIds(source) : Array.Empty<string>();
+        var structuredIds = gate.JudgeEscalation || gate.AlertRan ? RuleIds(source) : Array.Empty<string>();
         var escalated = gate.JudgeEscalation
             && (JudgeEscalationFinding.AnyIn(structuredIds)
                 || (isHook && JudgeEscalationFinding.ReasonIn(source.Details)));
 
         var rows = new List<DetailPair>(parsed.Count + 6);
         var labelled = false;
+        var meanings = new List<string>();
         var limited = false;
         foreach (var pair in parsed)
         {
@@ -72,12 +73,18 @@ internal static partial class AuditHookRows
                 continue;
             }
 
-            if (gate.JudgeEscalation && IsRuleLabel(pair.Label) && RuleIdLabels.Mentions(pair.Value))
+            if (gate.AlertRan && IsRuleLabel(pair.Label))
             {
-                rows.Add(new DetailPair(pair.Label, RuleIdLabels.Replace(pair.Value)));
-                labelled = true;
-                escalated |= MentionsEscalation(pair.Value);
+                // The 1.0.9 rule labels: the row keeps the runtime's own value and the sentence goes on a line of its own below.
+                meanings.AddRange(RuleIdLabels.NewSentencesIn(pair.Value));
                 limited |= RuleIdLabels.MentionsCompoundLimit(pair.Value);
+            }
+
+            if (gate.JudgeEscalation && IsRuleLabel(pair.Label) && MentionsEscalation(pair.Value))
+            {
+                rows.Add(new DetailPair(pair.Label, LabelEscalation(pair.Value)));
+                labelled = true;
+                escalated = true;
                 continue;
             }
 
@@ -97,20 +104,31 @@ internal static partial class AuditHookRows
 
         if (gate.JudgeEscalation)
         {
-            if (!labelled && RuleIdLabels.AnyIn(structuredIds))
+            if (!labelled && JudgeEscalationFinding.AnyIn(structuredIds))
             {
-                rows.Add(new DetailPair("Rule IDs", string.Join(", ", structuredIds.Select(RuleIdLabels.WithLabel))));
-                limited |= structuredIds.Any(RuleIdLabels.IsCompoundLimit);
-            }
-
-            if (limited && RuleIdLabels.CompoundLimitOutcome(null, source.Details) is { } outcome)
-            {
-                rows.Add(new DetailPair("Call outcome", outcome));
+                rows.Add(new DetailPair("Rule IDs", string.Join(", ", structuredIds.Select(JudgeEscalationFinding.WithLabel))));
             }
 
             if (escalated)
             {
                 rows.Add(new DetailPair("Rule note", JudgeEscalationFinding.Explanation));
+            }
+        }
+
+        if (gate.AlertRan)
+        {
+            // ShellProtectedFileFloor is the 1.0.9 release marker here: the rule labels and the alert decision shipped in the same release and no separate
+            // capability exists. A 1.0.7 or 1.0.8 runtime's rows are left as they always were.
+            meanings.AddRange(RuleIdLabels.NewSentencesOf(structuredIds));
+            limited |= structuredIds.Any(RuleIdLabels.IsCompoundLimit);
+            foreach (var meaning in meanings.Distinct(StringComparer.Ordinal))
+            {
+                rows.Add(new DetailPair("Rule meaning", meaning));
+            }
+
+            if (limited && RuleIdLabels.CompoundLimitOutcome(null, source.Details) is { } outcome)
+            {
+                rows.Add(new DetailPair("Call outcome", outcome));
             }
         }
 
@@ -162,6 +180,9 @@ internal static partial class AuditHookRows
         || label.Equals("Rule ID", StringComparison.OrdinalIgnoreCase);
 
     private static bool MentionsEscalation(string value) => EscalationId().IsMatch(value);
+
+    private static string LabelEscalation(string value) =>
+        EscalationId().Replace(value, static match => JudgeEscalationFinding.WithLabel(match.Value));
 
     [GeneratedRegex(@"(?:llm-judge:)?" + JudgeEscalationFinding.RuleId, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 250)]
     private static partial Regex EscalationId();

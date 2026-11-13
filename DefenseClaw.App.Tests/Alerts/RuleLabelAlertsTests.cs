@@ -41,15 +41,38 @@ public sealed class RuleLabelAlertsTests
     // ------------------------------------------------------------------ rule ids
 
     [Fact]
-    public void A_runtime_only_row_headlines_the_sentence_of_a_known_rule_and_keeps_the_raw_fact()
+    public void A_runtime_only_row_keeps_the_runtimes_rule_title_and_adds_the_sentence_as_its_own_note()
     {
         var row = Runtime(",\"rule\":\"ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit\",\"decision\":\"alert\"");
         var item = AlertItem.FromRuntime(row).WithHookRows(Gate109, row);
 
         Assert.Equal("ACTION-COMPOUND-LIMIT", item.RuleId);
-        Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), item.Headline);
+        Assert.Equal("ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit", item.Headline);
         Assert.Contains(item.Fields, f => f.Name == "runtime.rule" && f.Value.StartsWith("ACTION-COMPOUND-LIMIT: Shell command exceeds", StringComparison.Ordinal));
-        Assert.Contains("The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", item.HookRowNote, StringComparison.Ordinal);
+        var paragraphs = item.HookRowNote.Split(Environment.NewLine + Environment.NewLine);
+        Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), paragraphs[0]);
+        Assert.Equal("The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).", paragraphs[1]);
+    }
+
+    [Theory]
+    [InlineData("ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit", "alert", "connector=codex action=alert raw_action=alert mode=action would_block=false")]
+    [InlineData("ACTION-COMPOUND-LIMIT: Shell command exceeds policy evaluation limit", "blocked", "connector=codex action=block raw_action=block mode=action would_block=true")]
+    [InlineData("tamper.agent_hook_config_write: Shell command writes an agent hook config", "blocked", "connector=claudecode action=block")]
+    [InlineData("tamper.agent_hook_config_disable: Edit turns off the agent hooks", "blocked", "connector=claudecode action=block")]
+    [InlineData("ACTION-OPERAND-BOUND: Command has too many operands", "alert", "connector=codex action=alert raw_action=alert mode=action")]
+    public void A_1_0_8_runtime_row_for_a_rule_id_added_in_1_0_9_reads_exactly_as_it_did_before(string rule, string decision, string details)
+    {
+        // Before the 1.0.9 round (b8cb8e2) the headline was the runtime's own rule value and a 1.0.8 row got no hook-row fact or note for these ids.
+        var row = Runtime(",\"rule\":\"" + rule + "\",\"decision\":\"" + decision + "\"", details: details);
+
+        foreach (var gate in new[] { Gate108, HookRowGate.None })
+        {
+            var item = AlertItem.FromRuntime(row).WithHookRows(gate, row);
+            Assert.Equal(rule, item.Headline);
+            Assert.Empty(item.HookRowFacts);
+            Assert.Equal(string.Empty, item.HookRowNote);
+            Assert.False(item.HasHookRowNotes);
+        }
     }
 
     [Fact]
@@ -63,13 +86,13 @@ public sealed class RuleLabelAlertsTests
     }
 
     [Fact]
-    public void A_limit_row_without_decision_or_action_fields_gets_only_the_label()
+    public void A_limit_row_without_decision_or_action_fields_gets_only_the_sentence()
     {
         var row = Runtime(",\"rule\":\"ACTION-COMPOUND-LIMIT: x\"", details: "something else");
         var item = AlertItem.FromRuntime(row).WithHookRows(Gate109, row);
 
-        Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), item.Headline);
-        Assert.Equal(string.Empty, item.HookRowNote);
+        Assert.Equal("ACTION-COMPOUND-LIMIT: x", item.Headline);
+        Assert.Equal(RuleIdLabels.Sentence("ACTION-COMPOUND-LIMIT"), item.HookRowNote);
     }
 
     [Fact]
@@ -78,8 +101,8 @@ public sealed class RuleLabelAlertsTests
         var row = Runtime(",\"rule\":\"tamper.agent_hook_config_disable: Turn off the agent's DefenseClaw hooks\",\"decision\":\"blocked\"", details: "connector=claudecode action=block");
         var item = AlertItem.FromRuntime(row).WithHookRows(Gate109, row);
 
-        Assert.Equal("An edit that turns off the agent's DefenseClaw hooks in its settings.", item.Headline);
-        Assert.Equal(string.Empty, item.HookRowNote);
+        Assert.Equal("tamper.agent_hook_config_disable: Turn off the agent's DefenseClaw hooks", item.Headline);
+        Assert.Equal("An edit that turns off the agent's DefenseClaw hooks in its settings.", item.HookRowNote);
     }
 
     [Fact]

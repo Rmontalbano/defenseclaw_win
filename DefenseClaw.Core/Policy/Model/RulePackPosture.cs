@@ -18,6 +18,10 @@ namespace DefenseClaw.Core.Policy.Model;
 /// makes the <em>hook outage tier</em> strict (internal/config/hook_outage_fail_mode.go@1.0.9:151-162). That verdict needs the loader and the pinned digest, which
 /// this app cannot reproduce, so it is never claimed here: a folder that cannot be read has the posture of its name.
 /// </para>
+/// <para>
+/// <b>Known limit.</b> A pinned custom pack whose manifest was edited after it was pinned shows the edited posture here, while the gateway rejects the pack
+/// (hook_outage_fail_mode.go@1.0.9:151-175). No digest check is built; the pack's pinned digest is not compared with the folder.
+/// </para>
 /// </summary>
 public static class RulePackPosture
 {
@@ -60,14 +64,34 @@ public static class RulePackPosture
         try
         {
             using var json = JsonDocument.Parse(text);
-            if (json.RootElement.ValueKind != JsonValueKind.Object
-                || !json.RootElement.TryGetProperty("posture", out var posture)
-                || posture.ValueKind != JsonValueKind.String)
+            if (json.RootElement.ValueKind != JsonValueKind.Object)
             {
                 return null;
             }
 
-            return posture.GetString()?.Trim().ToLowerInvariant() switch
+            // Go's json.Unmarshal into a struct field tagged "posture" (compose.go@1.0.9:349-369) takes each key in order, matches it to the field exactly or, failing
+            // that, ignoring case, and assigns it, so the LAST matching key wins whether it was spelled "posture" or "Posture". A matching key whose value is not a
+            // string (and not null, which Go leaves alone) makes Unmarshal return an error, and the gateway then reads no posture. Case folding here is
+            // OrdinalIgnoreCase, which equals Go's simple folding for the ASCII key.
+            string? last = null;
+            foreach (var property in json.RootElement.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, "posture", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    last = property.Value.GetString();
+                }
+                else if (property.Value.ValueKind != JsonValueKind.Null)
+                {
+                    return null;
+                }
+            }
+
+            return last?.Trim().ToLowerInvariant() switch
             {
                 "strict" => "strict",
                 "default" => "default",
