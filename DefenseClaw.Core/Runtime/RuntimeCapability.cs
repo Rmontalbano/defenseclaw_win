@@ -231,6 +231,36 @@ public enum RuntimeCapability
     /// Overview they had). Judged from the runtime's version (1.0.7 or later).
     /// </summary>
     RuntimeMonitoringDegradedReasons,
+
+    /// <summary>
+    /// <c>defenseclaw-gateway connector recover-config</c> finishes an interrupted agent config change (1.0.9); before it, the only way past a stuck receipt was to move it aside. Judged from the runtime's version (1.0.9 or later).
+    /// </summary>
+    ConnectorRecoverConfig,
+
+    /// <summary>
+    /// <c>status --json</c> reports <c>cowork_plugin_stale</c> for a Cowork plugin an older release built (1.0.9); the plugin has to be built and uploaded again. Judged from the runtime's version (1.0.9 or later).
+    /// </summary>
+    CoworkPluginStale,
+
+    /// <summary>
+    /// A Cowork plugin built by 1.0.9 lets Cowork calls run after DefenseClaw's data folder is removed; a plugin an older release built may block them until it is removed in Claude Desktop. Judged from the runtime's version (1.0.9 or later).
+    /// </summary>
+    CoworkPluginRunsAfterRemoval,
+
+    /// <summary>
+    /// A shell command that writes a protected file is at least an alert in every rule pack, the permissive one included, and DefenseClaw's own files block with every pack (1.0.9). Judged from the runtime's version (1.0.9 or later).
+    /// </summary>
+    ShellProtectedFileFloor,
+
+    /// <summary>
+    /// <c>guardrail.judge.max_parallel</c> defaults to 1 for a local judge (1.0.9), so the hint to set it is moot there. Judged from the runtime's version (1.0.9 or later).
+    /// </summary>
+    JudgeLocalParallelDefault,
+
+    /// <summary>
+    /// One dropped host sensor event keeps the host sensor degraded until the gateway restarts (1.0.9); before it, the state cleared by itself. Judged from the runtime's version (1.0.9 or later).
+    /// </summary>
+    HostSensorDropLatch,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -290,6 +320,12 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.OpenAiCompatibleProviders => "openai-compatible and custom-openai providers (1.0.8)",
         RuntimeCapability.SecretRefGatewayTokenSkipped => "Secret-reference gateway token skipped (1.0.7)",
         RuntimeCapability.RuntimeMonitoringDegradedReasons => "Runtime monitoring degraded reasons (1.0.7)",
+        RuntimeCapability.ConnectorRecoverConfig => "Recover an interrupted agent config change (1.0.9)",
+        RuntimeCapability.CoworkPluginStale => "Cowork plugin from an older release reads stale (1.0.9)",
+        RuntimeCapability.CoworkPluginRunsAfterRemoval => "Cowork plugin lets calls run after DefenseClaw is removed (1.0.9)",
+        RuntimeCapability.ShellProtectedFileFloor => "Shell writes to protected files always alert (1.0.9)",
+        RuntimeCapability.JudgeLocalParallelDefault => "A local LLM judge runs one call at a time by default (1.0.9)",
+        RuntimeCapability.HostSensorDropLatch => "A dropped host sensor event stays degraded until restart (1.0.9)",
         _ => capability.ToString(),
     };
 
@@ -342,6 +378,12 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.OpenAiCompatibleProviders => "the runtime reports version 1.0.8 or later and lists its commands (the LLM provider list includes openai-compatible and custom-openai, which need a base URL)",
         RuntimeCapability.SecretRefGatewayTokenSkipped => "the runtime reports version 1.0.7 or later and lists its commands (the gateway skips a gateway token that is a secret reference, and doctor --fix drops it)",
         RuntimeCapability.RuntimeMonitoringDegradedReasons => "the runtime reports version 1.0.7 or later and lists its commands (the Overview shows the gateway's runtime-monitoring degraded reasons)",
+        RuntimeCapability.ConnectorRecoverConfig => "the runtime reports version 1.0.9 or later and lists its commands (the gateway has 'connector recover-config', which finishes an interrupted agent config change; its receipts must not be removed or replayed)",
+        RuntimeCapability.CoworkPluginStale => "the runtime reports version 1.0.9 or later and lists its commands ('status --json' can report the Cowork reason code cowork_plugin_stale for a plugin an older release built)",
+        RuntimeCapability.CoworkPluginRunsAfterRemoval => "the runtime reports version 1.0.9 or later and lists its commands (a Cowork plugin built by this release lets Cowork calls run after the data folder is removed; a plugin an older release built may block them)",
+        RuntimeCapability.ShellProtectedFileFloor => "the runtime reports version 1.0.9 or later and lists its commands (a shell command that writes SSH authorized keys, a shell startup file or an active Git hook is at least an alert in every rule pack, and DefenseClaw's own files block with every pack)",
+        RuntimeCapability.JudgeLocalParallelDefault => "the runtime reports version 1.0.9 or later and lists its commands (guardrail.judge.max_parallel defaults to 1 for a local judge)",
+        RuntimeCapability.HostSensorDropLatch => "the runtime reports version 1.0.9 or later and lists its commands (one dropped host sensor event keeps the host sensor shown as degraded until the gateway restarts)",
         _ => string.Empty,
     };
 }
