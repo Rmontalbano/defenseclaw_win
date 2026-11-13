@@ -1,5 +1,6 @@
 using System.Globalization;
 using DefenseClaw.App.Services;
+using DefenseClaw.App.Services.Updates;
 using DefenseClaw.Core.Gateway.Durability;
 
 namespace DefenseClaw.App.ViewModels;
@@ -42,6 +43,9 @@ internal static class AttentionActionIds
 
     /// <summary>Puts back what <see cref="ClearStuckWrite"/> moved.</summary>
     public const string PutBack = "put-back";
+
+    /// <summary><c>defenseclaw-gateway connector recover-config --data-dir &lt;dir&gt;</c> (DefenseClaw 1.0.9 and later): finishes the interrupted change.</summary>
+    public const string FinishInterruptedChange = "finish-interrupted-change";
 
     /// <summary><c>defenseclaw guardrail fail-mode open --yes</c>.</summary>
     public const string SwitchToFailOpen = "fail-open";
@@ -103,9 +107,10 @@ internal static class DurabilityAttention
 
     /// <summary>
     /// The rows, most urgent first. <paramref name="blockedReason"/> says, for an action id, why it cannot be pressed now (the installation's sentence
-    /// before any other), or null; <paramref name="now"/> is the clock the ages are told against.
+    /// before any other), or null; <paramref name="now"/> is the clock the ages are told against. <paramref name="recoverConfig"/> is true when the installed
+    /// DefenseClaw has <c>connector recover-config</c> (1.0.9): the stuck-write row then offers that command, not the move-aside.
     /// </summary>
-    public static IReadOnlyList<AttentionRow> Rows(GatewaySnapshot snapshot, Func<string, string?> blockedReason, DateTimeOffset now)
+    public static IReadOnlyList<AttentionRow> Rows(GatewaySnapshot snapshot, Func<string, string?> blockedReason, DateTimeOffset now, bool recoverConfig = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(blockedReason);
@@ -165,11 +170,17 @@ internal static class DurabilityAttention
                     : $"{facts.PendingWrites.Count.ToString(CultureInfo.CurrentCulture)} guarded config write(s) never finished",
                 Detail = Describe(facts.PendingWrites, now) + (StateSentence(facts.PendingWrites) is { Length: > 0 } states ? " " + states : string.Empty) +
                          " If the agent rewrote the file in between, every later write is refused (\"requested recovery leaf is occupied by an unrecognized inode\"), " +
-                         "and the gateway exits at start. DefenseClaw has no command to recover from this. " +
-                         "Clearing it moves the pending files to a quarantine folder (nothing is deleted; you can put them back) while the gateway is stopped." +
+                         "and the gateway exits at start. " +
+                         (recoverConfig
+                             ? ConnectorRecovery.OverviewSentence
+                             : "DefenseClaw has no command to recover from this. " +
+                               "Clearing it moves the pending files to a quarantine folder (nothing is deleted; you can put them back) while the gateway is stopped.") +
                          (stuckNow ? " This is why the gateway stops at start." : string.Empty),
                 SeverityKey = stuckNow ? "Critical" : "High",
-                Actions = Actions(blockedReason, (AttentionActionIds.ClearStuckWrite, "Clear the stuck pending write", ClearTip(facts.PendingWrites))),
+                Actions = recoverConfig
+                    ? Actions(blockedReason, (AttentionActionIds.FinishInterruptedChange, ConnectorRecovery.ActionLabel,
+                        "Review defenseclaw-gateway connector recover-config. Nothing runs until you confirm."))
+                    : Actions(blockedReason, (AttentionActionIds.ClearStuckWrite, "Clear the stuck pending write", ClearTip(facts.PendingWrites))),
             });
         }
 

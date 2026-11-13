@@ -69,6 +69,12 @@ public static partial class InstallTranscript
         RegexOptions.CultureInvariant,
         RefusalTimeout);
 
+    // install.ps1@1.0.9:1914-1920: "The uv cache folder <path> is N characters long. uv builds one package (win-unicode-console) from source in it and needs 151 more, ..."
+    private static readonly Regex UvCacheLine = new(
+        "^" + Flex("The uv cache folder ") + ".+?" + Flex(" is ") + @"\d+" + Flex(" characters long. uv builds one package"),
+        RegexOptions.CultureInvariant,
+        RefusalTimeout);
+
     private static readonly Regex OpenCodeV1Line = new(
         Flex("OpenCode ") + "(?<raw>.{0,120}?)" + Flex(" at ") + "(?<exe>.{1,1024}?)" + Flex(" is OpenCode V1, and DefenseClaw ") + @"(?<to>\d[\d.]{0,20}?)" + Flex(V1Middle + " " + OpenCodeV1NextStep),
         RegexOptions.CultureInvariant,
@@ -129,6 +135,13 @@ public static partial class InstallTranscript
             if (AgentsRunningStop.Match(line) is { Success: true } running)
             {
                 return AgentsRunningRefusal(running, text, host);
+            }
+
+            if (UvCacheLine.IsMatch(line))
+            {
+                // The whole sentence: its tail is the fix, and the path keeps its home folder so the length it states is the one shown.
+                var whole = Sanitize(FailureLine.Match(candidate).Groups["r"].Value, shortenHome: false);
+                return new InstallerRefusal(InstallerRefusalKind.UvCacheTooDeep, whole, UvCacheDepth.NextStep);
             }
 
             if (EndsNothingChanged.IsMatch(line))

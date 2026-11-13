@@ -385,7 +385,7 @@ public static class InstallRunReader
     }
 
     /// <summary>The Last install row's text.</summary>
-    public static string Describe(InstallRunSummary run, DateTimeOffset now)
+    public static string Describe(InstallRunSummary run, DateTimeOffset now, bool recoverConfigInstalled = false)
     {
         ArgumentNullException.ThrowIfNull(run);
 
@@ -418,7 +418,7 @@ public static class InstallRunReader
                 // The refusal's step is apart from its reason, so the cap on the reason cannot lose it.
                 text += (reason.EndsWith('.') ? " " : ". ") + refusal.NextStep;
             }
-            else if (InstallScriptPlan.HintFor(reason) is { } hint)
+            else if (InstallScriptPlan.HintFor(reason, recoverConfigInstalled) is { } hint)
             {
                 text += " " + hint;
             }
@@ -508,7 +508,7 @@ public sealed record InstallStateSnapshot(
     /// <summary>The run the Last install row describes, with its transcript facts (CUST-359); null when none was found.</summary>
     public InstallRunSummary? LastRun { get; init; }
 
-    public static InstallStateSnapshot Read(string dataDirectory, IEnumerable<CliInvocation> activity, DateTimeOffset now)
+    public static InstallStateSnapshot Read(string dataDirectory, IEnumerable<CliInvocation> activity, DateTimeOffset now, bool recoverConfigInstalled = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(dataDirectory);
         ArgumentNullException.ThrowIfNull(activity);
@@ -532,7 +532,7 @@ public sealed record InstallStateSnapshot(
             configText,
             migration,
             migrationText,
-            run is null ? "No install run was found (no install-*.log, nothing in Activity)." : InstallRunReader.Describe(run, now),
+            run is null ? "No install run was found (no install-*.log, nothing in Activity)." : InstallRunReader.Describe(run, now, recoverConfigInstalled),
             run is null ? "Neutral" : InstallRunReader.ToneKey(run.Outcome),
             run?.LogPath,
             InstallFiles.ReadPreviousVersion(dataDirectory),

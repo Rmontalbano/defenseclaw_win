@@ -13,6 +13,8 @@ public sealed partial class OverviewPanelViewModel
         AppendAuditCapAttention(rows);
         AppendConnectorSkipAttention(rows);
         AppendHookBridgeAttention(rows);
+        AppendHookLauncherAttention(rows);
+        AppendWatcherAdmissionAttention(rows);
     }
 
     /// <summary>True for the ids of the buttons of the rows <see cref="AppendOverviewHealthAttention"/> adds.</summary>

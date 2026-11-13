@@ -17,6 +17,16 @@ public sealed partial class InstallScriptUpgradeViewModel
     private bool CoworkPluginLeft() =>
         CoworkUninstall.Applies(_services.Runtime.Capabilities.Has(RuntimeCapability.CoworkProtection), _services.Paths.DataDirectory);
 
+    /// <summary>Whether the DefenseClaw installed now has <c>defenseclaw-gateway connector recover-config</c> (1.0.9): the hint and the pre-flight send the user there, not to the move-aside.</summary>
+    private bool RecoverConfigInstalled() => _services.Runtime.Capabilities.Has(RuntimeCapability.ConnectorRecoverConfig);
+
+    /// <summary>
+    /// Whether the installed DefenseClaw is 1.0.9 or later, whose 'defenseclaw uninstall' also removes a 0.8.x Setup install kept beside it
+    /// (legacy_setup_install.py@1.0.9). Judged on the installed version text; <c>RuntimeProbe.Release109</c> is not visible to this assembly.
+    /// </summary>
+    private static bool UninstallRemovesSetup(string installedVersion) =>
+        InstallScriptPlan.TryNormalizeVersion(installedVersion, out var v) && Version.TryParse(v, out var parsed) && parsed >= UvCacheDepth.FirstRelease;
+
     /// <summary>Reads today's config.yaml and the kept version; null when unreadable or nothing is left behind.</summary>
     private RollbackConfigKeys.Result? ReadRollbackConfig(string? backTo)
     {

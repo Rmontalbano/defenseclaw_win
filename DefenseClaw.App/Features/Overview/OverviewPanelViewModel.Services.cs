@@ -404,6 +404,12 @@ public sealed partial class OverviewPanelViewModel
             parts.Add($"{plugins} plugin dirs");
         }
 
+        // 1.0.9: the watcher says when admission scanning is off for a root; its own words are the reason (WatcherAdmissionHealth, absent before 1.0.9).
+        if (WatcherAdmissionHealth.From(watcher) is { Reason.Length: > 0 } admission)
+        {
+            parts.Add(admission.Reason);
+        }
+
         return string.Join(", ", parts);
     }
 

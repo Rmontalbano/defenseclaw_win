@@ -82,6 +82,12 @@ public enum InstallerRefusalKind
 
     /// <summary>Any other last <c>x</c> line that ends by saying nothing was changed, of any release.</summary>
     NothingChanged,
+
+    /// <summary>
+    /// install.ps1 1.0.9 <c>Assert-UvBuildPathFits</c>: the uv cache folder is too deep for the one package uv builds from source, and Windows long paths are off.
+    /// The sentence says "Nothing was changed" in its middle, not at its end, and its reason is kept whole (the fix is its tail).
+    /// </summary>
+    UvCacheTooDeep,
 }
 
 /// <summary>A refusal: the installer's line (sanitized, capped) and the next step it named.</summary>
@@ -339,7 +345,13 @@ public static partial class InstallTranscript
     /// One installer line made fit to show: URLs cut to their host and credentials masked (<see cref="EndpointDisplay.ScrubLine"/>), the trailing
     /// <c>Log: &lt;path&gt;</c> dropped, and a home folder (<c>C:\Users\&lt;name&gt;</c>) written as <c>~</c>.
     /// </summary>
-    public static string Sanitize(string? line)
+    public static string Sanitize(string? line) => Sanitize(line, shortenHome: true);
+
+    /// <summary>
+    /// <see cref="Sanitize(string?)"/>, with the home folder kept as it is when <paramref name="shortenHome"/> is false: the uv refusal says how many characters
+    /// its path has, and a path written <c>~</c> would make that number look wrong. The path is the operator's own, on their own machine.
+    /// </summary>
+    public static string Sanitize(string? line, bool shortenHome)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
@@ -350,6 +362,11 @@ public static partial class InstallTranscript
         {
             var text = EndpointDisplay.ScrubLine(line);
             text = LogTail.Replace(text, string.Empty);
+
+            if (!shortenHome)
+            {
+                return text.Trim();
+            }
 
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (home.Length > 3)

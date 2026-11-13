@@ -59,6 +59,9 @@ public sealed partial class OverviewPanelViewModel
             case AttentionActionIds.PutBack:
                 PutBackQuarantine();
                 break;
+            case AttentionActionIds.FinishInterruptedChange:
+                FinishInterruptedChange();
+                break;
             case AttentionActionIds.SwitchToFailOpen:
                 SwitchToFailOpen();
                 break;

@@ -61,7 +61,7 @@ public sealed partial class OverviewPanelViewModel
                 continue;
             }
 
-            rows.Add(ConnectorSkipRow(skip));
+            rows.Add(WithRepair(ConnectorSkipRow(skip), skip));
         }
     }
 

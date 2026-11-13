@@ -239,7 +239,7 @@ public static class InstallScriptPlan
     /// The one-line hint for a reason that names an unresolved connector recovery, or that tells the operator to run the installer again with
     /// <see cref="AcceptCurrentInstallFlag"/>; null otherwise.
     /// </summary>
-    public static string? HintFor(string? reason)
+    public static string? HintFor(string? reason, bool recoverConfigInstalled = false)
     {
         if (reason is null)
         {
@@ -248,7 +248,11 @@ public static class InstallScriptPlan
 
         if (reason.Contains(ConnectorRecoveryPhrase, StringComparison.OrdinalIgnoreCase))
         {
-            return ConnectorRecoveryHint;
+            // The installed DefenseClaw has `connector recover-config` (1.0.9): finish the change with it. An older one has not, so the move-aside stays its way out;
+            // when the refusal line is the 1.0.9 installer's, which names that command, say it needs 1.0.9.
+            return recoverConfigInstalled ? ConnectorRecovery.UpgradeHint
+                : ConnectorRecovery.LineNamesCommand(reason) ? ConnectorRecoveryHint + " " + ConnectorRecovery.OlderRuntimeNote
+                : ConnectorRecoveryHint;
         }
 
         return reason.Contains(AcceptCurrentInstallFlag, StringComparison.Ordinal) ? AcceptCurrentInstallHint : null;
@@ -560,7 +564,14 @@ public static class PostUpgradeLeftovers
     /// <summary>The Add/Remove Programs key DefenseClaw Setup 0.8.x registered.</summary>
     public const string UninstallKeyName = "DefenseClaw";
 
-    public static IReadOnlyList<PreflightRow> Evaluate(ILeftoverProbes probes, bool coworkPluginLeft = false)
+    /// <summary>The file a 0.8.x Setup install keeps while it has not been imported (legacy_setup_install.py@1.0.9:82-157); 1.0.9's 'defenseclaw uninstall' looks for it.</summary>
+    internal static string SetupInstallStatePath() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "DefenseClaw", "installer", "install-state.json");
+
+    /// <param name="probes">The registry and file facts.</param>
+    /// <param name="coworkPluginLeft">Whether the Cowork removal sentence is added.</param>
+    /// <param name="uninstallRemovesSetup">The installed DefenseClaw is 1.0.9 or later, whose 'defenseclaw uninstall' also removes a 0.8.x Setup install kept beside it.</param>
+    public static IReadOnlyList<PreflightRow> Evaluate(ILeftoverProbes probes, bool coworkPluginLeft = false, bool uninstallRemovesSetup = false)
     {
         ArgumentNullException.ThrowIfNull(probes);
         var rows = new List<PreflightRow>();
@@ -580,13 +591,19 @@ public static class PostUpgradeLeftovers
         {
             var name = string.IsNullOrWhiteSpace(entry.DisplayName) ? "DefenseClaw" : entry.DisplayName.Trim();
             var cached = string.IsNullOrWhiteSpace(entry.UninstallString) ? "a cached 0.x Setup program" : "the cached 0.x Setup program (" + entry.UninstallString.Trim() + ")";
+            var besideSetup = uninstallRemovesSetup && probes.FileExists(SetupInstallStatePath());
             rows.Add(new PreflightRow(
                 UninstallEntryId,
                 "Add/Remove Programs entry",
                 PreflightStatus.Warn,
-                $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. Do not uninstall it from Windows Settings on a 1.0 machine: " +
-                "it is the old Setup's entry, not the 1.0 install's. To remove DefenseClaw 1.0 use 'defenseclaw uninstall'. " +
-                (coworkPluginLeft ? CoworkUninstall.Sentence + " " : string.Empty) + "This app does not change that entry."));
+                besideSetup
+                    ? $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. DefenseClaw Setup 0.8.x is still installed beside 1.0. " +
+                      "'defenseclaw uninstall' removes it (its data folder is kept), but it also stops this release's gateway and removes the hooks of the connectors it has configured, " +
+                      "so run setup again afterwards. 'defenseclaw init' will not set up hooks while Setup's hooks remain in the agent's settings. " +
+                      (coworkPluginLeft ? CoworkUninstall.Sentence + " " : string.Empty) + "This app does not change that entry."
+                    : $"Windows Settings still lists \"{name}\", and its uninstaller points to {cached}. Do not uninstall it from Windows Settings on a 1.0 machine: " +
+                      "it is the old Setup's entry, not the 1.0 install's. To remove DefenseClaw 1.0 use 'defenseclaw uninstall'. " +
+                      (coworkPluginLeft ? CoworkUninstall.Sentence + " " : string.Empty) + "This app does not change that entry."));
         }
 
         return rows;
@@ -731,6 +748,26 @@ public interface IUpgradeProbes
     /// <summary>The <c>DEFENSECLAW_HOME</c> environment variable, or null when it is not set. A seam so tests can fake it.</summary>
     string? DefenseClawHome() => Environment.GetEnvironmentVariable("DEFENSECLAW_HOME");
 
+    /// <summary>The <c>UV_CACHE_DIR</c> environment variable of this app, which the installer inherits; null when it is not set. A seam so tests can fake it.</summary>
+    string? UvCacheDirEnvironment() => Environment.GetEnvironmentVariable("UV_CACHE_DIR");
+
+    /// <summary>
+    /// HKLM <c>SYSTEM\CurrentControlSet\Control\FileSystem</c> <c>LongPathsEnabled</c> is 1; false when it is not, and false when it cannot be read, as the installer
+    /// counts it (install.ps1@1.0.9:1896-1904). Read-only.
+    /// </summary>
+    bool? LongPathsEnabled()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\FileSystem", writable: false);
+            return key?.GetValue("LongPathsEnabled") is int enabled && enabled == 1;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Whether <paramref name="path"/> is a reparse point (a junction or symbolic link). A folder that does not exist is not one.</summary>
     bool IsReparsePoint(string path)
     {
@@ -810,7 +847,8 @@ public static class InstallScriptPreflight
         PreflightVerification verification,
         string verificationDetail,
         string? targetVersion = null,
-        string? installedVersion = null)
+        string? installedVersion = null,
+        bool recoverConfigInstalled = false)
     {
         ArgumentNullException.ThrowIfNull(probes);
         ArgumentException.ThrowIfNullOrEmpty(dataDirectory);
@@ -869,7 +907,7 @@ public static class InstallScriptPreflight
                 "If a file is held open it reports which program, and this app releases its own database handles before it starts.")
             : new PreflightRow(ProcessesId, "DefenseClaw processes", PreflightStatus.Pass, "No other DefenseClaw program is running."));
 
-        rows.Add(PendingWritesRow(probes, dataDirectory));
+        rows.Add(PendingWritesRow(probes, dataDirectory, recoverConfigInstalled));
 
         long databases;
         long? free;
@@ -910,6 +948,11 @@ public static class InstallScriptPreflight
         if (DataFolderLink.Row(probes, dataDirectory, targetVersion) is { } link)
         {
             rows.Add(link);
+        }
+
+        if (UvCacheDepth.Row(probes, targetVersion, dataDirectory) is { } uv)
+        {
+            rows.Add(uv);
         }
 
         return new PreflightReport(rows);
@@ -967,7 +1010,7 @@ public static class InstallScriptPreflight
     /// install.ps1's <c>Assert-NoActiveConnectorRecovery</c> throws when any <c>.defenseclaw-cas-v2-*</c> receipt is in the data directory, whatever its
     /// age, so one pending set blocks. A directory that cannot be read only warns: the installer is the judge.
     /// </summary>
-    private static PreflightRow PendingWritesRow(IUpgradeProbes probes, string dataDirectory)
+    private static PreflightRow PendingWritesRow(IUpgradeProbes probes, string dataDirectory, bool recoverConfigInstalled)
     {
         const string title = "Pending config writes";
         IReadOnlyList<CasPendingWrite> pending;
@@ -994,7 +1037,10 @@ public static class InstallScriptPreflight
             var shown = string.Join(", ", receipts.Order(StringComparer.OrdinalIgnoreCase).Take(3)) + (receipts.Count > 3 ? ", ..." : string.Empty);
             return new PreflightRow(PendingWritesId, title, PreflightStatus.Block,
                 $"{receipts.Count.ToString(CultureInfo.InvariantCulture)} DefenseClaw recovery file{(receipts.Count == 1 ? string.Empty : "s")} ({shown}) " +
-                $"remain in {dataDirectory}. DefenseClaw's installer refuses to change version while any remain, and they are not a pending write this app can clear.");
+                $"remain in {dataDirectory}. DefenseClaw's installer refuses to change version while any remain, and " +
+                (recoverConfigInstalled
+                    ? "they are not a pending write this app lists. " + ConnectorRecovery.ReceiptsOnlyStep(dataDirectory)
+                    : "they are not a pending write this app can clear."));
         }
 
         var targets = pending
@@ -1011,7 +1057,10 @@ public static class InstallScriptPreflight
         return new PreflightRow(PendingWritesId, title, PreflightStatus.Block,
             $"{count.ToString(CultureInfo.InvariantCulture)} pending config write{(count == 1 ? string.Empty : "s")} ({string.Join(", ", targets)}). " +
             (states.Length > 0 ? states + " " : string.Empty) +
-            "DefenseClaw's installer refuses to change version while they remain. Open Overview and use \"Clear the stuck pending write\", then check again.")
+            "DefenseClaw's installer refuses to change version while they remain. " +
+            (recoverConfigInstalled
+                ? "Open Overview and use \"" + ConnectorRecovery.ActionLabel + "\" (or run the command the installer names), then check again. Do not remove or move the receipts yourself."
+                : "Open Overview and use \"Clear the stuck pending write\", then check again."))
         {
             ActionId = PreflightActionIds.OpenOverview,
             ActionLabel = "Open Overview",

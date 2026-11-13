@@ -21,7 +21,21 @@ public enum ConnectorSkipKind
 /// <param name="Name">The connector's lower-case wire name.</param>
 /// <param name="Kind">Why it was not started.</param>
 /// <param name="Reason">The gateway's sentence (or the CLI's own text when the gateway gave none): single line, at most <see cref="ConnectorStartHealth.MaxReasonLength"/> characters.</param>
-public sealed record ConnectorSkip(string Name, ConnectorSkipKind Kind, string Reason);
+/// <param name="Repair">The repair the gateway sends beside the reason (<c>connectors_not_started_repairs</c>, 1.0.9); null when it sent none.</param>
+public sealed record ConnectorSkip(string Name, ConnectorSkipKind Kind, string Reason, ConnectorRepair? Repair = null);
+
+/// <summary>
+/// The repair for a connector the gateway refused (<c>guardrail.details.connectors_not_started_repairs</c>, 1.0.9: a plugin folder another account can write).
+/// Text to read and copy, never to run: <paramref name="Fix"/> is a shell command (an <c>icacls</c> line, for example) the app does not review.
+/// </summary>
+/// <param name="Fix">The command the gateway names; null when it sent none or it was over <see cref="ConnectorStartHealth.MaxRepairLength"/> (never cut).</param>
+/// <param name="ByHand">The manual step; null on the same terms.</param>
+/// <param name="OmittedBytes">How much the gateway left out because a field was over its own cap; the gateway log has it.</param>
+public sealed record ConnectorRepair(string? Fix, string? ByHand, long OmittedBytes)
+{
+    /// <summary>True when there is something to show.</summary>
+    public bool HasContent => Fix is not null || ByHand is not null || OmittedBytes > 0;
+}
 
 /// <summary>
 /// Reads the connectors the gateway did not start out of <c>/health</c> <c>guardrail.details</c> (<c>connectors_not_started</c>,
@@ -35,6 +49,9 @@ public static class ConnectorStartHealth
 
     /// <summary>The start of the gateway's reason for an agent that is not installed (agent_not_installed.go, 1.0.7).</summary>
     public const string NotInstalledReasonPrefix = "the agent is not installed for this account";
+
+    /// <summary>The longest repair field kept (the gateway's own cap); a longer one is dropped, never cut, because a cut command must not be copied.</summary>
+    public const int MaxRepairLength = 8192;
 
     private const int MaxSkips = 64;
 
@@ -67,6 +84,7 @@ public static class ConnectorStartHealth
 
             var refused = ReadMap(details, "connectors_refused_by_agent_settings");
             var reasons = ReadMap(details, "connectors_not_started_reasons");
+            var repairs = ReadRepairs(details);
             foreach (var name in refused.Keys)
             {
                 _ = names.Add(name);
@@ -88,7 +106,7 @@ public static class ConnectorStartHealth
                     reason = $"setup failed when the gateway started, so it is not enforced; see gateway.log, then run: defenseclaw setup {name}";
                 }
 
-                result.Add(new ConnectorSkip(name, kind, reason));
+                result.Add(new ConnectorSkip(name, kind, reason, repairs.GetValueOrDefault(name)));
             }
 
             return result;
@@ -97,6 +115,45 @@ public static class ConnectorStartHealth
         {
             return [];
         }
+    }
+
+    private static Dictionary<string, ConnectorRepair> ReadRepairs(JsonElement details)
+    {
+        var map = new Dictionary<string, ConnectorRepair>(StringComparer.Ordinal);
+        if (!details.TryGetProperty("connectors_not_started_repairs", out var block) || block.ValueKind != JsonValueKind.Object)
+        {
+            return map;
+        }
+
+        foreach (var entry in block.EnumerateObject())
+        {
+            if (CleanName(entry.Name) is not { } name || entry.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var omitted = entry.Value.TryGetProperty("omitted_bytes", out var bytes) && bytes.ValueKind == JsonValueKind.Number && bytes.TryGetInt64(out var count)
+                ? Math.Max(count, 0)
+                : 0;
+            var repair = new ConnectorRepair(RepairText(entry.Value, "fix"), RepairText(entry.Value, "by_hand"), omitted);
+            if (repair.HasContent)
+            {
+                map[name] = repair;
+            }
+        }
+
+        return map;
+    }
+
+    private static string? RepairText(JsonElement repair, string key)
+    {
+        if (!repair.TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.String ||
+            value.GetString()?.Trim() is not { Length: > 0 and <= MaxRepairLength } text)
+        {
+            return null;
+        }
+
+        return DisplayNames.Visible(text);
     }
 
     private static Dictionary<string, string> ReadMap(JsonElement details, string key)

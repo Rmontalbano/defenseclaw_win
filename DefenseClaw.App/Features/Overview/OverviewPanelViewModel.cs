@@ -770,7 +770,7 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
 
         // What the disk says about the gateway's next start, and what a failure costs the agent (CUST-352): a moved Codex executable, a stuck
         // config write, a fail-closed agent with no gateway. The agent that is blocked comes first: it is the one that cannot work right now.
-        var durabilityRows = DurabilityAttention.Rows(snapshot, id => AttentionActionBlockedReason(id, snapshot), DateTimeOffset.UtcNow);
+        var durabilityRows = DurabilityAttention.Rows(snapshot, id => AttentionActionBlockedReason(id, snapshot), DateTimeOffset.UtcNow, Services.Runtime.Capabilities.Has(DefenseClaw.Core.Runtime.RuntimeCapability.ConnectorRecoverConfig));
         var blockedFirst = snapshot.IsAgentBlocked && durabilityRows.Count > 0;
         if (blockedFirst)
         {

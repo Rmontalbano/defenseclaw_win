@@ -44,6 +44,7 @@ public sealed partial class InstallScriptUpgradeViewModel
         {
             // These steps are the app's own wording, not the installer's: the line did not name one.
             InstallerRefusalKind.NothingChanged => step,
+            InstallerRefusalKind.UvCacheTooDeep => step,
             InstallerRefusalKind.OpenCodeV2Rollback when refusal.NextStep == InstallTranscript.OpenCodeV2FallbackStep => step,
             InstallerRefusalKind.OpenCodeV2Rollback => "Releases before 1.0.6 cannot guard OpenCode V2. The installer's next step: " + step,
             _ => "The installer's next step: " + step,

@@ -32,10 +32,12 @@ public sealed partial class OverviewPanelViewModel
     /// <summary>True when <see cref="RuntimeMonitoringDegradedText"/> has something to say.</summary>
     public bool HasRuntimeMonitoringDegraded => RuntimeMonitoringDegradedText.Length > 0;
 
+    private const string DroppedEventsReason = "events were dropped";
+    private const string BackPressureReason = "under back-pressure";
     private const string OwnSocketsReason = "egress attribution is limited to this process's own sockets";
 
     /// <summary>The reassurance is true only when every reason listed is the own-sockets one; a second, real reason is not "how a gateway that runs as you works".</summary>
-    private static string DegradedTextFor(RuntimeHealthView view)
+    private static string DegradedTextFor(RuntimeHealthView view, bool dropLatch = false)
     {
         if (!view.Reported || !view.Degraded)
         {
@@ -48,6 +50,12 @@ public sealed partial class OverviewPanelViewModel
         }
 
         var text = "The gateway reports runtime monitoring degraded: " + string.Join("; ", view.Reasons) + ".";
+        if (dropLatch && view.Reasons.Any(static r => r.Contains(DroppedEventsReason, StringComparison.Ordinal) && r.Contains(BackPressureReason, StringComparison.Ordinal)))
+        {
+            // HostSensorDropLatch (1.0.9): the sensor keeps the count of events it dropped for the life of the gateway process.
+            text += " The dropped-events count stays until the gateway restarts.";
+        }
+
         return view.Reasons.All(static r => r.Contains(OwnSocketsReason, StringComparison.Ordinal))
             ? text + " That is how a gateway that runs as you normally works; this app keeps the gateway unelevated, so nothing needs to change."
             : text;
@@ -76,7 +84,7 @@ public sealed partial class OverviewPanelViewModel
 
         // The line is new with 1.0.7 (RuntimeMonitoringDegradedReasons): a 1.0.3 to 1.0.6 gateway also sends degraded_reasons, but the Overview showed nothing for it there.
         RuntimeMonitoringDegradedText = Services.Runtime.Capabilities.Has(RuntimeCapability.RuntimeMonitoringDegradedReasons)
-            ? DegradedTextFor(view)
+            ? DegradedTextFor(view, Services.Runtime.Capabilities.Has(RuntimeCapability.HostSensorDropLatch))
             : string.Empty;
     }
 

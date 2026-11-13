@@ -554,8 +554,9 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var detail = _verificationDetail;
             var target = InstallVersion;
             var installedNow = _installedVersion;
+            var recoverConfig = RecoverConfigInstalled();
 
-            var report = await Task.Run(() => InstallScriptPreflight.Evaluate(_probes, blocked, dataDirectory, verification, detail, target, installedNow)).ConfigureAwait(true);
+            var report = await Task.Run(() => InstallScriptPreflight.Evaluate(_probes, blocked, dataDirectory, verification, detail, target, installedNow, recoverConfig)).ConfigureAwait(true);
 
             PreflightRows.Clear();
             foreach (var row in report.Rows)
@@ -879,7 +880,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             ExitMessage = "The installer said: " + installerSaid + (installerSaid.EndsWith('.') || installerSaid.EndsWith('…') ? " " : ". ") + ExitMessage;
         }
 
-        ExitHint = RefusalHint(result) ?? InstallScriptPlan.HintFor(result.InstallerReason) ?? string.Empty;
+        ExitHint = RefusalHint(result) ?? InstallScriptPlan.HintFor(result.InstallerReason, RecoverConfigInstalled()) ?? string.Empty;
         HasExitHint = ExitHint.Length > 0;
         DurationText = result.Started ? $"{result.Duration.TotalSeconds:0} s" : string.Empty;
         LogPath = result.LogPath ?? string.Empty;
@@ -903,10 +904,11 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var dataDirectory = _services.Paths.DataDirectory;
             var activity = _services.Cli.Activity;
             var now = _time.GetLocalNow();
+            var recoverConfigNow = RecoverConfigInstalled();
             var (installer, installed) = (ScriptVersion, _installedVersion);
-            var state = await Task.Run(() => InstallStateSnapshot.Read(dataDirectory, activity, now)).ConfigureAwait(true);
+            var state = await Task.Run(() => InstallStateSnapshot.Read(dataDirectory, activity, now, recoverConfigNow)).ConfigureAwait(true);
             var coworkLeft = CoworkPluginLeft();
-            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers, coworkLeft)).ConfigureAwait(true);
+            var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers, coworkLeft, UninstallRemovesSetup(installed) || recoverConfigNow)).ConfigureAwait(true);
             var rollbackConfig = await Task.Run(() => ReadRollbackConfig(state.PreviousVersion)).ConfigureAwait(true);
 
             // What the installer's rollback will do about a Codex that changed since the older install set it up (CUST-399; hashes codex.exe) or an OpenCode V2 (CUST-424).

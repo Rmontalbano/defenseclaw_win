@@ -1,6 +1,7 @@
 using System.Globalization;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway.Models;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -17,6 +18,7 @@ public sealed partial class OverviewPanelViewModel
 
     private ConfigDocument? _judgeConfigSource;
     private bool _judgeMaxParallelOff = true;
+    private bool _judgeKeyAbsentOnLocalJudge;
 
     /// <summary>
     /// True while <c>guardrail.judge.max_parallel</c> is off: absent or zero or below. A value that is there and not a whole number says nothing either way (the
@@ -31,10 +33,12 @@ public sealed partial class OverviewPanelViewModel
             _judgeMaxParallelOff = reader.Integer("guardrail", "judge", "max_parallel") is { } value
                 ? value <= 0
                 : !reader.Has("guardrail", "judge", "max_parallel");
+            _judgeKeyAbsentOnLocalJudge = !reader.Has("guardrail", "judge", "max_parallel") && JudgeLocalEndpoint.IsLocal(reader) == true;
             _judgeConfigSource = config;
         }
 
-        return _judgeMaxParallelOff;
+        // JudgeLocalParallelDefault (1.0.9): with the key left out, a local or private judge already runs one call at a time. An explicit 0 still means no bound.
+        return _judgeMaxParallelOff && !(_judgeKeyAbsentOnLocalJudge && Services.Runtime.Capabilities.Has(RuntimeCapability.JudgeLocalParallelDefault));
     }
 
     /// <summary>Adds the row. Called once from <see cref="BuildAttention"/>. Nothing without a gateway answer or without a fallback.</summary>
