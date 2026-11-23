@@ -612,6 +612,12 @@ public sealed record CommandReview
             return dashboards;
         }
 
+        // `setup tokenomics` writes hot keys only; `setup routing --status` and the bare command write nothing (CUST-457).
+        if (ModelRoutingSetupReview.RestartsGateway(argv) is { } routing)
+        {
+            return routing;
+        }
+
         // Only a flag counts: one that is the value of another option (a webhook named "--show") or the option's
         // own argument does not turn the restart off, and nothing after a "--" is a flag at all.
         var options = argv.TakeWhile(a => !string.Equals(a, "--", StringComparison.Ordinal)).ToArray();

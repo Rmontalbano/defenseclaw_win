@@ -65,8 +65,27 @@ public static class ConfigReloadRules
         "skill_actions", "mcp_actions", "plugin_actions", "config_version", "decision_model",
     };
 
-    /// <summary>True when the running gateway applies a change to <paramref name="segments"/> only after a restart.</summary>
-    public static bool NeedsRestart(IReadOnlyList<string> segments)
+    /// <summary>
+    /// The nine routing keys 1.0.10 still lists as restart-required (the vLLM Semantic Router's process settings and what its container is started with;
+    /// <c>config_writer.RESTART_KEYS</c> and <c>configwrite.restartKeys</c>). On a runtime with <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.RoutingHotReload"/>
+    /// they replace the whole <c>routing</c> entry of <see cref="RestartKeys"/>, and the rest of routing, <c>observability.tokenomics</c> and
+    /// <c>observability.pricing</c> among it, is applied in place.
+    /// </summary>
+    public static IReadOnlyList<string> RoutingRestartKeys { get; } =
+    [
+        "routing.port", "routing.version", "routing.remote", "routing.algorithm", "routing.enabled",
+        "routing.classifier", "routing.models", "routing.signals", "routing.decisions",
+    ];
+
+    /// <summary>True when the running gateway applies a change to <paramref name="segments"/> only after a restart (a 1.0.9 or older runtime: all of <c>routing</c> restarts).</summary>
+    public static bool NeedsRestart(IReadOnlyList<string> segments) => NeedsRestart(segments, routingHotReload: false);
+
+    /// <summary>
+    /// True when the running gateway applies a change to <paramref name="segments"/> only after a restart.
+    /// <paramref name="routingHotReload"/>: the runtime has <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.RoutingHotReload"/> (1.0.10), so only
+    /// <see cref="RoutingRestartKeys"/> restart and the rest of <c>routing</c> is hot.
+    /// </summary>
+    public static bool NeedsRestart(IReadOnlyList<string> segments, bool routingHotReload)
     {
         ArgumentNullException.ThrowIfNull(segments);
 
@@ -84,9 +103,30 @@ public static class ConfigReloadRules
 
         foreach (var key in RestartKeys)
         {
+            if (routingHotReload && key == "routing")
+            {
+                continue;
+            }
+
             if (Matches(segments, key.Split('.')))
             {
                 return true;
+            }
+        }
+
+        if (routingHotReload)
+        {
+            foreach (var key in RoutingRestartKeys)
+            {
+                if (Matches(segments, key.Split('.')))
+                {
+                    return true;
+                }
+            }
+
+            if (segments[0] == "routing")
+            {
+                return false;
             }
         }
 
@@ -112,7 +152,13 @@ public static class ConfigReloadRules
     /// What changing config.yaml from <paramref name="before"/> to <paramref name="after"/> asks of the running gateway. <see cref="ConfigReloadVerdict.Unknown"/>
     /// when either text cannot be compared. Never carries a value, only key paths.
     /// </summary>
-    public static ConfigReloadVerdict Classify(string before, string after)
+    public static ConfigReloadVerdict Classify(string before, string after) => Classify(before, after, routingHotReload: false);
+
+    /// <inheritdoc cref="Classify(string, string)"/>
+    /// <param name="before">What config.yaml held.</param>
+    /// <param name="after">What it holds now.</param>
+    /// <param name="routingHotReload">The runtime has <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.RoutingHotReload"/> (see <see cref="NeedsRestart(IReadOnlyList{string}, bool)"/>).</param>
+    public static ConfigReloadVerdict Classify(string before, string after, bool routingHotReload)
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
@@ -143,7 +189,7 @@ public static class ConfigReloadRules
 
         // A gateway set to restart on any reload shuts down whatever changed.
         var reloadRestarts = ModeIsRestart(oldKeys) || ModeIsRestart(newKeys);
-        var restart = changed.Where(path => reloadRestarts || NeedsRestart(path.Split(ConfigYamlFlatten.Separator))).ToList();
+        var restart = changed.Where(path => reloadRestarts || NeedsRestart(path.Split(ConfigYamlFlatten.Separator), routingHotReload)).ToList();
         return new ConfigReloadVerdict(true, changed, restart);
     }
 

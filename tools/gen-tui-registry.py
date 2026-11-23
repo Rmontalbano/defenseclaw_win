@@ -10,6 +10,8 @@ capabilities the app probed (``RuntimeCapability.TuiRegistry``; see ``TuiRegistr
   Extended   the pinned newer source commit (reports version 1.0.0) (253 entries)
   Current    an optional third source: the registry of a released tag (1.0.8, 250 entries), for the runtimes that
              report DecisionModelCascade (1.0.7) or CoworkProtection (1.0.8)
+  Routing    an optional fourth source: the registry of the release that added the ``routing`` CLI (1.0.10, 281
+             entries), for the runtimes that report RoutingCli
 
 Nothing of DefenseClaw is imported or executed. Every file is parsed with ``ast`` and only literals are evaluated (the registry
 tuple, the Windows platform table, the module-level string constants); a file that is not shaped as expected stops the run
@@ -23,14 +25,24 @@ preview, and ``sandbox`` - ``WINDOWS_UNSUPPORTED_FEATURES``), so the same three 
 platform table. An entry that fails one of them is still in the catalogue, with the runtime's own reason, and the palette
 hides it and says how many it hid.
 
+The routing source's platform table has no ``WINDOWS_UNSUPPORTED_FEATURES`` any more (1.0.10's ``platform_support.py`` dropped
+it), so that table is optional here: absent means no feature is listed as unsupported, and the sandbox rule then rests on
+``openshell_sandboxes_supported`` alone (darwin and linux). A table that is present but not shaped as ``frozenset({...})``
+still stops the run. 1.0.10's own ``build_registry`` (``tui/registry.py``) filters on the same three things only.
+
+What this file does NOT decide: the app leaves some entries out of its palette for its own reasons (``routing`` commands that
+change routing, ``substrate``); that is ``DefenseClaw.Core/Cli/RoutingCliExclusions.cs``, kept apart so the runtime's reasons
+recorded here stay the runtime's own.
+
 Usage (run it with ``-I`` so the interpreter reads nothing from the environment):
 
   python -I tools/gen-tui-registry.py ^
       --baseline <site-packages>/defenseclaw/tui/registry_data.py --baseline-version 0.8.10 ^
       --pinned   <checkout>/cli/defenseclaw/tui/registry_data.py --pinned-commit 95159fd ^
-      --current  <extract-of-1.0.8>/cli/defenseclaw/tui/registry_data.py --current-commit <sha of 1.0.8> --current-tag 1.0.8
+      --current  <extract-of-1.0.8>/cli/defenseclaw/tui/registry_data.py --current-commit <sha of 1.0.8> --current-tag 1.0.8 ^
+      --routing  <extract-of-1.0.10>/cli/defenseclaw/tui/registry_data.py --routing-commit <sha of 1.0.10> --routing-tag 1.0.10
 
-  The inputs of the current catalogue are extracted from the upstream tag, laid out as
+  The inputs of the current catalogue (and of the routing one) are extracted from the upstream tag, laid out as
   ``<dir>/cli/defenseclaw/{__init__.py,platform_support.py,tui/registry_data.py,tui/registry.py}``.
 
   --baseline-version V   label the baseline as version V instead of the ``__version__`` in its ``__init__.py``. Needed because
@@ -38,6 +50,9 @@ Usage (run it with ``-I`` so the interpreter reads nothing from the environment)
                          ``registry_data.py`` is byte-identical to the installed 0.8.10 build the baseline records.
   --current PATH         optional third source (registry_data.py of a released tag); needs --current-commit and --current-tag.
                          The tag names the catalogue's version (the 1.0.x tags' ``__init__.py`` still says 1.0.0).
+  --routing PATH         optional fourth source (registry_data.py of the release that has the ``routing`` commands); needs
+                         --routing-commit and --routing-tag, and is only allowed together with --current. Same layout and
+                         checks as --current.
   --out PATH   where to write (default: DefenseClaw.Core/Cli/TuiRegistryData.Generated.cs next to this script's repository)
   --check      write nothing; exit 1 when PATH differs from what would be generated (line endings are ignored)
 
@@ -209,10 +224,15 @@ def read_platform(path: pathlib.Path) -> Platform:
             resolve_string(value.args[1], constants, f"{key.value} reason"),
         )
 
+    # Optional: 1.0.10's platform_support.py no longer defines it (absent means no feature is unsupported); a table that is
+    # there but not shaped as frozenset({...}) is still not guessed at.
     features_node = top_level_assignment(tree, "WINDOWS_UNSUPPORTED_FEATURES")
-    if not (isinstance(features_node, ast.Call) and isinstance(features_node.func, ast.Name) and features_node.func.id == "frozenset" and len(features_node.args) == 1):
+    if features_node is None:
+        features: set[str] = set()
+    elif isinstance(features_node, ast.Call) and isinstance(features_node.func, ast.Name) and features_node.func.id == "frozenset" and len(features_node.args) == 1:
+        features = set(ast.literal_eval(features_node.args[0]))
+    else:
         raise GeneratorError(f"{path}: WINDOWS_UNSUPPORTED_FEATURES is not frozenset({{...}})")
-    features = set(ast.literal_eval(features_node.args[0]))
 
     reason = constants.get("LOCAL_OBSERVABILITY_UNSUPPORTED_REASON")
     if reason is None:
@@ -334,12 +354,22 @@ def cs_entry(row: tuple, unavailable: str | None) -> str:
     )
 
 
-def render(baseline: Source, extended: Source, pinned_commit: str, current: Source | None = None, current_commit: str | None = None) -> str:
+def render(
+    baseline: Source,
+    extended: Source,
+    pinned_commit: str,
+    current: Source | None = None,
+    current_commit: str | None = None,
+    routing: Source | None = None,
+    routing_commit: str | None = None,
+) -> str:
     lines: list[str] = []
     add = lines.append
     sources = [("Baseline", baseline), ("Extended", extended)]
     if current is not None:
         sources.append(("Current", current))
+    if routing is not None:
+        sources.append(("Routing", routing))
 
     add("// <auto-generated>")
     add("//   Generated by tools/gen-tui-registry.py from DefenseClaw's TUI command registry. Do not edit by hand: change the")
@@ -371,6 +401,8 @@ def render(baseline: Source, extended: Source, pinned_commit: str, current: Sour
     add(f"    public const string ExtendedCommit = {cs_string(pinned_commit)};")
     if current is not None:
         add(f"    public const string CurrentCommit = {cs_string(current_commit)};")
+    if routing is not None:
+        add(f"    public const string RoutingCommit = {cs_string(routing_commit)};")
     add("")
     for index, (prefix, source) in enumerate(sources):
         add(f"    public static readonly TuiRegistryEntry[] {prefix} =")
@@ -396,6 +428,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--current", type=pathlib.Path, help="optional third source: cli/defenseclaw/tui/registry_data.py of a released tag")
     parser.add_argument("--current-commit", help="the current source's commit (7 to 40 hex digits)")
     parser.add_argument("--current-tag", help="the current source's release tag (for the label)")
+    parser.add_argument("--routing", type=pathlib.Path, help="optional fourth source: cli/defenseclaw/tui/registry_data.py of the release with the routing commands (needs --current)")
+    parser.add_argument("--routing-commit", help="the routing source's commit (7 to 40 hex digits)")
+    parser.add_argument("--routing-tag", help="the routing source's release tag (for the label)")
     parser.add_argument("--pinned-subdir", default="cli", help="where the package sits in that repository (default: cli)")
     parser.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT)
     parser.add_argument("--check", action="store_true", help="write nothing; exit 1 when --out differs")
@@ -412,6 +447,16 @@ def main(argv: list[str]) -> int:
     elif args.current_commit or args.current_tag:
         parser.error("--current-commit and --current-tag need --current")
 
+    if args.routing is not None:
+        if args.current is None:
+            parser.error("--routing is only allowed together with --current")
+        if not (args.routing_commit and args.routing_tag):
+            parser.error("--routing needs --routing-commit and --routing-tag")
+        if not re.fullmatch(r"[0-9a-f]{7,40}", args.routing_commit):
+            parser.error("--routing-commit must be 7 to 40 lower-case hex digits")
+    elif args.routing_commit or args.routing_tag:
+        parser.error("--routing-commit and --routing-tag need --routing")
+
     try:
         baseline = Source(args.baseline, "DefenseClaw {version}, the installed Windows build", "defenseclaw/tui/registry_data.py", args.baseline_version)
         extended = Source(
@@ -427,15 +472,23 @@ def main(argv: list[str]) -> int:
                 f"{args.pinned_subdir}/defenseclaw/tui/registry_data.py",
                 args.current_tag,  # the release tags' __init__.py still says 1.0.0, so the tag names the version
             )
+        routing = None
+        if args.routing is not None:
+            routing = Source(
+                args.routing,
+                f"DefenseClaw {{version}} (release tag, source commit {args.routing_commit})",
+                f"{args.pinned_subdir}/defenseclaw/tui/registry_data.py",
+                args.routing_tag,
+            )
     except GeneratorError as exc:
         print(f"gen-tui-registry: {exc}", file=sys.stderr)
         return 2
 
-    text = render(baseline, extended, args.pinned_commit, current, args.current_commit)
+    text = render(baseline, extended, args.pinned_commit, current, args.current_commit, routing, args.routing_commit)
 
     if args.check:
-        current = args.out.read_bytes().decode("utf-8").replace("\r\n", "\n") if args.out.exists() else ""
-        if current != text:
+        on_disk = args.out.read_bytes().decode("utf-8").replace("\r\n", "\n") if args.out.exists() else ""
+        if on_disk != text:
             print(f"gen-tui-registry: {args.out} is out of date; run the generator again.", file=sys.stderr)
             return 1
         print(f"gen-tui-registry: {args.out} is up to date.")
@@ -446,7 +499,9 @@ def main(argv: list[str]) -> int:
     print(
         f"gen-tui-registry: wrote {args.out} - baseline {len(baseline.entries)} entries ({baseline.windows_count} on Windows), "
         f"extended {len(extended.entries)} ({extended.windows_count} on Windows)"
-        + (f", current {len(current.entries)} ({current.windows_count} on Windows)." if current is not None else ".")
+        + (f", current {len(current.entries)} ({current.windows_count} on Windows)" if current is not None else "")
+        + (f", routing {len(routing.entries)} ({routing.windows_count} on Windows)" if routing is not None else "")
+        + "."
     )
     return 0
 

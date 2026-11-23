@@ -589,6 +589,8 @@ public sealed partial class OverviewPanelViewModel
     /// </summary>
     private void AddConfigReloadRow(List<(string Label, string Value, string Tone)> rows, string suffix)
     {
+        AddModelRoutingRows(rows, suffix); // the Model routing and Tokenomics rows (OverviewPanelViewModel.ModelRouting.cs), ahead of Config reload's own early return
+
         if (_snapshot.Health?.Config is not { } block)
         {
             return;

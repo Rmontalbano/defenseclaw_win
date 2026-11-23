@@ -1022,7 +1022,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
                 // ... and the bar above is the editor's own, gone with the next edit. A save that changed a value (not a comment, spacing or key
                 // order) also joins the app-wide queue, which the Setup hub and the Overview keep until a restart or Clear (CUST-267). A gateway that
                 // reloads config.yaml itself needs the restart only for the keys it cannot apply in place (CUST-377).
-                if (RestartQueueRules.ConfigSaveReason(textBeforeSave, textToSave, RestartQueueRules.ConfigSavedText, GatewayHotReloads) is { } restartReason)
+                if (RestartQueueRules.ConfigSaveReason(textBeforeSave, textToSave, RestartQueueRules.ConfigSavedText, GatewayHotReloads, RoutingHotReloads) is { } restartReason)
                 {
                     _ = _services.RestartQueue.Queue(restartReason);
                 }
@@ -1122,7 +1122,7 @@ public sealed partial class ConfigEditorWindowViewModel : ObservableObject, IDis
             // A restore is a write to config.yaml like a save is (CUST-267), so it queues a restart when it changed a value of a file the gateway
             // may be running. Restoring after a rejected save is the usual case, and queues nothing: the file goes back to what the gateway has.
             if (!replacedAnUnvalidatedFile &&
-                RestartQueueRules.ConfigSaveReason(textBeforeRestore, _diskText, RestartQueueRules.ConfigRestoredText, GatewayHotReloads) is { } restartReason)
+                RestartQueueRules.ConfigSaveReason(textBeforeRestore, _diskText, RestartQueueRules.ConfigRestoredText, GatewayHotReloads, RoutingHotReloads) is { } restartReason)
             {
                 _ = _services.RestartQueue.Queue(restartReason);
             }

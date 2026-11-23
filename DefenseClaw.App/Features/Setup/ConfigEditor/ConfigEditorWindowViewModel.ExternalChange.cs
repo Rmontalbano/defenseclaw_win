@@ -35,6 +35,9 @@ public sealed partial class ConfigEditorWindowViewModel
     /// <summary>The runtime's gateway reloads config.yaml in place (<see cref="RuntimeCapability.GatewayConfigReload"/>): a save needs a restart only for the keys it cannot apply live.</summary>
     internal bool GatewayHotReloads => _services.Runtime.Capabilities.Has(RuntimeCapability.GatewayConfigReload);
 
+    /// <summary>1.0.10 restarts only nine routing keys (<see cref="RuntimeCapability.RoutingHotReload"/>); older runtimes restart for any routing key.</summary>
+    internal bool RoutingHotReloads => _services.Runtime.Capabilities.Has(RuntimeCapability.RoutingHotReload);
+
     private bool HasConfig104Keys => _services.Runtime.Capabilities.Has(RuntimeCapability.Config104Keys);
 
     // ------------------------------------------------------------------ hot reload
@@ -45,7 +48,7 @@ public sealed partial class ConfigEditorWindowViewModel
     /// </summary>
     private void ApplyHotReloadOutcome(string before, string after)
     {
-        if (!GatewayHotReloads || !ConfigReloadRules.Classify(before, after).HotOnly)
+        if (!GatewayHotReloads || !ConfigReloadRules.Classify(before, after, RoutingHotReloads).HotOnly)
         {
             return;
         }

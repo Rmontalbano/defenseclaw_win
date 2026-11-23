@@ -243,7 +243,7 @@ public static class WizardWindowsPolicy
                 });
         }
 
-        return result;
+        return RoutingSetupWindowsPolicy.AddNote(target, result);
     }
 
     private static bool IsSuppressed(string target, WizardField field)
@@ -254,6 +254,7 @@ public static class WizardWindowsPolicy
         }
 
         return SuppressedEverywhere.Contains(flag) ||
+               RoutingSetupWindowsPolicy.Suppresses(target, flag) ||
                (target == "splunk" && SplunkSuppressed.Contains(flag)) ||
 
                // The Terraform that runs is the one the look found (TERRAFORM_BIN, or PATH); a different one named on the command line is a

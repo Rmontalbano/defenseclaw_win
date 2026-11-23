@@ -5,6 +5,7 @@ using DefenseClaw.App.Tests.TestSupport;
 using DefenseClaw.App.ViewModels;
 using DefenseClaw.Core.Config;
 using DefenseClaw.Core.Gateway;
+using DefenseClaw.Core.Runtime;
 
 namespace DefenseClaw.App.Tests.Agents;
 
@@ -23,7 +24,8 @@ internal sealed class AgentsScene : IDisposable
     private readonly TempDirectory _temp = new();
     private readonly GatewayClient _client;
 
-    public AgentsScene()
+    /// <param name="runtimeVersion">Null: the 1.0.0 fixture runtime. Otherwise the same command screens under this release number (1.0.9, 1.0.10).</param>
+    public AgentsScene(string? runtimeVersion = null)
     {
         Handler = new Gateway();
         _client = new GatewayClient(
@@ -33,7 +35,15 @@ internal sealed class AgentsScene : IDisposable
         Services = AppServices.CreateIsolated(
             TestServices.IsolatedPaths(_temp.Path),
             claudeSettingsPath: _temp.File("claude-settings.json"),
-            runtimeProbeRunner: RuntimeFixtureRunner.For("95159fd"));
+            runtimeProbeRunner: runtimeVersion is null ? RuntimeFixtureRunner.For("95159fd") : AtVersion(runtimeVersion));
+    }
+
+    private static RuntimeProbeRunner AtVersion(string version)
+    {
+        var screens = RuntimeFixtureRunner.For("95159fd");
+        return (arguments, ct) => string.Join(' ', arguments) == "--version-json"
+            ? Task.FromResult(RuntimeProbeOutput.Ok("{\"name\":\"defenseclaw-cli\",\"schema_version\":1,\"version\":\"" + version + "\"}"))
+            : screens(arguments, ct);
     }
 
     public Gateway Handler { get; }

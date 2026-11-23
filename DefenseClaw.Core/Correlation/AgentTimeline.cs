@@ -439,6 +439,16 @@ public sealed record AgentKpis(
     public const string UsageNote =
         "Not reported: the correlation ledger holds identifiers and event names, not token counts or cost. Nothing is estimated.";
 
+    /// <summary>
+    /// Added to <see cref="UsageNote"/> on a runtime with tokenomics (1.0.10): where model usage is kept. <c>GET /usage</c> has no agent dimension
+    /// (<c>api_usage.go</c> at 1.0.10: model, connector, route, profile, role, provider, user, group, hour).
+    /// </summary>
+    public const string UsageSourceNote =
+        "When tokenomics is on, DefenseClaw records the usage and cost of the model calls it carries itself (GET /usage); that record has no per-agent breakdown.";
+
+    /// <summary>The note under the Tokens and Cost tiles: <see cref="UsageNote"/>, plus <see cref="UsageSourceNote"/> when the runtime has tokenomics.</summary>
+    public static string UsageNoteFor(bool tokenomics) => tokenomics ? UsageNote + " " + UsageSourceNote : UsageNote;
+
     /// <summary>Counts distinct occurrences of each kind in <paramref name="entries"/>, metric points excluded.</summary>
     public static AgentKpis From(IEnumerable<TimelineEntry> entries)
     {

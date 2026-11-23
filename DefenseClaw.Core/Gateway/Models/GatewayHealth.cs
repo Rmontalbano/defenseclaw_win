@@ -192,6 +192,9 @@ public sealed class GatewayHealth
 
     public TimeSpan Uptime => TimeSpan.FromMilliseconds(UptimeMs);
 
+    /// <summary><c>routing</c> read out of <see cref="AdditionalData"/> (so <c>/health</c> still parses and "routing" stays in the bag); see <see cref="RoutingHealth"/>.</summary>
+    [JsonIgnore] public ServiceState? ModelRoutingBlock => RoutingHealth.ReadBlock(AdditionalData);
+
     /// <summary>Every named subsystem, for the Overview panel's Services box.</summary>
     public IEnumerable<KeyValuePair<string, ServiceState>> Services()
     {

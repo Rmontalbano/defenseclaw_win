@@ -149,7 +149,8 @@ internal static class RestartQueueRules
     /// then only a changed key the gateway applies after a restart (<see cref="ConfigReloadRules"/>) queues one, and the reason names only the sections that hold
     /// such a key. A text that cannot be compared keeps the answer above. False (0.8.10, a runtime that has not answered): every changed value queues one, as before.
     /// </param>
-    public static string? ConfigSaveReason(string before, string after, string what = ConfigSavedText, bool gatewayHotReloads = false)
+    /// <param name="routingHotReloads">The runtime has <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.RoutingHotReload"/> (1.0.10): only nine routing keys restart (<see cref="DefenseClaw.Core.Config.ConfigReloadRules.RoutingRestartKeys"/>). False keeps all of <c>routing</c> a restart.</param>
+    public static string? ConfigSaveReason(string before, string after, string what = ConfigSavedText, bool gatewayHotReloads = false, bool routingHotReloads = false)
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
@@ -163,7 +164,7 @@ internal static class RestartQueueRules
 
         if (gatewayHotReloads)
         {
-            var verdict = DefenseClaw.Core.Config.ConfigReloadRules.Classify(before, after);
+            var verdict = DefenseClaw.Core.Config.ConfigReloadRules.Classify(before, after, routingHotReloads);
             if (verdict.Parsed)
             {
                 if (verdict.RestartPaths.Count == 0)

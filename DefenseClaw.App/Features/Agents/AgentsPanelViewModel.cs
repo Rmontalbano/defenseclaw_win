@@ -844,8 +844,9 @@ public sealed partial class AgentsPanelViewModel : PanelViewModelBase, IAcceptsN
             true));
         Kpis.Add(new KpiTile("Model calls", AgentKpis.Count(k.ModelCalls), "Neutral", "Distinct model request and response events.", true));
         Kpis.Add(new KpiTile("Tool calls", AgentKpis.Count(k.ToolCalls), "Neutral", "Distinct tool call and result events.", true));
-        Kpis.Add(new KpiTile("Tokens", AgentKpis.NotReported, "Neutral", AgentKpis.UsageNote, false));
-        Kpis.Add(new KpiTile("Cost", AgentKpis.NotReported, "Neutral", AgentKpis.UsageNote, false));
+        var usageNote = AgentKpis.UsageNoteFor(Services.Runtime.Capabilities.Has(DefenseClaw.Core.Runtime.RuntimeCapability.Tokenomics));
+        Kpis.Add(new KpiTile("Tokens", AgentKpis.NotReported, "Neutral", usageNote, false));
+        Kpis.Add(new KpiTile("Cost", AgentKpis.NotReported, "Neutral", usageNote, false));
     }
 
     /// <summary>Esc clears the filter box when it has text. False when there was nothing to clear.</summary>

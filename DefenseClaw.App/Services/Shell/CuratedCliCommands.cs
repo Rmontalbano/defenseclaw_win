@@ -239,6 +239,7 @@ internal sealed class CuratedCommandCatalog
     private static readonly CuratedCommandCatalog ExtendedCommands = new(TuiRegistryCatalogues.Extended);
     private static readonly CuratedCommandCatalog CurrentCommands = new(TuiRegistryCatalogues.Current);
     private static readonly CuratedCommandCatalog CurrentWithoutCoworkCommands = new(TuiRegistryCatalogues.CurrentWithoutCowork);
+    private static readonly CuratedCommandCatalog WithRoutingCliCommands = new(TuiRegistryCatalogues.WithRoutingCli);
 
     private readonly Dictionary<string, CuratedCommand> _byId;
 
@@ -259,6 +260,11 @@ internal sealed class CuratedCommandCatalog
     public static CuratedCommandCatalog For(RuntimeCapabilities? capabilities)
     {
         var registry = TuiRegistryCatalogues.For(capabilities);
+        if (ReferenceEquals(registry, TuiRegistryCatalogues.WithRoutingCli))
+        {
+            return WithRoutingCliCommands;
+        }
+
         if (ReferenceEquals(registry, TuiRegistryCatalogues.Current))
         {
             return CurrentCommands;
@@ -281,14 +287,41 @@ internal sealed class CuratedCommandCatalog
     /// <summary>How many entries the registry has that the runtime does not run on Windows.</summary>
     public int HiddenCount => Source.HiddenOnWindows.Count;
 
-    /// <summary>"21 hidden on Windows", or empty when none is.</summary>
-    public string HiddenNote => HiddenCount == 0 ? string.Empty : $"{HiddenCount} hidden on Windows";
+    /// <summary>How many entries the runtime does run on Windows that this app leaves out for its own reasons (only the newest catalogue has any).</summary>
+    public int LeftOutCount => Source.LeftOut.Count;
 
-    /// <summary>One line per reason: how many entries and the runtime's own words. For the note's tooltip.</summary>
-    public string HiddenDetail => HiddenCount == 0
+    /// <summary>
+    /// "21 hidden on Windows", or empty when none is. A catalogue that also leaves entries out for the app's own reasons counts both and does not
+    /// say "on Windows", which would blame the runtime: "42 not offered".
+    /// </summary>
+    public string HiddenNote => HiddenCount + LeftOutCount == 0
         ? string.Empty
-        : "Not offered on Windows, because the runtime does not run them here:" + string.Concat(Source.HiddenReasons.Select(
-            r => Environment.NewLine + $"{r.Count} {(r.Count == 1 ? "command" : "commands")}: {r.Reason}"));
+        : LeftOutCount == 0 ? $"{HiddenCount} hidden on Windows" : $"{HiddenCount + LeftOutCount} not offered";
+
+    /// <summary>
+    /// One line per reason: how many entries and the runtime's own words, then, under a heading of their own, the entries this app leaves out and
+    /// its words for them. For the note's tooltip.
+    /// </summary>
+    public string HiddenDetail
+    {
+        get
+        {
+            var sections = new List<string>(2);
+            if (HiddenCount > 0)
+            {
+                sections.Add("Not offered on Windows, because the runtime does not run them here:" + string.Concat(Source.HiddenReasons.Select(
+                    r => Environment.NewLine + $"{r.Count} {(r.Count == 1 ? "command" : "commands")}: {r.Reason}")));
+            }
+
+            if (LeftOutCount > 0)
+            {
+                sections.Add("Not offered by this app:" + string.Concat(Source.LeftOutReasons.Select(
+                    r => Environment.NewLine + $"{r.Count} {(r.Count == 1 ? "command" : "commands")}: {r.Reason}")));
+            }
+
+            return string.Join(Environment.NewLine, sections);
+        }
+    }
 
     /// <summary>The command with this id (<see cref="CuratedCommand.Id"/>), or null: it is not in this catalogue, or Windows does not run it.</summary>
     public CuratedCommand? Find(string id) => id is not null && _byId.TryGetValue(id, out var command) ? command : null;

@@ -60,15 +60,40 @@ public sealed class TuiRegistryCatalogue
 {
     private readonly Dictionary<string, TuiRegistryEntry> _byName;
 
-    internal TuiRegistryCatalogue(string runtime, string source, string sourceSha256, int sourceEntries, IReadOnlyList<TuiRegistryEntry> entries)
+    private readonly Dictionary<string, string> _leftOutReasons = new(StringComparer.Ordinal);
+
+    // leftOut (optional): the app's own reason for not offering an entry the runtime does run on Windows, null for an entry it offers. Not the
+    // runtime's reason: it never goes into TuiRegistryEntry.WindowsUnavailable. Every catalogue but the newest passes none.
+    internal TuiRegistryCatalogue(
+        string runtime,
+        string source,
+        string sourceSha256,
+        int sourceEntries,
+        IReadOnlyList<TuiRegistryEntry> entries,
+        Func<TuiRegistryEntry, string?>? leftOut = null)
     {
         Runtime = runtime;
         Source = source;
         SourceSha256 = sourceSha256;
         SourceEntries = sourceEntries;
         Entries = entries;
-        OnWindows = entries.Where(e => e.IsAvailableOnWindows).ToArray();
         HiddenOnWindows = entries.Where(e => !e.IsAvailableOnWindows).ToArray();
+
+        // An entry the runtime itself hides stays hidden with the runtime's reason; only an entry it runs can be left out by the app.
+        var runtimeRuns = entries.Where(e => e.IsAvailableOnWindows).ToArray();
+        if (leftOut is not null)
+        {
+            foreach (var entry in runtimeRuns)
+            {
+                if (leftOut(entry) is { Length: > 0 } reason)
+                {
+                    _leftOutReasons[entry.Name] = reason;
+                }
+            }
+        }
+
+        LeftOut = runtimeRuns.Where(e => _leftOutReasons.ContainsKey(e.Name)).ToArray();
+        OnWindows = runtimeRuns.Where(e => !_leftOutReasons.ContainsKey(e.Name)).ToArray();
         _byName = entries.ToDictionary(e => e.Name, StringComparer.Ordinal);
     }
 
@@ -87,11 +112,30 @@ public sealed class TuiRegistryCatalogue
     /// <summary>Every entry the runtime's registry lists.</summary>
     public IReadOnlyList<TuiRegistryEntry> Entries { get; }
 
-    /// <summary>The entries Windows runs, in registry order.</summary>
+    /// <summary>The entries Windows runs and this app offers, in registry order: neither hidden by the runtime nor left out by the app.</summary>
     public IReadOnlyList<TuiRegistryEntry> OnWindows { get; }
 
-    /// <summary>The entries it does not, each carrying its reason.</summary>
+    /// <summary>The entries the runtime does not run on Windows, each carrying the runtime's own reason.</summary>
     public IReadOnlyList<TuiRegistryEntry> HiddenOnWindows { get; }
+
+    /// <summary>
+    /// The entries the runtime runs on Windows that this app does not offer, for its own reasons (see <see cref="LeftOutReasonOf"/>). Empty for
+    /// every catalogue that was built without such a rule.
+    /// </summary>
+    public IReadOnlyList<TuiRegistryEntry> LeftOut { get; }
+
+    /// <summary>Why entries are left out by the app, one line per distinct reason with how many it covers, the largest group first.</summary>
+    public IReadOnlyList<(string Reason, int Count)> LeftOutReasons =>
+        LeftOut
+            .GroupBy(e => _leftOutReasons[e.Name], StringComparer.Ordinal)
+            .Select(g => (Reason: g.Key, Count: g.Count()))
+            .OrderByDescending(g => g.Count)
+            .ThenBy(g => g.Reason, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>The app's reason for leaving <paramref name="entry"/> out, or null when it is not left out.</summary>
+    public string? LeftOutReasonOf(TuiRegistryEntry entry) =>
+        entry is not null && _leftOutReasons.TryGetValue(entry.Name, out var reason) ? reason : null;
 
     /// <summary>Why entries are hidden, one line per distinct reason with how many it covers, the largest group first.</summary>
     public IReadOnlyList<(string Reason, int Count)> HiddenReasons =>
@@ -180,7 +224,8 @@ public static class TuiRegistryCatalogues
         entry.Argv.Count >= 2 && entry.Argv[0] == "setup" && RemovedConnectors.IsRemoved(entry.Argv[1]);
 
     /// <summary>
-    /// The catalogue for a runtime with these capabilities: <see cref="Current"/> when it has <see cref="RuntimeCapability.CoworkProtection"/> (1.0.8),
+    /// The catalogue for a runtime with these capabilities: <see cref="WithRoutingCli"/> when it has <see cref="RuntimeCapability.RoutingCli"/> (1.0.10),
+    /// <see cref="Current"/> when it has <see cref="RuntimeCapability.CoworkProtection"/> (1.0.8),
     /// <see cref="CurrentWithoutCowork"/> when it has <see cref="RuntimeCapability.DecisionModelCascade"/> (1.0.7), otherwise <see cref="Extended"/> when it
     /// has <see cref="RuntimeCapability.TuiRegistry"/> (without the removed connectors when it has <see cref="RuntimeCapability.ConnectorsRetired"/>),
     /// otherwise <see cref="Baseline"/>.
@@ -190,6 +235,11 @@ public static class TuiRegistryCatalogues
         if (capabilities is null)
         {
             return Baseline;
+        }
+
+        if (capabilities.Has(RuntimeCapability.RoutingCli))
+        {
+            return WithRoutingCli;
         }
 
         if (capabilities.Has(RuntimeCapability.CoworkProtection))
@@ -238,4 +288,18 @@ public static class TuiRegistryCatalogues
     }
 
     private static readonly char[] ShellCharacters = { ';', '&', '|', '<', '>', '`', '$', '(', ')', '%', '"', '\'', '\\', '*', '?', '~', '^', '=', '\n', '\r' };
+
+    /// <summary>
+    /// The 1.0.10 release's registry (281 entries: the 250 of <see cref="Current"/> and the 8 <c>substrate</c> and 23 <c>routing</c> commands it adds),
+    /// as this app offers it: the runtime hides 19 of them on Windows (18 <c>sandbox</c>, <c>setup zeptoclaw</c>; <c>setup openclaw</c> is offered now), and
+    /// <see cref="RoutingCliExclusions"/> leaves out 23 more for the app's own reasons. Declared after <c>ShellCharacters</c> on purpose: building it
+    /// calls <see cref="ArgvProblem"/>, which reads that array, and static fields are set in the order they are written.
+    /// </summary>
+    public static TuiRegistryCatalogue WithRoutingCli { get; } = new(
+        TuiRegistryData.RoutingRuntime,
+        TuiRegistryData.RoutingSource,
+        TuiRegistryData.RoutingSourceSha256,
+        TuiRegistryData.RoutingSourceEntries,
+        TuiRegistryData.Routing,
+        RoutingCliExclusions.Reason);
 }
