@@ -281,20 +281,19 @@ public sealed class CatalogTrust
     /// </summary>
     private void TakeReadSignature()
     {
-        _staleReason = null;
         if (_configSignature is null)
         {
+            _staleReason = null;
             _readSignature = null;
             _pendingSignature = null;
             return;
         }
 
+        // The new signature is stored before the stale flag is cleared, so a CheckConfig that runs in between (a late reload notification) compares
+        // against the signature this read took, not the one before it, and cannot leave the fresh list marked stale.
         var now = _configSignature();
         _readSignature = _pendingSignature ?? now;
         _pendingSignature = null;
-        if (_readSignature != now)
-        {
-            _staleReason = ConfigChangedReason(_readClause);
-        }
+        _staleReason = _readSignature != now ? ConfigChangedReason(_readClause) : null;
     }
 }

@@ -326,6 +326,30 @@ public sealed class OpenClawWindowsSetupTests
     }
 
     [Fact]
+    public async Task A_probe_that_lands_after_the_detail_was_built_brings_the_intro_in_and_the_same_answer_again_reads_nothing()
+    {
+        // An in-app upgrade rebuilds the details before the runtime is probed again: the detail is built with the old capabilities first.
+        var current = Runtime("1.0.9");
+        var catalog = CatalogOver(TopHelp1010, OpenClawHelp1010, () => current);
+        _ = await catalog.LoadAsync();
+        Assert.DoesNotContain((await catalog.EnsureDetailAsync("openclaw")).Steps, s => s.Id == OpenClawSetupIntro.StepId);
+
+        current = Runtime("1.0.10");
+        await catalog.ObserveRuntimeAsync();
+
+        Assert.Equal(OpenClawSetupIntro.StepId, (await catalog.EnsureDetailAsync("openclaw")).Steps[0].Id);
+
+        // Told again with the same answer: the detail is the one already built.
+        var built = await catalog.EnsureDetailAsync("openclaw");
+        await catalog.ObserveRuntimeAsync();
+        Assert.Same(built, await catalog.EnsureDetailAsync("openclaw"));
+
+        current = Runtime("1.0.9");
+        await catalog.ObserveRuntimeAsync();
+        Assert.DoesNotContain((await catalog.EnsureDetailAsync("openclaw")).Steps, s => s.Id == OpenClawSetupIntro.StepId);
+    }
+
+    [Fact]
     public void The_intro_is_added_once_and_only_to_the_openclaw_card()
     {
         var steps = new[] { new WizardStep { Id = "options", Title = "Options" } };

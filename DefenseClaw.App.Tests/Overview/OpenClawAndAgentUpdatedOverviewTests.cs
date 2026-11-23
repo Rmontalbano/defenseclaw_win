@@ -229,6 +229,17 @@ public sealed class OpenClawAndAgentUpdatedOverviewTests : IDisposable
     }
 
     [Fact]
+    public async Task An_openclaw_the_gateway_did_not_start_gets_its_not_enforced_row_and_no_plugin_row_beside_it()
+    {
+        var vm = await PanelAsync("1.0.10", OpenClawOnly);
+
+        vm.Apply(Snapshot(Health("[]", NotStarted("openclaw", "openclaw is not installed"), uptimeMs: 120_000), "openclaw"));
+
+        Assert.Contains(vm.Attention, static r => r.Title.StartsWith("OpenClaw is not enforced", StringComparison.Ordinal));
+        Assert.DoesNotContain(vm.Attention, static r => r.Title.StartsWith("The OpenClaw plugin", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task An_absent_key_in_the_first_90_seconds_is_not_a_problem_yet()
     {
         var vm = await PanelAsync("1.0.10", OpenClawOnly);

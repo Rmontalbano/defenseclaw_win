@@ -668,7 +668,7 @@ internal sealed partial class ShellActions
                     ? command.NeedsArguments
                         ? " It names something you typed, so it is reviewed first, even where the command alone is on DefenseClaw for Windows' list of read-only commands."
                         : " It is not on DefenseClaw for Windows' list of commands known to be read-only, so it is reviewed first."
-                    : string.Empty;
+                    : RoutingReadReview.Note(argv);
 
                 // The local stack's rows say what the verb really does (the same sentences the Setup wizard's review uses): the registry's one-line
                 // description of the bare `setup local-observability` row is "Show local observability commands", and run bare it starts the stack.

@@ -163,6 +163,47 @@ public sealed class CoworkConnectorRemovalReviewTests : IDisposable
         Assert.Equal(CoworkUninstallReview.ConnectorMessage108, CoworkUninstallReview.ConnectorMessageFor(old.Runtime.Capabilities));
     }
 
+    // ------------------------------------------------------------------ setup openclaw --replace (1.0.10)
+
+    /// <summary><c>setup openclaw --replace</c> removes every configured hook connector, Claude Code among them (cmd_setup.py@1.0.10:15501-15524), so it carries the same bar.</summary>
+    [Fact]
+    public async Task Setup_openclaw_replace_carries_the_cowork_bar_when_the_plugin_state_exists()
+    {
+        var services = await ServicesAsync("1.0.10");
+
+        var bar = Assert.Single(Bars(services, "setup", "openclaw", "--replace", "--yes"));
+
+        Assert.Equal(CoworkUninstallReview.ConnectorTitle, bar.Title);
+        Assert.Equal(CoworkUninstallReview.ConnectorMessage, bar.Message);
+    }
+
+    [Fact]
+    public async Task Setup_openclaw_replace_carries_no_cowork_bar_without_the_plugin_state()
+    {
+        var services = await ServicesAsync("1.0.10", pluginState: false);
+
+        Assert.Empty(Bars(services, "setup", "openclaw", "--replace", "--yes"));
+    }
+
+    [Fact]
+    public async Task Setup_openclaw_without_replace_or_with_replace_after_the_separator_carries_no_cowork_bar()
+    {
+        var services = await ServicesAsync("1.0.10");
+
+        Assert.Empty(Bars(services, "setup", "openclaw", "--yes"));
+        Assert.Empty(Bars(services, "setup", "openclaw", "--", "--replace"));
+    }
+
+    [Fact]
+    public async Task Setup_openclaw_replace_on_1_0_8_uses_the_1_0_8_sentence_and_before_1_0_8_no_bar()
+    {
+        var old = await ServicesAsync("1.0.8");
+        Assert.Equal(CoworkUninstallReview.ConnectorMessage108, Assert.Single(Bars(old, "setup", "openclaw", "--replace")).Message);
+
+        var older = await ServicesAsync("1.0.7");
+        Assert.Empty(Bars(older, "setup", "openclaw", "--replace"));
+    }
+
     // ------------------------------------------------------------------ the uninstall / reset sentence by release
 
     [Fact]

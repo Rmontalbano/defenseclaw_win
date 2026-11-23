@@ -213,4 +213,36 @@ public sealed class RoutingCliCommandCatalogueTests
         Assert.DoesNotContain(older.Commands, c => c.Argv[0] == "substrate");
         Assert.Equal("20 hidden on Windows", older.HiddenNote);
     }
-}
+
+    // ------------------------------------------------------------------ what the review says about them
+
+    [Theory]
+    [InlineData("routing", "status")]
+    [InlineData("routing", "models", "list")]
+    [InlineData("routing", "usage")]
+    [InlineData("routing", "explain", "req-123")]
+    public void The_review_says_a_routing_read_only_reads(params string[] argv)
+    {
+        Assert.Equal(RoutingReadReview.ReadNote, RoutingReadReview.Note(argv));
+        Assert.Contains("changes nothing", RoutingReadReview.ReadNote, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_review_calls_routing_test_a_dry_run_that_may_ask_the_classifier()
+    {
+        var note = RoutingReadReview.Note(new[] { "routing", "test", "write a parser" });
+
+        Assert.Equal(RoutingReadReview.TestNote, note);
+        Assert.Contains("dry run", note, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("classifier", note, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("routing", "models", "add", "fast")]
+    [InlineData("routing", "enable")]
+    [InlineData("status")]
+    [InlineData("routing")]
+    public void Any_other_command_gets_no_routing_sentence(params string[] argv)
+    {
+        Assert.Equal(string.Empty, RoutingReadReview.Note(argv));
+    }}

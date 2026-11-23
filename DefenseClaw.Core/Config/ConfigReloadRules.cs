@@ -44,7 +44,7 @@ public static class ConfigReloadRules
         "guardrail.hook_self_heal", "guardrail.hook_self_heal_debounce_ms",
         "guardrail.protected_files",
         "claw", "agent", "routing", "plugin_dir",
-        "deployment_mode", "enterprise.profile", "enterprise.network", "enterprise.openshell",
+        "deployment_mode", "enterprise.profile", "enterprise.network", "enterprise.openshell", "enterprise.cowork_vm_sensor",
         "environment", "tenant_id", "workspace_id", "discovery_source",
         "fleet.mqtt_broker_url", "fleet.mqtt_require_tls",
         "fleet.ota_key_env", "fleet.emergency_key_env", "fleet.device_key_env",

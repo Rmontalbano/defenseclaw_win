@@ -40,7 +40,8 @@ public static class CoworkUninstallReview
     /// The warning for the <c>defenseclaw</c> command <paramref name="argv"/> (the arguments without the executable): one bar when the runtime has Cowork
     /// protection, the plugin state exists under <paramref name="dataDirectory"/>, and the command is <c>uninstall</c> or <c>reset</c> (the remove-plugin
     /// sentence for the runtime), or <c>setup remove</c> of the Claude Code connector under any of its names (<c>claudecode</c>, <c>claude</c>,
-    /// <c>claude-code</c>, <c>claude_code</c>, any case; connector_contracts.py@1.0.9:120-124); otherwise none.
+    /// <c>claude-code</c>, <c>claude_code</c>, any case; connector_contracts.py@1.0.9:120-124), or <c>setup openclaw --replace</c>, which removes every configured hook
+    /// connector, Claude Code among them (<see cref="OpenClawReplaceReview"/>; the connector bar, same sentence per release); otherwise none.
     /// The caller passes only the DefenseClaw CLI's argv (the gateway's verbs are not this CLI's).
     /// </summary>
     /// <param name="pluginStateExists">Tells whether the plugin state exists for a data directory; a test supplies its own. Defaults to <see cref="CoworkProtectionFacts.PluginStateExists"/>.</param>
@@ -59,7 +60,7 @@ public static class CoworkUninstallReview
         }
 
         var removesAll = RemovesDefenseClaw(argv);
-        if (!removesAll && !RemovesClaudeCodeConnector(argv))
+        if (!removesAll && !RemovesClaudeCodeConnector(argv) && !OpenClawReplaceReview.Applies(argv))
         {
             return Array.Empty<CommandReviewWarning>();
         }

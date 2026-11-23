@@ -77,12 +77,20 @@ public sealed class ConfigReloadRulesTests
                 "guardrail.scanner_mode", "guardrail.retain_judge_bodies", "guardrail.hook_self_heal", "guardrail.hook_self_heal_debounce_ms",
                 "guardrail.protected_files",
                 "claw", "agent", "routing", "plugin_dir",
-                "deployment_mode", "enterprise.profile", "enterprise.network", "enterprise.openshell",
+                "deployment_mode", "enterprise.profile", "enterprise.network", "enterprise.openshell", "enterprise.cowork_vm_sensor",
                 "environment", "tenant_id", "workspace_id", "discovery_source",
                 "fleet.mqtt_broker_url", "fleet.mqtt_require_tls", "fleet.ota_key_env", "fleet.emergency_key_env", "fleet.device_key_env",
                 "fleet.mqtt_user_env", "fleet.mqtt_pass_env", "fleet.enabled",
             ],
             ConfigReloadRules.RestartKeys);
+    }
+
+    [Fact]
+    public void The_cowork_vm_sensor_key_restarts_on_every_runtime()
+    {
+        // config_writer.RESTART_KEYS and configwrite.restartKeys list it at 1.0.8, 1.0.9 and 1.0.10; the enterprise block was already a restart section, so the verdict is the same as before the key was named.
+        Assert.True(ConfigReloadRules.NeedsRestart(new[] { "enterprise", "cowork_vm_sensor" }));
+        Assert.True(ConfigReloadRules.NeedsRestart(new[] { "enterprise", "cowork_vm_sensor", "enabled" }, routingHotReload: true));
     }
 
     [Fact]

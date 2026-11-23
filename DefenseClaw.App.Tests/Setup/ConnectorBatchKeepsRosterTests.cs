@@ -139,6 +139,20 @@ public sealed class ConnectorBatchKeepsRosterTests : IDisposable
     }
 
     [Fact]
+    public async Task On_1_0_10_ticking_a_configured_connector_at_its_own_mode_is_an_update_the_review_can_run()
+    {
+        var vm = await OpenedAsync("1.0.10", TwoConfigured);
+
+        Row(vm, "codex").IsOn = true;
+
+        Assert.Equal("will be updated", Row(vm, "codex").ChangeText);
+        Assert.True(vm.HasChanges);
+        Assert.Equal("1 change to apply", vm.Summary);
+        Assert.Equal(new[] { "Update Codex in observe mode", "Left as they were: Claude Code" }, vm.ChangeLines);
+        Assert.Equal("defenseclaw setup --yes --connector codex --mode observe", vm.CommandPreview);
+    }
+
+    [Fact]
     public async Task On_1_0_10_the_owner_shape_with_only_codex_opens_with_nothing_to_apply_and_nothing_dropped()
     {
         var vm = await OpenedAsync("1.0.10", OwnerShape);

@@ -39,7 +39,11 @@ public sealed partial class OverviewPanelViewModel
 
         if (IsActiveConnector("openclaw"))
         {
-            AppendOpenClawPluginRow(rows);
+            // A connector the gateway skipped at start already has its "not enforced" row (ConnectorSkips); the plugin row would be a second one for the same cause.
+            if (!IsSkippedAtStart("openclaw", _snapshot.Health))
+            {
+                AppendOpenClawPluginRow(rows);
+            }
         }
         else if (_openClawDetected && ManagedConnectorNames() is var configured && !configured.Contains("openclaw"))
         {

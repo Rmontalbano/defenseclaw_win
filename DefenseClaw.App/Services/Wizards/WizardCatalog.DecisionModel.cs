@@ -3,7 +3,8 @@ using DefenseClaw.Core.Runtime;
 namespace DefenseClaw.App.Services.Wizards;
 
 /// <summary>
-/// The part of <see cref="WizardCatalog"/> that follows the runtime for the one card whose presence depends on it (<see cref="DecisionModelCard"/>).
+/// The part of <see cref="WizardCatalog"/> that follows the runtime: for the one card whose presence depends on it (<see cref="DecisionModelCard"/>), and
+/// for the OpenClaw card's first page (<see cref="OpenClawSetupIntro"/>, 1.0.10).
 /// </summary>
 public sealed partial class WizardCatalog
 {
@@ -12,6 +13,9 @@ public sealed partial class WizardCatalog
 
     // Whether the roster read last held the card back; null until a roster has been read.
     private bool? _decisionModelHeldAtLoad;
+
+    // Whether the OpenClaw card's detail was last built with its 1.0.10 intro page (OpenClawSetupIntro); null until that detail has been built.
+    private bool? _openClawIntroAtLoad;
 
     /// <summary>
     /// Raised (on a pool thread) after <see cref="RefreshAfterCliChangeAsync"/> read the roster again, before the details are warmed. The Setup hub
@@ -55,16 +59,32 @@ public sealed partial class WizardCatalog
         runtime.Changed += (_, _) => _ = ObserveRuntimeAsync();
     }
 
-    /// <summary>Re-reads the catalog when the runtime's answer to "is the decision-model card offered" differs from the last roster read's. Never faults.</summary>
-    internal Task ObserveRuntimeAsync()
+    /// <summary>
+    /// The capabilities the OpenClaw card's intro is built with (<see cref="OpenClawSetupIntro"/>), recording for that target whether the intro is offered,
+    /// so a probe that lands after the detail was built (an in-app upgrade to 1.0.10 rebuilds the details before the runtime is probed again) is noticed.
+    /// </summary>
+    private RuntimeCapabilities? CapabilitiesForOpenClawIntro(string target)
     {
-        var read = _decisionModelHeldAtLoad;
-        if (read is null)
+        var capabilities = _capabilities?.Invoke();
+        if (string.Equals(target, OpenClawSetupIntro.Target, StringComparison.Ordinal))
         {
-            return Task.CompletedTask;
+            _openClawIntroAtLoad = OpenClawSetupIntro.IsOffered(capabilities);
         }
 
-        var held = DecisionModelCard.IsHeld(DecisionModelCard.Target, _capabilities?.Invoke());
-        return held == read ? Task.CompletedTask : RefreshAfterCliChangeAsync();
+        return capabilities;
+    }
+
+    /// <summary>
+    /// Re-reads the catalog when the runtime's answer to "is the decision-model card offered" differs from the last roster read's, or the answer to
+    /// "does the OpenClaw card open on its intro" differs from the one its detail was built with. Never faults.
+    /// </summary>
+    internal Task ObserveRuntimeAsync()
+    {
+        var capabilities = _capabilities?.Invoke();
+        var read = _decisionModelHeldAtLoad;
+        var heldChanged = read is not null && DecisionModelCard.IsHeld(DecisionModelCard.Target, capabilities) != read;
+        var intro = _openClawIntroAtLoad;
+        var introChanged = intro is not null && OpenClawSetupIntro.IsOffered(capabilities) != intro;
+        return heldChanged || introChanged ? RefreshAfterCliChangeAsync() : Task.CompletedTask;
     }
 }

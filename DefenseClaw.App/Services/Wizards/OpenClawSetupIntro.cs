@@ -25,14 +25,17 @@ public static class OpenClawSetupIntro
     /// <summary>The command the intro tells the operator to run in a terminal. Shown, never run by the app.</summary>
     public const string PreflightCommand = "defenseclaw-gateway connector openclaw preflight";
 
+    /// <summary>True when the runtime has OpenClaw on native Windows, so the OpenClaw card opens on the intro.</summary>
+    public static bool IsOffered(RuntimeCapabilities? capabilities) =>
+        capabilities is not null && capabilities.Has(RuntimeCapability.OpenClawNativeWindows);
+
     /// <summary>Puts the intro in front of <paramref name="steps"/> for the OpenClaw card on a runtime that has OpenClaw on Windows; every other target or runtime comes back unchanged.</summary>
     public static IReadOnlyList<WizardStep> Apply(string target, IReadOnlyList<WizardStep> steps, RuntimeCapabilities? capabilities)
     {
         ArgumentNullException.ThrowIfNull(steps);
 
         if (!string.Equals(target, Target, StringComparison.Ordinal) ||
-            capabilities is null ||
-            !capabilities.Has(RuntimeCapability.OpenClawNativeWindows) ||
+            !IsOffered(capabilities) ||
             steps.Count == 0 ||
             steps.Any(static s => s.Id == StepId))
         {

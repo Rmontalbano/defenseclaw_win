@@ -331,6 +331,11 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
             .Where(r => r.IsOn && r.Configured && !string.Equals(r.ConfiguredMode ?? ConnectorBatch.ObserveMode, Mode, StringComparison.OrdinalIgnoreCase))
             .ToArray();
         var dropped = extra == BatchExtra.None && !_keepsRoster ? Dropped() : Array.Empty<string>();
+
+        // 1.0.10: a ticked configured connector at the mode it already has is still an update (the CLI sets it up again); its row says "will be updated".
+        var updates = _keepsRoster
+            ? Rows.Where(r => r.IsOn && r.Configured && !modeMoves.Contains(r)).ToArray()
+            : Array.Empty<BatchRow>();
         var kept = KeptConnectors(selected, extra);
 
         foreach (var id in added)
@@ -341,6 +346,11 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         foreach (var row in modeMoves)
         {
             ChangeLines.Add($"{row.Label}: {row.ConfiguredMode ?? "observe"} to {Mode}");
+        }
+
+        foreach (var row in updates)
+        {
+            ChangeLines.Add($"Update {row.Label} in {Mode} mode");
         }
 
         foreach (var id in dropped)
@@ -357,7 +367,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
             ChangeLines.Add("Also every supported connector");
         }
 
-        HasChanges = argv is not null && (added.Length > 0 || modeMoves.Length > 0 || dropped.Count > 0 || extra != BatchExtra.None);
+        HasChanges = argv is not null && (added.Length > 0 || modeMoves.Length > 0 || updates.Length > 0 || dropped.Count > 0 || extra != BatchExtra.None);
         CommandPreview = HasChanges && argv is not null ? CommandReview.CommandLine(CommandReview.DefaultExecutable, argv) : string.Empty;
         var changeCount = ChangeLines.Count;
 
