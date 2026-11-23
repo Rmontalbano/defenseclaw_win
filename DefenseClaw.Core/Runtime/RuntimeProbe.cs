@@ -84,6 +84,9 @@ public static class RuntimeProbe
     /// <summary>The 1.0.9 release: <c>connector recover-config</c>, the stale Cowork plugin reason and the shell-write alert floor for protected files. Public so the app's installer checks compare with the same number.</summary>
     public static readonly Version Release109 = new(1, 0, 9);
 
+    /// <summary>The 1.0.10 release: the guardrail cascade, model routing and tokenomics, and OpenClaw on native Windows.</summary>
+    public static readonly Version Release1010 = new(1, 0, 10);
+
     /// <summary>The version that added <c>guardrail use-pack --repin --yes</c> (cmd_guardrail.py at tag 1.0.4; absent at 1.0.3).</summary>
     internal static readonly Version RepinVersion = new(1, 0, 4);
 
@@ -418,6 +421,20 @@ public static class RuntimeProbe
             present.Add(RuntimeCapability.ShellProtectedFileFloor);
             present.Add(RuntimeCapability.JudgeLocalParallelDefault);
             present.Add(RuntimeCapability.HostSensorDropLatch);
+        }
+
+        // What 1.0.10 changed is gateway, setup and config behaviour that no help screen the probe reads shows: the version decides, on the same terms as above.
+        if (identity.ParsedVersion is { } release1010 && release1010 >= Release1010 && (root.Count > 0 || setup.Count > 0))
+        {
+            present.Add(RuntimeCapability.SetupKeepsRoster);
+            present.Add(RuntimeCapability.OpenClawNativeWindows);
+            present.Add(RuntimeCapability.OpenClawTokenSeparate);
+            present.Add(RuntimeCapability.AgentSelfUpdateKeepsGateway);
+            present.Add(RuntimeCapability.RoutingCli);
+            present.Add(RuntimeCapability.RoutingHotReload);
+            present.Add(RuntimeCapability.Tokenomics);
+            present.Add(RuntimeCapability.DecisionModelProtocol);
+            present.Add(RuntimeCapability.GuardrailCascade);
         }
 
         if (HasAll(setup, RegistryMarkers))

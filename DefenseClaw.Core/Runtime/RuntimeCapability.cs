@@ -262,6 +262,51 @@ public enum RuntimeCapability
     /// One dropped host sensor event keeps the host sensor degraded until the gateway restarts (1.0.9); before it, the state cleared by itself. Judged from the runtime's version (1.0.9 or later).
     /// </summary>
     HostSensorDropLatch,
+
+    /// <summary>
+    /// <c>setup -c</c>, <c>--detected</c> and <c>--all</c> add or update the connectors they name and keep the rest of the roster (1.0.10). Before it, the same command replaced the whole roster. Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    SetupKeepsRoster,
+
+    /// <summary>
+    /// OpenClaw runs on native Windows in native hook mode (1.0.10): <c>setup openclaw</c> is offered there and /health reports <c>openclaw_plugin</c>. Before it, OpenClaw was unsupported on Windows. Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    OpenClawNativeWindows,
+
+    /// <summary>
+    /// The OpenClaw gateway token is never the DefenseClaw gateway token (1.0.10): a <c>token_env</c> that names it, or a value equal to it, is skipped. Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    OpenClawTokenSeparate,
+
+    /// <summary>
+    /// When an agent updates itself in place the gateway keeps running and leaves only that connector unstarted (1.0.10). Before it, the gateway stopped for every connector. Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    AgentSelfUpdateKeepsGateway,
+
+    /// <summary>
+    /// <c>defenseclaw routing</c>, the routing details of /health and the <c>/api/v1/routing</c> reads exist (1.0.10). Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    RoutingCli,
+
+    /// <summary>
+    /// Only nine <c>routing</c> keys need a gateway restart; the rest reload in place (1.0.10). Before it, every routing change needed a restart. Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    RoutingHotReload,
+
+    /// <summary>
+    /// The gateway can record what each model call it carries used and cost and serves it at <c>/usage</c> (1.0.10); off until set, and only for calls DefenseClaw carries. Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    Tokenomics,
+
+    /// <summary>
+    /// <c>setup decision-model</c> takes <c>--protocol</c> (System One or Gemini decisions) and the <c>decide</c> choice of <c>--on-confident-block</c> is retired (1.0.10). Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    DecisionModelProtocol,
+
+    /// <summary>
+    /// <c>guardrail.cascade</c> sets what each guardrail layer does, with an opt-in alignment lane (1.0.10). A proven CRITICAL finding ends at least at alert, <c>ACTION-COMPOUND-LIMIT</c> is the shared over-limit finding and <c>ACTION-OPERAND-BOUND</c> is retired. Judged from the runtime's version (1.0.10 or later).
+    /// </summary>
+    GuardrailCascade,
 }
 
 /// <summary>Names, the verified commit and the one sentence a hidden feature carries.</summary>
@@ -327,6 +372,15 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.ShellProtectedFileFloor => "Shell writes to protected files always alert (1.0.9)",
         RuntimeCapability.JudgeLocalParallelDefault => "A local LLM judge runs one call at a time by default (1.0.9)",
         RuntimeCapability.HostSensorDropLatch => "A dropped host sensor event stays degraded until restart (1.0.9)",
+        RuntimeCapability.SetupKeepsRoster => "Connector setup keeps the other connectors (1.0.10)",
+        RuntimeCapability.OpenClawNativeWindows => "OpenClaw on native Windows (1.0.10)",
+        RuntimeCapability.OpenClawTokenSeparate => "The OpenClaw token is not the DefenseClaw token (1.0.10)",
+        RuntimeCapability.AgentSelfUpdateKeepsGateway => "An agent that updated itself no longer stops the gateway (1.0.10)",
+        RuntimeCapability.RoutingCli => "Model routing commands and state (1.0.10)",
+        RuntimeCapability.RoutingHotReload => "Most routing settings reload without a restart (1.0.10)",
+        RuntimeCapability.Tokenomics => "Tokenomics: usage and cost of model calls (1.0.10)",
+        RuntimeCapability.DecisionModelProtocol => "Decision model protocol choice (1.0.10)",
+        RuntimeCapability.GuardrailCascade => "Configurable guardrail cascade (1.0.10)",
         _ => capability.ToString(),
     };
 
@@ -385,6 +439,15 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.ShellProtectedFileFloor => "the runtime reports version 1.0.9 or later and lists its commands (a shell command that writes SSH authorized keys, a shell startup file or an active Git hook is at least an alert in every rule pack, and DefenseClaw's own files block with every pack)",
         RuntimeCapability.JudgeLocalParallelDefault => "the runtime reports version 1.0.9 or later and lists its commands (guardrail.judge.max_parallel defaults to 1 for a local judge)",
         RuntimeCapability.HostSensorDropLatch => "the runtime reports version 1.0.9 or later and lists its commands (one dropped host sensor event keeps the host sensor shown as degraded until the gateway restarts)",
+        RuntimeCapability.SetupKeepsRoster => "the runtime reports version 1.0.10 or later and lists its commands ('setup -c', '--detected' and '--all' add or update the named connectors and keep every other one; before 1.0.10 they replaced the roster)",
+        RuntimeCapability.OpenClawNativeWindows => "the runtime reports version 1.0.10 or later and lists its commands (OpenClaw is supported on native Windows in native hook mode, 'setup openclaw' is offered there and /health carries openclaw_plugin)",
+        RuntimeCapability.OpenClawTokenSeparate => "the runtime reports version 1.0.10 or later and lists its commands (the gateway never accepts the OpenClaw gateway token as its own: a token_env naming it is skipped and DEFENSECLAW_GATEWAY_TOKEN is used)",
+        RuntimeCapability.AgentSelfUpdateKeepsGateway => "the runtime reports version 1.0.10 or later and lists its commands (when an agent updates itself in place the gateway keeps running and does not start that one connector until setup is run again)",
+        RuntimeCapability.RoutingCli => "the runtime reports version 1.0.10 or later and lists its commands ('defenseclaw routing' exists, /health routing reports the classifier and route-only connectors, and the gateway serves /api/v1/routing/*)",
+        RuntimeCapability.RoutingHotReload => "the runtime reports version 1.0.10 or later and lists its commands (only nine routing keys need a gateway restart; the rest, tokenomics and pricing included, are applied in place)",
+        RuntimeCapability.Tokenomics => "the runtime reports version 1.0.10 or later and lists its commands (the gateway can record what each model call it carries used and cost, and serves it at /usage; off until set)",
+        RuntimeCapability.DecisionModelProtocol => "the runtime reports version 1.0.10 or later and lists its commands ('setup decision-model' takes --protocol (system-one or gemini-decisions) and no longer accepts '--on-confident-block decide')",
+        RuntimeCapability.GuardrailCascade => "the runtime reports version 1.0.10 or later and lists its commands (guardrail.cascade sets what each guardrail layer does, the alignment lane exists, a proven CRITICAL finding ends at least at alert, and ACTION-COMPOUND-LIMIT is the shared over-limit finding)",
         _ => string.Empty,
     };
 }
