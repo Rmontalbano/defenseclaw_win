@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DefenseClaw.Core.Gateway.Models;
@@ -22,6 +23,35 @@ public sealed class OpenClawPluginHealth
     /// <summary><c>hybrid</c>, <c>native</c> or <c>proxy</c>; absent when the plugin did not say.</summary>
     [JsonPropertyName("hook_mode")]
     public string? HookMode { get; init; }
+
+    /// <summary>
+    /// The block out of <c>/health</c>'s extra keys: null when <c>openclaw_plugin</c> is absent or is not an object; a member of the wrong type is dropped,
+    /// the rest is kept. Text is bounded.
+    /// </summary>
+    public static OpenClawPluginHealth? Read(IReadOnlyDictionary<string, JsonElement>? additionalData)
+    {
+        if (additionalData is null || !additionalData.TryGetValue("openclaw_plugin", out var block) || block.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return new OpenClawPluginHealth
+        {
+            LastSeenAt = Text(block, "last_seen_at", 64),
+            HookMode = Text(block, "hook_mode", 32),
+        };
+    }
+
+    private static string? Text(JsonElement block, string key, int max)
+    {
+        if (!block.TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var text = value.GetString();
+        return text is null || text.Length <= max ? text : text[..max];
+    }
 
     /// <summary>The call-in time, or null when absent or not a valid RFC 3339 time.</summary>
     [JsonIgnore]

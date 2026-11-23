@@ -1169,7 +1169,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
                 .Concat(SplunkDashboardsReview.Warnings(argv))
                 .Concat(CoworkUninstallReview.Warnings(argv, _services.Runtime.Capabilities, _services.Paths.DataDirectory))
                 .Concat(WizardCautions.For(argv))
-                .Concat(DecisionModelReview.Warnings(argv))
+                .Concat(DecisionModelReview.Warnings(argv, DecisionModelReview.IsDecisionModelCommand(argv) ? DefenseClaw.Core.Config.ConfigYamlReader.From(_services.Config) : null))
                 .Concat(CodexRunningWarnings(argv))
                 .Concat(CodexHomeWarnings(argv))
                 .ToArray(),

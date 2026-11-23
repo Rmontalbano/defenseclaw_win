@@ -17,6 +17,9 @@ public sealed partial class WizardCatalog
     // Whether the OpenClaw card's detail was last built with its 1.0.10 intro page (OpenClawSetupIntro); null until that detail has been built.
     private bool? _openClawIntroAtLoad;
 
+    // What the Routing card's detail was last built with (RoutingSetupWindowsPolicy: whether --enable is left out, and which sentence); null until built.
+    private (bool Applies, string Sentence)? _routingCardAtLoad;
+
     /// <summary>
     /// Raised (on a pool thread) after <see cref="RefreshAfterCliChangeAsync"/> read the roster again, before the details are warmed. The Setup hub
     /// compares <see cref="LoadedRoster"/> with its cards and redraws when a target came or went.
@@ -74,9 +77,24 @@ public sealed partial class WizardCatalog
         return capabilities;
     }
 
+    /// <summary>The capabilities the Routing card is filtered with, recording for that target what <see cref="RoutingSetupWindowsPolicy"/> made of them.</summary>
+    private RuntimeCapabilities? CapabilitiesForRoutingCard(string target)
+    {
+        var capabilities = _capabilities?.Invoke();
+        if (string.Equals(target, RoutingSetupWindowsPolicy.Target, StringComparison.Ordinal))
+        {
+            _routingCardAtLoad = RoutingCard(capabilities);
+        }
+
+        return capabilities;
+    }
+
+    private static (bool Applies, string Sentence) RoutingCard(RuntimeCapabilities? capabilities) =>
+        (RoutingSetupWindowsPolicy.Applies(capabilities), RoutingSetupWindowsPolicy.SentenceFor(capabilities));
+
     /// <summary>
     /// Re-reads the catalog when the runtime's answer to "is the decision-model card offered" differs from the last roster read's, or the answer to
-    /// "does the OpenClaw card open on its intro" differs from the one its detail was built with. Never faults.
+    /// "does the OpenClaw card open on its intro" or "what does the Routing card offer" differs from the one its detail was built with. Never faults.
     /// </summary>
     internal Task ObserveRuntimeAsync()
     {
@@ -85,6 +103,8 @@ public sealed partial class WizardCatalog
         var heldChanged = read is not null && DecisionModelCard.IsHeld(DecisionModelCard.Target, capabilities) != read;
         var intro = _openClawIntroAtLoad;
         var introChanged = intro is not null && OpenClawSetupIntro.IsOffered(capabilities) != intro;
-        return heldChanged || introChanged ? RefreshAfterCliChangeAsync() : Task.CompletedTask;
+        var routing = _routingCardAtLoad;
+        var routingChanged = routing is not null && RoutingCard(capabilities) != routing;
+        return heldChanged || introChanged || routingChanged ? RefreshAfterCliChangeAsync() : Task.CompletedTask;
     }
 }

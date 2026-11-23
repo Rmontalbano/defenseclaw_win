@@ -18,7 +18,7 @@ public enum ConnectorSkipKind
 
     /// <summary>
     /// The agent updated itself in place, so its executable no longer matches what setup recorded (runtime 1.0.10: the gateway keeps running and does not start that
-    /// connector; the reason says "executable changed since setup"). Only for codex, amp, hermes and opencode (<see cref="ConnectorStartHealth.IsAgentUpdateConnector"/>).
+    /// connector; the reason says "executable changed since setup". With one connector only the guardrail error says it: <see cref="AgentUpdatedGuardrailError"/>). Only for codex, amp, hermes and opencode (<see cref="ConnectorStartHealth.IsAgentUpdateConnector"/>).
     /// </summary>
     AgentUpdated,
 }
@@ -233,7 +233,7 @@ public static class ConnectorStartHealth
         return name is { Length: > 0 } && NamePattern.IsMatch(name) ? name : null;
     }
 
-    private static string CleanReason(string? raw)
+    internal static string CleanReason(string? raw)
     {
         var text = DisplayNames.Visible(raw?.Trim()).Trim();
         if (text.Length <= MaxReasonLength)

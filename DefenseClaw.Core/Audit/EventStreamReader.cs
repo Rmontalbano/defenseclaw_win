@@ -540,7 +540,7 @@ public sealed class EventStreamReader
                     {Optional("payload_json", PayloadCap.SizeWhenOver("e.payload_json", PayloadByteLimit))} AS omitted,
                     {Optional("run_id", "e.run_id")} AS run_id, {Optional("trace_id", "e.trace_id")} AS trace_id,
                     {Optional("request_id", "e.request_id")} AS request_id, {Optional("session_id", "e.session_id")} AS session_id,
-                    {Optional("target", "e.target")} AS row_target
+                    {Optional("target", $"substr(e.target, 1, {DetailsLimit.ToString(CultureInfo.InvariantCulture)})")} AS row_target
             """;
 
         var logsOnly = columns.Contains("signal") ? " AND e.signal = 'logs'" : string.Empty;

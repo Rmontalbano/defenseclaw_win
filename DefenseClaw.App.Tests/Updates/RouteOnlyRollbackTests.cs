@@ -8,7 +8,14 @@ namespace DefenseClaw.App.Tests.Updates;
 /// </summary>
 public sealed class RouteOnlyRollbackTests
 {
-    private const string Both = "routing:\n  route_only:\n    connectors:\n      - codex\n      - claudecode\n";
+    private const string Both = "routing:\n  enabled: true\n  route_only:\n    connectors:\n      - codex\n      - claudecode\n";
+
+    [Theory]
+    [InlineData("routing:\n  enabled: false\n  route_only:\n    connectors:\n      - codex\n")]
+    [InlineData("routing:\n  route_only:\n    connectors:\n      - codex\n")]
+    [InlineData("routing:\n  enabled: \"no\"\n  route_only:\n    connectors: [claudecode, codex]\n")]
+    public void With_routing_off_or_unset_the_listed_agents_get_no_warning(string config) =>
+        Assert.Null(RouteOnlyRollback.Evaluate(config, "1.0.9"));
 
     [Fact]
     public void Both_agents_are_named_in_the_order_claudecode_then_codex_for_a_target_before_1_0_10()
@@ -26,7 +33,7 @@ public sealed class RouteOnlyRollbackTests
     [Fact]
     public void One_agent_and_a_v_prefixed_older_target_are_named_and_duplicates_count_once()
     {
-        var text = RouteOnlyRollback.Evaluate("routing:\n  route_only:\n    connectors: [codex, codex]\n", "v0.8.10");
+        var text = RouteOnlyRollback.Evaluate("routing:\n  enabled: true\n  route_only:\n    connectors: [codex, codex]\n", "v0.8.10");
 
         Assert.NotNull(text);
         Assert.StartsWith("Route-only is on for codex. DefenseClaw 0.8.10 has no route-only, ", text, StringComparison.Ordinal);

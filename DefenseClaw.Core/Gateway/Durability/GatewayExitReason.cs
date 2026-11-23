@@ -4,7 +4,7 @@ namespace DefenseClaw.Core.Gateway.Durability;
 /// Why the gateway's latest start attempt ended (CUST-352), read from <c>gateway.log</c>. DefenseClaw 1.0 up to 1.0.9 treats one connector's setup failure
 /// as fatal at start: the sidecar listens for about a second and then exits, so the app sees "stopped" with nothing to say why. From 1.0.10 an agent that
 /// updated itself in place (its executable changed since setup) no longer stops the gateway: the connector is not started and /health says so
-/// (<see cref="DefenseClaw.Core.Gateway.Models.ConnectorSkipKind.AgentUpdated"/>). Its pinned executable gone after a folder-moving update, and every other setup failure, still do. These are the
+/// (<see cref="DefenseClaw.Core.Gateway.Models.ConnectorSkipKind.AgentUpdated"/>; with only one connector configured as the guardrail error, so nothing is enforced). Its pinned executable gone after a folder-moving update, and every other setup failure, still do. These are the
 /// causes the two 2026-10-15 incidents showed, plus a generic connector failure and the last error line for anything else.
 /// </summary>
 public abstract record GatewayExitReason

@@ -689,6 +689,7 @@ internal sealed partial class ShellActions
                         .Concat(LocalStackReview.Warnings(argv, LocalStack.Status))
                         .Concat(SplunkDashboardsReview.Warnings(argv, TokenPresenceFor(argv)))
                         .Concat(ArgvHazards.AppliesTo(command.Executable) ? CoworkUninstallReview.Warnings(argv, _services.Runtime.Capabilities, _services.Paths.DataDirectory) : Array.Empty<CommandReviewWarning>())
+                        .Concat(ArgvHazards.AppliesTo(command.Executable) ? OpenClawReplaceReview.Warnings(argv) : Array.Empty<CommandReviewWarning>())
                         .ToArray(),
                 };
 

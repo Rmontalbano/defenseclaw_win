@@ -1,3 +1,5 @@
+using DefenseClaw.Core.Config;
+
 namespace DefenseClaw.App.Services.Wizards;
 
 /// <summary>
@@ -16,6 +18,9 @@ public static class DecisionModelReview
     /// <summary>The heading of the bar that says Gemini Decision 1 needs a URL and a model.</summary>
     public const string GeminiNeedsEndpointTitle = "Gemini Decision 1 needs a URL and a model";
 
+    // The host infer_protocol (decision_model.py@1.0.10:107-114) turns into the gemini-decisions protocol.
+    private const string GeminiHost = "generativelanguage.googleapis.com";
+
     /// <summary>True for a <c>setup decision-model</c> command.</summary>
     public static bool IsDecisionModelCommand(IReadOnlyList<string> argv)
     {
@@ -27,7 +32,12 @@ public static class DecisionModelReview
     }
 
     /// <summary>The bars for <paramref name="argv"/>, in the order the review shows them; empty when it is not a decision-model command or has nothing to say.</summary>
-    public static IReadOnlyList<CommandReviewWarning> Warnings(IReadOnlyList<string> argv)
+    /// <param name="argv">The command.</param>
+    /// <param name="config">
+    /// config.yaml as it is now (read only), or null when the caller has none: the settings the command does not name are the ones already saved, and
+    /// the CLI infers the protocol from the URL only when none is saved. Null judges the argv alone.
+    /// </param>
+    public static IReadOnlyList<CommandReviewWarning> Warnings(IReadOnlyList<string> argv, ConfigYamlReader? config = null)
     {
         ArgumentNullException.ThrowIfNull(argv);
 
@@ -47,15 +57,20 @@ public static class DecisionModelReview
                 "defenseclaw setup decision-model --connectors \"\" --non-interactive."));
         }
 
-        // Only the 1.0.10 wizard can send this value: its help is the one with --protocol.
-        if (string.Equals(ValueOf(argv, "--protocol"), DecisionModelCard.GeminiProtocol, StringComparison.Ordinal))
+        // The protocol key is written when --protocol names gemini-decisions, and also when no --protocol is given, a --base-url is, no protocol is saved yet and
+        // the URL's host is Google's Decisions API (cli/defenseclaw/decision_model.py@1.0.10:99-102 apply_settings and infer_protocol: system-one is the default
+        // and is never written). Only the 1.0.10 wizard can send --protocol: its help is the one that has it.
+        var protocolGiven = ValueOf(argv, "--protocol");
+        var inferred = protocolGiven is null && InfersGemini(ValueOf(argv, "--base-url"), config);
+        if (string.Equals(protocolGiven?.Trim(), DecisionModelCard.GeminiProtocol, StringComparison.OrdinalIgnoreCase) || inferred)
         {
             warnings.Add(new CommandReviewWarning(
                 RollbackTitle,
                 "Releases before 1.0.10 refuse the decision_model keys added in 1.0.10 (protocol, block_risk_score, escalate_rule_flagged, history_turns, " +
                 "history_tool_results, flow_guard): rolling back to 1.0.9 or earlier needs decision_model.protocol removed first."));
 
-            if (ValueOf(argv, "--base-url") is not { Length: > 0 } || ValueOf(argv, "--model") is not { Length: > 0 })
+            // What the command leaves out is what config.yaml already holds (the CLI sets only the fields it is given).
+            if (!HasSetting(argv, "--base-url", config?.Text("decision_model", "base_url")) || !HasSetting(argv, "--model", config?.Text("decision_model", "model")))
             {
                 warnings.Add(new CommandReviewWarning(
                     GeminiNeedsEndpointTitle,
@@ -72,6 +87,23 @@ public static class DecisionModelReview
         }
 
         return warnings;
+    }
+
+    // True when the endpoint the command saves has a value: the flag's own (an empty one clears it), else what config.yaml holds.
+    private static bool HasSetting(IReadOnlyList<string> argv, string flag, string? saved) =>
+        !string.IsNullOrWhiteSpace(ValueOf(argv, flag) ?? saved);
+
+    // apply_settings: no --protocol, a --base-url, no protocol saved, and infer_protocol (urlsplit's hostname, lower-cased, is Google's Decisions API host).
+    private static bool InfersGemini(string? baseUrl, ConfigYamlReader? config)
+    {
+        if (baseUrl is null || !string.IsNullOrWhiteSpace(config?.Text("decision_model", "protocol")))
+        {
+            return false;
+        }
+
+        return Uri.TryCreate(baseUrl.Trim(), UriKind.Absolute, out var uri) &&
+               !string.IsNullOrEmpty(uri.Host) &&
+               string.Equals(uri.Host, GeminiHost, StringComparison.OrdinalIgnoreCase);
     }
 
     // The value after the flag, or null when the flag is not there or ends the command. Everything after "--" is not an option.

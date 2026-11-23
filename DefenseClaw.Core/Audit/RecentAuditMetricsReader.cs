@@ -74,6 +74,9 @@ public sealed class RecentAuditMetricsReader
     /// <summary>How much of <c>details</c> is read per row; the decision token is at the start of a hook row's details.</summary>
     public const int DetailsLimit = 1024;
 
+    /// <summary>How much of <c>target</c> is read per row (enough for the secret flow shadow target).</summary>
+    public const int TargetLimit = 64;
+
     /// <summary>How long <see cref="ReadAsync"/> lets the statement run unless told otherwise; the read itself takes milliseconds.</summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
@@ -146,8 +149,20 @@ public sealed class RecentAuditMetricsReader
     /// <summary>
     /// True when a row with this <paramref name="action"/> and <paramref name="details"/> is a block: the Mac's <c>overviewBlockCount</c> test.
     /// </summary>
-    public static bool IsBlock(string? action, string? details)
+    public static bool IsBlock(string? action, string? details) => IsBlockRow(action, details, null);
+
+    /// <summary>
+    /// As <see cref="IsBlock"/>, with the row's target: a shadow measurement row (action <c>guardrail-inspection</c>, an effects lane details prefix or the
+    /// secret flow target) records what a lane would have done and is never a block, whatever tokens its free text holds (a secret flow row's <c>program=</c> value is
+    /// an unescaped tool name, so it can contain <c>action=block</c>). The decision of a hook row is its details token, so that stays the rule for the rest.
+    /// </summary>
+    public static bool IsBlockRow(string? action, string? details, string? target)
     {
+        if (ShadowMeasurementRow.IsShadowMeasurement(action, target, details))
+        {
+            return false;
+        }
+
         var kind = (action ?? string.Empty).ToLowerInvariant();
         if (kind is "block" or "guardrail-block" or "deny" or "quarantine")
         {
@@ -219,9 +234,10 @@ public sealed class RecentAuditMetricsReader
                 var action = reader.IsDBNull(0) ? null : reader.GetString(0);
                 var details = reader.IsDBNull(1) ? null : reader.GetString(1);
                 var connector = reader.IsDBNull(2) ? string.Empty : reader.GetString(2).Trim();
+                var target = reader.IsDBNull(3) ? null : reader.GetString(3);
 
                 var isHook = string.Equals(action, "connector-hook", StringComparison.Ordinal);
-                var isBlock = IsBlock(action, details);
+                var isBlock = IsBlockRow(action, details, target);
                 if (isHook)
                 {
                     hooks++;
@@ -294,7 +310,10 @@ public sealed class RecentAuditMetricsReader
 
         var connector = columns.Contains("connector") ? "connector" : "NULL";
 
-        return $"SELECT action, {details}, {connector} FROM audit_events ORDER BY timestamp DESC, rowid DESC LIMIT $limit";
+        // The target is only compared with the secret flow shadow target, so a short prefix is enough.
+        var target = columns.Contains("target") ? $"substr(target, 1, {TargetLimit})" : "NULL";
+
+        return $"SELECT action, {details}, {connector}, {target} FROM audit_events ORDER BY timestamp DESC, rowid DESC LIMIT $limit";
     }
 
     /// <summary>The table's column names, without case; empty when the table does not exist (<c>pragma_table_info</c> of a missing table is no rows).</summary>

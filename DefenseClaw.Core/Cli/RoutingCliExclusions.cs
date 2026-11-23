@@ -45,7 +45,10 @@ public static class RoutingCliExclusions
     /// <item><description><c>routing test</c> (:1370-1415): a dry run, POST <c>/api/v1/routing/test</c> (<c>api_routing.go:409-474</c>). The handler does not call
     /// <c>recordRoutingDecision</c> (the recent-decisions ring), charges no budget and writes no usage row; it asks the routing engine to decide
     /// (<c>internal/routing/engine/decide.go:31</c>), which may ask the classifier and keeps the classifier's answer in an in-memory cache
-    /// (<c>decide.go:228-247</c>) - no model call is made for the prompt and nothing persists. It is the one command here that is not a plain
+    /// (<c>decide.go:228-247</c>). The configured classifier receives the prompt and can be a hosted model: the <c>systemone</c> classifier POSTs
+    /// <c>{"user_request": prompt, ...}</c> to its decision-model endpoint (<c>model_router_systemone.go:138</c>) and the remote one POSTs it to
+    /// <c>&lt;endpoint&gt;/api/v1/classify/intent</c> (<c>model_router_remote.go:105</c>). The CLI's "No model is called" (<c>cmd_routing.py:1377</c>) means the
+    /// model the prompt would be routed to; nothing persists. It is the one command here that is not a plain
     /// GET; it needs the prompt typed, so the palette copies it for the operator to finish.</description></item>
     /// </list>
     /// </summary>

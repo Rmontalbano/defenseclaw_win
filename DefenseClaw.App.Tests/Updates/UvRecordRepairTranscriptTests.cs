@@ -54,6 +54,50 @@ public sealed class UvRecordRepairTranscriptTests
         Assert.False(facts.PreviousRestored);
     }
 
+    // A console that wraps at a fixed width breaks a long line into physical lines (a break may fall inside a word); the parser joins them as it does for the other refusals.
+    private static string[] Wrapped(string line, int width)
+    {
+        var pieces = new List<string>();
+        for (var i = 0; i < line.Length; i += width)
+        {
+            var piece = line.Substring(i, Math.Min(width, line.Length - i));
+            if (i > 0)
+            {
+                Assert.False(System.Text.RegularExpressions.Regex.IsMatch(piece, @"^\s*[xX+>!]\s"), "The wrap must not start a piece like a line of its own: " + piece);
+            }
+
+            pieces.Add(piece);
+        }
+
+        return pieces.ToArray();
+    }
+
+    [Theory]
+    [MemberData(nameof(Eols))]
+    public void A_console_wrapped_uv_still_differ_line_is_the_same_refusal_as_the_unwrapped_one(string eol)
+    {
+        var line = StillDiffer("litellm, tiktoken", "the staging environment", Cache);
+        var plain = InstallTranscript.Parse(Transcript(eol, line, StagingLast));
+        var wrapped = InstallTranscript.Parse(Transcript(eol, Wrapped(line, 90).Append(StagingLast).ToArray()));
+
+        var refusal = Assert.IsType<InstallerRefusal>(wrapped.Refusal);
+        Assert.Equal(InstallerRefusalKind.UvCacheDamaged, refusal.Kind);
+        Assert.Equal(plain.Refusal!.Reason, refusal.Reason);
+        Assert.Equal(plain.Refusal.NextStep, refusal.NextStep);
+    }
+
+    [Fact]
+    public void A_console_wrapped_could_not_check_line_keeps_the_nothing_changed_kind_with_its_cause()
+    {
+        var line = "  x Could not check the Python packages in the staging environment at C:\\synthetic\\a-very-long-folder-name\\envs\\staging against their wheels (exit 2)";
+        var facts = InstallTranscript.Parse(Transcript("\n", Wrapped(line, 80).Append(StagingLast).ToArray()));
+
+        var refusal = Assert.IsType<InstallerRefusal>(facts.Refusal);
+        Assert.Equal(InstallerRefusalKind.NothingChanged, refusal.Kind);
+        Assert.StartsWith("Could not check the Python packages in the staging environment", refusal.Reason, StringComparison.Ordinal);
+        Assert.EndsWith("(exit 2) — Could not install the DefenseClaw 1.0.10 Python package; nothing was changed", refusal.Reason, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void An_over_long_or_empty_cache_path_falls_back_to_the_folder_named_in_the_log()
     {
@@ -157,6 +201,23 @@ public sealed class UvRecordRepairTranscriptTests
         Assert.Contains("A route-only agent then gets 401", notice.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("(see above)", notice.Text, StringComparison.Ordinal);
         Assert.True(notice.Text.Length <= InstallScriptPlan.MaxFailureReasonChars);
+        Assert.Null(facts.Refusal);
+    }
+
+    [Theory]
+    [InlineData(80)]
+    [InlineData(120)]
+    public void A_console_wrapped_route_only_warning_is_the_same_single_notice(int width)
+    {
+        var tail = "  + Now running DefenseClaw 1.0.9. Run 'defenseclaw rollback' again to return to 1.0.10.";
+        var plain = Assert.Single(InstallTranscript.Parse(Rollback(NotPutBack, tail)).Notices);
+
+        var facts = InstallTranscript.Parse(Rollback(Wrapped(NotPutBack, width).Append(tail).ToArray()));
+
+        var notice = Assert.Single(facts.Notices);
+        Assert.Equal(InstallerNoticeKind.AgentSettingsNotPutBack, notice.Kind);
+        Assert.Equal(plain.Text, notice.Text);
+        Assert.Contains("A route-only agent then gets 401", notice.Text, StringComparison.Ordinal);
         Assert.Null(facts.Refusal);
     }
 

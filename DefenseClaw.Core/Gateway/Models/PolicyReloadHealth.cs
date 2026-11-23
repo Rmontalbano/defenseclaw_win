@@ -17,8 +17,11 @@ namespace DefenseClaw.Core.Gateway.Models;
 /// the whole <c>/health</c> parse and the other readers of that object are not disturbed. Both keys are absent before 1.0.10 and while nothing is wrong,
 /// so there is no capability gate: a null answer is "nothing to report". Each text is bounded and only drawn.
 /// </summary>
-public sealed record PolicyReloadHealth(string CascadeInvalid, string CascadeReloadError)
+public sealed record PolicyReloadHealth(string CascadeInvalid, string CascadeReloadError, bool IsWeaker = false)
 {
+    /// <summary>The longest text looked at to judge <see cref="IsWeaker"/>: the gateway puts the marker last, so it is judged on the whole text before the display is cut.</summary>
+    public const int MaxJudgedChars = 16384;
+
     /// <summary>The longest text kept of each.</summary>
     public const int MaxChars = 400;
 
@@ -27,9 +30,6 @@ public sealed record PolicyReloadHealth(string CascadeInvalid, string CascadeRel
 
     /// <summary>The gateway's wording when the fallback is weaker than what was written.</summary>
     public const string WeakerMark = "WEAKER";
-
-    /// <summary>The fallback protects less than the configuration the operator wrote.</summary>
-    public bool IsWeaker => CascadeInvalid.Contains(WeakerMark, StringComparison.Ordinal);
 
     /// <summary>What there is to report; null when neither key says anything about the cascade.</summary>
     public static PolicyReloadHealth? From(IReadOnlyDictionary<string, JsonElement>? additionalData)
@@ -46,7 +46,19 @@ public sealed record PolicyReloadHealth(string CascadeInvalid, string CascadeRel
             reload = string.Empty;
         }
 
-        return invalid.Length == 0 && reload.Length == 0 ? null : new PolicyReloadHealth(invalid, reload);
+        return invalid.Length == 0 && reload.Length == 0 ? null : new PolicyReloadHealth(invalid, reload, MentionsWeaker(policy, "cascade_invalid"));
+    }
+
+    /// <summary>True when the whole <c>cascade_invalid</c> text (up to <see cref="MaxJudgedChars"/>) holds the marker, whatever is later cut for display.</summary>
+    private static bool MentionsWeaker(JsonElement policy, string key)
+    {
+        if (!policy.TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var full = value.GetString() ?? string.Empty;
+        return (full.Length <= MaxJudgedChars ? full : full[..MaxJudgedChars]).Contains(WeakerMark, StringComparison.Ordinal);
     }
 
     private static string Text(JsonElement policy, string key)

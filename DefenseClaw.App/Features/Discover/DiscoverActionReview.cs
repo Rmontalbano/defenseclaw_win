@@ -308,6 +308,14 @@ public sealed partial class DiscoverActionReview : ObservableObject
                     warnings.Add(coworkWarning);
                 }
             }
+
+            foreach (var replaceWarning in OpenClawReplaceReview.Warnings(step.Argv))
+            {
+                if (!warnings.Any(w => w.Title == replaceWarning.Title))
+                {
+                    warnings.Add(replaceWarning);
+                }
+            }
         }
 
         // A command that rewrites Codex's config.toml (setup codex, a fail-mode change) while Codex is running can collide with Codex's own write (CUST-352).

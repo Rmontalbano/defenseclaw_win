@@ -148,7 +148,7 @@ public sealed class ConnectorBatchKeepsRosterTests : IDisposable
         Assert.Equal("will be updated", Row(vm, "codex").ChangeText);
         Assert.True(vm.HasChanges);
         Assert.Equal("1 change to apply", vm.Summary);
-        Assert.Equal(new[] { "Update Codex in observe mode", "Left as they were: Claude Code" }, vm.ChangeLines);
+        Assert.Equal(new[] { "Set up Codex again (stays observe)", "Left as they were: Claude Code" }, vm.ChangeLines);
         Assert.Equal("defenseclaw setup --yes --connector codex --mode observe", vm.CommandPreview);
     }
 
@@ -162,12 +162,68 @@ public sealed class ConnectorBatchKeepsRosterTests : IDisposable
         Assert.DoesNotContain(vm.ChangeLines, l => l.StartsWith("Drop", StringComparison.Ordinal));
         Assert.StartsWith("Tick at least one connector", vm.ReviewBlockedReason, StringComparison.Ordinal);
 
-        // Detected and supported connectors may name more, so no line claims which ones are left.
+        // --detected and --all would give every connector they name, Codex included, the chosen mode, so the dialog does not offer them here.
         vm.ExtraIndex = 1;
-        Assert.DoesNotContain(vm.ChangeLines, l => l.StartsWith("Left as they were", StringComparison.Ordinal));
-        var warnings = ReviewWarnings(vm);
-        Assert.DoesNotContain(warnings, w => w.Title is "Drops configured connectors" or "Sets the roster");
-        Assert.Contains(warnings, w => w.Title == ConnectorBatchViewModel.KeepsRosterTitle);
+        Assert.Equal(0, vm.ExtraIndex);
+        Assert.False(vm.HasExtraChoices);
+        Assert.Single(vm.ExtraChoices);
+        Assert.False(vm.HasChanges);
+        Assert.StartsWith("Tick at least one connector", vm.ReviewBlockedReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task On_1_0_10_the_argv_names_only_the_ticked_connectors_and_never_detected_or_all()
+    {
+        var vm = await OpenedAsync("1.0.10", OwnerShape);
+
+        Row(vm, "cursor").IsOn = true;
+        vm.ExtraIndex = 2;
+        vm.Mode = ConnectorBatch.ActionMode;
+
+        Assert.Equal(0, vm.ExtraIndex);
+        Assert.Equal("defenseclaw setup --yes --connector cursor --mode action", vm.CommandPreview);
+        Assert.Equal(new[] { "Add Cursor in action mode", "Left as they were: Codex" }, vm.ChangeLines);
+
+        _ = ReviewWarnings(vm);
+        Assert.Equal(new[] { "setup", "--yes", "--connector", "cursor", "--mode", "action" }, vm.LastArgv);
+        Assert.DoesNotContain("--detected", vm.LastArgv);
+        Assert.DoesNotContain("--all", vm.LastArgv);
+    }
+
+    [Fact]
+    public async Task On_1_0_10_a_connector_without_its_own_mode_is_judged_by_the_global_guardrail_mode()
+    {
+        var vm = await OpenedAsync("1.0.10", "guardrail:\n  mode: action\n  connectors:\n    codex:\n      enabled: true\n");
+
+        Assert.Equal("action", Row(vm, "codex").ConfiguredMode);
+        Row(vm, "codex").IsOn = true;
+        Assert.Contains("Codex: action to observe", vm.ChangeLines);
+    }
+
+    [Fact]
+    public async Task On_1_0_9_a_connector_without_its_own_mode_still_reads_as_observe()
+    {
+        var vm = await OpenedAsync("1.0.9", "guardrail:\n  mode: action\n  connectors:\n    codex:\n      enabled: true\n");
+
+        Assert.Null(Row(vm, "codex").ConfiguredMode);
+        Assert.Equal(3, vm.ExtraChoices.Count);
+        Assert.True(vm.HasExtraChoices);
+    }
+
+    [Fact]
+    public async Task Connector_ids_from_config_yaml_are_shown_visible_and_cut_to_64_characters()
+    {
+        var longId = new string('x', 100);
+        var vm = await OpenedAsync("1.0.10", "guardrail:\n  connectors:\n    codex:\n      mode: observe\n    " + longId + ":\n      mode: observe\n");
+
+        Row(vm, "cursor").IsOn = true;
+
+        var kept = Assert.Single(vm.ChangeLines, l => l.StartsWith("Left as they were", StringComparison.Ordinal));
+        Assert.DoesNotContain(longId, kept, StringComparison.Ordinal);
+        Assert.Contains(new string('x', 63) + "…", kept, StringComparison.Ordinal);
+        Assert.DoesNotContain(longId, vm.RosterLine, StringComparison.Ordinal);
+        Assert.Equal(64, ConnectorBatchViewModel.Shown(longId).Length);
+        Assert.Equal("a\\u202Eb", ConnectorBatchViewModel.Shown("a‮b"));
     }
 
     // ------------------------------------------------------------------ 1.0.9: exactly today's lines

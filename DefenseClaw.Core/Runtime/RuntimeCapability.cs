@@ -299,7 +299,7 @@ public enum RuntimeCapability
     Tokenomics,
 
     /// <summary>
-    /// <c>setup decision-model</c> takes <c>--protocol</c> (System One or Gemini decisions) and the <c>decide</c> choice of <c>--on-confident-block</c> is retired (1.0.10). Judged from the runtime's version (1.0.10 or later).
+    /// <c>setup decision-model</c> takes <c>--protocol</c> (System One or Gemini decisions) and the <c>decide</c> choice of <c>--on-confident-block</c> is retired (1.0.10: still accepted, and ignored; cmd_setup.py@1.0.10:1471-1479). Judged from the runtime's version (1.0.10 or later).
     /// </summary>
     DecisionModelProtocol,
 
@@ -446,7 +446,7 @@ public static class RuntimeCapabilityCatalog
         RuntimeCapability.RoutingCli => "the runtime reports version 1.0.10 or later and lists its commands ('defenseclaw routing' exists, /health routing reports the classifier and route-only connectors, and the gateway serves /api/v1/routing/*)",
         RuntimeCapability.RoutingHotReload => "the runtime reports version 1.0.10 or later and lists its commands (only nine routing keys need a gateway restart; the rest, tokenomics and pricing included, are applied in place)",
         RuntimeCapability.Tokenomics => "the runtime reports version 1.0.10 or later and lists its commands (the gateway can record what each model call it carries used and cost, and serves it at /usage; off until set)",
-        RuntimeCapability.DecisionModelProtocol => "the runtime reports version 1.0.10 or later and lists its commands ('setup decision-model' takes --protocol (system-one or gemini-decisions) and no longer accepts '--on-confident-block decide')",
+        RuntimeCapability.DecisionModelProtocol => "the runtime reports version 1.0.10 or later and lists its commands ('setup decision-model' takes --protocol (system-one or gemini-decisions), and '--on-confident-block decide' is retired: still accepted, and ignored)",
         RuntimeCapability.GuardrailCascade => "the runtime reports version 1.0.10 or later and lists its commands (guardrail.cascade sets what each guardrail layer does, the alignment lane exists, a proven CRITICAL finding ends at least at alert, and ACTION-COMPOUND-LIMIT is the shared over-limit finding)",
         _ => string.Empty,
     };

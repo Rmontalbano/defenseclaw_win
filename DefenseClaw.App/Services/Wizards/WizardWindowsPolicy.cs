@@ -211,7 +211,8 @@ public static class WizardWindowsPolicy
     /// Removes the fields (and, for a group, the subcommand pages) this platform must not offer, then drops
     /// any page left empty. A page that was empty to begin with (a subcommand with no options) is kept.
     /// </summary>
-    public static IReadOnlyList<WizardStep> Filter(string target, IReadOnlyList<WizardStep> steps)
+    /// <param name="capabilities">The runtime's, for the Routing card (<see cref="RoutingSetupWindowsPolicy"/>); null (not known to the caller) keeps its policy on.</param>
+    public static IReadOnlyList<WizardStep> Filter(string target, IReadOnlyList<WizardStep> steps, RuntimeCapabilities? capabilities = null)
     {
         ArgumentNullException.ThrowIfNull(steps);
 
@@ -234,7 +235,7 @@ public static class WizardWindowsPolicy
                 continue;
             }
 
-            var kept = step.Fields.Where(f => !IsSuppressed(target, f)).ToArray();
+            var kept = step.Fields.Where(f => !IsSuppressed(target, f, capabilities)).ToArray();
             var choicesTrimmed = kept.Select(f => TrimChoices(target, f)).ToArray();
 
             if (choicesTrimmed.Length == 0 && step.Fields.Count > 0)
@@ -264,10 +265,10 @@ public static class WizardWindowsPolicy
                 });
         }
 
-        return RoutingSetupWindowsPolicy.AddNote(target, result);
+        return RoutingSetupWindowsPolicy.AddNote(target, result, capabilities);
     }
 
-    private static bool IsSuppressed(string target, WizardField field)
+    private static bool IsSuppressed(string target, WizardField field, RuntimeCapabilities? capabilities)
     {
         if (field.Flag is not { Length: > 0 } flag)
         {
@@ -275,7 +276,7 @@ public static class WizardWindowsPolicy
         }
 
         return SuppressedEverywhere.Contains(flag) ||
-               RoutingSetupWindowsPolicy.Suppresses(target, flag) ||
+               RoutingSetupWindowsPolicy.Suppresses(target, flag, capabilities) ||
                (target == "splunk" && SplunkSuppressed.Contains(flag)) ||
 
                // The Terraform that runs is the one the look found (TERRAFORM_BIN, or PATH); a different one named on the command line is a

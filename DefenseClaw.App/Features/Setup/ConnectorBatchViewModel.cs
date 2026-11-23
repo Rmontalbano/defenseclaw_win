@@ -56,7 +56,7 @@ public sealed partial class BatchRow : ObservableObject
         get
         {
             var state = Configured
-                ? (ConfiguredMode is { Length: > 0 } mode ? $"Configured now ({mode})" : "Configured now")
+                ? (ConfiguredMode is { Length: > 0 } mode ? $"Configured now ({ConnectorBatchViewModel.Shown(mode)})" : "Configured now")
                 : "Not configured";
             return KeepsRoster && Configured && !IsOn ? state + ". " + LeftAsTheyWere + "." : state;
         }
@@ -150,7 +150,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
     /// <summary>The connectors to tick, in the order the first-run window lists them.</summary>
     public ObservableCollection<BatchRow> Rows { get; } = new();
 
-    public IReadOnlyList<string> ExtraChoices => ExtraLabelsAll;
+    public IReadOnlyList<string> ExtraChoices => _keepsRoster ? ExtraLabelsAll[..1] : ExtraLabelsAll;
 
     [ObservableProperty]
     private int _extraIndex;
@@ -180,9 +180,19 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         ? "Configured now: none."
         : "Configured now: " + string.Join(", ", _roster.Select(Label)) + ".";
 
-    private static string Label(string id) => ConnectorOnboarding.Label(id) is { Length: > 0 } label ? label : id;
+    // ConnectorOnboarding.Label returns the id itself for a connector it does not know, so the text is always drawn through Shown (a known label is short and plain).
+    private static string Label(string id) => Shown(ConnectorOnboarding.Label(id) is { Length: > 0 } label ? label : id);
 
-    partial void OnExtraIndexChanged(int value) => Recompute();
+    partial void OnExtraIndexChanged(int value)
+    {
+        if (_keepsRoster && value != 0)
+        {
+            ExtraIndex = 0;
+            return;
+        }
+
+        Recompute();
+    }
 
     partial void OnModeChanged(string value)
     {
@@ -196,7 +206,9 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         Recompute();
     }
 
-    private BatchExtra Extra => ExtraIndex switch
+    // From 1.0.10 the dialog names the ticked connectors one by one and never sends --detected or --all: those give every connector they name, configured
+    // ones included, the chosen --mode (cmd_setup.py@1.0.10:13889-13926, 13604-13607), which the "left as they were" lines would then misreport.
+    private BatchExtra Extra => _keepsRoster ? BatchExtra.None : ExtraIndex switch
     {
         1 => BatchExtra.Detected,
         2 => BatchExtra.All,
@@ -223,7 +235,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
             var key = reader.Keys("guardrail", "connectors")
                 .FirstOrDefault(k => SetupStateLines.Id(k) == offered.Id);
             var configured = key is not null || _roster.Contains(offered.Id, StringComparer.Ordinal);
-            var mode = key is null ? null : reader.Text("guardrail", "connectors", key, "mode");
+            var mode = key is null ? null : ConfiguredModeOf(reader.Text("guardrail", "connectors", key, "mode"), reader.Text("guardrail", "mode"));
             var row = new BatchRow(offered, configured, mode, _keepsRoster);
             if (typed is not null && typed.TryGetValue(offered.Id, out var on))
             {
@@ -240,6 +252,13 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
             Mode = ConnectorBatch.ObserveMode;
         }
 
+        if (_keepsRoster && ExtraIndex != 0)
+        {
+            ExtraIndex = 0;
+        }
+
+        OnPropertyChanged(nameof(ExtraChoices));
+        OnPropertyChanged(nameof(HasExtraChoices));
         OnPropertyChanged(nameof(RosterLine));
         OnPropertyChanged(nameof(ModeNote));
         OnPropertyChanged(nameof(RosterNote));
@@ -345,12 +364,12 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
 
         foreach (var row in modeMoves)
         {
-            ChangeLines.Add($"{row.Label}: {row.ConfiguredMode ?? "observe"} to {Mode}");
+            ChangeLines.Add($"{row.Label}: {Shown(row.ConfiguredMode ?? ConnectorBatch.ObserveMode)} to {Mode}");
         }
 
         foreach (var row in updates)
         {
-            ChangeLines.Add($"Update {row.Label} in {Mode} mode");
+            ChangeLines.Add($"Set up {row.Label} again (stays {Mode})");
         }
 
         foreach (var id in dropped)

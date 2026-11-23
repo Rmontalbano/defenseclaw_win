@@ -434,7 +434,7 @@ public sealed partial class WizardCatalog
         // the CLI's own default applies), then every secret-taking flag is given the route that tells the
         // operator where its value lives. A secret the CLI reads from its environment but has no flag for (galileo's
         // API key) is added between the two so it gets a route too. None of these steps needs the network or the CLI.
-        steps = WizardWindowsPolicy.Filter(target, steps);
+        steps = WizardWindowsPolicy.Filter(target, steps, CapabilitiesForRoutingCard(target));
         steps = WizardSyntheticSecrets.Add(target, steps);
         steps = SecretRoutes.Annotate(target, steps);
 

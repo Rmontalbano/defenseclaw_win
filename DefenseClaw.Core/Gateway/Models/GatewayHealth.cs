@@ -187,9 +187,12 @@ public sealed class GatewayHealth
     [JsonPropertyName("provenance")]
     public Provenance? Provenance { get; init; }
 
-    /// <summary>The OpenClaw plugin's last call-in (runtime 1.0.10); absent until it calls in.</summary>
-    [JsonPropertyName("openclaw_plugin")]
-    public OpenClawPluginHealth? OpenClawPlugin { get; init; }
+    /// <summary>
+    /// The OpenClaw plugin's last call-in (runtime 1.0.10); absent until it calls in. Read from <see cref="AdditionalData"/>, never bound to a typed member, so a value
+    /// of the wrong shape (a string, a number, a list) is read as absent and can never fail the whole <c>/health</c> parse.
+    /// </summary>
+    [JsonIgnore]
+    public OpenClawPluginHealth? OpenClawPlugin => OpenClawPluginHealth.Read(AdditionalData);
 
     /// <summary>The invalid-cascade part of the top-level <c>policy</c> object (1.0.10); null when there is none. Not named <c>Policy</c>, so <c>policy</c> stays in <see cref="AdditionalData"/>.</summary>
     [JsonIgnore]

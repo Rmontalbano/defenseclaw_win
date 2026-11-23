@@ -276,7 +276,7 @@ public static partial class InstallTranscript
             {
                 Add(new InstallerNotice(InstallerNoticeKind.CodexNeedsSetup, "Codex hooks", Cap(Sanitize(codex.Groups["text"].Value)) + "."));
             }
-            else if (RouteOnlyNotice(line) is { } routeOnly)
+            else if (RouteOnlyNotice(lines, i) is { } routeOnly)
             {
                 Add(routeOnly);
             }

@@ -43,17 +43,21 @@ public static partial class InstallTranscript
                 continue;
             }
 
-            var raw = FailureLine.Match(lines[i]).Groups["r"].Value;
-            if (UvStillDiffer.Match(Sanitize(raw, shortenHome: false)) is { Success: true } differ)
+            // The line as it stands first, then joined with the lines a console wrapped it onto (the sentence with a long cache path is long).
+            foreach (var candidate in new[] { lines[i], Unwrapped(lines, i) })
             {
-                return UvCacheDamagedRefusal(differ);
-            }
+                var raw = FailureLine.Match(candidate).Groups["r"].Value;
+                if (UvStillDiffer.Match(Sanitize(raw, shortenHome: false)) is { Success: true } differ)
+                {
+                    return UvCacheDamagedRefusal(differ);
+                }
 
-            var line = Sanitize(raw);
-            if (UvCouldNotCheck.IsMatch(line))
-            {
-                var reason = string.Equals(line, last, StringComparison.Ordinal) ? line : line + " — " + last;
-                return new InstallerRefusal(InstallerRefusalKind.NothingChanged, Cap(reason), GenericNextStep);
+                var line = Sanitize(raw);
+                if (UvCouldNotCheck.IsMatch(line))
+                {
+                    var reason = string.Equals(line, last, StringComparison.Ordinal) ? line : line + " — " + last;
+                    return new InstallerRefusal(InstallerRefusalKind.NothingChanged, Cap(reason), GenericNextStep);
+                }
             }
         }
 

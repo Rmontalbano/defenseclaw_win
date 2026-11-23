@@ -11,8 +11,9 @@ namespace DefenseClaw.App.ViewModels;
 ///   <item>A "Cascade" row on the Effective policy card: <c>default</c>, <c>set (see Policies)</c>, or <c>set, invalid</c> when <c>/health</c> says the
 ///     gateway fell back (<see cref="PolicyReloadHealth"/>). Only on a runtime with <see cref="RuntimeCapability.GuardrailCascade"/>; older runtimes
 ///     get exactly the rows they had.</item>
-///   <item>Attention rows for an invalid cascade or a refused reload that names it. No capability gate: the keys are absent before 1.0.10 and while
-///     nothing is wrong, and the owner's machine, where nothing is wrong, sees nothing.</item>
+///   <item>Attention rows for an invalid cascade or a refused reload that names it. Only with <see cref="RuntimeCapability.GuardrailCascade"/>:
+///     <c>policy.last_reload_error</c> exists before 1.0.10, and an older runtime has no <c>guardrail cascade explain</c> to point at. The owner's
+///     machine, where nothing is wrong, sees nothing.</item>
 /// </list>
 /// </summary>
 public sealed partial class OverviewPanelViewModel
@@ -61,17 +62,22 @@ public sealed partial class OverviewPanelViewModel
     /// <summary>Adds the cascade rows. Called once from <see cref="BuildAttention"/>. Nothing unless the gateway reports one.</summary>
     private void AppendCascadeAttention(List<AttentionRow> rows)
     {
-        if (_snapshot.Health?.PolicyReload is not { } reload)
+        // Only a runtime with the cascade: an older one has no `guardrail cascade explain` to point at, and its reload errors keep showing as they did (nowhere).
+        if (!Services.Runtime.Capabilities.Has(RuntimeCapability.GuardrailCascade) || _snapshot.Health?.PolicyReload is not { } reload)
         {
             return;
         }
 
         if (reload.CascadeInvalid.Length > 0)
         {
+            // The text is cut for display; the severity was judged on the whole text, so say it when the cut dropped the gateway's own sentence.
+            var weakerSentence = reload.IsWeaker && !reload.CascadeInvalid.Contains(PolicyReloadHealth.WeakerMark, StringComparison.Ordinal)
+                ? " This is WEAKER than the configuration you wrote."
+                : string.Empty;
             rows.Add(new AttentionRow
             {
                 Title = CascadeInvalidTitle,
-                Detail = reload.CascadeInvalid + CascadeCheckHint,
+                Detail = reload.CascadeInvalid + weakerSentence + CascadeCheckHint,
                 SeverityKey = reload.IsWeaker ? "High" : "Medium",
             });
         }

@@ -27,7 +27,9 @@ public static class RouteOnlyRollback
             return null;
         }
 
-        var named = ConfigYamlReader.Parse(configText).List("routing", "route_only", "connectors");
+        // Route-only routes a connector only while routing is on and the connector is listed (internal/config/routing_policy.go@1.0.10:303-305, RouteOnlyRouted).
+        var reader = ConfigYamlReader.Parse(configText);
+        var named = reader.Bool("routing", "enabled") == true ? reader.List("routing", "route_only", "connectors") : null;
         if (named is null)
         {
             return null;

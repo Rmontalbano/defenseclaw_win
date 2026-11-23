@@ -238,10 +238,7 @@ public static class RuleIdLabels
             return cascadeEra ? "It was blocked." : "The call was blocked.";
         }
 
-        var ranAsAlert = verdict == "alert"
-            || action == "alert"
-            || (verdict is "allow" or "allowed" && raw == "alert");
-        if (!ranAsAlert)
+        if (!RanAsAlert(verdict, action, raw))
         {
             return null;
         }
@@ -262,20 +259,23 @@ public static class RuleIdLabels
 
     /// <summary>
     /// What happened to a call the alignment check flagged (1.0.10), said from the row's own fields: the runtime's decision label, else the details' <c>action=</c>.
-    /// Allowed (or no action and <c>would_block=false</c>): measured only; alert: it ran and was recorded; block or deny: blocked. Null when the row says none.
+    /// Allowed (or no action and <c>would_block=false</c>): measured only; alert (the verdict or action, or an allow with <c>raw_action=alert</c>, as in
+    /// <see cref="CompoundLimitOutcome(string?, string?, bool)"/>): it ran and was recorded; block or deny: blocked. Null when the row says none.
     /// </summary>
     public static string? AlignmentDriftOutcome(string? decision, string? details)
     {
         var values = StructuredDetailParser.Values(details);
         var label = Word(decision);
-        var verdict = label.Length > 0 ? label : Word(values.GetValueOrDefault("action"));
+        var action = Word(values.GetValueOrDefault("action"));
+        var verdict = label.Length > 0 ? label : action;
 
         if (verdict is "block" or "blocked" or "deny" or "denied")
         {
             return "The call was blocked.";
         }
 
-        if (verdict == "alert")
+        // The same rule as CompoundLimitOutcome, so one row reads one way on every surface: an allow whose raw_action is alert was recorded as an alert.
+        if (RanAsAlert(verdict, action, Word(values.GetValueOrDefault("raw_action"))))
         {
             return "The call ran; DefenseClaw recorded an alert.";
         }
@@ -287,6 +287,10 @@ public static class RuleIdLabels
 
         return null;
     }
+
+    // The call ran and DefenseClaw recorded an alert: the verdict or action says alert, or an allow carries raw_action=alert.
+    private static bool RanAsAlert(string verdict, string action, string raw) =>
+        verdict == "alert" || action == "alert" || (verdict is "allow" or "allowed" && raw == "alert");
 
     private static string Word(string? value) => value?.Trim().ToLowerInvariant() ?? string.Empty;
 }

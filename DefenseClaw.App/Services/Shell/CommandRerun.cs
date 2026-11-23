@@ -210,6 +210,7 @@ internal sealed class CommandRerun
         {
             warnings.AddRange(LocalStackReview.Warnings(argv, _services.LocalStack.Status));
             warnings.AddRange(CoworkUninstallReview.Warnings(argv, _services.Runtime.Capabilities, _services.Paths.DataDirectory));
+            warnings.AddRange(OpenClawReplaceReview.Warnings(argv));
         }
 
         return new CommandReview

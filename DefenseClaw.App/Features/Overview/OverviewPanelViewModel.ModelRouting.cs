@@ -35,6 +35,7 @@ public sealed partial class OverviewPanelViewModel
     private static readonly string[] ModelProxyConnectors = { "openclaw", "zeptoclaw" };
 
     private ModelUsageSummary? _modelUsage;
+    private DateTimeOffset? _modelUsageReadAt;
     private MonotonicStamp _modelUsageStamp = MonotonicStamp.Never;
     private int _modelUsageReading;
     private ConfigDocument? _tokenomicsSource;
@@ -95,6 +96,13 @@ public sealed partial class OverviewPanelViewModel
                 return "on in config.yaml, but the running gateway reports its usage store off";
             default:
                 var text = "on, " + ModelUsageReader.Describe(usage);
+
+                // An old figure is never shown as current: with no /health answer, or a read older than two refresh intervals, say when it was read.
+                if (_modelUsageReadAt is { } readAt && (_snapshot.Health is null || _modelUsageStamp.HasElapsed(ModelUsageRefreshInterval * 2)))
+                {
+                    text += $" (read at {readAt.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture)})";
+                }
+
                 return CarriesNoAgentCalls() ? text + ". " + HookModeUsageNote : text;
         }
     }
@@ -139,6 +147,7 @@ public sealed partial class OverviewPanelViewModel
             if (_modelUsage is not null)
             {
                 _modelUsage = null;
+                _modelUsageReadAt = null;
                 _modelUsageStamp = MonotonicStamp.Never;
                 BuildConfiguration();
             }
@@ -165,6 +174,7 @@ public sealed partial class OverviewPanelViewModel
             try
             {
                 _modelUsage = ModelUsageReader.FromGateway(result);
+                _modelUsageReadAt = DateTimeOffset.UtcNow;
             }
             finally
             {
@@ -181,11 +191,28 @@ public sealed partial class OverviewPanelViewModel
         catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
         {
             _modelUsage = ModelUsageSummary.Unreadable;
+            _modelUsageReadAt = null;
             BuildConfiguration();
         }
         finally
         {
             _ = Interlocked.Exchange(ref _modelUsageReading, 0);
+        }
+    }
+
+    /// <summary>
+    /// Starts <see cref="RefreshModelUsageAsync"/> without waiting for it, so a slow gateway can never hold up the reads after it in the refresh chain
+    /// (<c>status --json</c>). Nothing escapes: the read is the row's own business, and a failure there is its "usage could not be read".
+    /// </summary>
+    private async Task StartModelUsageRefreshAsync(bool force, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RefreshModelUsageAsync(force, cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Left as it was; the next poll asks again.
         }
     }
 }

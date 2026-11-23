@@ -18,10 +18,17 @@ public static partial class InstallTranscript
         RegexOptions.CultureInvariant,
         RouteOnlyTimeout);
 
-    /// <summary>The notice for one transcript line, or null when it is not the installer's route-only warning.</summary>
-    private static InstallerNotice? RouteOnlyNotice(string line)
+    /// <summary>The notice for the transcript line at <paramref name="at"/> (as it stands, then joined with the lines a console wrapped it onto), or null when it is not the installer's route-only warning.</summary>
+    private static InstallerNotice? RouteOnlyNotice(IReadOnlyList<string> lines, int at)
     {
-        if (RouteOnlyNotPutBack.Match(line) is not { Success: true } match)
+        // The line as it stands first: joining can only be wrong about a line that was not wrapped (the warning is about 560 characters long).
+        var match = RouteOnlyNotPutBack.Match(lines[at]);
+        if (!match.Success)
+        {
+            match = RouteOnlyNotPutBack.Match(Unwrapped(lines, at));
+        }
+
+        if (!match.Success)
         {
             return null;
         }

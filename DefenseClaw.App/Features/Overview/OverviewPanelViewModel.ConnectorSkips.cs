@@ -21,10 +21,16 @@ public sealed partial class OverviewPanelViewModel
     internal const string ConnectorSkipRestartActionId = "connector-skip-restart";
 
     /// <summary>The connectors the gateway did not start, as the last answer says; empty on a runtime before 1.0.7 or with no answer.</summary>
-    private IReadOnlyList<ConnectorSkip> CurrentConnectorSkips(GatewayHealth? health) =>
-        health is not null && Services.Runtime.Capabilities.Has(RuntimeCapability.AgentNotInstalledSkip)
-            ? ConnectorStartHealth.From(health.Guardrail)
-            : [];
+    private IReadOnlyList<ConnectorSkip> CurrentConnectorSkips(GatewayHealth? health)
+    {
+        if (health is null || !Services.Runtime.Capabilities.Has(RuntimeCapability.AgentNotInstalledSkip))
+        {
+            return [];
+        }
+
+        var listed = ConnectorStartHealth.From(health.Guardrail);
+        return KeepsGatewayOnAgentUpdate ? WithSingleConnectorAgentUpdate(listed, health) : listed;
+    }
 
     /// <summary>True when the gateway says it did not start <paramref name="connector"/> (any spelling), on a runtime that says so.</summary>
     private bool IsSkippedAtStart(string connector, GatewayHealth? health)

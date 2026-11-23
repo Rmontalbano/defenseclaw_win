@@ -92,6 +92,22 @@ public sealed class RuleIdLabelsCascadeTests
     public void The_alignment_outcome_comes_from_the_rows_own_fields(string? decision, string? details, string expected) =>
         Assert.Equal(expected, RuleIdLabels.AlignmentDriftOutcome(decision, details));
 
+    // Audit and Logs pass the details only, Alerts also the decision label: one row reads one way, and an allow that carries raw_action=alert is an alert
+    // (the same rule CompoundLimitOutcome applies).
+    [Theory]
+    [InlineData(null, "action=allow raw_action=alert", "The call ran; DefenseClaw recorded an alert.")]
+    [InlineData("allow", "action=allow raw_action=alert", "The call ran; DefenseClaw recorded an alert.")]
+    [InlineData("allowed", "raw_action=alert", "The call ran; DefenseClaw recorded an alert.")]
+    [InlineData(null, "action=allow raw_action=allow", "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).")]
+    [InlineData(null, "action=block raw_action=alert", "The call was blocked.")]
+    public void An_allow_with_raw_action_alert_reads_as_an_alert_on_every_surface(string? decision, string? details, string expected)
+    {
+        Assert.Equal(expected, RuleIdLabels.AlignmentDriftOutcome(decision, details));
+        Assert.Equal(
+            RuleIdLabels.CompoundLimitOutcome(decision, details, cascadeEra: true) is { } limit && limit.StartsWith("It was blocked", StringComparison.Ordinal),
+            expected == "The call was blocked.");
+    }
+
     [Fact]
     public void An_alignment_row_with_no_decision_says_nothing_about_the_outcome()
     {

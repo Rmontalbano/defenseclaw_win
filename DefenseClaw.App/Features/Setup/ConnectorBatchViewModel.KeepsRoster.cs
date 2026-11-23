@@ -1,6 +1,7 @@
 using DefenseClaw.App.Services.FirstRun;
 using DefenseClaw.Core.Runtime;
 using DefenseClaw.Core.Setup;
+using DefenseClaw.Core.Text;
 
 namespace DefenseClaw.App.ViewModels;
 
@@ -47,6 +48,40 @@ public sealed partial class ConnectorBatchViewModel
         !_keepsRoster || extra != BatchExtra.None
             ? Array.Empty<string>()
             : _roster.Where(r => !selected.Contains(r, StringComparer.Ordinal)).ToArray();
+
+    /// <summary>"Also add detected / every supported" is offered only where the CLI's <c>--detected</c> and <c>--all</c> do what the dialog says (before 1.0.10).</summary>
+    public bool HasExtraChoices => !_keepsRoster;
+
+    /// <summary>The longest text from config.yaml the dialog shows (a connector id, a mode).</summary>
+    internal const int ShownLimit = 64;
+
+    /// <summary>Text out of config.yaml as it is drawn here: control and bidirectional characters written out (<see cref="DisplayNames.Visible"/>), cut to <see cref="ShownLimit"/>.</summary>
+    internal static string Shown(string? text)
+    {
+        var visible = DisplayNames.Visible(text);
+        if (visible.Length <= ShownLimit)
+        {
+            return visible;
+        }
+
+        var cut = ShownLimit - 1;
+        return (char.IsHighSurrogate(visible[cut - 1]) ? visible[..(cut - 1)] : visible[..cut]) + "…";
+    }
+
+    /// <summary>
+    /// The mode a configured connector runs in: its own <c>mode</c>, else (from 1.0.10, where the dialog compares it with the chosen one) the global
+    /// <c>guardrail.mode</c>, as the runtime does (config.go@1.0.10:2214 <c>EffectiveMode</c>: connector override, then global mode, then observe). Before 1.0.10 only its own.
+    /// </summary>
+    private string? ConfiguredModeOf(string? own, string? global)
+    {
+        var ownMode = string.IsNullOrWhiteSpace(own) ? null : own.Trim();
+        if (ownMode is not null || !_keepsRoster)
+        {
+            return own;
+        }
+
+        return string.IsNullOrWhiteSpace(global) ? null : global.Trim();
+    }
 
     private string KeptLine(IReadOnlyList<string> kept) =>
         BatchRow.LeftAsTheyWere + ": " + string.Join(", ", kept.Select(Label));

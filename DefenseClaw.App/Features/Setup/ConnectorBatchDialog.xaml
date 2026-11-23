@@ -101,7 +101,7 @@
                                 <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource BatchRowTemplate}"
                                               IsTabStop="False" AutomationProperties.Name="Connectors to set up" />
 
-                                <StackPanel Margin="0,4,0,10">
+                                <StackPanel Margin="0,4,0,10" Visibility="{Binding HasExtraChoices, Converter={StaticResource BoolToVisibility}}">
                                     <TextBlock Style="{StaticResource DcBody}" FontWeight="SemiBold" Text="Also add" />
                                     <ComboBox Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="320"
                                               ItemsSource="{Binding ExtraChoices}"

@@ -500,7 +500,9 @@ public sealed record CommandReview
             }
         }
 
-        return Stricter(CommandTiers.Classify(terminator < 0 ? argv : argv.Take(terminator).ToArray()), floor);
+        // `setup openclaw --replace` removes every other connector: Destructive on every review path (wizard, palette, Discover, Activity rerun).
+        var tier = Stricter(CommandTiers.Classify(terminator < 0 ? argv : argv.Take(terminator).ToArray()), floor);
+        return OpenClawReplaceReview.Applies(argv) ? Stricter(tier, CommandTier.Destructive) : tier;
     }
 
     /// <summary>The stricter of two tiers: Destructive beats StateChanging beats ReadOnly.</summary>

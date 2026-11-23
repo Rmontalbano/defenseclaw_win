@@ -1,6 +1,7 @@
 using DefenseClaw.App.Services.Wizards;
 using System.Text.RegularExpressions;
 using DefenseClaw.App.Tests.TestSupport;
+using DefenseClaw.Core.Config;
 
 namespace DefenseClaw.App.Tests.Wizards;
 
@@ -187,6 +188,65 @@ public sealed class DecisionModelProtocolTests
         });
         var only = Assert.Single(full);
         Assert.Equal(DecisionModelReview.RollbackTitle, only.Title);
+    }
+
+    // The CLI infers the protocol from a Google Decisions API URL and writes decision_model.protocol (decision_model.py@1.0.10:99-102, infer_protocol).
+    private const string GoogleUrl = "https://generativelanguage.googleapis.com/v1beta/decisions";
+
+    [Theory]
+    [InlineData(GoogleUrl)]
+    [InlineData("https://GenerativeLanguage.GoogleAPIs.com:443/v1beta/decisions")]
+    [InlineData("  https://generativelanguage.googleapis.com/v1beta/decisions  ")]
+    public void A_google_url_with_no_protocol_still_carries_the_rollback_bar_because_the_cli_writes_the_key(string url)
+    {
+        var warnings = DecisionModelReview.Warnings(
+            new[] { "setup", "decision-model", "--base-url", url, "--model", "gemini-decision-1", "--non-interactive" },
+            ConfigYamlReader.Parse("decision_model:\n  enabled: false\n"));
+
+        var bar = Assert.Single(warnings);
+        Assert.Equal(DecisionModelReview.RollbackTitle, bar.Title);
+        Assert.Contains("decision_model.protocol removed first", bar.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_inference_needs_no_saved_protocol_no_protocol_flag_and_googles_host()
+    {
+        var google = new[] { "setup", "decision-model", "--base-url", GoogleUrl, "--model", "m", "--non-interactive" };
+
+        // A protocol already saved is not inferred over (nothing new is written), system-one is never written, and another host is not Google's.
+        Assert.Empty(DecisionModelReview.Warnings(google, ConfigYamlReader.Parse("decision_model:\n  protocol: system-one\n")));
+        Assert.Empty(DecisionModelReview.Warnings(
+            new[] { "setup", "decision-model", "--protocol", "system-one", "--base-url", GoogleUrl, "--model", "m", "--non-interactive" },
+            ConfigYamlReader.Parse(null)));
+        Assert.Empty(DecisionModelReview.Warnings(
+            new[] { "setup", "decision-model", "--base-url", "https://generativelanguage.googleapis.com.example.net/v1", "--model", "m", "--non-interactive" },
+            ConfigYamlReader.Parse(null)));
+        Assert.Empty(DecisionModelReview.Warnings(
+            new[] { "setup", "decision-model", "--base-url", "https://example.net/generativelanguage.googleapis.com", "--model", "m", "--non-interactive" },
+            ConfigYamlReader.Parse(null)));
+        Assert.Empty(DecisionModelReview.Warnings(
+            new[] { "setup", "decision-model", "--base-url", "http://127.0.0.1:8791/v1/systemone", "--non-interactive" }, ConfigYamlReader.Parse(null)));
+        Assert.Empty(DecisionModelReview.Warnings(new[] { "setup", "decision-model", "--model", "m", "--non-interactive" }, ConfigYamlReader.Parse(null)));
+        Assert.Single(DecisionModelReview.Warnings(google, ConfigYamlReader.Parse(null)));
+    }
+
+    [Fact]
+    public void The_url_and_model_bar_counts_what_config_yaml_already_holds()
+    {
+        var explicitGemini = new[] { "setup", "decision-model", "--protocol", "gemini-decisions", "--non-interactive" };
+        var saved = ConfigYamlReader.Parse("decision_model:\n  base_url: " + GoogleUrl + "\n  model: gemini-decision-1\n");
+        var onlyUrl = ConfigYamlReader.Parse("decision_model:\n  base_url: " + GoogleUrl + "\n");
+
+        // Both saved already: the rollback bar only.
+        Assert.Equal(DecisionModelReview.RollbackTitle, Assert.Single(DecisionModelReview.Warnings(explicitGemini, saved)).Title);
+
+        // One missing: the bar still shows; none known (no config): as before.
+        Assert.Contains(DecisionModelReview.Warnings(explicitGemini, onlyUrl), w => w.Title == DecisionModelReview.GeminiNeedsEndpointTitle);
+        Assert.Contains(DecisionModelReview.Warnings(explicitGemini), w => w.Title == DecisionModelReview.GeminiNeedsEndpointTitle);
+
+        // An empty --base-url clears the saved one.
+        var cleared = new[] { "setup", "decision-model", "--protocol", "gemini-decisions", "--base-url", string.Empty, "--non-interactive" };
+        Assert.Contains(DecisionModelReview.Warnings(cleared, saved), w => w.Title == DecisionModelReview.GeminiNeedsEndpointTitle);
     }
 
     [Fact]

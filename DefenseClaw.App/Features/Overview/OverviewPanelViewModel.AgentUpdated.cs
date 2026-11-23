@@ -5,8 +5,10 @@ namespace DefenseClaw.App.ViewModels;
 
 /// <summary>
 /// The "agent updated itself" row (runtime 1.0.10, G10C-08). When Codex, Amp, Hermes or OpenCode updates itself in place, its executable no longer matches what
-/// setup recorded. Up to 1.0.9 that stopped the whole gateway at start; on 1.0.10 the gateway keeps running and does not start that connector, and /health
-/// <c>guardrail.details.connectors_not_started</c> lists it with a reason that contains "executable changed since setup" (agent_executable_changed.go@1.0.10:49-54).
+/// setup recorded. Up to 1.0.9 that stopped the whole gateway at start; on 1.0.10 the gateway keeps running and does not start that connector. With several connectors /health
+/// <c>guardrail.details.connectors_not_started</c> lists it with a reason that contains "executable changed since setup" (agent_executable_changed.go@1.0.10:49-54);
+/// with ONE connector there is no such list and the guardrail is in <c>error</c> with that sentence in <c>last_error</c> (<see cref="AgentUpdatedGuardrailError"/>),
+/// so nothing at all is enforced.
 /// <see cref="ConnectorStartHealth"/> recognises the text (<see cref="ConnectorSkipKind.AgentUpdated"/>); the row is drawn only with
 /// <see cref="RuntimeCapability.AgentSelfUpdateKeepsGateway"/>, so 1.0.9 and earlier keep the generic setup-failed row. Codex offers the reviewed
 /// <see cref="AttentionActionIds.ReselectCodex"/> action; the others get the runtime's own named fix as a copy-only command built from the connector allow-list, never from the reason text.
@@ -24,12 +26,28 @@ public sealed partial class OverviewPanelViewModel
         OverviewDetectedConnectors.Normalize(skip.Name) == "codex" &&
         _snapshot.Durability?.CodexExecutableMissing == true;
 
+    /// <summary>
+    /// Adds the agents a guardrail in <c>error</c> says updated themselves (<see cref="AgentUpdatedGuardrailError"/>): the one-connector form, where the gateway
+    /// has no "not started" list and /health shows only the guardrail error. A name the list already has is not added twice.
+    /// </summary>
+    private static IReadOnlyList<ConnectorSkip> WithSingleConnectorAgentUpdate(IReadOnlyList<ConnectorSkip> listed, GatewayHealth health)
+    {
+        var fromError = AgentUpdatedGuardrailError.From(health.Guardrail);
+        if (fromError.Count == 0)
+        {
+            return listed;
+        }
+
+        var extra = fromError.Where(e => !listed.Any(l => l.Name == e.Name)).ToList();
+        return extra.Count == 0 ? listed : listed.Concat(extra).OrderBy(static s => s.Name, StringComparer.Ordinal).ToList();
+    }
+
     /// <summary>The row for an agent that updated itself. Critical when no connector is enforced at all, High when another one is.</summary>
     private AttentionRow AgentUpdatedRow(ConnectorSkip skip)
     {
         var friendly = FriendlyConnectorName(skip.Name);
         var reason = skip.Reason.EndsWith('.') ? skip.Reason : skip.Reason + ".";
-        var detail = $"{friendly} updated itself, so its executable no longer matches what setup recorded. The gateway is running for any other connectors, " +
+        var detail = $"{friendly} updated itself, so its executable no longer matches what setup recorded. The gateway is still running, " +
                      $"but it is not checking {friendly}'s calls until setup is run again, which admits the new version. The gateway says: {reason}";
         var severity = NoConnectorEnforced(skip) ? "Critical" : "High";
 

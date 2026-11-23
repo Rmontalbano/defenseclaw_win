@@ -284,9 +284,11 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         await RefreshHourlyAsync(cancellationToken).ConfigureAwait(true);
         await RefreshAgentsAsync(cancellationToken).ConfigureAwait(true);
         await RefreshEffectivePolicyAsync(forceStatus, cancellationToken).ConfigureAwait(true);
-        await RefreshModelUsageAsync(forceStatus, cancellationToken).ConfigureAwait(true);
         RefreshBomCoverage();
         await RefreshStatusAsync(forceStatus, cancellationToken).ConfigureAwait(true);
+
+        // The tokenomics read (CUST-457) goes after status and is not awaited: a slow /usage must not delay anything else here.
+        _ = StartModelUsageRefreshAsync(forceStatus, cancellationToken);
 
         // The compiled observability plan has its own age limit (and is read again when config.yaml changes), so this is a comparison unless it is due.
         await RefreshObservabilityPlanAsync(forceStatus, cancellationToken).ConfigureAwait(true);

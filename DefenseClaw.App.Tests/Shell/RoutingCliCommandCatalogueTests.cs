@@ -235,6 +235,8 @@ public sealed class RoutingCliCommandCatalogueTests
         Assert.Equal(RoutingReadReview.TestNote, note);
         Assert.Contains("dry run", note, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("classifier", note, StringComparison.Ordinal);
+        Assert.Contains("hosted model", note, StringComparison.Ordinal);
+        Assert.DoesNotContain("No model is called", note, StringComparison.Ordinal);
     }
 
     [Theory]
