@@ -19,6 +19,16 @@ public sealed class LocalObservabilityPolicyTests
 {
     private static readonly string[] Verbs = { "up", "down", "status", "logs", "url", "env", "reset" };
 
+    private static RuntimeCapabilities RuntimeAt(string version)
+    {
+        const string help = "Usage: defenseclaw [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  setup  Configure.\n";
+        return RuntimeProbe.Evaluate(
+            new RuntimeProbeScreens("{\"name\":\"defenseclaw-cli\",\"version\":\"" + version + "\",\"schema_version\":1}", help, help, null, null, null, null, null),
+            "test",
+            "fp",
+            DateTimeOffset.UnixEpoch).Capabilities;
+    }
+
     private static WizardValues Answers(WizardDefinition definition, params (string Id, string Value)[] answers)
     {
         var values = WizardSamples.StartingValues(definition);
@@ -66,6 +76,11 @@ public sealed class LocalObservabilityPolicyTests
         // What it still hides: sandboxes, OpenClaw, ZeptoClaw, anything whose summary needs Docker, and the --with-local-stack flow.
         Assert.True(WizardWindowsPolicy.HidesCommand(new[] { "sandbox", "list" }, string.Empty));
         Assert.True(WizardWindowsPolicy.HidesCommand(new[] { "setup", "openclaw" }, string.Empty));
+
+        // OpenClaw is unsupported on Windows through 1.0.9 and runs there from 1.0.10 (native hooks): hidden on the one, offered on the other.
+        Assert.True(WizardWindowsPolicy.HidesCommand(new[] { "setup", "openclaw" }, string.Empty, RuntimeAt("1.0.9")));
+        Assert.False(WizardWindowsPolicy.HidesCommand(new[] { "setup", "openclaw" }, string.Empty, RuntimeAt("1.0.10")));
+        Assert.True(WizardWindowsPolicy.HidesCommand(new[] { "setup", "zeptoclaw" }, string.Empty, RuntimeAt("1.0.10")));
         Assert.True(WizardWindowsPolicy.HidesCommand(new[] { "setup", "zeptoclaw" }, string.Empty));
         Assert.True(WizardWindowsPolicy.HidesCommand(new[] { "tunnel" }, "Needs Docker to run the stack."));
         Assert.True(WizardWindowsPolicy.HidesCommand(new[] { "setup", "local-stack" }, string.Empty));

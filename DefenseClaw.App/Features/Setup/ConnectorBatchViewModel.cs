@@ -12,13 +12,24 @@ namespace DefenseClaw.App.ViewModels;
 /// <summary>One connector the batch dialog offers: whether it is ticked, and whether config.yaml has it now.</summary>
 public sealed partial class BatchRow : ObservableObject
 {
-    internal BatchRow(OfferedConnector connector, bool configured, string? configuredMode)
+    /// <param name="keepsRoster">
+    /// The runtime adds or updates only the connectors the command names and keeps every other one (<see cref="ConnectorBatchViewModel.KeepsRoster"/>, 1.0.10):
+    /// a configured connector then starts unticked, "left as they were", and ticking it means "update it", never "keep it".
+    /// </param>
+    internal BatchRow(OfferedConnector connector, bool configured, string? configuredMode, bool keepsRoster = false)
     {
         Connector = connector;
         Configured = configured;
         ConfiguredMode = configuredMode;
-        _isOn = configured;
+        KeepsRoster = keepsRoster;
+        _isOn = configured && !keepsRoster;
     }
+
+    /// <summary>The runtime keeps the connectors the command does not name (1.0.10), so unticking one drops nothing.</summary>
+    internal bool KeepsRoster { get; }
+
+    /// <summary>The CLI's own words for a connector the command did not name (<c>Left as they were</c>).</summary>
+    internal const string LeftAsTheyWere = "Left as they were";
 
     internal OfferedConnector Connector { get; }
 
@@ -40,19 +51,29 @@ public sealed partial class BatchRow : ObservableObject
     /// <summary>The mode config.yaml gives it today (<c>observe</c>, <c>action</c>), or null.</summary>
     public string? ConfiguredMode { get; }
 
-    public string StateText => Configured
-        ? (ConfiguredMode is { Length: > 0 } mode ? $"Configured now ({mode})" : "Configured now")
-        : "Not configured";
+    public string StateText
+    {
+        get
+        {
+            var state = Configured
+                ? (ConfiguredMode is { Length: > 0 } mode ? $"Configured now ({mode})" : "Configured now")
+                : "Not configured";
+            return KeepsRoster && Configured && !IsOn ? state + ". " + LeftAsTheyWere + "." : state;
+        }
+    }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsChanged), nameof(ChangeText), nameof(AutomationName))]
+    [NotifyPropertyChangedFor(nameof(IsChanged), nameof(ChangeText), nameof(AutomationName), nameof(StateText))]
     private bool _isOn;
 
-    public bool IsChanged => IsOn != Configured;
+    public bool IsChanged => KeepsRoster ? IsOn : IsOn != Configured;
 
-    public string ChangeText => !IsChanged ? string.Empty : IsOn ? "will be added" : "will be dropped";
+    public string ChangeText => !IsChanged
+        ? string.Empty
+        : KeepsRoster ? (Configured ? "will be updated" : "will be added")
+        : IsOn ? "will be added" : "will be dropped";
 
-    public string AutomationName => $"{Label}: {(IsOn ? "selected" : "not selected")}. {StateText}." + (IsChanged ? " " + ChangeText + "." : string.Empty);
+    public string AutomationName => $"{Label}: {(IsOn ? "selected" : "not selected")}. {StateText.TrimEnd('.')}." + (IsChanged ? " " + ChangeText + "." : string.Empty);
 
     internal event EventHandler? Moved;
 
@@ -65,8 +86,9 @@ public sealed partial class BatchRow : ObservableObject
 /// and the Mac's multi-select, in this app's model: the form starts with the connectors config.yaml has ticked (so doing nothing drops nothing),
 /// <b>Review</b> shows the one command with every flag, and the shared <see cref="DiscoverActionReview"/> runs it when confirmed.
 /// <para>
-/// <b>The batch sets the roster; it does not add to it.</b> The CLI replaces the configured set with the selection (<see cref="ConnectorBatch"/>), so a
-/// configured connector that is unticked is dropped, and the review says which. Flags are checked against the installed CLI's own
+/// <b>Before 1.0.10 the batch sets the roster; it does not add to it.</b> The CLI replaces the configured set with the selection (<see cref="ConnectorBatch"/>), so a
+/// configured connector that is unticked is dropped, and the review says which. From 1.0.10 (<see cref="KeepsRoster"/>) it adds or updates the named connectors and
+/// keeps every other one, unless the roster is empty or holds openclaw or zeptoclaw; the form and the review then say that instead. Flags are checked against the installed CLI's own
 /// <c>setup --help</c> (<c>--yes</c>, <c>--connector</c> and <c>--mode</c> must be there; <c>--detected</c>, <c>--all</c> and <c>--no-restart</c> are offered only if they are);
 /// a help that cannot be read leaves the review off. Guards are <see cref="SetupDialogViewModel"/>'s.
 /// </para>
@@ -149,9 +171,10 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         ? "The gateway restarts once, at the end, so the new connectors' hooks come up."
         : "The gateway is not restarted, so nothing changes in the running gateway until it is restarted.";
 
-    public string ModeNote => Mode == ConnectorBatch.ActionMode
+    public string ModeNote => (Mode == ConnectorBatch.ActionMode
         ? "Action lets DefenseClaw block. If the CLI cannot verify a connector for action mode it configures observe for that one and says so."
-        : DefenseClaw.Core.Runtime.ObserveModeCopy.BatchObserveNote(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities));
+        : DefenseClaw.Core.Runtime.ObserveModeCopy.BatchObserveNote(DefenseClaw.Core.Runtime.ObserveModeCopy.BlocksSelfChange(Services.Runtime.Capabilities)))
+        + (_keepsRoster ? " " + ModeAppliesOnlyToNamed : string.Empty);
 
     public string RosterLine => _roster.Count == 0
         ? "Configured now: none."
@@ -186,6 +209,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
     {
         var reader = ConfigYamlReader.From(Services.Config);
         _roster = SetupStateLines.ActiveConnectors(reader);
+        _keepsRoster = ComputeKeepsRoster();
 
         var typed = keepEdits ? Rows.ToDictionary(static r => r.Id, static r => r.IsOn, StringComparer.Ordinal) : null;
         foreach (var row in Rows)
@@ -200,7 +224,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
                 .FirstOrDefault(k => SetupStateLines.Id(k) == offered.Id);
             var configured = key is not null || _roster.Contains(offered.Id, StringComparer.Ordinal);
             var mode = key is null ? null : reader.Text("guardrail", "connectors", key, "mode");
-            var row = new BatchRow(offered, configured, mode);
+            var row = new BatchRow(offered, configured, mode, _keepsRoster);
             if (typed is not null && typed.TryGetValue(offered.Id, out var on))
             {
                 row.IsOn = on;
@@ -217,6 +241,9 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         }
 
         OnPropertyChanged(nameof(RosterLine));
+        OnPropertyChanged(nameof(ModeNote));
+        OnPropertyChanged(nameof(RosterNote));
+        OnPropertyChanged(nameof(HasRosterNote));
         BeginTrustRead();
         Recompute();
     }
@@ -303,7 +330,8 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         var modeMoves = Rows
             .Where(r => r.IsOn && r.Configured && !string.Equals(r.ConfiguredMode ?? ConnectorBatch.ObserveMode, Mode, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        var dropped = extra == BatchExtra.None ? Dropped() : Array.Empty<string>();
+        var dropped = extra == BatchExtra.None && !_keepsRoster ? Dropped() : Array.Empty<string>();
+        var kept = KeptConnectors(selected, extra);
 
         foreach (var id in added)
         {
@@ -331,9 +359,17 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
 
         HasChanges = argv is not null && (added.Length > 0 || modeMoves.Length > 0 || dropped.Count > 0 || extra != BatchExtra.None);
         CommandPreview = HasChanges && argv is not null ? CommandReview.CommandLine(CommandReview.DefaultExecutable, argv) : string.Empty;
+        var changeCount = ChangeLines.Count;
+
+        // 1.0.10: the connectors the command does not name are not a change; the line says what the CLI will say of them.
+        if (kept.Count > 0)
+        {
+            ChangeLines.Add(KeptLine(kept));
+        }
+
         Summary = !HasChanges
             ? "Nothing to apply"
-            : ChangeLines.Count == 1 ? "1 change to apply" : $"{ChangeLines.Count} changes to apply";
+            : changeCount == 1 ? "1 change to apply" : $"{changeCount} changes to apply";
         OnPropertyChanged(nameof(HasCommandPreview));
         NotifyActions();
     }
@@ -426,7 +462,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         }
 
         _planArgv = argv;
-        var dropped = Extra == BatchExtra.None ? Dropped() : Array.Empty<string>();
+        var dropped = Extra == BatchExtra.None && !_keepsRoster ? Dropped() : Array.Empty<string>();
         var picked = Selected.Select(Label).ToArray();
         var what = Extra switch
         {
@@ -436,7 +472,15 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         };
 
         var warnings = new List<CommandReviewWarning>();
-        if (dropped.Count > 0)
+        if (_keepsRoster)
+        {
+            var keptNow = KeptConnectors(Selected.ToArray(), Extra);
+            if (keptNow.Count > 0 || Extra != BatchExtra.None)
+            {
+                warnings.Add(new CommandReviewWarning(KeepsRosterTitle, KeepsRosterText(keptNow)));
+            }
+        }
+        else if (dropped.Count > 0)
         {
             warnings.Add(new CommandReviewWarning(
                 "Drops configured connectors",
@@ -482,7 +526,7 @@ public sealed partial class ConnectorBatchViewModel : SetupDialogViewModel
         return new SetupPlan
         {
             Title = "Set up these connectors?",
-            Summary = $"Configures {what} in {Mode} mode in one command" +
+            Summary = (_keepsRoster ? $"Adds or updates {what} in {Mode} mode in one command" : $"Configures {what} in {Mode} mode in one command") +
                       (restart ? ", then restarts the gateway once." : ", without restarting the gateway."),
             Steps = new[]
             {

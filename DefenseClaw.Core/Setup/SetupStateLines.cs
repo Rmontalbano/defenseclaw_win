@@ -25,7 +25,7 @@ public static class SetupStateLines
 {
     private const string NotSet = "not set";
 
-    /// <summary>Connectors whose LLM role is judge and agent (<c>connector_llm_role</c>): the proxy connectors, which Windows does not run.</summary>
+    /// <summary>Connectors whose LLM role is judge and agent (<c>connector_llm_role</c>): the proxy connectors. Windows ran neither before 1.0.10; from 1.0.10 OpenClaw runs there too (native hooks), and the CLI still gives it this role.</summary>
     private static readonly string[] ProxyConnectors = { "openclaw", "zeptoclaw" };
 
     /// <summary>The LLM card: <c>Main: openai/gpt-4o  ·  Judge: not set  ·  Connectors: codex (judge only)</c>.</summary>

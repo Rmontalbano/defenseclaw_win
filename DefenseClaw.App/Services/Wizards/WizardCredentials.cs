@@ -59,9 +59,16 @@ public sealed class WizardCredentials
     private HashSet<string>? _dotEnvNames;
     private DateTimeOffset _dotEnvReadAt;
 
-    public WizardCredentials(DefenseClawPaths paths)
+    private readonly Func<bool> _openClawTokenSeparate;
+
+    /// <param name="openClawTokenSeparate">
+    /// Whether the runtime keeps OPENCLAW_GATEWAY_TOKEN apart from its own token (1.0.10+, the same answer as
+    /// <see cref="TokenResolver.OpenClawTokenSeparate"/>); null means no (1.0.9 and earlier).
+    /// </param>
+    public WizardCredentials(DefenseClawPaths paths, Func<bool>? openClawTokenSeparate = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _openClawTokenSeparate = openClawTokenSeparate ?? (static () => false);
     }
 
     /// <summary>True for a name that is safe to hand to <c>keys set</c> and to a console command line.</summary>
@@ -94,9 +101,11 @@ public sealed class WizardCredentials
         }
 
         // The runtime matches its own gateway token's name without regard to case on Windows (1.0.4), as the environment above already does.
+        // From 1.0.10 OPENCLAW_GATEWAY_TOKEN is the OpenClaw credential, not one of those names, so it keeps the exact match.
+        var separate = _openClawTokenSeparate();
         var stored = names.Contains(envName!) ||
-                     (DefenseClaw.Core.Cli.GatewayTokenNames.IsGatewayToken(envName) &&
-                      names.Any(n => DefenseClaw.Core.Cli.GatewayTokenNames.IsGatewayToken(n) && n.Equals(envName, StringComparison.OrdinalIgnoreCase)));
+                     (DefenseClaw.Core.Cli.GatewayTokenNames.IsGatewayToken(envName, null, separate) &&
+                      names.Any(n => DefenseClaw.Core.Cli.GatewayTokenNames.IsGatewayToken(n, null, separate) && n.Equals(envName, StringComparison.OrdinalIgnoreCase)));
         return stored ? CredentialPresence.InDotEnv : CredentialPresence.NotSet;
     }
 

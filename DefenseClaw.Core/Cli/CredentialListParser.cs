@@ -36,20 +36,30 @@ public sealed record CredentialRow(
 }
 
 /// <summary>
-/// The environment names that hold DefenseClaw's own gateway token (<c>cmd_keys.py</c> <c>_gateway_token_names</c>): <c>DEFENSECLAW_GATEWAY_TOKEN</c>,
-/// <c>OPENCLAW_GATEWAY_TOKEN</c> and the configured <c>gateway.token_env</c>. Up to 1.0.3 the match was exact everywhere; from 1.0.4 it ignores case on
+/// The environment names that hold DefenseClaw's own gateway token (<c>cmd_keys.py</c> <c>_gateway_token_names</c>). Up to 1.0.9:
+/// <c>DEFENSECLAW_GATEWAY_TOKEN</c>, <c>OPENCLAW_GATEWAY_TOKEN</c> and the configured <c>gateway.token_env</c>. From 1.0.10
+/// (<see cref="For"/>): <c>DEFENSECLAW_GATEWAY_TOKEN</c> plus <c>gateway.token_env</c> unless that names <c>OPENCLAW_GATEWAY_TOKEN</c>, which is the
+/// OpenClaw credential. Up to 1.0.3 the match was exact everywhere; from 1.0.4 it ignores case on
 /// Windows (<c>_gateway_token_name</c> casefolds there), so <c>defenseclaw_gateway_token</c> is the same variable, as the environment treats it.
 /// </summary>
 public static class GatewayTokenNames
 {
-    /// <summary>The two names every runtime knows.</summary>
-    public static IReadOnlyList<string> Builtin { get; } = ["DEFENSECLAW_GATEWAY_TOKEN", "OPENCLAW_GATEWAY_TOKEN"];
+    private const string OpenClawName = "OPENCLAW_GATEWAY_TOKEN";
+
+    /// <summary>The two names every runtime up to 1.0.9 knows.</summary>
+    public static IReadOnlyList<string> Builtin { get; } = ["DEFENSECLAW_GATEWAY_TOKEN", OpenClawName];
+
+    private static readonly IReadOnlyList<string> Separate = ["DEFENSECLAW_GATEWAY_TOKEN"];
+
+    /// <summary>The built-in names for a runtime: <see cref="Builtin"/> up to 1.0.9, without the OpenClaw name from 1.0.10.</summary>
+    public static IReadOnlyList<string> For(bool openClawTokenSeparate) => openClawTokenSeparate ? Separate : Builtin;
 
     /// <summary>
-    /// True when <paramref name="name"/> is a gateway token name: one of <see cref="Builtin"/> or <paramref name="configuredTokenEnv"/>, ignoring case
-    /// (this app only runs on Windows, where the runtime does the same).
+    /// True when <paramref name="name"/> is a gateway token name: one of <see cref="For"/> (<see cref="Builtin"/> by default) or
+    /// <paramref name="configuredTokenEnv"/>, ignoring case (this app only runs on Windows, where the runtime does the same).
+    /// On 1.0.10 a <paramref name="configuredTokenEnv"/> that names OPENCLAW_GATEWAY_TOKEN does not count.
     /// </summary>
-    public static bool IsGatewayToken(string? name, string? configuredTokenEnv = null)
+    public static bool IsGatewayToken(string? name, string? configuredTokenEnv = null, bool openClawTokenSeparate = false)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -57,8 +67,11 @@ public static class GatewayTokenNames
         }
 
         var trimmed = name.Trim();
-        return Builtin.Any(b => b.Equals(trimmed, StringComparison.OrdinalIgnoreCase)) ||
-               (!string.IsNullOrWhiteSpace(configuredTokenEnv) && configuredTokenEnv.Trim().Equals(trimmed, StringComparison.OrdinalIgnoreCase));
+        var configured = configuredTokenEnv?.Trim();
+        var configuredCounts = !string.IsNullOrEmpty(configured) &&
+                               !(openClawTokenSeparate && configured.Equals(OpenClawName, StringComparison.OrdinalIgnoreCase));
+        return For(openClawTokenSeparate).Any(b => b.Equals(trimmed, StringComparison.OrdinalIgnoreCase)) ||
+               (configuredCounts && configured!.Equals(trimmed, StringComparison.OrdinalIgnoreCase));
     }
 }
 

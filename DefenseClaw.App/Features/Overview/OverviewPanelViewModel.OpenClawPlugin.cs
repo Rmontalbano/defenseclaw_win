@@ -41,13 +41,17 @@ public sealed partial class OverviewPanelViewModel
         {
             AppendOpenClawPluginRow(rows);
         }
-        else if (_openClawDetected && !ManagedConnectorNames().Contains("openclaw"))
+        else if (_openClawDetected && ManagedConnectorNames() is var configured && !configured.Contains("openclaw"))
         {
+            // OpenClaw runs alone in 1.0.10: setup openclaw refuses while hook connectors are configured (cmd_setup.py@1.0.10:15501-15524).
+            var alone = configured.Any()
+                ? " OpenClaw runs alone in this release: its setup refuses while other connectors are configured, and 'setup openclaw --replace' removes them."
+                : string.Empty;
             rows.Add(new AttentionRow
             {
                 Title = "OpenClaw found, not set up",
                 Detail = "DefenseClaw found OpenClaw on this machine, but no connector is configured for it, so its tool calls are not checked. " +
-                         "Set it up from Setup -> OpenClaw. Discovery alone never changes enforcement.",
+                         "Set it up from Setup -> OpenClaw. Discovery alone never changes enforcement." + alone,
                 SeverityKey = "Info",
             });
         }

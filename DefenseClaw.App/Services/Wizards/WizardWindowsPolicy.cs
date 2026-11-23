@@ -1,3 +1,5 @@
+using DefenseClaw.Core.Runtime;
+
 namespace DefenseClaw.App.Services.Wizards;
 
 /// <summary>
@@ -87,8 +89,9 @@ public static class WizardWindowsPolicy
     public const string LocalObservabilityTarget = "local-observability";
 
     /// <summary>
-    /// Command words that name something Windows does not run: sandboxes, OpenClaw, ZeptoClaw and anything the CLI's own summary says needs
-    /// Docker or the <c>--with-local-stack</c> flow. <c>local-observability</c> is not here: see <see cref="LocalObservabilityTarget"/>.
+    /// Command words that name something Windows does not run: sandboxes, OpenClaw (before 1.0.10: from then it runs on native Windows, see
+    /// <see cref="HidesCommand"/>), ZeptoClaw and anything the CLI's own summary says needs Docker or the <c>--with-local-stack</c> flow.
+    /// <c>local-observability</c> is not here: see <see cref="LocalObservabilityTarget"/>.
     /// </summary>
     private static readonly string[] HiddenWords = { "sandbox", "openclaw", "zeptoclaw", "docker", "local-stack" };
 
@@ -99,12 +102,22 @@ public static class WizardWindowsPolicy
     /// </summary>
     /// <param name="path">The command's nouns, e.g. <c>sandbox list</c>.</param>
     /// <param name="summary">Its one-line help summary; may be empty.</param>
-    public static bool HidesCommand(IReadOnlyList<string> path, string summary)
+    /// <param name="capabilities">
+    /// The connected runtime's. With <see cref="RuntimeCapability.OpenClawNativeWindows"/> (1.0.10) the <c>openclaw</c> word no longer hides a command;
+    /// null, or any older runtime, keeps it hidden.
+    /// </param>
+    public static bool HidesCommand(IReadOnlyList<string> path, string summary, RuntimeCapabilities? capabilities = null)
     {
         ArgumentNullException.ThrowIfNull(path);
 
+        var openClawRuns = capabilities is not null && capabilities.Has(RuntimeCapability.OpenClawNativeWindows);
         foreach (var word in HiddenWords)
         {
+            if (openClawRuns && word == "openclaw")
+            {
+                continue;
+            }
+
             if (path.Any(noun => noun.Contains(word, StringComparison.OrdinalIgnoreCase)) ||
                 (summary ?? string.Empty).Contains(word, StringComparison.OrdinalIgnoreCase))
             {
@@ -113,7 +126,7 @@ public static class WizardWindowsPolicy
         }
 
         return path.Count == 2 && string.Equals(path[0], "setup", StringComparison.Ordinal) &&
-               UnavailableReason(path[1], PlatformStatus.Certified) is not null;
+               UnavailableReason(path[1], PlatformStatus.Certified, capabilities) is not null;
     }
 
     /// <summary>
@@ -164,17 +177,25 @@ public static class WizardWindowsPolicy
         return SplunkDashboards.IsCommand(argv, out _);
     }
 
+    /// <summary>The Gateway card's reason on 1.0.10: OpenClaw runs on Windows, so the card stays off for another reason (<c>setup openclaw</c> sets the uplink).</summary>
+    private const string GatewayReasonOpenClawNative =
+        "Configures the OpenClaw uplink. On Windows, setup openclaw points it at OpenClaw's own local gateway; set up OpenClaw instead.";
+
     /// <summary>
     /// Why a hub card cannot be launched here, or null when it can. A target that needs Docker (<see cref="NeedsDocker"/>) is not
     /// decided here: whether Docker is ready is a fact about this machine right now, not about the platform.
     /// </summary>
-    public static string? UnavailableReason(string target, PlatformStatus status)
+    /// <param name="capabilities">The connected runtime's: with <see cref="RuntimeCapability.OpenClawNativeWindows"/> the Gateway card's reason no longer says OpenClaw is unsupported.</param>
+    public static string? UnavailableReason(string target, PlatformStatus status, RuntimeCapabilities? capabilities = null)
     {
         switch (target)
         {
             case "registry":
                 return "An interactive wizard that needs a real terminal — with none attached it exits before changing anything. " +
                        "Add, sync, approve and remove registries from the Registries panel (Discover) instead.";
+
+            case "gateway" when capabilities is not null && capabilities.Has(RuntimeCapability.OpenClawNativeWindows):
+                return GatewayReasonOpenClawNative;
 
             case "gateway":
                 return "Configures the OpenClaw fleet uplink (host, port, token). OpenClaw is unsupported on Windows, and a " +

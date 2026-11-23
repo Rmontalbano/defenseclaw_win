@@ -33,13 +33,14 @@ public sealed record ConfigFieldInfo(string Hint, IReadOnlyList<string>? Options
 /// <param name="Keys104">The runtime has the config keys 1.0.4 added (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.Config104Keys"/>, CUST-377): <c>scanners.mcp_scanner.unverified_server</c>, <c>openshell.trusted_ca_bundle</c> and the severity notes are in the catalogue; without it they are not, and the form is exactly what it was.</param>
 /// <param name="JudgeExtraBody">The runtime has <c>guardrail.judge.extra_body</c> (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.JudgeExtraBody"/>, 1.0.8): the catalogue offers the key and the form checks it; releases before 1.0.8 refuse a config that carries it, so without the flag the key is not offered.</param>
 /// <param name="OpenAiCompatibleProviders">The runtime has the <c>openai-compatible</c> and <c>custom-openai</c> LLM providers (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.OpenAiCompatibleProviders"/>, 1.0.8): the provider lists offer them and the form warns when they have no base URL.</param>
+/// <param name="OpenClawNativeWindows">OpenClaw runs on native Windows (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.OpenClawNativeWindows"/>, 1.0.10): the Windows connector pickers offer <c>openclaw</c>.</param>
 /// <param name="OpenShellMiddlewareRetired">The runtime retired <c>openshell.middleware.enabled</c> (<see cref="DefenseClaw.Core.Runtime.RuntimeCapability.OpenShellMiddlewareRetired"/>, 1.0.8): the form shows it read-only and warns that it does nothing.</param>
-public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false, bool Keys104 = false, bool SavedFailModeWins = false, bool JudgeExtraBody = false, bool OpenAiCompatibleProviders = false, bool OpenShellMiddlewareRetired = false)
+public sealed record ConfigChoiceProfile(string OsName, bool ExtendedConnectors, bool ConnectorsRetired = false, bool SavedFailModeIgnored = false, bool Keys104 = false, bool SavedFailModeWins = false, bool JudgeExtraBody = false, bool OpenAiCompatibleProviders = false, bool OpenShellMiddlewareRetired = false, bool OpenClawNativeWindows = false)
 {
     /// <summary>This machine's operating system, with the 0.8.10 connector set: what the editor uses until the runtime says otherwise.</summary>
     public static ConfigChoiceProfile ForHost(bool extendedConnectors = false, bool connectorsRetired = false, bool savedFailModeIgnored = false, bool keys104 = false, bool savedFailModeWins = false,
-        bool judgeExtraBody = false, bool openAiCompatibleProviders = false, bool openShellMiddlewareRetired = false) =>
-        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored, keys104, savedFailModeWins, judgeExtraBody, openAiCompatibleProviders, openShellMiddlewareRetired);
+        bool judgeExtraBody = false, bool openAiCompatibleProviders = false, bool openShellMiddlewareRetired = false, bool openClawNativeWindows = false) =>
+        new(HostOsName(), extendedConnectors, connectorsRetired, savedFailModeIgnored, keys104, savedFailModeWins, judgeExtraBody, openAiCompatibleProviders, openShellMiddlewareRetired, openClawNativeWindows);
 
     /// <summary>Windows with the 0.8.10 connector set: this app's own profile when no runtime has been probed.</summary>
     public static ConfigChoiceProfile Windows { get; } = new("windows", false);
@@ -135,7 +136,11 @@ public static class ConfigFieldCatalog
     /// </summary>
     private static readonly HashSet<string> WindowsAvailable0810 = new(StringComparer.Ordinal) { "codex", "claudecode" };
 
-    /// <summary>The same set at the pinned source: everything but openhands, openclaw and zeptoclaw is <c>supported</c> on native Windows there.</summary>
+    /// <summary>
+    /// The same set at the pinned source: everything but openhands, openclaw and zeptoclaw is <c>supported</c> on native Windows there. From 1.0.10
+    /// openclaw is supported too (<see cref="ConfigChoiceProfile.OpenClawNativeWindows"/>); <see cref="SupportedConnectors"/> adds it. The retired
+    /// <c>omnigent</c> is still named here for a runtime that predates 1.0.4.
+    /// </summary>
     private static readonly HashSet<string> WindowsAvailablePin = new(StringComparer.Ordinal)
     {
         "kiro", "codex", "claudecode", "cursor", "devin", "copilot", "antigravity", "opencode", "amp", "hermes", "omnigent",
@@ -189,8 +194,8 @@ public static class ConfigFieldCatalog
 
     /// <summary>
     /// <c>supported_connector_choices(os_name)</c> (<c>cli_choices.py:58-65</c>): <see cref="AllConnectors"/> without the ones <c>os</c> cannot run. On
-    /// Windows that keeps only the connectors the platform table calls supported or preview, which is why <c>claw.mode</c> never offers
-    /// openclaw or zeptoclaw there (and, on 0.8.10, none of the not-certified ones either). Everywhere else every connector stays.
+    /// Windows that keeps only the connectors the platform table calls supported or preview, which is why <c>claw.mode</c> does not offer
+    /// openclaw before 1.0.10 (it does from then, <see cref="ConfigChoiceProfile.OpenClawNativeWindows"/>) or zeptoclaw there (and, on 0.8.10, none of the not-certified ones either). Everywhere else every connector stays.
     /// </summary>
     public static IReadOnlyList<string> SupportedConnectors(ConfigChoiceProfile profile)
     {
@@ -203,7 +208,9 @@ public static class ConfigFieldCatalog
         }
 
         var available = profile.ExtendedConnectors ? WindowsAvailablePin : WindowsAvailable0810;
-        return all.Where(available.Contains).ToArray();
+
+        // 1.0.10: platform_support.py lists openclaw as supported on native Windows (native plugin hooks), so connector_supported_on_os keeps it.
+        return all.Where(c => available.Contains(c) || (profile.OpenClawNativeWindows && c == "openclaw")).ToArray();
     }
 
     // ------------------------------------------------------------------ the combo's items

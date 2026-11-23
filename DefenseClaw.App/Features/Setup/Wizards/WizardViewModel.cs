@@ -212,7 +212,7 @@ public sealed partial class WizardViewModel : ObservableObject, IDisposable
         Definition = WizardFailModeRule.Apply(
             WizardBaseline.Apply(definition, services.Config, services.ConfigLoadError is null),
             DefenseClaw.Core.Config.HookFailModeRule.SavedValueIgnored(services.Runtime.Capabilities, services.Installation.Context.IsManaged));
-        Credentials = new WizardCredentials(services.Paths);
+        Credentials = new WizardCredentials(services.Paths, () => services.TokenResolver.OpenClawTokenSeparate());
 
         foreach (var step in Definition.Steps)
         {

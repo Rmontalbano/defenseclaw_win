@@ -241,7 +241,8 @@ public static class SecretRoutes
             }
 
             // Terminal only: `if token is not None: _save_secret_to_dotenv(...)` — the flag is the only source. An
-            // OPENCLAW_GATEWAY_TOKEN in the environment is consulted (`gw.resolved_token()`) but never written to .env.
+            // OPENCLAW_GATEWAY_TOKEN in the environment is consulted (`gw.resolved_token()`, up to 1.0.9; from 1.0.10 it is the OpenClaw
+            // credential, not DefenseClaw's token, and that call no longer reads it) but never written to .env.
             case ("gateway", "--token"):
                 return new SecretRoute
                 {

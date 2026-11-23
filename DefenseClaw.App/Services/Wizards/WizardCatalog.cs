@@ -441,6 +441,7 @@ public sealed partial class WizardCatalog
         // Last, because it regroups pages: splunk's flat flag list becomes a guided first step plus one page per pipeline,
         // and galileo gets its "what you need" page. Built from the same fields, so argv and secret routes are unchanged.
         steps = WizardWalkthroughs.Apply(target, steps, result.Text);
+        steps = OpenClawSetupIntro.Apply(target, steps, _capabilities?.Invoke());
 
         // Last of all, the "what do you want to do?" page in front of the wizards that have goals (llm, guardrail, the hook connectors, splunk): the
         // goals are kept to what the flags above really are.

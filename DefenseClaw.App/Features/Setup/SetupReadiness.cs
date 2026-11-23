@@ -140,8 +140,8 @@ public static class SetupReadiness
         var checks = new List<ReadinessCheck>();
         var config = inputs.Config;
 
-        // Active connectors. The TUI's fix here is `setup openclaw --yes`; OpenClaw is not supported on Windows (the Setup hub lists it
-        // under "not available"), so the row says what is missing and the connector cards above are where it gets added.
+        // Active connectors. The TUI's fix here is `setup openclaw --yes`; before 1.0.10 OpenClaw is not supported on Windows (the Setup hub lists it
+        // under "not available"; from 1.0.10 it has its own setup card), so the row says what is missing and the connector cards above are where it gets added.
         if (inputs.ActiveConnectors.Count > 0)
         {
             foreach (var connector in inputs.ActiveConnectors)

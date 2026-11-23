@@ -71,6 +71,7 @@ public static class WizardCautions
 
         // acp setup (CUST-294): action mode blocks, the editor's file is rewritten, a managed enrollment is the administrator's.
         warnings.AddRange(AcpGuardReview.Warnings(argv));
+        warnings.AddRange(OpenClawReplaceReview.Warnings(argv));
 
         return warnings;
     }
@@ -82,7 +83,7 @@ public static class WizardCautions
     public static CommandTier? Floor(IReadOnlyList<string> argv)
     {
         ArgumentNullException.ThrowIfNull(argv);
-        return GuardrailScope.IsDisableCommand(argv) ? CommandTier.Destructive : null;
+        return GuardrailScope.IsDisableCommand(argv) || OpenClawReplaceReview.Applies(argv) ? CommandTier.Destructive : null;
     }
 
     private static string DisableSentence(IReadOnlyList<string> options)

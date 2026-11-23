@@ -184,7 +184,9 @@ public sealed class AppServices : IDisposable
         Runtime = new RuntimeService(Paths, runtimeProbeRunner);
         // 1.0.7+ gateways skip a secret-reference gateway token; 1.0.5/1.0.6 use it as is, so the app does too until the runtime says otherwise.
         TokenResolver.SkipSecretReferences = () => Runtime.Check(RuntimeCapability.SecretRefGatewayTokenSkipped).IsAvailable;
-        _tokenSkipApplied = TokenResolver.SkipSecretReferences();
+        // 1.0.10+ keeps the OpenClaw token apart from the API token (never takes OPENCLAW_GATEWAY_TOKEN as it).
+        TokenResolver.OpenClawTokenSeparate = () => Runtime.Check(RuntimeCapability.OpenClawTokenSeparate).IsAvailable;
+        _tokenSkipApplied = (TokenResolver.SkipSecretReferences(), TokenResolver.OpenClawTokenSeparate());
         Runtime.Changed += OnRuntimeChangedForToken;
 
         // "Use this defenseclaw.exe" (Settings → Connection) reaches every CLI lookup through the paths, before anything has looked one
@@ -463,12 +465,12 @@ public sealed class AppServices : IDisposable
 
     private void OnMonitorStateForAdmin(object? sender, GatewaySnapshotEventArgs e) => GatewayAdmin.RequestRefresh();
 
-    private bool _tokenSkipApplied;
+    private (bool SkipReferences, bool OpenClawSeparate) _tokenSkipApplied;
 
     // The token is resolved at config load and cached, so a runtime that turns out to be 1.0.7+ (or changes version) re-resolves it.
     private void OnRuntimeChangedForToken(object? sender, EventArgs e)
     {
-        var skip = TokenResolver.SkipSecretReferences();
+        var skip = (TokenResolver.SkipSecretReferences(), TokenResolver.OpenClawTokenSeparate());
         if (skip == _tokenSkipApplied)
         {
             return;

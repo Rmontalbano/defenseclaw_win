@@ -18,7 +18,7 @@ namespace DefenseClaw.App.ViewModels;
 /// </para>
 /// <para>
 /// <b>Gateway.</b> The TUI's Gateway row reads <c>/health</c>'s <c>gateway</c> block, which is the optional OpenClaw fleet uplink: <c>disabled</c>
-/// on every install without an OpenClaw fleet, and OpenClaw does not run on Windows, so always. The TUI's own status strip says so (it reports the
+/// on every install without an OpenClaw fleet, and before 1.0.10 OpenClaw does not run on Windows, so always (from 1.0.10 it can, and then the uplink is OpenClaw's own local gateway). The TUI's own status strip says so (it reports the
 /// sidecar's availability, "not the optional fleet uplink") and so does this card: the state word is the gateway's availability as this app measures
 /// it (the poll that produced the snapshot), and the uplink moves to the detail line (<c>no OpenClaw fleet configured (standalone mode)</c>). An
 /// uplink that is in use (any state but <c>disabled</c>) speaks for itself.

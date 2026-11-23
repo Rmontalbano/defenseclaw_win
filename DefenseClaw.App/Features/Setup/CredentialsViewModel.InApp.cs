@@ -291,7 +291,7 @@ public sealed partial class CredentialsViewModel
     /// <summary>A row for a variable the CLI's list does not have: only what the app can honestly say (whether a value is there, from the same look the wizards take).</summary>
     private CredentialRow NamedRow(string envName)
     {
-        var presence = new WizardCredentials(_services.Paths).Check(envName, fresh: true);
+        var presence = new WizardCredentials(_services.Paths, () => _services.TokenResolver.OpenClawTokenSeparate()).Check(envName, fresh: true);
         var isSet = presence is CredentialPresence.InDotEnv or CredentialPresence.InEnvironment;
         return new CredentialRow(
             envName,

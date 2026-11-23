@@ -13,7 +13,7 @@
              Focusable="False">
     <!--
         Connector batch (CUST-271): the batch form of `defenseclaw setup` (yes, connector, mode flags) as a dialog on the Setup hub. The connectors config.yaml
-        has start ticked, so doing nothing drops nothing; the command that results is shown here and again in the review. DataContext is a
+        has start ticked, so doing nothing drops nothing (from 1.0.10 a configured connector starts unticked and is left as it was; ticking it updates it); the command that results is shown here and again in the review. DataContext is a
         ConnectorBatchViewModel (the Setup panel binds it: DataContext="{Binding Batch}").
     -->
     <UserControl.Resources>
@@ -92,6 +92,8 @@
                                         Message="{Binding HelpProblem, Mode=OneWay}" />
 
                             <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,10" Text="{Binding RosterLine}" />
+                            <TextBlock Style="{StaticResource DcCaption}" Margin="0,0,0,10" TextWrapping="Wrap" Text="{Binding RosterNote}"
+                                       Visibility="{Binding HasRosterNote, Converter={StaticResource BoolToVisibility}}" />
 
                             <StackPanel IsEnabled="{Binding CanEdit}">
                                 <ctl:DcCardHeader Margin="0,0,0,8" AutomationProperties.HeadingLevel="Level2"

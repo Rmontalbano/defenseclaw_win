@@ -30,7 +30,7 @@ public sealed record OfferedConnector(string Id, string Label, string Alias, Pla
 /// names map onto the CLI's two spellings, which are offered on Windows, and which of the detected ones are not configured yet. All pure.
 /// <para>
 /// Mirrors the Mac's <c>ConnectorOnboarding</c> (first run is hook-only: <c>openclaw</c> and <c>zeptoclaw</c> are proxy connectors with
-/// their own setup and never enter this plan), with the Windows filter on top: <see cref="WizardWindowsPolicy"/> and the CLI's own
+/// their own setup and never enter this plan; OpenClaw runs on Windows from 1.0.10 and keeps its own setup card there), with the Windows filter on top: <see cref="WizardWindowsPolicy"/> and the CLI's own
 /// <c>Platform status on windows</c> line, which the Setup catalog has already parsed from <c>setup &lt;target&gt; --help</c>.
 /// </para>
 /// </summary>

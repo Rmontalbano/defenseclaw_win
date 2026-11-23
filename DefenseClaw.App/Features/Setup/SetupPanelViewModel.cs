@@ -280,6 +280,15 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
         // The ACP Guard tile follows the runtime's answer (CUST-385).
         RefreshAreas();
+
+        // The Gateway card's reason names the runtime (1.0.10: OpenClaw runs on Windows).
+        foreach (var card in _all)
+        {
+            if (string.Equals(card.Target, "gateway", StringComparison.Ordinal))
+            {
+                card.Apply(card.Definition);
+            }
+        }
     }
 
     /// <summary>Shows these definitions as the tile grid without asking the CLI (tests).</summary>
@@ -452,7 +461,7 @@ public sealed partial class SetupPanelViewModel : PanelViewModelBase, IAcceptsNa
 
     private void AddCard(WizardDefinition definition)
     {
-        var card = new WizardCardViewModel(definition, () => Services.Installation.BlockedReason);
+        var card = new WizardCardViewModel(definition, () => Services.Installation.BlockedReason, () => Services.Runtime.Capabilities);
         card.OpensEditor = ResourceFor(card) is not null;
 
         // A card that needs Docker or Terraform starts from what is known now: the held answer, or "Checking for …" before the first.
@@ -1428,15 +1437,19 @@ public sealed partial class WizardCardViewModel : ObservableObject
 
     private readonly Func<string?>? _installationBlockedReason;
 
+    private readonly Func<DefenseClaw.Core.Runtime.RuntimeCapabilities?>? _capabilities;
+
     /// <param name="definition">What the card shows.</param>
     /// <param name="installationBlockedReason">
     /// Why nothing may be changed on the installation right now (it is managed or invalid), asked each time the card is drawn; null, or one that
     /// answers null, means the wizard may be opened. A card the platform policy cannot offer at all, or that Docker (or Terraform) rules out
     /// right now, is a different thing (<see cref="UnavailableReason"/>); the installation's reason comes first when both apply.
     /// </param>
-    public WizardCardViewModel(WizardDefinition definition, Func<string?>? installationBlockedReason = null)
+    /// <param name="capabilities">The connected runtime's capabilities, for the platform policy's runtime-dependent reasons (the Gateway card, 1.0.10); null reads as none.</param>
+    public WizardCardViewModel(WizardDefinition definition, Func<string?>? installationBlockedReason = null, Func<DefenseClaw.Core.Runtime.RuntimeCapabilities?>? capabilities = null)
     {
         _installationBlockedReason = installationBlockedReason;
+        _capabilities = capabilities;
         Target = definition?.Target ?? throw new ArgumentNullException(nameof(definition));
         Group = definition.Group;
         Apply(definition);
@@ -1584,7 +1597,7 @@ public sealed partial class WizardCardViewModel : ObservableObject
 
         // In order of how final each answer is: the platform's (the CLI says it is unsupported here), the CLI's (it has no such command), then
         // the live looks (Docker, Terraform), which a card needs at most one of.
-        UnavailableReason = WizardWindowsPolicy.UnavailableReason(Target, definition.PlatformStatus)
+        UnavailableReason = WizardWindowsPolicy.UnavailableReason(Target, definition.PlatformStatus, _capabilities?.Invoke())
             ?? (definition.UnavailableReason.Length > 0 ? definition.UnavailableReason : null)
             ?? (_dockerReason.Length > 0 ? _dockerReason : _terraformReason);
         Group = IsAvailable ? definition.Group : WizardGroups.Unavailable;

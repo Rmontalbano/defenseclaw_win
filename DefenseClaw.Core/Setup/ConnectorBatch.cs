@@ -23,9 +23,14 @@ public enum BatchExtra
 /// say "(no subcommand)": they act only when no connector subcommand follows, so this argv has none.
 /// </para>
 /// <para>
-/// <b>It sets the roster, not adds to it.</b> The batch configures the connectors it selects; a connector that is configured now and not selected is
-/// not carried over (the TUI pre-checks the active ones for that reason). The dialog starts with the configured connectors ticked and warns
+/// <b>Before 1.0.10 it sets the roster, not adds to it.</b> The batch configures the connectors it selects; a connector that is configured now and not
+/// selected is not carried over (the TUI pre-checks the active ones for that reason). The dialog starts with the configured connectors ticked and warns
 /// when one is unticked.
+/// </para>
+/// <para>
+/// <b>From 1.0.10 it adds or updates the connectors it names and keeps every other one</b> with its own mode, fail mode and judge, unless the configured
+/// roster is empty or holds openclaw or zeptoclaw (that roster is still replaced): <c>cmd_setup.py</c> at 1.0.10, <c>_roster_accepts_hook_merge</c> and
+/// the dispatch just after it. The runtime's capability is <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.SetupKeepsRoster"/>; the argv is the same.
 /// </para>
 /// </summary>
 public static class ConnectorBatch

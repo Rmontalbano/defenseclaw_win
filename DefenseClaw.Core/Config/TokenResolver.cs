@@ -69,12 +69,15 @@ public sealed class DictionaryEnvironmentReader : IEnvironmentReader
 }
 
 /// <summary>
-/// Replicates the CLI's gateway-token priority ladder:
+/// Replicates the runtime's gateway-token priority ladder. Up to 1.0.9:
 /// <list type="number">
 ///   <item>process environment variable named by <c>gateway.token_env</c>,</item>
 ///   <item>that same variable in <c>~/.defenseclaw/.env</c>,</item>
 ///   <item>a literal <c>gateway.token</c> in config.yaml.</item>
 /// </list>
+/// From 1.0.10 (<see cref="OpenClawTokenSeparate"/>) the OpenClaw token is not DefenseClaw's: the names tried are
+/// <c>gateway.token_env</c> then <c>DEFENSECLAW_GATEWAY_TOKEN</c> (each from the environment, then .env), a name that is
+/// <c>OPENCLAW_GATEWAY_TOKEN</c> is skipped, a value equal to the OpenClaw token is skipped, then the literal.
 /// Empty or whitespace-only values at a rung are treated as absent and the walk continues.
 /// <para>
 /// <b>Every rung is trimmed</b> — a token pasted into an environment variable or a config line
@@ -110,9 +113,21 @@ public sealed partial class TokenResolver
     /// </summary>
     public Func<bool> SkipSecretReferences { get; set; } = static () => false;
 
+    /// <summary>
+    /// Whether the runtime keeps the OpenClaw token apart from its own API token (RuntimeCapability.OpenClawTokenSeparate, 1.0.10+).
+    /// Read at every resolve. The default, and the answer while the runtime is unknown, is false: a 1.0.9 or earlier gateway still
+    /// accepts the variable <c>gateway.token_env</c> names, whatever it is called, so the app does too.
+    /// </summary>
+    public Func<bool> OpenClawTokenSeparate { get; set; } = static () => false;
+
     public TokenResolution Resolve(DefenseClawConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
+
+        if (OpenClawTokenSeparate())
+        {
+            return ResolveSeparate(config);
+        }
 
         var variableName = config.Gateway.TokenEnv;
         string? note = null;
@@ -136,6 +151,77 @@ public sealed partial class TokenResolver
         }
 
         return new TokenResolution(null, TokenSource.None, variableName) { Note = note };
+    }
+
+    private const string OpenClawVariable = "OPENCLAW_GATEWAY_TOKEN";
+    private const string CanonicalVariable = "DEFENSECLAW_GATEWAY_TOKEN";
+
+    /// <summary>
+    /// The 1.0.10 order (config.go ResolvedToken): the OpenClaw token is not DefenseClaw's. Candidate names are
+    /// [gateway.token_env, DEFENSECLAW_GATEWAY_TOKEN]; a blank name or one naming OPENCLAW_GATEWAY_TOKEN (any case) is skipped;
+    /// a value equal to the OpenClaw token is skipped; then the literal gateway.token, under the same rule.
+    /// </summary>
+    private TokenResolution ResolveSeparate(DefenseClawConfig config)
+    {
+        string? note = null;
+        var dotEnv = _dotEnvProvider();
+        var openClaw = OpenClawToken(dotEnv);
+
+        var configured = config.Gateway.TokenEnv?.Trim();
+        if (!string.IsNullOrEmpty(configured) && IsOpenClawName(configured))
+        {
+            // Names the variable only. 'doctor --fix' rewrites a config that still names it (CHANGELOG 1.0.10).
+            note = $"gateway.token_env names {OpenClawVariable}, which DefenseClaw 1.0.10 no longer accepts as its API token; run 'defenseclaw doctor --fix'.";
+        }
+
+        var names = new List<string>(2);
+        if (!string.IsNullOrEmpty(configured) && !IsOpenClawName(configured))
+        {
+            names.Add(configured);
+        }
+
+        names.Add(CanonicalVariable);
+        var reported = names[0];
+
+        bool Usable(string? value) => value is not null && (openClaw is null || value != openClaw);
+
+        foreach (var name in names)
+        {
+            if (Clean(_environment.GetVariable(name), $"{name} in the process environment", true, ref note) is { } fromEnvironment && Usable(fromEnvironment))
+            {
+                return new TokenResolution(new SecretValue(fromEnvironment), TokenSource.Environment, name) { Note = note };
+            }
+
+            dotEnv.TryGetValue(name, out var rawDotEnv);
+            if (Clean(rawDotEnv, $"{name} in .env", true, ref note) is { } fromDotEnv && Usable(fromDotEnv))
+            {
+                return new TokenResolution(new SecretValue(fromDotEnv), TokenSource.DotEnvFile, name) { Note = note };
+            }
+        }
+
+        if (Clean(config.Gateway.Token, "gateway.token in config.yaml", true, ref note) is { } fromConfig && Usable(fromConfig))
+        {
+            return new TokenResolution(new SecretValue(fromConfig), TokenSource.ConfigLiteral, reported) { Note = note };
+        }
+
+        return new TokenResolution(null, TokenSource.None, reported) { Note = note };
+    }
+
+    private static bool IsOpenClawName(string name) =>
+        name.Trim().Equals(OpenClawVariable, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The OpenClaw token the way the runtime reads it: process environment, else .env; a secret reference is not a token. Null when none.</summary>
+    private string? OpenClawToken(IReadOnlyDictionary<string, string> dotEnv)
+    {
+        var fromEnvironment = _environment.GetVariable(OpenClawVariable)?.Trim();
+        if (!string.IsNullOrEmpty(fromEnvironment) && !IsSecretRefText(fromEnvironment))
+        {
+            return fromEnvironment;
+        }
+
+        dotEnv.TryGetValue(OpenClawVariable, out var raw);
+        var fromFile = raw?.Trim();
+        return !string.IsNullOrEmpty(fromFile) && !IsSecretRefText(fromFile) ? fromFile : null;
     }
 
     // Same shape as the runtime's check: one line, braces around a "source" key. No Singleline, so "." stops at a newline.
