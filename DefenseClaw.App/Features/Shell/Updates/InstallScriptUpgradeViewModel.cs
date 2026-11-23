@@ -698,6 +698,11 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             warnings.Add(new CommandReviewWarning(RollbackConfigKeys.WarningTitle, config.Warning));
         }
 
+        if (_routeOnlyWarning is { } routeOnly)
+        {
+            warnings.Add(new CommandReviewWarning(RouteOnlyRollback.WarningTitle, routeOnly));
+        }
+
         return new CommandReview
         {
             Title = "Roll DefenseClaw back with install.ps1 -Rollback?",
@@ -911,6 +916,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             var coworkRuns = CoworkPluginRunsAfterRemoval();
             var leftovers = await Task.Run(() => PostUpgradeLeftovers.Evaluate(_leftovers, coworkLeft, UninstallRemovesSetup(installed) || recoverConfigNow, coworkRuns)).ConfigureAwait(true);
             var rollbackConfig = await Task.Run(() => ReadRollbackConfig(state.PreviousVersion)).ConfigureAwait(true);
+            var routeOnlyWarning = await Task.Run(() => ReadRouteOnlyWarning(state.PreviousVersion)).ConfigureAwait(true);
 
             // What the installer's rollback will do about a Codex that changed since the older install set it up (CUST-399; hashes codex.exe) or an OpenCode V2 (CUST-424).
             var agentNote = await Task.Run(() => RollbackAgentPreflight.Read(dataDirectory, installer, installed, now)).ConfigureAwait(true);
@@ -943,6 +949,7 @@ public sealed partial class InstallScriptUpgradeViewModel : ObservableObject, ID
             OnPropertyChanged(nameof(RollbackLabel));
             _rollbackAgentNote = agentNote;
             _rollbackConfig = rollbackConfig;
+            _routeOnlyWarning = routeOnlyWarning;
             ApplyRollbackState(InstallScriptPlan.CheckRollback(dataDirectory, coworkLeft, coworkRuns));
 
             LeftoverRows.Clear();

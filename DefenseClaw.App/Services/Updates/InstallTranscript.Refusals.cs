@@ -147,7 +147,7 @@ public static partial class InstallTranscript
 
             if (EndsNothingChanged.IsMatch(line))
             {
-                return new InstallerRefusal(InstallerRefusalKind.NothingChanged, Cap(line), GenericNextStep);
+                return UvRecordRefusal(lines, at, line) ?? new InstallerRefusal(InstallerRefusalKind.NothingChanged, Cap(line), GenericNextStep);
             }
         }
 

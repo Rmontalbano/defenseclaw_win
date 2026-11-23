@@ -16,7 +16,7 @@ namespace DefenseClaw.Core.Config;
 /// answers null for it so the caller falls back to the default instead of guessing.
 /// </para>
 /// </summary>
-public sealed class ConfigYamlReader
+public sealed partial class ConfigYamlReader
 {
     /// <summary>The longest config.yaml read (it is a few KiB; the same bound the other config readers use).</summary>
     public const int MaxLength = 1024 * 1024;

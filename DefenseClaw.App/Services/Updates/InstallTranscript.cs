@@ -88,6 +88,12 @@ public enum InstallerRefusalKind
     /// The sentence says "Nothing was changed" in its middle, not at its end, and its reason is kept whole (the fix is its tail).
     /// </summary>
     UvCacheTooDeep,
+
+    /// <summary>
+    /// install.ps1 1.0.10 <c>Repair-DamagedPackages</c>: in the staging environment, Python packages still differ from their wheels after a fresh download, so the
+    /// run stopped with nothing changed. The fix is to delete the uv cache folder, which the sentence names (its "run the installer again" is not this app's step).
+    /// </summary>
+    UvCacheDamaged,
 }
 
 /// <summary>A refusal: the installer's line (sanitized, capped) and the next step it named.</summary>
@@ -104,6 +110,9 @@ public enum InstallerNoticeKind
 
     /// <summary>A rollback to 1.0.3 or earlier finished, but Codex changed since that release set it up: it starts without Codex hooks.</summary>
     CodexNeedsSetup,
+
+    /// <summary>A rollback's <c>prepare-rollback</c> step failed: a route-only agent gets 401 until DefenseClaw's base URL and route header are removed from its settings (install.ps1 1.0.10).</summary>
+    AgentSettingsNotPutBack,
 }
 
 /// <summary>One installer notice: a short title for the row and the installer's sentence (sanitized), with the command it named.</summary>
@@ -266,6 +275,10 @@ public static partial class InstallTranscript
             else if (CodexNeedsSetupLine.Match(line) is { Success: true } codex)
             {
                 Add(new InstallerNotice(InstallerNoticeKind.CodexNeedsSetup, "Codex hooks", Cap(Sanitize(codex.Groups["text"].Value)) + "."));
+            }
+            else if (RouteOnlyNotice(line) is { } routeOnly)
+            {
+                Add(routeOnly);
             }
         }
 

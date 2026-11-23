@@ -30,8 +30,15 @@ public static class RollbackConfigKeys
             return null;
         }
 
-        var note = "DefenseClaw " + normalized + " does not accept " + string.Join(", ", keys) + ", so those settings are not in the config.yaml it gets back. " +
+        var note = "DefenseClaw " + normalized + " does not accept " + Listed(keys) + ", so those settings are not in the config.yaml it gets back. " +
                    "Today's config.yaml is kept in previous\\data: 'defenseclaw rollback' again brings it back.";
         return new Result(keys, note, "Rollback puts back the config.yaml saved when you upgraded. " + note);
     }
+
+    private const int MaxListed = 10;
+
+    private static string Listed(IReadOnlyList<string> keys) =>
+        keys.Count <= MaxListed
+            ? string.Join(", ", keys)
+            : string.Join(", ", keys.Take(MaxListed)) + ", and " + (keys.Count - MaxListed).ToString(System.Globalization.CultureInfo.InvariantCulture) + " more";
 }

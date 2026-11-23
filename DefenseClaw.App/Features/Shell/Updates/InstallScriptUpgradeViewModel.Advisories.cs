@@ -13,6 +13,9 @@ public sealed partial class InstallScriptUpgradeViewModel
     // What the last install-state read found in today's config.yaml that the version in previous\VERSION refuses; null when nothing.
     private RollbackConfigKeys.Result? _rollbackConfig;
 
+    // The review warning for route-only agents (RouteOnlyRollback), from the same read; null when none.
+    private string? _routeOnlyWarning;
+
     /// <summary>Whether the app's uninstall copy should add the Cowork plugin sentence: the runtime knows Cowork and its plugin-state file exists.</summary>
     private bool CoworkPluginLeft() =>
         CoworkUninstall.Applies(_services.Runtime.Capabilities.Has(RuntimeCapability.CoworkProtection), _services.Paths.DataDirectory);
@@ -38,6 +41,21 @@ public sealed partial class InstallScriptUpgradeViewModel
             var path = _services.Paths.ConfigFilePath;
             var info = new FileInfo(path);
             return info.Exists && info.Length <= 1024 * 1024 ? RollbackConfigKeys.Evaluate(File.ReadAllText(path), backTo) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads today's config.yaml and the kept version for <see cref="RouteOnlyRollback"/>; null when unreadable or nothing applies.</summary>
+    private string? ReadRouteOnlyWarning(string? backTo)
+    {
+        try
+        {
+            var path = _services.Paths.ConfigFilePath;
+            var info = new FileInfo(path);
+            return info.Exists && info.Length <= 1024 * 1024 ? RouteOnlyRollback.Evaluate(File.ReadAllText(path), backTo) : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
