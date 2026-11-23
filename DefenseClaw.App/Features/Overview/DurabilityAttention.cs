@@ -140,7 +140,9 @@ internal static class DurabilityAttention
             });
         }
 
-        // Incident A. The pinned path is checked while the gateway is still up: the next start is the one that fails.
+        // Incident A. The pinned path is checked while the gateway is still up: the next start is the one that fails. This is the folder-moving update, which
+        // stops every runtime's gateway at start (1.0.10 included: codex_policy.go@1.0.10:283-291). An update in place (same path, new bytes) stops only 1.0.9 and
+        // earlier; 1.0.10 keeps the gateway up and lists the connector as not started, which is OverviewPanelViewModel.AgentUpdated.cs's row, not this one.
         var stale = snapshot.LastFailure as GatewayExitReason.StaleAgentExecutable;
         var missingPath = facts.CodexExecutableMissing ? facts.CodexPin!.Executable : facts.CodexPin is null ? stale?.Path : null;
         if (missingPath is not null)

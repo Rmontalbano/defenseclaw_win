@@ -6,7 +6,8 @@ namespace DefenseClaw.Core.Gateway.Durability;
 /// <summary>
 /// The agent executable DefenseClaw 1.0 has pinned for a connector, and whether it is still on disk. Codex desktop updates itself into a new
 /// versioned folder (<c>bin\&lt;hash&gt;\codex.exe</c>) and deletes the old one; the gateway never checks that the pinned path exists, so the
-/// next start fails (CUST-352, incident A). This reads the same two files the gateway does and does the check it does not.
+/// next start fails (CUST-352, incident A). That is the folder-moving update; on 1.0.10 an update in place (same path, new bytes) does not stop the
+/// gateway, which then does not start that connector (<see cref="DefenseClaw.Core.Gateway.Models.ConnectorSkipKind.AgentUpdated"/>). This reads the same two files the gateway does and does the check it does not.
 /// </summary>
 /// <param name="Connector">The connector, e.g. <c>codex</c>.</param>
 /// <param name="Executable">The pinned path, or null when nothing is pinned.</param>

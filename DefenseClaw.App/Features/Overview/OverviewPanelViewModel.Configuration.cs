@@ -411,6 +411,12 @@ public sealed partial class OverviewPanelViewModel
                 parts.Add(decidedBy);
             }
 
+            // 1.0.10: what the hook does in each failure, from the app's own fixed text (absent before 1.0.10 and for proxy connectors).
+            if (FailureOutcomes.Sentence(mode.OnFailure) is { } outcomes)
+            {
+                parts.Add(outcomes);
+            }
+
             return (string.Join(" · ", parts), mode.HasDrift ? "Warn" : "Neutral");
         }
 
@@ -465,6 +471,11 @@ public sealed partial class OverviewPanelViewModel
 
         var name = roster[0].ToLowerInvariant();
         var mode = ModeOf(roster[0]) ?? "observe";
+        if (name == "openclaw" && HasOpenClawNativeWindows)
+        {
+            return $"openclaw native hooks ({mode})";
+        }
+
         return name is "openclaw" or "zeptoclaw" ? $"{name} proxy guardrail ({mode})" : $"{name} hook observability ({mode})";
     }
 

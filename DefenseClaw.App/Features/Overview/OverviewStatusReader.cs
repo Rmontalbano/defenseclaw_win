@@ -19,6 +19,9 @@ internal sealed record HookFailModeState(
     bool? Current,
     IReadOnlyList<string> Drift)
 {
+    /// <summary>What the hook does in each failure (runtime 1.0.10 <c>on_failure</c>); null when the status has none, or says null (proxy connectors).</summary>
+    public FailureOutcomes? OnFailure { get; init; }
+
     /// <summary>True when the status says the hook is not as configured: <c>current: false</c>, or any drift entry.</summary>
     public bool HasDrift => Current == false || Drift.Count > 0;
 }
@@ -215,7 +218,12 @@ internal static class DefenseClawStatusReader
             Text(mode, "desired"),
             Text(mode, "runtime"),
             Bool(mode, "current"),
-            new ReadOnlyCollection<string>(drift));
+            new ReadOnlyCollection<string>(drift))
+        {
+            OnFailure = Object(mode, "on_failure") is { } outcomes
+                ? new FailureOutcomes(Text(outcomes, "gateway_down"), Text(outcomes, "no_answer"), Text(outcomes, "hook_error"))
+                : null,
+        };
     }
 
     private static JsonElement? Object(JsonElement parent, string name) =>

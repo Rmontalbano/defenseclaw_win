@@ -47,6 +47,7 @@ public sealed partial class OverviewPanelViewModel
             {
                 // Off in config.yaml, and not running in the gateway either (a config with no ai_discovery section is the gateway's default).
                 var enabled = config.Enabled || _snapshot.Health?.AiDiscovery?.IsRunning == true;
+                _openClawDetected = false;
                 SetDetectedConnectors(Array.Empty<string>());
                 SetAgents(
                     DiscoveredAgents.None,
@@ -60,6 +61,7 @@ public sealed partial class OverviewPanelViewModel
             var now = DateTimeOffset.UtcNow;
             var claudeDesktop = Services.Runtime.Check(DefenseClaw.Core.Runtime.RuntimeCapability.ClaudeDesktopDiscovery).IsAvailable;
             var agentDiscoveryPath = Services.Paths.AgentDiscoveryStatePath;
+            var openClawFound = false;
             var (agents, detected, novelty) = await Task.Run(
                 () =>
                 {
@@ -70,9 +72,11 @@ public sealed partial class OverviewPanelViewModel
                         options = new OverviewAgentOptions(true, ReadClaudeCodeOnDesktopEngine(agentDiscoveryPath));
                     }
 
+                    openClawFound = OpenClawDiscovery.Found(text);
                     return (OverviewAgentReader.Parse(text, now, options), OverviewDetectedConnectors.Parse(text), AiDiscoveryNovelty.Parse(text));
                 },
                 cancellationToken).ConfigureAwait(true);
+            _openClawDetected = openClawFound;
             SetDetectedConnectors(detected);
             SetAgents(agents, agents.IsEmpty ? "No AI usage detected yet. Try: defenseclaw agent discovery scan" : string.Empty);
 
@@ -86,6 +90,7 @@ public sealed partial class OverviewPanelViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+            _openClawDetected = false;
             SetDetectedConnectors(Array.Empty<string>());
             SetAgents(DiscoveredAgents.None, $"ai_discovery_state.json could not be read: {ex.Message}");
         }

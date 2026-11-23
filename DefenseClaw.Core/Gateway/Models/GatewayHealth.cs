@@ -187,6 +187,10 @@ public sealed class GatewayHealth
     [JsonPropertyName("provenance")]
     public Provenance? Provenance { get; init; }
 
+    /// <summary>The OpenClaw plugin's last call-in (runtime 1.0.10); absent until it calls in.</summary>
+    [JsonPropertyName("openclaw_plugin")]
+    public OpenClawPluginHealth? OpenClawPlugin { get; init; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; init; }
 

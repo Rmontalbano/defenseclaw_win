@@ -44,10 +44,22 @@ public static class HookFailModeRule
     /// The outage rule as the runtime has it: <see cref="SavedWinsOutageRule"/>, followed by <see cref="JudgeEscalationRule"/> on a runtime with
     /// <see cref="RuntimeCapability.JudgeEscalation"/>. 1.0.5 and 1.0.6 get <see cref="SavedWinsOutageRule"/> alone, word for word.
     /// </summary>
-    public static string SavedWinsOutageRuleFor(RuntimeCapabilities? capabilities) =>
-        capabilities is not null && capabilities.Has(RuntimeCapability.JudgeEscalation)
-            ? SavedWinsOutageRule + " " + JudgeEscalationRule
-            : SavedWinsOutageRule;
+    public static string SavedWinsOutageRuleFor(RuntimeCapabilities? capabilities)
+    {
+        var rule = capabilities is not null && capabilities.Has(RuntimeCapability.OpenClawNativeWindows) ? SavedWinsOutageRuleWithExceptions : SavedWinsOutageRule;
+        return capabilities is not null && capabilities.Has(RuntimeCapability.JudgeEscalation)
+            ? rule + " " + JudgeEscalationRule
+            : rule;
+    }
+
+    /// <summary>The words the 1.0.10 runtime adds right after "an explicit saved mode wins" (<c>_PER_USER_OUTAGE_RULE</c>, cmd_guardrail.py@1.0.10:2100-2107). The 1.0.9 runtime has the same clause, but the app says it only from 1.0.10, where OpenClaw can run on Windows.</summary>
+    public const string SavedWinsExceptionClause = " (except OpenClaw under the strict policy and ZeptoClaw model requests, which stay closed)";
+
+    /// <summary><see cref="SavedWinsOutageRule"/> with <see cref="SavedWinsExceptionClause"/> after "an explicit saved mode wins": what a 1.0.10 runtime says.</summary>
+    public const string SavedWinsOutageRuleWithExceptions =
+        "On a per-user install an explicit saved mode wins" + SavedWinsExceptionClause + ". When unset, the gateway-outage mode follows the policy tier: the default (balanced) and permissive " +
+        "rule packs let a call run with a warning while the gateway is not running, strict blocks it. Every other failure (an error or unusable gateway answer, " +
+        "a missing token, an install or upgrade) blocks.";
 
     /// <summary>
     /// True when a saved per-user <c>hook_fail_mode</c> is not what the hooks obey: the runtime follows 1.0.4's policy-tier rule and the installation is not

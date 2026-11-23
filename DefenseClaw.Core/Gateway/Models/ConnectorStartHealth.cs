@@ -15,6 +15,12 @@ public enum ConnectorSkipKind
 
     /// <summary>The connector's setup failed when the gateway started.</summary>
     SetupFailed,
+
+    /// <summary>
+    /// The agent updated itself in place, so its executable no longer matches what setup recorded (runtime 1.0.10: the gateway keeps running and does not start that
+    /// connector; the reason says "executable changed since setup"). Only for codex, amp, hermes and opencode (<see cref="ConnectorStartHealth.IsAgentUpdateConnector"/>).
+    /// </summary>
+    AgentUpdated,
 }
 
 /// <summary>A configured connector the gateway did not start, so it is not enforced.</summary>
@@ -49,6 +55,14 @@ public static class ConnectorStartHealth
 
     /// <summary>The start of the gateway's reason for an agent that is not installed (agent_not_installed.go, 1.0.7).</summary>
     public const string NotInstalledReasonPrefix = "the agent is not installed for this account";
+
+    /// <summary>A part of the runtime's reason for an agent that updated itself (agent_executable_changed.go, 1.0.10): "the Codex executable changed since setup (a Codex update does this); run: defenseclaw setup codex --yes".</summary>
+    public const string AgentUpdatedReasonPart = "executable changed since setup";
+
+    private static readonly string[] AgentUpdateConnectors = ["codex", "amp", "hermes", "opencode"];
+
+    /// <summary>True for the four connectors whose 1.0.10 gateway reports "executable changed since setup" instead of failing the whole start.</summary>
+    public static bool IsAgentUpdateConnector(string name) => Array.IndexOf(AgentUpdateConnectors, name) >= 0;
 
     /// <summary>The longest repair field kept (the gateway's own cap); a longer one is dropped, never cut, because a cut command must not be copied.</summary>
     public const int MaxRepairLength = 8192;
@@ -100,7 +114,9 @@ public static class ConnectorStartHealth
 
                 var kind = reason.StartsWith(NotInstalledReasonPrefix, StringComparison.OrdinalIgnoreCase)
                     ? ConnectorSkipKind.AgentNotInstalled
-                    : isRefused ? ConnectorSkipKind.RefusedByAgentSettings : ConnectorSkipKind.SetupFailed;
+                    : isRefused ? ConnectorSkipKind.RefusedByAgentSettings
+                    : IsAgentUpdateConnector(name) && reason.Contains(AgentUpdatedReasonPart, StringComparison.OrdinalIgnoreCase) ? ConnectorSkipKind.AgentUpdated
+                    : ConnectorSkipKind.SetupFailed;
                 if (kind == ConnectorSkipKind.SetupFailed && reason.Length == 0)
                 {
                     reason = $"setup failed when the gateway started, so it is not enforced; see gateway.log, then run: defenseclaw setup {name}";

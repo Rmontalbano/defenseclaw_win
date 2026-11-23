@@ -61,6 +61,11 @@ public sealed partial class OverviewPanelViewModel
                 continue;
             }
 
+            if (KeepsGatewayOnAgentUpdate && AgentUpdatedCoveredByDurability(skip))
+            {
+                continue;
+            }
+
             rows.Add(WithRepair(ConnectorSkipRow(skip), skip));
         }
     }
@@ -78,6 +83,12 @@ public sealed partial class OverviewPanelViewModel
             "Restart gateway",
             restartBlocked ?? "Opens a review of defenseclaw-gateway restart; nothing restarts until you confirm.",
             Enabled: restartBlocked is null);
+
+        // 1.0.10 (G10C-08): an agent that updated itself keeps the gateway up. Before that the kind falls to the setup-failed row below, exactly as it was.
+        if (skip.Kind == ConnectorSkipKind.AgentUpdated && KeepsGatewayOnAgentUpdate)
+        {
+            return AgentUpdatedRow(skip);
+        }
 
         return skip.Kind switch
         {
