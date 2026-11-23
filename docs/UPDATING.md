@@ -1,7 +1,7 @@
 # Updating DefenseClaw for Windows
 
 This page covers updating the companion app itself. The DefenseClaw runtime (CLI and gateway) is upgraded from the Updates window; see "DefenseClaw 1.0" in the README.
-The app works with runtime 0.8.10 and 1.0.0 to 1.0.9. Updating the app does not change which runtime is installed; the app offers what the installed runtime has.
+The app works with runtime 0.8.10 and 1.0.0 to 1.0.10. Updating the app does not change which runtime is installed; the app offers what the installed runtime has.
 
 For a runtime upgrade to 1.0.8, the Updates pre-flight warns when the installed version is outside the range that release supports upgrading from (1.0.2 to 1.0.7)
 and, from 1.0.7, when the data folder or `DEFENSECLAW_HOME` is a link, which the 1.0.7 launcher refuses. The upgrade still runs. A rollback puts back the
@@ -19,6 +19,23 @@ For a runtime upgrade to 1.0.9, three more things apply:
   this app (the installer reads the app's environment, so a variable set after the app started is not seen), or have an administrator turn on long paths.
 - **A 0.8.x Setup install kept beside 1.0.** With 1.0.9, `defenseclaw uninstall` also removes it (its data folder is kept), but it stops this release's gateway and
   removes the connectors' hooks, so run setup again afterwards. `defenseclaw init` will not set up hooks while Setup's hooks remain in the agent's settings.
+
+For a runtime upgrade to 1.0.10, and for a rollback from it, three more things apply:
+
+- **Settings an older release refuses.** A rollback puts back the config.yaml saved at upgrade time, so the older release does not meet a key it refuses; the settings you made since are what is
+  left behind (today's config.yaml is kept in `previous\data`, and `defenseclaw rollback` again brings it back). The Updates card's rollback note and the review warning "Settings made since the
+  upgrade" name them: "DefenseClaw X does not accept ..., so those settings are not in the config.yaml it gets back." The names come from a table of 67 keys and key patterns
+  (from 1.0.3 on, with the 1.0.10 additions such as `guardrail.cascade`, `decision_model.protocol`, `routing.*`, `observability.tokenomics` and `observability.pricing`), written with `*`
+  for every value of a map and `[]` for every item of a list, as the 1.0.10 upgrade shim lists them. At most ten keys are named; more are shown as ", and N more".
+- **Route-only agents.** When config.yaml has `routing.enabled: true` and Claude Code or Codex in `routing.route_only.connectors` (route-only is on only then), and the release you roll back to is older than 1.0.10 (it has no route-only), the review
+  warns "Route-only agents": before it swaps the install, the 1.0.10 installer has DefenseClaw put back the model settings route-only changed in those agents' settings, so restart those
+  agents after the rollback. If that step fails, the installer prints a warning that a route-only agent gets 401 on its model calls until the DefenseClaw base URL and route header are removed
+  from its settings; the result shows that warning. The app only reads config.yaml here and runs nothing for it.
+- **Python packages that differ from their wheels.** The 1.0.10 installer checks the Python packages it installs against their wheels, downloads a damaged one again, and checks again. If they still
+  differ in the staging environment, it stops with nothing changed, and the card shows "The Python packages ... still differ from their wheels after a fresh download; delete the uv cache ...
+  Nothing was changed." The fix is to delete the uv cache folder the message names (the installer's own text says to run the installer again; the card's step is to upgrade again from the Updates
+  window), and uv downloads the packages again on the next run. If the packages cannot be checked at all ("Could not check the Python packages ..."), the card shows that as a refusal with nothing
+  changed. If the same check fails in the final environment, the installer restores the previous install instead, which is not a refusal. This is separate from the 1.0.9 uv cache *path* stop above.
 
 ## Automatic checks
 

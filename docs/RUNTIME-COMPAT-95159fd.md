@@ -4,11 +4,11 @@ This page records what the app was checked against and what changed for it. It w
 `95159fd`; it requires a compatible runtime**. That commit is unreleased source that reports its own version as 1.0.0; nothing here is a
 statement about a release, and the 0.8.10 behaviour is unchanged (the 0.8.10 fixtures and suites are untouched and still pass).
 
-## Releases 1.0.0 to 1.0.9
+## Releases 1.0.0 to 1.0.10
 
-The app also covers the published releases 1.0.0 to 1.0.9. What a release added is gated by a capability judged from the version the runtime reports
-(`DefenseClaw.Core/Runtime/RuntimeCapability.cs`, `RuntimeProbe.cs`): a runtime that reports an older version, or none, gets what it got before. The 1.0.7, 1.0.8 and
-1.0.9 behaviour was read from the release source at those tags and is tested with synthetic fixtures; no release was run by the tests.
+The app also covers the published releases 1.0.0 to 1.0.10. What a release added is gated by a capability judged from the version the runtime reports
+(`DefenseClaw.Core/Runtime/RuntimeCapability.cs`, `RuntimeProbe.cs`): a runtime that reports an older version, or none, gets what it got before. The 1.0.7 to
+1.0.10 behaviour was read from the release source at those tags and is tested with synthetic fixtures; no release was run by the tests.
 
 - 1.0.7: `DecisionModelCascade`, `AuditStoreCapWarning`, `AgentNotInstalledSkip`, `HookFailureBlockRows`, `JudgeEscalation`, `PerUserCliLauncher`,
   `SecretRefGatewayTokenSkipped` (the gateway skips a gateway token that is a secret reference; below 1.0.7 the app uses that text as the token, as the gateway
@@ -22,10 +22,55 @@ The app also covers the published releases 1.0.0 to 1.0.9. What a release added 
   and DefenseClaw's own files block with every pack; through 1.0.8 the permissive pack only reported self-protection findings),
   `JudgeLocalParallelDefault` (`guardrail.judge.max_parallel` defaults to 1 for a local judge), `HostSensorDropLatch` (one dropped host sensor event keeps the
   host sensor degraded until the gateway restarts; before it the state cleared by itself).
+- 1.0.10 (`RuntimeProbe.Release1010`; nine capabilities, all judged from the version the runtime reports):
+  - `SetupKeepsRoster`: `setup -c`, `--detected` and `--all` add or update the connectors they name and keep every other one (before 1.0.10 they replace the roster). Read by the connector
+    batch dialog (`Features/Setup/ConnectorBatchViewModel.KeepsRoster.cs`), once when the dialog opens; the dialog still replaces the roster when it is empty or holds OpenClaw or ZeptoClaw. When it keeps the roster it names only
+    the ticked connectors and does not offer `--detected` or `--all`, because those give every connector they name, configured ones included, the chosen mode.
+  - `OpenClawNativeWindows`: OpenClaw runs on native Windows in native hook mode (before 1.0.10 it is unsupported there). Read by `Services/Wizards/WizardWindowsPolicy.cs` (the OpenClaw card is offered,
+    the Gateway card's reason), `Services/Wizards/OpenClawSetupIntro.cs` (the "Before you start" page), `Features/Setup/ConfigEditor/ConfigFieldCatalog.cs` and `ConfigEditorWindowViewModel.cs`
+    (connector pickers), `Core/Config/HookFailModeRule.cs` (the OpenClaw and ZeptoClaw exception in the outage rule text), `Features/Overview/OverviewPanelViewModel.OpenClawPlugin.cs`
+    (plugin and found-not-set-up rows) and `OverviewPanelViewModel.Configuration.cs`.
+  - `OpenClawTokenSeparate`: the gateway never takes the OpenClaw gateway token as its own (a `token_env` naming `OPENCLAW_GATEWAY_TOKEN`, or a value equal to it, is skipped). Read by
+    `Core/Config/TokenResolver.cs`, wired in `Services/AppServices.cs`.
+  - `AgentSelfUpdateKeepsGateway`: an agent that updated itself in place no longer stops the gateway; only that connector is left unstarted. With several connectors `/health`
+    lists it in `connectors_not_started`; with one connector there is no such list and the guardrail is in `error` with the runtime's sentence in `last_error`
+    (`Core/Gateway/Models/AgentUpdatedGuardrailError.cs`). Read by `Features/Overview/OverviewPanelViewModel.AgentUpdated.cs` and `OverviewPanelViewModel.ConnectorSkips.cs`; below 1.0.10
+    the generic "setup failed" row stays.
+  - `RoutingCli`: `defenseclaw routing`, the `routing` block of `/health` and the `/api/v1/routing` reads exist. Read by `Core/Cli/TuiRegistry.cs` (the 1.0.10 command list for the palette) and
+    `Features/Overview/OverviewPanelViewModel.ModelRouting.cs` (the "Model routing" row and one row per route-only connector). The app shows routing state only: no routing panel, and no command
+    that changes routing is offered (`Core/Cli/RoutingCliExclusions.cs`).
+  - `RoutingHotReload`: only nine `routing` keys need a gateway restart (`ConfigReloadRules.RoutingRestartKeys`); the rest, tokenomics and pricing included, apply in place. Read by
+    `Core/Config/ConfigReloadRules.cs`, `Services/RestartQueueRules.cs` and the config editor (`ConfigEditorWindowViewModel.ExternalChange.cs`); below 1.0.10 every `routing` key restarts.
+  - `Tokenomics`: the gateway can record what each model call it carries used and cost, and serves it at `GET /usage` (off until set; only calls DefenseClaw carries). Read by
+    `OverviewPanelViewModel.ModelRouting.cs` (the "Tokenomics" row; `/usage` is read only when config.yaml turns on both `observability.tokenomics.enabled` and
+    `observability.tokenomics.local_store.enabled`) and `Features/Agents/AgentsPanelViewModel.cs` (the note under the Tokens and Cost tiles).
+  - `DecisionModelProtocol`: `setup decision-model` takes `--protocol` (`system-one`, `gemini-decisions`) and `--on-confident-block decide` is retired (still accepted, and ignored). **A marker only: no app code reads it.** The
+    Decision model wizard is built from the live `setup decision-model --help`, and the help decides which flags can be sent, so `WizardStepFactory.DecisionModel.cs` keys on `--protocol` being in
+    that help (a 1.0.9 runtime's layout is unchanged).
+  - `GuardrailCascade`: `guardrail.cascade` sets what each guardrail layer does, with an opt-in alignment lane; a proven CRITICAL finding ends at least at alert; `ACTION-COMPOUND-LIMIT` is the shared
+    over-limit finding and `ACTION-OPERAND-BOUND` is retired. Read by the Alerts, Logs and Audit rule labels (`HookRowGate.Cascade` in `Features/Alerts/AlertsPanelViewModel.HookRows.cs`, used by
+    `Features/Logs/LogHookRows.cs` and `Features/Audit/AuditHookRows.cs`: the `ALIGNMENT-DRIFT` label and the 1.0.10 wording of `ACTION-COMPOUND-LIMIT`), `Features/Policies/PolicyModelViewModel.Cascade.cs`
+    (the Cascade block) and `Features/Overview/OverviewPanelViewModel.Cascade.cs` (the Cascade row and the invalid-cascade warnings).
+- 1.0.10, no gate needed, because an older runtime does not write the row or line (each is shown without a capability check): the shadow measurement rows (action `guardrail-inspection`,
+  details `lane=effects-shadow` or target `secret-flow:shadow`; `Core/Audit/ShadowMeasurementRow.cs`, left out of "Actionable only" in `Core/Audit/ActionableRule.cs`), the inspection timeout rows
+  (`inspect-*-timeout`, `Core/Audit/InspectTimeoutRow.cs`; a `scan_timeout` is actionable), the cascade's `guardrail-degraded` row (`Core/Audit/CascadeAuditRow.cs`), all three labelled through
+  `Core/Audit/GuardrailRowNotes.cs`; the `hook-failures.dropped` tail on a hook refusal row (`Core/Audit/HookFailureRow.cs`; hook refusal rows are read only on a runtime with
+  `HookFailureBlockRows`); `connectors[].fail_mode.on_failure` in `status --json` (`Features/Overview/FailureOutcomes.cs`, `OverviewStatusReader.cs`; null or absent gives no line); and two
+  installer transcript lines in `Services/Updates` (`InstallTranscript.UvRecord.cs`: the uv RECORD check's "still differ from their wheels" and "Could not check the Python packages" lines;
+  `InstallTranscript.RouteOnly.cs`: the `prepare-rollback` warning about route-only agents).
+- 1.0.10, read on every runtime but shown only with a capability, because an absent value would otherwise read as a fault: `/health` `openclaw_plugin` (an absent key on a gateway that has run 90 s or
+  more reads as "has not called in", so the row needs `OpenClawNativeWindows`; `Core/Gateway/Models/OpenClawPluginHealth.cs`), `/health` `routing` (`Core/Gateway/Models/ModelRouting.cs`, shown with
+  `RoutingCli`), `/health` `policy_reload` (`Core/Gateway/Models/PolicyReloadHealth.cs`, shown with `GuardrailCascade`), and the `connectors_not_started` reason "executable changed since setup"
+  (recognised by `ConnectorStartHealth`, drawn as its own row only with `AgentSelfUpdateKeepsGateway`).
+- A 1.0.5 capability used as a release marker: Setup > Routing hides `--enable` and shows the runtime's refusal only where `SavedFailModeWins` (judged at 1.0.5) is present
+  (`Services/Wizards/RoutingSetupWindowsPolicy.cs`), because the refusal is in the command body from 1.0.5 and not in its help; 1.0.0 to 1.0.4 keep the card as it was.
+- 1.0.10, follows the version you roll back to, not the runtime: the table of settings an older release refuses (`Core/Config/ConfigKeyFloors.cs`, 67 rows, read by
+  `Services/Updates/RollbackConfigKeys.cs`) and the route-only rollback warning (`Services/Updates/RouteOnlyRollback.cs`, shown when the target is older than 1.0.10).
 - Signals with no gate, because an older runtime does not emit them: the rule ids `ACTION-OPERAND-BOUND`, `ACTION-SHARE-BODY-UNREAD`, `TOOL-PATH-UNVERIFIED`,
   `ACTION-COMPOUND-LIMIT`, `tamper.agent_hook_config_disable` and `tamper.agent_hook_config_write`; the `surface` field of `alerts --json` (Cowork calls listed only by the runtime);
   the installer's "uv cache folder is N characters long" stop (judged from the target version); and `defenseclaw-pack.json` posture for a rule pack folder.
   The app's rule-pack selection (connector entry before global, `rule_pack` before `rule_pack_dir`) is the runtime's own since 1.0.0 and is not gated.
+  `ALIGNMENT-DRIFT` (1.0.10) is not in this list: its label is gated by `GuardrailCascade`, above.
 
 ## What "verified" means
 
