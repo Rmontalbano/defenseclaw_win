@@ -21,7 +21,7 @@ public sealed class RuleLabelAuditTests
     };
 
     private static IReadOnlyList<DetailPair> Pairs(AuditEvent row, params DetailPair[] parsed) =>
-        AuditHookRows.Pairs(parsed, row, HookRowGate.All, null, null);
+        AuditHookRows.Pairs(parsed, row, new HookRowGate(true, true, true, true, true), null, null);
 
     private static IReadOnlyList<DetailPair> PairsOn(HookRowGate gate, AuditEvent row, params DetailPair[] parsed) =>
         AuditHookRows.Pairs(parsed, row, gate, null, null);

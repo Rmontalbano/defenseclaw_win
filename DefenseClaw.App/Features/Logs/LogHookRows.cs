@@ -26,9 +26,14 @@ internal static partial class LogHookRows
     /// <summary>The labels of <paramref name="e"/> under <paramref name="gate"/>.</summary>
     public static Labels Read(StreamEvent e, HookRowGate gate)
     {
+        // The 1.0.10 guardrail rows (a shadow measurement, an inspection timeout, the cascade's degraded row) are labelled on every runtime, before the gate's early
+        // return: a runtime that never writes them never shows the label, so no gate is needed.
+        var kind = GuardrailRowNotes.For(e.RowAction, e.RowTarget, e.RowDetails);
         if (!gate.Any)
         {
-            return Labels.None(e.Message);
+            return kind.Count == 0
+                ? Labels.None(e.Message)
+                : new Labels(e.Message, false, kind.Select(static note => new LogField(note.Key, note.Value)).ToList(), false);
         }
 
         var message = e.Message;
@@ -71,7 +76,7 @@ internal static partial class LogHookRows
 
         if (gate.AlertRan)
         {
-            AddRuleMeanings(e, fields);
+            AddRuleMeanings(e, fields, gate.Cascade);
         }
 
         if (gate.JudgeFallback && StructuredDetailParser.IsHook(e.RowAction))
@@ -95,6 +100,11 @@ internal static partial class LogHookRows
             }
         }
 
+        foreach (var note in kind)
+        {
+            fields.Add(new LogField(note.Key, note.Value));
+        }
+
         return new Labels(message, isCowork, fields, skipFallback);
     }
 
@@ -104,7 +114,7 @@ internal static partial class LogHookRows
     /// <see cref="DefenseClaw.Core.Runtime.RuntimeCapability.ShellProtectedFileFloor"/> is used as the 1.0.9 release marker because the rule labels and the alert decision shipped in the
     /// same release and no separate capability exists.
     /// </summary>
-    private static void AddRuleMeanings(StreamEvent e, List<LogField> fields)
+    private static void AddRuleMeanings(StreamEvent e, List<LogField> fields, bool cascadeEra)
     {
         var ids = e.Detail.Categories.ToList();
         if (RuleIdOf(e.RowDetails) is { Length: > 0 } rule)
@@ -112,14 +122,19 @@ internal static partial class LogHookRows
             ids.Add(rule);
         }
 
-        foreach (var meaning in RuleIdLabels.NewSentencesOf(ids))
+        foreach (var meaning in RuleIdLabels.NewSentencesOf(ids, cascadeEra))
         {
             fields.Add(new LogField("Rule meaning", meaning));
         }
 
-        if (ids.Any(RuleIdLabels.IsCompoundLimit) && RuleIdLabels.CompoundLimitOutcome(null, e.RowDetails) is { } outcome)
+        if (ids.Any(id => RuleIdLabels.IsCompoundLimit(id)) && RuleIdLabels.CompoundLimitOutcome(null, e.RowDetails, cascadeEra) is { } outcome)
         {
             fields.Add(new LogField("Call outcome", outcome));
+        }
+
+        if (cascadeEra && ids.Any(id => RuleIdLabels.IsAlignmentDrift(id)) && RuleIdLabels.AlignmentDriftOutcome(null, e.RowDetails) is { } drift)
+        {
+            fields.Add(new LogField("Call outcome", drift));
         }
     }
 

@@ -41,6 +41,12 @@ public static class AuditTargetType
             return string.Empty;
         }
 
+        // The four 1.0.10 inspection timeouts name a tool or a model request, not a governed tool: they have no enforcement state to look up.
+        if (InspectTimeoutRow.IsTimeoutAction(action))
+        {
+            return string.Empty;
+        }
+
         foreach (var (type, words) in Rules)
         {
             foreach (var word in words)
@@ -76,7 +82,9 @@ public static class AuditTargetType
     /// </summary>
     internal static string SqlCase(string actionColumn)
     {
-        var sql = new StringBuilder("(CASE");
+        var sql = new StringBuilder("(CASE WHEN LOWER(TRIM(").Append(actionColumn).Append(")) IN (")
+            .Append(string.Join(", ", InspectTimeoutRow.Actions.Select(static name => "'" + name + "'")))
+            .Append(") THEN ''");
         foreach (var (type, words) in Rules)
         {
             _ = sql.Append(" WHEN ");

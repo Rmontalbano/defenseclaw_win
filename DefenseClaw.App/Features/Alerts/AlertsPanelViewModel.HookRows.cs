@@ -13,16 +13,17 @@ namespace DefenseClaw.App.ViewModels;
 /// <param name="JudgeFallback">1.0.8: <c>judge_fallback</c> on a hook row (<see cref="RuntimeCapability.JudgeFallbackOnHookRows"/>).</param>
 /// <param name="Cowork">1.0.8: Claude Cowork rows (<see cref="RuntimeCapability.CoworkProtection"/>).</param>
 /// <param name="AlertRan">1.0.9: an <c>allow</c> hook row in action mode reads <c>alert</c> in <c>alerts --json</c> (<see cref="RuntimeCapability.ShellProtectedFileFloor"/> marks a 1.0.9 runtime).</param>
-internal readonly record struct HookRowGate(bool HookFailure, bool JudgeEscalation, bool JudgeFallback, bool Cowork, bool AlertRan = false)
+/// <param name="Cascade">1.0.10: the guardrail cascade's wording of the over-limit rule and the alignment check's finding (<see cref="RuntimeCapability.GuardrailCascade"/>).</param>
+internal readonly record struct HookRowGate(bool HookFailure, bool JudgeEscalation, bool JudgeFallback, bool Cowork, bool AlertRan = false, bool Cascade = false)
 {
     /// <summary>No label: what runtimes before 1.0.7 get.</summary>
     public static HookRowGate None => default;
 
-    /// <summary>Every label (a test's shorthand for a 1.0.8 runtime).</summary>
-    public static HookRowGate All => new(true, true, true, true, true);
+    /// <summary>Every label (a test's shorthand for a 1.0.10 runtime).</summary>
+    public static HookRowGate All => new(true, true, true, true, true, true);
 
     /// <summary>True when any label is on.</summary>
-    public bool Any => HookFailure || JudgeEscalation || JudgeFallback || Cowork || AlertRan;
+    public bool Any => HookFailure || JudgeEscalation || JudgeFallback || Cowork || AlertRan || Cascade;
 
     /// <summary>The gate for what the runtime can do.</summary>
     public static HookRowGate From(RuntimeCapabilities capabilities)
@@ -33,7 +34,8 @@ internal readonly record struct HookRowGate(bool HookFailure, bool JudgeEscalati
             capabilities.Has(RuntimeCapability.JudgeEscalation),
             capabilities.Has(RuntimeCapability.JudgeFallbackOnHookRows),
             capabilities.Has(RuntimeCapability.CoworkProtection),
-            capabilities.Has(RuntimeCapability.ShellProtectedFileFloor));
+            capabilities.Has(RuntimeCapability.ShellProtectedFileFloor),
+            capabilities.Has(RuntimeCapability.GuardrailCascade));
     }
 }
 
@@ -140,7 +142,7 @@ public sealed partial class AlertItem
 
         if (gate.AlertRan)
         {
-            AddRuleIdLabels(row, details, notes);
+            AddRuleIdLabels(row, details, notes, gate.Cascade);
         }
 
         if (gate.AlertRan && StructuredDetailParser.IsHook(Action) && string.Equals(RowFact(row, "decision"), "alert", StringComparison.OrdinalIgnoreCase))
@@ -195,17 +197,23 @@ public sealed partial class AlertItem
     /// <see cref="RuntimeCapability.ShellProtectedFileFloor"/> is used as the 1.0.9 release marker because the rule labels and the alert decision change shipped in the
     /// same release and no separate capability exists, so a 1.0.7 or 1.0.8 runtime's rows read as they always did. The judge-unavailable id is labelled above.
     /// </summary>
-    private void AddRuleIdLabels(RuntimeAlertRow? row, string? details, List<string> notes)
+    private void AddRuleIdLabels(RuntimeAlertRow? row, string? details, List<string> notes, bool cascadeEra)
     {
         var ids = RuleIdList(row).Prepend(RuleId).Where(id => id.Length > 0 && !JudgeEscalationFinding.Is(id)).ToList();
-        foreach (var sentence in ids.Select(RuleIdLabels.Sentence).Where(x => x is { Length: > 0 }).Distinct(StringComparer.Ordinal))
+        foreach (var sentence in ids.Select(id => RuleIdLabels.Sentence(id, cascadeEra)).Where(x => x is { Length: > 0 }).Distinct(StringComparer.Ordinal))
         {
             notes.Add(sentence!);
         }
 
-        if (ids.Any(RuleIdLabels.IsCompoundLimit) && RuleIdLabels.CompoundLimitOutcome(RowFact(row, "decision"), details) is { } outcome)
+        if (ids.Any(id => RuleIdLabels.IsCompoundLimit(id)) && RuleIdLabels.CompoundLimitOutcome(RowFact(row, "decision"), details, cascadeEra) is { } outcome)
         {
             notes.Add(outcome);
+        }
+
+        // The alignment check (1.0.10): what happened to the call, from the row's own decision and action fields. The runtime's own title stays the headline.
+        if (cascadeEra && ids.Any(id => RuleIdLabels.IsAlignmentDrift(id)) && RuleIdLabels.AlignmentDriftOutcome(RowFact(row, "decision"), details) is { } drift)
+        {
+            notes.Add(drift);
         }
     }
 

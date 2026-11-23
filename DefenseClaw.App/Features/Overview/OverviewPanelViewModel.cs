@@ -807,6 +807,9 @@ public sealed partial class OverviewPanelViewModel : PanelViewModelBase
         // 1.0.6 counts the hook checks the rules decided because the judge gave no verdict in time (CUST-426). Built in OverviewPanelViewModel.JudgeFallbacks.cs.
         AppendJudgeFallbackAttention(rows);
 
+        // 1.0.10: an invalid guardrail cascade, or a config reload refused because of it (/health policy). Built in OverviewPanelViewModel.Cascade.cs.
+        AppendCascadeAttention(rows);
+
         // 1.0.7 / 1.0.8 (CUST-448): audit store over its cap, connectors the gateway did not start, stale PowerShell hook bridges. Built in OverviewPanelViewModel.HealthActions.cs.
         AppendOverviewHealthAttention(rows);
 

@@ -191,6 +191,10 @@ public sealed class GatewayHealth
     [JsonPropertyName("openclaw_plugin")]
     public OpenClawPluginHealth? OpenClawPlugin { get; init; }
 
+    /// <summary>The invalid-cascade part of the top-level <c>policy</c> object (1.0.10); null when there is none. Not named <c>Policy</c>, so <c>policy</c> stays in <see cref="AdditionalData"/>.</summary>
+    [JsonIgnore]
+    public PolicyReloadHealth? PolicyReload => PolicyReloadHealth.From(AdditionalData);
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; init; }
 

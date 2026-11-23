@@ -313,9 +313,9 @@ public sealed partial class PolicyModel
     /// <param name="view">One of <see cref="ViewIds"/>.</param>
     /// <param name="key">The row's <see cref="PolicyTableRow.Key"/>.</param>
     /// <param name="scope">The scope the opt-in packs and the rule families are shown for.</param>
-    public PolicyRowDetail Detail(string view, string key, ScopePosture? scope = null) => view switch
+    public PolicyRowDetail Detail(string view, string key, ScopePosture? scope = null, PostureCascade? cascade = null) => view switch
     {
-        "posture" => PostureDetail(ScopeRow(key)),
+        "posture" => PostureDetail(ScopeRow(key), cascade),
         "optin" => OptInDetail(ProtectionPackNamed(key), scope),
         "chains" => ChainDetail(Catalog.Chains.FirstOrDefault(c => string.Equals(c.Id, key, StringComparison.Ordinal))),
         "families" => FamilyDetail(ScopeFamilies(scope).FirstOrDefault(f => string.Equals(f.Name, key, StringComparison.Ordinal)), scope),
@@ -324,7 +324,7 @@ public sealed partial class PolicyModel
         _ => PolicyRowDetail.None,
     };
 
-    private PolicyRowDetail PostureDetail(ScopePosture? row)
+    private PolicyRowDetail PostureDetail(ScopePosture? row, PostureCascade? cascade = null)
     {
         if (row is null)
         {
@@ -338,11 +338,16 @@ public sealed partial class PolicyModel
         var source = ConnectorOf(row).Length > 0 && string.Equals(row.ModeSource, "override", StringComparison.Ordinal) ? "its own mode" : "global mode";
         var lines = new List<string>
         {
-            PolicyLevels.PostureSummary(scope, mode, block, alert, hilt),
+            PolicyLevels.PostureSummary(scope, mode, block, alert, hilt, cascade?.CriticalFloor),
             string.Empty,
             $"Tool calls ({mode}, {source}):",
         };
-        lines.AddRange(PolicyLevels.MatrixLines(mode, block, alert, hilt));
+        lines.AddRange(PolicyLevels.MatrixLines(mode, block, alert, hilt, cascade?.CriticalFloor));
+        if (cascade is { Set: true })
+        {
+            lines.Add(PostureCascade.MatrixCaveat);
+        }
+
         lines.Add(LevelsLine(row));
         lines.Add(string.Empty);
         lines.Add(PackLine(row));

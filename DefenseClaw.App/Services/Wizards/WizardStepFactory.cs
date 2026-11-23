@@ -27,7 +27,7 @@ public static partial class WizardStepFactory
 
         var curated = Curate(target, help);
         return curated is not null
-            ? (WithRemainder(curated, help, RemainderGate(target, help)), true)
+            ? (WithRemainder(curated, WithoutRetiredDecisionModelFlags(target, help), RemainderGate(target, help)), true)
             : (Generate(help), false);
     }
 

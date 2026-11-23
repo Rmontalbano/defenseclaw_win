@@ -13,6 +13,9 @@ public static class DecisionModelReview
     /// <summary>The heading of the bar that says <c>--ping</c> contacts the endpoint.</summary>
     public const string PingTitle = "Sends one request to the endpoint";
 
+    /// <summary>The heading of the bar that says Gemini Decision 1 needs a URL and a model.</summary>
+    public const string GeminiNeedsEndpointTitle = "Gemini Decision 1 needs a URL and a model";
+
     /// <summary>True for a <c>setup decision-model</c> command.</summary>
     public static bool IsDecisionModelCommand(IReadOnlyList<string> argv)
     {
@@ -42,6 +45,23 @@ public static class DecisionModelReview
                 RollbackTitle,
                 "This writes decision_model.hook_connectors. Releases before 1.0.7 refuse this key (config.yaml no longer loads), so clear it before you go back: " +
                 "defenseclaw setup decision-model --connectors \"\" --non-interactive."));
+        }
+
+        // Only the 1.0.10 wizard can send this value: its help is the one with --protocol.
+        if (string.Equals(ValueOf(argv, "--protocol"), DecisionModelCard.GeminiProtocol, StringComparison.Ordinal))
+        {
+            warnings.Add(new CommandReviewWarning(
+                RollbackTitle,
+                "Releases before 1.0.10 refuse the decision_model keys added in 1.0.10 (protocol, block_risk_score, escalate_rule_flagged, history_turns, " +
+                "history_tool_results, flow_guard): rolling back to 1.0.9 or earlier needs decision_model.protocol removed first."));
+
+            if (ValueOf(argv, "--base-url") is not { Length: > 0 } || ValueOf(argv, "--model") is not { Length: > 0 })
+            {
+                warnings.Add(new CommandReviewWarning(
+                    GeminiNeedsEndpointTitle,
+                    "Gemini Decision 1 needs --base-url (https://generativelanguage.googleapis.com/v1beta/decisions) and --model (gemini-decision-1) when the decision " +
+                    "model is turned on; setup fills in nothing in non-interactive mode."));
+            }
         }
 
         if (argv.Contains("--ping", StringComparer.Ordinal))

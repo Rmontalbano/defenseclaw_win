@@ -43,7 +43,7 @@ public sealed partial class PolicyModelViewModel
         if (_model is { } model && SelectedRow is { } row)
         {
             var scope = ScopeRowOfView();
-            var detail = model.Detail(View, row.Key, scope);
+            var detail = model.Detail(View, row.Key, scope, PostureCascadeContext());
             InspectorTitle = detail.Title.Length > 0 ? detail.Title : row.Key;
             foreach (var line in detail.Lines)
             {

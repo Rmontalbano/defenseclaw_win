@@ -15,6 +15,12 @@ public static class DecisionModelCard
     /// <summary>The setup target: <c>defenseclaw setup decision-model</c>.</summary>
     public const string Target = "decision-model";
 
+    /// <summary>The <c>--protocol</c> value of the default wire protocol (DefenseClaw 1.0.10).</summary>
+    public const string SystemOneProtocol = "system-one";
+
+    /// <summary>The <c>--protocol</c> value of Gemini Decision 1 (DefenseClaw 1.0.10).</summary>
+    public const string GeminiProtocol = "gemini-decisions";
+
     /// <summary>The id of the choice that says what to do with <c>--connectors</c>; never a command-line option itself.</summary>
     public const string ConnectorsModeFieldId = "connectors-mode";
 

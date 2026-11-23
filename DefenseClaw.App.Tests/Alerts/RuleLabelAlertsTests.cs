@@ -12,7 +12,7 @@ public sealed class RuleLabelAlertsTests
 {
     private static readonly DateTimeOffset Base = DateTimeOffset.UtcNow.AddHours(-3);
 
-    private static readonly HookRowGate Gate109 = HookRowGate.All;
+    private static readonly HookRowGate Gate109 = new(true, true, true, true, true);
 
     private static readonly HookRowGate Gate108 = new(true, true, true, true);
 

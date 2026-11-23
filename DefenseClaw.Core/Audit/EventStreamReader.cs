@@ -105,6 +105,9 @@ public sealed record StreamEvent(
     /// </summary>
     public string RowDetails { get; init; } = string.Empty;
 
+    /// <summary>The row's own <c>target</c> column, masked, for the 1.0.10 guardrail rows whose labels read it (a shadow measurement, a cascade row); empty for any other row.</summary>
+    public string RowTarget { get; init; } = string.Empty;
+
     /// <summary>The payload's <c>defenseclaw.agent.surface</c> (<c>cowork</c> on a Claude Cowork decision record), masked; empty when it has none.</summary>
     public string PayloadSurface { get; init; } = string.Empty;
 }
@@ -219,7 +222,7 @@ public sealed class EventStreamReader
 
     /// <summary>The columns of the statement, in the order <see cref="Project"/> reads them; the outer select of both streams.</summary>
     private const string Columns =
-        "rid, id, ts, bucket, event_name, source, severity, action, actor, details, connector, payload, omitted, run_id, trace_id, request_id, session_id";
+        "rid, id, ts, bucket, event_name, source, severity, action, actor, details, connector, payload, omitted, run_id, trace_id, request_id, session_id, row_target";
 
     private readonly string _connectionString;
     private readonly int _limit;
@@ -536,7 +539,8 @@ public sealed class EventStreamReader
                     {Optional("payload_json", PayloadCap.Within("e.payload_json", PayloadByteLimit))} AS payload,
                     {Optional("payload_json", PayloadCap.SizeWhenOver("e.payload_json", PayloadByteLimit))} AS omitted,
                     {Optional("run_id", "e.run_id")} AS run_id, {Optional("trace_id", "e.trace_id")} AS trace_id,
-                    {Optional("request_id", "e.request_id")} AS request_id, {Optional("session_id", "e.session_id")} AS session_id
+                    {Optional("request_id", "e.request_id")} AS request_id, {Optional("session_id", "e.session_id")} AS session_id,
+                    {Optional("target", "e.target")} AS row_target
             """;
 
         var logsOnly = columns.Contains("signal") ? " AND e.signal = 'logs'" : string.Empty;
@@ -602,6 +606,7 @@ public sealed class EventStreamReader
         var traceId = Text(14).Trim();
         var requestId = Text(15).Trim();
         var sessionId = Text(16).Trim();
+        var rowTarget = Text(17).Trim();
 
         // Column 12 is the payload's size when it was over the limit (the statement did not select it), NULL otherwise.
         var omittedBytes = reader.IsDBNull(12) ? 0L : reader.GetInt64(12);
@@ -644,11 +649,15 @@ public sealed class EventStreamReader
             // The hook-row labels (a hook's own refusal, a judge-unavailable finding, a judge fallback, a Cowork call) read the row's action and details.
             var labelAction = rowAction.Trim();
             var rowDetails = hookDetails ?? (LabelledAction(labelAction) ? DisplayRedaction.Text(details) : string.Empty);
+            var rowTargetText = GuardrailRowNotes.Headline(labelAction, rowTarget, details) is null ? string.Empty : DisplayRedaction.Text(rowTarget);
 
             // The TUI's Alerts panel judges a row on its action, target and a details line that names the bucket, event, source and connector
             // (tui/panels/alerts.py _v8_alert_event); the row's own action is searched as well as the decision the payload carries.
-            var actionable = omitted
-                || ActionableRule.IsActionable(severityText, string.Join(' ', decision, rowAction, target, eventName, bucket, source, connector, summary));
+            // A 1.0.10 shadow measurement row is never actionable (owner decision), even with a payload too large to read; a scan timeout always is. Both read the row's
+            // own action, target and details, not the joined text.
+            var actionable = !ShadowMeasurementRow.IsShadowMeasurement(rowAction, rowTarget, details)
+                && (omitted
+                    || ActionableRule.IsActionable(severityText, string.Join(' ', decision, rowAction, target, eventName, bucket, source, connector, summary), rowAction, rowTarget, details));
 
             return new StreamEvent(
                 Id: id,
@@ -672,6 +681,7 @@ public sealed class EventStreamReader
                 Detail = EventDetail.Read(root, eventName, source, runId, traceId, requestId, sessionId, summary, hookDetails),
                 RowAction = labelAction,
                 RowDetails = rowDetails,
+                RowTarget = rowTargetText,
                 PayloadSurface = DisplayRedaction.Text(FirstValue(root, SurfaceKeys)),
             };
         }
@@ -687,7 +697,10 @@ public sealed class EventStreamReader
     private static bool LabelledAction(string action) =>
         action.Equals("guardrail-block", StringComparison.OrdinalIgnoreCase)
         || action.Equals("guardrail-warn", StringComparison.OrdinalIgnoreCase)
-        || action.Equals("scan-finding", StringComparison.OrdinalIgnoreCase);
+        || action.Equals("scan-finding", StringComparison.OrdinalIgnoreCase)
+        || action.Equals(ShadowMeasurementRow.Action, StringComparison.OrdinalIgnoreCase)
+        || action.Equals(CascadeAuditRow.Action, StringComparison.OrdinalIgnoreCase)
+        || InspectTimeoutRow.IsTimeoutAction(action);
 
     /// <summary>The Mac's coarse kind of an event, from its bucket (and, for the judge, its name).</summary>
     internal static string TypeOf(string bucket, string eventName, AuditSeverity severity)

@@ -26,7 +26,8 @@ public enum HookFailureKind
 /// <param name="Kind">What the hook did.</param>
 /// <param name="Event">The hook event the row names (<c>PreToolUse</c> ...); empty for <see cref="HookFailureKind.RanUnchecked"/> and an unnamed event.</param>
 /// <param name="Reason">The hook's own reason, unquoted (at most 300 characters, as the gateway cut it); empty when the row holds none.</param>
-public sealed record HookFailureRefusal(HookFailureKind Kind, string Event, string Reason)
+/// <param name="Dropped">True when the row ends <c>; see logs/hook-failures.dropped</c> (the hook could not finish its usual <c>hook-failures.jsonl</c> record); false for the usual <c>.jsonl</c> tail.</param>
+public sealed record HookFailureRefusal(HookFailureKind Kind, string Event, string Reason, bool Dropped = false)
 {
     /// <summary>True when the hook refused something (fail mode closed); false for a call that ran unchecked.</summary>
     public bool IsRefusal => Kind != HookFailureKind.RanUnchecked;
@@ -42,7 +43,11 @@ public sealed record HookFailureRefusal(HookFailureKind Kind, string Event, stri
     };
 
     /// <summary>Why, in plain words, for the detail pane.</summary>
-    public string Explanation => Kind switch
+    public string Explanation => Base + (Dropped
+        ? " The hook could not finish its usual record, so it logged the call in " + HookFailureRow.DroppedLog + "."
+        : " The hook logged the call in " + HookFailureRow.FailuresLog + ".");
+
+    private string Base => Kind switch
     {
         HookFailureKind.RanUnchecked =>
             "The gateway was down or did not answer, and this connector's hook_fail_mode is open, so the hook let the call run without a gateway check. " +
@@ -53,7 +58,7 @@ public sealed record HookFailureRefusal(HookFailureKind Kind, string Event, stri
         _ =>
             "The gateway was down or did not answer, and this connector's hook_fail_mode is closed, so the hook refused on its own. No gateway policy " +
             "decided it, so there is no rule to look for.",
-    } + " The hook logged the call in " + HookFailureRow.FailuresLog + ".";
+    };
 }
 
 /// <summary>
@@ -72,11 +77,20 @@ public static class HookFailureRow
     /// <summary>Where that file is, as the app shows it.</summary>
     public const string FailuresLog = @"logs\" + FailuresFileName;
 
+    /// <summary>The file the gateway writes instead (1.0.9 and later) when the hook could not finish its usual record.</summary>
+    public const string DroppedFileName = "hook-failures.dropped";
+
+    /// <summary>Where that file is, as the app shows it.</summary>
+    public const string DroppedLog = @"logs\" + DroppedFileName;
+
     /// <summary>The words the Source field shows for these rows.</summary>
     public const string SourceLabel = "Hook (gateway unreachable)";
 
     /// <summary>The end of every such details text.</summary>
     internal const string Tail = "; see logs/" + FailuresFileName;
+
+    /// <summary>The end of such a details text when the hook could not finish its usual record (1.0.9 and later).</summary>
+    internal const string DroppedTail = "; see logs/" + DroppedFileName;
 
     /// <summary>The text a SQL <c>LIKE</c> matches a refusal's details on (with <see cref="Tail"/>): every refusal says <c>fail-closed</c>, a policy block never does.</summary>
     internal const string RefusalMark = "(fail-closed";
@@ -96,7 +110,7 @@ public static class HookFailureRow
     /// out. Constant text; no row an older runtime writes matches it.
     /// </summary>
     public const string RefusalSql =
-        "(action = '" + BlockAction + "' AND COALESCE(details, '') LIKE '%" + RefusalMark + "%' AND COALESCE(details, '') LIKE '%" + Tail + "')";
+        "(action = '" + BlockAction + "' AND COALESCE(details, '') LIKE '%" + RefusalMark + "%' AND (COALESCE(details, '') LIKE '%" + Tail + "' OR COALESCE(details, '') LIKE '%" + DroppedTail + "'))";
 
     /// <summary>Reads a row. Null for any row that is not one of these; never throws.</summary>
     /// <param name="action">The row's action.</param>
@@ -112,31 +126,34 @@ public static class HookFailureRow
         }
 
         var text = details.Trim();
-        if (!text.EndsWith(Tail, StringComparison.Ordinal))
+        var dropped = text.EndsWith(DroppedTail, StringComparison.Ordinal);
+        if (!dropped && !text.EndsWith(Tail, StringComparison.Ordinal))
         {
             return null;
         }
 
+        var tailLength = dropped ? DroppedTail.Length : Tail.Length;
+
         if (isWarn)
         {
             return text.StartsWith(UncheckedPrefix, StringComparison.Ordinal)
-                ? new HookFailureRefusal(HookFailureKind.RanUnchecked, string.Empty, ReasonOf(text))
+                ? new HookFailureRefusal(HookFailureKind.RanUnchecked, string.Empty, ReasonOf(text, tailLength), dropped)
                 : null;
         }
 
         if (text.StartsWith(CallPrefix, StringComparison.Ordinal))
         {
-            return new HookFailureRefusal(HookFailureKind.CallRefused, EventUntil(text, CallPrefix.Length, ')'), ReasonOf(text));
+            return new HookFailureRefusal(HookFailureKind.CallRefused, EventUntil(text, CallPrefix.Length, ')'), ReasonOf(text, tailLength), dropped);
         }
 
         if (text.StartsWith(ResultPrefix, StringComparison.Ordinal))
         {
-            return new HookFailureRefusal(HookFailureKind.ResultRefused, EventUntil(text, ResultPrefix.Length, ')'), ReasonOf(text));
+            return new HookFailureRefusal(HookFailureKind.ResultRefused, EventUntil(text, ResultPrefix.Length, ')'), ReasonOf(text, tailLength), dropped);
         }
 
         if (text.StartsWith(UnnamedPrefix, StringComparison.Ordinal))
         {
-            return new HookFailureRefusal(HookFailureKind.UnnamedEventRefused, string.Empty, ReasonOf(text));
+            return new HookFailureRefusal(HookFailureKind.UnnamedEventRefused, string.Empty, ReasonOf(text, tailLength), dropped);
         }
 
         if (text.StartsWith(EventPrefix, StringComparison.Ordinal))
@@ -147,7 +164,7 @@ public static class HookFailureRow
                 var name = text[EventPrefix.Length..end];
                 if (name.Length <= 64 && !name.Contains(' ', StringComparison.Ordinal))
                 {
-                    return new HookFailureRefusal(HookFailureKind.EventRefused, name, ReasonOf(text));
+                    return new HookFailureRefusal(HookFailureKind.EventRefused, name, ReasonOf(text, tailLength), dropped);
                 }
             }
         }
@@ -172,10 +189,10 @@ public static class HookFailureRow
     }
 
     /// <summary>The Go-quoted reason before the tail: the first double quote opens it (no prefix holds one).</summary>
-    private static string ReasonOf(string text)
+    private static string ReasonOf(string text, int tailLength)
     {
         var open = text.IndexOf('"', StringComparison.Ordinal);
-        var tail = text.Length - Tail.Length;
+        var tail = text.Length - tailLength;
         if (open < 0 || open >= tail)
         {
             return string.Empty;

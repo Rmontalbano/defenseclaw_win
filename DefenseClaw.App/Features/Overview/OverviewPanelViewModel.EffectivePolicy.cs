@@ -162,7 +162,7 @@ public sealed partial class OverviewPanelViewModel
         switch (read.Status)
         {
             case EffectivePolicyStatus.Ok when read.Policy is { } policy:
-                SyncByEquality(EffectivePolicyRows, EffectivePolicyRowsOf(policy, connector), static row => row.Label);
+                SyncByEquality(EffectivePolicyRows, WithCascadeRow(EffectivePolicyRowsOf(policy, connector)), static row => row.Label);
                 EffectivePolicyNote = string.Join(" ", policy.Warnings);
                 EffectivePolicyState = EffectivePolicyCardState.Shown;
                 break;

@@ -120,7 +120,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     internal PolicyModel? CurrentModel => _model;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowLoading), nameof(ShowContent), nameof(ShowError))]
+    [NotifyPropertyChangedFor(nameof(ShowLoading), nameof(ShowContent), nameof(ShowError), nameof(ShowCascade))]
     private PoliciesState _state = PoliciesState.Loading;
 
     [ObservableProperty]
@@ -363,7 +363,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
     /// Runs one of the read-only commands the panel starts on its own (the catalog reads, a pack validation, <c>policy validate</c>). Anything
     /// else throws: this is the one door the panel starts a command through without a review, and it is not a door for a change.
     /// </summary>
-    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv, CancellationToken cancellationToken = default, bool background = false)
+    internal Task<CliInvocation> RunReadAsync(IReadOnlyList<string> argv, CancellationToken cancellationToken = default, bool background = false, TimeSpan? timeout = null)
     {
         ArgumentNullException.ThrowIfNull(argv);
         if (!PolicyActionGuard.IsAllowedRead(argv))
@@ -371,7 +371,8 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
             throw new InvalidOperationException($"'{string.Join(' ', argv)}' is not a read-only Policies command, so it has to be reviewed first.");
         }
 
-        return RunCliAsync(argv, background ? CliRunOptions.BackgroundRead : CliRunOptions.JsonRead, cancellationToken);
+        var options = background ? CliRunOptions.BackgroundRead : CliRunOptions.JsonRead;
+        return RunCliAsync(argv, timeout is { } limit ? options with { Timeout = limit } : options, cancellationToken);
     }
 
     /// <summary>
@@ -669,6 +670,7 @@ public sealed partial class PolicyModelViewModel : PanelViewModelBase, IDisposab
         ViewError = model.ViewError(View);
         EmptyText = model.EmptyState(View, scope);
         OnPropertyChanged(nameof(CaptionText));
+        RefreshCascade();
     }
 
     private void SyncScopes(PolicyModel model)

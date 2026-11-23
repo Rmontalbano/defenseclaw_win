@@ -266,8 +266,32 @@ public static class PolicyActionGuard
     {
         ArgumentNullException.ThrowIfNull(argv);
         return Same(argv, ReadsPolicyList) || Same(argv, ReadsListPacks) || Same(argv, ReadsProtection) || Same(argv, ReadsGuardrailConfig)
-               || Same(argv, ReadsPolicyValidate) || IsPackValidation(argv);
+               || Same(argv, ReadsPolicyValidate) || IsPackValidation(argv) || IsCascadeExplain(argv);
     }
+
+    private static readonly System.Text.RegularExpressions.Regex ConnectorName =
+        new(@"^[a-z0-9][a-z0-9_-]{0,63}\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The read of 1.0.10's cascade: <c>guardrail cascade explain [--connector NAME] --json</c> (<see cref="DefenseClaw.Core.Cli.CommandTiers"/> reads it as read-only). A name that is not of the usual form is left out (the global scope).</summary>
+    public static IReadOnlyList<string> CascadeExplain(string? connector) =>
+        IsSafeConnector(connector)
+            ? new[] { "guardrail", "cascade", "explain", "--connector", connector!, "--json" }
+            : new[] { "guardrail", "cascade", "explain", "--json" };
+
+    /// <summary>True for exactly the shapes <see cref="CascadeExplain"/> builds: the three words, an optional connector name of the usual form, then <c>--json</c>.</summary>
+    public static bool IsCascadeExplain(IReadOnlyList<string> argv)
+    {
+        ArgumentNullException.ThrowIfNull(argv);
+        if (argv.Count is not (4 or 6) || argv[0] != "guardrail" || argv[1] != "cascade" || argv[2] != "explain" || argv[^1] != "--json")
+        {
+            return false;
+        }
+
+        return argv.Count == 4 || (argv[3] == "--connector" && IsSafeConnector(argv[4]));
+    }
+
+    private static bool IsSafeConnector(string? connector) =>
+        connector is { Length: > 0 and <= 64 } && ConnectorName.IsMatch(connector);
 
     /// <summary><c>guardrail validate-pack PATH --json</c> with a folder the CLI can be handed.</summary>
     public static bool IsPackValidation(IReadOnlyList<string> argv)

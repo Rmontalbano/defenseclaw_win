@@ -28,6 +28,19 @@ public static class RuleIdLabels
         [CompoundLimit] = "A shell command too long or too complex for the policy check.",
     };
 
+    /// <summary>The finding id of the alignment check (1.0.10): a tool call that does not serve the task the user gave.</summary>
+    public const string AlignmentDrift = "ALIGNMENT-DRIFT";
+
+    private const string AlignmentDriftSentence = "The alignment check (a question to the LLM judge) found that this tool call does not serve the task the user gave.";
+
+    private const string CascadeCompoundLimitSentence =
+        "An input too large or too complex for the policy check to read in full (a command, a tool's output or a model reply); DefenseClaw judged it at the rule pack's unknown tier.";
+
+    private static readonly Regex AnyIdCascade = new(
+        @"(?<![\w.\-])(?:llm-judge:)?(?:" + string.Join("|", Sentences.Keys.Append(AlignmentDrift).Select(Regex.Escape)) + "|" + Regex.Escape(JudgeEscalationFinding.RuleId) + @")(?![\w.\-])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(250));
+
     private static readonly Regex AnyId = new(
         @"(?<![\w.\-])(?:llm-judge:)?(?:" + string.Join("|", Sentences.Keys.Select(Regex.Escape)) + "|" + Regex.Escape(JudgeEscalationFinding.RuleId) + @")(?![\w.\-])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
@@ -43,6 +56,66 @@ public static class RuleIdLabels
         }
 
         return Sentences.TryGetValue(id, out var sentence) ? sentence : null;
+    }
+
+    /// <summary>
+    /// <see cref="Sentence(string?)"/> for a runtime of the guardrail cascade era (1.0.10), which adds the alignment-check id and words the over-limit id for every
+    /// surface it marks. <paramref name="cascadeEra"/> false is <see cref="Sentence(string?)"/> exactly. The runtime's own rule title is never replaced.
+    /// </summary>
+    public static string? Sentence(string? ruleId, bool cascadeEra)
+    {
+        if (!cascadeEra)
+        {
+            return Sentence(ruleId);
+        }
+
+        var id = ruleId?.Trim() ?? string.Empty;
+        if (IsAlignmentDrift(id))
+        {
+            return AlignmentDriftSentence;
+        }
+
+        return IsCompoundLimit(id) ? CascadeCompoundLimitSentence : Sentence(id);
+    }
+
+    /// <summary>True for the alignment check's finding id.</summary>
+    public static bool IsAlignmentDrift(string? ruleId) => string.Equals(ruleId?.Trim(), AlignmentDrift, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when <paramref name="text"/> names the alignment check's finding id.</summary>
+    public static bool MentionsAlignmentDrift(string? text) =>
+        !string.IsNullOrEmpty(text) && text.Contains(AlignmentDrift, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary><see cref="NewSentence"/> for a runtime of the cascade era (see <see cref="Sentence(string?, bool)"/>).</summary>
+    public static string? NewSentence(string? ruleId, bool cascadeEra) =>
+        JudgeEscalationFinding.Is(ruleId?.Trim() ?? string.Empty) ? null : Sentence(ruleId, cascadeEra);
+
+    /// <summary>The distinct <see cref="NewSentence(string?, bool)"/> of each id in <paramref name="ruleIds"/>, in order.</summary>
+    public static IReadOnlyList<string> NewSentencesOf(IEnumerable<string>? ruleIds, bool cascadeEra) =>
+        (ruleIds ?? Array.Empty<string>()).Select(id => NewSentence(id, cascadeEra)).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>The distinct <see cref="NewSentence(string?, bool)"/> of each id <paramref name="text"/> names; the alignment id counts only in the cascade era.</summary>
+    public static IReadOnlyList<string> NewSentencesIn(string? text, bool cascadeEra)
+    {
+        if (!cascadeEra)
+        {
+            return NewSentencesIn(text);
+        }
+
+        if (string.IsNullOrEmpty(text))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return NewSentencesOf(
+                AnyIdCascade.Matches(text).Select(static m => m.Value.StartsWith("llm-judge:", StringComparison.OrdinalIgnoreCase) ? m.Value["llm-judge:".Length..] : m.Value),
+                cascadeEra: true);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     /// <summary>True when the id has a sentence (including the judge-unavailable id).</summary>
@@ -81,7 +154,7 @@ public static class RuleIdLabels
 
     /// <summary>The distinct <see cref="NewSentence"/> of each id in <paramref name="ruleIds"/>, in order.</summary>
     public static IReadOnlyList<string> NewSentencesOf(IEnumerable<string>? ruleIds) =>
-        (ruleIds ?? Array.Empty<string>()).Select(NewSentence).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        (ruleIds ?? Array.Empty<string>()).Select(id => NewSentence(id)).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
 
     /// <summary>The distinct <see cref="NewSentence"/> of each id <paramref name="text"/> names (a rule value such as <c>ID: title</c>, or a list of ids).</summary>
     public static IReadOnlyList<string> NewSentencesIn(string? text)
@@ -145,7 +218,14 @@ public static class RuleIdLabels
     /// row's details text carries <c>action=</c> and <c>raw_action=</c> (renderHookAuditLegacyDetails, hook_audit_envelope.go@1.0.9:289-312). Null when
     /// the row says neither (no fields, or an observe-mode row that only would have blocked).
     /// </summary>
-    public static string? CompoundLimitOutcome(string? decision, string? details)
+    public static string? CompoundLimitOutcome(string? decision, string? details) => CompoundLimitOutcome(decision, details, cascadeEra: false);
+
+    /// <summary>
+    /// <see cref="CompoundLimitOutcome(string?, string?)"/> for a runtime of the guardrail cascade era (1.0.10), where the limit marks over-limit input on every
+    /// surface (a command, a tool's output, a model reply): the wording does not say "command". Derived from the same row fields. <paramref name="cascadeEra"/> false is
+    /// the 1.0.9 text exactly.
+    /// </summary>
+    public static string? CompoundLimitOutcome(string? decision, string? details, bool cascadeEra)
     {
         var values = StructuredDetailParser.Values(details);
         var action = Word(values.GetValueOrDefault("action"));
@@ -155,7 +235,7 @@ public static class RuleIdLabels
         var verdict = label.Length > 0 ? label : action;
         if (verdict is "blocked" or "block" or "deny" or "denied")
         {
-            return "The call was blocked.";
+            return cascadeEra ? "It was blocked." : "The call was blocked.";
         }
 
         var ranAsAlert = verdict == "alert"
@@ -167,9 +247,45 @@ public static class RuleIdLabels
         }
 
         // In observe mode no pack blocks it (claudecode_hook_profile.go@1.0.9:124-139 answers allow), so the strict-pack clause is left out.
-        return Word(values.GetValueOrDefault("mode")) == "observe"
+        var observe = Word(values.GetValueOrDefault("mode")) == "observe";
+        if (cascadeEra)
+        {
+            return observe
+                ? "It went through; DefenseClaw recorded it as an alert (observe mode)."
+                : "It went through; DefenseClaw recorded it as an alert (the strict rule pack blocks it).";
+        }
+
+        return observe
             ? "The call ran; DefenseClaw recorded it as an alert (observe mode)."
             : "The call ran; DefenseClaw recorded it as an alert (the strict rule pack blocks it).";
+    }
+
+    /// <summary>
+    /// What happened to a call the alignment check flagged (1.0.10), said from the row's own fields: the runtime's decision label, else the details' <c>action=</c>.
+    /// Allowed (or no action and <c>would_block=false</c>): measured only; alert: it ran and was recorded; block or deny: blocked. Null when the row says none.
+    /// </summary>
+    public static string? AlignmentDriftOutcome(string? decision, string? details)
+    {
+        var values = StructuredDetailParser.Values(details);
+        var label = Word(decision);
+        var verdict = label.Length > 0 ? label : Word(values.GetValueOrDefault("action"));
+
+        if (verdict is "block" or "blocked" or "deny" or "denied")
+        {
+            return "The call was blocked.";
+        }
+
+        if (verdict == "alert")
+        {
+            return "The call ran; DefenseClaw recorded an alert.";
+        }
+
+        if (verdict is "allow" or "allowed" || (verdict.Length == 0 && Word(values.GetValueOrDefault("would_block")) == "false"))
+        {
+            return "Measured only: the call was not changed (the alignment lane records without acting in shadow mode, and observe mode never acts).";
+        }
+
+        return null;
     }
 
     private static string Word(string? value) => value?.Trim().ToLowerInvariant() ?? string.Empty;

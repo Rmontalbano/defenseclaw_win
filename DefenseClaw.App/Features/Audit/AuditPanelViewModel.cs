@@ -946,6 +946,7 @@ public sealed class AuditRow
     private readonly Lazy<IReadOnlyList<DetailPair>> _detailPairs;
     private readonly HookFailureRefusal? _hookRefusal;
     private readonly CoworkCall? _cowork;
+    private readonly string? _rowHeadline;
 
     public AuditRow(AuditEvent source)
         : this(source, HookRowGate.None)
@@ -958,6 +959,7 @@ public sealed class AuditRow
         ArgumentNullException.ThrowIfNull(source);
         _hookRefusal = AuditHookRows.Refusal(source, gate);
         _cowork = AuditHookRows.Cowork(source, gate);
+        _rowHeadline = GuardrailRowNotes.Headline(source.Action, source.Target, source.Details);
 
         Id = source.Id;
         Timestamp = source.Timestamp;
@@ -1080,6 +1082,7 @@ public sealed class AuditRow
 
     /// <summary>The inspector's title: <c>claudecode preToolUse</c> for a hook call (every one would otherwise be titled <c>connector-hook</c>), the action for any other row.</summary>
     public string Title => _title ??= _hookRefusal?.Headline
+        ?? _rowHeadline
         ?? (IsHook ? StructuredDetailParser.HookTitle(HookPhase, Details, IsPlatform ? null : Connector) : null) ?? Action;
 
     private string? _targetText;

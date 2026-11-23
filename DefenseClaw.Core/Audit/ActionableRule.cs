@@ -77,6 +77,19 @@ public static class ActionableRule
     {
         ArgumentNullException.ThrowIfNull(audit);
 
+        // A default-on shadow measurement (1.0.10) records what a lane would have done and changes nothing; owner decision: it is left out of the
+        // actionable view, whatever its text or severity says (its would=block is no block).
+        if (ShadowMeasurementRow.IsShadowMeasurement(audit.Action, audit.Target, audit.Details))
+        {
+            return false;
+        }
+
+        // An inspection that timed out on the scan is a real miss; one the caller canceled keeps the rule below.
+        if (InspectTimeoutRow.Parse(audit.Action, audit.Details) is { IsScanTimeout: true })
+        {
+            return true;
+        }
+
         if (SeverityDecides(audit.Severity))
         {
             return true;
@@ -92,6 +105,20 @@ public static class ActionableRule
 
         return HasToken(audit.Id) || HasToken(audit.Action) || HasToken(audit.Target) || HasToken(audit.Actor)
             || HasToken(audit.Severity) || HasToken(audit.Details) || HasToken(audit.RunId);
+    }
+
+    /// <summary>
+    /// <see cref="IsActionable(string?, string?)"/> for an event of the Logs streams, which keep the row's own action, target and details beside the joined text
+    /// <paramref name="text"/>: a shadow measurement row is never actionable, a scan timeout row always is.
+    /// </summary>
+    public static bool IsActionable(string? severity, string? text, string? action, string? target, string? details)
+    {
+        if (ShadowMeasurementRow.IsShadowMeasurement(action, target, details))
+        {
+            return false;
+        }
+
+        return InspectTimeoutRow.Parse(action, details) is { IsScanTimeout: true } || IsActionable(severity, text);
     }
 
     /// <summary>True when any of <see cref="Tokens"/> occurs in <paramref name="text"/>, without regard to case.</summary>

@@ -99,6 +99,9 @@ public static class CommandTiers
     private static readonly HashSet<string> ReadOnlySetupResourceLeaves = new(StringComparer.Ordinal)
     {
         "setup observability list", "setup trusted-paths list", "setup webhook list", "setup webhook show",
+
+        // 1.0.10: shells to `defenseclaw-gateway policy cascade`, which loads config and policy assets only (cmd_guardrail.py@1.0.10:6751-6788).
+        "guardrail cascade explain",
     };
 
     /// <summary>

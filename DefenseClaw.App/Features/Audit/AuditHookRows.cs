@@ -45,6 +45,33 @@ internal static partial class AuditHookRows
         HookFailureRefusal? refusal,
         CoworkCall? cowork)
     {
+        var rows = GatedPairs(parsed, source, gate, refusal, cowork);
+
+        // The 1.0.10 guardrail rows (a shadow measurement, an inspection timeout, the cascade's degraded row) are labelled on every runtime: a runtime that
+        // never writes them never shows the label, so no gate is needed, and the early return for an ungated runtime must not skip them.
+        var extra = GuardrailRowNotes.For(source.Action, source.Target, source.Details);
+        if (extra.Count == 0)
+        {
+            return rows;
+        }
+
+        var all = new List<DetailPair>(rows.Count + extra.Count);
+        all.AddRange(rows);
+        foreach (var note in extra)
+        {
+            all.Add(new DetailPair(note.Key, note.Value));
+        }
+
+        return all;
+    }
+
+    private static IReadOnlyList<DetailPair> GatedPairs(
+        IReadOnlyList<DetailPair> parsed,
+        AuditEvent source,
+        HookRowGate gate,
+        HookFailureRefusal? refusal,
+        CoworkCall? cowork)
+    {
         if (!gate.Any)
         {
             return parsed;
@@ -52,7 +79,7 @@ internal static partial class AuditHookRows
 
         var isHook = StructuredDetailParser.IsHook(source.Action);
         var fallback = gate.JudgeFallback && isHook ? HookJudgeFallback.Read(source.StructuredJson, source.Details) : string.Empty;
-        var structuredIds = gate.JudgeEscalation || gate.AlertRan ? RuleIds(source) : Array.Empty<string>();
+        var structuredIds = gate.JudgeEscalation || gate.AlertRan || gate.Cascade ? RuleIds(source) : Array.Empty<string>();
         var escalated = gate.JudgeEscalation
             && (JudgeEscalationFinding.AnyIn(structuredIds)
                 || (isHook && JudgeEscalationFinding.ReasonIn(source.Details)));
@@ -61,6 +88,7 @@ internal static partial class AuditHookRows
         var labelled = false;
         var meanings = new List<string>();
         var limited = false;
+        var drifted = false;
         foreach (var pair in parsed)
         {
             if (fallback.Length > 0 && string.Equals(pair.Label, HookJudgeFallback.FieldName, StringComparison.OrdinalIgnoreCase))
@@ -76,8 +104,9 @@ internal static partial class AuditHookRows
             if (gate.AlertRan && IsRuleLabel(pair.Label))
             {
                 // The 1.0.9 rule labels: the row keeps the runtime's own value and the sentence goes on a line of its own below.
-                meanings.AddRange(RuleIdLabels.NewSentencesIn(pair.Value));
+                meanings.AddRange(RuleIdLabels.NewSentencesIn(pair.Value, gate.Cascade));
                 limited |= RuleIdLabels.MentionsCompoundLimit(pair.Value);
+                drifted |= gate.Cascade && RuleIdLabels.MentionsAlignmentDrift(pair.Value);
             }
 
             if (gate.JudgeEscalation && IsRuleLabel(pair.Label) && MentionsEscalation(pair.Value))
@@ -119,16 +148,22 @@ internal static partial class AuditHookRows
         {
             // ShellProtectedFileFloor is the 1.0.9 release marker here: the rule labels and the alert decision shipped in the same release and no separate
             // capability exists. A 1.0.7 or 1.0.8 runtime's rows are left as they always were.
-            meanings.AddRange(RuleIdLabels.NewSentencesOf(structuredIds));
-            limited |= structuredIds.Any(RuleIdLabels.IsCompoundLimit);
+            meanings.AddRange(RuleIdLabels.NewSentencesOf(structuredIds, gate.Cascade));
+            limited |= structuredIds.Any(id => RuleIdLabels.IsCompoundLimit(id));
+            drifted |= gate.Cascade && structuredIds.Any(id => RuleIdLabels.IsAlignmentDrift(id));
             foreach (var meaning in meanings.Distinct(StringComparer.Ordinal))
             {
                 rows.Add(new DetailPair("Rule meaning", meaning));
             }
 
-            if (limited && RuleIdLabels.CompoundLimitOutcome(null, source.Details) is { } outcome)
+            if (limited && RuleIdLabels.CompoundLimitOutcome(null, source.Details, gate.Cascade) is { } outcome)
             {
                 rows.Add(new DetailPair("Call outcome", outcome));
+            }
+
+            if (drifted && RuleIdLabels.AlignmentDriftOutcome(null, source.Details) is { } driftOutcome)
+            {
+                rows.Add(new DetailPair("Call outcome", driftOutcome));
             }
         }
 

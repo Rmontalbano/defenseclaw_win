@@ -310,7 +310,7 @@ public static class PolicyLevels
     /// <c>(severity, action)</c> from CRITICAL to LOW, in the gateway's order: the block level wins first, then human approval, then the
     /// alert level (<c>guardrailRuntimeActionForConnector</c>). This is the action-mode answer; observe mode only logs what it would do.
     /// </summary>
-    public static IReadOnlyList<(string Severity, string Action)> SeverityActions(string? blockAt, string? alertAt, string? hilt)
+    public static IReadOnlyList<(string Severity, string Action)> SeverityActions(string? blockAt, string? alertAt, string? hilt, string? criticalFloor = null)
     {
         var block = LevelRank(blockAt) ?? 5;
         var alert = LevelRank(alertAt) ?? 5;
@@ -340,6 +340,36 @@ public static class PolicyLevels
             rows.Add((severity, action));
         }
 
+        return criticalFloor is null ? rows : WithCriticalFloor(rows, criticalFloor);
+    }
+
+    /// <summary>
+    /// What a proven CRITICAL finding ends at, whatever the levels say, at runtime 1.0.10: at least <c>guardrail.cascade.admin.critical_floor</c>
+    /// (<c>alert</c> by default; <c>confirm</c> asks a human; <c>log</c> is the explicit opt-out), on every hook surface even with no cascade set
+    /// (cascade.go@1.0.10:439-442). Null <paramref name="criticalFloor"/> leaves the matrix as it was; <c>log</c> raises nothing.
+    /// </summary>
+    private static IReadOnlyList<(string Severity, string Action)> WithCriticalFloor(List<(string Severity, string Action)> rows, string criticalFloor)
+    {
+        var floor = criticalFloor.ToLowerInvariant() switch
+        {
+            "alert" => "alert",
+            "confirm" => "ask",
+            "block" => "block",
+            _ => null,
+        };
+        if (floor is null)
+        {
+            return rows;
+        }
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (string.Equals(rows[i].Severity, "CRITICAL", StringComparison.Ordinal) && ActionStrength[rows[i].Action] < ActionStrength[floor])
+            {
+                rows[i] = (rows[i].Severity, floor);
+            }
+        }
+
         return rows;
     }
 
@@ -347,7 +377,7 @@ public static class PolicyLevels
         severities.Count == 0 ? string.Empty : LevelForRank[SeverityRank[severities[^1]]];
 
     /// <summary>One plain sentence: what the scope's tool calls get at each severity.</summary>
-    public static string PostureSummary(string scope, string mode, string blockAt, string alertAt, string hilt)
+    public static string PostureSummary(string scope, string mode, string blockAt, string alertAt, string hilt, string? criticalFloor = null)
     {
         var groups = new Dictionary<string, List<string>>(StringComparer.Ordinal)
         {
@@ -356,7 +386,7 @@ public static class PolicyLevels
             ["alert"] = new(),
             ["allow"] = new(),
         };
-        foreach (var (severity, action) in SeverityActions(blockAt, alertAt, hilt))
+        foreach (var (severity, action) in SeverityActions(blockAt, alertAt, hilt, criticalFloor))
         {
             groups[action].Add(severity);
         }
@@ -386,17 +416,27 @@ public static class PolicyLevels
     }
 
     /// <summary>The severity-to-action matrix, one line per severity.</summary>
-    public static IReadOnlyList<string> MatrixLines(string mode, string blockAt, string alertAt, string hilt)
+    public static IReadOnlyList<string> MatrixLines(string mode, string blockAt, string alertAt, string hilt, string? criticalFloor = null)
     {
         var observe = !string.Equals(mode, "action", StringComparison.Ordinal);
         var lines = new List<string>();
-        foreach (var (severity, action) in SeverityActions(blockAt, alertAt, hilt))
+        var plain = criticalFloor is null ? null : SeverityActions(blockAt, alertAt, hilt);
+        var index = 0;
+        foreach (var (severity, action) in SeverityActions(blockAt, alertAt, hilt, criticalFloor))
         {
             var word = ActionWords[action];
             if (observe && action is "block" or "ask")
             {
                 word = $"log (would {word})";
             }
+
+            // The floor raised this row: say where the answer comes from.
+            if (plain is not null && !string.Equals(plain[index].Action, action, StringComparison.Ordinal))
+            {
+                word += " (admin.critical_floor)";
+            }
+
+            index++;
 
             lines.Add($"  {severity,-9} {word}");
         }

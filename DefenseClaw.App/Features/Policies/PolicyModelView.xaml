@@ -71,6 +71,53 @@
                         IsOpen="{Binding HasReadWarning, Mode=OneWay}"
                         IsClosable="False"
                         AutomationProperties.LiveSetting="Polite" />
+
+            <!-- Runtime 1.0.10: what guardrail.cascade says in config.yaml. Read-only. Explain runs defenseclaw guardrail cascade explain, only when pressed. -->
+            <Border Style="{StaticResource DcCard}"
+                    Margin="{StaticResource DcCardGap}"
+                    Visibility="{Binding ShowCascade, Converter={StaticResource BoolToVisibility}}"
+                    AutomationProperties.Name="Cascade">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DcSectionHeader}" Margin="0,0,0,6" Text="Cascade" />
+                        <ItemsControl ItemsSource="{Binding CascadeLines}" AutomationProperties.Name="Cascade lines">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock x:Name="Line"
+                                               Style="{StaticResource DcTextSecondary}"
+                                               FontSize="12"
+                                               Margin="0,0,0,2"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding Text}" />
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsIndented}" Value="True">
+                                            <Setter TargetName="Line" Property="FontFamily" Value="{DynamicResource DcMonoFontFamily}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsBlank}" Value="True">
+                                            <Setter TargetName="Line" Property="Height" Value="6" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    <ui:Button Grid.Column="1"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Top"
+                               Content="Explain"
+                               Appearance="Secondary"
+                               Icon="{ctl:DcSymbolIcon Info24}"
+                               Command="{Binding ExplainCascadeCommand}"
+                               IsEnabled="{Binding CanExplainCascade}"
+                               ToolTip="Run defenseclaw guardrail cascade explain for this scope and show what the runtime decides"
+                               AutomationProperties.Name="Explain the cascade"
+                               AutomationProperties.HelpText="Runs defenseclaw guardrail cascade explain for the chosen scope. It reads configuration and changes nothing." />
+                </Grid>
+            </Border>
         </StackPanel>
 
         <Grid Grid.Row="2">
